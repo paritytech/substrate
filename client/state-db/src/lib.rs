@@ -33,7 +33,7 @@ mod noncanonical;
 mod pruning;
 #[cfg(test)] mod test;
 
-use std::fmt;
+use std::{fmt, pin::Pin, future::Future};
 use parking_lot::RwLock;
 use codec::Codec;
 use std::collections::{HashMap, hash_map::Entry};
@@ -58,7 +58,7 @@ pub trait MetaDb {
 	type Error: fmt::Debug;
 
 	/// Get meta value, such as the journal.
-	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
+	fn get_meta(&self, key: &[u8]) -> Pin<Box<dyn Future<Output = Result<Option<DBValue>, Self::Error>>>>;
 }
 
 /// Backend database trait. Read-only.
@@ -197,19 +197,19 @@ struct StateDbSync<BlockHash: Hash, Key: Hash> {
 }
 
 impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
-	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
+	pub async fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
 		trace!(target: "state-db", "StateDb settings: {:?}", mode);
 
 		// Check that settings match
-		Self::check_meta(&mode, db)?;
+		Self::check_meta(&mode, db).await?;
 
-		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(db)?;
+		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(db).await?;
 		let pruning: Option<RefWindow<BlockHash, Key>> = match mode {
 			PruningMode::Constrained(Constraints {
 				max_mem: Some(_),
 				..
 			}) => unimplemented!(),
-			PruningMode::Constrained(_) => Some(RefWindow::new(db)?),
+			PruningMode::Constrained(_) => Some(RefWindow::new(db).await?),
 			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical => None,
 		};
 
@@ -221,8 +221,8 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		})
 	}
 
-	fn check_meta<D: MetaDb>(mode: &PruningMode, db: &D) -> Result<(), Error<D::Error>> {
-		let db_mode = db.get_meta(&to_meta_key(PRUNING_MODE, &())).map_err(Error::Db)?;
+	async fn check_meta<D: MetaDb>(mode: &PruningMode, db: &D) -> Result<(), Error<D::Error>> {
+		let db_mode = db.get_meta(&to_meta_key(PRUNING_MODE, &())).await.map_err(Error::Db)?;
 		trace!(target: "state-db",
 			"DB pruning mode: {:?}",
 			db_mode.as_ref().map(|v| std::str::from_utf8(&v))
@@ -407,9 +407,9 @@ pub struct StateDb<BlockHash: Hash, Key: Hash> {
 
 impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	/// Creates a new instance. Does not expect any metadata in the database.
-	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> {
+	pub async fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> {
 		Ok(StateDb {
-			db: RwLock::new(StateDbSync::new(mode, db)?)
+			db: RwLock::new(StateDbSync::new(mode, db).await?)
 		})
 	}
 

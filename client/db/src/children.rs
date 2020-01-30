@@ -17,19 +17,20 @@
 //! Functionality for reading and storing children hashes from db.
 
 use kvdb::{KeyValueDB, DBTransaction};
+use kvdb_async::AsyncKeyValueDB;
 use codec::{Encode, Decode};
 use sp_blockchain;
 use std::hash::Hash;
 
 /// Returns the hashes of the children blocks of the block with `parent_hash`.
-pub fn read_children<
+pub async fn read_children<
 	K: Eq + Hash + Clone + Encode + Decode,
 	V: Eq + Hash + Clone + Encode + Decode,
->(db: &dyn KeyValueDB, column: u32, prefix: &[u8], parent_hash: K) -> sp_blockchain::Result<Vec<V>> {
+>(db: &dyn AsyncKeyValueDB, column: u32, prefix: &[u8], parent_hash: K) -> sp_blockchain::Result<Vec<V>> {
 	let mut buf = prefix.to_vec();
 	parent_hash.using_encoded(|s| buf.extend(s));
 
-	let raw_val_opt = match db.get(column, &buf[..]) {
+	let raw_val_opt = match db.get(column, &buf[..]).await {
 		Ok(raw_val_opt) => raw_val_opt,
 		Err(_) => return Err(sp_blockchain::Error::Backend("Error reading value from database".into())),
 	};

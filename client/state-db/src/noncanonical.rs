@@ -123,8 +123,9 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 
 impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// Creates a new instance. Does not expect any metadata to be present in the DB.
-	pub fn new<D: MetaDb>(db: &D) -> Result<NonCanonicalOverlay<BlockHash, Key>, Error<D::Error>> {
+	pub async fn new<D: MetaDb>(db: &D) -> Result<NonCanonicalOverlay<BlockHash, Key>, Error<D::Error>> {
 		let last_canonicalized = db.get_meta(&to_meta_key(LAST_CANONICAL, &()))
+			.await
 			.map_err(|e| Error::Db(e))?;
 		let last_canonicalized = match last_canonicalized {
 			Some(buffer) => Some(<(BlockHash, u64)>::decode(&mut buffer.as_slice())?),
@@ -143,7 +144,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				let mut level = Vec::new();
 				loop {
 					let journal_key = to_journal_key(block, index);
-					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+					match db.get_meta(&journal_key).await.map_err(|e| Error::Db(e))? {
 						Some(record) => {
 							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
 							let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();

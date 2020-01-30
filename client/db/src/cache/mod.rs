@@ -20,6 +20,7 @@ use std::{sync::Arc, collections::{HashMap, hash_map::Entry}};
 use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
+use kvdb_async::AsyncKeyValueDB;
 
 use sc_client_api::blockchain::{well_known_cache_keys::{self, Id as CacheKeyId}, Cache as BlockchainCache};
 use sp_blockchain::Result as ClientResult;
@@ -27,6 +28,7 @@ use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use crate::utils::{self, COLUMN_META, db_err};
+use async_std::task::block_on;
 
 use self::list_cache::{ListCache, PruningStrategy};
 
@@ -78,7 +80,7 @@ impl<T> CacheItemT for T where T: Clone + Decode + Encode + PartialEq {}
 /// Database-backed blockchain data cache.
 pub struct DbCache<Block: BlockT> {
 	cache_at: HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn AsyncKeyValueDB>,
 	key_lookup_column: u32,
 	header_column: u32,
 	cache_column: u32,
@@ -89,7 +91,7 @@ pub struct DbCache<Block: BlockT> {
 impl<Block: BlockT> DbCache<Block> {
 	/// Create new cache.
 	pub fn new(
-		db: Arc<dyn KeyValueDB>,
+		db: Arc<dyn AsyncKeyValueDB>,
 		key_lookup_column: u32,
 		header_column: u32,
 		cache_column: u32,
@@ -169,7 +171,7 @@ impl<Block: BlockT> DbCache<Block> {
 fn get_cache_helper<'a, Block: BlockT>(
 	cache_at: &'a mut HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
 	name: CacheKeyId,
-	db: &Arc<dyn KeyValueDB>,
+	db: &Arc<dyn AsyncKeyValueDB>,
 	key_lookup: u32,
 	header: u32,
 	cache: u32,
@@ -337,7 +339,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			EntryType::Genesis,
 		)?;
 		let tx_ops = tx.into_ops();
-		db.write(dbtx).map_err(db_err)?;
+		block_on(db.write(dbtx)).map_err(db_err)?;
 		cache.commit(tx_ops)?;
 		Ok(())
 	}
@@ -354,19 +356,19 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		let columns = storage.columns();
 		let at = match *at {
 			BlockId::Hash(hash) => {
-				let header = utils::require_header::<Block>(
+				let header = block_on(utils::require_header::<Block>(
 					&**db,
 					columns.key_lookup,
 					columns.header,
-					BlockId::Hash(hash.clone()))?;
+					BlockId::Hash(hash.clone())))?;
 				ComplexBlockId::new(hash, *header.number())
 			},
 			BlockId::Number(number) => {
-				let hash = utils::require_header::<Block>(
+				let hash = block_on(utils::require_header::<Block>(
 					&**db,
 					columns.key_lookup,
 					columns.header,
-					BlockId::Number(number.clone()))?.hash();
+					BlockId::Number(number.clone())))?.hash();
 				ComplexBlockId::new(hash, number)
 			},
 		};

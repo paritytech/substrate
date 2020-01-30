@@ -22,13 +22,14 @@ use std::{
 };
 
 use crate::columns;
-use kvdb::KeyValueDB;
+use kvdb_async::AsyncKeyValueDB;
 use parking_lot::Mutex;
+use async_std::task::block_on;
 
 /// Offchain local storage
 #[derive(Clone)]
 pub struct LocalStorage {
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn AsyncKeyValueDB>,
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
 }
 
@@ -48,7 +49,7 @@ impl LocalStorage {
 	}
 
 	/// Create offchain local storage with given `KeyValueDB` backend.
-	pub fn new(db: Arc<dyn KeyValueDB>) -> Self {
+	pub fn new(db: Arc<dyn AsyncKeyValueDB>) -> Self {
 		Self {
 			db,
 			locks: Default::default(),
@@ -62,14 +63,14 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		let mut tx = self.db.transaction();
 		tx.put(columns::OFFCHAIN, &key, value);
 
-		if let Err(e) = self.db.write(tx) {
+		if let Err(e) = block_on(self.db.write(tx)) {
 			log::warn!("Error writing to the offchain DB: {:?}", e);
 		}
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		self.db.get(columns::OFFCHAIN, &key)
+		block_on(self.db.get(columns::OFFCHAIN, &key))
 			.ok()
 			.and_then(|x| x)
 			.map(|v| v.to_vec())
@@ -91,7 +92,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		let is_set;
 		{
 			let _key_guard = key_lock.lock();
-			let val = self.db.get(columns::OFFCHAIN, &key)
+			let val = block_on(self.db.get(columns::OFFCHAIN, &key))
 				.ok()
 				.and_then(|x| x);
 			is_set = val.as_ref().map(|x| &**x) == old_value;

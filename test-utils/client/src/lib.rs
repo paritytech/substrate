@@ -43,6 +43,7 @@ use std::collections::HashMap;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_runtime::traits::Block as BlockT;
 use sc_client::LocalCallExecutor;
+use futures::executor::block_on;
 
 /// Test client light database backend.
 pub type LightBackend<Block> = sc_client::light::backend::Backend<
@@ -77,21 +78,21 @@ pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 impl<Block: BlockT, Executor, G: GenesisInit> Default
 	for TestClientBuilder<Block, Executor, Backend<Block>, G> {
 	fn default() -> Self {
-		Self::with_default_backend()
+		block_on(Self::with_default_backend())
 	}
 }
 
 impl<Block: BlockT, Executor, G: GenesisInit> TestClientBuilder<Block, Executor, Backend<Block>, G> {
 	/// Create new `TestClientBuilder` with default backend.
-	pub fn with_default_backend() -> Self {
-		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
-		Self::with_backend(backend)
+	pub async fn with_default_backend() -> Self {
+		let backend = Backend::new_test(std::u32::MAX, std::u64::MAX).await;
+		Self::with_backend(Arc::new(backend))
 	}
 
 	/// Create new `TestClientBuilder` with default backend and pruning window size
-	pub fn with_pruning_window(keep_blocks: u32) -> Self {
-		let backend = Arc::new(Backend::new_test(keep_blocks, 0));
-		Self::with_backend(backend)
+	pub async fn with_pruning_window(keep_blocks: u32) -> Self {
+		let backend = Backend::new_test(keep_blocks, 0).await;
+		Self::with_backend(Arc::new(backend))
 	}
 }
 

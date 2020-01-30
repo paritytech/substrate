@@ -19,12 +19,14 @@
 use std::sync::Arc;
 
 use kvdb::{KeyValueDB, DBTransaction};
+use kvdb_async::AsyncKeyValueDB;
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use crate::utils::{self, db_err, meta_keys};
+use async_std::task::block_on;
 
 use crate::cache::{CacheItemT, ComplexBlockId};
 use crate::cache::list_cache::{CommitOperation, Fork};
@@ -97,19 +99,19 @@ pub struct DbColumns {
 pub struct DbStorage {
 	name: Vec<u8>,
 	meta_key: Vec<u8>,
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn AsyncKeyValueDB>,
 	columns: DbColumns,
 }
 
 impl DbStorage {
 	/// Create new database-backed list cache storage.
-	pub fn new(name: Vec<u8>, db: Arc<dyn KeyValueDB>, columns: DbColumns) -> Self {
+	pub fn new(name: Vec<u8>, db: Arc<dyn AsyncKeyValueDB>, columns: DbColumns) -> Self {
 		let meta_key = meta::key(&name);
 		DbStorage { name, meta_key, db, columns }
 	}
 
 	/// Get reference to the database.
-	pub fn db(&self) -> &Arc<dyn KeyValueDB> { &self.db }
+	pub fn db(&self) -> &Arc<dyn AsyncKeyValueDB> { &self.db }
 
 	/// Get reference to the database columns.
 	pub fn columns(&self) -> &DbColumns { &self.columns }
@@ -126,16 +128,16 @@ impl DbStorage {
 
 impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for DbStorage {
 	fn read_id(&self, at: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
-		utils::read_header::<Block>(&*self.db, self.columns.key_lookup, self.columns.header, BlockId::Number(at))
+		block_on(utils::read_header::<Block>(&*self.db, self.columns.key_lookup, self.columns.header, BlockId::Number(at)))
 			.map(|maybe_header| maybe_header.map(|header| header.hash()))
 	}
 
 	fn read_header(&self, at: &Block::Hash) -> ClientResult<Option<Block::Header>> {
-		utils::read_header::<Block>(&*self.db, self.columns.key_lookup, self.columns.header, BlockId::Hash(*at))
+		block_on(utils::read_header::<Block>(&*self.db, self.columns.key_lookup, self.columns.header, BlockId::Hash(*at)))
 	}
 
 	fn read_meta(&self) -> ClientResult<Metadata<Block>> {
-		self.db.get(self.columns.meta, &self.meta_key)
+		block_on(self.db.get(self.columns.meta, &self.meta_key))
 			.map_err(db_err)
 			.and_then(|meta| match meta {
 				Some(meta) => meta::decode(&*meta),
@@ -147,7 +149,7 @@ impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for DbStorage {
 	}
 
 	fn read_entry(&self, at: &ComplexBlockId<Block>) -> ClientResult<Option<StorageEntry<Block, T>>> {
-		self.db.get(self.columns.cache, &self.encode_block_id(at))
+		block_on(self.db.get(self.columns.cache, &self.encode_block_id(at)))
 			.map_err(db_err)
 			.and_then(|entry| match entry {
 				Some(entry) => StorageEntry::<Block, T>::decode(&mut &entry[..])

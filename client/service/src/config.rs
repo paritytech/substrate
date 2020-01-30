@@ -17,7 +17,7 @@
 //! Service configuration.
 
 pub use sc_client::ExecutionStrategies;
-pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
+pub use sc_client_db::{kvdb_async::AsyncKeyValueDB, PruningMode};
 pub use sc_network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use sc_executor::WasmExecutionMethod;
 
@@ -143,7 +143,7 @@ pub enum DatabaseConfig {
 	},
 
 	/// A custom implementation of an already-open database.
-	Custom(Arc<dyn KeyValueDB>),
+	Custom(Arc<dyn AsyncKeyValueDB>),
 }
 
 impl<C, G, E> Configuration<C, G, E> where

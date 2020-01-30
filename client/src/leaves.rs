@@ -19,6 +19,8 @@
 use std::collections::BTreeMap;
 use std::cmp::Reverse;
 use kvdb::{KeyValueDB, DBTransaction};
+use kvdb_async::AsyncKeyValueDB;
+use futures::prelude::*;
 use sp_runtime::traits::SimpleArithmetic;
 use codec::{Encode, Decode};
 use sp_blockchain::{Error, Result};
@@ -77,10 +79,11 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Read the leaf list from the DB, using given prefix for keys.
-	pub fn read_from_db(db: &dyn KeyValueDB, column: u32, prefix: &[u8]) -> Result<Self> {
+	pub async fn read_from_db(db: &dyn AsyncKeyValueDB, column: u32, prefix: &[u8]) -> Result<Self> {
 		let mut storage = BTreeMap::new();
+		let mut stream = db.iter_from_prefix(column, prefix);
 
-		for (key, value) in db.iter_from_prefix(column, prefix) {
+		while let Some((key, value)) = stream.next().await {
 			if !key.starts_with(prefix) { break }
 			let raw_hash = &mut &key[prefix.len()..];
 			let hash = match Decode::decode(raw_hash) {

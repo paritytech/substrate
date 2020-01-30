@@ -18,12 +18,14 @@
 //! full and light storages.
 
 use std::sync::Arc;
-use std::{io, convert::TryInto};
+use std::{io, convert::TryInto, pin::Pin};
 
 use kvdb::{KeyValueDB, DBTransaction};
+use kvdb_async::AsyncKeyValueDB;
 #[cfg(any(feature = "kvdb-rocksdb", test))]
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use log::debug;
+use futures::prelude::*;
 
 use codec::Decode;
 use sp_trie::DBValue;
@@ -189,8 +191,8 @@ pub fn insert_hash_to_key_mapping<N: TryInto<u32>, H: AsRef<[u8]> + Clone>(
 /// Convert block id to block lookup key.
 /// block lookup key is the DB-key header, block and justification are stored under.
 /// looks up lookup key by hash from DB as necessary.
-pub fn block_id_to_lookup_key<Block>(
-	db: &dyn KeyValueDB,
+pub async fn block_id_to_lookup_key<Block>(
+	db: &dyn AsyncKeyValueDB,
 	key_lookup_col: u32,
 	id: BlockId<Block>
 ) -> Result<Option<Vec<u8>>, sp_blockchain::Error> where
@@ -201,8 +203,8 @@ pub fn block_id_to_lookup_key<Block>(
 		BlockId::Number(n) => db.get(
 			key_lookup_col,
 			number_index_key(n)?.as_ref(),
-		),
-		BlockId::Hash(h) => db.get(key_lookup_col, h.as_ref()),
+		).await,
+		BlockId::Hash(h) => db.get(key_lookup_col, h.as_ref()).await,
 	};
 
 	res.map_err(db_err)
@@ -214,15 +216,15 @@ pub fn db_err(err: io::Error) -> sp_blockchain::Error {
 }
 
 /// Open RocksDB database.
-pub fn open_database<Block: BlockT>(
+pub async fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
 	db_type: DatabaseType,
-) -> sp_blockchain::Result<Arc<dyn KeyValueDB>> {
-	let db: Arc<dyn KeyValueDB> = match &config.source {
+) -> sp_blockchain::Result<Arc<dyn AsyncKeyValueDB>> {
+	let db: Arc<dyn AsyncKeyValueDB> = match &config.source {
 		#[cfg(any(feature = "kvdb-rocksdb", test))]
 		DatabaseSettingsSrc::Path { path, cache_size } => {
 			// first upgrade database to required version
-			crate::upgrade::upgrade_db::<Block>(&path, db_type)?;
+			crate::upgrade::upgrade_db::<Block>(&path, db_type).await?;
 
 			// and now open database assuming that it has the latest version
 			let mut db_config = DatabaseConfig::with_columns(NUM_COLUMNS);
@@ -254,14 +256,14 @@ pub fn open_database<Block: BlockT>(
 		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
 
-	check_database_type(&*db, db_type)?;
+	check_database_type(&*db, db_type).await?;
 
 	Ok(db)
 }
 
 /// Check database type.
-pub fn check_database_type(db: &dyn KeyValueDB, db_type: DatabaseType) -> sp_blockchain::Result<()> {
-	match db.get(COLUMN_META, meta_keys::TYPE).map_err(db_err)? {
+pub async fn check_database_type(db: &dyn AsyncKeyValueDB, db_type: DatabaseType) -> sp_blockchain::Result<()> {
+	match db.get(COLUMN_META, meta_keys::TYPE).await.map_err(db_err)? {
 		Some(stored_type) => {
 			if db_type.as_str().as_bytes() != &*stored_type {
 				return Err(sp_blockchain::Error::Backend(
@@ -271,7 +273,7 @@ pub fn check_database_type(db: &dyn KeyValueDB, db_type: DatabaseType) -> sp_blo
 		None => {
 			let mut transaction = DBTransaction::new();
 			transaction.put(COLUMN_META, meta_keys::TYPE, db_type.as_str().as_bytes());
-			db.write(transaction).map_err(db_err)?;
+			db.write(transaction).await.map_err(db_err)?;
 		},
 	}
 
@@ -279,8 +281,8 @@ pub fn check_database_type(db: &dyn KeyValueDB, db_type: DatabaseType) -> sp_blo
 }
 
 /// Read database column entry for the given block.
-pub fn read_db<Block>(
-	db: &dyn KeyValueDB,
+pub async fn read_db<Block>(
+	db: &dyn AsyncKeyValueDB,
 	col_index: u32,
 	col: u32,
 	id: BlockId<Block>
@@ -288,20 +290,20 @@ pub fn read_db<Block>(
 	where
 		Block: BlockT,
 {
-	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
-		Some(key) => db.get(col, key.as_ref()).map_err(db_err),
-		None => Ok(None),
-	})
+	match block_id_to_lookup_key(db, col_index, id).await? {
+		Some(key) =>  db.get(col, key.as_ref()).await.map_err(db_err),
+		None => Ok(None)
+	}
 }
 
 /// Read a header from the database.
-pub fn read_header<Block: BlockT>(
-	db: &dyn KeyValueDB,
+pub async fn read_header<Block: BlockT>(
+	db: &dyn AsyncKeyValueDB,
 	col_index: u32,
 	col: u32,
 	id: BlockId<Block>,
 ) -> sp_blockchain::Result<Option<Block::Header>> {
-	match read_db(db, col_index, col, id)? {
+	match read_db(db, col_index, col, id).await? {
 		Some(header) => match Block::Header::decode(&mut &header[..]) {
 			Ok(header) => Ok(Some(header)),
 			Err(_) => return Err(
@@ -313,25 +315,26 @@ pub fn read_header<Block: BlockT>(
 }
 
 /// Required header from the database.
-pub fn require_header<Block: BlockT>(
-	db: &dyn KeyValueDB,
+pub async fn require_header<Block: BlockT>(
+	db: &dyn AsyncKeyValueDB,
 	col_index: u32,
 	col: u32,
 	id: BlockId<Block>,
 ) -> sp_blockchain::Result<Block::Header> {
 	read_header(db, col_index, col, id)
+		.await
 		.and_then(|header| header.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", id))))
 }
 
 /// Read meta from the database.
-pub fn read_meta<Block>(db: &dyn KeyValueDB, col_header: u32) -> Result<
+pub async fn read_meta<Block>(db: &dyn AsyncKeyValueDB, col_header: u32) -> Result<
 	Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,
 	sp_blockchain::Error,
 >
 	where
 		Block: BlockT,
 {
-	let genesis_hash: Block::Hash = match read_genesis_hash(db)? {
+	let genesis_hash: Block::Hash = match read_genesis_hash(db).await? {
 		Some(genesis_hash) => genesis_hash,
 		None => return Ok(Meta {
 			best_hash: Default::default(),
@@ -342,23 +345,29 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_header: u32) -> Result<
 		}),
 	};
 
-	let load_meta_block = |desc, key| -> Result<_, sp_blockchain::Error> {
-		if let Some(Some(header)) = db.get(COLUMN_META, key).and_then(|id|
-			match id {
-				Some(id) => db.get(col_header, &id).map(|h| h.map(|b| Block::Header::decode(&mut &b[..]).ok())),
-				None => Ok(None),
-			}).map_err(db_err)?
-		{
-			let hash = header.hash();
-			debug!("DB Opened blockchain db, fetched {} = {:?} ({})", desc, hash, header.number());
-			Ok((hash, *header.number()))
-		} else {
-			Ok((genesis_hash.clone(), Zero::zero()))
-		}
+	let load_meta_block = |desc, key| -> Pin<Box<dyn Future<Output = Result<_, sp_blockchain::Error>>>> {
+		async move {
+			if let Ok(Some(header)) = db.get(COLUMN_META, key).map_err(db_err).and_then(|id| {
+				async {
+					match id {
+						Some(id) => db.get(col_header, &id)
+							.await
+							.map(|h| h.and_then(|b| Block::Header::decode(&mut &b[..]).ok())),
+						None => Ok(None),
+					}.map_err(db_err)
+				}
+			}).await {
+				let hash = header.hash();
+				debug!("DB Opened blockchain db, fetched {} = {:?} ({})", desc, hash, header.number());
+				Ok((hash, *header.number()))
+			} else {
+				Ok((genesis_hash.clone(), Zero::zero()))
+			}
+		}.boxed()
 	};
 
-	let (best_hash, best_number) = load_meta_block("best", meta_keys::BEST_BLOCK)?;
-	let (finalized_hash, finalized_number) = load_meta_block("final", meta_keys::FINALIZED_BLOCK)?;
+	let (best_hash, best_number) = load_meta_block("best", meta_keys::BEST_BLOCK).await?;
+	let (finalized_hash, finalized_number) = load_meta_block("final", meta_keys::FINALIZED_BLOCK).await?;
 
 	Ok(Meta {
 		best_hash,
@@ -370,8 +379,8 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_header: u32) -> Result<
 }
 
 /// Read genesis hash from database.
-pub fn read_genesis_hash<Hash: Decode>(db: &dyn KeyValueDB) -> sp_blockchain::Result<Option<Hash>> {
-	match db.get(COLUMN_META, meta_keys::GENESIS_HASH).map_err(db_err)? {
+pub async fn read_genesis_hash<Hash: Decode>(db: &dyn AsyncKeyValueDB) -> sp_blockchain::Result<Option<Hash>> {
+	match db.get(COLUMN_META, meta_keys::GENESIS_HASH).await.map_err(db_err)? {
 		Some(h) => match Decode::decode(&mut &h[..]) {
 			Ok(h) => Ok(Some(h)),
 			Err(err) => Err(sp_blockchain::Error::Backend(

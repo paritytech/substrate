@@ -42,10 +42,10 @@ const CURRENT_VERSION: u32 = 1;
 const V0_NUM_COLUMNS: u32 = 10;
 
 /// Upgrade database to current version.
-pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_blockchain::Result<()> {
+pub async fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_blockchain::Result<()> {
 	let db_version = current_version(db_path)?;
 	match db_version {
-		0 => migrate_0_to_1::<Block>(db_path, db_type)?,
+		0 => migrate_0_to_1::<Block>(db_path, db_type).await?,
 		1 => (),
 		_ => Err(sp_blockchain::Error::Backend(format!("Future database version: {}", db_version)))?,
 	}
@@ -56,14 +56,14 @@ pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_bl
 /// Migration from version0 to version1:
 /// 1) the number of columns has changed from 10 to 11;
 /// 2) changes tries configuration are now cached.
-fn migrate_0_to_1<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_blockchain::Result<()> {
+async fn migrate_0_to_1<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_blockchain::Result<()> {
 	{
-		let db = open_database(db_path, db_type, V0_NUM_COLUMNS)?;
+		let db = open_database(db_path, db_type, V0_NUM_COLUMNS).await?;
 		db.add_column().map_err(db_err)?;
 		db.flush().map_err(db_err)?;
 	}
 
-	let db = open_database(db_path, db_type, V0_NUM_COLUMNS + 1)?;
+	let db = open_database(db_path, db_type, V0_NUM_COLUMNS + 1).await?;
 
 	const V0_FULL_KEY_LOOKUP_COLUMN: u32 = 3;
 	const V0_FULL_HEADER_COLUMN: u32 = 4;
@@ -85,7 +85,7 @@ fn migrate_0_to_1<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_bl
 		),
 	};
 
-	let genesis_hash: Option<Block::Hash> = read_genesis_hash(&db)?;
+	let genesis_hash: Option<Block::Hash> = read_genesis_hash(&db).await?;
 	if let Some(genesis_hash) = genesis_hash {
 		let cache: DbCacheSync<Block> = DbCacheSync(RwLock::new(DbCache::new(
 			Arc::new(db),
@@ -119,12 +119,12 @@ fn current_version(path: &Path) -> sp_blockchain::Result<u32> {
 }
 
 /// Opens database of givent type with given number of columns.
-fn open_database(db_path: &Path, db_type: DatabaseType, db_columns: u32) -> sp_blockchain::Result<Database> {
+async fn open_database(db_path: &Path, db_type: DatabaseType, db_columns: u32) -> sp_blockchain::Result<Database> {
 	let db_path = db_path.to_str()
 		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
 	let db_cfg = DatabaseConfig::with_columns(db_columns);
 	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
-	check_database_type(&db, db_type)?;
+	check_database_type(&db, db_type).await?;
 	Ok(db)
 }
 

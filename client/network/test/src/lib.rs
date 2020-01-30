@@ -59,6 +59,7 @@ use sp_runtime::Justification;
 use sc_network::TransactionPool;
 use sc_network::specialization::NetworkSpecialization;
 use substrate_test_runtime_client::{self, AccountKeyring};
+use futures03::executor::block_on;
 
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
@@ -353,20 +354,21 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// Potentially costly, as it creates in-memory copies of both blockchains in order
 	/// to compare them. If you have easier/softer checks that are sufficient, e.g.
 	/// by using .info(), you should probably use it instead of this.
-	pub fn blockchain_canon_equals(&self, other: &Self) -> bool {
+	pub async fn blockchain_canon_equals(&self, other: &Self) -> bool {
 		if let (Some(mine), Some(others)) = (self.backend.clone(), other.backend.clone()) {
-			mine.as_in_memory().blockchain()
-				.canon_equals_to(others.as_in_memory().blockchain())
+			mine.as_in_memory().await.blockchain()
+				.canon_equals_to(others.as_in_memory().await.blockchain())
 		} else {
 			false
 		}
 	}
 
 	/// Count the total number of imported blocks.
-	pub fn blocks_count(&self) -> u64 {
-		self.backend.as_ref().map(
-			|backend| backend.blocks_count()
-		).unwrap_or(0)
+	pub async fn blocks_count(&self) -> u64 {
+		match self.backend.as_ref() {
+			Some(backend) => backend.blocks_count().await,
+			None => 0
+		}
 	}
 }
 
@@ -580,8 +582,8 @@ pub trait TestNetFactory: Sized {
 	/// Add a full peer.
 	fn add_full_peer_with_states(&mut self, config: &ProtocolConfig, keep_blocks: Option<u32>) {
 		let test_client_builder = match keep_blocks {
-			Some(keep_blocks) => TestClientBuilder::with_pruning_window(keep_blocks),
-			None => TestClientBuilder::with_default_backend(),
+			Some(keep_blocks) => block_on(TestClientBuilder::with_pruning_window(keep_blocks)),
+			None => block_on(TestClientBuilder::with_default_backend()),
 		};
 		let backend = test_client_builder.backend();
 		let (c, longest_chain) = test_client_builder.build_with_longest_chain();
@@ -661,7 +663,7 @@ pub trait TestNetFactory: Sized {
 		let mut config = config.clone();
 		config.roles = Roles::LIGHT;
 
-		let (c, backend) = substrate_test_runtime_client::new_light();
+		let (c, backend) = block_on(substrate_test_runtime_client::new_light());
 		let client = Arc::new(c);
 		let (
 			block_import,

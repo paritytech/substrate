@@ -30,7 +30,8 @@ use sp_consensus::import_queue::ImportQueue;
 use futures::{
 	Future, FutureExt, StreamExt,
 	channel::mpsc,
-	future::{select, ready}
+	future::{select, ready},
+	executor::block_on,
 };
 use sc_keystore::{Store as Keystore};
 use log::{info, warn, error};
@@ -211,14 +212,14 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 			Some(keystore.clone()),
 		);
 
-		sc_client_db::new_client(
+		block_on(sc_client_db::new_client(
 			db_config,
 			executor,
 			&config.chain_spec,
 			fork_blocks,
 			bad_blocks,
 			extensions,
-		)?
+		))?
 	};
 
 	Ok((client, backend, keystore))
@@ -318,7 +319,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 						sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),
 				},
 			};
-			sc_client_db::light::LightStorage::new(db_settings)?
+			block_on(sc_client_db::light::LightStorage::new(db_settings))?
 		};
 		let light_blockchain = sc_client::light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(

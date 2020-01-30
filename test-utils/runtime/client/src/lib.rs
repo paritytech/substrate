@@ -41,6 +41,7 @@ use sc_client::{
 		RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest,
 	},
 };
+use futures::executor::block_on;
 
 /// A prelude to import in tests.
 pub mod prelude {
@@ -166,7 +167,7 @@ pub trait DefaultTestClientBuilderExt: Sized {
 
 impl DefaultTestClientBuilderExt for TestClientBuilder<Executor, Backend> {
 	fn new() -> Self {
-		Self::with_default_backend()
+		block_on(Self::with_default_backend())
 	}
 }
 
@@ -340,12 +341,12 @@ pub fn new() -> Client<Backend> {
 }
 
 /// Creates new light client instance used for tests.
-pub fn new_light() -> (
+pub async fn new_light() -> (
 	sc_client::Client<LightBackend, LightExecutor, substrate_test_runtime::Block, substrate_test_runtime::RuntimeApi>,
 	Arc<LightBackend>,
 ) {
 
-	let storage = sc_client_db::light::LightStorage::new_test();
+	let storage = sc_client_db::light::LightStorage::new_test().await;
 	let blockchain = Arc::new(sc_client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
 	let executor = new_native_executor();

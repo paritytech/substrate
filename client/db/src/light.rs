@@ -21,6 +21,7 @@ use std::convert::TryInto;
 use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
+use kvdb_async::AsyncKeyValueDB;
 
 use sc_client_api::{backend::{AuxStore, NewBlockState}, UsageInfo};
 use sc_client::blockchain::{
@@ -41,6 +42,7 @@ use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntry
 use crate::utils::{self, meta_keys, DatabaseType, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::{DatabaseSettings, FrozenForDuration};
 use log::{trace, warn, debug};
+use async_std::task::block_on;
 
 pub(crate) mod columns {
 	pub const META: u32 = crate::utils::COLUMN_META;
@@ -59,7 +61,7 @@ const CHANGES_TRIE_CHT_PREFIX: u8 = 1;
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
 /// Locks order: meta, cache.
 pub struct LightStorage<Block: BlockT> {
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn AsyncKeyValueDB>,
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: HeaderMetadataCache<Block>,
@@ -70,23 +72,23 @@ pub struct LightStorage<Block: BlockT> {
 
 impl<Block: BlockT> LightStorage<Block> {
 	/// Create new storage with given settings.
-	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
-		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Light)?;
-		Self::from_kvdb(db as Arc<_>)
+	pub async fn new(config: DatabaseSettings) -> ClientResult<Self> {
+		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Light).await?;
+		Self::from_kvdb(db as Arc<_>).await
 	}
 
 	/// Create new memory-backed `LightStorage` for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test() -> Self {
+	pub async fn new_test() -> Self {
 		use utils::NUM_COLUMNS;
 
 		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
 
-		Self::from_kvdb(db as Arc<_>).expect("failed to create test-db")
+		Self::from_kvdb(db as Arc<_>).await.expect("failed to create test-db")
 	}
 
-	fn from_kvdb(db: Arc<dyn KeyValueDB>) -> ClientResult<Self> {
-		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
+	async fn from_kvdb(db: Arc<dyn AsyncKeyValueDB>) -> ClientResult<Self> {
+		let meta = read_meta::<Block>(&*db, columns::HEADER).await?;
 		let cache = DbCache::new(
 			db.clone(),
 			columns::KEY_LOOKUP,
@@ -142,7 +144,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		Block: BlockT,
 {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
-		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
+		block_on(utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id))
 	}
 
 	fn info(&self) -> BlockchainInfo<Block> {
@@ -158,12 +160,12 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 
 	fn status(&self, id: BlockId<Block>) -> ClientResult<BlockStatus> {
 		let exists = match id {
-			BlockId::Hash(_) => read_db(
+			BlockId::Hash(_) => block_on(read_db(
 				&*self.db,
 				columns::KEY_LOOKUP,
 				columns::HEADER,
 				id
-			)?.is_some(),
+			))?.is_some(),
 			BlockId::Number(n) => n <= self.meta.read().best_number,
 		};
 		match exists {
@@ -173,7 +175,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 	}
 
 	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
-		if let Some(lookup_key) = block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Hash(hash))? {
+		if let Some(lookup_key) = block_on(block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Hash(hash)))? {
 			let number = utils::lookup_key_to_number(&lookup_key)?;
 			Ok(Some(number))
 		} else {
@@ -277,7 +279,7 @@ impl<Block: BlockT> LightStorage<Block> {
 	}
 
 	// Note that a block is finalized. Only call with child of last finalized block.
-	fn note_finalized(
+	async fn note_finalized(
 		&self,
 		transaction: &mut DBTransaction,
 		header: &Block::Header,
@@ -341,7 +343,8 @@ impl<Block: BlockT> LightStorage<Block> {
 
 			while prune_block <= new_cht_end {
 				if let Some(hash) = self.hash(prune_block)? {
-					let lookup_key = block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(prune_block))?
+					let lookup_key = block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(prune_block))
+						.await?
 						.expect("retrieved hash for `prune_block` right above. therefore retrieving lookup key must succeed. q.e.d.");
 					utils::remove_key_mappings(
 						transaction,
@@ -359,7 +362,7 @@ impl<Block: BlockT> LightStorage<Block> {
 	}
 
 	/// Read CHT root of given type for the block.
-	fn read_cht_root(
+	async fn read_cht_root(
 		&self,
 		cht_type: u8,
 		cht_size: NumberFor<Block>,
@@ -376,7 +379,9 @@ impl<Block: BlockT> LightStorage<Block> {
 		}
 
 		let cht_start = cht::start_number(cht_size, cht_number);
-		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)?).map_err(db_err)?
+		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)?)
+			.await
+			.map_err(db_err)?
 			.ok_or_else(no_cht_for_block)
 			.and_then(|hash| Block::Hash::decode(&mut &*hash).map_err(|_| no_cht_for_block()))
 			.map(Some)
@@ -400,11 +405,11 @@ impl<Block> AuxStore for LightStorage<Block>
 		for k in delete {
 			transaction.delete(columns::AUX, k);
 		}
-		self.db.write(transaction).map_err(db_err)
+		block_on(self.db.write(transaction)).map_err(db_err)
 	}
 
 	fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		self.db.get(columns::AUX, key).map(|r| r.map(|v| v.to_vec())).map_err(db_err)
+		block_on(self.db.get(columns::AUX, key)).map(|r| r.map(|v| v.to_vec())).map_err(db_err)
 	}
 }
 
@@ -465,11 +470,11 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		};
 
 		if finalized {
-			self.note_finalized(
+			block_on(self.note_finalized(
 				&mut transaction,
 				&header,
 				hash,
-			)?;
+			))?;
 		}
 
 		// update changes trie configuration cache
@@ -492,7 +497,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 			debug!("Light DB Commit {:?} ({})", hash, number);
 
-			self.db.write(transaction).map_err(db_err)?;
+			block_on(self.db.write(transaction)).map_err(db_err)?;
 			cache.commit(cache_ops)
 				.expect("only fails if cache with given name isn't loaded yet;\
 						cache is already loaded because there are cache_ops; qed");
@@ -510,7 +515,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 			let mut transaction = DBTransaction::new();
 			self.set_head_with_transaction(&mut transaction, hash.clone(), (number.clone(), hash.clone()))?;
-			self.db.write(transaction).map_err(db_err)?;
+			block_on(self.db.write(transaction)).map_err(db_err)?;
 			self.update_meta(hash, header.number().clone(), true, false);
 			Ok(())
 		} else {
@@ -523,7 +528,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
 	) -> ClientResult<Option<Block::Hash>> {
-		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
+		block_on(self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block))
 	}
 
 	fn changes_trie_cht_root(
@@ -531,7 +536,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
 	) -> ClientResult<Option<Block::Hash>> {
-		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
+		block_on(self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block))
 	}
 
 	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
@@ -539,7 +544,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			let mut transaction = DBTransaction::new();
 			let hash = header.hash();
 			let number = *header.number();
-			self.note_finalized(&mut transaction, &header, hash.clone())?;
+			block_on(self.note_finalized(&mut transaction, &header, hash.clone()))?;
 			{
 				let mut cache = self.cache.0.write();
 				let cache_ops = cache.transaction(&mut transaction)
@@ -549,7 +554,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 					)?
 					.into_ops();
 
-				self.db.write(transaction).map_err(db_err)?;
+				block_on(self.db.write(transaction)).map_err(db_err)?;
 				cache.commit(cache_ops)
 					.expect("only fails if cache with given name isn't loaded yet;\
 							cache is already loaded because there are cache_ops; qed");

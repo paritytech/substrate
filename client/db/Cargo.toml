@@ -8,13 +8,16 @@ license = "GPL-3.0"
 [dependencies]
 parking_lot = "0.9.0"
 log = "0.4.8"
-kvdb = "0.3.0"
-kvdb-rocksdb = { version = "0.4", optional = true }
-kvdb-memorydb = "0.3.0"
+kvdb = { git = "https://github.com/paritytech/parity-common", branch = "ashley-kvdb-async" }
+kvdb-async = { git = "https://github.com/paritytech/parity-common", branch = "ashley-kvdb-async" }
+kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", branch = "ashley-kvdb-async", optional = true }
+kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", branch = "ashley-kvdb-async" }
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
-parity-util-mem = { version = "0.4", default-features = false, features = ["std"] }
+parity-util-mem = { git = "https://github.com/paritytech/parity-common", branch = "ashley-kvdb-async", default-features = false, features = ["std"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+futures = "0.3.1"
+async-std = "*"
 
 sc-client-api = { version = "2.0.0", path = "../api" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
@@ -32,7 +35,7 @@ sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 quickcheck = "0.9"
-kvdb-rocksdb = "0.4"
+kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", branch = "ashley-kvdb-async" }
 tempfile = "3"
 
 [features]

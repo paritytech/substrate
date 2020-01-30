@@ -20,6 +20,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use hash_db::Prefix;
 use kvdb::{KeyValueDB, DBTransaction};
+use kvdb_async::AsyncKeyValueDB;
 use codec::{Decode, Encode};
 use parking_lot::RwLock;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -37,6 +38,7 @@ use crate::cache::{
 	DbCacheSync, DbCache, DbCacheTransactionOps,
 	ComplexBlockId, EntryType as CacheEntryType,
 };
+use async_std::task::block_on;
 
 /// Extract new changes trie configuration (if available) from the header.
 pub fn extract_new_configuration<Header: HeaderT>(header: &Header) -> Option<&Option<ChangesTrieConfiguration>> {
@@ -76,7 +78,7 @@ impl<Block: BlockT> From<DbCacheTransactionOps<Block>> for DbChangesTrieStorageT
 /// Stores all tries in separate DB column.
 /// Lock order: meta, tries_meta, cache, build_cache.
 pub struct DbChangesTrieStorage<Block: BlockT> {
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn AsyncKeyValueDB>,
 	meta_column: u32,
 	changes_tries_column: u32,
 	key_lookup_column: u32,
@@ -110,8 +112,8 @@ struct ChangesTriesMeta<Block: BlockT> {
 
 impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	/// Create new changes trie storage.
-	pub fn new(
-		db: Arc<dyn KeyValueDB>,
+	pub async fn new(
+		db: Arc<dyn AsyncKeyValueDB>,
 		meta_column: u32,
 		changes_tries_column: u32,
 		key_lookup_column: u32,
@@ -124,7 +126,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 			let meta = meta.read();
 			(meta.finalized_hash, meta.finalized_number, meta.genesis_hash)
 		};
-		let tries_meta = read_tries_meta(&*db, meta_column)?;
+		let tries_meta = read_tries_meta(&*db, meta_column).await?;
 		Ok(Self {
 			db: db.clone(),
 			meta_column,
@@ -147,7 +149,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	}
 
 	/// Commit new changes trie.
-	pub fn commit(
+	pub async fn commit(
 		&self,
 		tx: &mut DBTransaction,
 		mut changes_trie: MemoryDB<HasherFor<Block>>,
@@ -174,7 +176,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 				block.number,
 				Some(new_header),
 				cache_tx,
-			),
+			).await,
 		};
 
 		// update configuration cache
@@ -203,7 +205,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	}
 
 	/// Called when block is finalized.
-	pub fn finalize(
+	pub async fn finalize(
 		&self,
 		tx: &mut DBTransaction,
 		parent_block_hash: Block::Hash,
@@ -213,7 +215,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 		cache_tx: Option<DbChangesTrieStorageTransaction<Block>>,
 	) -> ClientResult<DbChangesTrieStorageTransaction<Block>> {
 		// prune obsolete changes tries
-		self.prune(tx, block_hash, block_num, new_header.clone(), cache_tx.as_ref())?;
+		self.prune(tx, block_hash, block_num, new_header.clone(), cache_tx.as_ref()).await?;
 
 		// if we have inserted the block that we're finalizing in the same transaction
 		// => then we have already finalized it from the commit() call
@@ -278,7 +280,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	}
 
 	/// Prune obsolete changes tries.
-	fn prune(
+	async fn prune(
 		&self,
 		tx: &mut DBTransaction,
 		block_hash: Block::Hash,
@@ -327,7 +329,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 					self.key_lookup_column,
 					self.header_column,
 					BlockId::Number(next_digest_range_start),
-				)?.hash(),
+				).await?.hash(),
 			};
 
 			let config_for_new_block = new_header
@@ -403,7 +405,7 @@ impl<Block: BlockT> sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, 
 		&self,
 		hash: Block::Hash,
 	) -> Result<sp_state_machine::ChangesTrieAnchorBlockId<Block::Hash, NumberFor<Block>>, String> {
-		utils::read_header::<Block>(&*self.db, self.key_lookup_column, self.header_column, BlockId::Hash(hash))
+		block_on(utils::read_header::<Block>(&*self.db, self.key_lookup_column, self.header_column, BlockId::Hash(hash)))
 			.map_err(|e| e.to_string())
 			.and_then(|maybe_header| maybe_header.map(|header|
 				sp_state_machine::ChangesTrieAnchorBlockId {
@@ -431,9 +433,9 @@ impl<Block: BlockT> sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, 
 			// the block is not finalized
 			let mut current_num = anchor.number;
 			let mut current_hash: Block::Hash = convert_hash(&anchor.hash);
-			let maybe_anchor_header: Block::Header = utils::require_header::<Block>(
+			let maybe_anchor_header: Block::Header = block_on(utils::require_header::<Block>(
 				&*self.db, self.key_lookup_column, self.header_column, BlockId::Number(current_num)
-			).map_err(|e| e.to_string())?;
+			)).map_err(|e| e.to_string())?;
 			if maybe_anchor_header.hash() == current_hash {
 				// if anchor is canonicalized, then the block is also canonicalized
 				BlockId::Number(block)
@@ -442,9 +444,9 @@ impl<Block: BlockT> sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, 
 				// => we should find the required block hash by traversing
 				// back from the anchor to the block with given number
 				while current_num != block {
-					let current_header: Block::Header = utils::require_header::<Block>(
+					let current_header: Block::Header = block_on(utils::require_header::<Block>(
 						&*self.db, self.key_lookup_column, self.header_column, BlockId::Hash(current_hash)
-					).map_err(|e| e.to_string())?;
+					)).map_err(|e| e.to_string())?;
 
 					current_hash = *current_header.parent_hash();
 					current_num = current_num - One::one();
@@ -455,12 +457,12 @@ impl<Block: BlockT> sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, 
 		};
 
 		Ok(
-			utils::require_header::<Block>(
+			block_on(utils::require_header::<Block>(
 				&*self.db,
 				self.key_lookup_column,
 				self.header_column,
 				block_id,
-			)
+			))
 			.map_err(|e| e.to_string())?
 			.digest()
 			.log(DigestItem::as_changes_trie_root)
@@ -487,17 +489,17 @@ where
 	}
 
 	fn get(&self, key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
-		self.db.get(self.changes_tries_column, key.as_ref())
+		block_on(self.db.get(self.changes_tries_column, key.as_ref()))
 			.map_err(|err| format!("{}", err))
 	}
 }
 
 /// Read changes tries metadata from database.
-fn read_tries_meta<Block: BlockT>(
-	db: &dyn KeyValueDB,
+async fn read_tries_meta<Block: BlockT>(
+	db: &dyn AsyncKeyValueDB,
 	meta_column: u32,
 ) -> ClientResult<ChangesTriesMeta<Block>> {
-	match db.get(meta_column, meta_keys::CHANGES_TRIES_META).map_err(db_err)? {
+	match db.get(meta_column, meta_keys::CHANGES_TRIES_META).await.map_err(db_err)? {
 		Some(h) => match Decode::decode(&mut &h[..]) {
 			Ok(h) => Ok(h),
 			Err(err) => Err(ClientError::Backend(format!("Error decoding changes tries metadata: {}", err))),

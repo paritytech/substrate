@@ -65,8 +65,9 @@ fn to_journal_key(block: u64) -> Vec<u8> {
 }
 
 impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
-	pub fn new<D: MetaDb>(db: &D) -> Result<RefWindow<BlockHash, Key>, Error<D::Error>> {
+	pub async fn new<D: MetaDb>(db: &D) -> Result<RefWindow<BlockHash, Key>, Error<D::Error>> {
 		let last_pruned = db.get_meta(&to_meta_key(LAST_PRUNED, &()))
+			.await
 			.map_err(|e| Error::Db(e))?;
 		let pending_number: u64 = match last_pruned {
 			Some(buffer) => u64::decode(&mut buffer.as_slice())? + 1,
@@ -84,7 +85,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		trace!(target: "state-db", "Reading pruning journal. Pending #{}", pending_number);
 		loop {
 			let journal_key = to_journal_key(block);
-			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+			match db.get_meta(&journal_key).await.map_err(|e| Error::Db(e))? {
 				Some(record) => {
 					let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
 					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
