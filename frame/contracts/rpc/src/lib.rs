@@ -133,6 +133,12 @@ pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance> {
 		at: Option<BlockHash>,
 	) -> Result<Option<Bytes>>;
 
+	/// Returns the projected time a given contract will be able to sustain paying its rent.
+	///
+	/// The returned projection is relevent for the given block, i.e. it is as if the contract was
+	/// accessed at the beginning of that block.
+	///
+	/// Returns `None` if the contract is exempted from rent.
 	#[rpc(name = "contracts_rentProjection")]
 	fn rent_projection(
 		&self,
