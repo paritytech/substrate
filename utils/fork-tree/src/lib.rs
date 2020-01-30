@@ -232,14 +232,39 @@ impl<H, N, V> ForkTree<H, N, V> where
 		number: &N,
 		is_descendent_of: &F,
 		predicate: &P,
-	) -> Result<Option<&Node<H, N, V>>, Error<E>>
-		where E: std::error::Error,
-			  F: Fn(&H, &H) -> Result<bool, E>,
-			  P: Fn(&V) -> bool,
+	) -> Result<Option<&Node<H, N, V>>, Error<E>> where
+		E: std::error::Error,
+		F: Fn(&H, &H) -> Result<bool, E>,
+		P: Fn(&V) -> bool,
 	{
 		// search for node starting from all roots
 		for root in self.roots.iter() {
 			let node = root.find_node_where(hash, number, is_descendent_of, predicate)?;
+
+			// found the node, early exit
+			if let FindOutcome::Found(node) = node {
+				return Ok(Some(node));
+			}
+		}
+
+		Ok(None)
+	}
+
+	/// Same as `find_node_where`, but returns mutable reference.
+	pub fn find_node_mut_where<F, E, P>(
+		&mut self,
+		hash: &H,
+		number: &N,
+		is_descendent_of: &F,
+		predicate: &P,
+	) -> Result<Option<&mut Node<H, N, V>>, Error<E>> where
+		E: std::error::Error,
+		F: Fn(&H, &H) -> Result<bool, E>,
+		P: Fn(&V) -> bool,
+	{
+		// search for node starting from all roots
+		for root in self.roots.iter_mut() {
+			let node = root.find_node_mut_where(hash, number, is_descendent_of, predicate)?;
 
 			// found the node, early exit
 			if let FindOutcome::Found(node) = node {
@@ -634,6 +659,66 @@ mod node_implementation {
 			for node in self.children.iter() {
 				// found node, early exit
 				match node.find_node_where(hash, number, is_descendent_of, predicate)? {
+					FindOutcome::Abort => return Ok(FindOutcome::Abort),
+					FindOutcome::Found(x) => return Ok(FindOutcome::Found(x)),
+					FindOutcome::Failure(true) => {
+						// if the block was a descendent of this child,
+						// then it cannot be a descendent of any others,
+						// so we don't search them.
+						known_descendent_of = true;
+						break;
+					},
+					FindOutcome::Failure(false) => {},
+				}
+			}
+
+			// node not found in any of the descendents, if the node we're
+			// searching for is a descendent of this node then we will stop the
+			// search here, since there aren't any more children and we found
+			// the correct node so we don't want to backtrack.
+			let is_descendent_of = known_descendent_of || is_descendent_of(&self.hash, hash)?;
+			if is_descendent_of {
+				// if the predicate passes we return the node
+				if predicate(&self.data) {
+					return Ok(FindOutcome::Found(self));
+				}
+			}
+
+			// otherwise, tell our ancestor that we failed, and whether
+			// the block was a descendent.
+			Ok(FindOutcome::Failure(is_descendent_of))
+		}
+
+		/// Find a node in the tree that is the deepest ancestor of the given
+		/// block hash which also passes the given predicate, backtracking
+		/// when the predicate fails.
+		/// The given function `is_descendent_of` should return `true` if the second hash (target)
+		/// is a descendent of the first hash (base).
+		// FIXME: it would be useful if this returned a mutable reference but
+		// rustc can't deal with lifetimes properly. an option would be to try
+		// an iterative definition instead.
+		pub fn find_node_mut_where<F, P, E>(
+			&mut self,
+			hash: &H,
+			number: &N,
+			is_descendent_of: &F,
+			predicate: &P,
+		) -> Result<FindOutcome<&mut Node<H, N, V>>, Error<E>>
+			where E: std::error::Error,
+				  F: Fn(&H, &H) -> Result<bool, E>,
+				  P: Fn(&V) -> bool,
+		{
+			// stop searching this branch
+			if *number < self.number {
+				return Ok(FindOutcome::Failure(false));
+			}
+
+			let mut known_descendent_of = false;
+
+			// continue depth-first search through all children
+			for node in self.children.iter_mut() {
+				// found node, early exit
+				match node.find_node_mut_where(hash, number, is_descendent_of, predicate)? {
 					FindOutcome::Abort => return Ok(FindOutcome::Abort),
 					FindOutcome::Found(x) => return Ok(FindOutcome::Found(x)),
 					FindOutcome::Failure(true) => {

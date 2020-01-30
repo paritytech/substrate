@@ -7,24 +7,6 @@ use sp_consensus_sassafras::{
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sc_client_api::AuxStore;
 
-#[derive(Clone, Debug, Encode, Decode, Default)]
-pub struct PoolAuxiliary {
-	pub proofs: Vec<VRFProof>,
-	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
-	pub randomness: Randomness,
-	pub epoch: EpochNumber,
-}
-
-#[derive(Clone, Debug, Encode, Decode, Default)]
-pub struct Auxiliary {
-	pub total_weight: SassafrasBlockWeight,
-	pub weight: SassafrasBlockWeight,
-	pub slot: SlotNumber,
-
-	pub publishing: PoolAuxiliary,
-	pub validating: PoolAuxiliary,
-}
-
 pub const AUXILIARY_KEY: &[u8] = b"sassafras_auxiliary";
 
 fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>

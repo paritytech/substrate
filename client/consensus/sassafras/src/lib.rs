@@ -32,6 +32,58 @@ use sc_client_api::backend::{AuxStore, Backend};
 use sc_consensus_slots::SlotCompatible;
 use crate::aux_schema::{AUXILIARY_KEY, PoolAuxiliary};
 
+/// Validator set of a particular epoch, can be either publishing or validating.
+pub struct ValidatorSet {
+	/// Proofs of all VRFs collected.
+	pub proofs: Vec<VRFProof>,
+	/// The authorities and their weights.
+	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+	/// Randomness for this epoch.
+	pub randomness: Randomness,
+}
+
+/// Epoch data for Sassafras
+pub struct Epoch {
+	/// Start slot of the epoch.
+	pub start_slot: SlotNumber,
+	/// Duration of this epoch.
+	pub duration: SlotNumber,
+	/// Epoch index.
+	pub epoch_index: u64,
+
+	/// Publishing validator set. The set will start validating block in the next epoch.
+	pub publishing: ValidatorSet,
+	/// Validating validator set. The set validates block in the current epoch.
+	pub validating: ValidatorSet,
+}
+
+impl EpochT for Epoch {
+	type NextEpochDescriptor = NextEpochDescriptor;
+
+	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
+		Epoch {
+			epoch_index: self.epoch_index + 1,
+			start_slot: self.start_slot + self.duration,
+			duration: self.duration,
+
+			validating: self.publishing.clone(),
+			publishing: ValidatorSet {
+				proofs: Vec::new(),
+				authorities: descriptor.authorities,
+				randomness: descriptor.randomness,
+			},
+		}
+	}
+
+	fn start_slot(&self) -> SlotNumber {
+		self.start_slot
+	}
+
+	fn end_slot(&self) -> SlotNumber {
+		self.start_slot + self.duration
+	}
+}
+
 #[derive(derive_more::Display, Debug)]
 enum Error<B: BlockT> {
 	#[display(fmt = "Could not extract timestamp and slot: {:?}", _0)]
