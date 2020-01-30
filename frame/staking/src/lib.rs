@@ -1542,7 +1542,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn end_session(session_index: SessionIndex) {
-		if ErasStartSessionIndex::get(Self::active_era() + 1) == session_index + 1 {
+		let next_era_start = ErasStartSessionIndex::get(Self::active_era() + 1);
+
+		if next_era_start < session_index + 1 {
+			frame_support::print("Error: some era ending has been missed");
+		}
+
+		// This should be a strict equality but better be safe in case ending has been missed.
+		if next_era_start <= session_index + 1 {
 			Self::end_era(session_index);
 		}
 	}
