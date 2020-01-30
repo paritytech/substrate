@@ -210,7 +210,7 @@ where
 
 	let mut full_version = sc_service::config::full_version_from_strs(
 		version.version,
-		version.commit
+		version.commit,
 	);
 	full_version.push_str("\n");
 
