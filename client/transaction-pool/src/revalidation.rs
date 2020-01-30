@@ -1,3 +1,21 @@
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Pool periodic revalidation.
+
 use std::{sync::Arc, collections::{HashMap, HashSet, BTreeMap}};
 use sc_transaction_graph::{ChainApi, Pool, ExHash, NumberFor, ValidatedTransaction, Transaction};
 use sp_runtime::traits::{Zero, SaturatedConversion};
@@ -16,11 +34,15 @@ const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(5);
 
 const BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
 
+/// Payload from queue to worker.
 struct WorkerPayload<Api: ChainApi> {
 	at: NumberFor<Api>,
 	transactions: Vec<ExHash<Api>>,
 }
 
+/// Async revalidation worker.
+///
+/// Implements future and can be spawned in place or in background.
 struct RevalidationWorker<Api: ChainApi> {
 	api: Arc<Api>,
 	pool: Arc<Pool<Api>>,
@@ -39,6 +61,7 @@ fn interval(duration: Duration) -> impl Stream<Item=()> + Unpin {
 	}).map(drop)
 }
 
+/// Actual async revalidation batch.
 async fn batch_revalidate<Api: ChainApi>(
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
@@ -218,11 +241,16 @@ where
 	}
 }
 
+/// Background state for revalidation queue.
 struct BackgroundConfig<Api: ChainApi> {
 	to_worker: mpsc::UnboundedSender<WorkerPayload<Api>>,
 	_spawner: futures::executor::ThreadPool,
 }
 
+/// Revalidation queue.
+///
+/// Can be configured background (`new_background`)
+/// or immediate (just `new`).
 pub struct RevalidationQueue<Api: ChainApi> {
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
@@ -233,6 +261,7 @@ impl<Api: ChainApi> RevalidationQueue<Api>
 where
 	Api: 'static,
 {
+	/// New revalidation queue without background worker.
 	pub fn new(api: Arc<Api>, pool: Arc<Pool<Api>>) -> Self {
 		Self {
 			api,
@@ -241,6 +270,7 @@ where
 		}
 	}
 
+	/// New revalidation queue with background worker.
 	pub fn new_background(api: Arc<Api>, pool: Arc<Pool<Api>>) -> Self {
 		let spawner = futures::executor::ThreadPool::builder()
 			.name_prefix("txpool-worker")
@@ -262,6 +292,11 @@ where
 		}
 	}
 
+	/// Offload some revalidation to the queue.
+	///
+	/// If queue configured with background worker, this will return immediately.
+	/// If queue configured without background worker, this will resolve after
+	/// revalidation is actually done.
 	pub async fn offload(&self, at: NumberFor<Api>, transactions: Vec<ExHash<Api>>) {
 		if let Some(ref background) = self.background {
 			background.to_worker.unbounded_send(WorkerPayload { at, transactions })
