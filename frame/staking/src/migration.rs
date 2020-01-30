@@ -28,6 +28,7 @@ pub mod inner {
 	use crate::{Store, Module, Trait, EraRewardPoints, BalanceOf, StakingLedger, UnlockChunk};
 	use frame_support::{
 		StorageLinkedMap, StoragePrefixedMap, StorageValue, StorageDoubleMap, StorageMap,
+		traits::Get,
 	};
 	use codec::{Encode, Decode, HasCompact};
 	use sp_std::vec::Vec;
@@ -127,6 +128,7 @@ pub mod inner {
 	//   * ErasRewardPoints
 	//   * ActiveEra
 	//   * ErasStakers
+	//   * ErasStakersClipped
 	//   * ErasValidatorPrefs
 	//   * ErasTotalStake
 	//   * ErasStartSessionIndex
@@ -161,10 +163,21 @@ pub mod inner {
 		let current_elected = <Module<T> as Store>::CurrentElected::get();
 		let mut current_total_stake = <BalanceOf<T>>::zero();
 		for validator in &current_elected {
-			let exposure = <Module<T> as Store>::Stakers::get(validator);
+			let mut exposure = <Module<T> as Store>::Stakers::get(validator);
 			current_total_stake += exposure.total;
+			exposure.others.sort_unstable_by(|a, b| a.who.cmp(&b.who));
+			<Module<T> as Store>::ErasStakers::insert(current_era, validator, &exposure);
+
+			let mut exposure_clipped = exposure;
+			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
+			if exposure_clipped.others.len() > clipped_max_len {
+				exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value));
+				exposure_clipped.others.truncate(clipped_max_len);
+				exposure_clipped.others.sort_unstable_by(|a, b| a.who.cmp(&b.who));
+			}
+			<Module<T> as Store>::ErasStakersClipped::insert(current_era, validator, exposure_clipped);
+
 			let pref = <Module<T> as Store>::Validators::get(validator);
-			<Module<T> as Store>::ErasStakers::insert(current_era, validator, exposure);
 			<Module<T> as Store>::ErasValidatorPrefs::insert(current_era, validator, pref);
 		}
 		<Module<T> as Store>::ErasTotalStake::insert(current_era, current_total_stake);

@@ -641,6 +641,12 @@ pub trait Trait: frame_system::Trait {
 
 	/// The NPoS reward curve to use.
 	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
+
+	/// The maximum number of nominator rewarded for each validator.
+	///
+	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
+	/// their reward. This used to limit the i/o cost for the nominator payout.
+	type MaxNominatorRewardedPerValidator: Get<u32>;
 }
 
 /// Mode of era-forcing.
@@ -716,6 +722,19 @@ decl_storage! {
 		///
 		/// Is it removed after `HISTORY_DEPTH` eras.
 		pub ErasStakers get(fn eras_stakers):
+			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
+			=> Exposure<T::AccountId, BalanceOf<T>>;
+
+		/// Clipped Exposure of validator at era.
+		///
+		/// This is similar to [`ErasStakers`] but number of nominators exposed is reduce to the
+		/// `T::MaxNominatorRewardedPerValidator` biggest stakers.
+		/// This used to limit the i/o cost for the nominator payout.
+		///
+		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
+		///
+		/// Is it removed after `HISTORY_DEPTH` eras.
+		pub ErasStakersClipped get(fn eras_stakers_clipped):
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> Exposure<T::AccountId, BalanceOf<T>>;
 
@@ -1400,7 +1419,7 @@ impl<T: Trait> Module<T> {
 
 		let mut reward = Perbill::zero();
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
-		for validator in validators {
+		for validator in validators.into_iter().take(MAX_NOMINATIONS) {
 			let commission = Self::eras_validator_prefs(&era, &validator).commission;
 			let validator_exposure = <ErasStakers<T>>::get(&era, &validator);
 
@@ -1682,8 +1701,8 @@ impl<T: Trait> Module<T> {
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
-			let elected_stashes = phragmen_result.winners.iter()
-				.map(|(s, _)| s.clone())
+			let elected_stashes = phragmen_result.winners.into_iter()
+				.map(|(s, _)| s)
 				.collect::<Vec<T::AccountId>>();
 			let assignments = phragmen_result.assignments;
 
@@ -1715,7 +1734,10 @@ impl<T: Trait> Module<T> {
 						}
 						total = total.saturating_add(value);
 					});
-				others.sort_by(|a, b| a.who.cmp(&b.who));
+
+				total_staked = total_staked.saturating_add(total);
+
+				others.sort_unstable_by(|a, b| a.who.cmp(&b.who));
 				let exposure = Exposure {
 					own,
 					others,
@@ -1725,9 +1747,16 @@ impl<T: Trait> Module<T> {
 					// we simulate it in some tests.
 					total,
 				};
+				<ErasStakers<T>>::insert(&current_era, &c, &exposure);
 
-				total_staked = total_staked.saturating_add(exposure.total);
-				<ErasStakers<T>>::insert(&current_era, &c, exposure.clone());
+				let mut exposure_clipped = exposure;
+				let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
+				if exposure_clipped.others.len() > clipped_max_len {
+					exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value));
+					exposure_clipped.others.truncate(clipped_max_len);
+					exposure_clipped.others.sort_unstable_by(|a, b| a.who.cmp(&b.who));
+				}
+				<ErasStakersClipped<T>>::insert(&current_era, &c, exposure_clipped);
 			}
 
 			// Insert current era informations
