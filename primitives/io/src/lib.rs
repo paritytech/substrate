@@ -935,7 +935,7 @@ pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2
 #[cfg(feature = "std")]
 pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
-	transaction::HostFunctions,
+	storage_transaction::HostFunctions,
 	misc::HostFunctions,
 	offchain::HostFunctions,
 	crypto::HostFunctions,
