@@ -1117,11 +1117,11 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			let finalized = if operation.commit_state {
-				let mut changesets = BTreeMap::new();
+				let mut changesets = BTreeMap::<_, sc_state_db::ChangeSet<Vec<u8>>>::new();
 				let mut ops: u64 = 0;
 				let mut bytes: u64 = 0;
 				for (info, mut updates) in operation.db_updates.into_iter() {
-					let mut data: sc_state_db::ChangeSet<Vec<u8>> = sc_state_db::ChangeSet::default();
+					let data = changesets.entry(info).or_default();
 					for (key, (val, rc)) in updates.drain() {
 						if rc > 0 {
 							ops += 1;
@@ -1134,14 +1134,6 @@ impl<Block: BlockT> Backend<Block> {
 
 							data.deleted.push(key);
 						}
-					}
-					match changesets.entry(info) {
-						Entry::Vacant(e) => { e.insert(data); },
-						Entry::Occupied(mut e) => {
-							let e = e.get_mut();
-							e.inserted.extend(data.inserted);
-							e.deleted.extend(data.deleted);
-						},
 					}
 				}
 				self.state_usage.tally_writes(ops, bytes);
