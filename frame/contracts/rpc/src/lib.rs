@@ -21,7 +21,7 @@ use std::sync::Arc;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use pallet_contracts_common::RentProjection;
+use pallet_contracts_primitives::RentProjection;
 use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -51,10 +51,10 @@ const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
 const GAS_PER_SECOND: u64 = 1_000_000_000;
 
 /// A private newtype for converting `ContractAccessError` into an RPC error.
-struct ContractAccessError(pallet_contracts_common::ContractAccessError);
+struct ContractAccessError(pallet_contracts_primitives::ContractAccessError);
 impl From<ContractAccessError> for Error {
 	fn from(e: ContractAccessError) -> Error {
-		use pallet_contracts_common::ContractAccessError::*;
+		use pallet_contracts_primitives::ContractAccessError::*;
 		match e.0 {
 			DoesntExist => Error {
 				code: ErrorCode::ServerError(CONTRACT_DOESNT_EXIST),

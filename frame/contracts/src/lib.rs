@@ -128,7 +128,7 @@ use frame_support::{
 use frame_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
 use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
-use pallet_contracts_common::{RentProjection, ContractAccessError};
+use pallet_contracts_primitives::{RentProjection, ContractAccessError};
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
 pub type TrieId = Vec<u8>;

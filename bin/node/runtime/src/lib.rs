@@ -771,13 +771,13 @@ impl_runtime_apis! {
 		fn get_storage(
 			address: AccountId,
 			key: [u8; 32],
-		) -> pallet_contracts_common::GetStorageResult {
+		) -> pallet_contracts_primitives::GetStorageResult {
 			Contracts::get_storage(address, key)
 		}
 
 		fn rent_projection(
 			address: AccountId
-		) -> pallet_contracts_common::RentProjectionResult<BlockNumber> {
+		) -> pallet_contracts_primitives::RentProjectionResult<BlockNumber> {
 			Contracts::rent_projection(address)
 		}
 	}
