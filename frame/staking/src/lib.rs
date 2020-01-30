@@ -718,7 +718,6 @@ decl_storage! {
 		pub ErasStakers get(fn eras_stakers):
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> Exposure<T::AccountId, BalanceOf<T>>;
-		// TODO: consider switching this to a simple map EraIndex => Vec<Exposure>
 
 		/// Similarly to `ErasStakers` this holds the preferences of validators.
 		///
@@ -1327,7 +1326,6 @@ decl_module! {
 		///   maximum number of validators that may be nominated by a single nominator, it is
 		///   bounded only economically (all nominators are required to place a minimum stake).
 		/// # </weight>
-		// TODO: Limit the amount of nominators that can be assigned to a validator by Phragmen.
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn payout_nominator(origin, era: EraIndex, validators: Vec<T::AccountId>)
 			-> DispatchResult
@@ -1545,9 +1543,8 @@ impl<T: Trait> Module<T> {
 
 	/// Initialise the session 0 (and consequently the era 0)
 	fn initial_session() -> Option<Vec<T::AccountId>> {
-		// note: `CurrentEraStart` is set in `on_finalize` of the first block because now is not
+		// note: `ActiveEraStart` is set in `on_finalize` of the first block because now is not
 		// available yet.
-		CurrentEraStartSessionIndex::put(0);
 		BondedEras::mutate(|bonded| bonded.push((0, 0)));
 		Self::select_validators()
 	}
