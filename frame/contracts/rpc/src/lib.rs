@@ -27,7 +27,10 @@ use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::{Bytes, H256};
 use sp_rpc::number;
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT},
+};
 
 pub use self::gen_client::Client as ContractsClient;
 pub use pallet_contracts_rpc_runtime_api::{
@@ -162,15 +165,24 @@ impl<C, B> Contracts<C, B> {
 		}
 	}
 }
-impl<C, Block, AccountId, Balance, BlockNumber>
-	ContractsApi<<Block as BlockT>::Hash, BlockNumber, AccountId, Balance> for Contracts<C, Block>
+impl<C, Block, AccountId, Balance>
+	ContractsApi<
+		<Block as BlockT>::Hash,
+		<<Block as BlockT>::Header as HeaderT>::Number,
+		AccountId,
+		Balance,
+	> for Contracts<C, Block>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	C::Api: ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber>,
+	C::Api: ContractsRuntimeApi<
+		Block,
+		AccountId,
+		Balance,
+		<<Block as BlockT>::Header as HeaderT>::Number,
+	>,
 	AccountId: Codec,
 	Balance: Codec,
-	BlockNumber: Codec,
 {
 	fn call(
 		&self,
@@ -238,7 +250,7 @@ where
 		&self,
 		address: AccountId,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<Option<BlockNumber>> {
+	) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
