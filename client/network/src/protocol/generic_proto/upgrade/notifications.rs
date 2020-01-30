@@ -35,7 +35,7 @@
 ///
 
 use bytes::BytesMut;
-use futures::prelude::*;
+use futures::{prelude::*, ready};
 use futures_codec::Framed;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade};
 use log::error;
@@ -233,16 +233,68 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	}
 }
 
+impl<TSubstream> Sink<VecDeque<u8>> for NotificationsOutSubstream<TSubstream>
+	where TSubstream: AsyncRead + AsyncWrite + Unpin,
+{
+	type Error = io::Error;
+
+	fn poll_ready(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+		// TODO: add a limit to the number of items in the queue
+		Poll::Ready(Ok(()))
+	}
+
+	fn start_send(mut self: Pin<&mut Self>, item: VecDeque<u8>) -> Result<(), Self::Error> {
+		// TODO: add a limit to the number of items in the queue
+		self.messages_queue.push_back(item);
+		Ok(())
+	}
+
+	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		let mut this = self.project();
+
+		while !this.messages_queue.is_empty() {
+			match Sink::poll_ready(this.socket.as_mut(), cx) {
+				Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
+				Poll::Ready(Ok(())) => {
+					let msg = this.messages_queue.pop_front()
+						.expect("checked for !is_empty above; qed");
+					Sink::start_send(this.socket.as_mut(), msg)?;
+					*this.need_flush = true;
+				},
+				Poll::Pending => return Poll::Pending,
+			}
+		}
+
+		if *this.need_flush {
+			match Sink::poll_flush(this.socket.as_mut(), cx) {
+				Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
+				Poll::Ready(Ok(())) => *this.need_flush = false,
+				Poll::Pending => return Poll::Pending,
+			}
+		}
+
+		Poll::Ready(Ok(()))
+	}
+
+	fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		ready!(Sink::poll_flush(self.as_mut(), cx))?;
+		let this = self.project();
+		Sink::poll_close(this.socket, cx)
+	}
+}
+
 impl<TSubstream> NotificationsOutSubstream<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	/// Pushes a message to the queue of messages.
+	// TODO: remove in favour of Sink
 	pub fn push_message(&mut self, message: impl Into<VecDeque<u8>>) {
 		// TODO: limit the size of the queue
 		self.messages_queue.push_back(message.into());
 	}
 
 	/// Processes the substream.
+	// TODO: remove in favour of Sink
 	pub fn process(self: Pin<&mut Self>, cx: &mut Context) -> Result<(), io::Error> {
 		let mut this = self.project();
 
@@ -278,7 +330,7 @@ mod tests {
 	use async_std::net::{TcpListener, TcpStream};
 	use futures::{prelude::*, channel::oneshot};
 	use libp2p::core::upgrade;
-	use std::{collections::VecDeque, pin::Pin, task::Poll};
+	use std::collections::VecDeque;
 
 	#[test]
 	fn basic_works() {
@@ -294,12 +346,7 @@ mod tests {
 			).await.unwrap();
 
 			assert_eq!(handshake, b"hello world");
-			substream.push_message(b"test message".iter().cloned().collect::<VecDeque<_>>());
-			// TODO: ugly
-			future::poll_fn(|cx| {
-				Pin::new(&mut substream).process(cx).unwrap();
-				Poll::Ready(())
-			}).await;
+			substream.send(b"test message".iter().cloned().collect::<VecDeque<_>>()).await.unwrap();
 		});
 
 		async_std::task::block_on(async move {
