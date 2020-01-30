@@ -320,7 +320,7 @@ where
 
 /// Run the node
 ///
-/// Run the light node if the role is "light", otherwise run the full node.
+/// Builds and runs either a full or a light node, depending on the `role` within the `Configuration`.
 pub fn run_node<G, E, FNL, FNF, SL, SF>(
 	config: Configuration<G, E>,
 	new_light: FNL,
