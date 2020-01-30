@@ -96,16 +96,19 @@ impl TestApi {
 	}
 
 	/// Push block as a part of canonical chain under given number.
-	pub fn push_block(&self, block_number: BlockNumber, xts: Vec<Extrinsic>) {
+	pub fn push_block(&self, block_number: BlockNumber, xts: Vec<Extrinsic>) -> Hash {
 		let mut chain = self.chain.write();
-		chain.block_by_number.insert(block_number, xts);
-		chain.header_by_number.insert(block_number, Header {
+		let header = Header {
 			number: block_number,
 			digest: Default::default(),
 			extrinsics_root:  Default::default(),
 			parent_hash: Default::default(),
 			state_root: Default::default(),
-		});
+		};
+		let header_hash = header.hash();
+		chain.block_by_number.insert(block_number, xts);
+		chain.header_by_number.insert(block_number, header);
+		header_hash
 	}
 
 	/// Push a block without a number.

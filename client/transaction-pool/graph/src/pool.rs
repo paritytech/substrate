@@ -178,7 +178,7 @@ impl<B: ChainApi> Pool<B> {
 	) {
 		let now = std::time::Instant::now();
 		self.validated_pool.resubmit(revalidated_transactions);
-		log::debug!(target: "txpool",
+		log::debug!(target: "txpool", 
 			"Resubmitted. Took {} ms. Status: {:?}",
 			now.elapsed().as_millis(),
 			self.validated_pool.status()
@@ -982,82 +982,6 @@ mod tests {
 			assert_eq!(pool.status().ready, 1);
 			assert_eq!(pool.status().future, 0);
 		}
-	}
-
-	#[test]
-	fn should_revalidate_ready_transactions() {
-		fn transfer(nonce: u64) -> Extrinsic {
-			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
-				to: AccountId::from_h256(H256::from_low_u64_be(2)),
-				amount: 5,
-				nonce,
-			})
-		}
-
-		// given
-		let pool = pool();
-		let tx0 = transfer(0);
-		let hash0 = pool.validated_pool.api().hash_and_length(&tx0).0;
-		let watcher0 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx0)).unwrap();
-		let tx1 = transfer(1);
-		let hash1 = pool.validated_pool.api().hash_and_length(&tx1).0;
-		let watcher1 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx1)).unwrap();
-		let tx2 = transfer(2);
-		let hash2 = pool.validated_pool.api().hash_and_length(&tx2).0;
-		let watcher2 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx2)).unwrap();
-		let tx3 = transfer(3);
-		let hash3 = pool.validated_pool.api().hash_and_length(&tx3).0;
-		let watcher3 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx3)).unwrap();
-		let tx4 = transfer(4);
-		let hash4 = pool.validated_pool.api().hash_and_length(&tx4).0;
-		let watcher4 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx4)).unwrap();
-		assert_eq!(pool.status().ready, 5);
-
-		// when
-		pool.validated_pool.api().invalidate.lock().insert(hash3);
-		pool.validated_pool.api().clear_requirements.lock().insert(hash1);
-		pool.validated_pool.api().add_requirements.lock().insert(hash0);
-		block_on(pool.revalidate_ready(&BlockId::Number(0), None)).unwrap();
-
-		// then
-		// hash0 now has unsatisfied requirements => it is moved to the future queue
-		// hash1 is now independent of hash0 => it is in ready queue
-		// hash2 still depends on hash1 => it is in ready queue
-		// hash3 is now invalid => it is removed from the pool
-		// hash4 now depends on invalidated hash3 => it is moved to the future queue
-		//
-		// events for hash3 are: Ready, Invalid
-		// events for hash4 are: Ready, Invalid
-		assert_eq!(pool.status().ready, 2);
-		assert_eq!(
-			futures::executor::block_on_stream(watcher3.into_stream()).collect::<Vec<_>>(),
-			vec![TransactionStatus::Ready, TransactionStatus::Invalid],
-		);
-
-		// when
-		pool.validated_pool.remove_invalid(&[hash0, hash1, hash2, hash4]);
-
-		// then
-		// events for hash0 are: Ready, Future, Invalid
-		// events for hash1 are: Ready, Invalid
-		// events for hash2 are: Ready, Invalid
-		assert_eq!(
-			futures::executor::block_on_stream(watcher0.into_stream()).collect::<Vec<_>>(),
-			vec![TransactionStatus::Ready, TransactionStatus::Future, TransactionStatus::Invalid],
-		);
-		assert_eq!(
-			futures::executor::block_on_stream(watcher1.into_stream()).collect::<Vec<_>>(),
-			vec![TransactionStatus::Ready, TransactionStatus::Invalid],
-		);
-		assert_eq!(
-			futures::executor::block_on_stream(watcher2.into_stream()).collect::<Vec<_>>(),
-			vec![TransactionStatus::Ready, TransactionStatus::Invalid],
-		);
-		assert_eq!(
-			futures::executor::block_on_stream(watcher4.into_stream()).collect::<Vec<_>>(),
-			vec![TransactionStatus::Ready, TransactionStatus::Future, TransactionStatus::Invalid],
-		);
 	}
 }
 

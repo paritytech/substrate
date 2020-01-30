@@ -15,14 +15,15 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::*;
-use sc_transaction_graph::Pool;
+use sc_transaction_graph::{self, Pool};
+use sp_transaction_pool::TransactionStatus;
 use futures::executor::block_on;
 use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::ValidTransaction,
 };
 use substrate_test_runtime_client::{
-	runtime::{Block, Hash, Index},
+	runtime::{Block, Hash, Index, Extrinsic},
 	AccountKeyring::*,
 };
 use substrate_test_runtime_transaction_pool::{TestApi, uxt};
@@ -222,4 +223,69 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	block_on(futures_timer::Delay::new(std::time::Duration::from_millis(10)));
 
 	assert_eq!(pool.status().ready, 0);
+}
+
+#[test]
+fn should_push_watchers_during_maintaince() {
+	fn alice_uxt(nonce: u64) -> Extrinsic {
+		uxt(Alice, 209 + nonce)
+	}
+
+	// given
+	let pool = maintained_pool();
+
+	let tx0 = alice_uxt(0);
+	let watcher0 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx0.clone())).unwrap();
+	let tx1 = alice_uxt(1);
+	let watcher1 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx1.clone())).unwrap();
+	let tx2 = alice_uxt(2);
+	let watcher2 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx2.clone())).unwrap();
+	let tx3 = alice_uxt(3);
+	let watcher3 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx3.clone())).unwrap();
+	let tx4 = alice_uxt(4);
+	let watcher4 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx4.clone())).unwrap();
+	assert_eq!(pool.status().ready, 5);
+
+	// when
+	pool.api.add_invalid(&tx3);
+	pool.api.add_invalid(&tx4);
+	block_on(pool.maintain(&BlockId::Number(0), &[]));
+
+	// revalidation is in background
+	block_on(futures_timer::Delay::new(std::time::Duration::from_millis(10)));
+
+	// then
+	// hash3 is now invalid
+	// hash4 is now invalid
+
+	assert_eq!(pool.status().ready, 3);
+	assert_eq!(
+		futures::executor::block_on_stream(watcher3).collect::<Vec<_>>(),
+		vec![TransactionStatus::Ready, TransactionStatus::Invalid],
+	);
+	assert_eq!(
+		futures::executor::block_on_stream(watcher4).collect::<Vec<_>>(),
+		vec![TransactionStatus::Ready, TransactionStatus::Invalid],
+	);
+
+	// when
+	pool.api.push_block(1, vec![tx0, tx1, tx2]);
+	block_on(pool.maintain(&BlockId::Number(1), &[]));
+
+	// then
+	// events for hash0 are: Ready, InBlock
+	// events for hash1 are: Ready, InBlock
+	// events for hash2 are: Ready, InBlock
+	assert_eq!(
+		futures::executor::block_on_stream(watcher0).collect::<Vec<_>>(),
+		vec![TransactionStatus::Ready, TransactionStatus::InBlock(Hash::zero())],
+	);
+	assert_eq!(
+		futures::executor::block_on_stream(watcher1).collect::<Vec<_>>(),
+		vec![TransactionStatus::Ready, TransactionStatus::InBlock(Hash::zero())],
+	);
+	assert_eq!(
+		futures::executor::block_on_stream(watcher2).collect::<Vec<_>>(),
+		vec![TransactionStatus::Ready, TransactionStatus::InBlock(Hash::zero())],
+	);
 }
