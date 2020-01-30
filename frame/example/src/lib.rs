@@ -640,10 +640,6 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 			_ => Ok(Default::default()),
 		}
 	}
-
-	fn identifier() -> Vec<&'static str> {
-		sp_std::vec!["watchdummy"]
-	}
 }
 
 #[cfg(test)]
