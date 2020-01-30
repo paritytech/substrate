@@ -110,13 +110,22 @@ fn subsistence_threshold<T: Trait>() -> BalanceOf<T> {
 ///
 /// Rent mechanism cannot consume more than `rent_allowance` set by the contract and it cannot make
 /// the balance lower than [`subsistence_threshold`].
+///
+/// In case the balance is below the subsistence threshold, this function returns `None`.
 fn rent_budget<T: Trait>(
 	balance: &BalanceOf<T>,
 	contract: &AliveContractInfo<T>,
-	subsistence_threshold: &BalanceOf<T>,
-) -> BalanceOf<T> {
-	let rent_allowed_to_charge = *balance - *subsistence_threshold;
-	<BalanceOf<T>>::min(contract.rent_allowance, rent_allowed_to_charge)
+) -> Option<BalanceOf<T>> {
+	let subsistence_threshold = subsistence_threshold::<T>();
+	if *balance < subsistence_threshold {
+		return None;
+	}
+
+	let rent_allowed_to_charge = *balance - subsistence_threshold;
+	Some(<BalanceOf<T>>::min(
+		contract.rent_allowance,
+		rent_allowed_to_charge,
+	))
 }
 
 /// Consider the case for rent payment of the given account and returns a `Verdict`.
@@ -150,12 +159,16 @@ fn consider_case<T: Trait>(
 		return Verdict::Exempt;
 	}
 
-	let subsistence_threshold = subsistence_threshold::<T>();
-	if balance < subsistence_threshold {
-		// The contract cannot afford to leave a tombstone, so remove the contract info altogether.
-		return Verdict::Kill;
-	}
-	let rent_budget = rent_budget::<T>(&balance, contract, &subsistence_threshold);
+	let rent_budget = match rent_budget::<T>(&balance, contract) {
+		Some(rent_budget) => rent_budget,
+		None => {
+			// The contract's balance is already below subsistence threshold. That indicates that
+			// the contract cannot afford to leave a tombstone.
+			//
+			// So cleanly wipe the contract.
+			return Verdict::Kill;
+		}
+	};
 
 	let dues = fee_per_block
 		.checked_mul(&blocks_passed.saturated_into::<u32>().into())
@@ -353,13 +366,14 @@ pub fn compute_rent_projection<T: Trait>(
 	}
 
 	// Then compute how much the contract will sustain under these circumstances.
-	let blocks_left = match rent_budget::<T>(
-		&balance,
-		&alive_contract_info,
-		&subsistence_threshold::<T>(),
-	)
-	.checked_div(&fee_per_block)
-	{
+	let rent_budget = rent_budget::<T>(&balance, &alive_contract_info).expect(
+		"the contract exists and in the alive state;
+		the updated balance must be greater than subsistence deposit;
+		this function doesn't return `None`;
+		qed
+		",
+	);
+	let blocks_left = match rent_budget.checked_div(&fee_per_block) {
 		Some(blocks_left) => blocks_left,
 		None => {
 			// `fee_per_block` is not zero here, so `checked_div` can return `None` if
