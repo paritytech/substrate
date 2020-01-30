@@ -245,7 +245,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorageRef<H>
 
 	fn get(
 		&self,
-		trie: Option<ChildInfo>,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
@@ -253,7 +252,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorageRef<H>
 		if let Some(v) = self.proof_recorder.read().get(key) {
 			return Ok(v.clone());
 		}
-		let backend_value =  self.backend.get(trie, key, prefix)?;
+		let backend_value =  self.backend.get(key, prefix)?;
 		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
 		Ok(backend_value)
 	}

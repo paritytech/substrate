@@ -71,7 +71,6 @@ use hash_db::{Hasher, Prefix};
 use num_traits::{One, Zero};
 use codec::{Decode, Encode};
 use sp_core;
-use sp_core::storage::{OwnedChildInfo, ChildInfo};
 use sp_trie::{MemoryDB, DBValue, TrieMut};
 use sp_trie::trie_types::TrieDBMut;
 use crate::{
@@ -175,11 +174,9 @@ impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorageRef<H> for TrieBack
 
 	fn get(
 		&self,
-		trie: Option<ChildInfo>,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		assert!(trie.is_none(), "Change trie is using a single top trie");
 		self.0.get(key, prefix)
 	}
 }

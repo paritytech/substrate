@@ -15,17 +15,16 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Trie-based state machine backend.
-
 use log::{warn, debug};
 use hash_db::Hasher;
-use sp_trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
+use sp_trie::{Trie, delta_trie_root, default_child_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use sp_core::storage::{ChildInfo, OwnedChildInfo};
 use std::collections::BTreeMap;
 use codec::{Codec, Decode};
 use crate::{
 	StorageKey, StorageValue, Backend,
-	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral, BackendStorageDBRef},
+	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral, BackendStorageDBRef, ChildTrieBackendStorage},
 };
 
 /// Patricia trie-based backend. Transaction type is overlays of changes to commit
@@ -86,7 +85,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
-		self.essence.child_storage(storage_key, child_info, key)
+		// TODO switch to &mut self like in overlay pr
+		let mut buf = Vec::new();
+		if let Some(essence) = self.child_essence(storage_key, child_info, &mut buf)? {
+			essence.storage(key)
+		} else {
+			Ok(None)
+		}
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
@@ -99,7 +104,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
-		self.essence.next_child_storage_key(storage_key, child_info, key)
+		// TODO switch to &mut self like in overlay pr
+		let mut buf = Vec::new();
+		if let Some(essence) = self.child_essence(storage_key, child_info, &mut buf)? {
+			essence.next_storage_key(key)
+		} else {
+			Ok(None)
+		}
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -116,7 +127,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: ChildInfo,
 		f: F,
 	) {
-		self.essence.for_keys_in_child_storage(storage_key, child_info, f)
+		// TODO switch to &mut self like in overlay pr
+		let mut buf = Vec::new();
+		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info, &mut buf) {
+			essence.for_keys(f)
+		}
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
@@ -126,7 +141,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		prefix: &[u8],
 		f: F,
 	) {
-		self.essence.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+		// TODO switch to &mut self like in overlay pr
+		let mut buf = Vec::new();
+		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info, &mut buf) {
+			essence.for_keys_with_prefix(prefix, f)
+		}
 	}
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
@@ -206,7 +225,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		let default_root = default_child_trie_root::<Layout<H>>(storage_key);
 
 		let mut write_overlay = S::Overlay::default();
-		let mut root = match self.storage(storage_key) {
+		let mut root: H::Out = match self.storage(storage_key) {
 			Ok(value) =>
 				value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or(default_root.clone()),
 			Err(e) => {
@@ -216,15 +235,16 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		};
 
 		{
-			let keyspaced_backend = (self.essence.backend_storage(), child_info.keyspace());
+			// TODO switch to &mut self like in overlay pr
+			let mut buf = Vec::new();
+			let child_essence = ChildTrieBackendStorage::new(self.essence.backend_storage(), Some(child_info), &mut buf);
 			// Do not write prefix in overlay.
 			let mut eph = Ephemeral::new(
-				&keyspaced_backend,
+				&child_essence,
 				&mut write_overlay,
 			);
 
-			match child_delta_trie_root::<Layout<H>, _, _, _, _, _>(
-				storage_key,
+			match delta_trie_root::<Layout<H>, _, _, _, _>(
 				&mut eph,
 				root,
 				delta
@@ -243,6 +263,29 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		Some(self)
+	}
+}
+
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where
+	H::Out: Ord + Codec,
+{
+	fn child_essence<'a>(
+		&'a self,
+		storage_key: &[u8],
+		child_info: ChildInfo<'a>,
+		buffer: &'a mut Vec<u8>,
+	) -> Result<Option<TrieBackendEssence<ChildTrieBackendStorage<'a, H, S>, H>>, <Self as Backend<H>>::Error> {
+		let root: Option<H::Out> = self.storage(storage_key)?
+			.and_then(|encoded_root| Decode::decode(&mut &encoded_root[..]).ok());
+		Ok(if let Some(root) = root {
+			Some(TrieBackendEssence::new(ChildTrieBackendStorage::new(
+				self.essence.backend_storage(),
+				Some(child_info),
+				buffer,
+			), root))
+		} else {
+			None
+		})
 	}
 }
 

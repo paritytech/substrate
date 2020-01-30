@@ -217,54 +217,6 @@ pub fn default_child_trie_root<L: TrieConfiguration>(
 	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
 }
 
-/// Determine a child trie root given its ordered contents, closed form. H is the default hasher,
-/// but a generic implementation may ignore this type parameter and use other hashers.
-pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
-	_storage_key: &[u8],
-	input: I,
-) -> <L::Hash as Hasher>::Out
-	where
-		I: IntoIterator<Item = (A, B)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>,
-{
-	L::trie_root(input)
-}
-
-/// Determine a child trie root given a hash DB and delta values. H is the default hasher,
-/// but a generic implementation may ignore this type parameter and use other hashers.
-pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
-	_storage_key: &[u8],
-	db: &mut DB,
-	root_data: RD,
-	delta: I,
-) -> Result<<L::Hash as Hasher>::Out, Box<TrieError<L>>>
-	where
-		I: IntoIterator<Item = (A, Option<B>)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>,
-		RD: AsRef<[u8]>,
-		DB: hash_db::HashDB<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDB<TrieHash<L>, trie_db::DBValue>,
-{
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_data.as_ref());
-
-	{
-		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root)?;
-
-		for (key, change) in delta {
-			match change {
-				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
-				None => trie.remove(key.as_ref())?,
-			};
-		}
-	}
-
-	Ok(root)
-}
-
 /// Call `f` for all keys in a child trie.
 pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
 	_storage_key: &[u8],
@@ -293,6 +245,28 @@ pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
 	Ok(())
 }
 
+/// Call `f` for all keys in a child trie.
+pub fn for_keys_in_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
+	db: &DB,
+	root: &TrieHash<L>,
+	mut f: F
+) -> Result<(), Box<TrieError<L>>>
+	where
+		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
+			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
+{
+	let trie = TrieDB::<L>::new(&*db, &root)?;
+	let iter = trie.iter()?;
+
+	for x in iter {
+		let (key, _) = x?;
+		f(&key);
+	}
+
+	Ok(())
+}
+
+
 /// Record all keys for a given root.
 pub fn record_all_keys<L: TrieConfiguration, DB>(
 	db: &DB,
@@ -314,26 +288,6 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 	}
 
 	Ok(())
-}
-
-/// Read a value from the child trie.
-pub fn read_child_trie_value<L: TrieConfiguration, DB>(
-	_storage_key: &[u8],
-	keyspace: &[u8],
-	db: &DB,
-	root_slice: &[u8],
-	key: &[u8]
-) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
-	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
-{
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_slice);
-
-	let db = KeySpacedDB::new(&*db, keyspace);
-	Ok(TrieDB::<L>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Read a value from the child trie with given query.
