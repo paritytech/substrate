@@ -201,6 +201,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 	where BalanceOf<T>: Send + Sync
 {
+	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
