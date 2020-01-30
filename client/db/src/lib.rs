@@ -666,9 +666,14 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for StorageDb<Block> {
-	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		trie: Option<ChildInfo>,
+		key: &Block::Hash,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<HasherFor<Block>>(key, prefix);
-		self.state_db.get(&key, self)
+		self.state_db.get(trie, &key, self)
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 }
@@ -694,7 +699,12 @@ impl<Block: BlockT> DbGenesisStorage<Block> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for DbGenesisStorage<Block> {
-	fn get(&self, _key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		_trie: Option<ChildInfo>,
+		_key: &Block::Hash,
+		_prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
 }
@@ -1316,7 +1326,7 @@ impl<Block: BlockT> Backend<Block> {
 }
 
 fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::CommitSet<Vec<u8>>) {
-	let mut key_buffer = Vec::new(); 
+	let mut key_buffer = Vec::new();
 	for child_data in commit.data.into_iter() {
 		if let Some(child_info) = child_data.info {
 			// children tries with prefixes
@@ -1640,6 +1650,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				Ok(Some(header)) => {
 					sp_state_machine::Storage::get(
 						self.storage.as_ref(),
+						None, // header in top trie
 						&header.state_root(),
 						(&[], None),
 					).unwrap_or(None).is_some()

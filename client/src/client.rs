@@ -564,7 +564,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				self.storage.with_cached_changed_keys(root, functor)
 			}
 
-			fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
+			fn get(
+				&self,
+				key: &Block::Hash,
+				prefix: Prefix,
+			) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
 		}

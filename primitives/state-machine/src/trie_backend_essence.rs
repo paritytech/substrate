@@ -27,13 +27,18 @@ use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	for_keys_in_child_trie, KeySpacedDB, keyspace_as_prefix_alloc};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, OwnedChildInfo};
 use codec::Encode;
 
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {
 	/// Get a trie node.
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
+	fn get(
+		&self,
+		trie: Option<ChildInfo>,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String>;
 }
 
 /// Patricia trie-based pairs storage essence.
@@ -359,10 +364,12 @@ impl<'a, S, H, O> hash_db::PlainDBRef<H::Out, DBValue> for Ephemeral<'a, S, H, O
 	O: hash_db::HashDB<H, DBValue> + Default + Consolidate,
 {
 	fn get(&self, key: &H::Out) -> Option<DBValue> {
+		// TODO need new trait with ct as parameter!!!
 		if let Some(val) = hash_db::HashDB::get(self.overlay, key, EMPTY_PREFIX) {
 			Some(val)
 		} else {
-			match self.storage.get(&key, EMPTY_PREFIX) {
+			unimplemented!("new trait with ct as parameter");
+			match self.storage.get(None, &key, EMPTY_PREFIX) {
 				Ok(x) => x,
 				Err(e) => {
 					warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -382,7 +389,8 @@ impl<'a, S, H> hash_db::PlainDBRef<H::Out, DBValue> for BackendStorageDBRef<'a, 
 	H: 'a + Hasher,
 {
 	fn get(&self, key: &H::Out) -> Option<DBValue> {
-		match self.storage.get(&key, EMPTY_PREFIX) {
+		unimplemented!("new trait with ct as parameter");
+		match self.storage.get(None, &key, EMPTY_PREFIX) {
 			Ok(x) => x,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -432,8 +440,9 @@ impl<'a, S, H, O> hash_db::HashDBRef<H, DBValue> for Ephemeral<'a, S, H, O> wher
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		if let Some(val) = hash_db::HashDB::get(self.overlay, key, prefix) {
 			Some(val)
-		} else {
-			match self.storage.get(&key, prefix) {
+		} else {	
+			unimplemented!("new trait with ct as parameter");
+			match self.storage.get(None, &key, prefix) {
 				Ok(x) => x,
 				Err(e) => {
 					warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -453,7 +462,8 @@ impl<'a, S, H> hash_db::HashDBRef<H, DBValue> for BackendStorageDBRef<'a, S, H> 
 	H: 'a + Hasher,
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		match self.storage.get(&key, prefix) {
+		unimplemented!("new trait with ct as parameter");
+		match self.storage.get(None, &key, prefix) {
 			Ok(x) => x,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -473,7 +483,12 @@ pub trait TrieBackendStorageRef<H: Hasher> {
 	/// Type of in-memory overlay.
 	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
 	/// Get the value stored at key.
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
+	fn get(
+		&self,
+		trie: Option<ChildInfo>,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String>;
 }
 
 /// Key-value pairs storage that is used by trie backend essence.
@@ -485,8 +500,13 @@ impl<H: Hasher, B: TrieBackendStorageRef<H> + Send + Sync> TrieBackendStorage<H>
 impl<H: Hasher> TrieBackendStorageRef<H> for Arc<dyn Storage<H>> {
 	type Overlay = PrefixedMemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		Storage::<H>::get(self.deref(), key, prefix)
+	fn get(
+		&self,
+		trie: Option<ChildInfo>,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
+		Storage::<H>::get(self.deref(), trie, key, prefix)
 	}
 }
 
@@ -494,7 +514,14 @@ impl<H: Hasher> TrieBackendStorageRef<H> for Arc<dyn Storage<H>> {
 impl<H: Hasher> TrieBackendStorageRef<H> for PrefixedMemoryDB<H> {
 	type Overlay = PrefixedMemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		trie: Option<ChildInfo>,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
+		// TODO should we split prefixed memory db too?? -> likely yes: sharing
+		// rc does not make sense -> change type of PrefixedMemoryDB.
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
 }
@@ -502,17 +529,31 @@ impl<H: Hasher> TrieBackendStorageRef<H> for PrefixedMemoryDB<H> {
 impl<H: Hasher> TrieBackendStorageRef<H> for MemoryDB<H> {
 	type Overlay = MemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		trie: Option<ChildInfo>,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
+		// TODO should we split prefixed memory db too?? -> likely yes: sharing
+		// rc does not make sense -> change type of PrefixedMemoryDB.
+		// This could be mergde with prefixed impl through genericmemorydb
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
 }
 
+// TODO remove : should not be used anymore.
 impl<'a, H: Hasher, B: TrieBackendStorageRef<H>> TrieBackendStorageRef<H> for (&'a B, &'a [u8]) {
 	type Overlay = PrefixedMemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		trie: Option<ChildInfo>,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
 		let prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.get(key, (prefix.0.as_slice(), prefix.1))
+		self.0.get(trie, key, (prefix.0.as_slice(), prefix.1))
 	}
 }
 

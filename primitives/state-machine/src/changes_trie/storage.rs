@@ -26,6 +26,7 @@ use crate::{
 	trie_backend_essence::TrieBackendStorageRef,
 	changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber},
 };
+use sp_core::storage::ChildInfo;
 
 #[cfg(test)]
 use crate::backend::insert_into_memory_db;
@@ -187,8 +188,14 @@ impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, N
 		self.cache.with_changed_keys(root, functor)
 	}
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
+	fn get(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
+		// Change trie is a default top trie.
+		let trie = None;
+		MemoryDB::<H>::get(&self.data.read().mdb, trie, key, prefix)
 	}
 }
 
@@ -205,7 +212,13 @@ impl<'a, H, Number> TrieBackendStorageRef<H> for TrieBackendAdapter<'a, H, Numbe
 {
 	type Overlay = MemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		trie: Option<ChildInfo>,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
+		assert!(trie.is_none(), "Change trie is a single top trie");
 		self.storage.get(key, prefix)
 	}
 }

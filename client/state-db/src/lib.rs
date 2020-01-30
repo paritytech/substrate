@@ -40,7 +40,7 @@ use std::collections::{HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
-use sp_core::storage::OwnedChildInfo;
+use sp_core::storage::{OwnedChildInfo, ChildInfo};
 
 const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
@@ -400,10 +400,15 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn get<D: NodeDb>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>>
+	pub fn get<D: NodeDb>(
+		&self,
+		trie: Option<ChildInfo>,
+		key: &Key,
+		db: &D,
+	) -> Result<Option<DBValue>, Error<D::Error>>
 		where Key: AsRef<D::Key>
 	{
-		if let Some(value) = self.non_canonical.get(key) {
+		if let Some(value) = self.non_canonical.get(trie, key) {
 			return Ok(Some(value));
 		}
 		db.get(key.as_ref()).map_err(|e| Error::Db(e))
@@ -472,10 +477,15 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Get a value from non-canonical/pruning overlay or the backing DB.
-	pub fn get<D: NodeDb>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>>
+	pub fn get<D: NodeDb>(
+		&self,
+		trie: Option<ChildInfo>,
+		key: &Key,
+		db: &D,
+	) -> Result<Option<DBValue>, Error<D::Error>>
 		where Key: AsRef<D::Key>
 	{
-		self.db.read().get(key, db)
+		self.db.read().get(trie, key, db)
 	}
 
 	/// Revert all non-canonical blocks with the best block number.
