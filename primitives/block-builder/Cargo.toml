@@ -3,6 +3,7 @@ name = "sp-block-builder"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }

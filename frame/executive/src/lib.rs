@@ -385,7 +385,7 @@ mod tests {
 				fn some_root_operation(origin) {
 					let _ = frame_system::ensure_root(origin);
 				}
-				#[weight = SimpleDispatchInfo::FreeNormal]
+				#[weight = SimpleDispatchInfo::InsecureFreeNormal]
 				fn some_unsigned_message(origin) {
 					let _ = frame_system::ensure_none(origin);
 				}
