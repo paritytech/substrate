@@ -145,3 +145,10 @@ fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
 		}),
 	}
 }
+
+pub fn load_spec(id: &str) -> Result<Option<ChainSpec>, String> {
+	Ok(match Alternative::from(id) {
+		Some(spec) => Some(spec.load()?),
+		None => None,
+	})
+}

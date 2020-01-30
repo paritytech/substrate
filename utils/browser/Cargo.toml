@@ -4,12 +4,13 @@ version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for creating a browser light-client."
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 futures = "0.3"
 futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
-libp2p = { version = "0.14.0-alpha.1", default-features = false }
+libp2p = { version = "0.15.0", default-features = false }
 console_error_panic_hook = "0.1.6"
 console_log = "0.1.2"
 js-sys = "0.3.34"

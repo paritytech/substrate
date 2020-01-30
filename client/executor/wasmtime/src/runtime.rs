@@ -32,42 +32,38 @@ use sc_executor_common::{
 use sp_wasm_interface::{Pointer, WordSize, Function};
 use sp_runtime_interface::unpack_ptr_and_len;
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::rc::Rc;
+use std::{cell::RefCell, collections::HashMap, convert::TryFrom, rc::Rc};
 
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilderContext;
-use cranelift_wasm::DefinedFuncIndex;
+use cranelift_wasm::{DefinedFuncIndex, MemoryIndex};
 use wasmtime_environ::{Module, translate_signature};
 use wasmtime_jit::{
 	ActionOutcome, CodeMemory, CompilationStrategy, CompiledModule, Compiler, Context, RuntimeValue,
 };
 use wasmtime_runtime::{Export, Imports, InstanceHandle, VMFunctionBody};
 
+/// TODO: We should remove this in https://github.com/paritytech/substrate/pull/4686
+/// Currently there is no way to extract this with wasmtime.
+const INITIAL_HEAP_PAGES: u32 = 17;
+
 /// A `WasmRuntime` implementation using the Wasmtime JIT to compile the runtime module to native
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
 	module: CompiledModule,
 	context: Context,
-	max_heap_pages: Option<u32>,
 	heap_pages: u32,
 	/// The host functions registered for this instance.
 	host_functions: Vec<&'static dyn Function>,
+	/// The index of the memory in the module.
+	memory_index: MemoryIndex,
 }
 
 impl WasmRuntime for WasmtimeRuntime {
 	fn update_heap_pages(&mut self, heap_pages: u64) -> bool {
-		match heap_pages_valid(heap_pages, self.max_heap_pages) {
-			Some(heap_pages) => {
-				self.heap_pages = heap_pages;
-				true
-			}
-			None => false,
-		}
+		self.heap_pages as u64 == heap_pages
 	}
 
 	fn host_functions(&self) -> &[&'static dyn Function] {
@@ -80,6 +76,7 @@ impl WasmRuntime for WasmtimeRuntime {
 			&mut self.module,
 			method,
 			data,
+			self.memory_index,
 			self.heap_pages,
 		)
 	}
@@ -93,31 +90,42 @@ pub fn create_instance(
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
-	let (compiled_module, context) = create_compiled_unit(code, &host_functions, allow_missing_func_imports)?;
+	let heap_pages = u32::try_from(heap_pages)
+		.map_err(|e|
+			WasmError::Other(format!("Heap pages can not be converted into `u32`: {:?}", e))
+		)?;
 
-	// Inspect the module for the min and max memory sizes.
-	let (min_memory_size, max_memory_size) = {
-		let module = compiled_module.module_ref();
-		let memory_index = match module.exports.get("memory") {
-			Some(wasmtime_environ::Export::Memory(memory_index)) => *memory_index,
-			_ => return Err(WasmError::InvalidMemory),
+	let (compiled_module, context, memory_index) = create_compiled_unit(
+		code,
+		&host_functions,
+		heap_pages,
+		allow_missing_func_imports,
+	)?;
+
+	let module = compiled_module.module_ref();
+	if !module.is_imported_memory(memory_index) {
+		// Inspect the module for the min and max memory sizes.
+		let (min_memory_size, max_memory_size) = {
+			let memory_plan = module.memory_plans
+				.get(memory_index)
+				.ok_or_else(|| WasmError::InvalidMemory)?;
+			(memory_plan.memory.minimum, memory_plan.memory.maximum)
 		};
-		let memory_plan = module.memory_plans.get(memory_index)
-			.expect("memory_index is retrieved from the module's exports map; qed");
-		(memory_plan.memory.minimum, memory_plan.memory.maximum)
-	};
 
-	// Check that heap_pages is within the allowed range.
-	let max_heap_pages = max_memory_size.map(|max| max.saturating_sub(min_memory_size));
-	let heap_pages = heap_pages_valid(heap_pages, max_heap_pages)
-		.ok_or_else(|| WasmError::InvalidHeapPages)?;
+		// Check that heap_pages is within the allowed range.
+		let max_heap_pages = max_memory_size.map(|max| max.saturating_sub(min_memory_size));
+
+		if max_heap_pages.map(|m| heap_pages > m).unwrap_or(false) {
+			return Err(WasmError::InvalidHeapPages)
+		}
+	}
 
 	Ok(WasmtimeRuntime {
 		module: compiled_module,
 		context,
-		max_heap_pages,
 		heap_pages,
 		host_functions,
+		memory_index,
 	})
 }
 
@@ -209,8 +217,9 @@ fn scan_missing_functions(
 fn create_compiled_unit(
 	code: &[u8],
 	host_functions: &[&'static dyn Function],
+	heap_pages: u32,
 	allow_missing_func_imports: bool,
-) -> std::result::Result<(CompiledModule, Context), WasmError> {
+) -> std::result::Result<(CompiledModule, Context, MemoryIndex), WasmError> {
 	let compilation_strategy = CompilationStrategy::Cranelift;
 
 	let compiler = new_compiler(compilation_strategy)?;
@@ -231,16 +240,32 @@ fn create_compiled_unit(
 		MissingFunctionStubs::new()
 	};
 
-	let env_missing_functions = missing_functions_stubs.stubs.remove("env").unwrap_or_else(|| Vec::new());
-	context.name_instance(
-		"env".to_owned(),
-		instantiate_env_module(global_exports, compiler, host_functions, env_missing_functions)?,
-	);
+	let env_missing_functions = missing_functions_stubs.stubs
+		.remove("env")
+		.unwrap_or_else(|| Vec::new());
+
+	let (module, memory_index) = instantiate_env_module(
+		global_exports,
+		compiler,
+		host_functions,
+		heap_pages,
+		env_missing_functions,
+		true,
+	)?;
+
+	context.name_instance("env".to_owned(), module);
 
 	for (module, missing_functions_stubs) in missing_functions_stubs.stubs {
 		let compiler = new_compiler(compilation_strategy)?;
 		let global_exports = context.get_global_exports();
-		let instance = instantiate_env_module(global_exports, compiler, &[], missing_functions_stubs)?;
+		let instance = instantiate_env_module(
+			global_exports,
+			compiler,
+			&[],
+			heap_pages,
+			missing_functions_stubs,
+			false,
+		)?.0;
 		context.name_instance(module, instance);
 	}
 
@@ -248,7 +273,7 @@ fn create_compiled_unit(
 	let module = context.compile_module(&code)
 		.map_err(|e| WasmError::Other(format!("module compile error: {}", e)))?;
 
-	Ok((module, context))
+	Ok((module, context, memory_index.expect("Memory is added on request; qed")))
 }
 
 /// Call a function inside a precompiled Wasm module.
@@ -257,22 +282,21 @@ fn call_method(
 	module: &mut CompiledModule,
 	method: &str,
 	data: &[u8],
+	memory_index: MemoryIndex,
 	heap_pages: u32,
 ) -> Result<Vec<u8>> {
+	let is_imported_memory = module.module().is_imported_memory(memory_index);
 	// Old exports get clobbered in `InstanceHandle::new` if we don't explicitly remove them first.
 	//
 	// The global exports mechanism is temporary in Wasmtime and expected to be removed.
 	// https://github.com/CraneStation/wasmtime/issues/332
-	clear_globals(&mut *context.get_global_exports().borrow_mut());
+	clear_globals(&mut *context.get_global_exports().borrow_mut(), is_imported_memory);
 
-	let mut instance = module.instantiate()
-		.map_err(|e| Error::Other(e.to_string()))?;
+	let mut instance = module.instantiate().map_err(|e| Error::Other(e.to_string()))?;
 
-	// Ideally there would be a way to set the heap pages during instantiation rather than
-	// growing the memory after the fact. Currently this may require an additional mmap and copy.
-	// However, the wasmtime API doesn't support modifying the size of memory on instantiation
-	// at this time.
-	grow_memory(&mut instance, heap_pages)?;
+	if !is_imported_memory {
+		grow_memory(&mut instance, heap_pages)?;
+	}
 
 	// Initialize the function executor state.
 	let heap_base = get_heap_base(&instance)?;
@@ -280,7 +304,7 @@ fn call_method(
 	reset_env_state_and_take_trap(context, Some(executor_state))?;
 
 	// Write the input data into guest memory.
-	let (data_ptr, data_len) = inject_input_data(context, &mut instance, data)?;
+	let (data_ptr, data_len) = inject_input_data(context, &mut instance, data, memory_index)?;
 	let args = [RuntimeValue::I32(u32::from(data_ptr) as i32), RuntimeValue::I32(data_len as i32)];
 
 	// Invoke the function in the runtime.
@@ -300,7 +324,7 @@ fn call_method(
 
 	// Read the output data from guest memory.
 	let mut output = vec![0; output_len as usize];
-	let memory = get_memory_mut(&mut instance)?;
+	let memory = get_memory_mut(&mut instance, memory_index)?;
 	read_memory_into(memory, Pointer::new(output_ptr), &mut output)?;
 	Ok(output)
 }
@@ -310,9 +334,10 @@ fn instantiate_env_module(
 	global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
 	compiler: Compiler,
 	host_functions: &[&'static dyn Function],
+	heap_pages: u32,
 	missing_functions_stubs: Vec<MissingFunction>,
-) -> std::result::Result<InstanceHandle, WasmError>
-{
+	add_memory: bool,
+) -> std::result::Result<(InstanceHandle, Option<MemoryIndex>), WasmError> {
 	let isa = target_isa()?;
 	let pointer_type = isa.pointer_type();
 	let call_conv = isa.default_call_conv();
@@ -325,7 +350,7 @@ fn instantiate_env_module(
 	for function in host_functions {
 		let sig = translate_signature(
 			cranelift_ir_signature(function.signature(), &call_conv),
-			pointer_type
+			pointer_type,
 		);
 		let sig_id = module.signatures.push(sig.clone());
 		let func_id = module.functions.push(sig_id);
@@ -365,6 +390,22 @@ fn instantiate_env_module(
 
 	code_memory.publish();
 
+	let memory_id = if add_memory {
+		let memory = cranelift_wasm::Memory {
+			minimum: heap_pages + INITIAL_HEAP_PAGES,
+			maximum: Some(heap_pages + INITIAL_HEAP_PAGES),
+			shared: false,
+		};
+		let memory_plan = wasmtime_environ::MemoryPlan::for_memory(memory, &Default::default());
+
+		let memory_id = module.memory_plans.push(memory_plan);
+		module.exports.insert("memory".into(), wasmtime_environ::Export::Memory(memory_id));
+
+		Some(memory_id)
+	} else {
+		None
+	};
+
 	let imports = Imports::none();
 	let data_initializers = Vec::new();
 	let signatures = PrimaryMap::new();
@@ -380,7 +421,10 @@ fn instantiate_env_module(
 		None,
 		Box::new(env_state),
 	);
-	result.map_err(|e| WasmError::Other(format!("cannot instantiate env: {}", e)))
+
+	result
+		.map_err(|e| WasmError::Other(format!("cannot instantiate env: {}", e)))
+		.map(|r| (r, memory_id))
 }
 
 /// Build a new TargetIsa for the host machine.
@@ -396,8 +440,11 @@ fn new_compiler(strategy: CompilationStrategy) -> std::result::Result<Compiler, 
 	Ok(Compiler::new(isa, strategy))
 }
 
-fn clear_globals(global_exports: &mut HashMap<String, Option<Export>>) {
-	global_exports.remove("memory");
+fn clear_globals(global_exports: &mut HashMap<String, Option<Export>>, is_imported_memory: bool) {
+	// When memory is imported, we can not delete the global export.
+	if !is_imported_memory {
+		global_exports.remove("memory");
+	}
 	global_exports.remove("__heap_base");
 	global_exports.remove("__indirect_function_table");
 }
@@ -441,13 +488,14 @@ fn inject_input_data(
 	context: &mut Context,
 	instance: &mut InstanceHandle,
 	data: &[u8],
+	memory_index: MemoryIndex,
 ) -> Result<(Pointer<u8>, WordSize)> {
 	let env_state = get_env_state(context)?;
 	let executor_state = env_state.executor_state
 		.as_mut()
 		.ok_or_else(|| "cannot get \"env\" module executor state")?;
 
-	let memory = get_memory_mut(instance)?;
+	let memory = get_memory_mut(instance, memory_index)?;
 
 	let data_len = data.len() as WordSize;
 	let data_ptr = executor_state.heap().allocate(memory, data_len)?;
@@ -455,12 +503,12 @@ fn inject_input_data(
 	Ok((data_ptr, data_len))
 }
 
-fn get_memory_mut(instance: &mut InstanceHandle) -> Result<&mut [u8]> {
-	match instance.lookup("memory") {
+fn get_memory_mut(instance: &mut InstanceHandle, memory_index: MemoryIndex) -> Result<&mut [u8]> {
+	match instance.lookup_by_declaration(&wasmtime_environ::Export::Memory(memory_index)) {
 		// This is safe to wrap in an unsafe block as:
 		// - The definition pointer is returned by a lookup on a valid instance and thus points to
 		//   a valid memory definition
-		Some(Export::Memory { definition, vmctx: _, memory: _ }) => unsafe {
+		Export::Memory { definition, vmctx: _, memory: _ } => unsafe {
 			Ok(std::slice::from_raw_parts_mut(
 				(*definition).base,
 				(*definition).current_length,
@@ -483,18 +531,4 @@ fn get_heap_base(instance: &InstanceHandle) -> Result<u32> {
 			_ => return Err(Error::HeapBaseNotFoundOrInvalid),
 		}
 	}
-}
-
-/// Checks whether the heap_pages parameter is within the valid range and converts it to a u32.
-/// Returns None if heaps_pages in not in range.
-fn heap_pages_valid(heap_pages: u64, max_heap_pages: Option<u32>)
-	-> Option<u32>
-{
-	let heap_pages = u32::try_from(heap_pages).ok()?;
-	if let Some(max_heap_pages) = max_heap_pages {
-		if heap_pages > max_heap_pages {
-			return None;
-		}
-	}
-	Some(heap_pages)
 }

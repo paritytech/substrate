@@ -4,6 +4,7 @@ version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate State Machine"
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 log = "0.4.8"

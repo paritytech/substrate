@@ -67,8 +67,8 @@ mod module1 {
 			T::BlockNumber: From<u32> + std::fmt::Display
 		{
 			pub Value config(value): T::GenericType;
-			pub Map: map u32 => u64;
-			pub LinkedMap: linked_map u32 => u64;
+			pub Map: map hasher(blake2_256) u32 => u64;
+			pub LinkedMap: linked_map hasher(blake2_256) u32 => u64;
 		}
 
 		add_extra_genesis {
@@ -136,9 +136,9 @@ mod module2 {
 	frame_support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
-			pub Map config(map): map u64 => u64;
-			pub LinkedMap config(linked_map): linked_map u64 => Vec<u8>;
-			pub DoubleMap config(double_map): double_map u64, u64 => u64;
+			pub Map config(map): map hasher(blake2_256) u64 => u64;
+			pub LinkedMap config(linked_map): linked_map hasher(blake2_256) u64 => Vec<u8>;
+			pub DoubleMap config(double_map): double_map hasher(blake2_256) u64, hasher(blake2_256) u64 => u64;
 		}
 	}
 

@@ -8,11 +8,11 @@ edition = "2018"
 
 [dependencies]
 log = "0.4.8"
-futures01 = { package = "futures", version = "0.1.29" }
 futures = { version = "0.3.1", features = ["compat"] }
+futures01 = { package = "futures", version = "0.1.29" }
 futures-timer = "0.4.0"
+libp2p = { version = "0.15.0", default-features = false, features = ["libp2p-websocket"] }
 lru = "0.1.2"
-libp2p = { version = "0.14.0-alpha.1", default-features = false, features = ["libp2p-websocket"] }
-sc-network = { version = "0.8", path = "../network" }
 parking_lot = "0.9.0"
+sc-network = { version = "0.8", path = "../network" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }

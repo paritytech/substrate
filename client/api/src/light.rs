@@ -21,10 +21,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 
 use sp_runtime::{
-    traits::{
-        Block as BlockT, Header as HeaderT, NumberFor,
-    },
-    generic::BlockId
+	traits::{
+		Block as BlockT, Header as HeaderT, NumberFor,
+	},
+	generic::BlockId
 };
 use sp_core::ChangesTrieConfigurationRange;
 use sp_state_machine::StorageProof;
@@ -307,8 +307,8 @@ pub trait RemoteBlockchain<Block: BlockT>: Send + Sync {
 pub mod tests {
 	use futures::future::Ready;
 	use parking_lot::Mutex;
-    use sp_blockchain::Error as ClientError;
-    use sp_test_primitives::{Block, Header, Extrinsic};
+	use sp_blockchain::Error as ClientError;
+	use sp_test_primitives::{Block, Header, Extrinsic};
 	use super::*;
 
 	pub type OkCallFetcher = Mutex<Vec<u8>>;

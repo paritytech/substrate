@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node implementation in Rust."
 build = "build.rs"
 edition = "2018"
+license = "GPL-3.0"
 default-run = "substrate"
 
 [badges]
@@ -30,7 +31,7 @@ hex-literal = "0.2.1"
 jsonrpc-core = "14.0.3"
 log = "0.4.8"
 rand = "0.7.2"
-structopt = "=0.3.7"
+structopt = { version = "0.3.8", optional = true }
 
 # primitives
 sp-authority-discovery = { version = "2.0.0",  path = "../../../primitives/authority-discovery" }
@@ -80,9 +81,7 @@ node-primitives = { version = "2.0.0", path = "../primitives" }
 node-executor = { version = "2.0.0", path = "../executor" }
 
 # CLI-specific dependencies
-tokio = { version = "0.2", features = ["rt-threaded"], optional = true }
 sc-cli = { version = "0.8.0", optional = true, path = "../../../client/cli" }
-ctrlc = { version = "3.1.3", features = ["termination"], optional = true }
 node-transaction-factory = { version = "0.8.0", optional = true, path = "../transaction-factory" }
 
 # WASM-specific dependencies
@@ -98,10 +97,19 @@ futures = "0.3.1"
 tempfile = "3.1.0"
 
 [build-dependencies]
-sc-cli = { version = "0.8.0", package = "sc-cli", path = "../../../client/cli" }
 build-script-utils = { version = "2.0.0", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
-structopt = "=0.3.7"
-vergen = "3.0.4"
+structopt = { version = "0.3.8", optional = true }
+node-transaction-factory = { version = "0.8.0", optional = true, path = "../transaction-factory" }
+
+[build-dependencies.sc-cli]
+version = "0.8.0"
+package = "sc-cli"
+path = "../../../client/cli"
+optional = true
+
+[build-dependencies.vergen]
+version = "3.0.4"
+optional = true
 
 [features]
 default = ["cli", "wasmtime"]
@@ -113,10 +121,10 @@ browser = [
 cli = [
 	"sc-cli",
 	"node-transaction-factory",
-	"tokio",
-	"ctrlc",
 	"sc-service/rocksdb",
 	"node-executor/wasmi-errno",
+	"vergen",
+	"structopt",
 ]
 wasmtime = [
 	"cli",
