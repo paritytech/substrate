@@ -1874,15 +1874,18 @@ impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 	}
 }
 
-/// A typed conversion from stash account ID to the current exposure of nominators
+/// A typed conversion from stash account ID to the active exposure of nominators
 /// on that account.
+///
+/// Active exposure is the exposure of the validator set currently validating. It can differ from
+/// the latest planned exposure.
 pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
 	for ExposureOf<T>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
-		Some(<Module<T>>::eras_stakers(<Module<T>>::current_era(), &validator))
+		Some(<Module<T>>::eras_stakers(<Module<T>>::active_era(), &validator))
 	}
 }
 
