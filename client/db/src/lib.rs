@@ -92,7 +92,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState<B> = sp_state_machine::TrieBackend<
-	Arc<dyn sp_state_machine::Storage<HasherFor<B>>>, HasherFor<B>
+	(Arc<dyn sp_state_machine::Storage<HasherFor<B>>>, Option<OwnedChildInfo>), HasherFor<B>
 >;
 
 /// Re-export the KVDB trait so that one can pass an implementation of it.
@@ -666,9 +666,14 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for StorageDb<Block> {
-	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		trie: Option<ChildInfo>,
+		key: &Block::Hash,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<HasherFor<Block>>(key, prefix);
-		self.state_db.get(&key, self)
+		self.state_db.get(trie, &key, self)
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 }
@@ -694,7 +699,12 @@ impl<Block: BlockT> DbGenesisStorage<Block> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for DbGenesisStorage<Block> {
-	fn get(&self, _key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		_trie: Option<ChildInfo>,
+		_key: &Block::Hash,
+		_prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
 }
@@ -1598,7 +1608,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			BlockId::Hash(h) if h == Default::default() => {
 				let genesis_storage = DbGenesisStorage::<Block>::new();
 				let root = genesis_storage.0.clone();
-				let db_state = DbState::<Block>::new(Arc::new(genesis_storage), root);
+				let db_state = DbState::<Block>::new((Arc::new(genesis_storage), None), root);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				return Ok(CachingState::new(state, self.shared_cache.clone(), None));
 			},
@@ -1617,7 +1627,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = hdr.state_root();
-					let db_state = DbState::<Block>::new(self.storage.clone(), *root);
+					let db_state = DbState::<Block>::new((self.storage.clone(), None), *root);
 					let state = RefTrackingState::new(
 						db_state,
 						self.storage.clone(),
@@ -1647,6 +1657,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				Ok(Some(header)) => {
 					sp_state_machine::Storage::get(
 						self.storage.as_ref(),
+						None, // header in top trie
 						&header.state_root(),
 						(&[], None),
 					).unwrap_or(None).is_some()

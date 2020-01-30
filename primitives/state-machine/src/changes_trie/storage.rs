@@ -187,7 +187,11 @@ impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, N
 		self.cache.with_changed_keys(root, functor)
 	}
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
 		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
 	}
 }
@@ -205,7 +209,11 @@ impl<'a, H, Number> TrieBackendStorageRef<H> for TrieBackendAdapter<'a, H, Numbe
 {
 	type Overlay = MemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
 		self.storage.get(key, prefix)
 	}
 }

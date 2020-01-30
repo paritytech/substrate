@@ -159,7 +159,11 @@ pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 		functor: &mut dyn FnMut(&HashMap<Option<StorageKey>, HashSet<StorageKey>>),
 	) -> bool;
 	/// Get a trie node.
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
+	fn get(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String>;
 }
 
 /// Changes trie storage -> trie backend essence adapter.
@@ -168,7 +172,11 @@ pub struct TrieBackendStorageAdapter<'a, H: Hasher, Number: BlockNumber>(pub &'a
 impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorageRef<H> for TrieBackendStorageAdapter<'a, H, N> {
 	type Overlay = sp_trie::MemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
 		self.0.get(key, prefix)
 	}
 }

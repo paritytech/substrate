@@ -243,7 +243,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorageRef<H>
 {
 	type Overlay = S::Overlay;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
+		// TODO switch proof model too (use a trie)
 		if let Some(v) = self.proof_recorder.read().get(key) {
 			return Ok(v.clone());
 		}

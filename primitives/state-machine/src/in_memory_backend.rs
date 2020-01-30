@@ -24,7 +24,7 @@ use crate::{
 use std::{error, fmt, collections::{BTreeMap, HashMap}, marker::PhantomData, ops};
 use hash_db::Hasher;
 use sp_trie::{
-	MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration, trie_types::Layout,
+	MemoryDB, default_child_trie_root, TrieConfiguration, trie_types::Layout,
 };
 use codec::Codec;
 use sp_core::storage::{ChildInfo, OwnedChildInfo, Storage};
@@ -268,8 +268,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = child_trie_root::<Layout<H>, _, _, _>(
-			&storage_key,
+		let root = Layout::<H>::trie_root(
 			existing_pairs.chain(transaction.iter().cloned())
 				.collect::<HashMap<_, _>>()
 				.into_iter()

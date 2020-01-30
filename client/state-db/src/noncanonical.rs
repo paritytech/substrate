@@ -21,11 +21,11 @@
 //! `revert_pending`
 
 use std::fmt;
-use std::collections::{HashMap, VecDeque, hash_map::Entry};
+use std::collections::{HashMap, VecDeque, hash_map::Entry, BTreeMap};
 use super::{Error, DBValue, ChildTrieChangeSets, CommitSet, MetaDb, Hash, to_meta_key, ChangeSet};
 use codec::{Encode, Decode};
 use log::trace;
-use sp_core::storage::OwnedChildInfo;
+use sp_core::storage::{ChildInfo, OwnedChildInfo};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 // version at start to avoid collision when adding a unit
@@ -34,6 +34,7 @@ const LAST_CANONICAL: &[u8] = b"last_canonical";
 
 type Keys<Key> = Vec<(Option<OwnedChildInfo>, Vec<Key>)>;
 type KeyVals<Key> = Vec<(Option<OwnedChildInfo>, Vec<(Key, DBValue)>)>;
+type ChildKeyVals<Key> = BTreeMap<Option<OwnedChildInfo>, HashMap<Key, (u32, DBValue)>>;
 
 /// See module documentation.
 pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
@@ -42,7 +43,7 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	parents: HashMap<BlockHash, BlockHash>,
 	pending_canonicalizations: Vec<BlockHash>,
 	pending_insertions: Vec<BlockHash>,
-	values: HashMap<Key, (u32, DBValue)>, //ref counted
+	values: ChildKeyVals<Key>, //ref counted
 	//would be deleted but kept around because block is pinned, ref counted.
 	pinned: HashMap<BlockHash, u32>,
 	pinned_insertions: HashMap<BlockHash, Keys<Key>>,
@@ -94,8 +95,12 @@ struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	deleted: Keys<Key>,
 }
 
-fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted: KeyVals<Key>) {
-	for (_ct, inserted) in inserted {
+fn insert_values<Key: Hash>(
+	values: &mut ChildKeyVals<Key>,
+	inserted: KeyVals<Key>,
+) {
+	for (ct, inserted) in inserted {
+		let values = values.entry(ct).or_default();
 		for (k, v) in inserted {
 			debug_assert!(values.get(&k).map_or(true, |(_, value)| *value == v));
 			let (ref mut counter, _) = values.entry(k).or_insert_with(|| (0, v));
@@ -104,9 +109,10 @@ fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted:
 	}
 }
 
-fn discard_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted: Keys<Key>) {
-	for inserted in inserted {
-		for k in inserted.1 {
+fn discard_values<Key: Hash>(values: &mut ChildKeyVals<Key>, inserted: Keys<Key>) {
+	for (ct, inserted) in inserted {
+		let values = values.entry(ct).or_default();
+		for k in inserted {
 			match values.entry(k) {
 				Entry::Occupied(mut e) => {
 					let (ref mut counter, _) = e.get_mut();
@@ -125,7 +131,7 @@ fn discard_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted
 
 fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	levels: &mut VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
-	mut values: &mut HashMap<Key, (u32, DBValue)>,
+	mut values: &mut ChildKeyVals<Key>,
 	index: usize,
 	parents: &mut HashMap<BlockHash, BlockHash>,
 	pinned: &HashMap<BlockHash, u32>,
@@ -168,7 +174,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 		let mut levels = VecDeque::new();
 		let mut parents = HashMap::new();
-		let mut values = HashMap::new();
+		let mut values = BTreeMap::new();
 		if let Some((ref hash, mut block)) = last_canonicalized {
 			// read the journal
 			trace!(target: "state-db", "Reading uncanonicalized journal. Last canonicalized #{} ({:?})", block, hash);
@@ -196,7 +202,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					let overlay = BlockOverlay {
 						hash: record.hash.clone(),
 						journal_key,
-						inserted: inserted,
+						inserted,
 						deleted: record.deleted,
 					};
 					insert_values(&mut values, record.inserted);
@@ -389,7 +395,10 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				ChangeSet {
 					inserted: keys.iter().map(|k| (
 						k.clone(),
-						self.values.get(k)
+						self.values
+							.get(ct)
+							.expect("For each key in overlays there's a value in values")
+							.get(k)
 							.expect("For each key in overlays there's a value in values").1.clone(),
 					)).collect(),
 					deleted: Vec::new(),
@@ -451,9 +460,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Get a value from the node overlay. This searches in every existing changeset.
-	pub fn get(&self, key: &Key) -> Option<DBValue> {
-		if let Some((_, value)) = self.values.get(&key) {
-			return Some(value.clone());
+	pub fn get(&self, trie: Option<ChildInfo>, key: &Key) -> Option<DBValue> {
+		// TODO make storage over data representation of OwnedChildInfo to use borrow
+		if let Some(values) = self.values.get(&trie.map(|t| t.to_owned())) {
+			if let Some((_, value)) = values.get(&key) {
+				return Some(value.clone());
+			}
 		}
 		None
 	}
@@ -559,7 +571,7 @@ mod tests {
 	use crate::test::{make_db, make_childchangeset};
 
 	fn contains(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
-		overlay.get(&H256::from_low_u64_be(key)) == Some(H256::from_low_u64_be(key).as_bytes().to_vec())
+		overlay.get(None, &H256::from_low_u64_be(key)) == Some(H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 
 	#[test]

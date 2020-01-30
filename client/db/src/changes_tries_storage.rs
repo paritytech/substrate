@@ -486,7 +486,11 @@ where
 		self.build_cache.read().with_changed_keys(root, functor)
 	}
 
-	fn get(&self, key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		key: &Block::Hash,
+		_prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
 		self.db.get(self.changes_tries_column, key.as_ref())
 			.map_err(|err| format!("{}", err))
 	}
