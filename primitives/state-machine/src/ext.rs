@@ -136,7 +136,10 @@ where
 
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.changes.iter_values(None).map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec()))))
+			.chain(
+				self.overlay.changes.iter_values(None)
+					.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())))
+			)
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -338,12 +341,12 @@ where
 			let next_overlay_key_change = self.overlay.next_storage_key_change(key);
 
 			match (next_backend_key, next_overlay_key_change) {
-				(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => return Some(backend_key),
+				(Some(backend_key), Some(overlay_key))
+					if &backend_key[..] < overlay_key.0 => return Some(backend_key),
 				(backend_key, None) => return backend_key,
 				(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
 					return Some(overlay_key.0.to_vec())
 				} else {
-					// TODO make this function non recursive to avoid this clone
 					overlay_key.0.to_vec()
 				},
 			}
@@ -367,7 +370,8 @@ where
 			);
 
 			match (next_backend_key, next_overlay_key_change) {
-				(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => return Some(backend_key),
+				(Some(backend_key), Some(overlay_key))
+					if &backend_key[..] < overlay_key.0 => return Some(backend_key),
 				(backend_key, None) => return backend_key,
 				(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
 					return Some(overlay_key.0.to_vec())
@@ -376,9 +380,6 @@ where
 				},
 			}
 		};
-		// TODO no need to query child at each recursive iter here
-		// and also find a way to remove the clone (non recursive and global mut handle should do the
-		// trick).
 		self.next_child_storage_key(storage_key, child_info, &next_key[..])
 	}
 

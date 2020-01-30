@@ -315,7 +315,7 @@ pub trait Storage {
 
 /// Interface for managing transaction within the runtime.
 #[runtime_interface]
-pub trait Transaction {
+pub trait StorageTransaction {
 	/// Start a new transaction.
 	fn start_transaction(&mut self) {
 		self.storage_start_transaction();

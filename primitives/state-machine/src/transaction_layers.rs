@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Types and method for managing a stack of transactional values.
+//! Types and methods for managing a stack of transactional values.
 
 
 #[derive(Debug, Clone, Eq, PartialEq, Copy)]
@@ -26,7 +26,7 @@ pub(crate) enum TransactionState {
 	TxPending,
 	/// The transaction has been discarded.
 	/// Data from a `LayerEntry` pointing to this layer state should
-	/// not be returned and can be remove.
+	/// not be returned and can be removed.
 	Dropped,
 }
 
@@ -40,9 +40,8 @@ pub struct States {
 	// This information is redundant as it could be
 	// calculated by iterating backward over `history`
 	// field.
-	// Managing this cache allow use to have
-	// an implementation of `transaction_start_windows`
-	// function that is constant time.
+	// Managing this cache let us implement `transaction_start_windows`
+	// function in constant time.
 	start_transaction_window: Vec<usize>,
 	// `commit` stores the index of the layer for which a previous
 	// prospective commit occurs.
@@ -248,8 +247,7 @@ impl<V> Layers<V> {
 		None
 	}
 
-	/// Push a value without checking without transactional layer
-	/// consistency.
+	/// Push a value without checking transactional layer consistency.
 	pub(crate) fn push_unchecked(&mut self, item: LayerEntry<V>) {
 		self.0.push(item);
 	}
@@ -355,7 +353,10 @@ impl<V> Layers<V> {
 						if result.is_none() {
 							result = Some((index + 1, state_index));
 							if state == TransactionState::Pending {
-								start_transaction_window = transaction_start_windows(states, state_index);
+								start_transaction_window = transaction_start_windows(
+									states,
+									state_index,
+								);
 							}
 						} else {
 							if !prune_to_commit {
@@ -459,6 +460,14 @@ impl<V> Layers<V> {
 	}
 }
 
+#[cfg(any(test, feature = "test-helpers"))]
+impl<V> Layers<V> {
+	/// Get current number of stored historical values.
+	pub fn len(&self) -> usize {
+		self.0.len()
+	}
+}
+
 #[cfg(test)]
 impl<V> Layers<V> {
 	/// Create an history from a sequence of historical values.
@@ -473,7 +482,7 @@ impl<V> Layers<V> {
 	/// Get latest prospective value, excludes
 	/// committed values.
 	pub(crate) fn get_prospective(&self, states: &States) -> Option<&V> {
-		let self_len = self.len();
+		let self_len = self.0.len();
 		if self_len == 0 {
 			return None;
 		}
@@ -488,7 +497,7 @@ impl<V> Layers<V> {
 
 	/// Get latest committed value.
 	pub(crate) fn get_committed(&self, states: &States) -> Option<&V> {
-		let self_len = self.len();
+		let self_len = self.0.len();
 		if self_len == 0 {
 			return None;
 		}
@@ -504,12 +513,11 @@ impl<V> Layers<V> {
 	}
 }
 
-
 /// A default sample configuration to manage garbage collection
 /// triggering.
 ///
 /// With this default values it should be very unlikelly that gc is needed
-/// during a block processing for most use case.
+/// during a block processing for most use cases.
 pub(crate) const DEFAULT_GC_CONF: GCConfiguration = GCConfiguration {
 	trigger_transaction_gc: 1_000_000,
 	trigger_commit_gc: 100_000,
@@ -566,6 +574,7 @@ impl GCConfiguration {
 	}
 
 }
+
 /// Base code for fuzzing.
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod fuzz {
@@ -578,13 +587,6 @@ pub mod fuzz {
 
 	/// Size of key, max 255
 	const VALUE_SPACE: u8 = 50;
-
-	impl<V> Layers<V> {
-		/// Get current number of stored historical values.
-		pub fn len(&self) -> usize {
-			self.0.len()
-		}
-	}
 
 	/// Fuzz input against a stack of hash map reference implementation.
 	/// `check_compactness` add a check in the number of stored entry.
@@ -671,7 +673,10 @@ pub mod fuzz {
 		assert!(success);
 	}
 
-	fn check_values(overlayed: &OverlayedChanges, ref_overlayed: &RefOverlayedChanges) -> (bool, usize) {
+	fn check_values(
+		overlayed: &OverlayedChanges,
+		ref_overlayed: &RefOverlayedChanges,
+	) -> (bool, usize) {
 		let mut len = 0;
 		let mut success = true;
 		for (key, value) in overlayed.iter_values(None) {

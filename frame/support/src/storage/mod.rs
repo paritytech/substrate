@@ -32,11 +32,11 @@ pub mod generator;
 /// the transactional layer get reverted; otherwise
 /// it is committed.
 pub fn with_transaction<R, E>(f: impl FnOnce() -> Result<R, E>) -> Result<R, E> {
-	sp_io::transaction::start_transaction();
+	sp_io::storage_transaction::start_transaction();
 	let result = f();
 	match result {
-		Ok(_) => sp_io::transaction::commit_transaction(),
-		Err(_) => sp_io::transaction::discard_transaction(),
+		Ok(_) => sp_io::storage_transaction::commit_transaction(),
+		Err(_) => sp_io::storage_transaction::discard_transaction(),
 	}
 	result
 }
