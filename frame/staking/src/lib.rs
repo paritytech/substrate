@@ -106,6 +106,8 @@
 //!
 //! Reward must be claimed by stakers for each era before it gets too old by $HISTORY_DEPTH using
 //! `payout_nominator` and `payout_validator` calls.
+//! Only the [`T::MaxNominatorRewardedPerValidator`] biggest stakers can claim their reward. This
+//! limit the i/o cost to compute nominators payout.
 //!
 //! Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
 //! determined, a value is deducted from the balance of the validator and all the nominators who
