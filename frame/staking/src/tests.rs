@@ -1820,7 +1820,8 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 
 		// Check reward
 		ErasRewardPoints::<Test>::insert(0, reward);
-		ErasStakers::<Test>::insert(0, 11, exposure);
+		ErasStakers::<Test>::insert(0, 11, &exposure);
+		ErasStakersClipped::<Test>::insert(0, 11, exposure);
 		ErasValidatorReward::<Test>::insert(0, stake);
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 0));
 		assert_eq!(Balances::total_balance(&11), stake * 2);

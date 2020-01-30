@@ -1423,7 +1423,7 @@ impl<T: Trait> Module<T> {
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 		for validator in validators.into_iter().take(MAX_NOMINATIONS) {
 			let commission = Self::eras_validator_prefs(&era, &validator).commission;
-			let validator_exposure = <ErasStakers<T>>::get(&era, &validator);
+			let validator_exposure = <ErasStakersClipped<T>>::get(&era, &validator);
 
 			if let Ok(nominator_exposure) = validator_exposure.others
 				.binary_search_by(|exposure| exposure.who.cmp(&nominator_ledger.stash))
