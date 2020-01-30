@@ -449,8 +449,8 @@ fn fill_config_keystore_in_memory<G, E>(config: &mut sc_service::Configuration<G
 	-> Result<(), String>
 {
 	match &mut config.keystore {
-		 cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
-		 _ => Err("Keystore config specified when it should not be!".into()),
+		cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
+		_ => Err("Keystore config specified when it should not be!".into()),
 	}
 }
 
