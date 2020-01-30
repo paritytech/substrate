@@ -138,28 +138,34 @@ const INCLUDE_THRESHOLD: u32 = 3;
 /// Status of the offchain worker code.
 ///
 /// This stores the block number at which heartbeat was requested and when the worker
-/// has actaully managed to produce it.
+/// has actually managed to produce it.
 /// Note we store such status for every `authority_index` separately.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 struct HeartbeatStatus<BlockNumber> {
-	/// A block number at which we were supposed to send the heartbeat.
+	/// An index of the session that we are supposed to send heartbeat for.
+	pub session_index: SessionIndex,
+	/// A block number at which the heartbeat for that session has been actually sent.
 	///
-	/// I.e. the block that was set as the threshold by `SessionHandler` via `HeartbeatAt`.
-	pub heartbeat_at: BlockNumber,
-	/// A block number at which the heartbeat was actually sent.
-	///
-	/// Note that this may be 0 in case sending failed.
+	/// It may be 0 in case the sending failed. In such case we should just retry
+	/// as soon as possible (i.e. in a worker running for the next block).
 	pub sent_at: BlockNumber,
 }
 
 impl<BlockNumber: PartialEq + SimpleArithmetic + Copy> HeartbeatStatus<BlockNumber> {
 	/// Returns true if heartbeat has been recently sent.
 	///
-	/// Note this function will return `true` iff:
-	/// 1. the requested block number (`heartbeat_at`) is the same
-	/// 2. the heartbeat has been sent recently
-	fn is_recent(&self, heartbeat_at: BlockNumber, now: BlockNumber) -> bool {
-		self.heartbeat_at == heartbeat_at && self.sent_at + INCLUDE_THRESHOLD.into() > now
+	/// Parameters:
+	/// `session_index` - index of current session.
+	/// `now` - block at which the offchain worker is running.
+	///
+	/// This function will return `true` iff:
+	/// 1. the session index is the same (we don't care if it went up or down)
+	/// 2. the heartbeat has been sent recently (within the threshold)
+	///
+	/// The reasoning for 1. is that it's better to send an extra heartbeat than
+	/// to stall or not send one in case of a bug.
+	fn is_recent(&self, session_index: SessionIndex, now: BlockNumber) -> bool {
+		self.session_index == session_index && self.sent_at + INCLUDE_THRESHOLD.into() > now
 	}
 }
 
@@ -225,7 +231,9 @@ pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
 	/// An expected duration of the session.
 	///
 	/// This parameter is used to determine the longevity of `heartbeat` transaction
-	/// and a rough time when the heartbeat should be sent.
+	/// and a rough time when we should start considering sending hearbeats,
+	/// since the workers avoids sending them at the very beginning of the session, assuming
+	/// there is a chance the authority will produce a block and they won't be necessary.
 	type SessionDuration: Get<Self::BlockNumber>;
 
 	/// A type that gives us the ability to submit unresponsiveness offence reports.
@@ -253,8 +261,13 @@ decl_event!(
 
 decl_storage! {
 	trait Store for Module<T: Trait> as ImOnline {
-		/// The block number when we should send heartbeat.
-		HeartbeatAt get(fn heartbeat_at): T::BlockNumber;
+		/// The block number after which it's ok to send heartbeats in current session.
+		///
+		/// At the beginning of each session we set this to a value that should
+		/// fall roughly in the middle of the session duration.
+		/// The idea is to first wait for the validators to produce a block
+		/// in the current session, so that the heartbeat later on will not be necessary.
+		HeartbeatAfter get(fn heartbeat_after): T::BlockNumber;
 
 		/// The current set of keys that may issue a heartbeat.
 		Keys get(fn keys): Vec<T::AuthorityId>;
@@ -330,7 +343,7 @@ decl_module! {
 
 			// Only send messages if we are a potential validator.
 			if sp_io::offchain::is_validator() {
-				for res in Self::offchain(now).into_iter().flatten() {
+				for res in Self::send_heartbeats(now).into_iter().flatten() {
 					if let Err(e) = res {
 						debug::debug!(
 							target: "imonline",
@@ -343,7 +356,7 @@ decl_module! {
 			} else {
 				debug::trace!(
 					target: "imonline",
-					"Skipping hearbeat at {:?}. Not a validator.",
+					"Skipping heartbeat at {:?}. Not a validator.",
 					now,
 				)
 			}
@@ -410,32 +423,32 @@ impl<T: Trait> Module<T> {
 		);
 	}
 
-	pub(crate) fn offchain(block_number: T::BlockNumber)
+	pub(crate) fn send_heartbeats(block_number: T::BlockNumber)
 		-> OffchainResult<T, impl Iterator<Item=OffchainResult<T, ()>>>
 	{
-		let heartbeat_at = <HeartbeatAt<T>>::get();
-		if block_number < heartbeat_at {
-			return Err(OffchainErr::TooEarly(heartbeat_at))
+		let heartbeat_after = <HeartbeatAfter<T>>::get();
+		if block_number < heartbeat_after {
+			return Err(OffchainErr::TooEarly(heartbeat_after))
 		}
 
+		let session_index = <pallet_session::Module<T>>::current_index();
 		Ok(Self::local_authority_keys()
 			.map(move |(authority_index, key)|
-				Self::send_heartbeat(authority_index, key, heartbeat_at, block_number)
+				Self::send_single_heartbeat(authority_index, key, session_index, block_number)
 			))
 	}
 
 
-	fn send_heartbeat(
+	fn send_single_heartbeat(
 		authority_index: u32,
 		key: T::AuthorityId,
-		heartbeat_at: T::BlockNumber,
+		session_index: SessionIndex,
 		block_number: T::BlockNumber
 	) -> OffchainResult<T, ()> {
-		// A helper function to prepare hearbeat call.
+		// A helper function to prepare heartbeat call.
 		let prepare_heartbeat = || -> OffchainResult<T, Call<T>> {
 			let network_state = sp_io::offchain::network_state()
 				.map_err(|_| OffchainErr::NetworkState)?;
-			let session_index = <pallet_session::Module<T>>::current_index();
 			let heartbeat_data = Heartbeat {
 				block_number,
 				network_state,
@@ -454,16 +467,16 @@ impl<T: Trait> Module<T> {
 		// send concurrent heartbeats.
 		Self::with_heartbeat_lock(
 			authority_index,
-			heartbeat_at,
+			session_index,
 			block_number,
 			|| {
 				let call = prepare_heartbeat()?;
 				debug::info!(
 					target: "imonline",
-					"[index: {:?}] Reporting im-online at block: {:?} (expected: {:?}): {:?}",
+					"[index: {:?}] Reporting im-online at block: {:?} (session: {:?}): {:?}",
 					authority_index,
 					block_number,
-					heartbeat_at,
+					session_index,
 					call,
 				);
 
@@ -492,7 +505,7 @@ impl<T: Trait> Module<T> {
 
 	fn with_heartbeat_lock<R>(
 		authority_index: u32,
-		heartbeat_at: T::BlockNumber,
+		session_index: SessionIndex,
 		now: T::BlockNumber,
 		f: impl FnOnce() -> OffchainResult<T, R>,
 	) -> OffchainResult<T, R> {
@@ -509,17 +522,15 @@ impl<T: Trait> Module<T> {
 			// we will re-send it.
 			match status {
 				// we are still waiting for inclusion.
-				Some(Some(status)) if status.is_recent(heartbeat_at, now) => {
-					return Err(OffchainErr::WaitingForInclusion(status.sent_at));
+				Some(Some(status)) if status.is_recent(session_index, now) => {
+					Err(OffchainErr::WaitingForInclusion(status.sent_at))
 				},
-				_ => {},
+				// attempt to set new status
+				_ => Ok(HeartbeatStatus {
+					session_index,
+					sent_at: now,
+				}),
 			}
-
-			// attempt to set new status
-			Ok(HeartbeatStatus {
-				heartbeat_at,
-				sent_at: now,
-			})
 		})?;
 
 		let mut new_status = res.map_err(|_| OffchainErr::FailedToAcquireLock)?;
@@ -563,10 +574,10 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	{
 		// Tell the offchain worker to start making the next session's heartbeats.
 		// Since we consider producing blocks as being online,
-		// the hearbeat is defered a bit to prevent spaming.
+		// the heartbeat is defered a bit to prevent spaming.
 		let block_number = <frame_system::Module<T>>::block_number();
 		let half_session = T::SessionDuration::get() / 2.into();
-		<HeartbeatAt<T>>::put(block_number + half_session);
+		<HeartbeatAfter<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
 		Keys::<T>::put(validators.map(|x| x.1).collect::<Vec<_>>());

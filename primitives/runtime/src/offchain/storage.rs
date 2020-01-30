@@ -68,13 +68,10 @@ impl<'a> StorageValueRef<'a> {
 	/// 1. `Ok(Ok(T))` in case the value has been succesfuly set.
 	/// 2. `Ok(Err(T))` in case the value was returned, but it couldn't have been set.
 	/// 3. `Err(_)` in case `f` returns an error.
-	pub fn mutate<T: codec::Decode + codec::Encode, E>(
-		&self,
-		f: impl FnOnce(Option<Option<T>>) -> Result<T, E>
-	) -> Result<
-		Result<T, T>,
-		E
-	> {
+	pub fn mutate<T, E, F>(&self, f: F) -> Result<Result<T, T>, E> where
+		T: codec::Codec,
+		F: FnOnce(Option<Option<T>>) -> Result<T, E>
+	{
 		let value = sp_io::offchain::local_storage_get(self.kind, self.key);
 		let decoded = value.as_deref().map(|mut v| T::decode(&mut v).ok());
 		let val = f(decoded)?;
@@ -92,5 +89,68 @@ impl<'a> StorageValueRef<'a> {
 		} else {
 			Ok(Err(val))
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_io::TestExternalities;
+	use sp_core::offchain::{
+		OffchainExt,
+		OffchainStorage,
+		testing,
+	};
+
+	#[test]
+	fn should_set_and_get() {
+		let (offchain, state) = testing::TestOffchainExt::new();
+		let mut t = TestExternalities::default();
+		t.register_extension(OffchainExt::new(offchain));
+
+		t.execute_with(|| {
+			let val = StorageValue::persistent(b"testval");
+
+			assert_eq!(val.get::<u32>(), None);
+
+			val.set(&15_u32);
+
+			assert_eq!(val.get::<u32>(), Some(Some(15_u32)));
+			assert_eq!(val.get::<Vec<u8>>(), Some(None));
+			assert_eq!(
+				state.read().persistent_storage.get(b"", b"testval"),
+				Some(vec![15_u8, 0, 0, 0])
+			);
+		})
+	}
+
+	#[test]
+	fn should_mutate() {
+		let (offchain, state) = testing::TestOffchainExt::new();
+		let mut t = TestExternalities::default();
+		t.register_extension(OffchainExt::new(offchain));
+
+		t.execute_with(|| {
+			let val = StorageValue::persistent(b"testval");
+
+			let result = val.mutate::<u32, (), _>(|val| {
+				assert_eq!(val, None);
+
+				Ok(16_u32)
+			});
+			assert_eq!(result, Ok(Ok(16_u32)));
+			assert_eq!(val.get::<u32>(), Some(Some(16_u32)));
+			assert_eq!(
+				state.read().persistent_storage.get(b"", b"testval"),
+				Some(vec![16_u8, 0, 0, 0])
+			);
+
+			// mutate again, but this time early-exit.
+			let res = val.mutate::<u32, (), _>(|val| {
+				assert_eq!(val, Some(Some(16_u32)));
+				Err(())
+			});
+			assert_eq!(res, Err(()));
+		})
 	}
 }

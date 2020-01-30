@@ -210,7 +210,7 @@ fn should_generate_heartbeats() {
 
 		// when
 		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
-		ImOnline::offchain(2)
+		ImOnline::send_heartbeats(2)
 			.unwrap()
 			// make sure to consume the iterator and check there are no errors.
 			.collect::<Result<Vec<_>, _>>().unwrap();
@@ -320,7 +320,7 @@ fn should_not_send_a_report_if_already_online() {
 		// when
 		UintAuthorityId::set_all_keys(vec![0]); // all authorities use pallet_session key 0
 		// we expect error, since the authority is already online.
-		let mut res = ImOnline::offchain(4).unwrap();
+		let mut res = ImOnline::send_heartbeats(4).unwrap();
 		assert_eq!(res.next().unwrap().unwrap(), ());
 		assert_eq!(res.next().unwrap().unwrap_err(), OffchainErr::AlreadyOnline(1));
 		assert_eq!(res.next().unwrap().unwrap_err(), OffchainErr::AlreadyOnline(2));
