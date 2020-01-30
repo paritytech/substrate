@@ -1135,18 +1135,26 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	/// Call when we must propagate ready extrinsics to peers.
-	pub fn propagate_extrinsics(
+	/// Propagate one extrinsic.
+	pub fn propagate_extrinsic(
 		&mut self,
+		hash: &H,
 	) {
-		debug!(target: "sync", "Propagating extrinsics");
-
+		debug!(target: "sync", "Propagating extrinsic [{:?}]", hash);
 		// Accept transactions only when fully synced
 		if self.sync.status().state != SyncState::Idle {
 			return;
 		}
+		if let Some(extrinsic) = self.transaction_pool.transaction(hash) {
+			let propagated_to = self.do_propagate_extrinsics(&[(hash.clone(), extrinsic)]);
+			self.transaction_pool.on_broadcasted(propagated_to);
+		}
+	}
 
-		let extrinsics = self.transaction_pool.transactions();
+	fn do_propagate_extrinsics(
+		&mut self,
+		extrinsics: &[(H, B::Extrinsic)],
+	) -> HashMap<H,  Vec<String>> {
 		let mut propagated_to = HashMap::new();
 		for (who, peer) in self.context_data.peers.iter_mut() {
 			// never send extrinsics to the light node
@@ -1177,6 +1185,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 
+		propagated_to
+	}
+
+	/// Call when we must propagate ready extrinsics to peers.
+	pub fn propagate_extrinsics(&mut self) {
+		debug!(target: "sync", "Propagating extrinsics");
+		// Accept transactions only when fully synced
+		if self.sync.status().state != SyncState::Idle {
+			return;
+		}
+		let extrinsics = self.transaction_pool.transactions();
+		let propagated_to = self.do_propagate_extrinsics(&extrinsics);
 		self.transaction_pool.on_broadcasted(propagated_to);
 	}
 
@@ -1792,7 +1812,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened { remote: PeerId, protocols: Vec<ConsensusEngineId>, roles: Roles },
 	/// Notification protocols have been closed with a remote.
-	NotificationsStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
+	NotificationStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
 	None,
@@ -1931,7 +1951,7 @@ Protocol<B, S, H> {
 			LegacyProtoOut::CustomProtocolClosed { peer_id, .. } => {
 				self.on_peer_disconnected(peer_id.clone());
 				// Notify all the notification protocols as closed.
-				CustomMessageOutcome::NotificationsStreamClosed {
+				CustomMessageOutcome::NotificationStreamClosed {
 					remote: peer_id,
 					protocols: self.registered_notif_protocols.iter().cloned().collect(),
 				}

@@ -66,42 +66,38 @@ pub enum InspectSubCmd {
 }
 
 impl InspectCmd {
-	/// Run the inspect command, passing an inspector buuilder,
-	/// spec_factory and software version.
-	pub fn run_with_builder<C, G, E, B, P>(
-		self,
-		builder: impl FnOnce(sc_service::config::Configuration<C, G, E>) -> Result<
-			Inspector<B, P>,
-			error::Error
-		>,
+	/// Parse CLI arguments and initialize given config.
+	pub fn init<G, E>(
+		&self,
+		config: &mut sc_service::config::Configuration<G, E>,
 		spec_factory: impl FnOnce(&str) -> Result<Option<sc_service::ChainSpec<G, E>>, String>,
 		version: &sc_cli::VersionInfo,
 	) -> error::Result<()> where
-		B: sp_runtime::traits::Block,
-		B::Hash: FromStr,
-		C: Default,
 		G: sc_service::RuntimeGenesis,
 		E: sc_service::ChainSpecExtension,
-		P: PrettyPrinter<B>,
 	{
-		let mut config = sc_cli::create_config_with_db_path(
-			spec_factory,
-			&self.shared_params,
-			version,
-			None,
-		)?;
+		sc_cli::init(config, spec_factory, &self.shared_params, version)?;
 		// make sure to configure keystore
-		sc_cli::fill_config_keystore_in_memory(&mut config)?;
+		sc_cli::fill_config_keystore_in_memory(config)?;
 		// and all import params (especially pruning that has to match db meta)
 		sc_cli::fill_import_params(
-			&mut config,
+			config,
 			&self.import_params,
 			sc_service::Roles::FULL,
 			self.shared_params.dev,
 		)?;
+		Ok(())
+	}
 
-		let inspect = (builder)(config)?;
-
+	/// Run the inspect command, passing the inspector.
+	pub fn run<B, P>(
+		self,
+		inspect: Inspector<B, P>,
+	) -> error::Result<()> where
+		B: sp_runtime::traits::Block,
+		B::Hash: FromStr,
+		P: PrettyPrinter<B>,
+	{
 		match self.command {
 			InspectSubCmd::Block { input } => {
 				let input = input.parse()?;

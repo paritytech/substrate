@@ -374,10 +374,14 @@ check_polkadot:
 trigger-contracts-ci:
   stage:                           publish
   needs:
-    - build-linux-substrate
+    - job:                         build-linux-substrate
+      artifacts:                   false
+    - job:                         test-linux-stable
+      artifacts:                   false
   trigger:
     project:                       parity/srml-contracts-waterfall
-    branch:                        "master"
+    branch:                        master
+    strategy:                      depend
   only:
     - master
     - schedules

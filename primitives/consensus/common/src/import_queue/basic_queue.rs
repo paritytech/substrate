@@ -71,7 +71,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 
 		let manual_poll;
 		if let Some(pool) = &mut pool {
-			pool.spawn_ok(future);
+			pool.spawn_ok(futures_diagnose::diagnose("import-queue", future));
 			manual_poll = None;
 		} else {
 			manual_poll = Some(Box::pin(future) as Pin<Box<_>>);

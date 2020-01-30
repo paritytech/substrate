@@ -51,6 +51,24 @@ pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usiz
 	}
 }
 
+/// Convert from a parity wasm FunctionType to wasm interface's Signature.
+pub fn convert_parity_wasm_signature(func_ty: &parity_wasm::elements::FunctionType) -> Signature {
+	fn convert_value_type(val_ty: parity_wasm::elements::ValueType) -> ValueType {
+		use parity_wasm::elements::ValueType::*;
+		match val_ty {
+			I32 => ValueType::I32,
+			I64 => ValueType::I64,
+			F32 => ValueType::F32,
+			F64 => ValueType::F64,
+		}
+	}
+
+	Signature::new(
+		func_ty.params().iter().cloned().map(convert_value_type).collect::<Vec<_>>(),
+		func_ty.return_type().map(convert_value_type),
+	)
+}
+
 /// Convert a wasm_interface Signature into a cranelift_codegen Signature.
 pub fn cranelift_ir_signature(signature: Signature, call_conv: &isa::CallConv) -> ir::Signature {
 	ir::Signature {

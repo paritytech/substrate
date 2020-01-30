@@ -14,4 +14,4 @@ sc-service = { version = "0.8", default-features = false, path = "../../../clien
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-structopt = "=0.3.7"
+structopt = "0.3.8"

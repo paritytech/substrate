@@ -315,10 +315,10 @@ where
 
 		let remote_addresses: Vec<Multiaddr> = values.into_iter()
 			.map(|(_k, v)| {
-				let schema::SignedAuthorityAddresses {
-					signature,
-					addresses,
-				} = schema::SignedAuthorityAddresses::decode(v).map_err(Error::DecodingProto)?;
+				let schema::SignedAuthorityAddresses { signature, addresses } =
+					schema::SignedAuthorityAddresses::decode(v.as_slice())
+					.map_err(Error::DecodingProto)?;
+
 				let signature = AuthoritySignature::decode(&mut &signature[..])
 					.map_err(Error::EncodingDecodingScale)?;
 
@@ -326,7 +326,7 @@ where
 					return Err(Error::VerifyingDhtPayload);
 				}
 
-				let addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
+				let addresses = schema::AuthorityAddresses::decode(addresses.as_slice())
 					.map(|a| a.addresses)
 					.map_err(Error::DecodingProto)?
 					.into_iter()

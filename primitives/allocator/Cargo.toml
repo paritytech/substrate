@@ -1,0 +1,23 @@
+[package]
+name = "sp-allocator"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0"
+
+[dependencies]
+sp-std = { version = "2.0.0", path = "../std", default-features = false }
+sp-core = { version = "2.0.0", path = "../core", default-features = false }
+sp-wasm-interface = { version = "2.0.0", path = "../wasm-interface", default-features = false }
+log = { version = "0.4.8", optional = true }
+derive_more = { version = "0.99.2", optional = true }
+
+[features]
+default = [ "std" ]
+std = [
+	"sp-std/std",
+	"sp-core/std",
+	"sp-wasm-interface/std",
+	"log",
+	"derive_more",
+]
