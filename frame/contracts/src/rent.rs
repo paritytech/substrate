@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
+//! A module responsible for computing the right amount of weight and charging it.
+
 use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
 	TombstoneContractInfo, Trait,
@@ -130,8 +132,8 @@ fn rent_budget<T: Trait>(
 
 /// Consider the case for rent payment of the given account and returns a `Verdict`.
 ///
-/// The `current_block_number` must be equal to the current block number. Use `handicap` do
-/// change the reference block number. (See `snitch_contract_should_be_evicted` for more details).
+/// Use `handicap` in case you want to change the reference block number. (To get more details see
+/// `snitch_contract_should_be_evicted` ).
 fn consider_case<T: Trait>(
 	account: &T::AccountId,
 	current_block_number: T::BlockNumber,
@@ -285,7 +287,7 @@ pub fn collect_rent<T: Trait>(account: &T::AccountId) -> Option<ContractInfo<T>>
 	enact_verdict(account, alive_contract_info, current_block_number, verdict)
 }
 
-/// Process a snitch that a contract under the given address should be evicted.
+/// Process a report that a contract under the given address should be evicted.
 ///
 /// Enact the eviction right away if the contract should be evicted and return true.
 /// Otherwise, **do nothing** and return false.
