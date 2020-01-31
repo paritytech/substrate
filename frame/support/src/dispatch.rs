@@ -28,6 +28,7 @@ pub use crate::weights::{
 	TransactionPriority, Weight, WeighBlock, PaysFee,
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError, DispatchResult};
+pub use crate::traits::{CallMetadata, GetCallMetadata};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -1302,42 +1303,52 @@ macro_rules! decl_module {
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
-				$(
-					if let $call_type::$fn_name($( ref $param_name ),*) = self {
-						let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
-							&$weight,
-							($( $param_name, )*)
-						);
-						let class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
-							&$weight,
-							($( $param_name, )*)
-						);
-						let pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
-							&$weight,
-							($( $param_name, )*)
-						);
-						return $crate::dispatch::DispatchInfo { weight, class, pays_fee };
-					}
-					if let $call_type::__PhantomItem(_, _) = self { unreachable!("__PhantomItem should never be used.") }
-				)*
-				// Defensive only: this function must have already returned at this point.
-				// all dispatchable function will have a weight which has the `::default`
-				// implementation of `SimpleDispatchInfo`. Nonetheless, we create one if it does
-				// not exist.
-				let weight = <dyn $crate::dispatch::WeighData<_>>::weigh_data(
-					&$crate::dispatch::SimpleDispatchInfo::default(),
-					()
-				);
-				let class = <dyn $crate::dispatch::ClassifyDispatch<_>>::classify_dispatch(
-					&$crate::dispatch::SimpleDispatchInfo::default(),
-					()
-				);
-				let pays_fee = <dyn $crate::dispatch::PaysFee<_>>::pays_fee(
-					&$crate::dispatch::SimpleDispatchInfo::default(),
-					()
-				);
-				$crate::dispatch::DispatchInfo { weight, class, pays_fee }
+				match *self {
+					$(
+						$call_type::$fn_name( $( ref $param_name ),* ) => {
+							let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
+								&$weight,
+								($( $param_name, )*)
+							);
+							let class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
+								&$weight,
+								($( $param_name, )*)
+							);
+							let pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
+								&$weight,
+								($( $param_name, )*)
+							);
+							$crate::dispatch::DispatchInfo { 
+								weight, 
+								class, 
+								pays_fee,
+							}
+						},
+					)*
+					_ => unreachable!("__PhantomItem should never be used."),
+				}
+			}
+		}
 
+		// Implement GetCallMetadata for the Call.
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetCallMetadata
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn get_call_metadata(&self) -> $crate::dispatch::CallMetadata {
+				match *self {
+					$(
+						$call_type::$fn_name( $( ref $param_name ),* ) => {
+							let function_name = stringify!($fn_name);
+							// We assign the pallet_name as None as it is not available here.
+							// It is assigned a value where we call this function in impl_outer_dispatch.
+							$crate::dispatch::CallMetadata { 
+								function_name,
+								pallet_name: None,
+							}
+						},
+					)*
+					_ => unreachable!("__PhantomItem should never be used."),
+				}
 			}
 		}
 
@@ -1497,6 +1508,17 @@ macro_rules! impl_outer_dispatch {
 			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
 				match self {
 					$( $call_type::$camelcase(call) => call.get_dispatch_info(), )*
+				}
+			}
+		}
+		impl $crate::dispatch::GetCallMetadata for $call_type {
+			fn get_call_metadata(&self) -> $crate::dispatch::CallMetadata {
+				match self {
+					$( $call_type::$camelcase(call) => {
+						let mut info = call.get_call_metadata();
+						info.pallet_name = Some(stringify!($camelcase));
+						info
+					}, )*
 				}
 			}
 		}
@@ -1871,6 +1893,7 @@ mod tests {
 	use super::*;
 	use crate::sp_runtime::traits::{OnInitialize, OnFinalize};
 	use crate::weights::{DispatchInfo, DispatchClass};
+	use crate::traits::{CallMetadata, GetCallMetadata};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
 		type Origin;
@@ -2083,5 +2106,12 @@ mod tests {
 		// dependent
 		assert_eq!(<Test as WeighBlock<u32>>::on_finalize(2), 10);
 		assert_eq!(<Test as WeighBlock<u32>>::on_finalize(3), 0);
+	}
+
+	#[test]
+	fn call_metadata() {
+		let metadata = Call::<TraitImpl>::aux_3().get_call_metadata();
+		let expected = CallMetadata { function_name: "aux_3".into(), pallet_name: None };
+		assert_eq!(metadata, expected);
 	}
 }
