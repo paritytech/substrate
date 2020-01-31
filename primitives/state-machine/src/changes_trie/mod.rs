@@ -68,15 +68,20 @@ pub use self::prune::prune;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use hash_db::{Hasher, Prefix};
-use crate::backend::Backend;
 use num_traits::{One, Zero};
 use codec::{Decode, Encode};
 use sp_core;
-use crate::changes_trie::build::prepare_input;
-use crate::changes_trie::build_cache::{IncompleteCachedBuildData, IncompleteCacheAction};
-use crate::overlayed_changes::OverlayedChanges;
 use sp_trie::{MemoryDB, DBValue, TrieMut};
 use sp_trie::trie_types::TrieDBMut;
+use crate::{
+	StorageKey,
+	backend::Backend,
+	overlayed_changes::OverlayedChanges,
+	changes_trie::{
+		build::prepare_input,
+		build_cache::{IncompleteCachedBuildData, IncompleteCacheAction},
+	},
+};
 
 /// Changes that are made outside of extrinsics are marked with this index;
 pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
@@ -151,7 +156,7 @@ pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 	fn with_cached_changed_keys(
 		&self,
 		root: &H::Out,
-		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+		functor: &mut dyn FnMut(&HashMap<Option<StorageKey>, HashSet<StorageKey>>),
 	) -> bool;
 	/// Get a trie node.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;

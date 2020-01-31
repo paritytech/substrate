@@ -45,7 +45,7 @@ use std::collections::HashMap;
 
 use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo};
 use sc_client_api::backend::NewBlockState;
-use sc_client_api::backend::{PrunableStateChangesTrieStorage, StorageCollection, ChildStorageCollection};
+use sc_client_api::backend::PrunableStateChangesTrieStorage;
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	well_known_cache_keys, HeaderBackend,
@@ -66,8 +66,9 @@ use sp_runtime::traits::{
 };
 use sc_executor::RuntimeInfo;
 use sp_state_machine::{
-	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction,
-	backend::Backend as StateBackend, UsageInfo as StateUsageInfo,
+	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
+	StorageCollection, ChildStorageCollection,
+	backend::Backend as StateBackend,
 };
 use crate::utils::{DatabaseType, Meta, db_err, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
@@ -1148,6 +1149,7 @@ impl<Block: BlockT> Backend<Block> {
 				changes_trie_config_update,
 				changes_trie_cache_ops,
 			)?);
+			self.state_usage.merge_sm(operation.old_state.usage_info());
 			let cache = operation.old_state.release(); // release state reference so that it can be finalized
 
 			if finalized {
@@ -1618,6 +1620,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn destroy_state(&self, state: Self::State) -> ClientResult<()> {
+		self.state_usage.merge_sm(state.usage_info());
 		if let Some(hash) = state.cache.parent_hash.clone() {
 			let is_best = self.blockchain.meta.read().best_hash == hash;
 			state.release().sync_cache(&[], &[], vec![], vec![], None, None, is_best);
