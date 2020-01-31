@@ -268,6 +268,8 @@ impl sp_std::fmt::Debug for DefaultByteGetter {
 }
 
 /// Hasher used by storage maps
+///
+/// Only Blake2_\* are safe for keys that are not compile-time constants.
 #[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
 pub enum StorageHasher {
@@ -357,7 +359,7 @@ pub enum RuntimeMetadata {
 pub enum RuntimeMetadataDeprecated { }
 
 impl Encode for RuntimeMetadataDeprecated {
-	fn encode_to<W: Output>(&self, _dest: &mut W) {}
+	fn encode_to<W: Output>(&self, _dest: &mut W) { match *self {} }
 }
 
 impl codec::EncodeLike for RuntimeMetadataDeprecated {}

@@ -304,8 +304,8 @@ decl_module! {
 			ensure!(reporter != target, Error::<T>::ReportSelf);
 			ensure!(Self::is_voter(&reporter), Error::<T>::MustBeVoter);
 
-			// Checking if someone is a candidate and a member here is O(LogN), making the whole
-			// function O(MLonN) with N candidates in total and M of them being voted by `target`.
+			// Checking if someone is a candidate and a member here is O(log N), making the whole
+			// function O(M log N) with N candidates in total and M of them being voted by `target`.
 			// We could easily add another mapping to be able to check if someone is a candidate in
 			// `O(1)` but that would make the process of removing candidates at the end of each
 			// round slightly harder. Note that for now we have a bound of number of votes (`N`).
@@ -336,7 +336,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// #### State
-		/// Reads: O(LogN) Given N candidates.
+		/// Reads: O(log N) Given N candidates.
 		/// Writes: O(1)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
@@ -366,6 +366,10 @@ decl_module! {
 		/// - `origin` is a current member. In this case, the bond is unreserved and origin is
 		///   removed as a member, consequently not being a candidate for the next round anymore.
 		///   Similar to [`remove_voter`], if replacement runners exists, they are immediately used.
+		///
+		/// # <weight>
+		/// #### `O(runners_up) + O(candidates) + O(members)` where `n` is the numbe
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000)]
 		fn renounce_candidacy(origin) {
 			let who = ensure_signed(origin)?;
@@ -567,7 +571,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Note that false is returned if `who` is not a voter at all.
 	///
-	/// O(NLogM) with M candidates and `who` having voted for `N` of them.
+	/// O(N log M) with M candidates and `who` having voted for `N` of them.
 	fn is_defunct_voter(who: &T::AccountId) -> bool {
 		if Self::is_voter(who) {
 			Self::votes_of(who)
@@ -582,6 +586,8 @@ impl<T: Trait> Module<T> {
 	///
 	/// This will clean always clean the storage associated with the voter, and remove the balance
 	/// lock. Optionally, it would also return the reserved voting bond if indicated by `unreserve`.
+	///
+	/// O(1).
 	fn do_remove_voter(who: &T::AccountId, unreserve: bool) {
 		// remove storage and lock.
 		<VotesOf<T>>::remove(who);
@@ -594,6 +600,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// The locked stake of a voter.
+	///
+	/// O(1).
 	fn locked_stake_of(who: &T::AccountId) -> BalanceOf<T> {
 		Self::stake_of(who)
 	}

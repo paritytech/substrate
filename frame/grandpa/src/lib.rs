@@ -190,6 +190,8 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Report some misbehavior.
+		///
+		/// O(1).
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
@@ -200,6 +202,7 @@ decl_module! {
 			Self::migrate_authorities();
 		}
 
+		/// O(authorities)?
 		fn on_finalize(block_number: T::BlockNumber) {
 			// check for scheduled pending authority set changes
 			if let Some(pending_change) = <PendingChange<T>>::get() {
@@ -372,6 +375,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	#[cfg(feature = "migrate-authorities")]
+	/// O(authorities)?
 	fn migrate_authorities() {
 		if Authorities::exists() {
 			Self::set_grandpa_authorities(&Authorities::take());

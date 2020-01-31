@@ -120,6 +120,10 @@
 //!   as your life changes and your relationship with new and existing friends
 //!   change as well.
 //!
+//! Nevertheless, this pallet is safer than the alternative means of achieving the same
+//! result. In particular, it is safer than using Shamir’s secret sharing, which does not
+//! provide a delay period and does not allow changing the configuration.
+//!
 //! ## Interface
 //! 
 //! ### Dispatchable Functions
@@ -206,7 +210,7 @@ pub trait Trait: frame_system::Trait {
 	/// This is primarily held for deterring malicious recovery attempts, and should
 	/// have a value large enough that a bad actor would choose not to place this
 	/// deposit. It also acts to fund additional storage item whose value size is
-	/// `sizeof(BlockNumber, Balance + T * AccountId)` bytes. Where T is a configurable
+	/// `sizeof(BlockNumber, Balance + T * AccountId)` bytes, where T is a configurable
 	/// threshold.
 	type RecoveryDeposit: Get<BalanceOf<Self>>;
 }

@@ -142,6 +142,7 @@ impl<T: Trait> Module<T> {
 				let b = ordered[(len / 2) - 1];
 
 				// compute average.
+				// FIXME check for overflow!
 				(a + b) / two
 			} else {
 				ordered[len / 2]

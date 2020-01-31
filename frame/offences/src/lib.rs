@@ -88,6 +88,7 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>>
 where
 	T::IdentificationTuple: Clone,
 {
+	/// O(offenders + reporters)
 	fn report_offence(reporters: Vec<T::AccountId>, offence: O) {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
@@ -137,6 +138,8 @@ impl<T: Trait> Module<T> {
 
 	/// Triages the offence report and returns the set of offenders that was involved in unique
 	/// reports along with the list of the concurrent offences.
+	///
+	/// O(reporters + offenders)
 	fn triage_offence_report<O: Offence<T::IdentificationTuple>>(
 		reporters: Vec<T::AccountId>,
 		time_slot: &O::TimeSlot,
@@ -217,6 +220,8 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	}
 
 	/// Insert a new report to the index.
+	///
+	/// `O(reports)`.
 	fn insert(&mut self, time_slot: &O::TimeSlot, report_id: ReportIdOf<T>) {
 		// Insert the report id into the list while maintaining the ordering by the time
 		// slot.
@@ -235,6 +240,8 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	}
 
 	/// Dump the indexes to the storage.
+	///
+	/// `O(reports)`.
 	fn save(self) {
 		<ReportsByKindIndex>::insert(&O::ID, self.same_kind_reports.encode());
 		<ConcurrentReportsIndex<T>>::insert(

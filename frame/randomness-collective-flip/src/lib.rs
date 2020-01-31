@@ -129,6 +129,8 @@ impl<T: Trait> Randomness<T::Hash> for Module<T> {
 	/// WARNING: Hashing the result of this function will remove any low-influence properties it has
 	/// and mean that all bits of the resulting value are entirely manipulatable by the author of
 	/// the parent block, who can determine the value of `parent_hash`.
+	///
+	/// O(1).
 	fn random(subject: &[u8]) -> T::Hash {
 		let block_number = <frame_system::Module<T>>::block_number();
 		let index = block_number_to_index::<T>(block_number);

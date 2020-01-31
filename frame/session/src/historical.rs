@@ -113,6 +113,7 @@ pub struct NoteHistoricalRoot<T, I>(sp_std::marker::PhantomData<(T, I)>);
 impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<T, I>
 	where I: OnSessionEnding<T::ValidatorId, T::FullIdentification>
 {
+	/// O(range * data)
 	fn on_session_ending(ending: SessionIndex, applied_at: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		StoredRange::mutate(|range| {
 			range.get_or_insert_with(|| (ending, ending)).1 = ending + 1;
@@ -158,6 +159,7 @@ pub struct ProvingTrie<T: Trait> {
 }
 
 impl<T: Trait> ProvingTrie<T> {
+	/// O(stored data)
 	fn generate_for(now: SessionIndex) -> Result<Self, &'static str> {
 		let mut db = MemoryDB::default();
 		let mut root = Default::default();

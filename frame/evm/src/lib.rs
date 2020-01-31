@@ -205,6 +205,10 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Despoit balance from currency/balances module into EVM.
+		///
+		/// # <weight>
+		/// - O(1)
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn deposit_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
@@ -225,6 +229,10 @@ decl_module! {
 		}
 
 		/// Withdraw balance from EVM into currency/balances module.
+		///
+		/// # <weight>
+		/// - O(1)
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn withdraw_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
@@ -248,6 +256,10 @@ decl_module! {
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
+		///
+		/// # <weight>
+		/// - O(1), plus the cost of executing the EVM bytecode.
+		/// # </weight>
 		#[weight = WeightForCallCreate]
 		fn call(
 			origin,
@@ -308,6 +320,10 @@ decl_module! {
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
 		/// Ethereum.
+		///
+		/// # <weight>
+		/// - O(1), plus the cost of executing the EVM bytecode.
+		/// # </weight>
 		#[weight = WeightForCallCreate]
 		fn create(
 			origin,

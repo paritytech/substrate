@@ -113,10 +113,16 @@ decl_module! {
 		/// Add a member `who` to the set.
 		///
 		/// May only be called from `AddOrigin` or root.
+		///
+		/// # <weight>
+		/// - O(members)
+		/// - O(1) storage read
+		/// - O(1) storage write
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn add_member(origin, who: T::AccountId) {
 			T::AddOrigin::try_origin(origin)
-				.map(|_| ())
+				.map(drop)
 				.or_else(ensure_root)?;
 
 			let mut members = <Members<T, I>>::get();
@@ -132,6 +138,12 @@ decl_module! {
 		/// Remove a member `who` from the set.
 		///
 		/// May only be called from `RemoveOrigin` or root.
+		///
+		/// # <weight>
+		/// - O(members)
+		/// - O(1) storage read
+		/// - O(1) storage write
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn remove_member(origin, who: T::AccountId) {
 			T::RemoveOrigin::try_origin(origin)
@@ -151,6 +163,12 @@ decl_module! {
 		/// Swap out one member `remove` for another `add`.
 		///
 		/// May only be called from `SwapOrigin` or root.
+		///
+		/// # <weight>
+		/// - O(members)
+		/// - O(1) storage read
+		/// - O(1) storage write
+		/// # </weight
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn swap_member(origin, remove: T::AccountId, add: T::AccountId) {
 			T::SwapOrigin::try_origin(origin)
@@ -179,6 +197,12 @@ decl_module! {
 		/// pass `members` pre-sorted.
 		///
 		/// May only be called from `ResetOrigin` or root.
+		///
+		/// # <weight>
+		/// - O(n log n) in members
+		/// - 1 storage read
+		/// - 2 storage writes
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn reset_members(origin, members: Vec<T::AccountId>) {
 			T::ResetOrigin::try_origin(origin)
@@ -198,6 +222,12 @@ decl_module! {
 		/// Swap out the sending member for some other key `new`.
 		///
 		/// May only be called from `Signed` origin of a current member.
+		///
+		/// # <weight>
+		/// - O(n log n) in members
+		/// - O(1) stores
+		/// - O(1) loads
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn change_key(origin, new: T::AccountId) {
 			let remove = ensure_signed(origin)?;

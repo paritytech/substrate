@@ -278,15 +278,19 @@ pub struct IdentityInfo {
 	/// fields.
 	pub additional: Vec<(Data, Data)>,
 
-	/// A reasonable display name for the controller of the account. This should be whatever it is
-	/// that it is typically known as and should not be confusable with other entities, given
-	/// reasonable context.
+	/// A reasonable display name for the controller of the account. This should be whatever the
+	/// entity is typically known as, and should not be confusable with other entities, given
+	/// reasonable context.  For humans, this is the name that the person would prefer to be
+	/// called.
 	///
 	/// Stored as UTF-8.
 	pub display: Data,
 
 	/// The full legal name in the local jurisdiction of the entity. This might be a bit
 	/// long-winded.
+	///
+	/// This is not guaranteed to be unique.  Many jurisdictions do not prevent two humans from
+	/// having the same legal name.  Collisions on this field are, however, rare.
 	///
 	/// Stored as UTF-8.
 	pub legal: Data,
@@ -341,6 +345,7 @@ pub struct Registration<
 impl <
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
 > Registration<Balance> {
+	/// O(judgements)
 	fn total_deposit(&self) -> Balance {
 		self.deposit + self.judgements.iter()
 			.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })

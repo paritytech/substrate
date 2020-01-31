@@ -85,6 +85,7 @@ impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
 	AccountId: Member + Encode,
 	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + Copy + From<u32> + TryInto<u32>,
 {
+	/// O(n)
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			Address::Id(ref i) => {

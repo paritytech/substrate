@@ -1117,6 +1117,8 @@ fn pick_usize<'a, R: RngCore>(rng: &mut R, max: usize) -> usize {
 impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Puts a bid into storage ordered by smallest to largest value.
 	/// Allows a maximum of 1000 bids in queue, removing largest value people first.
+	///
+	/// O(log n)?
 	fn put_bid(
 		mut bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>,
 		who: &T::AccountId,
@@ -1213,7 +1215,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 	}
 
-	/// Remove a member from the members list, except the Head.
+	/// Remove a member from the members list, except the Head or Founder.
 	///
 	/// NOTE: This does not correctly clean up a member from storage. It simply
 	/// removes them from the Members storage item.
@@ -1234,6 +1236,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// End the current period and begin a new one.
+	/// `O(cadidates * members)`
+	///
+	/// POTENTIALLY O(N^2)
 	fn rotate_period(members: &mut Vec<T::AccountId>) {
 		let phrase = b"society_rotation";
 

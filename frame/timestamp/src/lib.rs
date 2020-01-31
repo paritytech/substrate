@@ -140,6 +140,10 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
+		///
+		/// # <weight>
+		/// - O(1)
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;

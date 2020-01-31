@@ -343,7 +343,7 @@ decl_module! {
 		/// Reject a proposed spend. The original deposit will be slashed.
 		///
 		/// # <weight>
-		/// - O(1).
+		/// - O(proposals).
 		/// - Limited storage reads.
 		/// - One DB clear.
 		/// # </weight>
@@ -363,7 +363,7 @@ decl_module! {
 		/// and the original deposit will be returned.
 		///
 		/// # <weight>
-		/// - O(1).
+		/// - O(approvals).
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>

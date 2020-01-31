@@ -126,9 +126,9 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
 
-	// The deposit which is reserved from candidates if they want to
-	// start a candidacy. The deposit gets returned when the candidacy is
-	// withdrawn or when the candidate is kicked.
+	/// The deposit which is reserved from candidates if they want to
+	/// start a candidacy. The deposit gets returned when the candidacy is
+	/// withdrawn or when the candidate is kicked.
 	type CandidateDeposit: Get<BalanceOf<Self, I>>;
 
 	/// Every `Period` blocks the `Members` are filled with the highest scoring
@@ -263,6 +263,12 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
+		///
+		/// # <weight>
+		/// - 1 storage read (O(members) decode)
+		/// - 2 storage writes (O(members) encode)
+		/// - Total: O(members)
+		/// # </weight>
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(!<CandidateExists<T, I>>::exists(&who), Error::<T, I>::AlreadyInPool);
@@ -292,6 +298,12 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
+		///
+		/// # <weight>
+		/// - 1 storage read (O(members) decode)
+		/// - 2 storage writes (O(members) encode)
+		/// - Total: O(members)
+		/// # </weight>
 		pub fn withdraw_candidacy(
 			origin,
 			index: u32
@@ -311,6 +323,12 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
+		///
+		/// # <weight>
+		/// - 1 storage read (O(members) decode)
+		/// - 2 storage writes (O(members) encode)
+		/// - Total: O(members)
+		/// # </weight>
 		pub fn kick(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -335,6 +353,12 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
+		///
+		/// # <weight>
+		/// - 1 storage read (O(members) decode)
+		/// - 2 storage writes (O(members) encode)
+		/// - Total: O(members)
+		/// # </weight>
 		pub fn score(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -375,6 +399,11 @@ decl_module! {
 		/// (this happens each `Period`).
 		///
 		/// May only be called from root.
+		///
+		/// # <weight>
+		/// - O(1)
+		/// - 1 storage write
+		/// # </weight>
 		pub fn change_member_count(origin, count: u32) {
 			ensure_root(origin)?;
 			<MemberCount<I>>::put(&count);

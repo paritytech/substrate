@@ -119,6 +119,8 @@ impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
 
 	/// Lookup an T::AccountIndex to get an Id, if there's one there.
+	///
+	/// *O(1)*.
 	pub fn lookup_index(index: T::AccountIndex) -> Option<T::AccountId> {
 		let enum_set_size = Self::enum_set_size();
 		let set = Self::enum_set(index / enum_set_size);
@@ -127,6 +129,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// `true` if the account `index` is ready for reclaim.
+	///
+	/// *O(1)*.
 	pub fn can_reclaim(try_index: T::AccountIndex) -> bool {
 		let enum_set_size = Self::enum_set_size();
 		let try_set = Self::enum_set(try_index / enum_set_size);
@@ -139,6 +143,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Lookup an address to get an Id, if there's one there.
+	///
+	/// *O(1)*.
 	pub fn lookup_address(
 		a: address::Address<T::AccountId, T::AccountIndex>
 	) -> Option<T::AccountId> {
