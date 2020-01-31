@@ -41,7 +41,7 @@ mod stats;
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::io;
-use std::collections::{HashMap, BTreeMap, btree_map::Entry};
+use std::collections::{HashMap, BTreeMap};
 
 use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo};
 use sc_client_api::backend::NewBlockState;
