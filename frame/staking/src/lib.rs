@@ -1542,8 +1542,7 @@ impl<T: Trait> Module<T> {
 				),
 			RewardDestination::Stash =>
 				T::Currency::deposit_into_existing(stash, amount).ok(),
-			RewardDestination::Staked => {
-				Self::bonded(stash)
+			RewardDestination::Staked => Self::bonded(stash)
 				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
 				.and_then(|(controller, mut l)| {
 					l.active += amount;
@@ -1551,7 +1550,7 @@ impl<T: Trait> Module<T> {
 					let r = T::Currency::deposit_into_existing(stash, amount).ok();
 					Self::update_ledger(&controller, &l);
 					r
-				})},
+				}),
 		}
 	}
 
@@ -1576,7 +1575,6 @@ impl<T: Trait> Module<T> {
 
 			Self::new_era(session_index)
 		} else {
-			println!("initial era!!");
 			// Set initial era
 			Self::new_era(session_index)
 		}
@@ -1889,7 +1887,6 @@ impl<T: Trait> Module<T> {
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		println!("New session at: {}", new_index);
 		Self::ensure_storage_upgraded();
 		Self::new_session(new_index)
 	}
