@@ -375,13 +375,13 @@ where
 mod tests {
 	use super::*;
 
+	use assert_matches::assert_matches;
 	use crate::{aux_schema,	communication::tests::{Event, make_test_network}};
 	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
 	use sc_network::PeerId;
 
 	use futures::executor::{self, ThreadPool};
 
-	#[test]
 	/// Ensure `Future` implementation of `ObserverWork` is polling its `NetworkBridge`. Regression
 	/// test for bug introduced in d4fbb897c and fixed in b7af8b339.
 	///
@@ -390,16 +390,15 @@ mod tests {
 	/// `GossipValidator::validate` with an invalid gossip message. After polling the `ObserverWork`
 	/// which should poll the `NetworkBridge`, the reputation change should be forwarded to the test
 	/// network.
+	#[test]
 	fn observer_work_polls_underlying_network_bridge() {
 		let thread_pool = ThreadPool::new().unwrap();
 
 		// Create a test network.
-
 		let (tester_fut, _network) = make_test_network(&thread_pool);
 		let mut tester = executor::block_on(tester_fut);
 
 		// Create an observer.
-
 		let (client, backend) = {
 			let builder = TestClientBuilder::with_default_backend();
 			let backend = builder.backend();
@@ -424,7 +423,6 @@ mod tests {
 		);
 
 		// Trigger a reputation change through the gossip validator.
-
 		let peer_id = PeerId::random();
 		tester.trigger_gossip_validator_reputation_change(&peer_id);
 
@@ -444,10 +442,7 @@ mod tests {
 			// validator to the test network.
 			assert!(observer.now_or_never().is_none());
 
-			match tester.events.next().now_or_never() {
-				Some(Some(Event::Report(_, _))) => {},
-				_ => panic!("expected test network to receive reputation change event"),
-			};
+			assert_matches!(tester.events.next().now_or_never(), Some(Some(Event::Report(_, _))));
 		});
 	}
 }
