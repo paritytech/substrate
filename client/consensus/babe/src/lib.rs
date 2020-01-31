@@ -1279,7 +1279,7 @@ pub mod test_helpers {
 		client: &C,
 		keystore: &KeyStorePtr,
 		link: &BabeLink<B>,
-	) -> Option<BabePreDigest> where
+	) -> Option<PreDigest> where
 		B: BlockT,
 		C: ProvideRuntimeApi<B> +
 			ProvideCache<B> +

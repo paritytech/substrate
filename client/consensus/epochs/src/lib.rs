@@ -190,6 +190,11 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 	Number: Ord + One + Zero + Add<Output=Number> + Copy,
 	Epoch: crate::Epoch + Clone,
 {
+	/// Create a new epoch change.
+	pub fn new() -> Self {
+		Self::default()
+	}
+
 	/// Rebalances the tree of epoch changes so that it is sorted by length of
 	/// fork (longest fork first).
 	pub fn rebalance(&mut self) {
@@ -377,6 +382,7 @@ mod tests {
 	}
 
 	type Hash = [u8; 1];
+	type SlotNumber = u64;
 
 	#[derive(Debug, Clone, Eq, PartialEq)]
 	struct Epoch {
@@ -386,6 +392,7 @@ mod tests {
 
 	impl EpochT for Epoch {
 		type NextEpochDescriptor = ();
+		type SlotNumber = SlotNumber;
 
 		fn increment(&self, _: ()) -> Self {
 			Epoch {
