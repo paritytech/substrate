@@ -63,7 +63,7 @@ macro_rules! new_full_start {
 			})?
 			.with_transaction_pool(|config, client, _fetcher| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
-				let pool = sc_transaction_pool::BasicPool::new(config, pool_api);
+				let pool = sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api));
 				Ok(pool)
 			})?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
@@ -274,10 +274,10 @@ type ConcreteTransactionPool = sc_transaction_pool::BasicPool<
 >;
 
 /// A specialized configuration object for setting up the node..
-pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spec::Extensions>;
+pub type NodeConfiguration = Configuration<GenesisConfig, crate::chain_spec::Extensions>;
 
 /// Builds a new service for a full client.
-pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
+pub fn new_full(config: NodeConfiguration)
 -> Result<
 	Service<
 		ConcreteBlock,
@@ -299,7 +299,7 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 }
 
 /// Builds a new service for a light client.
-pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
+pub fn new_light(config: NodeConfiguration)
 -> Result<impl AbstractService, ServiceError> {
 	type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
@@ -313,7 +313,7 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
 			let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
 			let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
-				config, pool_api, sc_transaction_pool::RevalidationType::Light,
+				config, Arc::new(pool_api), sc_transaction_pool::RevalidationType::Light,
 			);
 			Ok(pool)
 		})?

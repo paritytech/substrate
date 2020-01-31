@@ -11,7 +11,6 @@ use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
-use futures::{FutureExt, compat::Future01CompatExt};
 
 // Our native executor instance.
 native_executor_instance!(
@@ -42,7 +41,7 @@ macro_rules! new_full_start {
 			})?
 			.with_transaction_pool(|config, client, _fetcher| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
-				let pool = sc_transaction_pool::BasicPool::new(config, pool_api);
+				let pool = sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api));
 				Ok(pool)
 			})?
 			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
@@ -78,7 +77,7 @@ macro_rules! new_full_start {
 }
 
 /// Builds a new service for a full client.
-pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
+pub fn new_full(config: Configuration<GenesisConfig>)
 	-> Result<impl AbstractService, ServiceError>
 {
 	let is_authority = config.roles.is_authority();
@@ -193,7 +192,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 }
 
 /// Builds a new service for a light client.
-pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
+pub fn new_light(config: Configuration<GenesisConfig>)
 	-> Result<impl AbstractService, ServiceError>
 {
 	let inherent_data_providers = InherentDataProviders::new();
@@ -208,7 +207,7 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 
 			let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
 			let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
-				config, pool_api, sc_transaction_pool::RevalidationType::Light,
+				config, Arc::new(pool_api), sc_transaction_pool::RevalidationType::Light,
 			);
 			Ok(pool)
 		})?
