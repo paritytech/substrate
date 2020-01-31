@@ -730,7 +730,7 @@ mod node_implementation {
 		/// when the predicate fails.
 		/// The given function `is_descendent_of` should return `true` if the second hash (target)
 		/// is a descendent of the first hash (base).
-		pub fn find_node_mut_where<F, P, E>(
+		pub fn find_node_where_mut<F, P, E>(
 			&mut self,
 			hash: &H,
 			number: &N,
