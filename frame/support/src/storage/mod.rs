@@ -26,3 +26,6 @@ pub use top as unhashed;
 #[deprecated(note="Use module `top_hashed` instead")]
 pub use top_hashed as hashed;
 
+pub use generator::{
+	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap
+};
