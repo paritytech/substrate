@@ -132,8 +132,8 @@ fn rent_budget<T: Trait>(
 
 /// Consider the case for rent payment of the given account and returns a `Verdict`.
 ///
-/// Use `handicap` in case you want  change the reference block number. (Check out the
-/// `snitch_contract_should_be_evicted` function to get more details).
+/// Use `handicap` in case you want to change the reference block number. (To get more details see
+/// `snitch_contract_should_be_evicted` ).
 fn consider_case<T: Trait>(
 	account: &T::AccountId,
 	current_block_number: T::BlockNumber,
