@@ -1554,7 +1554,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// New session. Provide the validator set for if it's a new era.
+	/// Plan a new session potentially trigger a new era.
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
@@ -1580,6 +1580,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Start a session potentially starting an era.
 	fn start_session(start_session: SessionIndex) {
 		let next_active_era = Self::active_era().map(|e| e + 1).unwrap_or(0);
 		if let Some(next_active_era_start_session_index) = Self::eras_start_session_index(next_active_era) {
@@ -1589,6 +1590,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// End a session potentially ending an era.
 	fn end_session(session_index: SessionIndex) {
 		if let Some(active_era) = Self::active_era() {
 			let next_active_era_start_session_index = Self::eras_start_session_index(active_era + 1)
@@ -1603,6 +1605,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Increment `ActiveEra` and reset `ActiveEraStart`
 	fn start_era(_start_session: SessionIndex) {
 		ActiveEra::mutate(|s| {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
@@ -1613,6 +1616,7 @@ impl<T: Trait> Module<T> {
 
 	}
 
+	/// Compute payout for era.
 	fn end_era(active_era: EraIndex, _session_index: SessionIndex) {
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = Self::active_era_start() {
@@ -1627,15 +1631,12 @@ impl<T: Trait> Module<T> {
 				era_duration.saturated_into::<u64>(),
 			);
 
-			// Set previous era reward.
+			// Set ending era reward.
 			<ErasValidatorReward<T>>::insert(&active_era, total_payout);
 		}
 	}
 
-	/// The era has changed - enact new staking set.
-	///
-	/// NOTE: This always happens immediately before a session change to ensure that new validators
-	/// get a chance to set their session keys.
+	/// Plan a new era. Return the potential new staking set.
 	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		// Increment or set current era.
 		let current_era = CurrentEra::mutate(|s| {
