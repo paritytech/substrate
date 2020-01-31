@@ -2110,8 +2110,9 @@ mod tests {
 
 	#[test]
 	fn call_metadata() {
-		let metadata = Call::<TraitImpl>::aux_3().get_call_metadata();
-		let expected = CallMetadata { function_name: "aux_3".into(), pallet_name: None };
+		let call = OuterCall::Test(Call::<TraitImpl>::aux_3());
+		let metadata = call.get_call_metadata();
+		let expected = CallMetadata { function_name: "aux_3".into(), pallet_name: Some("Test".into()) };
 		assert_eq!(metadata, expected);
 	}
 }
