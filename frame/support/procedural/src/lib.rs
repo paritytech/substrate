@@ -54,7 +54,7 @@ use proc_macro::TokenStream;
 /// Basic storage consists of a name and a type; supported types are:
 ///
 /// * Value: `Foo: type`: Implements the
-///   [`StorageValue`](../frame_support/storage/trait.StorageValue.html) trait with
+///   [`StorageValue`](../frame_support/storage/generator/trait.StorageValue.html) trait with
 ///   * `module_prefix`: module_prefix
 ///   * `storage_prefix`: storage_name
 ///
@@ -64,8 +64,8 @@ use proc_macro::TokenStream;
 ///   ```
 ///
 /// * Map: `Foo: map hasher($hash) type => type`: Implements the
-///   [`StorageMap`](../frame_support/storage/trait.StorageMap.html) trait and
-///   [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
+///   [`StorageMap`](../frame_support/storage/generator/trait.StorageMap.html) trait and
+///   [`StoragePrefixedMap`](../frame_support/storage/generator/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
@@ -84,7 +84,7 @@ use proc_macro::TokenStream;
 ///   ```
 ///
 /// * Linked map: `Foo: linked_map hasher($hash) type => type`: Implements the
-///   [`StorageLinkedMap`](../frame_support/storage/trait.StorageLinkedMap.html) trait.
+///   [`StorageLinkedMap`](../frame_support/storage/generator/trait.StorageLinkedMap.html) trait.
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
@@ -112,8 +112,8 @@ use proc_macro::TokenStream;
 ///   ```
 ///
 /// * Double map: `Foo: double_map hasher($hash1) u32, hasher($hash2) u32 => u32`: Implements the
-///   [`StorageDoubleMap`](../frame_support/storage/trait.StorageDoubleMap.html) trait and
-///   [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
+///   [`StorageDoubleMap`](../frame_support/storage/generator/trait.StorageDoubleMap.html) trait and
+///   [`StoragePrefixedMap`](../frame_support/storage/generator/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be choosen with care, see
