@@ -14,28 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{Call, Trait, NegativeImbalanceOf, GasPrice, GasUsageReport};
-use sp_std::{prelude::*, marker::PhantomData, convert::TryFrom, fmt};
-use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
-use frame_support::dispatch::{DispatchResult, Dispatchable};
+use crate::{Call, GasPrice, GasUsageReport, NegativeImbalanceOf, Trait};
 use frame_support::{
-	Parameter, decl_module, decl_event, decl_error, decl_storage, storage::{StorageValue, child},
-	parameter_types, IsSubType,
-	weights::{DispatchInfo, Weight, FunctionOf, DispatchClass},
-	traits::{
-		Currency, Get, OnFreeBalanceZero, Time, Randomness, OnUnbalanced, ExistenceRequirement,
-		WithdrawReason, Imbalance,
-	},
+	storage::StorageValue,
+	traits::{Currency, ExistenceRequirement, Imbalance, OnUnbalanced, WithdrawReason},
+	weights::{DispatchInfo, Weight},
+	IsSubType,
 };
 use sp_runtime::{
-	traits::{
-		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension, Convert,
-		UniqueSaturatedInto, CheckedDiv,
-	},
+	traits::{CheckedDiv, Convert, SignedExtension, UniqueSaturatedInto},
 	transaction_validity::{
-		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
+		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
 };
+use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
 
 #[doc(hidden)]
 #[cfg_attr(test, derive(Debug))]
@@ -77,7 +69,7 @@ impl<T: Trait + Send + Sync> GasWeightConversion<T> {
 				// if this transaction depleted all provided gas to zero.
 				let gas_weight_limit = Weight::try_from(gas_limit)
 					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
-				let weight_available = <system::Module<T>>::remaining_weight().into();
+				let weight_available = <frame_system::Module<T>>::remaining_weight().into();
 				if gas_weight_limit > weight_available {
 					// We discard the transaction if the requested limit exceeds the available
 					// amount of weight in the current block.
@@ -197,7 +189,7 @@ impl<T: Trait + Send + Sync> SignedExtension for GasWeightConversion<T> {
 				T::GasPayment::on_unbalanced(imbalance);
 			}
 
-			<system::Module<T>>::register_extra_weight_unchecked(spent_weight);
+			<frame_system::Module<T>>::register_extra_weight_unchecked(spent_weight);
 		}
 	}
 }
