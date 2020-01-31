@@ -68,7 +68,7 @@
 //!
 //! The contracts module defines the following extension:
 //!
-//!   - [`CheckBlockGasLimit`]: Ensures that the transaction does not exceeds the block gas limit.
+//!   - [`GasWeightConversion`]: Ensures that the transaction does not exceeds the block gas limit.
 //!
 //! The signed extension needs to be added as signed extra to the transaction type to be used in the
 //! runtime.
@@ -95,6 +95,7 @@ mod account_db;
 mod exec;
 mod wasm;
 mod rent;
+mod gas_weight_conv;
 
 #[cfg(test)]
 mod tests;
@@ -105,6 +106,7 @@ use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
 pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
+pub use gas_weight_conv::GasWeightConversion;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
@@ -1084,162 +1086,6 @@ impl Default for Schedule {
 			max_table_size: 16 * 1024,
 			enable_println: false,
 			max_subject_len: 32,
-		}
-	}
-}
-
-#[doc(hidden)]
-#[cfg_attr(test, derive(Debug))]
-pub struct DynamicWeightData<AccountId, NegativeImbalance> {
-	/// The account id who should receive the refund from the gas leftovers.
-	transactor: AccountId,
-	/// The negative imbalance obtained by withdrawing the value up to the requested gas limit.
-	imbalance: NegativeImbalance,
-}
-
-/// `SignedExtension` that checks if a transaction would exhausts the block gas limit.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckBlockGasLimit<T: Trait + Send + Sync>(PhantomData<T>);
-
-impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
-	/// Perform pre-dispatch checks for the given call and origin.
-	fn perform_pre_dispatch_checks(
-		who: &T::AccountId,
-		call: &<T as Trait>::Call,
-	) -> Result<Option<DynamicWeightData<T::AccountId, NegativeImbalanceOf<T>>>, TransactionValidityError> {
-		let call = match call.is_sub_type() {
-			Some(call) => call,
-			None => return Ok(None),
-		};
-
-		match *call {
-			Call::claim_surcharge(_, _) | Call::update_schedule(_) | Call::put_code(_) => Ok(None),
-			Call::call(_, _, gas_limit, _) | Call::instantiate(_, gas_limit, _, _) => {
-				// Compute how much block weight this transaction can take at its limit, i.e.
-				// if this transaction depleted all provided gas to zero.
-				let gas_weight_limit = Weight::try_from(gas_limit)
-					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
-				let weight_available = <system::Module<T>>::remaining_weight().into();
-				if gas_weight_limit > weight_available {
-					// We discard the transaction if the requested limit exceeds the available
-					// amount of weight in the current block.
-					//
-					// Note that this transaction is left out only from the current block and txq
-					// might attempt to include this transaction again.
-					return Err(InvalidTransaction::ExhaustsResources.into());
-				}
-
-				// Compute the fee corresponding for the given gas_weight_limit and attempt
-				// withdrawing from the origin of this transaction.
-				let fee = T::WeightToFee::convert(gas_weight_limit);
-
-				// Compute and store the effective price per unit of gas.
-				let gas_price = {
-					let divisor = gas_weight_limit.unique_saturated_into();
-					fee
-						.checked_div(&divisor)
-						.unwrap_or(1.into())
-				};
-
-				//
-				// The place where we set GasPrice for the execution of this transaction.
-				//
-				<GasPrice<T>>::put(gas_price);
-
-				let imbalance = match T::Currency::withdraw(
-					who,
-					fee,
-					WithdrawReason::TransactionPayment.into(),
-					ExistenceRequirement::KeepAlive,
-				) {
-					Ok(imbalance) => imbalance,
-					Err(_) => return Err(InvalidTransaction::Payment.into()),
-				};
-
-				Ok(Some(DynamicWeightData {
-					transactor: who.clone(),
-					imbalance,
-				}))
-			},
-			Call::__PhantomItem(_, _)  => unreachable!("Variant is never constructed"),
-		}
-	}
-}
-
-impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
-	fn default() -> Self {
-		Self(PhantomData)
-	}
-}
-
-impl<T: Trait + Send + Sync> fmt::Debug for CheckBlockGasLimit<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "CheckBlockGasLimit")
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
-	const IDENTIFIER: &'static str = "CheckBlockGasLimit";
-	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
-	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
-	/// Optional pre-dispatch check data.
-	///
-	/// It is present only for the contract calls that operate with gas.
-	type Pre = Option<DynamicWeightData<T::AccountId, NegativeImbalanceOf<T>>>;
-
-	fn additional_signed(&self) -> Result<(), TransactionValidityError> { Ok(()) }
-
-	fn pre_dispatch(
-		self,
-		who: &Self::AccountId,
-		call: &Self::Call,
-		_: DispatchInfo,
-		_: usize,
-	) -> Result<Self::Pre, TransactionValidityError> {
-		Self::perform_pre_dispatch_checks(who, call)
-	}
-
-	fn validate(
-		&self,
-		who: &Self::AccountId,
-		call: &Self::Call,
-		_: Self::DispatchInfo,
-		_: usize,
-	) -> TransactionValidity {
-		Self::perform_pre_dispatch_checks(who, call)
-			.map(|_| ValidTransaction::default())
-	}
-
-	fn post_dispatch(pre: Self::Pre, _info: DispatchInfo, _len: usize) {
-		if let Some(DynamicWeightData {
-			transactor,
-			imbalance,
-		}) = pre {
-			// Take the report of consumed and left gas after the execution of the current
-			// transaction.
-			let (gas_left, gas_spent) = GasUsageReport::take();
-
-			// These should be OK since we don't buy more
-			let unused_weight = gas_left as Weight;
-			let spent_weight = gas_spent as Weight;
-
-			let refund = T::WeightToFee::convert(unused_weight);
-
-			// Refund the unused gas.
-			let refund_imbalance = T::Currency::deposit_creating(&transactor, refund);
-			if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
-				T::GasPayment::on_unbalanced(imbalance);
-			}
-
-			<system::Module<T>>::register_extra_weight_unchecked(spent_weight);
 		}
 	}
 }

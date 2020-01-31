@@ -22,8 +22,9 @@
 use crate::{
 	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig,
 	Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, Schedule,
-	TrieIdGenerator, CheckBlockGasLimit, account_db::{AccountDb, DirectAccountDb, OverlayAccountDb},
+	TrieIdGenerator, account_db::{AccountDb, DirectAccountDb, OverlayAccountDb},
 };
+use crate::gas_weight_conv::GasWeightConversion;
 use assert_matches::assert_matches;
 use hex_literal::*;
 use codec::{Decode, Encode, KeyedVec};
@@ -2414,14 +2415,14 @@ fn cannot_self_destruct_in_constructor() {
 fn check_block_gas_limit_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		let info = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: true };
-		let check = CheckBlockGasLimit::<Test>(Default::default());
+		let check = GasWeightConversion::<Test>::new();
 		let call: Call = crate::Call::put_code(vec![]).into();
 		match check.pre_dispatch(&0, &call, info, 0) {
 			Ok(None) => {},
 			_ => panic!("put_code is not dynamic and should pass validation"),
 		}
 
-		let check = CheckBlockGasLimit::<Test>(Default::default());
+		let check = GasWeightConversion::<Test>::new();
 		let call: Call = crate::Call::call(Default::default(), 0, 100, vec![]).into();
 		match check.pre_dispatch(&0, &call, info, 0) {
 			Ok(Some(_)) => {},
