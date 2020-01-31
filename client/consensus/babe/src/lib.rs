@@ -59,8 +59,10 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 pub use sp_consensus_babe::{
-	BabeApi, ConsensusLog, BABE_ENGINE_ID, PreDigest, SlotNumber, BabeConfiguration,
-	CompatibleDigestItem, BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
+	BabeApi, ConsensusLog, BABE_ENGINE_ID, SlotNumber, BabeConfiguration,
+	AuthorityId, AuthorityPair, AuthoritySignature,
+	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
+	digest::{PreDigest, CompatibleDigestItem, NextEpochDescriptor},
 };
 pub use sp_consensus::SyncOracle;
 use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration}};
@@ -115,9 +117,6 @@ mod verification;
 mod authorship;
 #[cfg(test)]
 mod tests;
-pub use sp_consensus_babe::{
-	AuthorityId, AuthorityPair, AuthoritySignature, NextEpochDescriptor,
-};
 
 /// BABE epoch information
 #[derive(Decode, Encode, Default, PartialEq, Eq, Clone, Debug)]
@@ -136,6 +135,7 @@ pub struct Epoch {
 
 impl EpochT for Epoch {
 	type NextEpochDescriptor = NextEpochDescriptor;
+	type SlotNumber = SlotNumber;
 
 	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
 		Epoch {
