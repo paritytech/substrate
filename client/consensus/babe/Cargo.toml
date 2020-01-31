@@ -22,6 +22,7 @@ sc-telemetry = { version = "2.0.0", path = "../../telemetry" }
 sc-keystore = { version = "2.0.0", path = "../../keystore" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
 sc-client = { version = "0.8", path = "../../" }
+sc-consensus-epochs = { version = "0.8", path = "../epochs" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
