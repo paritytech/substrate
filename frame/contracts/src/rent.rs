@@ -333,7 +333,8 @@ pub fn snitch_contract_should_be_evicted<T: Trait>(
 /// rent allowance, or any problems coming from withdrawing the dues.
 ///
 /// NOTE that this is not a side-effect free function! It will actually collect rent and then
-/// compute the projection.
+/// compute the projection. This function is only used for implementation of an RPC method through
+/// `RuntimeApi` meaning that the changes will be discarded anyway.
 pub fn compute_rent_projection<T: Trait>(
 	account: &T::AccountId,
 ) -> RentProjectionResult<T::BlockNumber> {
