@@ -217,14 +217,11 @@ pub fn default_child_trie_root<L: TrieConfiguration>(
 	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
 }
 
+/// Test if this is an empty root node.
 pub fn check_if_empty_root<H: Hasher> (
 	root: &[u8],
 ) -> bool {
-	if let Some(empty_root) = H::EMPTY_ROOT.as_ref() {
-		*empty_root == root
-	} else {
-		H::hash(&[0u8]).as_ref() == root
-	}
+	H::EMPTY_ROOT == root
 }
 
 /// Call `f` for all keys in a child trie.
