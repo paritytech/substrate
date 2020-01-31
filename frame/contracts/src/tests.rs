@@ -2410,7 +2410,6 @@ fn cannot_self_destruct_in_constructor() {
 	});
 }
 
-// TODO: This test relies on put_code, which no longer requires any gas.
 #[test]
 fn check_block_gas_limit_works() {
 	ExtBuilder::default().build().execute_with(|| {
