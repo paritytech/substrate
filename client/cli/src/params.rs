@@ -480,6 +480,12 @@ pub struct RunCmd {
 	#[structopt(long = "prometheus-port", value_name = "PORT")]
 	pub prometheus_port: Option<u16>,
 
+	/// Disable connecting to the Substrate prometheus.
+	///
+	/// prometheus is on by default on global chains.
+	#[structopt(long = "no-prometheus")]
+	pub no_prometheus: bool,
+
 	/// The human-readable name for this node.
 	///
 	/// The node name will be reported to the telemetry server, if enabled.

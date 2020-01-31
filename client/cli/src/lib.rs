@@ -1065,13 +1065,9 @@ where
 
 	let rpc_interface: &str = interface_str(cli.rpc_external, cli.unsafe_rpc_external, cli.validator)?;
 	let ws_interface: &str = interface_str(cli.ws_external, cli.unsafe_ws_external, cli.validator)?;
-	let prometheus_interface: &str = if cli.prometheus_external { "0.0.0.0" } else { "127.0.0.1" };
 
 	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
 	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
-	config.prometheus_port = Some(
-		parse_address(&format!("{}:{}", prometheus_interface, 9615), cli.prometheus_port)?
-	);
 
 	config.rpc_ws_max_connections = cli.ws_max_connections;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
@@ -1094,7 +1090,14 @@ where
 	} else if !cli.telemetry_endpoints.is_empty() {
 		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
-
+	// Override prometheus
+	if cli.no_prometheus {
+		config.prometheus_port = None;
+	} else {
+		let prometheus_interface: &str = if cli.prometheus_external { "0.0.0.0" } else { "127.0.0.1" };
+		config.prometheus_port = Some(
+		parse_address(&format!("{}:{}", prometheus_interface, 9615), cli.prometheus_port)?);
+	}
 	config.tracing_targets = cli.tracing_targets.into();
 	config.tracing_receiver = cli.tracing_receiver.into();
 
