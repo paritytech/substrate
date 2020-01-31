@@ -430,13 +430,15 @@ pub trait Trait: frame_system::Trait {
 	/// The maximum size of a storage value in bytes.
 	type MaxValueSize: Get<u32>;
 
-	/// Weight consume by the `put_code` excluding per byte costs.
+	/// Weight consumed by the `put_code` excluding per byte costs.
 	type PutCodeBaseWeight: Get<Weight>;
 
 	/// Weight consumed per one byte of code deployed in `put_code`.
 	type PutCodePerByteWeight: Get<Weight>;
 
 	/// Convert a weight value into a deductible fee based on the currency type.
+	///
+	/// For now, only linear weight to fee is suppored.
 	type WeightToFee: Convert<Weight, BalanceOf<Self>>;
 }
 
