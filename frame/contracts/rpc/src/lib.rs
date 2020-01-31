@@ -18,19 +18,23 @@
 
 use std::sync::Arc;
 
-use sp_blockchain::HeaderBackend;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use sp_core::{H256, Bytes};
-use sp_rpc::number;
+use pallet_contracts_primitives::RentProjection;
 use serde::{Deserialize, Serialize};
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_api::ProvideRuntimeApi;
+use sp_blockchain::HeaderBackend;
+use sp_core::{Bytes, H256};
+use sp_rpc::number;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT},
+};
 
 pub use self::gen_client::Client as ContractsClient;
 pub use pallet_contracts_rpc_runtime_api::{
-	self as runtime_api, ContractExecResult, ContractsApi as ContractsRuntimeApi, GetStorageResult,
+	self as runtime_api, ContractExecResult, ContractsApi as ContractsRuntimeApi,
 };
 
 const RUNTIME_ERROR: i64 = 1;
@@ -46,13 +50,13 @@ const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
 /// https://docs.google.com/spreadsheets/d/1h0RqncdqiWI4KgxO0z9JIpZEJESXjX_ZCK6LFX6veDo/view
 const GAS_PER_SECOND: u64 = 1_000_000_000;
 
-/// A private newtype for converting `GetStorageError` into an RPC error.
-struct GetStorageError(runtime_api::GetStorageError);
-impl From<GetStorageError> for Error {
-	fn from(e: GetStorageError) -> Error {
-		use runtime_api::GetStorageError::*;
+/// A private newtype for converting `ContractAccessError` into an RPC error.
+struct ContractAccessError(pallet_contracts_primitives::ContractAccessError);
+impl From<ContractAccessError> for Error {
+	fn from(e: ContractAccessError) -> Error {
+		use pallet_contracts_primitives::ContractAccessError::*;
 		match e.0 {
-			ContractDoesntExist => Error {
+			DoesntExist => Error {
 				code: ErrorCode::ServerError(CONTRACT_DOESNT_EXIST),
 				message: "The specified contract doesn't exist.".into(),
 				data: None,
@@ -61,7 +65,7 @@ impl From<GetStorageError> for Error {
 				code: ErrorCode::ServerError(CONTRACT_IS_A_TOMBSTONE),
 				message: "The contract is a tombstone and doesn't have any storage.".into(),
 				data: None,
-			}
+			},
 		}
 	}
 }
@@ -97,19 +101,18 @@ pub enum RpcContractExecResult {
 impl From<ContractExecResult> for RpcContractExecResult {
 	fn from(r: ContractExecResult) -> Self {
 		match r {
-			ContractExecResult::Success { status, data } => {
-				RpcContractExecResult::Success { status, data: data.into() }
+			ContractExecResult::Success { status, data } => RpcContractExecResult::Success {
+				status,
+				data: data.into(),
 			},
-			ContractExecResult::Error => {
-				RpcContractExecResult::Error(())
-			},
+			ContractExecResult::Error => RpcContractExecResult::Error(()),
 		}
 	}
 }
 
 /// Contracts RPC methods.
 #[rpc]
-pub trait ContractsApi<BlockHash, AccountId, Balance> {
+pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance> {
 	/// Executes a call to a contract.
 	///
 	/// This call is performed locally without submitting any transactions. Thus executing this
@@ -132,6 +135,19 @@ pub trait ContractsApi<BlockHash, AccountId, Balance> {
 		key: H256,
 		at: Option<BlockHash>,
 	) -> Result<Option<Bytes>>;
+
+	/// Returns the projected time a given contract will be able to sustain paying its rent.
+	///
+	/// The returned projection is relevent for the given block, i.e. it is as if the contract was
+	/// accessed at the beginning of that block.
+	///
+	/// Returns `None` if the contract is exempted from rent.
+	#[rpc(name = "contracts_rentProjection")]
+	fn rent_projection(
+		&self,
+		address: AccountId,
+		at: Option<BlockHash>,
+	) -> Result<Option<BlockNumber>>;
 }
 
 /// An implementation of contract specific RPC methods.
@@ -149,13 +165,22 @@ impl<C, B> Contracts<C, B> {
 		}
 	}
 }
-
-impl<C, Block, AccountId, Balance> ContractsApi<<Block as BlockT>::Hash, AccountId, Balance>
-	for Contracts<C, Block>
+impl<C, Block, AccountId, Balance>
+	ContractsApi<
+		<Block as BlockT>::Hash,
+		<<Block as BlockT>::Header as HeaderT>::Number,
+		AccountId,
+		Balance,
+	> for Contracts<C, Block>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	C::Api: ContractsRuntimeApi<Block, AccountId, Balance>,
+	C::Api: ContractsRuntimeApi<
+		Block,
+		AccountId,
+		Balance,
+		<<Block as BlockT>::Header as HeaderT>::Number,
+	>,
 	AccountId: Codec,
 	Balance: Codec,
 {
@@ -188,8 +213,7 @@ where
 				code: ErrorCode::InvalidParams,
 				message: format!(
 					"Requested gas limit is greater than maximum allowed: {} > {}",
-					gas_limit,
-					max_gas_limit
+					gas_limit, max_gas_limit
 				),
 				data: None,
 			});
@@ -197,11 +221,7 @@ where
 
 		let exec_result = api
 			.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
-			.map_err(|e| Error {
-				code: ErrorCode::ServerError(RUNTIME_ERROR),
-				message: "Runtime trapped while executing a contract.".into(),
-				data: Some(format!("{:?}", e).into()),
-			})?;
+			.map_err(|e| runtime_error_into_rpc_err(e))?;
 
 		Ok(exec_result.into())
 	}
@@ -217,19 +237,43 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let get_storage_result = api
+		let result = api
 			.get_storage(&at, address, key.into())
-			.map_err(|e|
-				// Handle general API calling errors.
-				Error {
-					code: ErrorCode::ServerError(RUNTIME_ERROR),
-					message: "Runtime trapped while querying storage.".into(),
-					data: Some(format!("{:?}", e).into()),
-				})?
-			.map_err(GetStorageError)?
+			.map_err(|e| runtime_error_into_rpc_err(e))?
+			.map_err(ContractAccessError)?
 			.map(Bytes);
 
-		Ok(get_storage_result)
+		Ok(result)
+	}
+
+	fn rent_projection(
+		&self,
+		address: AccountId,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash));
+
+		let result = api
+			.rent_projection(&at, address)
+			.map_err(|e| runtime_error_into_rpc_err(e))?
+			.map_err(ContractAccessError)?;
+
+		Ok(match result {
+			RentProjection::NoEviction => None,
+			RentProjection::EvictionAt(block_num) => Some(block_num),
+		})
+	}
+}
+
+/// Converts a runtime trap into an RPC error.
+fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> Error {
+	Error {
+		code: ErrorCode::ServerError(RUNTIME_ERROR),
+		message: "Runtime trapped".into(),
+		data: Some(format!("{:?}", err).into()),
 	}
 }
 
@@ -240,7 +284,7 @@ mod tests {
 	#[test]
 	fn should_serialize_deserialize_properly() {
 		fn test(expected: &str) {
-			let res: RpcContractExecResult  = serde_json::from_str(expected).unwrap();
+			let res: RpcContractExecResult = serde_json::from_str(expected).unwrap();
 			let actual = serde_json::to_string(&res).unwrap();
 			assert_eq!(actual, expected);
 		}

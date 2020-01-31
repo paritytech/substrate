@@ -42,6 +42,7 @@ pallet-babe = { version = "2.0.0", default-features = false, path = "../../../fr
 pallet-balances = { version = "2.0.0", default-features = false, path = "../../../frame/balances" }
 pallet-collective = { version = "2.0.0", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "2.0.0", default-features = false, path = "../../../frame/contracts" }
+pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "../../../frame/contracts/common/" }
 pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
 pallet-democracy = { version = "2.0.0", default-features = false, path = "../../../frame/democracy" }
 pallet-elections-phragmen = { version = "2.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
@@ -83,8 +84,9 @@ std = [
 	"sp-block-builder/std",
 	"codec/std",
 	"pallet-collective/std",
-	"pallet-contracts-rpc-runtime-api/std",
 	"pallet-contracts/std",
+	"pallet-contracts-primitives/std",
+	"pallet-contracts-rpc-runtime-api/std",
 	"pallet-democracy/std",
 	"pallet-elections-phragmen/std",
 	"frame-executive/std",
