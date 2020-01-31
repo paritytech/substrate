@@ -181,7 +181,15 @@ impl Default for Data {
 	}
 }
 
-impl BenchType for Data {}
+impl BenchType for Data {
+	fn test_value(_name: &str) -> Self {
+		Default::default()
+	}
+
+	fn test_value_loop(name: &str, iteration: u32) -> Self {
+		Data::Raw(vec![42u8; (100 * iteration) as usize])
+	}
+}
 
 /// An identifier for a single name registrar/identity verification service.
 pub type RegistrarIndex = u32;
@@ -334,7 +342,29 @@ pub struct IdentityInfo {
 	pub twitter: Data,
 }
 
-impl BenchType for IdentityInfo {}
+impl BenchType for IdentityInfo {
+	fn test_value(name: &str) -> Self {
+		Default::default()
+	}
+
+	fn test_value_loop(name: &str, iteration: u32) -> Self {
+		#![cfg(feature = "std")]
+		println!("test_value_loop {} {}", name, iteration);
+		let d = Data::test_value_loop(name, iteration);
+		let t = (d.clone(), d.clone());
+		Self {
+			additional: vec![t; (100 * iteration) as usize],
+			display: BenchType::test_value_loop(name, iteration),
+			legal: BenchType::test_value_loop(name, iteration),
+			web: BenchType::test_value_loop(name, iteration),
+			riot: BenchType::test_value_loop(name, iteration),
+			email: BenchType::test_value_loop(name, iteration),
+			pgp_fingerprint: Some(Default::default()),
+			image: BenchType::test_value_loop(name, iteration),
+			twitter: BenchType::test_value_loop(name, iteration),
+		}
+	}
+}
 
 /// Information concerning the identity of the controller of an account.
 ///
