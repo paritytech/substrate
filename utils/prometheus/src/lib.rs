@@ -16,7 +16,7 @@
 
 use futures_util::{FutureExt, future::Future};
 use hyper::http::StatusCode;
-use hyper::{Server, Body, Response, service::{service_fn, make_service_fn}};
+use hyper::{Server, Body, Request, Response, service::{service_fn, make_service_fn}};
 use prometheus::{Encoder, TextEncoder, core::Collector};
 use std::net::SocketAddr;
 #[cfg(not(target_os = "unknown"))]
@@ -59,17 +59,25 @@ impl std::error::Error for Error {
 	}
 }
 
-async fn request_metrics(registry: Registry) -> Result<Response<Body>, Error> {
-	let metric_families = registry.gather();
-	let mut buffer = vec![];
-	let encoder = TextEncoder::new();
-	encoder.encode(&metric_families, &mut buffer).unwrap();
+async fn request_metrics(req: Request<Body>, registry: Registry) -> Result<Response<Body>, Error> {
+	if req.uri().path() == "/metrics" {
+		let metric_families = registry.gather();
+		let mut buffer = vec![];
+		let encoder = TextEncoder::new();
+		encoder.encode(&metric_families, &mut buffer).unwrap();
 
-	Response::builder()
-		.status(StatusCode::OK)
-		.header("Content-Type", encoder.format_type())
-		.body(Body::from(buffer))
+		Response::builder()
+			.status(StatusCode::OK)
+			.header("Content-Type", encoder.format_type())
+			.body(Body::from(buffer))
+			.map_err(Error::Http)
+	} else {
+		Response::builder()
+		.status(StatusCode::NOT_FOUND)
+		.body(Body::from("Not found."))
 		.map_err(Error::Http)
+	}
+
 }
 
 #[derive(Clone)]
@@ -101,8 +109,8 @@ pub async fn init_prometheus(prometheus_addr: SocketAddr, registry: Registry) ->
 		let registry = registry.clone();
 
 		async move {
-			Ok::<_, hyper::Error>(service_fn(move |_| {
-				request_metrics(registry.clone())
+			Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
+				request_metrics(req, registry.clone())
 			}))
 		}
 	});
