@@ -16,7 +16,7 @@
 
 //! Changes trie pruning-related functions.
 
-use hash_db::Hasher;
+use sp_core::{Hasher, InnerHasher};
 use sp_trie::Recorder;
 use log::warn;
 use num_traits::One;
@@ -68,7 +68,7 @@ pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 			trie_storage.for_key_values_with_prefix(&child_prefix, |key, value| {
 				if let Ok(InputKey::ChildIndex::<Number>(_trie_key)) = Decode::decode(&mut &key[..]) {
 					if let Ok(value) = <Vec<u8>>::decode(&mut &value[..]) {
-						let mut trie_root = <H as Hasher>::Out::default();
+						let mut trie_root = <H as InnerHasher>::Out::default();
 						trie_root.as_mut().copy_from_slice(&value[..]);
 						children_roots.push(trie_root);
 					}

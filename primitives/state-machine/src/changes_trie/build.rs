@@ -19,7 +19,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::collections::btree_map::Entry;
 use codec::{Decode, Encode};
-use hash_db::Hasher;
+use sp_core::{Hasher, InnerHasher};
 use num_traits::One;
 use crate::{
 	StorageKey,
@@ -291,7 +291,7 @@ fn prepare_digest_input<'a, H, Number>(
 				trie_storage.for_key_values_with_prefix(&child_prefix, |key, value|
 					if let Ok(InputKey::ChildIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 						if let Ok(value) = <Vec<u8>>::decode(&mut &value[..]) {
-							let mut trie_root = <H as Hasher>::Out::default();
+							let mut trie_root = <H as InnerHasher>::Out::default();
 							trie_root.as_mut().copy_from_slice(&value[..]);
 							children_roots.insert(trie_key.storage_key, trie_root);
 						}

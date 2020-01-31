@@ -27,7 +27,7 @@ use sc_client_api::{
 	light::{Fetcher, RemoteCallRequest, RemoteBodyRequest},
 	BlockBody,
 };
-use sp_core::Hasher;
+use sp_core::InnerHasher;
 use sp_runtime::{
 	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
 	transaction_validity::TransactionValidity,

@@ -22,7 +22,7 @@ use crate::{
 	backend::{Backend, insert_into_memory_db},
 };
 use std::{error, fmt, collections::{BTreeMap, HashMap}, marker::PhantomData, ops};
-use hash_db::Hasher;
+use sp_core::{Hasher, InnerHasher};
 use sp_trie::{
 	MemoryDB, default_child_trie_root, TrieConfiguration, trie_types::Layout,
 };
@@ -232,7 +232,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		<H as Hasher>::Out: Ord,
+		<H as InnerHasher>::Out: Ord,
 	{
 		let existing_pairs = self.inner.get(&None)
 			.into_iter()

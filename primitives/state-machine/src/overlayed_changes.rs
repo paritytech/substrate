@@ -31,7 +31,7 @@ use codec::{Decode, Encode};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo, ChildInfo};
 use std::{mem, ops};
 
-use hash_db::Hasher;
+use sp_core::Hasher;
 
 /// Storage key.
 pub type StorageKey = Vec<u8>;

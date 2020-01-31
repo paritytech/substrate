@@ -43,7 +43,7 @@ pub use sp_state_machine::{
 pub use sp_core::NativeOrEncoded;
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use hash_db::Hasher;
+pub use sp_state_machine::Hasher;
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;

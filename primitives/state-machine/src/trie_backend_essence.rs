@@ -21,9 +21,10 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::marker::PhantomData;
 use log::{debug, warn};
-use hash_db::{self, Hasher, EMPTY_PREFIX, Prefix};
+use sp_core::Hasher;
+use hash_db::{self, EMPTY_PREFIX, Prefix};
 use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
-	read_trie_value,
+	read_trie_value, check_if_empty_root,
 	for_keys_in_trie, KeySpacedDB, keyspace_as_prefix_alloc};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
@@ -296,6 +297,10 @@ impl<'a, S, H> hash_db::PlainDBRef<H::Out, DBValue> for BackendStorageDBRef<'a, 
 	H: 'a + Hasher,
 {
 	fn get(&self, key: &H::Out) -> Option<DBValue> {
+		if check_if_empty_root::<H>(key.as_ref()) {
+			return Some(vec![0u8]);
+		}
+
 		match self.storage.get(&key, EMPTY_PREFIX) {
 			Ok(x) => x,
 			Err(e) => {
@@ -367,6 +372,10 @@ impl<'a, S, H> hash_db::HashDBRef<H, DBValue> for BackendStorageDBRef<'a, S, H> 
 	H: 'a + Hasher,
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
+		if check_if_empty_root::<H>(key.as_ref()) {
+			return Some(vec![0u8]);
+		}
+
 		match self.storage.get(&key, prefix) {
 			Ok(x) => x,
 			Err(e) => {

@@ -67,7 +67,8 @@ pub use self::prune::prune;
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
-use hash_db::{Hasher, Prefix};
+use hash_db::Prefix;
+use sp_core::Hasher;
 use num_traits::{One, Zero};
 use codec::{Decode, Encode};
 use sp_core;

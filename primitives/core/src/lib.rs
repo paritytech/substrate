@@ -79,7 +79,8 @@ pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
 
-pub use hash_db::Hasher;
+pub use hash_db::Hasher as InnerHasher;
+pub use hash_db::{Prefix, EMPTY_PREFIX};
 // Switch back to Blake after PoC-3 is out
 // pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::blake2::Blake2Hasher;
@@ -347,5 +348,46 @@ macro_rules! impl_maybe_marker {
 			#[cfg(not(feature = "std"))]
 			impl<T> $trait_name for T {}
 		)+
+	}
+}
+
+/// Technical trait to avoid calculating empty root.
+/// This assumes (same wrong asumption as for hashdb trait),
+/// an empty node is `[0u8]`.
+pub trait Hasher: InnerHasher {
+	/// Associated constant value.
+	const EMPTY_ROOT: Option<&'static [u8]>;
+	
+
+	/// Test to call for all new implementation.
+	#[cfg(test)]
+	fn test_associated_empty_root() -> bool {
+		if let Some(root) = Self::EMPTY_ROOT.as_ref() {
+			let empty = Self::hash(&[0u8]);
+			if *root != empty.as_ref() {
+				return false;
+			}
+		}
+
+		true
+	}
+}
+
+impl Hasher for Blake2Hasher {
+	const EMPTY_ROOT: Option<&'static [u8]> = Some(&[
+		3, 23, 10, 46, 117, 151, 183, 183, 227, 216,
+		76, 5, 57, 29, 19, 154, 98, 177, 87, 231,
+		135, 134, 216, 192, 130, 242, 157, 207, 76, 17,
+		19, 20,
+	]);
+}
+
+#[cfg(test)]
+mod test {
+	use super::{Blake2Hasher, Hasher};
+
+	#[test]
+	fn empty_root_const() {
+		assert!(Blake2Hasher::test_associated_empty_root());
 	}
 }

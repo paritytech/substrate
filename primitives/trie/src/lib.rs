@@ -26,7 +26,7 @@ mod trie_stream;
 use sp_std::boxed::Box;
 use sp_std::marker::PhantomData;
 use sp_std::vec::Vec;
-use hash_db::{Hasher, Prefix};
+use sp_core::{Hasher, InnerHasher, Prefix};
 use trie_db::proof::{generate_proof, verify_proof};
 pub use trie_db::proof::VerifyError;
 /// Our `NodeCodec`-specific error.
@@ -49,14 +49,14 @@ pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 /// substrate trie layout
 pub struct Layout<H>(sp_std::marker::PhantomData<H>);
 
-impl<H: Hasher> TrieLayout for Layout<H> {
+impl<H: InnerHasher> TrieLayout for Layout<H> {
 	const USE_EXTENSION: bool = false;
 	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;
 }
 
-impl<H: Hasher> TrieConfiguration for Layout<H> {
-	fn trie_root<I, A, B>(input: I) -> <Self::Hash as Hasher>::Out where
+impl<H: InnerHasher> TrieConfiguration for Layout<H> {
+	fn trie_root<I, A, B>(input: I) -> <Self::Hash as InnerHasher>::Out where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
@@ -80,8 +80,8 @@ impl<H: Hasher> TrieConfiguration for Layout<H> {
 /// TrieDB error over `TrieConfiguration` trait.
 pub type TrieError<L> = trie_db::TrieError<TrieHash<L>, CError<L>>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
-pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
-impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
+pub trait AsHashDB<H: InnerHasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
+impl<H: InnerHasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 pub type HashDB<'a, H> = dyn hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// Reexport from `hash_db`, with genericity set for key only.
@@ -105,7 +105,7 @@ pub type TrieDBMut<'a, L> = trie_db::TrieDBMut<'a, L>;
 /// Querying interface, as in `trie_db` but less generic.
 pub type Lookup<'a, L, Q> = trie_db::Lookup<'a, L, Q>;
 /// Hash type for a trie layout.
-pub type TrieHash<L> = <<L as TrieLayout>::Hash as Hasher>::Out;
+pub type TrieHash<L> = <<L as TrieLayout>::Hash as InnerHasher>::Out;
 
 /// This module is for non generic definition of trie type.
 /// Only the `Hasher` trait is generic in this case.
@@ -213,8 +213,18 @@ pub fn read_trie_value_with<
 /// Determine the default child trie root.
 pub fn default_child_trie_root<L: TrieConfiguration>(
 	_storage_key: &[u8],
-) -> <L::Hash as Hasher>::Out {
+) -> <L::Hash as InnerHasher>::Out {
 	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
+}
+
+pub fn check_if_empty_root<H: Hasher> (
+	root: &[u8],
+) -> bool {
+	if let Some(empty_root) = H::EMPTY_ROOT.as_ref() {
+		*empty_root == root
+	} else {
+		H::hash(&[0u8]).as_ref() == root
+	}
 }
 
 /// Call `f` for all keys in a child trie.
@@ -304,7 +314,7 @@ pub fn keyspace_as_prefix_alloc(ks: &[u8], prefix: Prefix) -> (Vec<u8>, Option<u
 }
 
 impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
-	H: Hasher,
+	H: InnerHasher,
 {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a DB, ks: &'a [u8]) -> Self {
@@ -314,7 +324,7 @@ impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
 
 #[cfg(feature="test-helpers")]
 impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
-	H: Hasher,
+	H: InnerHasher,
 {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a mut DB, ks: &'a [u8]) -> Self {
@@ -324,7 +334,7 @@ impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
 
 impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
 	DB: hash_db::HashDBRef<H, T>,
-	H: Hasher,
+	H: InnerHasher,
 	T: From<&'static [u8]>,
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<T> {
@@ -341,7 +351,7 @@ impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
 #[cfg(feature="test-helpers")]
 impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	DB: hash_db::HashDB<H, T>,
-	H: Hasher,
+	H: InnerHasher,
 	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<T> {
@@ -373,7 +383,7 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 #[cfg(feature="test-helpers")]
 impl<'a, DB, H, T> hash_db::AsHashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	DB: hash_db::HashDB<H, T>,
-	H: Hasher,
+	H: InnerHasher,
 	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
 {
 	fn as_hash_db(&self) -> &dyn hash_db::HashDB<H, T> { &*self }
@@ -397,7 +407,8 @@ mod tests {
 	use super::*;
 	use codec::{Encode, Compact};
 	use sp_core::Blake2Hasher;
-	use hash_db::{HashDB, Hasher};
+	use hash_db::HashDB;
+	use sp_core::{Hasher, InnerHasher};
 	use trie_db::{DBValue, TrieMut, Trie, NodeCodec as NodeCodecT};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};
 	use hex_literal::hex;
@@ -581,7 +592,7 @@ mod tests {
 
 	#[test]
 	fn random_should_work() {
-		let mut seed = <Blake2Hasher as Hasher>::Out::zero();
+		let mut seed = <Blake2Hasher as InnerHasher>::Out::zero();
 		for test_i in 0..10000 {
 			if test_i % 50 == 0 {
 				println!("{:?} of 10000 stress tests done", test_i);

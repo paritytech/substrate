@@ -31,7 +31,7 @@ use sp_state_machine::{
 	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
 	merge_storage_proofs,
 };
-use hash_db::Hasher;
+use sp_core::Hasher;
 
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 

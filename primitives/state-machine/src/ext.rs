@@ -22,8 +22,8 @@ use crate::{
 	changes_trie::State as ChangesTrieState,
 };
 
-use hash_db::Hasher;
 use sp_core::{
+	Hasher,
 	storage::{ChildStorageKey, well_known_keys::is_child_storage_key, ChildInfo},
 	traits::Externalities, hexdisplay::HexDisplay,
 };

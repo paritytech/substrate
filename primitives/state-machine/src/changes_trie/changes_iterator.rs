@@ -20,7 +20,7 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use codec::{Decode, Encode, Codec};
-use hash_db::Hasher;
+use sp_core::Hasher;
 use num_traits::Zero;
 use sp_trie::Recorder;
 use crate::changes_trie::{AnchorBlockId, ConfigurationRange, RootsStorage, Storage, BlockNumber};

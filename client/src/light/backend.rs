@@ -46,7 +46,7 @@ use sc_client_api::{
 	UsageInfo,
 };
 use crate::light::blockchain::Blockchain;
-use hash_db::Hasher;
+use sp_core::Hasher;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 

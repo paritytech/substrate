@@ -20,7 +20,7 @@
 
 use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomData};
 use log::{warn, trace};
-use hash_db::Hasher;
+pub use sp_core::{Hasher, InnerHasher};
 use codec::{Decode, Encode, Codec};
 use sp_core::{
 	storage::ChildInfo, NativeOrEncoded, NeverNativeValue,
@@ -84,7 +84,7 @@ pub type DefaultHandler<R, E> = fn(CallResult<R, E>, CallResult<R, E>) -> CallRe
 /// Type of changes trie transaction.
 pub type ChangesTrieTransaction<H, N> = (
 	MemoryDB<H>,
-	ChangesTrieCacheAction<<H as Hasher>::Out, N>,
+	ChangesTrieCacheAction<<H as InnerHasher>::Out, N>,
 );
 
 /// Strategy for executing a call into the runtime.
