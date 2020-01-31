@@ -202,7 +202,10 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let pool = Arc::new(TestPool(BasicPool::new(Default::default(), FullChainApi::new(client.clone()))));
+		let pool = Arc::new(TestPool(BasicPool::new(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone())),
+		)));
 		client.execution_extensions()
 			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
 		let db = sc_client_db::offchain::LocalStorage::new_test();
