@@ -65,6 +65,16 @@ pub fn push_data(module: &str, name: &str, time: u128, result: &str) {
 	timings.push((module.to_string(), name.to_string(), time, result.to_string()));
 }
 
+pub fn get_data() -> Vec<(String, String, u128, String)> {
+	let timings = TIMINGS.lock();
+	timings.clone()
+}
+
+pub fn clear_data() {
+	let mut timings = TIMINGS.lock();
+	timings.clear()
+}
+
 #[derive(Debug)]
 struct Stats {
 	/// Total execution time in nanoseconds.
