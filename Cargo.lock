@@ -3196,6 +3196,7 @@ dependencies = [
  "pallet-balances 2.0.0",
  "pallet-collective 2.0.0",
  "pallet-contracts 2.0.0",
+ "pallet-contracts-primitives 2.0.0",
  "pallet-contracts-rpc-runtime-api 0.8.0",
  "pallet-democracy 2.0.0",
  "pallet-elections-phragmen 2.0.0",
@@ -3631,6 +3632,7 @@ dependencies = [
  "frame-system 2.0.0",
  "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "pallet-balances 2.0.0",
+ "pallet-contracts-primitives 2.0.0",
  "pallet-randomness-collective-flip 2.0.0",
  "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3647,12 +3649,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-contracts-primitives"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-runtime 2.0.0",
+ "sp-std 2.0.0",
+]
+
+[[package]]
 name = "pallet-contracts-rpc"
 version = "0.8.0"
 dependencies = [
  "jsonrpc-core 14.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core-client 14.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-derive 14.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pallet-contracts-primitives 2.0.0",
  "pallet-contracts-rpc-runtime-api 0.8.0",
  "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3668,6 +3680,7 @@ dependencies = [
 name = "pallet-contracts-rpc-runtime-api"
 version = "0.8.0"
 dependencies = [
+ "pallet-contracts-primitives 2.0.0",
  "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
  "sp-runtime 2.0.0",
