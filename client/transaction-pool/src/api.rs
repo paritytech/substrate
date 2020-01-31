@@ -87,13 +87,13 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 		let client = self.client.clone();
 		let at = at.clone();
 
-		self.pool.spawn_ok(async move {
+		self.pool.spawn_ok(futures_diagnose::diagnose("validate-transaction", async move {
 			let res = client.runtime_api().validate_transaction(&at, uxt)
 				.map_err(|e| Error::RuntimeApi(format!("{:?}", e)));
 			if let Err(e) = tx.send(res) {
 				log::warn!("Unable to send a validate transaction result: {:?}", e);
 			}
-		});
+		}));
 
 		Box::pin(async move {
 			match rx.await {

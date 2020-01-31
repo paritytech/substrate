@@ -50,6 +50,7 @@ pub trait OffchainStorage: Clone + Send + Sync {
 
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, PassByEnum)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub enum StorageKind {
 	/// Persistent storage is non-revertible and not fork-aware. It means that any value
