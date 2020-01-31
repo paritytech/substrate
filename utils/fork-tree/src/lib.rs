@@ -250,7 +250,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		Ok(None)
 	}
 
-	/// Same as `find_node_where`, but returns mutable reference.
+	/// Same as [`find_node_where`](Self::find_node_where), but returns mutable reference.
 	pub fn find_node_mut_where<F, E, P>(
 		&mut self,
 		hash: &H,
