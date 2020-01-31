@@ -635,9 +635,9 @@ mod node_implementation {
 		/// The given function `is_descendent_of` should return `true` if the second hash (target)
 		/// is a descendent of the first hash (base).
 		///
-		/// The returned indices are from last to first, meaning the last is the least significant
-		/// child, and the first is the most significant child. An empty list means that the
-		/// current node is the result.
+		/// The returned indices are from last to first. The earliest index in the traverse path
+		/// goes last, and the final index in the traverse path goes first. An empty list means
+		/// that the current node is the result.
 		pub fn find_node_index_where<F, P, E>(
 			&self,
 			hash: &H,
