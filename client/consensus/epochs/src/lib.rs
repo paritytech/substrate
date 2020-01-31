@@ -324,8 +324,7 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 		}
 	}
 
-	/// Return the inner fork tree, useful for testing purposes.
-	#[cfg(test)]
+	/// Return the inner fork tree.
 	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpoch<Epoch>> {
 		&self.inner
 	}
