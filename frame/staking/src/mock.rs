@@ -19,7 +19,7 @@
 use std::{collections::HashSet, cell::RefCell};
 use sp_runtime::{Perbill, KeyTypeId};
 use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
+use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, OnFinalize, SaturatedConversion};
 use sp_runtime::testing::{Header, UintAuthorityId};
 use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use sp_core::{H256, crypto::key_types};
@@ -338,7 +338,6 @@ impl ExtBuilder {
 		};
 		let nominated = if self.nominate { vec![11, 21] } else { vec![] };
 		let _ = GenesisConfig::<Test>{
-			current_era: 0,
 			stakers: vec![
 				// (stash, controller, staked_amount, status)
 				(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
@@ -450,6 +449,7 @@ pub fn advance_session() {
 
 pub fn start_session(session_index: SessionIndex) {
 	for i in Session::current_index()..session_index {
+		Staking::on_finalize(System::block_number());
 		System::set_block_number((i + 1).into());
 		Timestamp::set_timestamp(System::block_number() * 1000);
 		Session::on_initialize(System::block_number());
@@ -460,13 +460,13 @@ pub fn start_session(session_index: SessionIndex) {
 
 pub fn start_era(era_index: EraIndex) {
 	start_session((era_index * 3).into());
-	assert_eq!(Staking::active_era(), era_index);
+	assert_eq!(Staking::active_era().unwrap(), era_index);
 }
 
 pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 	inflation::compute_total_payout(
 		<Test as Trait>::RewardCurve::get(),
-		Staking::eras_total_stake(Staking::active_era()),
+		Staking::eras_total_stake(Staking::active_era().unwrap()),
 		Balances::total_issuance(),
 		duration,
 	).0
@@ -498,8 +498,8 @@ pub fn on_offence_in_era(
 		}
 	}
 
-	if Staking::active_era() == era {
-		Staking::on_offence(offenders, slash_fraction, Staking::eras_start_session_index(era));
+	if Staking::active_era().unwrap() == era {
+		Staking::on_offence(offenders, slash_fraction, Staking::eras_start_session_index(era).unwrap());
 	} else {
 		panic!("cannot slash in era {}", era);
 	}
@@ -509,7 +509,7 @@ pub fn on_offence_now(
 	offenders: &[OffenceDetails<AccountId, pallet_session::historical::IdentificationTuple<Test>>],
 	slash_fraction: &[Perbill],
 ) {
-	let now = Staking::active_era();
+	let now = Staking::active_era().unwrap();
 	on_offence_in_era(offenders, slash_fraction, now)
 }
 

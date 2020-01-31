@@ -92,7 +92,7 @@ fn basic_setup_works() {
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 
 		assert_eq!(
-			Staking::eras_stakers(Staking::active_era(), 11),
+			Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 			Exposure {
 				total: 1125,
 				own: 1000,
@@ -100,7 +100,7 @@ fn basic_setup_works() {
 			},
 		);
 		assert_eq!(
-			Staking::eras_stakers(Staking::active_era(), 21),
+			Staking::eras_stakers(Staking::active_era().unwrap(), 21),
 			Exposure {
 				total: 1375,
 				own: 1000,
@@ -108,14 +108,14 @@ fn basic_setup_works() {
 			},
 		);
 		// initial slot_stake
-		assert_eq!(Staking::eras_total_stake(Staking::active_era()), 2500);
+		assert_eq!(Staking::eras_total_stake(Staking::active_era().unwrap()), 2500);
 
 
 		// The number of validators required.
 		assert_eq!(Staking::validator_count(), 2);
 
 		// Initial Era and session
-		assert_eq!(Staking::active_era(), 0);
+		assert_eq!(Staking::active_era().unwrap(), 0);
 
 		// Account 10 has `balance_factor` free balance
 		assert_eq!(Balances::free_balance(&10), 1);
@@ -125,8 +125,8 @@ fn basic_setup_works() {
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 
 		// All exposures must be correct.
-		check_exposure_all(Staking::active_era());
-		check_nominator_all(Staking::active_era());
+		check_exposure_all(Staking::active_era().unwrap());
+		check_nominator_all(Staking::active_era().unwrap());
 	});
 }
 
@@ -189,7 +189,7 @@ fn rewards_should_work() {
 		assert_eq!(Balances::total_balance(&100), init_balance_100);
 		assert_eq!(Balances::total_balance(&101), init_balance_101);
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		assert_eq!(Staking::eras_reward_points(Staking::active_era()), EraRewardPoints {
+		assert_eq!(Staking::eras_reward_points(Staking::active_era().unwrap()), EraRewardPoints {
 			total: 50*3,
 			individual: vec![(11, 100), (21, 50)].into_iter().collect(),
 		});
@@ -201,7 +201,7 @@ fn rewards_should_work() {
 		start_session(2);
 		start_session(3);
 
-		assert_eq!(Staking::active_era(), 1);
+		assert_eq!(Staking::active_era().unwrap(), 1);
 		mock::make_all_reward_payment(0);
 
 		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * total_payout_0*2/3, 2);
@@ -282,7 +282,7 @@ fn staking_should_work() {
 
 			// --- Block 4: the validators will now be queued.
 			start_session(4);
-			assert_eq!(Staking::active_era(), 1);
+			assert_eq!(Staking::active_era().unwrap(), 1);
 
 			// --- Block 5: the validators are still in queue.
 			start_session(5);
@@ -345,11 +345,11 @@ fn less_than_needed_candidates_works() {
 			// But the exposure is updated in a simple way. No external votes exists.
 			// This is purely self-vote.
 			assert!(
-				ErasStakers::<Test>::iter_prefix(Staking::active_era())
+				ErasStakers::<Test>::iter_prefix(Staking::active_era().unwrap())
 					.all(|exposure| exposure.others.is_empty())
 			);
-			check_exposure_all(Staking::active_era());
-			check_nominator_all(Staking::active_era());
+			check_exposure_all(Staking::active_era().unwrap());
+			check_nominator_all(Staking::active_era().unwrap());
 		});
 }
 
@@ -468,9 +468,9 @@ fn nominating_and_rewards_should_work() {
 			// ------ check the staked value of all parties.
 
 			// 30 and 40 are not chosen anymore
-			assert_eq!(ErasStakers::<Test>::iter_prefix(Staking::active_era()).count(), 2);
+			assert_eq!(ErasStakers::<Test>::iter_prefix(Staking::active_era().unwrap()).count(), 2);
 			assert_eq!(
-				Staking::eras_stakers(Staking::active_era(), 11),
+				Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				Exposure {
 					total: 1000 + 800,
 					own: 1000,
@@ -481,7 +481,7 @@ fn nominating_and_rewards_should_work() {
 				},
 			);
 			assert_eq!(
-				Staking::eras_stakers(Staking::active_era(), 21),
+				Staking::eras_stakers(Staking::active_era().unwrap(), 21),
 				Exposure {
 					total: 1000 + 1200,
 					own: 1000,
@@ -532,8 +532,8 @@ fn nominating_and_rewards_should_work() {
 				1,
 			);
 
-			check_exposure_all(Staking::active_era());
-			check_nominator_all(Staking::active_era());
+			check_exposure_all(Staking::active_era().unwrap());
+			check_nominator_all(Staking::active_era().unwrap());
 		});
 }
 
@@ -576,13 +576,13 @@ fn nominators_also_get_slashed() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					Staking::eras_stakers(Staking::active_era(), 11),
+					Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(5)],
 		);
-		let expo = Staking::eras_stakers(Staking::active_era(), 11);
+		let expo = Staking::eras_stakers(Staking::active_era().unwrap(), 11);
 		let slash_value = 50;
 		let total_slash = expo.total.min(slash_value);
 		let validator_slash = expo.own.min(total_slash);
@@ -591,8 +591,8 @@ fn nominators_also_get_slashed() {
 		// initial + first era reward + slash
 		assert_eq!(Balances::total_balance(&11), initial_balance - validator_slash);
 		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_slash);
-		check_exposure_all(Staking::active_era());
-		check_nominator_all(Staking::active_era());
+		check_exposure_all(Staking::active_era().unwrap());
+		check_nominator_all(Staking::active_era().unwrap());
 		// Because slashing happened.
 		assert!(is_disabled(10));
 	});
@@ -647,52 +647,52 @@ fn double_controlling_should_fail() {
 #[test]
 fn session_and_eras_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(Staking::active_era(), 0);
+		assert_eq!(Staking::active_era().unwrap(), 0);
 
 		// Block 1: No change.
 		start_session(1);
 		assert_eq!(Session::current_index(), 1);
-		assert_eq!(Staking::active_era(), 0);
+		assert_eq!(Staking::active_era().unwrap(), 0);
 
 		// Block 2: No change.
 		start_session(2);
 		assert_eq!(Session::current_index(), 2);
-		assert_eq!(Staking::active_era(), 0);
+		assert_eq!(Staking::active_era().unwrap(), 0);
 
 		// Block 3: Era increment.
 		start_session(3);
 		assert_eq!(Session::current_index(), 3);
-		assert_eq!(Staking::active_era(), 1);
+		assert_eq!(Staking::active_era().unwrap(), 1);
 
 		// Block 4: No change.
 		start_session(4);
 		assert_eq!(Session::current_index(), 4);
-		assert_eq!(Staking::active_era(), 1);
+		assert_eq!(Staking::active_era().unwrap(), 1);
 
 		// Block 5: No change.
 		start_session(5);
 		assert_eq!(Session::current_index(), 5);
-		assert_eq!(Staking::active_era(), 1);
+		assert_eq!(Staking::active_era().unwrap(), 1);
 
 		// Block 6: Era increment.
 		start_session(6);
 		assert_eq!(Session::current_index(), 6);
-		assert_eq!(Staking::active_era(), 2);
+		assert_eq!(Staking::active_era().unwrap(), 2);
 
 		// Block 7: No change.
 		start_session(7);
 		assert_eq!(Session::current_index(), 7);
-		assert_eq!(Staking::active_era(), 2);
+		assert_eq!(Staking::active_era().unwrap(), 2);
 
 		// Block 8: No change.
 		start_session(8);
 		assert_eq!(Session::current_index(), 8);
-		assert_eq!(Staking::active_era(), 2);
+		assert_eq!(Staking::active_era().unwrap(), 2);
 
 		// Block 9: Era increment.
 		start_session(9);
 		assert_eq!(Session::current_index(), 9);
-		assert_eq!(Staking::active_era(), 3);
+		assert_eq!(Staking::active_era().unwrap(), 3);
 	});
 }
 
@@ -700,53 +700,53 @@ fn session_and_eras_work() {
 fn forcing_new_era_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		// normal flow of session.
-		assert_eq!(Staking::active_era(), 0);
+		assert_eq!(Staking::active_era().unwrap(), 0);
 		start_session(0);
-		assert_eq!(Staking::active_era(), 0);
+		assert_eq!(Staking::active_era().unwrap(), 0);
 		start_session(1);
-		assert_eq!(Staking::active_era(), 0);
+		assert_eq!(Staking::active_era().unwrap(), 0);
 		start_session(2);
-		assert_eq!(Staking::active_era(), 0);
+		assert_eq!(Staking::active_era().unwrap(), 0);
 		start_session(3);
-		assert_eq!(Staking::active_era(), 1);
+		assert_eq!(Staking::active_era().unwrap(), 1);
 
 		// no era change.
 		ForceEra::put(Forcing::ForceNone);
 		start_session(4);
-		assert_eq!(Staking::active_era(), 1);
+		assert_eq!(Staking::active_era().unwrap(), 1);
 		start_session(5);
-		assert_eq!(Staking::active_era(), 1);
+		assert_eq!(Staking::active_era().unwrap(), 1);
 		start_session(6);
-		assert_eq!(Staking::active_era(), 1);
+		assert_eq!(Staking::active_era().unwrap(), 1);
 		start_session(7);
-		assert_eq!(Staking::active_era(), 1);
+		assert_eq!(Staking::active_era().unwrap(), 1);
 
 		// back to normal.
 		// this immediately starts a new session.
 		ForceEra::put(Forcing::NotForcing);
 		start_session(8);
-		assert_eq!(Staking::active_era(), 1); // There is one session delay
+		assert_eq!(Staking::active_era().unwrap(), 1); // There is one session delay
 		start_session(9);
-		assert_eq!(Staking::active_era(), 2);
+		assert_eq!(Staking::active_era().unwrap(), 2);
 
 		// forceful change
 		ForceEra::put(Forcing::ForceAlways);
 		start_session(10);
-		assert_eq!(Staking::active_era(), 2); // There is one session delay
+		assert_eq!(Staking::active_era().unwrap(), 2); // There is one session delay
 		start_session(11);
-		assert_eq!(Staking::active_era(), 3);
+		assert_eq!(Staking::active_era().unwrap(), 3);
 		start_session(12);
-		assert_eq!(Staking::active_era(), 4);
+		assert_eq!(Staking::active_era().unwrap(), 4);
 
 		// just one forceful change
 		ForceEra::put(Forcing::ForceNew);
 		start_session(13);
-		assert_eq!(Staking::active_era(), 5);
+		assert_eq!(Staking::active_era().unwrap(), 5);
 		assert_eq!(ForceEra::get(), Forcing::NotForcing);
 		start_session(14);
-		assert_eq!(Staking::active_era(), 6);
+		assert_eq!(Staking::active_era().unwrap(), 6);
 		start_session(15);
-		assert_eq!(Staking::active_era(), 6);
+		assert_eq!(Staking::active_era().unwrap(), 6);
 
 	});
 }
@@ -760,7 +760,7 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11).total, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 20, 1),
@@ -789,7 +789,7 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 has some free balance
 		assert_eq!(Balances::free_balance(&21), 2000);
 		// Confirm account 21 (via controller 20) is totally staked
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 21).total, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 21).total, 1000);
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
 			Balances::transfer(Origin::signed(21), 20, 1001),
@@ -812,7 +812,7 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).own, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11).own, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
 			Balances::reserve(&11, 1),
@@ -950,7 +950,7 @@ fn validator_payment_prefs_work() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(3000);
-		let exposure_1 = Staking::eras_stakers(Staking::active_era(), 11);
+		let exposure_1 = Staking::eras_stakers(Staking::active_era().unwrap(), 11);
 		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
@@ -964,8 +964,8 @@ fn validator_payment_prefs_work() {
 		assert_eq_error_rate!(Balances::total_balance(&10), balance_era_1_10 + reward_of_10, 2);
 		assert_eq_error_rate!(Balances::total_balance(&100), balance_era_1_100 + reward_of_100, 2);
 
-		check_exposure_all(Staking::active_era());
-		check_nominator_all(Staking::active_era());
+		check_exposure_all(Staking::active_era().unwrap());
+		check_nominator_all(Staking::active_era().unwrap());
 	});
 
 }
@@ -1031,7 +1031,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		let _ = Balances::make_free_balance_be(&11, 1000000);
 
 		// Initial config should be correct
-		assert_eq!(Staking::active_era(), 0);
+		assert_eq!(Staking::active_era().unwrap(), 0);
 		assert_eq!(Session::current_index(), 0);
 
 		// check the balance of a validator accounts.
@@ -1048,7 +1048,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			unlocking: vec![],
 			next_reward: 0,
 		}));
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11), Exposure { total: 1000, own: 1000, others: vec![] });
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11), Exposure { total: 1000, own: 1000, others: vec![] });
 
 		// deposit the extra 100 units
 		Staking::bond_extra(Origin::signed(11), 100).unwrap();
@@ -1061,12 +1061,12 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			next_reward: 0,
 		}));
 		// Exposure is a snapshot! only updated after the next era update.
-		assert_ne!(Staking::eras_stakers(Staking::active_era(), 11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
+		assert_ne!(Staking::eras_stakers(Staking::active_era().unwrap(), 11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
 
 		// trigger next era.
 		Timestamp::set_timestamp(10);
 		start_era(2);
-		assert_eq!(Staking::active_era(), 2);
+		assert_eq!(Staking::active_era().unwrap(), 2);
 
 		// ledger should be the same.
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
@@ -1077,7 +1077,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			next_reward: 0,
 		}));
 		// Exposure is now updated.
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
 
 		// Unbond almost all of the funds in stash.
 		Staking::unbond(Origin::signed(10), 1000).unwrap();
@@ -1170,7 +1170,7 @@ fn rebond_works() {
 			);
 
 			start_era(2);
-			assert_eq!(Staking::active_era(), 2);
+			assert_eq!(Staking::active_era().unwrap(), 2);
 
 			// Try to rebond some funds. We get an error since no fund is unbonded.
 			assert_noop!(
@@ -1394,8 +1394,8 @@ fn reward_to_stake_works() {
 		// Confirm account 10 and 20 are validators
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
 
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, 1000);
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 21).total, 2000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11).total, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 21).total, 2000);
 
 		// Give the man some money.
 		let _ = Balances::make_free_balance_be(&10, 1000);
@@ -1405,7 +1405,7 @@ fn reward_to_stake_works() {
 		ErasStakers::<Test>::insert(0, 21, Exposure { total: 69, own: 69, others: vec![] });
 
 		// Now lets lower account 20 stake
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 21).total, 69);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 21).total, 69);
 		<Ledger<Test>>::insert(&20, StakingLedger { stash: 21, total: 69, active: 69, unlocking: vec![], next_reward: 0 });
 
 		// Compute total payout now for whole duration as other parameter won't change
@@ -1418,8 +1418,8 @@ fn reward_to_stake_works() {
 		start_era(1);
 		mock::make_all_reward_payment(0);
 
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, 1000);
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 21).total, 69);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11).total, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 21).total, 69);
 
 		let _11_balance = Balances::free_balance(&11);
 		assert_eq!(_11_balance, 1000 + total_payout_0 / 2);
@@ -1428,11 +1428,11 @@ fn reward_to_stake_works() {
 		start_era(2);
 
 		// -- new infos
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, 1000 + total_payout_0 / 2);
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 21).total, 69 + total_payout_0 / 2);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11).total, 1000 + total_payout_0 / 2);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 21).total, 69 + total_payout_0 / 2);
 
-		check_exposure_all(Staking::active_era());
-		check_nominator_all(Staking::active_era());
+		check_exposure_all(Staking::active_era().unwrap());
+		check_nominator_all(Staking::active_era().unwrap());
 	});
 }
 
@@ -1581,8 +1581,8 @@ fn switching_roles() {
 
 		assert_eq_uvec!(validator_controllers(), vec![2, 20]);
 
-		check_exposure_all(Staking::active_era());
-		check_nominator_all(Staking::active_era());
+		check_exposure_all(Staking::active_era().unwrap());
+		check_nominator_all(Staking::active_era().unwrap());
 	});
 }
 
@@ -1688,7 +1688,7 @@ fn bond_with_little_staked_value_bounded() {
 			// 2 is elected.
 			assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
 			// And has minimal stake
-			assert_eq!(Staking::eras_stakers(Staking::active_era(), 2).total, 0);
+			assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 2).total, 0);
 
 			// Old ones are rewarded.
 			assert_eq!(Balances::free_balance(&10), init_balance_10 + total_payout_0 / 3);
@@ -1703,15 +1703,15 @@ fn bond_with_little_staked_value_bounded() {
 			mock::make_all_reward_payment(1);
 
 			assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
-			assert_eq!(Staking::eras_stakers(Staking::active_era(), 2).total, 0);
+			assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 2).total, 0);
 
 			assert_eq!(Balances::free_balance(&2), init_balance_2 + total_payout_1 / 3);
 			assert_eq!(
 				Balances::free_balance(&10),
 				init_balance_10 + total_payout_0 / 3 + total_payout_1 / 3,
 			);
-			check_exposure_all(Staking::active_era());
-			check_nominator_all(Staking::active_era());
+			check_exposure_all(Staking::active_era().unwrap());
+			check_nominator_all(Staking::active_era().unwrap());
 		});
 }
 
@@ -1731,8 +1731,8 @@ fn new_era_elects_correct_number_of_validators() {
 			Session::on_initialize(System::block_number());
 
 			assert_eq!(validator_controllers().len(), 1);
-			check_exposure_all(Staking::active_era());
-			check_nominator_all(Staking::active_era());
+			check_exposure_all(Staking::active_era().unwrap());
+			check_nominator_all(Staking::active_era().unwrap());
 		})
 }
 
@@ -1754,8 +1754,8 @@ fn phragmen_should_not_overflow_validators() {
 
 		// This test will fail this. Will saturate.
 		// check_exposure_all();
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 3).total, u64::max_value());
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 5).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 3).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 5).total, u64::max_value());
 	})
 }
 
@@ -1776,8 +1776,8 @@ fn phragmen_should_not_overflow_nominators() {
 		assert_eq_uvec!(validator_controllers(), vec![4, 2]);
 
 		// Saturate.
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 3).total, u64::max_value());
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 5).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 3).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 5).total, u64::max_value());
 	})
 }
 
@@ -1795,8 +1795,8 @@ fn phragmen_should_not_overflow_ultimate() {
 		assert_eq_uvec!(validator_controllers(), vec![4, 2]);
 
 		// Saturate.
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 3).total, u64::max_value());
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 5).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 3).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 5).total, u64::max_value());
 	})
 }
 
@@ -1844,7 +1844,7 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -1874,7 +1874,7 @@ fn reward_from_authorship_event_handler_works() {
 		// 21 is rewarded as an uncle producer
 		// 11 is rewarded as a block producer and uncle referencer and uncle producer
 		assert_eq!(
-			ErasRewardPoints::<Test>::get(ActiveEra::get()),
+			ErasRewardPoints::<Test>::get(Staking::active_era().unwrap()),
 			EraRewardPoints {
 				individual: vec![(11, 20 + 2 * 2 + 1), (21, 1)].into_iter().collect(),
 				total: 26,
@@ -1902,7 +1902,7 @@ fn add_reward_points_fns_works() {
 		]);
 
 		assert_eq!(
-			ErasRewardPoints::<Test>::get(ActiveEra::get()),
+			ErasRewardPoints::<Test>::get(Staking::active_era().unwrap()),
 			EraRewardPoints {
 				individual: vec![(11, 4), (21, 2)].into_iter().collect(),
 				total: 6,
@@ -1930,20 +1930,20 @@ fn era_is_always_same_length() {
 	// session changes.
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
-		assert_eq!(Staking::eras_start_session_index(Staking::active_era()), SessionsPerEra::get());
+		assert_eq!(Staking::eras_start_session_index(Staking::active_era().unwrap()).unwrap(), SessionsPerEra::get());
 
 		start_era(2);
-		assert_eq!(Staking::eras_start_session_index(Staking::active_era()), SessionsPerEra::get() * 2);
+		assert_eq!(Staking::eras_start_session_index(Staking::active_era().unwrap()).unwrap(), SessionsPerEra::get() * 2);
 
 		let session = Session::current_index();
 		ForceEra::put(Forcing::ForceNew);
 		advance_session();
 		advance_session();
-		assert_eq!(Staking::active_era(), 3);
-		assert_eq!(Staking::eras_start_session_index(Staking::active_era()), session + 2);
+		assert_eq!(Staking::active_era().unwrap(), 3);
+		assert_eq!(Staking::eras_start_session_index(Staking::active_era().unwrap()).unwrap(), session + 2);
 
 		start_era(4);
-		assert_eq!(Staking::eras_start_session_index(Staking::active_era()), session + 2 + SessionsPerEra::get());
+		assert_eq!(Staking::eras_start_session_index(Staking::active_era().unwrap()).unwrap(), session + 2 + SessionsPerEra::get());
 	});
 }
 
@@ -1954,7 +1954,7 @@ fn offence_forces_new_era() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					Staking::eras_stakers(Staking::active_era(), 11),
+					Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -1974,7 +1974,7 @@ fn offence_ensures_new_era_without_clobbering() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					Staking::eras_stakers(Staking::active_era(), 11),
+					Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -1994,7 +1994,7 @@ fn offence_deselects_validator_when_slash_is_zero() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					Staking::eras_stakers(Staking::active_era(), 11),
+					Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -2013,7 +2013,7 @@ fn slashing_performed_according_exposure() {
 	// This test checks that slashing is performed according the exposure (or more precisely,
 	// historical exposure), not the current balance.
 	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).own, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11).own, 1000);
 
 		// Handle an offence with a historical exposure.
 		on_offence_now(
@@ -2047,7 +2047,7 @@ fn slash_in_old_span_does_not_deselect() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					Staking::eras_stakers(Staking::active_era(), 11),
+					Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -2072,7 +2072,7 @@ fn slash_in_old_span_does_not_deselect() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					Staking::eras_stakers(Staking::active_era(), 11),
+					Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -2089,7 +2089,7 @@ fn slash_in_old_span_does_not_deselect() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					Staking::eras_stakers(Staking::active_era(), 11),
+					Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -2113,13 +2113,13 @@ fn reporters_receive_their_slice() {
 		// The reporters' reward is calculated from the total exposure.
 		let initial_balance = 1125;
 
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, initial_balance);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11).total, initial_balance);
 
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (
 					11,
-					Staking::eras_stakers(Staking::active_era(), 11),
+					Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				),
 				reporters: vec![1, 2],
 			}],
@@ -2144,13 +2144,13 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 		// The reporters' reward is calculated from the total exposure.
 		let initial_balance = 1125;
 
-		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, initial_balance);
+		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11).total, initial_balance);
 
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (
 					11,
-					Staking::eras_stakers(Staking::active_era(), 11),
+					Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				),
 				reporters: vec![1],
 			}],
@@ -2166,7 +2166,7 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					Staking::eras_stakers(Staking::active_era(), 11),
+					Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				),
 				reporters: vec![1],
 			}],
@@ -2190,7 +2190,7 @@ fn invulnerables_are_not_slashed() {
 		assert_eq!(Balances::free_balance(&11), 1000);
 		assert_eq!(Balances::free_balance(&21), 2000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era(), 21);
+		let exposure = Staking::eras_stakers(Staking::active_era().unwrap(), 21);
 		let initial_balance = Staking::slashable_balance_of(&21);
 
 		let nominator_balances: Vec<_> = exposure.others
@@ -2199,11 +2199,11 @@ fn invulnerables_are_not_slashed() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap(), 11)),
 					reporters: vec![],
 				},
 				OffenceDetails {
-					offender: (21, Staking::eras_stakers(Staking::active_era(), 21)),
+					offender: (21, Staking::eras_stakers(Staking::active_era().unwrap(), 21)),
 					reporters: vec![],
 				},
 			],
@@ -2237,7 +2237,7 @@ fn dont_slash_if_fraction_is_zero() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					Staking::eras_stakers(Staking::active_era(), 11),
+					Staking::eras_stakers(Staking::active_era().unwrap(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -2258,7 +2258,7 @@ fn only_slash_for_max_in_era() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2272,7 +2272,7 @@ fn only_slash_for_max_in_era() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2285,7 +2285,7 @@ fn only_slash_for_max_in_era() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2306,7 +2306,7 @@ fn garbage_collection_after_slashing() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2320,7 +2320,7 @@ fn garbage_collection_after_slashing() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2343,21 +2343,21 @@ fn garbage_collection_on_window_pruning() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era(), 11);
+		let exposure = Staking::eras_stakers(Staking::active_era().unwrap(), 11);
 		assert_eq!(Balances::free_balance(&101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap(), 11)),
 					reporters: vec![],
 				},
 			],
 			&[Perbill::from_percent(10)],
 		);
 
-		let now = Staking::active_era();
+		let now = Staking::active_era().unwrap();
 
 		assert_eq!(Balances::free_balance(&11), 900);
 		assert_eq!(Balances::free_balance(&101), 2000 - (nominated_value / 10));
@@ -2391,8 +2391,8 @@ fn slashing_nominators_by_span_max() {
 		assert_eq!(Staking::slashable_balance_of(&21), 1000);
 
 
-		let exposure_11 = Staking::eras_stakers(Staking::active_era(), 11);
-		let exposure_21 = Staking::eras_stakers(Staking::active_era(), 21);
+		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap(), 11);
+		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap(), 21);
 		assert_eq!(Balances::free_balance(&101), 2000);
 		let nominated_value_11 = exposure_11.others.iter().find(|o| o.who == 101).unwrap().value;
 		let nominated_value_21 = exposure_21.others.iter().find(|o| o.who == 101).unwrap().value;
@@ -2400,7 +2400,7 @@ fn slashing_nominators_by_span_max() {
 		on_offence_in_era(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2434,7 +2434,7 @@ fn slashing_nominators_by_span_max() {
 		on_offence_in_era(
 			&[
 				OffenceDetails {
-					offender: (21, Staking::eras_stakers(Staking::active_era(), 21)),
+					offender: (21, Staking::eras_stakers(Staking::active_era().unwrap(), 21)),
 					reporters: vec![],
 				},
 			],
@@ -2457,7 +2457,7 @@ fn slashing_nominators_by_span_max() {
 		on_offence_in_era(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2493,7 +2493,7 @@ fn slashes_are_summed_across_spans() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (21, Staking::eras_stakers(Staking::active_era(), 21)),
+					offender: (21, Staking::eras_stakers(Staking::active_era().unwrap(), 21)),
 					reporters: vec![],
 				},
 			],
@@ -2518,7 +2518,7 @@ fn slashes_are_summed_across_spans() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (21, Staking::eras_stakers(Staking::active_era(), 21)),
+					offender: (21, Staking::eras_stakers(Staking::active_era().unwrap(), 21)),
 					reporters: vec![],
 				},
 			],
@@ -2543,14 +2543,14 @@ fn deferred_slashes_are_deferred() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era(), 11);
+		let exposure = Staking::eras_stakers(Staking::active_era().unwrap(), 11);
 		assert_eq!(Balances::free_balance(&101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2586,7 +2586,7 @@ fn remove_deferred() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era(), 11);
+		let exposure = Staking::eras_stakers(Staking::active_era().unwrap(), 11);
 		assert_eq!(Balances::free_balance(&101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
@@ -2656,7 +2656,7 @@ fn remove_multi_deferred() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era(), 11);
+		let exposure = Staking::eras_stakers(Staking::active_era().unwrap(), 11);
 		assert_eq!(Balances::free_balance(&101), 2000);
 
 		on_offence_now(
@@ -2672,7 +2672,7 @@ fn remove_multi_deferred() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (21, Staking::eras_stakers(Staking::active_era(), 21)),
+					offender: (21, Staking::eras_stakers(Staking::active_era().unwrap(), 21)),
 					reporters: vec![],
 				}
 			],
@@ -2712,7 +2712,7 @@ fn slash_kicks_validators_not_nominators() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era(), 11);
+		let exposure = Staking::eras_stakers(Staking::active_era().unwrap(), 11);
 		assert_eq!(Balances::free_balance(&101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
@@ -2788,7 +2788,7 @@ fn claim_reward_at_the_last_era() {
 		start_era(crate::HISTORY_DEPTH);
 
 		// This is the latest planned era in staking, not the active era
-		let current_era = Staking::current_era();
+		let current_era = Staking::current_era().unwrap();
 		assert!(current_era - crate::HISTORY_DEPTH == 0);
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 0));
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 1));
@@ -2897,14 +2897,14 @@ fn migration_v3() {
 		crate::migration::inner::to_v3::<Test>(&mut 2);
 
 		// Check migration
-		assert_eq!(<Staking as Store>::ActiveEraStart::get(), 777);
-		assert_eq!(<Staking as Store>::ErasStartSessionIndex::get(3), 5);
+		assert_eq!(<Staking as Store>::ActiveEraStart::get().unwrap(), 777);
+		assert_eq!(<Staking as Store>::ErasStartSessionIndex::get(3).unwrap(), 5);
 		assert_eq!(<Staking as Store>::ErasRewardPoints::get(3), EraRewardPoints {
 			total: 12,
 			individual: vec![(21, 2), (31, 10)].into_iter().collect(),
 		});
-		assert_eq!(<Staking as Store>::ActiveEra::get(), 3);
-		assert_eq!(<Staking as Store>::CurrentEra::get(), 3);
+		assert_eq!(<Staking as Store>::ActiveEra::get().unwrap(), 3);
+		assert_eq!(<Staking as Store>::CurrentEra::get().unwrap(), 3);
 		assert_eq!(<Staking as Store>::ErasStakers::get(3, 11), Exposure {
 			total: 0,
 			own: 0,
@@ -2933,7 +2933,7 @@ fn zero_slash_keeps_nominators() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era(), 11);
+		let exposure = Staking::eras_stakers(Staking::active_era().unwrap(), 11);
 		assert_eq!(Balances::free_balance(&101), 2000);
 
 		on_offence_now(
@@ -2971,7 +2971,7 @@ fn six_session_delay() {
 
 		let val_set = Session::validators();
 		let init_session = Session::current_index();
-		let init_active_era = Staking::active_era();
+		let init_active_era = Staking::active_era().unwrap();
 		// pallet-session is delaying session by one, thus the next session to plan is +2.
 		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 2), None);
 		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 3), Some(val_set.clone()));
@@ -2980,27 +2980,33 @@ fn six_session_delay() {
 		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 6), Some(val_set.clone()));
 
 		<Staking as SessionManager<_>>::end_session(init_session);
-		assert_eq!(Staking::active_era(), init_active_era);
+		<Staking as SessionManager<_>>::start_session(init_session + 1);
+		assert_eq!(Staking::active_era().unwrap(), init_active_era);
 		<Staking as SessionManager<_>>::end_session(init_session + 1);
-		assert_eq!(Staking::active_era(), init_active_era);
+		<Staking as SessionManager<_>>::start_session(init_session + 2);
+		assert_eq!(Staking::active_era().unwrap(), init_active_era);
 
 		// Reward current era
 		Staking::reward_by_ids(vec![(11, 1)]);
 
 		// New active era is triggered here.
 		<Staking as SessionManager<_>>::end_session(init_session + 2);
-		assert_eq!(Staking::active_era(), init_active_era + 1);
+		<Staking as SessionManager<_>>::start_session(init_session + 3);
+		assert_eq!(Staking::active_era().unwrap(), init_active_era + 1);
 		<Staking as SessionManager<_>>::end_session(init_session + 3);
-		assert_eq!(Staking::active_era(), init_active_era + 1);
+		<Staking as SessionManager<_>>::start_session(init_session + 4);
+		assert_eq!(Staking::active_era().unwrap(), init_active_era + 1);
 		<Staking as SessionManager<_>>::end_session(init_session + 4);
-		assert_eq!(Staking::active_era(), init_active_era + 1);
+		<Staking as SessionManager<_>>::start_session(init_session + 5);
+		assert_eq!(Staking::active_era().unwrap(), init_active_era + 1);
 
 		// Reward current era
 		Staking::reward_by_ids(vec![(21, 2)]);
 
 		// New active era is triggered here.
 		<Staking as SessionManager<_>>::end_session(init_session + 5);
-		assert_eq!(Staking::active_era(), init_active_era + 2);
+		<Staking as SessionManager<_>>::start_session(init_session + 6);
+		assert_eq!(Staking::active_era().unwrap(), init_active_era + 2);
 
 		// That reward are correct
 		assert_eq!(Staking::eras_reward_points(init_active_era).total, 1);
