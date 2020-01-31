@@ -29,9 +29,9 @@ use sp_runtime::{
 };
 use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
 
-#[doc(hidden)]
+/// Data which is collected during the pre-dispatch phase and needed at the post_dispatch phase.
 #[cfg_attr(test, derive(Debug))]
-pub struct DynamicWeightData<AccountId, NegativeImbalance> {
+pub struct GasCallEnvelope<AccountId, NegativeImbalance> {
 	/// The account id who should receive the refund from the gas leftovers.
 	transactor: AccountId,
 	/// The negative imbalance obtained by withdrawing the value up to the requested gas limit.
@@ -53,7 +53,7 @@ impl<T: Trait + Send + Sync> GasWeightConversion<T> {
 		who: &T::AccountId,
 		call: &<T as Trait>::Call,
 	) -> Result<
-		Option<DynamicWeightData<T::AccountId, NegativeImbalanceOf<T>>>,
+		Option<GasCallEnvelope<T::AccountId, NegativeImbalanceOf<T>>>,
 		TransactionValidityError,
 	> {
 		// This signed extension only deals with this module's `Call`.
@@ -104,7 +104,7 @@ impl<T: Trait + Send + Sync> GasWeightConversion<T> {
 					Err(_) => return Err(InvalidTransaction::Payment.into()),
 				};
 
-				Ok(Some(DynamicWeightData {
+				Ok(Some(GasCallEnvelope {
 					transactor: who.clone(),
 					imbalance,
 				}))
@@ -141,7 +141,7 @@ impl<T: Trait + Send + Sync> SignedExtension for GasWeightConversion<T> {
 	/// Optional pre-dispatch check data.
 	///
 	/// It is present only for the contract calls that operate with gas.
-	type Pre = Option<DynamicWeightData<T::AccountId, NegativeImbalanceOf<T>>>;
+	type Pre = Option<GasCallEnvelope<T::AccountId, NegativeImbalanceOf<T>>>;
 
 	fn additional_signed(&self) -> Result<(), TransactionValidityError> {
 		Ok(())
@@ -168,7 +168,7 @@ impl<T: Trait + Send + Sync> SignedExtension for GasWeightConversion<T> {
 	}
 
 	fn post_dispatch(pre: Self::Pre, _info: DispatchInfo, _len: usize) {
-		if let Some(DynamicWeightData {
+		if let Some(GasCallEnvelope {
 			transactor,
 			imbalance,
 		}) = pre
