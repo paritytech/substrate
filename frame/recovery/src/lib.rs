@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Recovery Pallet
-//! 
+//!
 //! - [`recovery::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //!
@@ -82,7 +82,7 @@
 //! permissionless. However, the recovery deposit is an economic deterrent that
 //! should disincentivize would-be attackers from trying to maliciously recover
 //! accounts.
-//! 
+//!
 //! The recovery deposit can always be claimed by the account which is trying to
 //! to be recovered. In the case of a malicious recovery attempt, the account
 //! owner who still has access to their account can claim the deposit and
@@ -121,14 +121,14 @@
 //!   change as well.
 //!
 //! ## Interface
-//! 
+//!
 //! ### Dispatchable Functions
-//! 
+//!
 //! #### For General Users
-//! 
+//!
 //! * `create_recovery` - Create a recovery configuration for your account and make it recoverable.
 //! * `initiate_recovery` - Start the recovery process for a recoverable account.
-//! 
+//!
 //! #### For Friends of a Recoverable Account
 //! * `vouch_recovery` - As a `friend` of a recoverable account, vouch for a recovery attempt on the account.
 //!
@@ -141,7 +141,7 @@
 //!
 //! * `close_recovery` - Close an active recovery process for your account and reclaim the recovery deposit.
 //! * `remove_recovery` - Remove the recovery configuration from the account, making it un-recoverable.
-//! 
+//!
 //! #### For Super Users
 //!
 //! * `set_recovered` - The ROOT origin is able to skip the recovery process and directly allow
@@ -242,7 +242,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Recovery {
 		/// The set of recoverable accounts and their recovery configuration.
 		pub Recoverable get(fn recovery_config):
-			map T::AccountId => Option<RecoveryConfig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
+			map hasher(blake2_256) T::AccountId
+			=> Option<RecoveryConfig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
 		/// Active recovery attempts.
 		///
 		/// First account is the account to be recovered, and the second account
@@ -253,7 +254,8 @@ decl_storage! {
 		/// The final list of recovered accounts.
 		///
 		/// Map from the recovered account to the user who can access it.
-		pub Recovered get(fn recovered_account): map T::AccountId => Option<T::AccountId>;
+		pub Recovered get(fn recovered_account):
+			map hasher(blake2_256) T::AccountId => Option<T::AccountId>;
 	}
 }
 
@@ -314,9 +316,11 @@ decl_error! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
-		
+
 		/// Send a call through a recovered account.
 		///
 		/// The dispatch origin for this call must be _Signed_ and registered to
@@ -340,7 +344,7 @@ decl_module! {
 			ensure!(Self::recovered_account(&account) == Some(who), Error::<T>::NotAllowed);
 			call.dispatch(frame_system::RawOrigin::Signed(account).into())
 		}
-		
+
 		/// Allow ROOT to bypass the recovery process and set an a rescuer account
 		/// for a lost account directly.
 		///
@@ -361,7 +365,7 @@ decl_module! {
 			<Recovered<T>>::insert(&lost, &rescuer);
 			Self::deposit_event(RawEvent::AccountRecovered(lost, rescuer));
 		}
-		
+
 		/// Create a recovery configuration for your account. This makes your account recoverable.
 		///
 		/// Payment: `ConfigDepositBase` + `FriendDepositFactor` * #_of_friends balance
@@ -425,7 +429,7 @@ decl_module! {
 			<Recoverable<T>>::insert(&who, recovery_config);
 			Self::deposit_event(RawEvent::RecoveryCreated(who));
 		}
-		
+
 		/// Initiate the process for recovering a recoverable account.
 		///
 		/// Payment: `RecoveryDeposit` balance will be reserved for initiating the
@@ -468,7 +472,7 @@ decl_module! {
 			<ActiveRecoveries<T>>::insert(&account, &who, recovery_status);
 			Self::deposit_event(RawEvent::RecoveryInitiated(account, who));
 		}
-		
+
 		/// Allow a "friend" of a recoverable account to vouch for an active recovery
 		/// process for that account.
 		///
@@ -512,7 +516,7 @@ decl_module! {
 			<ActiveRecoveries<T>>::insert(&lost, &rescuer, active_recovery);
 			Self::deposit_event(RawEvent::RecoveryVouched(lost, rescuer, who));
 		}
-		
+
 		/// Allow a successful rescuer to claim their recovered account.
 		///
 		/// The dispatch origin for this call must be _Signed_ and must be a "rescuer"
@@ -555,7 +559,7 @@ decl_module! {
 			<Recovered<T>>::insert(&account, &who);
 			Self::deposit_event(RawEvent::AccountRecovered(account, who));
 		}
-		
+
 		/// As the controller of a recoverable account, close an active recovery
 		/// process for your account.
 		///
@@ -586,7 +590,7 @@ decl_module! {
 			let _ = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit);
 			Self::deposit_event(RawEvent::RecoveryClosed(who, rescuer));
 		}
-		
+
 		/// Remove the recovery process for your account.
 		///
 		/// NOTE: The user must make sure to call `close_recovery` on all active

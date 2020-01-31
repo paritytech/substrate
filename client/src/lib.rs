@@ -83,6 +83,7 @@ pub mod light;
 pub mod leaves;
 mod call_executor;
 mod client;
+mod block_rules;
 
 pub use sc_client_api::{
 	blockchain,

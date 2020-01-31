@@ -730,6 +730,26 @@ mod test {
 	}
 
 	#[test]
+	fn messed_signature_should_not_work() {
+		let (pair, _) = Pair::generate();
+		let public = pair.public();
+		let message = b"Signed payload";
+		let Signature(mut bytes) = pair.sign(&message[..]);
+		bytes[0] = bytes[2];
+		let signature = Signature(bytes);
+		assert!(!Pair::verify(&signature, &message[..], &public));
+	}
+
+	#[test]
+	fn messed_message_should_not_work() {
+		let (pair, _) = Pair::generate();
+		let public = pair.public();
+		let message = b"Something important";
+		let signature = pair.sign(&message[..]);
+		assert!(!Pair::verify(&signature, &b"Something unimportant", &public));
+	}
+
+	#[test]
 	fn seeded_pair_should_work() {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();

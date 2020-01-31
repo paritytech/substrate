@@ -122,7 +122,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 			allow_private_ipv4,
 			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
-				match Mdns::new().await {
+				match Mdns::new() {
 					Ok(mdns) => Some(mdns).into(),
 					Err(err) => {
 						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);

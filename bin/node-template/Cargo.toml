@@ -4,6 +4,7 @@ version = "2.0.0"
 authors = ["Anonymous"]
 build = "build.rs"
 edition = "2018"
+license = "Unlicense"
 
 [[bin]]
 name = "node-template"
@@ -11,9 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 futures = "0.3.1"
-ctrlc = { version = "3.1.3", features = ["termination"] }
 log = "0.4.8"
-tokio = { version = "0.2", features = ["rt-threaded"] }
 sc-cli = { version = "0.8.0", path = "../../client/cli" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sc-executor = { version = "0.8", path = "../../client/executor" }
@@ -30,7 +29,8 @@ grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path 
 sc-client = { version = "0.8", path = "../../client/" }
 node-template-runtime = { version = "2.0.0", path = "runtime" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sc-basic-authorship = { path  = "../../client/basic-authorship" }
+sc-basic-authorship = { path = "../../client/basic-authorship" }
+structopt = "0.3.8"
 
 [build-dependencies]
 vergen = "3.0.4"

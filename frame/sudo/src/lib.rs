@@ -77,7 +77,6 @@
 //!
 //! ## Related Modules
 //!
-//! * [Consensus](../frame_consensus/index.html)
 //! * [Democracy](../pallet_democracy/index.html)
 //!
 //! [`Call`]: ./enum.Call.html
@@ -120,7 +119,7 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Unknown weight of derivative `proposal` execution.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;

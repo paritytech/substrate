@@ -21,7 +21,7 @@ use sp_core::{
 	Blake2Hasher, NeverNativeValue, NativeOrEncoded,
 	traits::CodeExecutor,
 };
-use sp_runtime::traits::Header as HeaderT;
+use sp_runtime::{ApplyExtrinsicResult, traits::Header as HeaderT};
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
 use sc_executor::error::Result;
 
@@ -92,6 +92,10 @@ pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalitie
 	ext
 }
 
+/// Construct a fake block.
+///
+/// `extrinsics` must be a list of valid extrinsics, i.e. none of the extrinsics for example
+/// can report `ExhaustResources`. Otherwise, this function panics.
 pub fn construct_block(
 	env: &mut TestExternalities<Blake2Hasher>,
 	number: BlockNumber,
@@ -104,10 +108,10 @@ pub fn construct_block(
 	let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 
 	// calculate the header fields that we can.
-	let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(
-			extrinsics.iter().map(Encode::encode)
-		).to_fixed_bytes()
-		.into();
+	let extrinsics_root =
+		Layout::<Blake2Hasher>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
+			.to_fixed_bytes()
+			.into();
 
 	let header = Header {
 		parent_hash,
@@ -126,14 +130,20 @@ pub fn construct_block(
 		None,
 	).0.unwrap();
 
-	for i in extrinsics.iter() {
-		executor_call::<NeverNativeValue, fn() -> _>(
+	for extrinsic in extrinsics.iter() {
+		// Try to apply the `extrinsic`. It should be valid, in the sense that it passes
+		// all pre-inclusion checks.
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			env,
 			"BlockBuilder_apply_extrinsic",
-			&i.encode(),
+			&extrinsic.encode(),
 			true,
 			None,
-		).0.unwrap();
+		).0.expect("application of an extrinsic failed").into_encoded();
+		match ApplyExtrinsicResult::decode(&mut &r[..]).expect("apply result deserialization failed") {
+			Ok(_) => {},
+			Err(e) => panic!("Applying extrinsic failed: {:?}", e),
+		}
 	}
 
 	let header = match executor_call::<NeverNativeValue, fn() -> _>(

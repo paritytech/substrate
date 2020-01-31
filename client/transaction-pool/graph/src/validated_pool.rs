@@ -63,20 +63,20 @@ pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 
 /// Pool that deals with validated transactions.
 pub(crate) struct ValidatedPool<B: ChainApi> {
-	api: B,
+	api: Arc<B>,
 	options: Options,
 	listener: RwLock<Listener<ExHash<B>, BlockHash<B>>>,
 	pool: RwLock<base::BasePool<
 		ExHash<B>,
 		ExtrinsicFor<B>,
 	>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<()>>>,
+	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<ExHash<B>>>>,
 	rotator: PoolRotator<ExHash<B>>,
 }
 
 impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
-	pub fn new(options: Options, api: B) -> Self {
+	pub fn new(options: Options, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
 		ValidatedPool {
 			api,
@@ -125,8 +125,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 			ValidatedTransaction::Valid(tx) => {
 				let imported = self.pool.write().import(tx)?;
 
-				if let base::Imported::Ready { .. } = imported {
-					self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
+				if let base::Imported::Ready { ref hash, .. } = imported {
+					self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(hash.clone()).is_ok());
 				}
 
 				let mut listener = self.listener.write();
@@ -320,12 +320,17 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 	/// For each extrinsic, returns tags that it provides (if known), or None (if it is unknown).
 	pub fn extrinsics_tags(&self, hashes: &[ExHash<B>]) -> Vec<Option<Vec<Tag>>> {
-		self.pool.read().by_hash(&hashes)
+		self.pool.read().by_hashes(&hashes)
 			.into_iter()
 			.map(|existing_in_pool| existing_in_pool
 				.map(|transaction| transaction.provides.iter().cloned()
 				.collect()))
 			.collect()
+	}
+
+	/// Get ready transaction by hash
+	pub fn ready_by_hash(&self, hash: &ExHash<B>) -> Option<TransactionFor<B>> {
+		self.pool.read().ready_by_hash(hash)
 	}
 
 	/// Prunes ready transactions that provide given list of tags.
@@ -444,7 +449,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Return an event stream of transactions imported to the pool.
-	pub fn import_notification_stream(&self) -> EventStream {
+	pub fn import_notification_stream(&self) -> EventStream<ExHash<B>> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream

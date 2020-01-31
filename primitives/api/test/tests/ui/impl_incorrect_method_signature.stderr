@@ -5,10 +5,10 @@ error[E0053]: method `test` has an incompatible type for trait
    |                       --- type in trait
 ...
 19 |         fn test(data: String) {}
-   |                       ^^^^^^ expected u64, found struct `std::string::String`
+   |                       ^^^^^^ expected `u64`, found struct `std::string::String`
    |
-   = note: expected type `fn(u64)`
-              found type `fn(std::string::String)`
+   = note: expected fn pointer `fn(u64)`
+              found fn pointer `fn(std::string::String)`
 
 error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for trait
   --> $DIR/impl_incorrect_method_signature.rs:17:1
@@ -23,7 +23,7 @@ error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for tr
 17 |   sp_api::impl_runtime_apis! {
    |   -^^^^^^^^^^^^^^^^^^^^^^^^^
    |   |
-   |  _expected u64, found struct `std::string::String`
+   |  _expected `u64`, found struct `std::string::String`
    | |
 18 | |     impl self::Api<Block> for Runtime {
 19 | |         fn test(data: String) {}
@@ -33,8 +33,8 @@ error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for tr
 33 | | }
    | |_- in this macro invocation
    |
-   = note: expected type `fn(&RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall>, &sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::BlockId<__SR_API_BLOCK__>, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ExecutionContext, std::option::Option<u64>, std::vec::Vec<u8>) -> std::result::Result<sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::NativeOrEncoded<()>, <RuntimeApiImplCall as sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::CallApiAt<__SR_API_BLOCK__>>::Error>`
-              found type `fn(&RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall>, &sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::BlockId<__SR_API_BLOCK__>, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ExecutionContext, std::option::Option<std::string::String>, std::vec::Vec<u8>) -> std::result::Result<sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::NativeOrEncoded<()>, <RuntimeApiImplCall as sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::CallApiAt<__SR_API_BLOCK__>>::Error>`
+   = note: expected fn pointer `fn(&RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall>, &sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::BlockId<__SR_API_BLOCK__>, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ExecutionContext, std::option::Option<u64>, std::vec::Vec<_>) -> std::result::Result<_, _>`
+              found fn pointer `fn(&RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall>, &sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::BlockId<__SR_API_BLOCK__>, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ExecutionContext, std::option::Option<std::string::String>, std::vec::Vec<_>) -> std::result::Result<_, _>`
 
 error[E0308]: mismatched types
   --> $DIR/impl_incorrect_method_signature.rs:17:1
@@ -48,17 +48,11 @@ error[E0308]: mismatched types
 33 | | }
    | | ^
    | | |
-   | |_expected u64, found struct `std::string::String`
+   | |_expected `u64`, found struct `std::string::String`
    |   in this macro invocation
-   |
-   = note: expected type `u64`
-              found type `std::string::String`
 
 error[E0308]: mismatched types
   --> $DIR/impl_incorrect_method_signature.rs:19:11
    |
 19 |         fn test(data: String) {}
-   |                 ^^^^ expected u64, found struct `std::string::String`
-   |
-   = note: expected type `u64`
-              found type `std::string::String`
+   |                 ^^^^ expected `u64`, found struct `std::string::String`

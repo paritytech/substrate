@@ -32,6 +32,7 @@ use libp2p::identity::{Keypair, ed25519};
 use libp2p::wasm_ext;
 use libp2p::{PeerId, Multiaddr, multiaddr};
 use core::{fmt, iter};
+use std::{future::Future, pin::Pin};
 use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
 use zeroize::Zeroize;
 
@@ -39,6 +40,10 @@ use zeroize::Zeroize;
 pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// Assigned roles for our node (full, light, ...).
 	pub roles: Roles,
+
+	/// How to spawn background tasks. If you pass `None`, then a threads pool will be used by
+	/// default.
+	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,

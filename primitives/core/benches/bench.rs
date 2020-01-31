@@ -87,8 +87,8 @@ fn bench_ed25519(c: &mut Criterion) {
 }
 
 criterion_group!{
-    name = benches;
-    config = Criterion::default().warm_up_time(Duration::from_millis(500)).without_plots();
-    targets = bench_hash_128_fix_size, bench_hash_128_dyn_size, bench_ed25519
+	name = benches;
+	config = Criterion::default().warm_up_time(Duration::from_millis(500)).without_plots();
+	targets = bench_hash_128_fix_size, bench_hash_128_dyn_size, bench_ed25519
 }
 criterion_main!(benches);

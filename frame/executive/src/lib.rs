@@ -262,8 +262,7 @@ where
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
 		match Self::apply_extrinsic_with_len(uxt, l, None) {
-			Ok(Ok(())) => (),
-			Ok(Err(e)) => sp_runtime::print(e),
+			Ok(_) => (),
 			Err(e) => { let err: &'static str = e.into(); panic!(err) },
 		}
 	}
@@ -386,7 +385,7 @@ mod tests {
 				fn some_root_operation(origin) {
 					let _ = frame_system::ensure_root(origin);
 				}
-				#[weight = SimpleDispatchInfo::FreeNormal]
+				#[weight = SimpleDispatchInfo::InsecureFreeNormal]
 				fn some_unsigned_message(origin) {
 					let _ = frame_system::ensure_none(origin);
 				}

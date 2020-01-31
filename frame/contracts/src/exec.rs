@@ -161,6 +161,9 @@ pub trait Ext {
 	/// Returns the minimum balance that is required for creating an account.
 	fn minimum_balance(&self) -> BalanceOf<Self::T>;
 
+	/// Returns the deposit required to create a tombstone upon contract eviction.
+	fn tombstone_deposit(&self) -> BalanceOf<Self::T>;
+
 	/// Returns a random number for the current block with the given subject.
 	fn random(&self, subject: &[u8]) -> SeedOf<Self::T>;
 
@@ -353,10 +356,10 @@ where
 			});
 		}
 
-		// Assumption: pay_rent doesn't collide with overlay because
-		// pay_rent will be done on first call and dest contract and balance
+		// Assumption: `collect_rent` doesn't collide with overlay because
+		// `collect_rent` will be done on first call and destination contract and balance
 		// cannot be changed before the first call
-		let contract_info = rent::pay_rent::<T>(&dest);
+		let contract_info = rent::collect_rent::<T>(&dest);
 
 		// Calls to dead contracts always fail.
 		if let Some(ContractInfo::Tombstone(_)) = contract_info {
@@ -777,6 +780,10 @@ where
 
 	fn minimum_balance(&self) -> BalanceOf<T> {
 		self.ctx.config.existential_deposit
+	}
+
+	fn tombstone_deposit(&self) -> BalanceOf<T> {
+		self.ctx.config.tombstone_deposit
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
