@@ -700,7 +700,10 @@ mod tests {
 		// given
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let pool = Arc::new(BasicPool::new(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone())),
+		));
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
