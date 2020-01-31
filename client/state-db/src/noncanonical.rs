@@ -460,7 +460,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Get a value from the node overlay. This searches in every existing changeset.
-	pub fn get(&self, trie: Option<ChildInfo>, key: &Key) -> Option<DBValue> {
+	pub fn get(&self, trie: Option<&ChildInfo>, key: &Key) -> Option<DBValue> {
 		// TODO make storage over data representation of OwnedChildInfo to use borrow
 		if let Some(values) = self.values.get(&trie.map(|t| t.to_owned())) {
 			if let Some((_, value)) = values.get(&key) {

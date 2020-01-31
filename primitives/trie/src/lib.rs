@@ -405,7 +405,7 @@ mod tests {
 	use codec::{Encode, Compact};
 	use sp_core::Blake2Hasher;
 	use hash_db::HashDB;
-	use sp_core::{Hasher, InnerHasher};
+	use sp_core::InnerHasher;
 	use trie_db::{DBValue, TrieMut, Trie, NodeCodec as NodeCodecT};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};
 	use hex_literal::hex;

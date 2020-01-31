@@ -18,13 +18,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Output};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_debug_derive::RuntimeDebug;
 
-use sp_std::{vec::Vec, borrow::Cow};
+use sp_std::{vec, vec::Vec, borrow::Cow, borrow::Borrow,
+	borrow::ToOwned, convert::TryInto, ops::Deref};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -177,131 +177,171 @@ impl<'a> ChildStorageKey<'a> {
 	}
 }
 
-#[derive(Clone, Copy)]
+#[repr(transparent)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Information related to a child state.
-pub enum ChildInfo<'a> {
-	Default(ChildTrie<'a>),
+pub struct ChildInfo([u8]);
+
+impl Encode for ChildInfo {
+	fn encode_to<T: Output>(&self, output: &mut T) {
+		self.0.encode_to(output)
+	}
 }
 
 /// Owned version of `ChildInfo`.
 /// To be use in persistence layers.
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
-pub enum OwnedChildInfo {
-	Default(OwnedChildTrie),
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode)]
+#[repr(transparent)]
+pub struct OwnedChildInfo(Vec<u8>);
+
+impl ToOwned for ChildInfo {
+	type Owned = OwnedChildInfo;
+
+	fn to_owned(&self) -> Self::Owned {
+		OwnedChildInfo(self.0.to_owned())
+	}
 }
 
-impl<'a> ChildInfo<'a> {
-	/// Instantiates information for a default child trie.
-	pub const fn new_default(unique_id: &'a[u8]) -> Self {
-		ChildInfo::Default(ChildTrie {
-			data: unique_id,
-		})
-	}
-
-	/// Instantiates a owned version of this child info.
-	pub fn to_owned(&self) -> OwnedChildInfo {
-		match self {
-			ChildInfo::Default(ChildTrie { data })
-				=> OwnedChildInfo::Default(OwnedChildTrie {
-					data: data.to_vec(),
-				}),
+impl Borrow<ChildInfo> for OwnedChildInfo {
+	#[inline]
+	fn borrow(&self) -> &ChildInfo {
+		let data: &[u8] = self.0.borrow();
+		unsafe {
+			sp_std::mem::transmute(data)
 		}
 	}
+}
 
+impl Deref for OwnedChildInfo {
+	type Target = ChildInfo;
+
+	#[inline]
+	fn deref(&self) -> &ChildInfo {
+		self.borrow()
+	}
+}
+
+impl ChildInfo {
 	/// Create child info from a linear byte packed value and a given type. 
-	pub fn resolve_child_info(child_type: u32, data: &'a[u8]) -> Option<Self> {
-		match child_type {
-			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data)),
+	pub fn resolve_child_info(data: &[u8]) -> Option<&Self> {
+		match ChildType::read_type(data) {
+			Some(x) if x == ChildType::CryptoUniqueId => Some({
+				unsafe {
+					sp_std::mem::transmute(data)
+				}
+			}),
 			_ => None,
 		}
+	}
+
+	/// Instantiates information for a child trie.
+	/// No check is done on consistency.
+	pub fn new_unchecked(data: &[u8]) -> &Self {
+		unsafe {
+			sp_std::mem::transmute(data)
+		}
+	}
+
+	/// Top trie defined as the unique crypto id trie with
+	/// 0 length unique id.
+	pub fn top_trie() -> &'static Self {
+		Self::new_unchecked(b"\x01\x00\x00\x00")
 	}
 
 	/// Return a single byte vector containing packed child info content and its child info type.
 	/// This can be use as input for `resolve_child_info`.
 	pub fn info(&self) -> (&[u8], u32) {
-		match self {
-			ChildInfo::Default(ChildTrie {
-				data,
-			}) => (data, ChildType::CryptoUniqueId as u32),
-		}
+		let child_type = ChildType::read_type_unchecked(&self.0);
+		(&self.0, child_type as u32)
 	}
 
 	/// Return byte sequence (keyspace) that can be use by underlying db to isolate keys.
 	/// This is a unique id of the child trie. The collision resistance of this value
 	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
 	pub fn keyspace(&self) -> &[u8] {
-		match self {
-			ChildInfo::Default(ChildTrie {
-				data,
-			}) => &data[..],
+		match ChildType::read_type_unchecked(&self.0) {
+			ChildType::CryptoUniqueId => &self.0[4..],
 		}
+	}
+
+	fn child_type(&self) -> ChildType {
+		ChildType::read_type_unchecked(&self.0[..])
 	}
 }
 
-/// Type of child.
+/// Type of child, it is encoded in the four first byte of the
+/// encoded child info (LE u32).
 /// It does not strictly define different child type, it can also
 /// be related to technical consideration or api variant.
 #[repr(u32)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum ChildType {
 	/// Default, it uses a cryptographic strong unique id as input.
+	/// All bytes following the type in encoded form are this unique
+	/// id.
+	/// If the trie got a unique id of length 0 it is considered
+	/// as a top child trie.
 	CryptoUniqueId = 1,
 }
 
+const LOWER_CHILD_TYPE: u32 = 1;
+const HIGHER_CHILD_TYPE: u32 = 1;
+
+impl ChildType {
+	/// Try to read type from child definition.
+	pub fn read_type(slice: &[u8]) -> Option<Self> {
+		if slice.len() < 4 {
+			return None;
+		}
+		slice[..4].try_into().ok()
+			.map(|b| u32::from_le_bytes(b))
+			.filter(|b| *b >= LOWER_CHILD_TYPE && *b <= HIGHER_CHILD_TYPE)
+			.map(|b| unsafe {
+				sp_std::mem::transmute(b)
+			})
+	}
+
+	fn read_type_unchecked(slice: &[u8]) -> Self {
+		let child_type = u32::from_le_bytes(slice[..4].try_into()
+			.expect("This function is only called on initialized child info."));
+		unsafe { sp_std::mem::transmute(child_type) }
+	}
+}
+
 impl OwnedChildInfo {
-	/// Instantiates info for a default child trie.
-	pub fn new_default(unique_id: Vec<u8>) -> Self {
-		OwnedChildInfo::Default(OwnedChildTrie {
-			data: unique_id,
-		})
+	/// Create a new child trie information for default
+	/// child type.
+	pub fn new_default(unique_id: &[u8]) -> Self {
+		let mut vec = vec![0; unique_id.len() + 4];
+		vec[..4].copy_from_slice(&(ChildType::CryptoUniqueId as u32).to_le_bytes()[..]);
+		vec[4..].copy_from_slice(unique_id);
+		OwnedChildInfo(vec)
 	}
 
 	/// Try to update with another instance, return false if both instance
 	/// are not compatible.
-	pub fn try_update(&mut self, other: ChildInfo) -> bool {
-		match self {
-			OwnedChildInfo::Default(owned_child_trie) => owned_child_trie.try_update(other),
-		}
-	}
-
-	/// Get `ChildInfo` reference to this owned child info.
-	pub fn as_ref(&self) -> ChildInfo {
-		match self {
-			OwnedChildInfo::Default(OwnedChildTrie { data })
-				=> ChildInfo::Default(ChildTrie {
-					data: data.as_slice(),
-				}),
+	pub fn try_update(&self, other: &ChildInfo) -> bool {
+		match self.child_type() {
+			ChildType::CryptoUniqueId => {
+				match other.child_type() {
+					ChildType::CryptoUniqueId => self.deref() == other,
+				}
+			},
 		}
 	}
 }
 
-/// A child trie of default type.
-/// Default is the same implementation as the top trie.
-/// It share its trie node storage with any kind of key,
-/// and its unique id needs to be collision free (eg strong
-/// crypto hash).
-#[derive(Clone, Copy)]
-pub struct ChildTrie<'a> {
-	/// Data containing unique id.
-	/// Unique id must but unique and free of any possible key collision
-	/// (depending on its storage behavior).
-	data: &'a[u8],
-}
+#[cfg(test)]
+mod test {
+	use super::*;
 
-/// Owned version of default child trie `ChildTrie`.
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
-pub struct OwnedChildTrie {
-	/// See `ChildTrie` reference field documentation.
-	data: Vec<u8>,
-}
-
-impl OwnedChildTrie {
-	/// Try to update with another instance, return false if both instance
-	/// are not compatible.
-	fn try_update(&mut self, other: ChildInfo) -> bool {
-		match other {
-			ChildInfo::Default(other) => self.data[..] == other.data[..],
-		}
+	#[test]
+	fn test_top_trie() {
+		let top_trie = ChildInfo::top_trie();
+		assert!(top_trie.child_type() == ChildType::CryptoUniqueId);
+		assert_eq!(top_trie.encode(), top_trie.to_owned().encode());
+		// 16 compact enc 4 and le 1 u32
+		assert!(top_trie.encode() == vec![16, 1, 0, 0, 0]);
+		assert_eq!(top_trie.keyspace(), &[]);
 	}
 }

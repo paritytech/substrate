@@ -27,7 +27,7 @@ use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Zero};
 use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
-use frame_support::{storage::child, StorageMap};
+use frame_support::{storage::child, StorageMap, storage::child::ChildInfo};
 use frame_system;
 
 // Note: we don't provide Option<Contract> because we can't create
@@ -108,7 +108,13 @@ pub trait AccountDb<T: Trait> {
 	///
 	/// Trie id is None iff account doesn't have an associated trie id in <ContractInfoOf<T>>.
 	/// Because DirectAccountDb bypass the lookup for this association.
-	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>>;
+	fn get_storage(
+		&self,
+		account: &T::AccountId,
+		trie_id: Option<&TrieId>,
+		child_info: Option<&ChildInfo>,
+		location: &StorageKey
+	) -> Option<Vec<u8>>;
 	/// If account has an alive contract then return the code hash associated.
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	/// If account has an alive contract then return the rent allowance associated.
@@ -126,9 +132,14 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		&self,
 		_account: &T::AccountId,
 		trie_id: Option<&TrieId>,
+		child_info: Option<&ChildInfo>,
 		location: &StorageKey
 	) -> Option<Vec<u8>> {
-		trie_id.and_then(|id| child::get_raw(id, crate::trie_unique_id(&id[..]), &blake2_256(location)))
+		trie_id.and_then(|id| if let Some(child_info) = child_info {
+			child::get_raw(id, child_info, &blake2_256(location))
+		} else {
+			child::get_raw(id, &*crate::trie_unique_id(&id[..]), &blake2_256(location))
+		})
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
@@ -173,13 +184,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					(false, Some(info), _) => info,
 					// Existing contract is being removed.
 					(true, Some(info), None) => {
-						child::kill_storage(&info.trie_id, info.child_trie_unique_id());
+						child::kill_storage(&info.trie_id, &*info.child_trie_unique_id());
 						<ContractInfoOf<T>>::remove(&address);
 						continue;
 					}
 					// Existing contract is being replaced by a new one.
 					(true, Some(info), Some(code_hash)) => {
-						child::kill_storage(&info.trie_id, info.child_trie_unique_id());
+						child::kill_storage(&info.trie_id, &*info.child_trie_unique_id());
 						AliveContractInfo::<T> {
 							code_hash,
 							storage_size: T::StorageSizeOffset::get(),
@@ -216,19 +227,20 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					new_info.last_write = Some(<frame_system::Module<T>>::block_number());
 				}
 
+				let child_info = &*new_info.child_trie_unique_id();
 				for (k, v) in changed.storage.into_iter() {
 					if let Some(value) = child::get_raw(
 						&new_info.trie_id[..],
-						new_info.child_trie_unique_id(),
+						child_info,
 						&blake2_256(&k),
 					) {
 						new_info.storage_size -= value.len() as u32;
 					}
 					if let Some(value) = v {
 						new_info.storage_size += value.len() as u32;
-						child::put_raw(&new_info.trie_id[..], new_info.child_trie_unique_id(), &blake2_256(&k), &value[..]);
+						child::put_raw(&new_info.trie_id[..], child_info, &blake2_256(&k), &value[..]);
 					} else {
-						child::kill(&new_info.trie_id[..], new_info.child_trie_unique_id(), &blake2_256(&k));
+						child::kill(&new_info.trie_id[..], child_info, &blake2_256(&k));
 					}
 				}
 
@@ -334,13 +346,14 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 		&self,
 		account: &T::AccountId,
 		trie_id: Option<&TrieId>,
+		child_info: Option<&ChildInfo>,
 		location: &StorageKey
 	) -> Option<Vec<u8>> {
 		self.local
 			.borrow()
 			.get(account)
 			.and_then(|changes| changes.storage(location))
-			.unwrap_or_else(|| self.underlying.get_storage(account, trie_id, location))
+			.unwrap_or_else(|| self.underlying.get_storage(account, trie_id, child_info, location))
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		self.local

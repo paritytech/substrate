@@ -225,15 +225,15 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 
 impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Associated child trie unique id is built from the hash part of the trie id.
-	pub fn child_trie_unique_id(&self) -> child::ChildInfo {
+	pub fn child_trie_unique_id(&self) -> child::OwnedChildInfo {
 		trie_unique_id(&self.trie_id[..])
 	}
 }
 
 /// Associated child trie unique id is built from the hash part of the trie id.
-pub(crate) fn trie_unique_id(trie_id: &[u8]) -> child::ChildInfo {
+pub(crate) fn trie_unique_id(trie_id: &[u8]) -> child::OwnedChildInfo {
 	let start = CHILD_STORAGE_KEY_PREFIX.len() + b"default:".len();
-	child::ChildInfo::new_default(&trie_id[start ..])
+	child::OwnedChildInfo::new_default(&trie_id[start ..])
 }
 
 pub type TombstoneContractInfo<T> =
@@ -716,10 +716,12 @@ impl<T: Trait> Module<T> {
 			.get_alive()
 			.ok_or(GetStorageError::IsTombstone)?;
 
+		let child_trie = contract_info.child_trie_unique_id();
 		let maybe_value = AccountDb::<T>::get_storage(
 			&DirectAccountDb,
 			&address,
 			Some(&contract_info.trie_id),
+			Some(&*child_trie),
 			&key,
 		);
 		Ok(maybe_value)
@@ -826,16 +828,17 @@ impl<T: Trait> Module<T> {
 			origin_contract.last_write
 		};
 
+		let child_trie = origin_contract.child_trie_unique_id();
 		let key_values_taken = delta.iter()
 			.filter_map(|key| {
 				child::get_raw(
 					&origin_contract.trie_id,
-					origin_contract.child_trie_unique_id(),
+					&*child_trie,
 					&blake2_256(key),
 				).map(|value| {
 					child::kill(
 						&origin_contract.trie_id,
-						origin_contract.child_trie_unique_id(),
+						&*child_trie,
 						&blake2_256(key),
 					);
 
@@ -857,7 +860,7 @@ impl<T: Trait> Module<T> {
 			for (key, value) in key_values_taken {
 				child::put_raw(
 					&origin_contract.trie_id,
-					origin_contract.child_trie_unique_id(),
+					&*child_trie,
 					&blake2_256(key),
 					&value,
 				);
@@ -957,7 +960,7 @@ decl_storage! {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
-			child::kill_storage(&info.trie_id, info.child_trie_unique_id());
+			child::kill_storage(&info.trie_id, &*info.child_trie_unique_id());
 		}
 	}
 }

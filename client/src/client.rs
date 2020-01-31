@@ -261,7 +261,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		id: &BlockId<Block>,
 		child_storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key_prefix: &StorageKey
 	) -> sp_blockchain::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?
@@ -277,7 +277,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		id: &BlockId<Block>,
 		storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
@@ -291,7 +291,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		id: &BlockId<Block>,
 		storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		Ok(self.state_at(id)?
@@ -333,7 +333,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		id: &BlockId<Block>,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		keys: I,
 	) -> sp_blockchain::Result<StorageProof> where
 		I: IntoIterator,

@@ -23,7 +23,7 @@ use crate::rent;
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
 use frame_support::{
-	storage::unhashed, dispatch::DispatchError,
+	storage::unhashed, dispatch::DispatchError, storage::child::OwnedChildInfo,
 	traits::{WithdrawReason, Currency, Time, Randomness},
 };
 
@@ -277,6 +277,7 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub parent: Option<&'a ExecutionContext<'a, T, V, L>>,
 	pub self_account: T::AccountId,
 	pub self_trie_id: Option<TrieId>,
+	pub self_child_info: Option<OwnedChildInfo>,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 	pub deferred: Vec<DeferredAction<T>>,
@@ -301,6 +302,7 @@ where
 		ExecutionContext {
 			parent: None,
 			self_trie_id: None,
+			self_child_info: None,
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
 			depth: 0,
@@ -313,12 +315,13 @@ where
 		}
 	}
 
-	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_id: Option<TrieId>)
+	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_id: Option<TrieId>, child_info: Option<OwnedChildInfo>)
 		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
 			parent: Some(self),
 			self_trie_id: trie_id,
+			self_child_info: child_info,
 			self_account: dest,
 			overlay: OverlayAccountDb::new(&self.overlay),
 			depth: self.depth + 1,
@@ -371,8 +374,9 @@ where
 
 		let caller = self.self_account.clone();
 		let dest_trie_id = contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()));
+		let dest_child_info = dest_trie_id.as_ref().map(|id| crate::trie_unique_id(id));
 
-		self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
+		self.with_nested_context(dest.clone(), dest_trie_id, dest_child_info, |nested| {
 			if value > BalanceOf::<T>::zero() {
 				try_or_exec_error!(
 					transfer(
@@ -457,8 +461,9 @@ where
 
 		// TrieId has not been generated yet and storage is empty since contract is new.
 		let dest_trie_id = None;
+		let dest_child_info = None;
 
-		let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
+		let output = self.with_nested_context(dest.clone(), dest_trie_id, dest_child_info, |nested| {
 			try_or_exec_error!(
 				nested.overlay.instantiate_contract(&dest, code_hash.clone()),
 				input_data
@@ -524,12 +529,17 @@ where
 		}
 	}
 
-	fn with_nested_context<F>(&mut self, dest: T::AccountId, trie_id: Option<TrieId>, func: F)
-		-> ExecResult
+	fn with_nested_context<F>(
+		&mut self,
+		dest: T::AccountId,
+		trie_id: Option<TrieId>,
+		child_info: Option<OwnedChildInfo>,
+		func: F,
+	) -> ExecResult
 		where F: FnOnce(&mut ExecutionContext<T, V, L>) -> ExecResult
 	{
 		let (output, change_set, deferred) = {
-			let mut nested = self.nested(dest, trie_id);
+			let mut nested = self.nested(dest, trie_id, child_info);
 			let output = func(&mut nested)?;
 			(output, nested.overlay.into_change_set(), nested.deferred)
 		};
@@ -695,7 +705,12 @@ where
 	type T = T;
 
 	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
-		self.ctx.overlay.get_storage(&self.ctx.self_account, self.ctx.self_trie_id.as_ref(), key)
+		self.ctx.overlay.get_storage(
+			&self.ctx.self_account,
+			self.ctx.self_trie_id.as_ref(),
+			self.ctx.self_child_info.as_deref(),
+			key,
+		)
 	}
 
 	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str> {

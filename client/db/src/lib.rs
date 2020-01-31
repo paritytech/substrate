@@ -148,7 +148,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 	fn child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.child_storage(storage_key, child_info, key)
@@ -161,7 +161,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 	fn exists_child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
 		self.state.exists_child_storage(storage_key, child_info, key)
@@ -174,7 +174,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 	fn next_child_storage_key(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.next_child_storage_key(storage_key, child_info, key)
@@ -191,7 +191,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
 		self.state.for_keys_in_child_storage(storage_key, child_info, f)
@@ -200,7 +200,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
@@ -217,7 +217,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 	fn child_storage_root<I>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
@@ -237,7 +237,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 	fn child_keys(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
 		self.state.child_keys(storage_key, child_info, prefix)
@@ -668,7 +668,7 @@ struct StorageDb<Block: BlockT> {
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for StorageDb<Block> {
 	fn get(
 		&self,
-		trie: Option<ChildInfo>,
+		trie: Option<&ChildInfo>,
 		key: &Block::Hash,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
@@ -701,7 +701,7 @@ impl<Block: BlockT> DbGenesisStorage<Block> {
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for DbGenesisStorage<Block> {
 	fn get(
 		&self,
-		_trie: Option<ChildInfo>,
+		_trie: Option<&ChildInfo>,
 		_key: &Block::Hash,
 		_prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
@@ -1329,7 +1329,6 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::Comm
 	for child_data in commit.data.into_iter() {
 		if let Some(child_info) = child_data.0 {
 			// children tries with prefixes
-			let child_info = child_info.as_ref();
 			let keyspace = child_info.keyspace();
 			let keyspace_len = keyspace.len();
 			key_buffer.resize(keyspace_len, 0);

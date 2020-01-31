@@ -387,7 +387,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	fn child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
@@ -408,7 +408,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	fn next_child_storage_key(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		match *self {
@@ -437,7 +437,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	fn for_keys_in_child_storage<A: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		action: A,
 	) {
 		match *self {
@@ -450,7 +450,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	fn for_child_keys_with_prefix<A: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		action: A,
 	) {
@@ -475,7 +475,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	fn child_storage_root<I>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where

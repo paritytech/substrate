@@ -36,7 +36,7 @@ pub trait Storage<H: Hasher>: Send + Sync {
 	/// Get a trie node.
 	fn get(
 		&self,
-		trie: Option<ChildInfo>,
+		trie: Option<&ChildInfo>,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String>;
@@ -141,7 +141,7 @@ impl<S: TrieBackendStorageRef<H>, H: Hasher> TrieBackendEssence<S, H> where H::O
 		root: &H::Out,
 		prefix: &[u8],
 		mut f: F,
-		child_info: Option<ChildInfo>,
+		child_info: Option<&ChildInfo>,
 	) {
 		let eph = BackendStorageDBRef::new(&self.storage);
 
@@ -417,8 +417,7 @@ impl<H: Hasher> TrieBackendStorageRef<H> for (Arc<dyn Storage<H>>, Option<OwnedC
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		let child_info = self.1.as_ref();
-		Storage::<H>::get(self.0.deref(), child_info.map(|c| c.as_ref()), key, prefix)
+		Storage::<H>::get(self.0.deref(), self.1.as_deref(), key, prefix)
 	}
 }
 
@@ -426,14 +425,14 @@ impl<H: Hasher> TrieBackendStorageRef<H> for (Arc<dyn Storage<H>>, Option<OwnedC
 /// This is an essence for the child trie backend.
 pub struct ChildTrieBackendStorage<'a, H: Hasher, B: TrieBackendStorageRef<H>> {
 	db: &'a B,
-	info: Option<ChildInfo<'a>>,
+	info: Option<&'a ChildInfo>,
 	buffer: &'a mut Vec<u8>,
 	_ph: PhantomData<H>,
 }
 
 impl<'a, H: Hasher, B: TrieBackendStorageRef<H>> ChildTrieBackendStorage<'a, H, B> {
 	/// Instantiate a `ChildTrieBackendStorage`.
-	pub fn new(db: &'a B, info: Option<ChildInfo<'a>>, buffer: &'a mut Vec<u8>) -> Self {
+	pub fn new(db: &'a B, info: Option<&'a ChildInfo>, buffer: &'a mut Vec<u8>) -> Self {
 		ChildTrieBackendStorage {
 			db,
 			info,
@@ -504,7 +503,7 @@ mod test {
 
 	#[test]
 	fn next_storage_key_and_next_child_storage_key_work() {
-		let child_info = ChildInfo::new_default(b"uniqueid");
+		let child_info = ChildInfo::resolve_child_info(b"\x01\x00\x00\x00uniqueid").unwrap();
 		// Contains values
 		let mut root_1 = H256::default();
 		// Contains child trie

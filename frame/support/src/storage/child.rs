@@ -27,12 +27,12 @@
 
 use crate::sp_std::prelude::*;
 use codec::{Codec, Encode, Decode};
-pub use sp_core::storage::ChildInfo;
+pub use sp_core::storage::{ChildInfo, OwnedChildInfo};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 ) -> Option<T> {
 	let (data, child_type) = child_info.info();
@@ -54,7 +54,7 @@ pub fn get<T: Decode + Sized>(
 /// explicit entry.
 pub fn get_or_default<T: Decode + Sized + Default>(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 ) -> T {
 	get(storage_key, child_info, key).unwrap_or_else(Default::default)
@@ -64,7 +64,7 @@ pub fn get_or_default<T: Decode + Sized + Default>(
 /// explicit entry.
 pub fn get_or<T: Decode + Sized>(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 	default_value: T,
 ) -> T {
@@ -75,7 +75,7 @@ pub fn get_or<T: Decode + Sized>(
 /// explicit entry.
 pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 	default_value: F,
 ) -> T {
@@ -85,7 +85,7 @@ pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(
 /// Put `value` in storage under `key`.
 pub fn put<T: Encode>(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 	value: &T,
 ) {
@@ -104,7 +104,7 @@ pub fn put<T: Encode>(
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
 pub fn take<T: Decode + Sized>(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 ) -> Option<T> {
 	let r = get(storage_key, child_info, key);
@@ -118,7 +118,7 @@ pub fn take<T: Decode + Sized>(
 /// the default for its type.
 pub fn take_or_default<T: Codec + Sized + Default>(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 ) -> T {
 	take(storage_key, child_info, key).unwrap_or_else(Default::default)
@@ -128,7 +128,7 @@ pub fn take_or_default<T: Codec + Sized + Default>(
 /// explicit entry. Ensure there is no explicit entry on return.
 pub fn take_or<T: Codec + Sized>(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 	default_value: T,
 ) -> T {
@@ -139,7 +139,7 @@ pub fn take_or<T: Codec + Sized>(
 /// explicit entry. Ensure there is no explicit entry on return.
 pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 	default_value: F,
 ) -> T {
@@ -149,7 +149,7 @@ pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 ) -> bool {
 	let (data, child_type) = child_info.info();
@@ -162,7 +162,7 @@ pub fn exists(
 /// Remove all `storage_key` key/values
 pub fn kill_storage(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 ) {
 	let (data, child_type) = child_info.info();
 	sp_io::storage::child_storage_kill(
@@ -175,7 +175,7 @@ pub fn kill_storage(
 /// Ensure `key` has no explicit entry in storage.
 pub fn kill(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 ) {
 	let (data, child_type) = child_info.info();
@@ -190,7 +190,7 @@ pub fn kill(
 /// Get a Vec of bytes from storage.
 pub fn get_raw(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 ) -> Option<Vec<u8>> {
 	let (data, child_type) = child_info.info();
@@ -205,7 +205,7 @@ pub fn get_raw(
 /// Put a raw byte slice into storage.
 pub fn put_raw(
 	storage_key: &[u8],
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 	value: &[u8],
 ) {

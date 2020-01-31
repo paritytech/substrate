@@ -55,7 +55,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error>;
 
@@ -63,7 +63,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn child_storage_hash(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<H::Out>, Self::Error> {
 		self.child_storage(storage_key, child_info, key).map(|v| v.map(|v| H::hash(&v)))
@@ -78,7 +78,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn exists_child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
 		Ok(self.child_storage(storage_key, child_info, key)?.is_some())
@@ -91,7 +91,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn next_child_storage_key(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8]
 	) -> Result<Option<StorageKey>, Self::Error>;
 
@@ -99,7 +99,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	);
 
@@ -119,7 +119,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	);
@@ -138,7 +138,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn child_storage_root<I>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -159,7 +159,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn child_keys(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<StorageKey> {
 		let mut all = Vec::new();
@@ -193,7 +193,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		// child first
 		for (storage_key, child_delta, child_info) in child_deltas {
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(&storage_key[..], child_info.as_ref(), child_delta);
+				self.child_storage_root(&storage_key[..], &*child_info, child_delta);
 			txs.consolidate(child_txs);
 			if empty {
 				if return_child_roots {
@@ -237,7 +237,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	fn child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
 		(*self).child_storage(storage_key, child_info, key)
@@ -246,7 +246,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
 		(*self).for_keys_in_child_storage(storage_key, child_info, f)
@@ -259,7 +259,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	fn next_child_storage_key(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
 		(*self).next_child_storage_key(storage_key, child_info, key)
@@ -272,7 +272,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
@@ -290,7 +290,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	fn child_storage_root<I>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where

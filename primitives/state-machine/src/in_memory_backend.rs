@@ -165,9 +165,9 @@ impl<H: Hasher> From<Vec<(Option<(StorageKey, OwnedChildInfo)>, StorageCollectio
 
 impl<H: Hasher> InMemory<H> {
 	/// child storage key iterator
-	pub fn child_storage_keys(&self) -> impl Iterator<Item=(&[u8], ChildInfo)> {
+	pub fn child_storage_keys(&self) -> impl Iterator<Item=(&[u8], &ChildInfo)> {
 		self.inner.iter().filter_map(|item|
-			item.0.as_ref().map(|v|(&v.0[..], v.1.as_ref()))
+			item.0.as_ref().map(|v|(&v.0[..], &*v.1))
 		)
 	}
 }
@@ -187,7 +187,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
 		Ok(self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
@@ -211,7 +211,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		mut f: F,
 	) {
 		self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
@@ -221,7 +221,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
@@ -253,7 +253,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn child_storage_root<I>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -293,7 +293,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn next_child_storage_key(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
 		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
@@ -320,7 +320,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn child_keys(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<StorageKey> {
 		self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
@@ -366,7 +366,7 @@ mod tests {
 	#[test]
 	fn in_memory_with_child_trie_only() {
 		let storage = InMemory::<sp_core::Blake2Hasher>::default();
-		let child_info = OwnedChildInfo::new_default(b"unique_id_1".to_vec());
+		let child_info = OwnedChildInfo::new_default(b"unique_id_1");
 		let mut storage = storage.update(
 			vec![(
 				Some((b"1".to_vec(), child_info.clone())),
@@ -374,7 +374,7 @@ mod tests {
 			)]
 		);
 		let trie_backend = storage.as_trie_backend().unwrap();
-		assert_eq!(trie_backend.child_storage(b"1", child_info.as_ref(), b"2").unwrap(),
+		assert_eq!(trie_backend.child_storage(b"1", &*child_info, b"2").unwrap(),
 			Some(b"3".to_vec()));
 		assert!(trie_backend.storage(b"1").unwrap().is_some());
 	}

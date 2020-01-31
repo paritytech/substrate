@@ -138,7 +138,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 	let (committed, prospective, child_info) = if let Some(sk) = storage_key.as_ref() {
-		let child_info = changes.child_info(sk).cloned();
+		let child_info = changes.child_info(sk).to_owned();
 		(
 			changes.committed.children.get(sk).map(|c| &c.0),
 			changes.prospective.children.get(sk).map(|c| &c.0),
@@ -157,8 +157,8 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					// AND are not in storage at the beginning of operation
 					if let Some(sk) = storage_key.as_ref() {
 						if !changes.child_storage(sk, k).map(|v| v.is_some()).unwrap_or_default() {
-							if let Some(child_info) = child_info.as_ref() {
-								if !backend.exists_child_storage(sk, child_info.as_ref(), k)
+							if let Some(child_info) = child_info.as_deref() {
+								if !backend.exists_child_storage(sk, child_info, k)
 									.map_err(|e| format!("{}", e))? {
 									return Ok(map);
 								}
@@ -351,8 +351,8 @@ mod test {
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use super::*;
 
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
-	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
+	const CHILD_INFO_1: &'static [u8] = b"\x01\x00\x00\x00unique_id_1";
+	const CHILD_INFO_2: &'static [u8] = b"\x01\x00\x00\x00unique_id_2";
 
 	fn prepare_for_build(zero: u64) -> (
 		InMemoryBackend<Blake2Hasher>,
@@ -360,6 +360,9 @@ mod test {
 		OverlayedChanges,
 		Configuration,
 	) {
+
+		let child_info1 = ChildInfo::resolve_child_info(CHILD_INFO_1).unwrap();
+		let child_info2 = ChildInfo::resolve_child_info(CHILD_INFO_2).unwrap();
 		let backend: InMemoryBackend<_> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
@@ -436,13 +439,13 @@ mod test {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-					].into_iter().collect(), CHILD_INFO_1.to_owned())),
+					].into_iter().collect(), child_info1.to_owned())),
 					(child_trie_key2, (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-					].into_iter().collect(), CHILD_INFO_2.to_owned())),
+					].into_iter().collect(), child_info2.to_owned())),
 				].into_iter().collect()
 			},
 			committed: OverlayedChangeSet { top: vec![
@@ -465,7 +468,7 @@ mod test {
 							value: Some(vec![202]),
 							extrinsics: Some(vec![3].into_iter().collect())
 						})
-					].into_iter().collect(), CHILD_INFO_1.to_owned())),
+					].into_iter().collect(), child_info1.to_owned())),
 				].into_iter().collect(),
 			},
 			collect_extrinsics: true,

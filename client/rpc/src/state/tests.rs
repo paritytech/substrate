@@ -30,7 +30,7 @@ use substrate_test_runtime_client::{
 	runtime,
 };
 
-const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"unique_id");
+const CHILD_INFO: &'static [u8] = b"\x01\x00\x00\x00unique_id";
 
 #[test]
 fn should_return_storage() {
@@ -38,17 +38,17 @@ fn should_return_storage() {
 	const VALUE: &[u8] = b"hello world";
 	const STORAGE_KEY: &[u8] = b":child_storage:default:child";
 	const CHILD_VALUE: &[u8] = b"hello world !";
-
+	let child_info1 = ChildInfo::resolve_child_info(CHILD_INFO).unwrap();
 	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let client = TestClientBuilder::new()
 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
-		.add_extra_child_storage(STORAGE_KEY.to_vec(), CHILD_INFO, KEY.to_vec(), CHILD_VALUE.to_vec())
+		.add_extra_child_storage(STORAGE_KEY.to_vec(), child_info1, KEY.to_vec(), CHILD_VALUE.to_vec())
 		.build();
 	let genesis_hash = client.genesis_hash();
 	let client = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
 	let key = StorageKey(KEY.to_vec());
 	let storage_key = StorageKey(STORAGE_KEY.to_vec());
-	let (child_info, child_type) = CHILD_INFO.info();
+	let (child_info, child_type) = child_info1.info();
 	let child_info = StorageKey(child_info.to_vec());
 
 	assert_eq!(
@@ -77,11 +77,12 @@ fn should_return_storage() {
 
 #[test]
 fn should_return_child_storage() {
-	let (child_info, child_type) = CHILD_INFO.info();
+	let child_info1 = ChildInfo::resolve_child_info(CHILD_INFO).unwrap();
+	let (child_info, child_type) = child_info1.info();
 	let child_info = StorageKey(child_info.to_vec());
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new()
-		.add_child_storage("test", "key", CHILD_INFO, vec![42_u8])
+		.add_child_storage("test", "key", child_info1, vec![42_u8])
 		.build());
 	let genesis_hash = client.genesis_hash();
 	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));

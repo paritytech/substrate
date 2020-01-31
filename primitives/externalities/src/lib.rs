@@ -48,7 +48,7 @@ pub trait Externalities: ExtensionStore {
 	fn child_storage_hash(
 		&self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
@@ -61,7 +61,7 @@ pub trait Externalities: ExtensionStore {
 	fn original_child_storage(
 		&self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
@@ -78,7 +78,7 @@ pub trait Externalities: ExtensionStore {
 	fn original_child_storage_hash(
 		&self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
@@ -88,7 +88,7 @@ pub trait Externalities: ExtensionStore {
 	fn child_storage(
 		&self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
@@ -101,7 +101,7 @@ pub trait Externalities: ExtensionStore {
 	fn set_child_storage(
 		&mut self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
@@ -117,7 +117,7 @@ pub trait Externalities: ExtensionStore {
 	fn clear_child_storage(
 		&mut self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) {
 		self.place_child_storage(storage_key, child_info, key.to_vec(), None)
@@ -132,7 +132,7 @@ pub trait Externalities: ExtensionStore {
 	fn exists_child_storage(
 		&self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> bool {
 		self.child_storage(storage_key, child_info, key).is_some()
@@ -145,12 +145,12 @@ pub trait Externalities: ExtensionStore {
 	fn next_child_storage_key(
 		&self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
 	/// Clear an entire child storage.
-	fn kill_child_storage(&mut self, storage_key: ChildStorageKey, child_info: ChildInfo);
+	fn kill_child_storage(&mut self, storage_key: ChildStorageKey, child_info: &ChildInfo);
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
@@ -159,7 +159,7 @@ pub trait Externalities: ExtensionStore {
 	fn clear_child_prefix(
 		&mut self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	);
 
@@ -170,7 +170,7 @@ pub trait Externalities: ExtensionStore {
 	fn place_child_storage(
 		&mut self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
 	);

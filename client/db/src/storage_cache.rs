@@ -540,7 +540,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 	fn child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		let key = (storage_key.to_vec(), key.to_vec());
@@ -577,7 +577,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 	fn exists_child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
 		self.state.exists_child_storage(storage_key, child_info, key)
@@ -586,7 +586,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
 		self.state.for_keys_in_child_storage(storage_key, child_info, f)
@@ -599,7 +599,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 	fn next_child_storage_key(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.next_child_storage_key(storage_key, child_info, key)
@@ -616,7 +616,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
@@ -633,7 +633,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 	fn child_storage_root<I>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
@@ -653,7 +653,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 	fn child_keys(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
 		self.state.child_keys(storage_key, child_info, prefix)
@@ -677,8 +677,7 @@ mod tests {
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
-	const CHILD_KEY_1: &'static [u8] = b"unique_id_1";
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_KEY_1);
+	const CHILD_KEY_1: &'static [u8] = b"\x01\x00\x00\x00unique_id_1";
 
 	#[test]
 	fn smoke() {
@@ -969,6 +968,7 @@ mod tests {
 
 	#[test]
 	fn should_track_used_size_correctly() {
+		let child_info1 = ChildInfo::resolve_child_info(CHILD_KEY_1).unwrap();
 		let root_parent = H256::random();
 		let shared = new_shared_cache::<Block>(109, ((109-36), 109));
 		let h0 = H256::random();
@@ -996,7 +996,7 @@ mod tests {
 			&[],
 			&[],
 			vec![],
-			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))], CHILD_INFO_1.to_owned())],
+			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))], child_info1.to_owned())],
 			Some(h0),
 			Some(0),
 			true,

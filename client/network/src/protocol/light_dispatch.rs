@@ -681,7 +681,7 @@ pub mod tests {
 	use std::sync::Arc;
 	use std::time::Instant;
 	use futures::channel::oneshot;
-	use sp_core::storage::ChildInfo;
+	use sp_core::storage::OwnedChildInfo;
 	use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use sp_blockchain::{Error as ClientError, Result as ClientResult};
 	use sc_client_api::{FetchChecker, RemoteHeaderRequest,
@@ -1035,7 +1035,7 @@ pub mod tests {
 		light_dispatch.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
 		let (tx, response) = oneshot::channel();
-		let child_info = ChildInfo::new_default(b"unique_id_1");
+		let child_info = OwnedChildInfo::new_default(b"unique_id_1");
 		let (child_info, child_type) = child_info.info();
 		light_dispatch.add_request(&mut network_interface, RequestData::RemoteReadChild(RemoteReadChildRequest {
 			header: dummy_header(),

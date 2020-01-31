@@ -57,7 +57,7 @@ pub trait Client<Block: BlockT>: Send + Sync {
 		&self,
 		block: &Block::Hash,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		keys: &[Vec<u8>],
 	) -> Result<StorageProof, Error>;
 
@@ -139,7 +139,7 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		&self,
 		block: &Block::Hash,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		keys: &[Vec<u8>],
 	) -> Result<StorageProof, Error> {
 		(self as &SubstrateClient<B, E, Block, RA>)

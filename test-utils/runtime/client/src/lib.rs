@@ -195,7 +195,7 @@ pub trait TestClientBuilderExt<B>: Sized {
 	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		mut self,
 		storage_key: SK,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: K,
 		value: V,
 	) -> Self {

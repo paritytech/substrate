@@ -131,7 +131,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		mut self,
 		key: impl AsRef<[u8]>,
 		child_key: impl AsRef<[u8]>,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		value: impl AsRef<[u8]>,
 	) -> Self {
 		let entry = self.child_storage_extension.entry(key.as_ref().to_vec())
