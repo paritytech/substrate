@@ -1995,11 +1995,13 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 
 		let reward_proportion = SlashRewardFraction::get();
 
-		let current_era = Self::current_era();
-		if current_era.is_none() {
-			return
-		}
-		let current_era = current_era.unwrap();
+		let current_era = {
+			let current_era = Self::current_era();
+			if current_era.is_none() {
+				return
+			}
+			current_era.unwrap()
+		};
 		let window_start = current_era.saturating_sub(T::BondingDuration::get());
 		let current_era_start_session_index = Self::eras_start_session_index(current_era)
 			.unwrap_or_else(|| {
