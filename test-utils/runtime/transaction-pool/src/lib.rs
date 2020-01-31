@@ -14,21 +14,40 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Test ChainApi
+//! Test utils for the transaction pool together with the test runtime.
+//!
+//! See [`TestApi`] for more information.
 
-use crate::*;
 use codec::Encode;
 use parking_lot::RwLock;
 use sp_runtime::{
 	generic::{self, BlockId},
 	traits::{BlakeTwo256, Hash as HashT},
-	transaction_validity::{TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction},
+	transaction_validity::{
+		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
+	},
 };
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use substrate_test_runtime_client::{
 	runtime::{Index, AccountId, Block, BlockNumber, Extrinsic, Hash, Header, Transfer},
 	AccountKeyring::{self, *},
 };
+
+/// Error type used by [`TestApi`].
+#[derive(Debug, derive_more::From, derive_more::Display)]
+pub struct Error(sp_transaction_pool::error::Error);
+
+impl sp_transaction_pool::error::IntoPoolError for Error {
+	fn into_pool_error(self) -> Result<sp_transaction_pool::error::Error, Self> {
+		Ok(self.0)
+	}
+}
+
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		Some(&self.0)
+	}
+}
 
 #[derive(Default)]
 struct ChainState {
@@ -47,7 +66,6 @@ pub struct TestApi {
 }
 
 impl TestApi {
-
 	/// Test Api with Alice nonce set initially.
 	pub fn with_alice_nonce(nonce: u64) -> Self {
 		let api = TestApi {
@@ -128,9 +146,9 @@ impl TestApi {
 impl sc_transaction_graph::ChainApi for TestApi {
 	type Block = Block;
 	type Hash = Hash;
-	type Error = error::Error;
-	type ValidationFuture = futures::future::Ready<error::Result<TransactionValidity>>;
-	type BodyFuture = futures::future::Ready<error::Result<Option<Vec<Extrinsic>>>>;
+	type Error = Error;
+	type ValidationFuture = futures::future::Ready<Result<TransactionValidity, Error>>;
+	type BodyFuture = futures::future::Ready<Result<Option<Vec<Extrinsic>>, Error>>;
 
 	fn validate_transaction(
 		&self,
@@ -149,7 +167,7 @@ impl sc_transaction_graph::ChainApi for TestApi {
 
 		if self.chain.read().invalid_hashes.contains(&self.hash_and_length(&uxt).0) {
 			return futures::future::ready(Ok(
-				Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(0)))
+				Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(0)).into())
 			))
 		}
 
@@ -169,14 +187,14 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	fn block_id_to_number(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<sc_transaction_graph::NumberFor<Self>>> {
+	) -> Result<Option<sc_transaction_graph::NumberFor<Self>>, Error> {
 		Ok(Some(number_of(at)))
 	}
 
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<sc_transaction_graph::BlockHash<Self>>> {
+	) -> Result<Option<sc_transaction_graph::BlockHash<Self>>, Error> {
 		Ok(match at {
 			generic::BlockId::Hash(x) => Some(x.clone()),
 			_ => Some(Default::default()),
