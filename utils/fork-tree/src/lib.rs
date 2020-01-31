@@ -264,7 +264,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 	{
 		// search for node starting from all roots
 		for root in self.roots.iter_mut() {
-			let node = root.find_node_mut_where(hash, number, is_descendent_of, predicate)?;
+			let node = root.find_node_where_mut(hash, number, is_descendent_of, predicate)?;
 
 			// found the node, early exit
 			if let FindOutcome::Found(node) = node {
