@@ -85,6 +85,7 @@ impl<T> hyper::rt::Executor<T> for Executor
 		async_std::task::spawn(future);
 	}
 }
+
 /// Initializes the metrics context, and starts an HTTP server
 /// to serve metrics.
 #[cfg(not(target_os = "unknown"))]
