@@ -5409,6 +5409,7 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-transaction-pool 2.0.0",
  "substrate-test-runtime-client 2.0.0",
+ "substrate-test-runtime-transaction-pool 2.0.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -5985,6 +5986,7 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-transaction-pool 2.0.0",
  "substrate-test-runtime-client 2.0.0",
+ "substrate-test-runtime-transaction-pool 2.0.0",
 ]
 
 [[package]]
@@ -7101,6 +7103,20 @@ dependencies = [
  "sp-runtime 2.0.0",
  "substrate-test-client 2.0.0",
  "substrate-test-runtime 2.0.0",
+]
+
+[[package]]
+name = "substrate-test-runtime-transaction-pool"
+version = "2.0.0"
+dependencies = [
+ "derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sc-transaction-graph 2.0.0",
+ "sp-runtime 2.0.0",
+ "sp-transaction-pool 2.0.0",
+ "substrate-test-runtime-client 2.0.0",
 ]
 
 [[package]]

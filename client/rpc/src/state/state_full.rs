@@ -36,7 +36,6 @@ use sp_core::{
 	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
 };
 use sp_version::RuntimeVersion;
-use sp_state_machine::ExecutionStrategy;
 use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion},
 };
