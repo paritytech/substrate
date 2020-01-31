@@ -423,6 +423,10 @@ parameter_types! {
 	pub const RentByteFee: Balance = 1 * DOLLARS;
 	pub const RentDepositOffset: Balance = 1000 * DOLLARS;
 	pub const SurchargeReward: Balance = 150 * DOLLARS;
+
+	/// These values mean that it is possible to store code up to approximatelly 250Kb.
+	pub const PutCodeBaseWeight: Weight = 10_000;
+	pub const PutCodePerByteWeight: Weight = 4;
 }
 
 impl pallet_contracts::Trait for Runtime {
@@ -452,6 +456,8 @@ impl pallet_contracts::Trait for Runtime {
 	type MaxDepth = pallet_contracts::DefaultMaxDepth;
 	type MaxValueSize = pallet_contracts::DefaultMaxValueSize;
 	type WeightToFee = LinearWeightToFee<WeightFeeCoefficient>;
+	type PutCodeBaseWeight = PutCodeBaseWeight;
+	type PutCodePerByteWeight = PutCodePerByteWeight;
 }
 
 impl pallet_sudo::Trait for Runtime {

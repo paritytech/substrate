@@ -148,6 +148,8 @@ parameter_types! {
 	pub const InstantiateBaseFee: u64 = 175;
 	pub const MaxDepth: u32 = 100;
 	pub const MaxValueSize: u32 = 16_384;
+	pub const PutCodeBaseWeight: Weight = 10_000;
+	pub const PutCodePerByteWeight: Weight = 4;
 }
 impl Trait for Test {
 	type Currency = Balances;
@@ -175,6 +177,8 @@ impl Trait for Test {
 	type InstantiateBaseFee = InstantiateBaseFee;
 	type MaxDepth = MaxDepth;
 	type MaxValueSize = MaxValueSize;
+	type PutCodeBaseWeight = PutCodeBaseWeight;
+	type PutCodePerByteWeight = PutCodePerByteWeight;
 	type WeightToFee = ();
 }
 

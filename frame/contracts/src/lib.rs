@@ -125,7 +125,7 @@ use frame_support::dispatch::{DispatchResult, Dispatchable};
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_error, decl_storage, storage::child,
 	parameter_types, IsSubType,
-	weights::{DispatchInfo, Weight},
+	weights::{DispatchInfo, Weight, FunctionOf, DispatchClass},
 	traits::{
 		Currency, Get, OnFreeBalanceZero, Time, Randomness, OnUnbalanced, ExistenceRequirement,
 		WithdrawReason, Imbalance,
@@ -430,6 +430,12 @@ pub trait Trait: frame_system::Trait {
 	/// The maximum size of a storage value in bytes.
 	type MaxValueSize: Get<u32>;
 
+	/// Weight consume by the `put_code` excluding per byte costs.
+	type PutCodeBaseWeight: Get<Weight>;
+
+	/// Weight consumed per one byte of code deployed in `put_code`.
+	type PutCodePerByteWeight: Get<Weight>;
+
 	/// Convert a weight value into a deductible fee based on the currency type.
 	type WeightToFee: Convert<Weight, BalanceOf<Self>>;
 }
@@ -572,6 +578,17 @@ decl_module! {
 
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
+		#[weight =
+			FunctionOf(
+				|args: (&Vec<u8>,)| {
+					let code_bytes = args.0.len() as u32;
+					code_bytes.saturating_mul(T::PutCodePerByteWeight::get())
+						.saturating_add(T::PutCodeBaseWeight::get())
+				},
+				DispatchClass::Normal,
+				true,
+			)
+		]
 		pub fn put_code(
 			origin,
 			code: Vec<u8>
