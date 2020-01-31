@@ -44,6 +44,8 @@ TO_RENAME=(
     "sp-sesssion sp-session"
     "sp-tracing-pool sp-transaction-pool"
     "sc-basic-authority sc-basic-authorship"
+    "sc-api sc-client-api"
+    "sc-database sc-client-db"
 
     # PRIMITIVES
     "substrate-application-crypto sp-application-crypto"
