@@ -603,6 +603,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
+	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
 	// Note that this could also be assigned to the top-level call enum. It is passed into the
 	// balances module directly and since `Trait: pallet_balances::Trait`, you could also use `T::Call`.
