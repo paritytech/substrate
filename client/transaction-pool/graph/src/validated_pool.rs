@@ -155,9 +155,9 @@ impl<B: ChainApi> ValidatedPool<B> {
 		{
 			debug!(
 				target: "txpool",
-				"Enforcing limits ({}/{}b ready, {}/{}b future",
-				ready_limit.count, ready_limit.total_bytes,
-				future_limit.count, future_limit.total_bytes,
+				"Enforcing limits ({}/{}kB ready, {}/{}kB future",
+				ready_limit.count, ready_limit.total_bytes / 1024,
+				future_limit.count, future_limit.total_bytes / 1024,
 			);
 
 			// clean up the pool
