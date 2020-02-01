@@ -386,7 +386,9 @@ decl_storage! {
 		pub Locks get(fn locks): map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// True if network has been upgraded to this version.
-		IsUpgraded: bool = true;
+		///
+		/// True for new networks.
+		IsUpgraded build(|_: &GenesisConfig<T, I>| true): bool;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
@@ -561,6 +563,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	// Upgrade from the pre-#4649 balances/vesting into the new balances.
 	pub fn do_upgrade() {
+		sp_runtime::print("Upgrading account balances...");
 		// First, migrate from old FreeBalance to new Account.
 		// We also move all locks across since only accounts with FreeBalance values have locks.
 		// FreeBalance: map T::AccountId => T::Balance
