@@ -298,7 +298,8 @@ pub fn testnet_genesis(
 			members: endowed_accounts[0..3].to_vec(),
 			pot: 0,
 			max_members: 999,
-		})
+		}),
+		pallet_vesting: Some(Default::default()),
 	}
 }
 
