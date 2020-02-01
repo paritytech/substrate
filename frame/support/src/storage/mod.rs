@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Stuff to do with the runtime's storage.
+//! Tools and abstraction on runtime storage.
 
 pub mod top;
 pub mod top_hashed;

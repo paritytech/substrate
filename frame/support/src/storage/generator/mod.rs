@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Generators are a set of trait that implement some abstraction over top trie.
+//! Set of trait that implement some abstraction over top trie.
 //!
 //! They are used by `decl_storage`.
 
