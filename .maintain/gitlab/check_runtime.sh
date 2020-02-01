@@ -3,7 +3,7 @@
 #
 # check for any changes in the node/src/runtime, frame/ and primitives/sr_* trees. if
 # there are any changes found, it should mark the PR breaksconsensus and
-# "auto-fail" the PR if there isn't a change in the runtime/src/lib.rs file 
+# "auto-fail" the PR if there isn't a change in the runtime/src/lib.rs file
 # that alters the version.
 
 set -e # fail on any error
@@ -40,7 +40,7 @@ if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
 	| grep -q -e '^bin/node/src/runtime' -e '^frame/' -e '^primitives/sr-'
 then
 	boldcat <<-EOT
-	
+
 	no changes to the runtime source code detected
 
 	EOT
@@ -67,9 +67,9 @@ then
 	github_label "B2-breaksapi"
 
 	boldcat <<-EOT
-		
+
 		changes to the runtime sources and changes in the spec version.
-	
+
 		spec_version: ${sub_spec_version} -> ${add_spec_version}
 
 	EOT
@@ -89,7 +89,7 @@ else
 	if [ "${add_impl_version}" != "${sub_impl_version}" ]
 	then
 		boldcat <<-EOT
-		
+
 		changes to the runtime sources and changes in the impl version.
 
 		impl_version: ${sub_impl_version} -> ${add_impl_version}
@@ -101,9 +101,8 @@ else
 
 	boldcat <<-EOT
 
-	wasm source files changed but not the spec/impl version and the runtime
-	binary blob. If changes made do not alter logic, just bump 'impl_version'.
-	If they do change logic, bump 'spec_version' and rebuild wasm.
+	wasm source files changed but not the spec/impl version. If changes made do not alter logic,
+	just bump 'impl_version'. If they do change logic, bump 'spec_version'.
 
 	source file directories:
 	- bin/node/src/runtime

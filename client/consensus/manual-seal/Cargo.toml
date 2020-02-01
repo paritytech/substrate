@@ -18,7 +18,7 @@ serde = { version = "1.0", features=["derive"] }
 
 sc-client = { path = "../../../client" }
 sc-client-api = { path = "../../../client/api" }
-sc-transaction-pool = { path = "../../transaction-pool", features = ["test-helpers"] }
+sc-transaction-pool = { path = "../../transaction-pool" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
 sp-consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 sp-inherents = { path = "../../../primitives/inherents" }
@@ -28,6 +28,7 @@ sp-transaction-pool = { path = "../../../primitives/transaction-pool" }
 [dev-dependencies]
 sc-basic-authorship = { path = "../../basic-authorship" }
 substrate-test-runtime-client = { path = "../../../test-utils/runtime/client" }
+substrate-test-runtime-transaction-pool = { path = "../../../test-utils/runtime/transaction-pool" }
 tokio = { version = "0.2", features = ["rt-core", "macros"] }
 env_logger = "0.7.0"
 tempfile = "3.1.0"
