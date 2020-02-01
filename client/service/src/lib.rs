@@ -341,7 +341,10 @@ impl<TBl: Unpin, TCl, TSc: Unpin, TNetStatus, TNet, TTxPool, TOc> Future for
 		}
 
 		while let Poll::Ready(Some((task_to_spawn, name))) = Pin::new(&mut this.to_spawn_rx).poll_next(cx) {
-			(this.task_executor)(Box::pin(futures_diagnose::diagnose(name, task_to_spawn)));
+			#[cfg(not(target_os = "unknown"))]
+			let task_to_spawn = futures_diagnose::diagnose(name, task_to_spawn);
+
+			(this.task_executor)(Box::pin(task_to_spawn));
 		}
 
 		// The service future never ends.

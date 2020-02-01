@@ -46,6 +46,7 @@ where
 
 	let transport = ExtTransport::new(transport);
 	let mut config = Configuration::default();
+	config.chain_spec = Some(chain_spec);
 	config.network.transport = sc_network::config::TransportConfig::Normal {
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
