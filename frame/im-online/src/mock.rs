@@ -63,6 +63,7 @@ impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager
 		)
 	}
 	fn end_session(_: SessionIndex) {}
+	fn start_session(_: SessionIndex) {}
 }
 
 /// An extrinsic type used for tests.
