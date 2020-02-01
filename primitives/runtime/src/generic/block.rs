@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use sp_std::prelude::*;
 use sp_core::RuntimeDebug;
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
+use crate::traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeMallocSizeOf};
 use crate::Justification;
 
 /// Something to identify a block.
@@ -73,10 +73,22 @@ pub struct Block<Header, Extrinsic: MaybeSerialize> {
 	pub extrinsics: Vec<Extrinsic>,
 }
 
+#[cfg(feature = "std")]
+impl<Header, Extrinsic> parity_util_mem::MallocSizeOf for Block<Header, Extrinsic>
+where
+	Header: parity_util_mem::MallocSizeOf,
+	Extrinsic: MaybeSerialize + parity_util_mem::MallocSizeOf,
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.header.size_of(ops) +
+			self.extrinsics.size_of(ops)
+	}
+}
+
 impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
-	Extrinsic: Member + Codec + traits::Extrinsic,
+	Extrinsic: Member + Codec + traits::Extrinsic + MaybeMallocSizeOf,
 {
 	type Extrinsic = Extrinsic;
 	type Header = Header;
