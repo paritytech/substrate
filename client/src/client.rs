@@ -235,13 +235,33 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
-	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> sp_blockchain::Result<Vec<StorageKey>> {
+	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey)
+		-> sp_blockchain::Result<Vec<StorageKey>>
+	{
 		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
 		Ok(keys)
 	}
 
+	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in that block.
+	pub fn storage_pairs(&self, id: &BlockId<Block>, key_prefix: &StorageKey)
+		-> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>
+	{
+		let state = self.state_at(id)?;
+		let keys = state
+			.keys(&key_prefix.0)
+			.into_iter()
+			.map(|k| {
+				let d = state.storage(&k).unwrap_or(None).unwrap_or(vec![]);
+				(StorageKey(k), StorageData(d))
+			})
+			.collect();
+		Ok(keys)
+	}
+
 	/// Given a `BlockId` and a key, return the value under the key in that block.
-	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<StorageData>> {
+	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey)
+		-> sp_blockchain::Result<Option<StorageData>>
+	{
 		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 			.map(StorageData)
@@ -250,7 +270,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Given a `BlockId` and a key, return the value under the hash in that block.
 	pub fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey)
-		-> sp_blockchain::Result<Option<Block::Hash>> {
+		-> sp_blockchain::Result<Option<Block::Hash>>
+	{
 		Ok(self.state_at(id)?
 			.storage_hash(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 		)

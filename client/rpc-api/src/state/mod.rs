@@ -43,6 +43,10 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_getKeys")]
 	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<StorageKey>>;
 
+	/// Returns the keys with prefix, leave empty to get all the keys
+	#[rpc(name = "state_getPairs")]
+	fn storage_pairs(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<(StorageKey, StorageData)>>;
+
 	/// Returns a storage entry at a specific block's state.
 	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]
 	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<StorageData>>;
