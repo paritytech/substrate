@@ -1964,6 +1964,7 @@ pub(crate) mod tests {
 		sc_client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
+	use hex_literal::hex;
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
@@ -3366,5 +3367,59 @@ pub(crate) mod tests {
 			client.key_changes(1, BlockId::Number(31), None, &StorageKey(vec![42])).unwrap(),
 			vec![(30, 0), (27, 0), (25, 0), (24, 0), (11, 0)]
 		);
+	}
+
+	#[test]
+	fn storage_keys_paged_prefix_and_start_key_works() {
+		let client = substrate_test_runtime_client::new();
+
+		let prefix = StorageKey(hex!("3a").to_vec());
+
+		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 50, &None)
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("3a636f6465").to_vec(), hex!("3a686561707061676573").to_vec()]);
+
+		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 50, &Some(StorageKey(hex!("3a636f6465").to_vec())))
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("3a686561707061676573").to_vec()]);
+
+		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 50, &Some(StorageKey(hex!("3a686561707061676573").to_vec())))
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, Vec::<Vec<u8>>::new());
+	}
+
+	#[test]
+	fn storage_keys_paged_count_works() {
+		let client = substrate_test_runtime_client::new();
+
+		let prefix = StorageKey(hex!("").to_vec());
+
+		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 2, &None)
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("0befda6e1ca4ef40219d588a727f1271").to_vec(), hex!("3a636f6465").to_vec()]);
+
+		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 3, &Some(StorageKey(hex!("3a636f6465").to_vec())))
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [
+			hex!("3a686561707061676573").to_vec(),
+			hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
+			hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
+		]);
+
+		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 1, &Some(StorageKey(hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec())))
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f").to_vec()]);
 	}
 }
