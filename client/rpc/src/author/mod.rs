@@ -112,6 +112,22 @@ where
 		).map(Into::into).map_err(|e| Error::Client(Box::new(e)))
 	}
 
+	fn has_session_keys(&self, session_keys: Bytes) -> Result<bool> {
+		let best_block_hash = self.client.chain_info().best_hash;
+		let keys = self.client.runtime_api().decode_session_keys(
+			&generic::BlockId::Hash(best_block_hash),
+			session_keys.to_vec(),
+		).map_err(|e| Error::Client(Box::new(e)))?
+			.ok_or_else(|| Error::InvalidSessionKeys)?;
+
+		Ok(self.keystore.read().has_keys(&keys))
+	}
+
+	fn has_key(&self, public_key: Bytes, key_type: String) -> Result<bool> {
+		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
+		Ok(self.keystore.read().has_keys(&[(public_key.to_vec(), key_type)]))
+	}
+
 	fn submit_extrinsic(&self, ext: Bytes) -> FutureResult<TxHash<P>> {
 		let xt = match Decode::decode(&mut &ext[..]) {
 			Ok(xt) => xt,

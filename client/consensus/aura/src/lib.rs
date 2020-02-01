@@ -65,7 +65,7 @@ use sp_timestamp::{
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
-    CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
+	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
 };
 
 use sc_keystore::KeyStorePtr;
@@ -290,7 +290,8 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 				storage_changes: Some(storage_changes),
 				finalized: false,
 				auxiliary: Vec::new(),
-				fork_choice: ForkChoiceStrategy::LongestChain,
+				intermediates: Default::default(),
+				fork_choice: Some(ForkChoiceStrategy::LongestChain),
 				allow_missing_state: false,
 				import_existing: false,
 			}
@@ -644,7 +645,8 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
-					fork_choice: ForkChoiceStrategy::LongestChain,
+					intermediates: Default::default(),
+					fork_choice: Some(ForkChoiceStrategy::LongestChain),
 					allow_missing_state: false,
 					import_existing: false,
 				};

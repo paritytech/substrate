@@ -201,6 +201,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 	where BalanceOf<T>: Send + Sync
 {
+	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
@@ -477,7 +478,7 @@ mod tests {
 
 			let len = 100;
 
-			// like a FreeOperational
+			// This is a completely free (and thus wholly insecure/DoS-ridden) transaction.
 			let operational_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
@@ -489,7 +490,7 @@ mod tests {
 					.is_ok()
 			);
 
-			// like a FreeNormal
+			// like a InsecureFreeNormal
 			let free_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Normal,

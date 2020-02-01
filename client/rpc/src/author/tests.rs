@@ -16,12 +16,12 @@
 
 use super::*;
 
-use std::sync::Arc;
+use std::{mem, sync::Arc};
 use assert_matches::assert_matches;
 use codec::Encode;
 use sp_core::{
-	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore}, traits::BareCryptoStorePtr, ed25519,
-	crypto::Pair,
+	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore},
+	traits::BareCryptoStorePtr, ed25519, crypto::{Pair, Public},
 };
 use rpc::futures::Stream as _;
 use substrate_test_runtime_client::{
@@ -56,8 +56,15 @@ struct TestSetup {
 impl Default for TestSetup {
 	fn default() -> Self {
 		let keystore = KeyStore::new();
-		let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
-		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let client = Arc::new(
+			substrate_test_runtime_client::TestClientBuilder::new()
+				.set_keystore(keystore.clone())
+				.build()
+		);
+		let pool = Arc::new(BasicPool::new(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone())),
+		));
 		TestSetup {
 			runtime: runtime::Runtime::new().expect("Failed to create runtime in test setup"),
 			client,
@@ -236,4 +243,60 @@ fn should_rotate_keys() {
 
 	assert_eq!(session_keys.ed25519, ed25519_key_pair.public().into());
 	assert_eq!(session_keys.sr25519, sr25519_key_pair.public().into());
+}
+
+#[test]
+fn test_has_session_keys() {
+	let setup = TestSetup::default();
+	let p = setup.author();
+
+	let non_existent_public_keys = TestSetup::default()
+		.author()
+		.rotate_keys()
+		.expect("Rotates the keys");
+
+	let public_keys = p.rotate_keys().expect("Rotates the keys");
+	let test_vectors = vec![
+		(public_keys, Ok(true)),
+		(vec![1, 2, 3].into(), Err(Error::InvalidSessionKeys)),
+		(non_existent_public_keys, Ok(false)),
+	];
+
+	for (keys, result) in test_vectors {
+		assert_eq!(
+			result.map_err(|e| mem::discriminant(&e)),
+			p.has_session_keys(keys).map_err(|e| mem::discriminant(&e)),
+		);
+	}
+}
+
+#[test]
+fn test_has_key() {
+	let setup = TestSetup::default();
+	let p = setup.author();
+
+	let suri = "//Alice";
+	let alice_key_pair = ed25519::Pair::from_string(suri, None).expect("Generates keypair");
+	p.insert_key(
+		String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
+		suri.to_string(),
+		alice_key_pair.public().0.to_vec().into(),
+	).expect("Insert key");
+	let bob_key_pair = ed25519::Pair::from_string("//Bob", None).expect("Generates keypair");
+
+	let test_vectors = vec![
+		(alice_key_pair.public().to_raw_vec().into(), ED25519, Ok(true)),
+		(alice_key_pair.public().to_raw_vec().into(), SR25519, Ok(false)),
+		(bob_key_pair.public().to_raw_vec().into(), ED25519, Ok(false)),
+	];
+
+	for (key, key_type, result) in test_vectors {
+		assert_eq!(
+			result.map_err(|e| mem::discriminant(&e)),
+			p.has_key(
+				key,
+				String::from_utf8(key_type.0.to_vec()).expect("Keytype is a valid string"),
+			).map_err(|e| mem::discriminant(&e)),
+		);
+	}
 }

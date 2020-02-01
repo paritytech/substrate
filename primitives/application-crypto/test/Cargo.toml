@@ -4,6 +4,7 @@ version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 description = "Integration tests for application-crypto"
+license = "GPL-3.0"
 publish = false
 
 [dependencies]

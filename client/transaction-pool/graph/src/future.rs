@@ -160,7 +160,7 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	}
 
 	/// Returns a list of known transactions
-	pub fn by_hash(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
+	pub fn by_hashes(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
 		hashes.iter().map(|h| self.waiting.get(h).map(|x| x.transaction.clone())).collect()
 	}
 

@@ -17,7 +17,7 @@
 //! Provides implementations for the runtime interface traits.
 
 use crate::{
-	RIType, Pointer, pass_by::{PassBy, Codec, Inner, PassByInner},
+	RIType, Pointer, pass_by::{PassBy, Codec, Inner, PassByInner, Enum},
 	util::{unpack_ptr_and_len, pack_ptr_and_len},
 };
 #[cfg(feature = "std")]
@@ -523,3 +523,11 @@ macro_rules! for_u128_i128 {
 
 for_u128_i128!(u128);
 for_u128_i128!(i128);
+
+impl PassBy for sp_wasm_interface::ValueType {
+	type PassBy = Enum<sp_wasm_interface::ValueType>;
+}
+
+impl PassBy for sp_wasm_interface::Value {
+	type PassBy = Codec<sp_wasm_interface::Value>;
+}

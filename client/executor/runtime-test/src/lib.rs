@@ -17,6 +17,8 @@ use sp_io::{
 use sp_runtime::{print, traits::{BlakeTwo256, Hash}};
 #[cfg(not(feature = "std"))]
 use sp_core::{ed25519, sr25519};
+#[cfg(not(feature = "std"))]
+use sp_sandbox::Value;
 
 extern "C" {
 	#[allow(dead_code)]
@@ -25,6 +27,11 @@ extern "C" {
 	#[allow(dead_code)]
 	fn yet_another_missing_external();
 }
+
+#[cfg(not(feature = "std"))]
+/// Mutable static variables should be always observed to have
+/// the initialized value at the start of a runtime call.
+static mut MUTABLE_STATIC: u64 = 32;
 
 sp_core::wasm_export_functions! {
 	fn test_calling_missing_external() {
@@ -128,8 +135,8 @@ sp_core::wasm_export_functions! {
 		execute_sandboxed(
 			&code,
 			&[
-				sp_sandbox::TypedValue::I32(0x12345678),
-				sp_sandbox::TypedValue::I64(0x1234567887654321),
+				Value::I32(0x12345678),
+				Value::I64(0x1234567887654321),
 			],
 		).is_ok()
 	}
@@ -138,10 +145,10 @@ sp_core::wasm_export_functions! {
 		let ok = match execute_sandboxed(
 			&code,
 			&[
-				sp_sandbox::TypedValue::I32(0x1336),
+				Value::I32(0x1336),
 			]
 		) {
-			Ok(sp_sandbox::ReturnValue::Value(sp_sandbox::TypedValue::I32(0x1337))) => true,
+			Ok(sp_sandbox::ReturnValue::Value(Value::I32(0x1337))) => true,
 			_ => false,
 		};
 
@@ -158,6 +165,22 @@ sp_core::wasm_export_functions! {
 		};
 
 		code
+	}
+
+
+	fn test_sandbox_get_global_val(code: Vec<u8>) -> i64 {
+		let env_builder = sp_sandbox::EnvironmentDefinitionBuilder::new();
+		let instance = if let Ok(i) = sp_sandbox::Instance::new(&code, &env_builder, &mut ()) {
+			i
+		} else {
+			return 20;
+		};
+
+		match instance.get_global_val("test_global") {
+			Some(sp_sandbox::Value::I64(val)) => val,
+			None => 30,
+			val => 40,
+		}
 	}
 
 	fn test_offchain_local_storage() -> bool {
@@ -217,12 +240,47 @@ sp_core::wasm_export_functions! {
 	fn test_sp_allocator_compiles() {
 		sp_allocator::FreeingBumpHeapAllocator::new(0);
 	}
+
+	fn returns_mutable_static() -> u64 {
+		unsafe {
+			MUTABLE_STATIC += 1;
+			MUTABLE_STATIC
+		}
+	}
+
+	fn allocates_huge_stack_array(trap: bool) -> Vec<u8> {
+		// Allocate a stack frame that is approx. 75% of the stack (assuming it is 1MB).
+		// This will just decrease (stacks in wasm32-u-u grow downwards) the stack
+		// pointer. This won't trap on the current compilers.
+		let mut data = [0u8; 1024 * 768];
+
+		// Then make sure we actually write something to it.
+		//
+		// If:
+		// 1. the stack area is placed at the beginning of the linear memory space, and
+		// 2. the stack pointer points to out-of-bounds area, and
+		// 3. a write is performed around the current stack pointer.
+		//
+		// then a trap should happen.
+		//
+		for (i, v) in data.iter_mut().enumerate() {
+			*v = i as u8; // deliberate truncation
+		}
+
+		if trap {
+			// There is a small chance of this to be pulled up in theory. In practice
+			// the probability of that is rather low.
+			panic!()
+		}
+
+		data.to_vec()
+	}
  }
 
 #[cfg(not(feature = "std"))]
 fn execute_sandboxed(
 	code: &[u8],
-	args: &[sp_sandbox::TypedValue],
+	args: &[Value],
 ) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
 	struct State {
 		counter: u32,
@@ -230,7 +288,7 @@ fn execute_sandboxed(
 
 	fn env_assert(
 		_e: &mut State,
-		args: &[sp_sandbox::TypedValue],
+		args: &[Value],
 	) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
 		if args.len() != 1 {
 			return Err(sp_sandbox::HostError);
@@ -244,14 +302,14 @@ fn execute_sandboxed(
 	}
 	fn env_inc_counter(
 		e: &mut State,
-		args: &[sp_sandbox::TypedValue],
+		args: &[Value],
 	) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
 		if args.len() != 1 {
 			return Err(sp_sandbox::HostError);
 		}
 		let inc_by = args[0].as_i32().ok_or_else(|| sp_sandbox::HostError)?;
 		e.counter += inc_by as u32;
-		Ok(sp_sandbox::ReturnValue::Value(sp_sandbox::TypedValue::I32(e.counter as i32)))
+		Ok(sp_sandbox::ReturnValue::Value(Value::I32(e.counter as i32)))
 	}
 
 	let mut state = State { counter: 0 };

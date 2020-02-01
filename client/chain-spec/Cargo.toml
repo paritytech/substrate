@@ -3,6 +3,7 @@ name = "sc-chain-spec"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 sc-chain-spec-derive = { version = "2.0.0", path = "./derive" }

@@ -73,8 +73,8 @@ fn bench_division(c: &mut Criterion) {
 }
 
 criterion_group!{
-    name = benches;
-    config = Criterion::default();
-    targets = bench_addition, bench_subtraction, bench_multiplication, bench_division
+	name = benches;
+	config = Criterion::default();
+	targets = bench_addition, bench_subtraction, bench_multiplication, bench_division
 }
 criterion_main!(benches);
