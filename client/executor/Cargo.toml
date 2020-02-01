@@ -3,6 +3,7 @@ name = "sc-executor"
 version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 derive_more = "0.99.2"

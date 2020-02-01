@@ -30,13 +30,12 @@ use sp_blockchain::{
 	Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata
 };
 use sc_client::{
-	Client, CallExecutor, BlockchainEvents,
+	Client, CallExecutor, BlockchainEvents
 };
 use sp_core::{
 	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
 };
 use sp_version::RuntimeVersion;
-use sp_state_machine::ExecutionStrategy;
 use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion},
 };
@@ -213,15 +212,14 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 	}
 }
 
-impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, RA>
-	where
-		Block: BlockT + 'static,
-		B: Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
-		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-			Metadata<Block, Error = sp_blockchain::Error>,
+impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, RA> where
+	Block: BlockT + 'static,
+	B: Backend<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static + Clone,
+	RA: Send + Sync + 'static,
+	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
+		Metadata<Block, Error = sp_blockchain::Error>,
 {
 	fn call(
 		&self,
@@ -229,21 +227,20 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		method: String,
 		call_data: Bytes,
 	) -> FutureResult<Bytes> {
-		Box::new(result(
-			self.block_or_best(block)
-				.and_then(|block|
-					self
-					.client
-					.executor()
-					.call(
-						&BlockId::Hash(block),
-						&method,
-						&*call_data,
-						ExecutionStrategy::NativeElseWasm,
-						None,
-					)
-					.map(Into::into))
-				.map_err(client_err)))
+		let r = self.block_or_best(block)
+			.and_then(|block| self
+				.client
+				.executor()
+				.call(
+					&BlockId::Hash(block),
+					&method,
+					&*call_data,
+					self.client.execution_extensions().strategies().other,
+					None,
+				)
+				.map(Into::into)
+			).map_err(client_err);
+		Box::new(result(r))
 	}
 
 	fn storage_keys(

@@ -392,7 +392,7 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 
 	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
 
-	fn transaction(&self, h: &Hash) -> Option<Extrinsic> { None }
+	fn transaction(&self, _h: &Hash) -> Option<Extrinsic> { None }
 }
 
 pub trait SpecializationFactory {

@@ -23,7 +23,7 @@ use wasmi::{
 	RuntimeArgs, RuntimeValue, Signature, TableDescriptor, TableRef, Trap, TrapKind
 };
 use wasmi::memory_units::Pages;
-use super::{Error, TypedValue, ReturnValue, HostFuncType, HostError};
+use super::{Error, Value, ReturnValue, HostFuncType, HostError};
 
 #[derive(Clone)]
 pub struct Memory {
@@ -88,27 +88,7 @@ impl fmt::Display for DummyHostError {
 	}
 }
 
-impl wasmi::HostError for DummyHostError {
-}
-
-fn from_runtime_value(v: RuntimeValue) -> TypedValue {
-	match v {
-		RuntimeValue::I32(v) => TypedValue::I32(v),
-		RuntimeValue::I64(v) => TypedValue::I64(v),
-		RuntimeValue::F32(v) => TypedValue::F32(v.to_bits() as i32),
-		RuntimeValue::F64(v) => TypedValue::F64(v.to_bits() as i64),
-	}
-}
-
-fn to_runtime_value(v: TypedValue) -> RuntimeValue {
-	use wasmi::nan_preserving_float::{F32, F64};
-	match v {
-		TypedValue::I32(v) => RuntimeValue::I32(v as i32),
-		TypedValue::I64(v) => RuntimeValue::I64(v as i64),
-		TypedValue::F32(v_bits) => RuntimeValue::F32(F32::from_bits(v_bits as u32)),
-		TypedValue::F64(v_bits) => RuntimeValue::F64(F64::from_bits(v_bits as u64)),
-	}
-}
+impl wasmi::HostError for DummyHostError {}
 
 struct GuestExternals<'a, T: 'a> {
 	state: &'a mut T,
@@ -124,13 +104,13 @@ impl<'a, T> Externals for GuestExternals<'a, T> {
 		let args = args.as_ref()
 			.iter()
 			.cloned()
-			.map(from_runtime_value)
+			.map(Into::into)
 			.collect::<Vec<_>>();
 
 		let result = (self.defined_host_functions.funcs[index])(self.state, &args);
 		match result {
 			Ok(value) => Ok(match value {
-				ReturnValue::Value(v) => Some(to_runtime_value(v)),
+				ReturnValue::Value(v) => Some(v.into()),
 				ReturnValue::Unit => None,
 			}),
 			Err(HostError) => Err(TrapKind::Host(Box::new(DummyHostError)).into()),
@@ -253,7 +233,7 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 pub struct Instance<T> {
 	instance: ModuleRef,
 	defined_host_functions: DefinedHostFunctions<T>,
-	_marker: ::std::marker::PhantomData<T>,
+	_marker: std::marker::PhantomData<T>,
 }
 
 impl<T> Instance<T> {
@@ -281,14 +261,14 @@ impl<T> Instance<T> {
 		Ok(Instance {
 			instance,
 			defined_host_functions,
-			_marker: ::std::marker::PhantomData::<T>,
+			_marker: std::marker::PhantomData::<T>,
 		})
 	}
 
 	pub fn invoke(
 		&mut self,
 		name: &str,
-		args: &[TypedValue],
+		args: &[Value],
 		state: &mut T,
 	) -> Result<ReturnValue, Error> {
 		let args = args.iter().cloned().map(Into::into).collect::<Vec<_>>();
@@ -306,20 +286,29 @@ impl<T> Instance<T> {
 			Err(_err) => Err(Error::Execution),
 		}
 	}
+
+	pub fn get_global_val(&self, name: &str) -> Option<Value> {
+		let global = self.instance
+			.export_by_name(name)?
+			.as_global()?
+			.get();
+
+		Some(global.into())
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use wabt;
-	use crate::{Error, TypedValue, ReturnValue, HostError, EnvironmentDefinitionBuilder, Instance};
+	use crate::{Error, Value, ReturnValue, HostError, EnvironmentDefinitionBuilder, Instance};
 	use assert_matches::assert_matches;
 
-	fn execute_sandboxed(code: &[u8], args: &[TypedValue]) -> Result<ReturnValue, HostError> {
+	fn execute_sandboxed(code: &[u8], args: &[Value]) -> Result<ReturnValue, HostError> {
 		struct State {
 			counter: u32,
 		}
 
-		fn env_assert(_e: &mut State, args: &[TypedValue]) -> Result<ReturnValue, HostError> {
+		fn env_assert(_e: &mut State, args: &[Value]) -> Result<ReturnValue, HostError> {
 			if args.len() != 1 {
 				return Err(HostError);
 			}
@@ -330,16 +319,16 @@ mod tests {
 				Err(HostError)
 			}
 		}
-		fn env_inc_counter(e: &mut State, args: &[TypedValue]) -> Result<ReturnValue, HostError> {
+		fn env_inc_counter(e: &mut State, args: &[Value]) -> Result<ReturnValue, HostError> {
 			if args.len() != 1 {
 				return Err(HostError);
 			}
 			let inc_by = args[0].as_i32().ok_or_else(|| HostError)?;
 			e.counter += inc_by as u32;
-			Ok(ReturnValue::Value(TypedValue::I32(e.counter as i32)))
+			Ok(ReturnValue::Value(Value::I32(e.counter as i32)))
 		}
 		/// Function that takes one argument of any type and returns that value.
-		fn env_polymorphic_id(_e: &mut State, args: &[TypedValue]) -> Result<ReturnValue, HostError> {
+		fn env_polymorphic_id(_e: &mut State, args: &[Value]) -> Result<ReturnValue, HostError> {
 			if args.len() != 1 {
 				return Err(HostError);
 			}
@@ -387,8 +376,8 @@ mod tests {
 		let result = execute_sandboxed(
 			&code,
 			&[
-				TypedValue::I32(0x12345678),
-				TypedValue::I64(0x1234567887654321),
+				Value::I32(0x12345678),
+				Value::I64(0x1234567887654321),
 			]
 		);
 		assert!(result.is_ok());
@@ -410,10 +399,10 @@ mod tests {
 		let return_val = execute_sandboxed(
 			&code,
 			&[
-				TypedValue::I32(0x1336),
+				Value::I32(0x1336),
 			]
 		).unwrap();
-		assert_eq!(return_val, ReturnValue::Value(TypedValue::I32(0x1337)));
+		assert_eq!(return_val, ReturnValue::Value(Value::I32(0x1337)));
 	}
 
 	#[test]
@@ -453,8 +442,8 @@ mod tests {
 
 	#[test]
 	fn cant_return_unmatching_type() {
-		fn env_returns_i32(_e: &mut (), _args: &[TypedValue]) -> Result<ReturnValue, HostError> {
-			Ok(ReturnValue::Value(TypedValue::I32(42)))
+		fn env_returns_i32(_e: &mut (), _args: &[Value]) -> Result<ReturnValue, HostError> {
+			Ok(ReturnValue::Value(Value::I32(42)))
 		}
 
 		let mut env_builder = EnvironmentDefinitionBuilder::new();

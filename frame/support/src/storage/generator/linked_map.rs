@@ -469,6 +469,9 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// This function must be used with care, before being updated the storage still contains the
 	/// old type, thus other calls (such as `get`) will fail at decoding it.
 	///
+	/// The translation happens in-place, new keys are inserted at the same time as old keys are
+	/// removed, thus new keys must not collide with still remaining old keys.
+	///
 	/// # Usage
 	///
 	/// This would typically be called inside the module implementation of on_initialize, while
