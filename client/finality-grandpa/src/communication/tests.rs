@@ -16,12 +16,11 @@
 
 //! Tests for the communication portion of the GRANDPA crate.
 
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 use futures::prelude::*;
 use sc_network::{Event as NetworkEvent, PeerId, config::Roles};
 use sc_network_test::{Block, Hash};
 use sc_network_gossip::Validator;
-use tokio::runtime::current_thread;
 use std::sync::Arc;
 use sp_keyring::Ed25519Keyring;
 use parity_scale_codec::Encode;
@@ -32,7 +31,8 @@ use sp_finality_grandpa::{AuthorityList, GRANDPA_ENGINE_ID};
 use super::gossip::{self, GossipValidator};
 use super::{AuthorityId, VoterSet, Round, SetId};
 
-enum Event {
+#[derive(Debug)]
+pub(crate) enum Event {
 	EventStream(mpsc::UnboundedSender<NetworkEvent>),
 	WriteNotification(sc_network::PeerId, Vec<u8>),
 	Report(sc_network::PeerId, sc_network::ReputationChange),
@@ -40,15 +40,23 @@ enum Event {
 }
 
 #[derive(Clone)]
-struct TestNetwork {
+pub(crate) struct TestNetwork {
 	sender: mpsc::UnboundedSender<Event>,
 }
 
-impl sc_network_gossip::Network<Block> for TestNetwork {
-	fn event_stream(&self) -> Box<dyn futures::Stream<Item = NetworkEvent, Error = ()> + Send> {
+impl TestNetwork {
+	fn event_stream_03(&self) -> Pin<Box<dyn futures::Stream<Item = NetworkEvent> + Send>> {
 		let (tx, rx) = mpsc::unbounded();
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
-		Box::new(rx)
+		Box::pin(rx)
+	}
+}
+
+impl sc_network_gossip::Network<Block> for TestNetwork {
+	fn event_stream(&self) -> Box<dyn futures01::Stream<Item = NetworkEvent, Error = ()> + Send> {
+		Box::new(
+			self.event_stream_03().map(Ok::<_, ()>).compat()
+		)
 	}
 
 	fn report_peer(&self, who: sc_network::PeerId, cost_benefit: sc_network::ReputationChange) {
@@ -94,26 +102,34 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 	fn send_topic(&mut self, _: &sc_network::PeerId, _: Hash, _: bool) { }
 }
 
-struct Tester {
-	net_handle: super::NetworkBridge<Block, TestNetwork>,
+pub(crate) struct Tester {
+	pub(crate) net_handle: super::NetworkBridge<Block, TestNetwork>,
 	gossip_validator: Arc<GossipValidator<Block>>,
-	events: mpsc::UnboundedReceiver<Event>,
+	pub(crate) events: mpsc::UnboundedReceiver<Event>,
 }
 
 impl Tester {
-	fn filter_network_events<F>(self, mut pred: F) -> impl Future<Item=Self,Error=()>
+	fn filter_network_events<F>(self, mut pred: F) -> impl Future<Output = Self>
 		where F: FnMut(Event) -> bool
 	{
 		let mut s = Some(self);
-		futures::future::poll_fn(move || loop {
-			match s.as_mut().unwrap().events.poll().expect("concluded early") {
-				Async::Ready(None) => panic!("concluded early"),
-				Async::Ready(Some(item)) => if pred(item) {
-					return Ok(Async::Ready(s.take().unwrap()))
+		futures::future::poll_fn(move |cx| loop {
+			match Stream::poll_next(Pin::new(&mut s.as_mut().unwrap().events), cx) {
+				Poll::Ready(None) => panic!("concluded early"),
+				Poll::Ready(Some(item)) => if pred(item) {
+					return Poll::Ready(s.take().unwrap())
 				},
-				Async::NotReady => return Ok(Async::NotReady),
+				Poll::Pending => return Poll::Pending,
 			}
 		})
+	}
+
+	pub(crate) fn trigger_gossip_validator_reputation_change(&self, p: &PeerId) {
+		self.gossip_validator.validate(
+			&mut crate::communication::tests::NoopContext,
+			p,
+			&vec![1, 2, 3],
+		);
 	}
 }
 
@@ -149,8 +165,8 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 }
 
 // needs to run in a tokio runtime.
-fn make_test_network(executor: &impl futures03::task::Spawn) -> (
-	impl Future<Item=Tester,Error=()>,
+pub(crate) fn make_test_network(executor: &impl futures::task::Spawn) -> (
+	impl Future<Output = Tester>,
 	TestNetwork,
 ) {
 	let (tx, rx) = mpsc::unbounded();
@@ -159,7 +175,7 @@ fn make_test_network(executor: &impl futures03::task::Spawn) -> (
 	#[derive(Clone)]
 	struct Exit;
 
-	impl futures03::Future for Exit {
+	impl futures::Future for Exit {
 		type Output = ();
 
 		fn poll(self: Pin<&mut Self>, _: &mut Context) -> Poll<()> {
@@ -172,11 +188,10 @@ fn make_test_network(executor: &impl futures03::task::Spawn) -> (
 		config(),
 		voter_set_state(),
 		executor,
-		Exit,
 	);
 
 	(
-		futures::future::ok(Tester {
+		futures::future::ready(Tester {
 			gossip_validator: bridge.validator.clone(),
 			net_handle: bridge,
 			events: rx,
@@ -246,14 +261,14 @@ fn good_commit_leads_to_relay() {
 	let id = sc_network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
-	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
+	let threads_pool = futures::executor::ThreadPool::new().unwrap();
 	let test = make_test_network(&threads_pool).0
-		.and_then(move |tester| {
+		.then(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
-			Ok((tester, id))
+			future::ready((tester, id))
 		})
-		.and_then(move |(tester, id)| {
+		.then(move |(tester, id)| {
 			// start round, dispatch commit, and wait for broadcast.
 			let (commits_in, _) = tester.net_handle.global_communication(SetId(1), voter_set, false);
 
@@ -306,12 +321,11 @@ fn good_commit_leads_to_relay() {
 						},
 						_ => panic!("commit expected"),
 					}
-				})
-				.map_err(|_| panic!("could not process commit"));
+				});
 
 			// once the message is sent and commit is "handled" we should have
 			// a repropagation event coming from the network.
-			send_message.join(handle_commit).and_then(move |(tester, ())| {
+			future::join(send_message, handle_commit).then(move |(tester, ())| {
 				tester.filter_network_events(move |event| match event {
 					Event::WriteNotification(_, data) => {
 						data == encoded_commit
@@ -319,11 +333,10 @@ fn good_commit_leads_to_relay() {
 					_ => false,
 				})
 			})
-				.map_err(|_| panic!("could not watch for gossip message"))
 				.map(|_| ())
 		});
 
-	current_thread::Runtime::new().unwrap().block_on(test).unwrap();
+	futures::executor::block_on(test);
 }
 
 #[test]
@@ -372,14 +385,14 @@ fn bad_commit_leads_to_report() {
 	let id = sc_network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
-	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
+	let threads_pool = futures::executor::ThreadPool::new().unwrap();
 	let test = make_test_network(&threads_pool).0
-		.and_then(move |tester| {
+		.map(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
-			Ok((tester, id))
+			(tester, id)
 		})
-		.and_then(move |(tester, id)| {
+		.then(move |(tester, id)| {
 			// start round, dispatch commit, and wait for broadcast.
 			let (commits_in, _) = tester.net_handle.global_communication(SetId(1), voter_set, false);
 
@@ -423,12 +436,11 @@ fn bad_commit_leads_to_report() {
 						},
 						_ => panic!("commit expected"),
 					}
-				})
-				.map_err(|_| panic!("could not process commit"));
+				});
 
 			// once the message is sent and commit is "handled" we should have
 			// a report event coming from the network.
-			send_message.join(handle_commit).and_then(move |(tester, ())| {
+			future::join(send_message, handle_commit).then(move |(tester, ())| {
 				tester.filter_network_events(move |event| match event {
 					Event::Report(who, cost_benefit) => {
 						who == id && cost_benefit == super::cost::INVALID_COMMIT
@@ -436,26 +448,25 @@ fn bad_commit_leads_to_report() {
 					_ => false,
 				})
 			})
-				.map_err(|_| panic!("could not watch for peer report"))
 				.map(|_| ())
 		});
 
-	current_thread::Runtime::new().unwrap().block_on(test).unwrap();
+	futures::executor::block_on(test);
 }
 
 #[test]
 fn peer_with_higher_view_leads_to_catch_up_request() {
 	let id = sc_network::PeerId::random();
 
-	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
+	let threads_pool = futures::executor::ThreadPool::new().unwrap();
 	let (tester, mut net) = make_test_network(&threads_pool);
 	let test = tester
-		.and_then(move |tester| {
+		.map(move |tester| {
 			// register a peer with authority role.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::AUTHORITY);
-			Ok((tester, id))
+			((tester, id))
 		})
-		.and_then(move |(tester, id)| {
+		.then(move |(tester, id)| {
 			// send neighbor message at round 10 and height 50
 			let result = tester.gossip_validator.validate(
 				&mut net,
@@ -495,9 +506,8 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 				},
 				_ => false,
 			})
-				.map_err(|_| panic!("could not watch for peer send message"))
 				.map(|_| ())
 		});
 
-	current_thread::Runtime::new().unwrap().block_on(test).unwrap();
+	futures::executor::block_on(test);
 }

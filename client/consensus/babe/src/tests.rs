@@ -72,23 +72,24 @@ struct DummyProposer {
 }
 
 impl Environment<TestBlock> for DummyFactory {
+	type CreateProposer = future::Ready<Result<DummyProposer, Error>>;
 	type Proposer = DummyProposer;
 	type Error = Error;
 
 	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
-		-> Result<DummyProposer, Error>
+		-> Self::CreateProposer
 	{
 
 		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
 			.expect("parent header has a pre-digest")
 			.slot_number();
 
-		Ok(DummyProposer {
+		future::ready(Ok(DummyProposer {
 			factory: self.clone(),
 			parent_hash: parent_header.hash(),
 			parent_number: *parent_header.number(),
 			parent_slot,
-		})
+		}))
 	}
 }
 
@@ -419,7 +420,7 @@ fn run_one_test(
 			babe_link: data.link.clone(),
 			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
-		}).expect("Starts babe"));
+		}).expect("Starts babe").unit_error().compat());
 	}
 
 	runtime.spawn(futures01::future::poll_fn(move || {
@@ -428,7 +429,7 @@ fn run_one_test(
 	}));
 
 	runtime.block_on(future::join_all(import_notifications)
-		.map(|_| Ok::<(), ()>(())).compat()).unwrap();
+		.unit_error().compat()).unwrap();
 }
 
 #[test]
@@ -547,7 +548,7 @@ fn propose_and_import_block<Transaction>(
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
 ) -> sp_core::H256 {
-	let mut proposer = proposer_factory.init(parent).unwrap();
+	let mut proposer = futures::executor::block_on(proposer_factory.init(parent)).unwrap();
 
 	let slot_number = slot_number.unwrap_or_else(|| {
 		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
@@ -593,7 +594,8 @@ fn propose_and_import_block<Transaction>(
 			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		},

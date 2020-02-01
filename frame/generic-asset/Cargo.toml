@@ -3,6 +3,7 @@ name = "pallet-generic-asset"
 version = "2.0.0"
 authors = ["Centrality Developers <support@centrality.ai>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true }

@@ -30,7 +30,6 @@ fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 	let mut ext_ext = ext.ext();
 
 	sc_executor::call_in_wasm::<
-		_,
 		(
 			HF,
 			sp_io::SubstrateHostFunctions,
@@ -108,4 +107,9 @@ fn test_invalid_utf8_data_should_return_an_error() {
 #[test]
 fn test_overwrite_native_function_implementation() {
 	call_wasm_method::<HostFunctions>("test_overwrite_native_function_implementation");
+}
+
+#[test]
+fn test_u128_i128_as_parameter_and_return_value() {
+	call_wasm_method::<HostFunctions>("test_u128_i128_as_parameter_and_return_value");
 }

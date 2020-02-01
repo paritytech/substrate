@@ -21,12 +21,12 @@ use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 
 use sp_runtime::{
-    traits::{
-        Block as BlockT, Header as HeaderT, NumberFor,
-    },
-    generic::BlockId
+	traits::{
+		Block as BlockT, Header as HeaderT, NumberFor,
+	},
+	generic::BlockId
 };
-use sp_core::ChangesTrieConfiguration;
+use sp_core::ChangesTrieConfigurationRange;
 use sp_state_machine::StorageProof;
 use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
@@ -96,8 +96,8 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 /// Remote key changes read request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoteChangesRequest<Header: HeaderT> {
-	/// Changes trie configuration.
-	pub changes_trie_config: ChangesTrieConfiguration,
+	/// All changes trie configurations that are valid within [first_block; last_block].
+	pub changes_trie_configs: Vec<ChangesTrieConfigurationRange<Header::Number, Header::Hash>>,
 	/// Query changes from range of blocks, starting (and including) with this hash...
 	pub first_block: (Header::Number, Header::Hash),
 	/// ...ending (and including) with this hash. Should come after first_block and
@@ -307,8 +307,8 @@ pub trait RemoteBlockchain<Block: BlockT>: Send + Sync {
 pub mod tests {
 	use futures::future::Ready;
 	use parking_lot::Mutex;
-    use sp_blockchain::Error as ClientError;
-    use sp_test_primitives::{Block, Header, Extrinsic};
+	use sp_blockchain::Error as ClientError;
+	use sp_test_primitives::{Block, Header, Extrinsic};
 	use super::*;
 
 	pub type OkCallFetcher = Mutex<Vec<u8>>;

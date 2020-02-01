@@ -53,8 +53,9 @@
 //! included in the newly-finalized chain.
 
 use futures::prelude::*;
-use log::{debug, error, info};
-use futures::sync::mpsc;
+use futures::StreamExt;
+use log::{debug, info};
+use futures::channel::mpsc;
 use sc_client_api::{BlockchainEvents, CallExecutor, backend::{AuxStore, Backend}, ExecutionStrategy};
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 use sc_client::Client;
@@ -65,7 +66,7 @@ use sc_keystore::KeyStorePtr;
 use sp_inherents::InherentDataProviders;
 use sp_consensus::SelectChain;
 use sp_core::Pair;
-use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
+use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use serde_json;
 
 use sp_finality_tracker;
@@ -76,6 +77,8 @@ use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
 use std::{fmt, io};
 use std::sync::Arc;
 use std::time::Duration;
+use std::pin::Pin;
+use std::task::{Poll, Context};
 
 mod authorities;
 mod aux_schema;
@@ -95,7 +98,7 @@ pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
 pub use observer::run_grandpa_observer;
 pub use voting_rule::{
-	BeforeBestBlock, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
+	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
 
 use aux_schema::PersistentData;
@@ -163,15 +166,6 @@ type CommunicationIn<Block> = finality_grandpa::voter::CommunicationIn<
 /// to some type (e.g. `H256`) when the compiler can't do the inference.
 type CommunicationInH<Block, H> = finality_grandpa::voter::CommunicationIn<
 	H,
-	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
->;
-
-/// A global communication sink for commits. Not exposed publicly, used
-/// internally to simplify types in the communication layer.
-type CommunicationOut<Block> = finality_grandpa::voter::CommunicationOut<
-	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
 	AuthorityId,
@@ -371,7 +365,7 @@ pub trait GenesisAuthoritySetProvider<Block: BlockT> {
 impl<B, E, Block: BlockT, RA> GenesisAuthoritySetProvider<Block> for Client<B, E, Block, RA>
 	where
 		B: Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
+		E: CallExecutor<Block> + Send + Sync,
 		RA: Send + Sync,
 {
 	fn get(&self) -> Result<AuthorityList, ClientError> {
@@ -407,7 +401,7 @@ pub fn block_import<B, E, Block: BlockT, RA, SC>(
 	), ClientError>
 where
 	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
+	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
 	SC: SelectChain<Block>,
 	Client<B, E, Block, RA>: AuxStore,
@@ -455,13 +449,12 @@ fn global_communication<Block: BlockT, B, E, N, RA>(
 	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
-		Item = CommunicationInH<Block, Block::Hash>,
-		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
+		Item = Result<CommunicationInH<Block, Block::Hash>, CommandOrError<Block::Hash, NumberFor<Block>>>,
 	>,
 	impl Sink<
-		SinkItem = CommunicationOutH<Block, Block::Hash>,
-		SinkError = CommandOrError<Block::Hash, NumberFor<Block>>,
-	>,
+		CommunicationOutH<Block, Block::Hash>,
+		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
+	> + Unpin,
 ) where
 	B: Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
@@ -535,7 +528,7 @@ pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X, Sp> {
 	/// Handle to a future that will resolve on exit.
 	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
-	pub telemetry_on_connect: Option<mpsc::UnboundedReceiver<()>>,
+	pub telemetry_on_connect: Option<futures::channel::mpsc::UnboundedReceiver<()>>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
 	/// How to spawn background tasks.
@@ -546,7 +539,7 @@ pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X, Sp> {
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
-) -> sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -556,9 +549,9 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
-	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
+	X: futures::Future<Output=()> + Clone + Send + Unpin + 'static,
 	Client<B, E, Block, RA>: AuxStore,
-	Sp: futures03::task::Spawn + 'static,
+	Sp: futures::task::Spawn + 'static,
 {
 	let GrandpaParams {
 		config,
@@ -583,7 +576,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 		config.clone(),
 		persistent_data.set_state.clone(),
 		&executor,
-		on_exit.clone(),
 	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
@@ -608,12 +600,11 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 							.expect("authorities is always at least an empty vector; elements are always of type string")
 					}
 				);
-				Ok(())
-			})
-			.then(|_| -> Result<(), ()> { Ok(()) });
-		futures::future::Either::A(events)
+				future::ready(())
+			});
+		future::Either::Left(events)
 	} else {
-		futures::future::Either::B(futures::future::empty())
+		future::Either::Right(future::pending())
 	};
 
 	let voter_work = VoterWork::new(
@@ -627,33 +618,28 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	);
 
 	let voter_work = voter_work
-		.map(|_| ())
-		.map_err(|e| {
-			error!("GRANDPA Voter failed: {:?}", e);
-			telemetry!(CONSENSUS_WARN; "afg.voter_failed"; "e" => ?e);
-		});
+		.map(|_| ());
 
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
 	let telemetry_task = telemetry_task
-		.then(|_| futures::future::empty::<(), ()>());
+		.then(|_| future::pending::<()>());
 
-	use futures03::{FutureExt, TryFutureExt};
-
-	Ok(voter_work.select(on_exit.map(Ok).compat()).select2(telemetry_task).then(|_| Ok(())))
+	Ok(future::select(future::select(voter_work, on_exit), telemetry_task).map(drop))
 }
 
 /// Future that powers the voter.
 #[must_use]
 struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
-	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
+	voter: Pin<Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> + Send>>,
 	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	network: NetworkBridge<Block, N>,
 }
 
 impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT,
- 	N: NetworkT<Block> + Sync,
+	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -679,7 +665,7 @@ where
 			voting_rule,
 			voters: Arc::new(voters),
 			config,
-			network,
+			network: network.clone(),
 			set_id: persistent_data.authority_set.set_id(),
 			authority_set: persistent_data.authority_set.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
@@ -689,9 +675,10 @@ where
 		let mut work = VoterWork {
 			// `voter` is set to a temporary value and replaced below when
 			// calling `rebuild_voter`.
-			voter: Box::new(futures::empty()) as Box<_>,
+			voter: Box::pin(future::pending()),
 			env,
 			voter_commands_rx,
+			network,
 		};
 		work.rebuild_voter();
 		work
@@ -754,10 +741,10 @@ where
 					last_finalized,
 				);
 
-				self.voter = Box::new(voter);
+				self.voter = Box::pin(voter);
 			},
 			VoterSetState::Paused { .. } =>
-				self.voter = Box::new(futures::empty()),
+				self.voter = Box::pin(future::pending()),
 		};
 	}
 
@@ -829,7 +816,7 @@ where
 impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT,
- 	N: NetworkT<Block> + Sync,
+	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -838,52 +825,47 @@ where
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	Client<B, E, Block, RA>: AuxStore,
 {
-	type Item = ();
-	type Error = Error;
+	type Output = Result<(), Error>;
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		match self.voter.poll() {
-			Ok(Async::NotReady) => {}
-			Ok(Async::Ready(())) => {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		match Future::poll(Pin::new(&mut self.voter), cx) {
+			Poll::Pending => {}
+			Poll::Ready(Ok(())) => {
 				// voters don't conclude naturally
-				return Err(Error::Safety("GRANDPA voter has concluded.".into()))
+				return Poll::Ready(Err(Error::Safety("GRANDPA voter has concluded.".into())))
 			}
-			Err(CommandOrError::Error(e)) => {
+			Poll::Ready(Err(CommandOrError::Error(e))) => {
 				// return inner observer error
-				return Err(e)
+				return Poll::Ready(Err(e))
 			}
-			Err(CommandOrError::VoterCommand(command)) => {
+			Poll::Ready(Err(CommandOrError::VoterCommand(command))) => {
 				// some command issued internally
 				self.handle_voter_command(command)?;
-				futures::task::current().notify();
+				cx.waker().wake_by_ref();
 			}
 		}
 
-		match self.voter_commands_rx.poll() {
-			Ok(Async::NotReady) => {}
-			Err(_) => {
-				// the `voter_commands_rx` stream should not fail.
-				return Ok(Async::Ready(()))
-			}
-			Ok(Async::Ready(None)) => {
+		match Stream::poll_next(Pin::new(&mut self.voter_commands_rx), cx) {
+			Poll::Pending => {}
+			Poll::Ready(None) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
-				return Ok(Async::Ready(()))
+				return Poll::Ready(Ok(()))
 			}
-			Ok(Async::Ready(Some(command))) => {
+			Poll::Ready(Some(command)) => {
 				// some command issued externally
 				self.handle_voter_command(command)?;
-				futures::task::current().notify();
+				cx.waker().wake_by_ref();
 			}
 		}
 
-		Ok(Async::NotReady)
+		Future::poll(Pin::new(&mut self.network), cx)
 	}
 }
 
 #[deprecated(since = "1.1.0", note = "Please switch to run_grandpa_voter.")]
 pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
-) -> sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> sp_blockchain::Result<impl Future<Output=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -893,9 +875,9 @@ pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
-	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
+	X: futures::Future<Output=()> + Clone + Send + Unpin + 'static,
 	Client<B, E, Block, RA>: AuxStore,
-	Sp: futures03::task::Spawn + 'static,
+	Sp: futures::task::Spawn + 'static,
 {
 	run_grandpa_voter(grandpa_params)
 }

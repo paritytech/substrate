@@ -44,7 +44,6 @@ parameter_types! {
 	pub const PeriodSpend: u64 = 1000;
 	pub const MaxLockDuration: u64 = 100;
 	pub const ChallengePeriod: u64 = 8;
-	pub const MaxMembers: u32 = 100;
 
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
@@ -52,7 +51,6 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 
 	pub const ExistentialDeposit: u64 = 0;
-	pub const TransferFee: u64 = 0;
 	pub const CreationFee: u64 = 0;
 }
 
@@ -82,13 +80,11 @@ impl frame_system::Trait for Test {
 
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 	type OnReapAccount = System;
 }
@@ -104,7 +100,7 @@ impl Trait for Test {
 	type MembershipChanged = ();
 	type RotationPeriod = RotationPeriod;
 	type MaxLockDuration = MaxLockDuration;
-	type FounderOrigin = EnsureSignedBy<FounderSetAccount, u128>;
+	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
 	type ChallengePeriod = ChallengePeriod;
 }
@@ -133,6 +129,9 @@ impl EnvBuilder {
 				(40, 50),
 				(50, 50),
 				(60, 50),
+				(70, 50),
+				(80, 50),
+				(90, 50),
 			],
 			pot: 0,
 			max_members: 100,
@@ -144,7 +143,6 @@ impl EnvBuilder {
 		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
 		pallet_balances::GenesisConfig::<Test> {
 			balances: self.balances,
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		GenesisConfig::<Test>{
 			members: self.members,

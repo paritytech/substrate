@@ -204,9 +204,9 @@ impl<Call: GetDispatchInfo> ClassifyDispatch<(&u16, &Box<Call>)> for Passthrough
 		call.get_dispatch_info().class
 	}
 }
-impl<Call: GetDispatchInfo> PaysFee for Passthrough<Call> {
-	fn pays_fee(&self) -> bool {
-		true
+impl<Call: GetDispatchInfo> PaysFee<(&u16, &Box<Call>)> for Passthrough<Call> {
+	fn pays_fee(&self, (_, call): (&u16, &Box<Call>)) -> bool {
+		call.get_dispatch_info().pays_fee
 	}
 }
 
@@ -226,13 +226,21 @@ impl<Call: GetDispatchInfo> WeighData<(&Vec<Call>,)> for BatchPassthrough<Call> 
 	}
 }
 impl<Call: GetDispatchInfo> ClassifyDispatch<(&Vec<Call>,)> for BatchPassthrough<Call> {
-	fn classify_dispatch(&self, (_,): (&Vec<Call>,)) -> DispatchClass {
-		DispatchClass::Normal
+	fn classify_dispatch(&self, (calls,): (&Vec<Call>,)) -> DispatchClass {
+		let all_operational = calls.iter()
+			.map(|call| call.get_dispatch_info().class)
+			.all(|class| class == DispatchClass::Operational);
+		if all_operational {
+			DispatchClass::Operational
+		} else {
+			DispatchClass::Normal
+		}
 	}
 }
-impl<Call: GetDispatchInfo> PaysFee for BatchPassthrough<Call> {
-	fn pays_fee(&self) -> bool {
-		true
+impl<Call: GetDispatchInfo> PaysFee<(&Vec<Call>,)> for BatchPassthrough<Call> {
+	fn pays_fee(&self, (calls,): (&Vec<Call>,)) -> bool {
+		calls.iter()
+			.any(|call| call.get_dispatch_info().pays_fee)
 	}
 }
 
@@ -254,16 +262,16 @@ for MultiPassthrough<Call, AccountId, Timepoint>
 impl<Call: GetDispatchInfo, AccountId, Timepoint> ClassifyDispatch<(&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)>
 for MultiPassthrough<Call, AccountId, Timepoint>
 {
-	fn classify_dispatch(&self, (_, _, _, _): (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>))
+	fn classify_dispatch(&self, (_, _, _, call): (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>))
 		-> DispatchClass
 	{
-		DispatchClass::Normal
+		call.get_dispatch_info().class
 	}
 }
-impl<Call: GetDispatchInfo, AccountId, Timepoint> PaysFee
+impl<Call: GetDispatchInfo, AccountId, Timepoint> PaysFee<(&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)>
 for MultiPassthrough<Call, AccountId, Timepoint>
 {
-	fn pays_fee(&self) -> bool {
+	fn pays_fee(&self, _: (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)) -> bool {
 		true
 	}
 }
@@ -286,16 +294,16 @@ for SigsLen<AccountId, Timepoint>
 impl<AccountId, Timepoint> ClassifyDispatch<(&u16, &Vec<AccountId>, &Timepoint, &[u8; 32])>
 for SigsLen<AccountId, Timepoint>
 {
-	fn classify_dispatch(&self, (_, _, _, _): (&u16, &Vec<AccountId>, &Timepoint, &[u8; 32]))
+	fn classify_dispatch(&self, _: (&u16, &Vec<AccountId>, &Timepoint, &[u8; 32]))
 		-> DispatchClass
 	{
 		DispatchClass::Normal
 	}
 }
-impl<AccountId, Timepoint> PaysFee
+impl<AccountId, Timepoint> PaysFee<(&u16, &Vec<AccountId>, &Timepoint, &[u8; 32])>
 for SigsLen<AccountId, Timepoint>
 {
-	fn pays_fee(&self) -> bool {
+	fn pays_fee(&self, _: (&u16, &Vec<AccountId>, &Timepoint, &[u8; 32])) -> bool {
 		true
 	}
 }
@@ -310,6 +318,8 @@ impl TypeId for IndexedUtilityModuleId {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
@@ -693,19 +703,16 @@ mod tests {
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
 		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = TestEvent;
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 	parameter_types! {
@@ -732,7 +739,6 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 10)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}

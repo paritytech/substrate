@@ -147,6 +147,11 @@ impl InherentData {
 			None => Ok(None)
 		}
 	}
+
+	/// Get the number of inherents in this instance
+	pub fn len(&self) -> usize {
+		self.data.len()
+	}
 }
 
 /// The result of checking inherents.

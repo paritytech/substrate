@@ -34,6 +34,7 @@ use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::BlockBuilderApi;
 use sp_api::{ProvideRuntimeApi, ApiExt};
+use futures::prelude::*;
 
 /// Proposer factory.
 pub struct ProposerFactory<C, A> where A: TransactionPool {
@@ -59,7 +60,7 @@ impl<B, E, Block, RA, A> ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
 		now: Box<dyn Fn() -> time::Instant + Send + Sync>,
-	) -> Result<Proposer<Block, SubstrateClient<B, E, Block, RA>, A>, sp_blockchain::Error> {
+	) -> Proposer<Block, SubstrateClient<B, E, Block, RA>, A> {
 		let parent_hash = parent_header.hash();
 
 		let id = BlockId::hash(parent_hash);
@@ -77,7 +78,7 @@ impl<B, E, Block, RA, A> ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 			}),
 		};
 
-		Ok(proposer)
+		proposer
 	}
 }
 
@@ -94,14 +95,15 @@ impl<B, E, Block, RA, A> sp_consensus::Environment<Block> for
 				BlockBuilderApi<Block, Error = sp_blockchain::Error> +
 				ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
 {
+	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
 	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
 	type Error = sp_blockchain::Error;
 
 	fn init(
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
-	) -> Result<Self::Proposer, sp_blockchain::Error> {
-		self.init_with_now(parent_header, Box::new(time::Instant::now))
+	) -> Self::CreateProposer {
+		future::ready(Ok(self.init_with_now(parent_header, Box::new(time::Instant::now))))
 	}
 }
 
@@ -203,6 +205,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 		let pending_iterator = self.transaction_pool.ready();
 
 		debug!("Attempting to push transactions from the pool.");
+		debug!("Pool status: {:?}", self.transaction_pool.status());
 		for pending_tx in pending_iterator {
 			if (self.now)() > deadline {
 				debug!(
@@ -248,10 +251,11 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
-		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
+		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
+			block.extrinsics().len(),
 			block.extrinsics()
 				.iter()
 				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
@@ -303,7 +307,9 @@ mod tests {
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let txpool = Arc::new(
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())))
+		);
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)])
@@ -324,7 +330,7 @@ mod tests {
 				*value = new;
 				old
 			})
-		).unwrap();
+		);
 
 		// when
 		let deadline = time::Duration::from_secs(3);
@@ -343,7 +349,9 @@ mod tests {
 		let (client, backend) = substrate_test_runtime_client::TestClientBuilder::new()
 			.build_with_backend();
 		let client = Arc::new(client);
-		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let txpool = Arc::new(
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())))
+		);
 		let genesis_hash = client.info().best_hash;
 		let block_id = BlockId::Hash(genesis_hash);
 
@@ -359,7 +367,7 @@ mod tests {
 		let mut proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),
 			Box::new(move || time::Instant::now()),
-		).unwrap();
+		);
 
 		let deadline = time::Duration::from_secs(9);
 		let proposal = futures::executor::block_on(
@@ -372,9 +380,12 @@ mod tests {
 		api.execute_block(&block_id, proposal.block).unwrap();
 
 		let state = backend.state_at(block_id).unwrap();
-		let changes_trie_storage = backend.changes_trie_storage();
+		let changes_trie_state = backend::changes_tries_state_at_block(
+			&block_id,
+			backend.changes_trie_storage(),
+		).unwrap();
 
-		let storage_changes = api.into_storage_changes(&state, changes_trie_storage, genesis_hash)
+		let storage_changes = api.into_storage_changes(&state, changes_trie_state.as_ref(), genesis_hash)
 			.unwrap();
 
 		assert_eq!(

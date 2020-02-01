@@ -325,8 +325,8 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		keys: Option<Vec<StorageKey>>
 	) {
 		let keys = match keys {
-			Some(keys) => keys,
-			None => {
+			Some(keys) if !keys.is_empty() => keys,
+			_ => {
 				warn!("Cannot subscribe to all keys on light client. Subscription rejected.");
 				return;
 			}
@@ -708,7 +708,7 @@ fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output=Result<Optio
 mod tests {
 	use rpc::futures::stream::futures_ordered;
 	use substrate_test_runtime_client::runtime::Block;
-    use sp_core::H256;
+	use sp_core::H256;
 	use super::*;
 
 	#[test]

@@ -1,0 +1,34 @@
+[package]
+name = "sc-consensus-manual-seal"
+version = "0.8.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Manual sealing engine for Substrate"
+edition = "2018"
+license = "GPL-3.0"
+
+[dependencies]
+derive_more = "0.99.2"
+futures = "0.3.1"
+jsonrpc-core = "14.0.5"
+jsonrpc-core-client = "14.0.5"
+jsonrpc-derive = "14.0.5"
+log = "0.4.8"
+parking_lot = "0.10"
+serde = { version = "1.0", features=["derive"] }
+
+sc-client = { path = "../../../client" }
+sc-client-api = { path = "../../../client/api" }
+sc-transaction-pool = { path = "../../transaction-pool" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
+sp-consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
+sp-inherents = { path = "../../../primitives/inherents" }
+sp-runtime = {  path = "../../../primitives/runtime" }
+sp-transaction-pool = { path = "../../../primitives/transaction-pool" }
+
+[dev-dependencies]
+sc-basic-authorship = { path = "../../basic-authorship" }
+substrate-test-runtime-client = { path = "../../../test-utils/runtime/client" }
+substrate-test-runtime-transaction-pool = { path = "../../../test-utils/runtime/transaction-pool" }
+tokio = { version = "0.2", features = ["rt-core", "macros"] }
+env_logger = "0.7.0"
+tempfile = "3.1.0"

@@ -289,7 +289,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	babe_link,
 	can_author_with,
 }: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
-	impl futures01::Future<Item=(), Error=()>,
+	impl futures::Future<Output=()>,
 	sp_consensus::Error,
 > where
 	B: BlockT,
@@ -325,7 +325,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	)?;
 
 	babe_info!("Starting BABE Authorship worker");
-	let slot_worker = sc_consensus_slots::start_slot_worker(
+	Ok(sc_consensus_slots::start_slot_worker(
 		config.0,
 		select_chain,
 		worker,
@@ -333,9 +333,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		inherent_data_providers,
 		babe_link.time_source,
 		can_author_with,
-	);
-
-	Ok(slot_worker.map(|_| Ok::<(), ()>(())).compat())
+	))
 }
 
 struct BabeWorker<B: BlockT, C, E, I, SO> {
@@ -365,6 +363,9 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	type EpochData = Epoch;
 	type Claim = (BabePreDigest, AuthorityPair);
 	type SyncOracle = SO;
+	type CreateProposer = Pin<Box<
+		dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static
+	>>;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
 
@@ -450,10 +451,8 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 				storage_changes: Some(storage_changes),
 				finalized: false,
 				auxiliary: Vec::new(), // block-weight is written in block import.
-				// TODO: block-import handles fork choice and this shouldn't even have the
-				// option to specify one.
-				// https://github.com/paritytech/substrate/issues/3623
-				fork_choice: ForkChoiceStrategy::LongestChain,
+				intermediates: Default::default(),
+				fork_choice: None,
 				allow_missing_state: false,
 				import_existing: false,
 			}
@@ -468,10 +467,10 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		&mut self.sync_oracle
 	}
 
-	fn proposer(&mut self, block: &B::Header) -> Result<Self::Proposer, sp_consensus::Error> {
-		self.env.init(block).map_err(|e| {
+	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
+		Box::pin(self.env.init(block).map_err(|e| {
 			sp_consensus::Error::ClientImport(format!("{:?}", e))
-		})
+		}))
 	}
 
 	fn proposing_remaining_duration(
@@ -806,10 +805,8 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
-					// TODO: block-import handles fork choice and this shouldn't even have the
-					// option to specify one.
-					// https://github.com/paritytech/substrate/issues/3623
-					fork_choice: ForkChoiceStrategy::LongestChain,
+					intermediates: Default::default(),
+					fork_choice: None,
 					allow_missing_state: false,
 					import_existing: false,
 				};
@@ -1084,13 +1081,13 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 					)?
 			};
 
-			ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
+			Some(ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
 				true
 			} else if total_weight == last_best_weight {
 				number > last_best_number
 			} else {
 				false
-			})
+			}))
 		};
 
 		let import_result = self.inner.import_block(block, new_cache);

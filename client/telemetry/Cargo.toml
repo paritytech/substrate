@@ -4,13 +4,14 @@ version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Telemetry utils"
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 bytes = "0.5"
 parking_lot = "0.9.0"
 futures = "0.3.1"
 futures-timer = "2.0.0"
-libp2p = { version = "0.14.0-alpha.1", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { version = "0.15.0", default-features = false, features = ["libp2p-websocket"] }
 log = "0.4.8"
 pin-project = "0.4.6"
 rand = "0.7.2"

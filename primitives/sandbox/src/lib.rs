@@ -40,7 +40,8 @@
 
 use sp_std::prelude::*;
 
-pub use sp_core::sandbox::{TypedValue, ReturnValue, HostError};
+pub use sp_core::sandbox::HostError;
+pub use sp_wasm_interface::{Value, ReturnValue};
 
 mod imp {
 	#[cfg(feature = "std")]
@@ -75,16 +76,13 @@ impl From<Error> for HostError {
 /// supervisor in [`EnvironmentDefinitionBuilder`].
 ///
 /// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
-pub type HostFuncType<T> = fn(&mut T, &[TypedValue]) -> Result<ReturnValue, HostError>;
+pub type HostFuncType<T> = fn(&mut T, &[Value]) -> Result<ReturnValue, HostError>;
 
 /// Reference to a sandboxed linear memory, that
 /// will be used by the guest module.
 ///
 /// The memory can't be directly accessed by supervisor, but only
-/// through designated functions [`get`] and [`set`].
-///
-/// [`get`]: #method.get
-/// [`set`]: #method.set
+/// through designated functions [`get`](Memory::get) and [`set`](Memory::set).
 #[derive(Clone)]
 pub struct Memory {
 	inner: imp::Memory,
@@ -200,9 +198,16 @@ impl<T> Instance<T> {
 	pub fn invoke(
 		&mut self,
 		name: &str,
-		args: &[TypedValue],
+		args: &[Value],
 		state: &mut T,
 	) -> Result<ReturnValue, Error> {
 		self.inner.invoke(name, args, state)
+	}
+
+	/// Get the value from a global with the given `name`.
+	///
+	/// Returns `Some(_)` if the global could be found.
+	pub fn get_global_val(&self, name: &str) -> Option<Value> {
+		self.inner.get_global_val(name)
 	}
 }

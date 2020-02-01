@@ -110,7 +110,7 @@ use sp_runtime::{
 	},
 };
 
-use sp_core::storage::well_known_keys;
+use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
 	traits::{Contains, Get, ModuleToIndex, OnReapAccount},
@@ -120,9 +120,6 @@ use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
-
-#[cfg(any(feature = "std", test))]
-use sp_core::ChangesTrieConfiguration;
 
 pub mod offchain;
 
@@ -259,11 +256,58 @@ decl_module! {
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
-		/// Set the new code.
+		/// Set the new runtime code.
 		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
-		pub fn set_code(origin, new: Vec<u8>) {
+		pub fn set_code(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
-			storage::unhashed::put_raw(well_known_keys::CODE, &new);
+
+			let current_version = T::Version::get();
+			let new_version = sp_io::misc::runtime_version(&code)
+				.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
+				.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
+
+			if new_version.spec_name != current_version.spec_name {
+				Err(Error::<T>::InvalidSpecName)?
+			}
+
+			if new_version.spec_version < current_version.spec_version {
+				Err(Error::<T>::SpecVersionNotAllowedToDecrease)?
+			} else if new_version.spec_version == current_version.spec_version {
+				if new_version.impl_version < current_version.impl_version {
+					Err(Error::<T>::ImplVersionNotAllowedToDecrease)?
+				} else if new_version.impl_version == current_version.impl_version {
+					Err(Error::<T>::SpecOrImplVersionNeedToIncrease)?
+				}
+			}
+
+			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			Self::deposit_event(Event::CodeUpdated);
+		}
+
+		/// Set the new runtime code without doing any checks of the given `code`.
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		pub fn set_code_without_checks(origin, code: Vec<u8>) {
+			ensure_root(origin)?;
+			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			Self::deposit_event(Event::CodeUpdated);
+		}
+
+		/// Set the new changes trie configuration.
+		#[weight = SimpleDispatchInfo::FixedOperational(20_000)]
+		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
+			ensure_root(origin)?;
+			match changes_trie_config.clone() {
+				Some(changes_trie_config) => storage::unhashed::put_raw(
+					well_known_keys::CHANGES_TRIE_CONFIG,
+					&changes_trie_config.encode(),
+				),
+				None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
+			}
+
+			let log = generic::DigestItem::ChangesTrieSignal(
+				generic::ChangesTrieSignal::NewConfiguration(changes_trie_config),
+			);
+			Self::deposit_log(log.into());
 		}
 
 		/// Set some items of storage.
@@ -322,12 +366,31 @@ decl_event!(
 		ExtrinsicSuccess(DispatchInfo),
 		/// An extrinsic failed.
 		ExtrinsicFailed(DispatchError, DispatchInfo),
+		/// `:code` was updated.
+		CodeUpdated,
 	}
 );
 
 decl_error! {
 	/// Error for the System module
-	pub enum Error for Module<T: Trait> {}
+	pub enum Error for Module<T: Trait> {
+		/// The name of specification does not match between the current runtime
+		/// and the new runtime.
+		InvalidSpecName,
+		/// The specification version is not allowed to decrease between the current runtime
+		/// and the new runtime.
+		SpecVersionNotAllowedToDecrease,
+		/// The implementation version is not allowed to decrease between the current runtime
+		/// and the new runtime.
+		ImplVersionNotAllowedToDecrease,
+		/// The specification or the implementation version need to increase between the
+		/// current runtime and the new runtime.
+		SpecOrImplVersionNeedToIncrease,
+		/// Failed to extract the runtime version from the new runtime.
+		///
+		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
+		FailedToExtractRuntimeVersion,
+	}
 }
 
 /// Origin for the System module.
@@ -373,7 +436,7 @@ type EventIndex = u32;
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// Extrinsics nonce for accounts.
-		pub AccountNonce get(fn account_nonce): map T::AccountId => T::Index;
+		pub AccountNonce get(fn account_nonce): map hasher(blake2_256) T::AccountId => T::Index;
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
 		/// Total weight for all extrinsics put together, for the current block.
@@ -381,9 +444,10 @@ decl_storage! {
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
 		/// Map of block numbers to block hashes.
-		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
+		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
+			map hasher(blake2_256) T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
-		ExtrinsicData get(fn extrinsic_data): map u32 => Vec<u8>;
+		ExtrinsicData get(fn extrinsic_data): map hasher(blake2_256) u32 => Vec<u8>;
 		/// The current block number being processed. Set by `execute_block`.
 		Number get(fn block_number) build(|_| 1.into()): T::BlockNumber;
 		/// Hash of the previous block.
@@ -412,7 +476,7 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): map T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -788,7 +852,10 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(
 			match r {
 				Ok(()) => Event::ExtrinsicSuccess(info),
-				Err(err) => Event::ExtrinsicFailed(err.clone(), info),
+				Err(err) => {
+					sp_runtime::print(err);
+					Event::ExtrinsicFailed(err.clone(), info)
+				},
 			}
 		);
 
@@ -893,6 +960,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	type AdditionalSigned = ();
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckWeight";
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
@@ -973,6 +1041,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AdditionalSigned = ();
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckNonce";
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
@@ -1057,6 +1126,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type AdditionalSigned = T::Hash;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckEra";
 
 	fn validate(
 		&self,
@@ -1113,6 +1183,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AdditionalSigned = T::Hash;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckGenesis";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
@@ -1148,6 +1219,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
 	type AdditionalSigned = u32;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckVersion";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok(<Module<T>>::runtime_version().spec_version)
@@ -1189,6 +1261,14 @@ mod tests {
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 		pub const MaximumBlockLength: u32 = 1024;
+		pub const Version: RuntimeVersion = RuntimeVersion {
+			spec_name: sp_version::create_runtime_str!("test"),
+			impl_name: sp_version::create_runtime_str!("system-test"),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_version::create_apis_vec!([]),
+		};
 	}
 
 	impl Trait for Test {
@@ -1206,7 +1286,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
-		type Version = ();
+		type Version = Version;
 		type ModuleToIndex = ();
 	}
 
@@ -1215,6 +1295,7 @@ mod tests {
 			match e {
 				Event::ExtrinsicSuccess(..) => 100,
 				Event::ExtrinsicFailed(..) => 101,
+				Event::CodeUpdated => 102,
 			}
 		}
 	}
@@ -1503,7 +1584,7 @@ mod tests {
 				.validate(&1, CALL, op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, Bounded::max_value());
+			assert_eq!(priority, u64::max_value());
 		})
 	}
 
@@ -1561,5 +1642,71 @@ mod tests {
 
 			assert_eq!(ext.validate(&1, CALL, normal, len).unwrap().longevity, 15);
 		})
+	}
+
+
+	#[test]
+	fn set_code_checks_works() {
+		struct CallInWasm(Vec<u8>);
+
+		impl sp_core::traits::CallInWasm for CallInWasm {
+			fn call_in_wasm(
+				&self,
+				_: &[u8],
+				_: &str,
+				_: &[u8],
+				_: &mut dyn sp_externalities::Externalities,
+			) -> Result<Vec<u8>, String> {
+				Ok(self.0.clone())
+			}
+		}
+
+		let test_data = vec![
+			("test", 1, 2, Ok(())),
+			("test", 1, 1, Err(Error::<Test>::SpecOrImplVersionNeedToIncrease)),
+			("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
+			("test", 2, 1, Ok(())),
+			("test", 0, 1, Err(Error::<Test>::SpecVersionNotAllowedToDecrease)),
+			("test", 1, 0, Err(Error::<Test>::ImplVersionNotAllowedToDecrease)),
+		];
+
+		for (spec_name, spec_version, impl_version, expected) in test_data.into_iter() {
+			let version = RuntimeVersion {
+				spec_name: spec_name.into(),
+				spec_version,
+				impl_version,
+				..Default::default()
+			};
+			let call_in_wasm = CallInWasm(version.encode());
+
+			let mut ext = new_test_ext();
+			ext.register_extension(sp_core::traits::CallInWasmExt::new(call_in_wasm));
+			ext.execute_with(|| {
+				let res = System::set_code(
+					RawOrigin::Root.into(),
+					vec![1, 2, 3, 4],
+				);
+
+				assert_eq!(expected.map_err(DispatchError::from), res);
+			});
+		}
+	}
+
+	#[test]
+	fn set_code_with_real_wasm_blob() {
+		let executor = substrate_test_runtime_client::new_native_executor();
+		let mut ext = new_test_ext();
+		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
+		ext.execute_with(|| {
+			System::set_code(
+				RawOrigin::Root.into(),
+				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
+			).unwrap();
+
+			assert_eq!(
+				System::events(),
+				vec![EventRecord { phase: Phase::ApplyExtrinsic(0), event: 102u16, topics: vec![] }],
+			);
+		});
 	}
 }

@@ -3,10 +3,10 @@ name = "pallet-elections"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true }
-safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
@@ -22,7 +22,6 @@ pallet-balances = { version = "2.0.0", path = "../balances" }
 [features]
 default = ["std"]
 std = [
-	"safe-mix/std",
 	"codec/std",
 	"sp-core/std",
 	"sp-std/std",

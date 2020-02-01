@@ -77,11 +77,11 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
 	// Per convention: if the runtime behavior changes, increment spec_version
-	// and set impl_version to equal spec_version. If only runtime
+	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 201,
-	impl_version: 201,
+	spec_version: 211,
+	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -167,20 +167,17 @@ impl pallet_indices::Trait for Runtime {
 
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 1 * DOLLARS;
-	pub const TransferFee: Balance = 1 * CENTS;
 	pub const CreationFee: Balance = 1 * CENTS;
 }
 
 impl pallet_balances::Trait for Runtime {
 	type Balance = Balance;
-	type OnFreeBalanceZero = ((Staking, Contracts), Session);
-	type OnReapAccount = System;
+	type OnReapAccount = ((((System, Staking), Contracts), Session), Recovery);
 	type OnNewAccount = Indices;
 	type Event = Event;
 	type DustRemoval = ();
 	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 }
 
@@ -236,14 +233,13 @@ parameter_types! {
 }
 
 impl pallet_session::Trait for Runtime {
-	type OnSessionEnding = Staking;
+	type SessionManager = Staking;
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type ShouldEndSession = Babe;
 	type Event = Event;
 	type Keys = SessionKeys;
 	type ValidatorId = <Self as frame_system::Trait>::AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
-	type SelectInitialValidators = Staking;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
@@ -431,7 +427,6 @@ impl pallet_contracts::Trait for Runtime {
 	type RentByteFee = RentByteFee;
 	type RentDepositOffset = RentDepositOffset;
 	type SurchargeReward = SurchargeReward;
-	type TransferFee = ContractTransferFee;
 	type CreationFee = ContractCreationFee;
 	type TransactionBaseFee = ContractTransactionBaseFee;
 	type TransactionByteFee = ContractTransactionByteFee;
@@ -488,19 +483,24 @@ impl pallet_finality_tracker::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const ReservationFee: Balance = 1 * DOLLARS;
-	pub const MinLength: usize = 3;
-	pub const MaxLength: usize = 16;
+	pub const BasicDeposit: Balance = 10 * DOLLARS;       // 258 bytes on-chain
+	pub const FieldDeposit: Balance = 250 * CENTS;        // 66 bytes on-chain
+	pub const SubAccountDeposit: Balance = 2 * DOLLARS;   // 53 bytes on-chain
+	pub const MaxSubAccounts: u32 = 100;
+	pub const MaxAdditionalFields: u32 = 100;
 }
 
-impl pallet_nicks::Trait for Runtime {
+impl pallet_identity::Trait for Runtime {
 	type Event = Event;
 	type Currency = Balances;
-	type ReservationFee = ReservationFee;
 	type Slashed = Treasury;
-	type ForceOrigin = pallet_collective::EnsureMember<AccountId, CouncilCollective>;
-	type MinLength = MinLength;
-	type MaxLength = MaxLength;
+	type BasicDeposit = BasicDeposit;
+	type FieldDeposit = FieldDeposit;
+	type SubAccountDeposit = SubAccountDeposit;
+	type MaxSubAccounts = MaxSubAccounts;
+	type MaxAdditionalFields = MaxAdditionalFields;
+	type RegistrarOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type ForceOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 }
 
 impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtime {
@@ -543,6 +543,49 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
 	}
 }
 
+parameter_types! {
+	pub const ConfigDepositBase: Balance = 5 * DOLLARS;
+	pub const FriendDepositFactor: Balance = 50 * CENTS;
+	pub const MaxFriends: u16 = 9;
+	pub const RecoveryDeposit: Balance = 5 * DOLLARS;
+}
+
+impl pallet_recovery::Trait for Runtime {
+	type Event = Event;
+	type Call = Call;
+	type Currency = Balances;
+	type ConfigDepositBase = ConfigDepositBase;
+	type FriendDepositFactor = FriendDepositFactor;
+	type MaxFriends = MaxFriends;
+	type RecoveryDeposit = RecoveryDeposit;
+}
+
+parameter_types! {
+	pub const CandidateDeposit: Balance = 10 * DOLLARS;
+	pub const WrongSideDeduction: Balance = 2 * DOLLARS;
+	pub const MaxStrikes: u32 = 10;
+	pub const RotationPeriod: BlockNumber = 80 * HOURS;
+	pub const PeriodSpend: Balance = 500 * DOLLARS;
+	pub const MaxLockDuration: BlockNumber = 36 * 30 * DAYS;
+	pub const ChallengePeriod: BlockNumber = 7 * DAYS;
+}
+
+impl pallet_society::Trait for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type Randomness = RandomnessCollectiveFlip;
+	type CandidateDeposit = CandidateDeposit;
+	type WrongSideDeduction = WrongSideDeduction;
+	type MaxStrikes = MaxStrikes;
+	type PeriodSpend = PeriodSpend;
+	type MembershipChanged = ();
+	type RotationPeriod = RotationPeriod;
+	type MaxLockDuration = MaxLockDuration;
+	type FounderSetOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type SuspensionJudgementOrigin = pallet_society::EnsureFounder<Runtime>;
+	type ChallengePeriod = ChallengePeriod;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -573,7 +616,9 @@ construct_runtime!(
 		AuthorityDiscovery: pallet_authority_discovery::{Module, Call, Config},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
-		Nicks: pallet_nicks::{Module, Call, Storage, Event<T>},
+		Identity: pallet_identity::{Module, Call, Storage, Event<T>},
+		Society: pallet_society::{Module, Call, Storage, Event<T>, Config<T>},
+		Recovery: pallet_recovery::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -697,7 +742,9 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_contracts_rpc_runtime_api::ContractsApi<Block, AccountId, Balance> for Runtime {
+	impl pallet_contracts_rpc_runtime_api::ContractsApi<Block, AccountId, Balance, BlockNumber>
+		for Runtime
+	{
 		fn call(
 			origin: AccountId,
 			dest: AccountId,
@@ -705,13 +752,8 @@ impl_runtime_apis! {
 			gas_limit: u64,
 			input_data: Vec<u8>,
 		) -> ContractExecResult {
-			let exec_result = Contracts::bare_call(
-				origin,
-				dest.into(),
-				value,
-				gas_limit,
-				input_data,
-			);
+			let exec_result =
+				Contracts::bare_call(origin, dest.into(), value, gas_limit, input_data);
 			match exec_result {
 				Ok(v) => ContractExecResult::Success {
 					status: v.status,
@@ -724,16 +766,14 @@ impl_runtime_apis! {
 		fn get_storage(
 			address: AccountId,
 			key: [u8; 32],
-		) -> pallet_contracts_rpc_runtime_api::GetStorageResult {
-			Contracts::get_storage(address, key).map_err(|rpc_err| {
-				use pallet_contracts::GetStorageError;
-				use pallet_contracts_rpc_runtime_api::{GetStorageError as RpcGetStorageError};
-				/// Map the contract error into the RPC layer error.
-				match rpc_err {
-					GetStorageError::ContractDoesntExist => RpcGetStorageError::ContractDoesntExist,
-					GetStorageError::IsTombstone => RpcGetStorageError::IsTombstone,
-				}
-			})
+		) -> pallet_contracts_primitives::GetStorageResult {
+			Contracts::get_storage(address, key)
+		}
+
+		fn rent_projection(
+			address: AccountId,
+		) -> pallet_contracts_primitives::RentProjectionResult<BlockNumber> {
+			Contracts::rent_projection(address)
 		}
 	}
 
@@ -750,6 +790,12 @@ impl_runtime_apis! {
 	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			SessionKeys::generate(seed)
+		}
+
+		fn decode_session_keys(
+			encoded: Vec<u8>,
+		) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
+			SessionKeys::decode_into_raw_public_keys(&encoded)
 		}
 	}
 }

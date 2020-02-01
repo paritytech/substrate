@@ -262,8 +262,7 @@ where
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
 		match Self::apply_extrinsic_with_len(uxt, l, None) {
-			Ok(Ok(())) => (),
-			Ok(Err(e)) => sp_runtime::print(e),
+			Ok(_) => (),
 			Err(e) => { let err: &'static str = e.into(); panic!(err) },
 		}
 	}
@@ -386,7 +385,7 @@ mod tests {
 				fn some_root_operation(origin) {
 					let _ = frame_system::ensure_root(origin);
 				}
-				#[weight = SimpleDispatchInfo::FreeNormal]
+				#[weight = SimpleDispatchInfo::InsecureFreeNormal]
 				fn some_unsigned_message(origin) {
 					let _ = frame_system::ensure_none(origin);
 				}
@@ -455,19 +454,16 @@ mod tests {
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Runtime {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
 		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = MetaEvent;
 		type DustRemoval = ();
 		type TransferPayment = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 
@@ -529,7 +525,6 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 211)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = sp_runtime::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
 		let weight = xt.get_dispatch_info().weight as u64;
@@ -553,7 +548,6 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
@@ -565,7 +559,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("c6b01b27df520ba23adb96e7fc032acb7c586ba1b477c6282de43184111f2091").into(),
+					state_root: hex!("a0b84fec49718caf59350dab6ec2993f12db399a7cccdb80f3cf79618ed93bd8").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -712,7 +706,6 @@ mod tests {
 					id,
 					&1,
 					110,
-					Bounded::max_value(),
 					lock,
 				);
 				let xt = sp_runtime::testing::TestXt(

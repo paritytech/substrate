@@ -83,7 +83,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{print, DispatchResult, DispatchError, traits::{Zero, StaticLookup, Bounded, Convert}};
+use sp_runtime::{print, DispatchResult, DispatchError, traits::{Zero, StaticLookup, Convert}};
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error, weights::SimpleDispatchInfo,
 	traits::{
@@ -157,12 +157,12 @@ decl_storage! {
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
 		/// Votes of a particular voter, with the round index of the votes.
-		pub VotesOf get(fn votes_of): linked_map T::AccountId => Vec<T::AccountId>;
+		pub VotesOf get(fn votes_of): linked_map hasher(blake2_256) T::AccountId => Vec<T::AccountId>;
 		/// Locked stake of a voter.
-		pub StakeOf get(fn stake_of): map T::AccountId => BalanceOf<T>;
+		pub StakeOf get(fn stake_of): map hasher(blake2_256) T::AccountId => BalanceOf<T>;
 
-		/// The present candidate list. Sorted based on account id. A current member can never enter
-		/// this vector and is always implicitly assumed to be a candidate.
+		/// The present candidate list. Sorted based on account-id. A current member or a runner can
+		/// never enter this vector and is always implicitly assumed to be a candidate.
 		pub Candidates get(fn candidates): Vec<T::AccountId>;
 	}
 }
@@ -260,7 +260,6 @@ decl_module! {
 				MODULE_ID,
 				&who,
 				locked_balance,
-				T::BlockNumber::max_value(),
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
 			);
 			<StakeOf<T>>::insert(&who, locked_balance);
@@ -535,7 +534,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Limited number of runners-up. Binary search. Constant time factor. O(1)
 	fn is_runner(who: &T::AccountId) -> bool {
-		Self::runners_up().binary_search_by(|(a, _b)| a.cmp(who)).is_ok()
+		Self::runners_up().iter().position(|(a, _b)| a == who).is_some()
 	}
 
 	/// Returns number of desired members.
@@ -816,20 +815,17 @@ mod tests {
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
 
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnNewAccount = ();
-		type OnFreeBalanceZero = ();
 		type OnReapAccount = System;
 		type Event = Event;
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 
@@ -989,7 +985,6 @@ mod tests {
 						(5, 50 * self.balance_factor),
 						(6, 60 * self.balance_factor)
 					],
-					vesting: vec![],
 				}),
 			}.build_storage().unwrap().into()
 		}
@@ -2078,6 +2073,25 @@ mod tests {
 				Elections::renounce_candidacy(Origin::signed(5)),
 				Error::<Test>::InvalidOrigin,
 			);
+		})
+	}
+
+	#[test]
+	fn behavior_with_dupe_candidate() {
+		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
+			<Candidates<Test>>::put(vec![1, 1, 2, 3, 4]);
+
+			assert_ok!(Elections::vote(Origin::signed(5), vec![1], 50));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![2], 20));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![1, 4]);
+			assert_eq!(Elections::runners_up_ids(), vec![2, 3]);
+			assert_eq!(Elections::candidates(), vec![]);
 		})
 	}
 }
