@@ -100,6 +100,57 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	_phantom: PhantomData<RA>,
 }
 
+pub struct KeyIterator<'a, State, Block> {
+	state: State,
+	prefix: &'a StorageKey,
+	current_key: Vec<u8>,
+	remaining: usize,
+	_phantom: PhantomData<Block>,
+}
+
+impl <'a, State, Block> KeyIterator<'a, State, Block> {
+	fn new(state: State, prefix: &'a StorageKey, current_key: Vec<u8>, count: usize) -> Self {
+		Self {
+			state,
+			prefix,
+			current_key,
+			remaining: count,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
+	Block: BlockT,
+	State: StateBackend<HasherFor<Block>>,
+{
+	type Item = StorageKey;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if self.remaining == 0 {
+			return None;
+		}
+		let maybe_next_key = self.state
+			.next_storage_key(&self.current_key[..])
+			.ok()
+			.unwrap_or_default()
+			.filter(|v| v.starts_with(&self.prefix.0[..]))
+			.map(StorageKey);
+		if let Some(ref next_key) = maybe_next_key {
+			self.current_key = next_key.0.clone();
+			self.remaining -= 1;
+		} else {
+			// no more
+			self.remaining = 0;
+		}
+		maybe_next_key
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		(0, Some(self.remaining))
+	}
+}
+
 // used in importing a block, where additional changes are made after the runtime
 // executed.
 enum PrePostHeader<H> {
@@ -243,31 +294,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Paged version of `storage_keys`. Only return up to `count` keys after `start_key` or `prefix`.
-	pub fn storage_keys_paged(
+	pub fn storage_keys_paged<'a>(
 		&self,
 		id: &BlockId<Block>,
-		prefix: &StorageKey,
-		count: u32,
+		prefix: &'a StorageKey,
+		count: usize,
 		start_key: &Option<StorageKey>
-	) -> sp_blockchain::Result<Vec<StorageKey>> {
+	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
 		let state = self.state_at(id)?;
-		let mut result = Vec::<StorageKey>::with_capacity(count as usize);
 		let start_key = start_key.as_ref().unwrap_or(prefix);
-		let prefix = &prefix.0[..];
-
-		let mut current_key = start_key.0.clone();
-		while result.len() < (count as usize) {
-			let maybe_next_key = state.next_storage_key(&current_key[..])
-				.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-				.filter(|v| v.starts_with(prefix));
-			if let Some(next_key) = maybe_next_key {
-				result.push(StorageKey(next_key.clone()));
-				current_key = next_key;
-			} else {
-				break
-			}
-		}
-		Ok(result)
+		Ok(KeyIterator::new(state, prefix, start_key.0.clone(), count))
 	}
 
 	/// Given a `BlockId` and a key, return the value under the key in that block.
