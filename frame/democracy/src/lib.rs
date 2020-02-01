@@ -1310,7 +1310,10 @@ mod tests {
 		// A dump of data from the previous version for which we know account 1 has 5 of its 10
 		// reserved and 3 of the rest is locked for misc. Account 2 has all 20 locked until block 5
 		// for everything and additionally 3 locked for just fees.
+		let mut is_upgraded_key = sp_io::hashing::twox_128(b"Balances").to_vec();
+		is_upgraded_key.extend(sp_io::hashing::twox_128(b"IsUpgraded").to_vec());
 		let data = vec![
+			(is_upgraded_key, false.encode()),
 			(hex!["26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac"].to_vec(), hex!["0100000000000000"].to_vec()),
 			(hex!["26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850"].to_vec(), hex!["02000000"].to_vec()),
 			(hex!["26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7"].to_vec(), hex!["08000000000000000000000000"].to_vec()),
