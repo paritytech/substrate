@@ -51,7 +51,6 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 
 	pub const ExistentialDeposit: u64 = 0;
-	pub const TransferFee: u64 = 0;
 	pub const CreationFee: u64 = 0;
 }
 
@@ -81,13 +80,11 @@ impl frame_system::Trait for Test {
 
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 	type OnReapAccount = System;
 }
@@ -146,7 +143,6 @@ impl EnvBuilder {
 		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
 		pallet_balances::GenesisConfig::<Test> {
 			balances: self.balances,
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		GenesisConfig::<Test>{
 			members: self.members,
