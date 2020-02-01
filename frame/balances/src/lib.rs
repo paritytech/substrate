@@ -386,7 +386,7 @@ decl_storage! {
 		pub Locks get(fn locks): map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// True if network has been upgraded to this version.
-		IsUpgraded: bool;
+		IsUpgraded: bool = true;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
