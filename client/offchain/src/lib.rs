@@ -107,7 +107,11 @@ impl<Client, Storage, Block> OffchainWorkers<
 		let version = match (has_api_v1, has_api_v2) {
 			(_, Ok(true)) => 2,
 			(Ok(true), _) => 1,
-			_ => 0,
+			err => {
+				let help = "Consider turning off offchain workers if they are not part of your runtime.";
+				log::error!("Unsupported Offchain Worker API version: {:?}. {}.", err, help);
+				0
+			}
 		};
 		debug!("Checking offchain workers at {:?}: version:{}", at, version);
 		if version > 0 {
@@ -140,8 +144,6 @@ impl<Client, Storage, Block> OffchainWorkers<
 			});
 			futures::future::Either::Left(runner.process())
 		} else {
-			let help = "Consider turning off offchain workers if they are not part of your runtime.";
-			log::error!("Unsupported Offchain Worker API version: {}. {}", version, help);
 			futures::future::Either::Right(futures::future::ready(()))
 		}
 	}
@@ -200,7 +202,10 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let pool = Arc::new(TestPool(BasicPool::new(Default::default(), FullChainApi::new(client.clone()))));
+		let pool = Arc::new(TestPool(BasicPool::new(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone())),
+		)));
 		client.execution_extensions()
 			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
 		let db = sc_client_db::offchain::LocalStorage::new_test();

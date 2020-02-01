@@ -44,6 +44,8 @@ TO_RENAME=(
     "sp-sesssion sp-session"
     "sp-tracing-pool sp-transaction-pool"
     "sc-basic-authority sc-basic-authorship"
+    "sc-api sc-client-api"
+    "sc-database sc-client-db"
 
     # PRIMITIVES
     "substrate-application-crypto sp-application-crypto"
@@ -87,7 +89,7 @@ TO_RENAME=(
 
     # # CLIENT
     "substrate-client sc-client"
-    "substrate-client-api sc-api"
+    "substrate-client-api sc-client-api"
     "substrate-authority-discovery sc-authority-discovery"
     "substrate-basic-authorship sc-basic-authorship"
     "substrate-block-builder sc-block-builder"
@@ -99,7 +101,7 @@ TO_RENAME=(
     "substrate-consensus-pow sc-consensus-pow"
     "substrate-consensus-slots sc-consensus-slots"
     "substrate-consensus-uncles sc-consensus-uncles"
-    "substrate-client-db sc-database"
+    "substrate-client-db sc-client-db"
     "substrate-executor sc-executor"
     "substrate-runtime-test sc-runtime-test"
     "substrate-finality-grandpa sc-finality-grandpa"

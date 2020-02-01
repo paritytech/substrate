@@ -108,7 +108,7 @@ decl_storage! {
 					].to_owned(),
 				))
 				.collect::<Vec<_>>()
-		}): map T::AccountIndex => Vec<T::AccountId>;
+		}): map hasher(blake2_256) T::AccountIndex => Vec<T::AccountId>;
 	}
 	add_extra_genesis {
 		config(ids): Vec<T::AccountId>;

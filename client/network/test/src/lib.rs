@@ -52,7 +52,7 @@ use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProof
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
-use sc_network::{Context, ProtocolConfig};
+use sc_network::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
@@ -391,6 +391,8 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 	) {}
 
 	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
+
+	fn transaction(&self, _h: &Hash) -> Option<Extrinsic> { None }
 }
 
 pub trait SpecializationFactory {
@@ -611,6 +613,7 @@ pub trait TestNetFactory: Sized {
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			roles: config.roles,
+			executor: None,
 			network_config: NetworkConfiguration {
 				listen_addresses: vec![listen_addr.clone()],
 				transport: TransportConfig::MemoryOnly,
@@ -686,6 +689,7 @@ pub trait TestNetFactory: Sized {
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			roles: config.roles,
+			executor: None,
 			network_config: NetworkConfiguration {
 				listen_addresses: vec![listen_addr.clone()],
 				transport: TransportConfig::MemoryOnly,

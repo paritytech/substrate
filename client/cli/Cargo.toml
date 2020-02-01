@@ -4,6 +4,7 @@ version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 clap = "2.33.0"
@@ -16,10 +17,11 @@ time = "0.1.42"
 ansi_term = "0.12.1"
 lazy_static = "1.4.0"
 app_dirs = "1.2.1"
-tokio = "0.2"
+tokio = { version = "0.2.9", features = [ "signal", "rt-core", "rt-threaded" ] }
 futures = "0.3.1"
 fdlimit = "0.1.1"
 serde_json = "1.0.41"
+sc-informant = { version = "0.8", path = "../informant" }
 sp-panic-handler = { version = "2.0.0", path = "../../primitives/panic-handler" }
 sc-client-api = { version = "2.0.0", path = "../api" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
@@ -31,9 +33,9 @@ sp-state-machine = { version = "0.8", path = "../../primitives/state-machine" }
 sc-telemetry = { version = "2.0.0", path = "../telemetry" }
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
 names = "0.11.0"
-structopt = "=0.3.7"
+structopt = "0.3.8"
 sc-tracing = { version = "2.0.0", path = "../tracing" }
-wasm-timer = "0.2"
+chrono = "0.4.10"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "4.0.1"

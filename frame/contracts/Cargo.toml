@@ -3,6 +3,7 @@ name = "pallet-contracts"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
@@ -17,6 +18,7 @@ sp-std = { version = "2.0.0", default-features = false, path = "../../primitives
 sp-sandbox = { version = "0.8.0", default-features = false, path = "../../primitives/sandbox" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "common" }
 
 [dev-dependencies]
 wabt = "0.9.2"
@@ -41,4 +43,5 @@ std = [
 	"parity-wasm/std",
 	"pwasm-utils/std",
 	"wasmi-validation/std",
+	"pallet-contracts-primitives/std",
 ]
