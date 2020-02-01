@@ -264,12 +264,11 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block|
-					self.client
-						.storage_keys_paged(
+					self.client.storage_keys_paged(
 						&BlockId::Hash(block), &prefix, count as usize, &start_key
-						)
-						.map(|v| v.collect())
+					)
 				)
+				.map(|v| v.collect())
 				.map_err(client_err)))
 	}
 
