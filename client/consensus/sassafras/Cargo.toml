@@ -23,4 +23,5 @@ sp-timestamp = { path = "../../../primitives/timestamp" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sc-client = { path = "../../" }
 sc-client-api = { path = "../../api" }
-sc-consensus-slots = { path = "../slots"  }
+sc-consensus-slots = { path = "../slots" }
+sc-consensus-epochs = { path = "../epochs" }

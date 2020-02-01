@@ -29,7 +29,6 @@ pub use crate::vrf::{
 	RawVRFProof, VRFProof, Randomness,
 };
 
-use core::ops::{Deref, DerefMut};
 use sp_runtime::ConsensusEngineId;
 
 mod app {

@@ -17,7 +17,8 @@ use sp_consensus::{
 };
 use sp_consensus::import_queue::{Verifier, CacheKeyId, BasicQueue};
 use sp_consensus_sassafras::{
-	SASSAFRAS_ENGINE_ID, AuthorityPair, AuthorityId, Randomness,
+	SASSAFRAS_ENGINE_ID, AuthorityPair, AuthorityId, Randomness, VRFProof,
+	SassafrasAuthorityWeight,
 };
 use sp_consensus_sassafras::digest::{
 	NextEpochDescriptor, PostBlockDescriptor, PreDigest, CompatibleDigestItem
@@ -29,8 +30,9 @@ use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sc_client::{Client, CallExecutor};
 use sc_client_api::backend::{AuxStore, Backend};
+use sc_consensus_epochs::{SlotNumber, Epoch as EpochT};
 use sc_consensus_slots::SlotCompatible;
-use crate::aux_schema::{AUXILIARY_KEY, PoolAuxiliary};
+use crate::aux_schema::{load_epoch_changes, write_epoch_changes};
 
 /// Validator set of a particular epoch, can be either publishing or validating.
 pub struct ValidatorSet {
@@ -125,10 +127,10 @@ pub struct SassafrasVerifier<B, E, Block: BlockT, RA, PRA> {
 
 impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 	Block: BlockT<Hash=H256>,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
-	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
+	PRA: ProvideRuntimeApi<Block> + Send + Sync + AuxStore + ProvideCache<Block>,
 	PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	fn verify(
@@ -248,10 +250,10 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 
 impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA, PRA> where
 	Block: BlockT<Hash=H256>,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
-	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
+	PRA: ProvideRuntimeApi<Block> + Send + Sync + AuxStore + ProvideCache<Block>,
 	PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	fn verify(
@@ -265,7 +267,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 	}
 }
 
-pub type SassafrasImportQueue<B> = BasicQueue<B>;
+pub type SassafrasImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 
 pub struct SassafrasBlockImport<B, E, Block: BlockT, I, RA, PRA> {
 	inner: I,
