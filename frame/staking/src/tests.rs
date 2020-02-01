@@ -2891,6 +2891,7 @@ fn migration_v3() {
 			individual: vec![2, 10],
 		});
 		<Staking as Store>::ErasStakers::remove_all();
+		<Staking as Store>::ErasStakersClipped::remove_all();
 
 		<Staking as Store>::StorageVersion::put(2);
 		// Perform migration.
@@ -2916,6 +2917,21 @@ fn migration_v3() {
 			others: vec![],
 		});
 		assert_eq!(<Staking as Store>::ErasStakers::get(3, 31), Exposure {
+			total: 30,
+			own: 30,
+			others: vec![],
+		});
+		assert_eq!(<Staking as Store>::ErasStakersClipped::get(3, 11), Exposure {
+			total: 0,
+			own: 0,
+			others: vec![],
+		});
+		assert_eq!(<Staking as Store>::ErasStakersClipped::get(3, 21), Exposure {
+			total: 20,
+			own: 20,
+			others: vec![],
+		});
+		assert_eq!(<Staking as Store>::ErasStakersClipped::get(3, 31), Exposure {
 			total: 30,
 			own: 30,
 			others: vec![],

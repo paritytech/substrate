@@ -112,6 +112,7 @@ impl SessionManager<u64> for TestSessionManager {
 #[cfg(feature = "historical")]
 impl crate::historical::SessionManager<u64, u64> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
+	fn start_session(_: SessionIndex) {}
 	fn new_session(new_index: SessionIndex)
 		-> Option<Vec<(u64, u64)>>
 	{
