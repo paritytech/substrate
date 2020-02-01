@@ -3209,6 +3209,7 @@ dependencies = [
  "pallet-transaction-payment-rpc-runtime-api 2.0.0",
  "pallet-treasury 2.0.0",
  "pallet-utility 2.0.0",
+ "pallet-vesting 2.0.0",
  "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
