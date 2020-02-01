@@ -610,8 +610,10 @@ pub trait Trait: frame_system::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
-	/// Time used for computing era duration. It is guaranteed to start being called from the
-	/// first `on_finalize`. Thus value can be wrong at genesis.
+	/// Time used for computing era duration.
+	///
+	/// It is guaranteed to start being called from the first `on_finalize`. Thus value at genesis
+	/// is not used.
 	type Time: Time;
 
 	/// Convert a balance into a number used for election calculation.
@@ -685,6 +687,7 @@ decl_storage! {
 
 		/// The ideal number of staking participants.
 		pub ValidatorCount get(fn validator_count) config(): u32;
+
 		/// Minimum number of staking participants before emergency conditions are imposed.
 		pub MinimumValidatorCount get(fn minimum_validator_count) config():
 			u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
@@ -696,6 +699,7 @@ decl_storage! {
 
 		/// Map from all locked "stash" accounts to the controller account.
 		pub Bonded get(fn bonded): map hasher(blake2_256) T::AccountId => Option<T::AccountId>;
+
 		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 		pub Ledger get(fn ledger):
 			map hasher(blake2_256) T::AccountId
@@ -722,20 +726,23 @@ decl_storage! {
 		pub CurrentEra get(fn current_era): Option<EraIndex>;
 
 		/// The active era index, the era currently rewarded.
+		///
+		/// Validator set of this era must be equal to `SessionInterface::validators`.
 		pub ActiveEra get(fn active_era): Option<EraIndex>;
 
-		/// The start of the currently rewarded era.
+		/// The start of the active era.
 		pub ActiveEraStart get(fn active_era_start): Option<MomentOf<T>>;
 
-		/// The session index at which the era started for the last `HISTORY_DEPTH` eras
+		/// The session index at which the era start for the last `HISTORY_DEPTH` eras
 		pub ErasStartSessionIndex get(fn eras_start_session_index):
 			map hasher(blake2_256) EraIndex => Option<SessionIndex>;
 
 		/// Exposure of validator at era.
 		///
-		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
+		/// This is keyed first by the era index to allow bulk deletion and then the stash account.
 		///
 		/// Is it removed after `HISTORY_DEPTH` eras.
+		// If stakers hasn't been set or has been removed then empty exposure is returned.
 		pub ErasStakers get(fn eras_stakers):
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> Exposure<T::AccountId, BalanceOf<T>>;
@@ -744,11 +751,12 @@ decl_storage! {
 		///
 		/// This is similar to [`ErasStakers`] but number of nominators exposed is reduce to the
 		/// `T::MaxNominatorRewardedPerValidator` biggest stakers.
-		/// This used to limit the i/o cost for the nominator payout.
+		/// This is used to limit the i/o cost for the nominator payout.
 		///
 		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
 		///
 		/// Is it removed after `HISTORY_DEPTH` eras.
+		// If stakers hasn't been set or has been removed then empty exposure is returned.
 		pub ErasStakersClipped get(fn eras_stakers_clipped):
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> Exposure<T::AccountId, BalanceOf<T>>;
@@ -758,6 +766,7 @@ decl_storage! {
 		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
 		///
 		/// Is it removed after `HISTORY_DEPTH` eras.
+		// If prefs hasn't been set or has been removed then 0 commission is returned.
 		pub ErasValidatorPrefs get(fn eras_validator_prefs):
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> ValidatorPrefs;
@@ -769,10 +778,12 @@ decl_storage! {
 			map hasher(blake2_256) EraIndex => BalanceOf<T>;
 
 		/// Rewards for the last `HISTORY_DEPTH` eras.
+		// If reward hasn't been set or has been removed then 0 reward is returned.
 		pub ErasRewardPoints get(fn eras_reward_points):
 			map hasher(blake2_256) EraIndex => EraRewardPoints<T::AccountId>;
 
 		/// The total amount staked for the last `HISTORY_DEPTH` eras.
+		// If total hasn't been set or has been removed then 0 stake is returned.
 		pub ErasTotalStake get(fn eras_total_stake):
 			map hasher(blake2_256) EraIndex => BalanceOf<T>;
 
@@ -1076,6 +1087,7 @@ decl_module! {
 					ledger.active = Zero::zero();
 				}
 
+				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
@@ -1101,8 +1113,10 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(400_000)]
 		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			let ledger = ledger.consolidate_unlocked(Self::current_era().unwrap_or(0));
+			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			if let Some(current_era) = Self::current_era() {
+				ledger = ledger.consolidate_unlocked(current_era)
+			}
 
 			if ledger.unlocking.is_empty() && ledger.active.is_zero() {
 				// This account must have called `unbond()` with some value that caused the active
@@ -1167,6 +1181,7 @@ decl_module! {
 
 			let nominations = Nominations {
 				targets,
+				// initial nominations are considered submitted at era 0. See `Nominations` doc
 				submitted_in: Self::current_era().unwrap_or(0),
 				suppressed: false,
 			};
@@ -1430,6 +1445,9 @@ impl<T: Trait> Module<T> {
 
 		let mut reward = Perbill::zero();
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
+
+		// Note: iterator take only `MAX_NOMINATIONS` to avoid querying more validator exposure
+		// than necessary. Anyway a nominator can't validate more than `MAX_NOMINATIONS`.
 		for validator in validators.into_iter().take(MAX_NOMINATIONS) {
 			let commission = Self::eras_validator_prefs(&era, &validator).commission;
 			let validator_exposure = <ErasStakersClipped<T>>::get(&era, &validator);
@@ -1457,7 +1475,7 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		// This is zero if the era is not finished yet.
+		// Note: this is zero if the era is not finished yet.
 		let era_payout = <ErasValidatorReward<T>>::get(&era);
 		if let Some(imbalance) = Self::make_payout(&nominator_ledger.stash, reward * era_payout) {
 			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
@@ -1495,6 +1513,7 @@ impl<T: Trait> Module<T> {
 				Perbill::one().saturating_sub(commission).saturating_mul(exposure_part)
 			)
 		);
+
 		// This is zero if the era is not finished yet.
 		let era_payout = <ErasValidatorReward<T>>::get(&era);
 		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
@@ -1557,6 +1576,8 @@ impl<T: Trait> Module<T> {
 	/// Plan a new session potentially trigger a new era.
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
+			// Initial era has been set.
+
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
 				.unwrap_or_else(|| {
 					frame_support::print("Error: start_session_index must be set for current_era");
@@ -1646,13 +1667,14 @@ impl<T: Trait> Module<T> {
 		ErasStartSessionIndex::insert(&current_era, &start_session_index);
 
 		// Clean old era information.
-		if let Some(era) = current_era.checked_sub(HISTORY_DEPTH) {
-			<ErasStakers<T>>::remove_prefix(era);
-			<ErasValidatorPrefs<T>>::remove_prefix(era);
-			<ErasValidatorReward<T>>::remove(era);
-			<ErasRewardPoints<T>>::remove(era);
-			<ErasTotalStake<T>>::remove(era);
-			ErasStartSessionIndex::remove(era);
+		if let Some(old_era) = current_era.checked_sub(HISTORY_DEPTH) {
+			<ErasStakers<T>>::remove_prefix(old_era);
+			<ErasStakersClipped<T>>::remove_prefix(old_era);
+			<ErasValidatorPrefs<T>>::remove_prefix(old_era);
+			<ErasValidatorReward<T>>::remove(old_era);
+			<ErasRewardPoints<T>>::remove(old_era);
+			<ErasTotalStake<T>>::remove(old_era);
+			ErasStartSessionIndex::remove(old_era);
 		}
 
 		let bonding_duration = T::BondingDuration::get();
@@ -1679,7 +1701,7 @@ impl<T: Trait> Module<T> {
 			}
 		});
 
-		// Reassign all ErasStakers.
+		// Set staking information for new era.
 		let maybe_new_validators = Self::select_validators(current_era);
 		Self::apply_unapplied_slashes(current_era);
 
@@ -1702,7 +1724,8 @@ impl<T: Trait> Module<T> {
 		})
 	}
 
-	/// Select a new validator set from the assembled stakers and their role preferences.
+	/// Select a new validator set from the assembled stakers and their role preferences, and store
+	/// staking information for the new current era.
 	///
 	/// Fill the storages `ErasStakers`, `ErasStakersClipped`, `ErasValidatorPrefs` and
 	/// `ErasTotalStake` for current era.
@@ -1760,7 +1783,7 @@ impl<T: Trait> Module<T> {
 				Self::slashable_balance_of,
 			);
 
-			// Populate ErasStakers and figure out the total stake.
+			// Populate stakers information and figure out the total stake.
 			let mut total_staked = BalanceOf::<T>::zero();
 			for (c, s) in supports.into_iter() {
 				// build `struct exposure` from `support`
@@ -1803,13 +1826,12 @@ impl<T: Trait> Module<T> {
 				<ErasStakersClipped<T>>::insert(&current_era, &c, exposure_clipped);
 			}
 
-			// Insert current era informations
+			// Insert current era staking informations
 			<ErasTotalStake<T>>::insert(&current_era, total_staked);
 			let default_pref = ValidatorPrefs::default();
 			for stash in &elected_stashes {
 				let pref = all_validators_and_prefs.get(stash)
-					// This should always succeed but better to be safe
-					.unwrap_or(&default_pref);
+					.unwrap_or(&default_pref); // Must never happen, but better to be safe.
 				<ErasValidatorPrefs<T>>::insert(&current_era, stash, pref);
 			}
 
@@ -1959,8 +1981,8 @@ impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 /// A typed conversion from stash account ID to the active exposure of nominators
 /// on that account.
 ///
-/// Active exposure is the exposure of the validator set currently validating. It can differ from
-/// the latest planned exposure.
+/// Active exposure is the exposure of the validator set currently validating, i.e. in
+/// `active_era`. It can differ from the latest planned exposure in `current_era`.
 pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
