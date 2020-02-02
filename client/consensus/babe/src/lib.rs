@@ -64,6 +64,7 @@ pub use sp_consensus_babe::{
 };
 pub use sp_consensus::SyncOracle;
 use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration}};
+use codec::{Encode, Decode};
 use sp_consensus_babe;
 use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
@@ -101,7 +102,7 @@ use log::{warn, debug, info, trace};
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
 };
-use epoch_changes::descendent_query;
+use epoch_changes::{descendent_query, ViableEpoch};
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	HeaderBackend, ProvideCache, HeaderMetadata
@@ -120,7 +121,6 @@ pub use sp_consensus_babe::{
 	AuthorityId, AuthorityPair, AuthoritySignature, Epoch, NextEpochDescriptor,
 };
 pub use epoch_changes::{EpochChanges, EpochChangesFor, SharedEpochChanges};
-
 
 #[derive(derive_more::Display, Debug)]
 enum Error<B: BlockT> {
@@ -162,16 +162,14 @@ enum Error<B: BlockT> {
 	FetchParentHeader(sp_blockchain::Error),
 	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]
 	ExpectedEpochChange(B::Hash, u64),
-	#[display(fmt = "Could not look up epoch: {:?}", _0)]
-	CouldNotLookUpEpoch(Box<fork_tree::Error<sp_blockchain::Error>>),
-	#[display(fmt = "Block {} is not valid under any epoch.", _0)]
-	BlockNotValid(B::Hash),
 	#[display(fmt = "Unexpected epoch change")]
 	UnexpectedEpochChange,
 	#[display(fmt = "Parent block of {} has no associated weight", _0)]
 	ParentBlockNoAssociatedWeight(B::Hash),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
+	#[display(fmt = "Intermediate is missing or invalid for block import")]
+	NoIntermediate,
 	Client(sp_blockchain::Error),
 	Runtime(sp_inherents::Error),
 	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
@@ -196,6 +194,17 @@ macro_rules! babe_info {
 		}
 	};
 }
+
+
+/// Intermediate value passed to block importer.
+#[derive(Encode, Decode, Clone, Debug)]
+pub struct BabeIntermediate {
+	/// The epoch data.
+	pub epoch: ViableEpoch,
+}
+
+/// Intermediate key for Babe engine.
+pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
@@ -796,6 +805,12 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 
+				let mut intermediates = HashMap::new();
+				intermediates.insert(
+					INTERMEDIATE_KEY.to_vec(),
+					BabeIntermediate { epoch }.encode()
+				);
+
 				let block_import_params = BlockImportParams {
 					origin,
 					header: pre_header,
@@ -805,7 +820,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
-					intermediates: Default::default(),
+					intermediates,
 					fork_choice: None,
 					allow_missing_state: false,
 					import_existing: false,
@@ -963,20 +978,16 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 					))?
 			};
 
-			let epoch = epoch_changes.epoch_for_child_of(
-				descendent_query(&*self.client),
-				&parent_hash,
-				*parent_header.number(),
-				slot_number,
-				|slot| self.config.genesis_epoch(slot),
-			)
-				.map_err(|e: fork_tree::Error<sp_blockchain::Error>| ConsensusError::ChainLookup(
-					babe_err(Error::<Block>::CouldNotLookUpEpoch(Box::new(e))).into()
-				))?
-				.ok_or_else(|| ConsensusError::ClientImport(
-					babe_err(Error::<Block>::BlockNotValid(hash)).into()
-				))?;
+			let intermediate = BabeIntermediate::decode(
+				&mut &block.intermediates.remove(INTERMEDIATE_KEY)
+					.ok_or(ConsensusError::ClientImport(
+						babe_err(Error::<Block>::NoIntermediate).into()
+					))?[..]
+			).map_err(|_| ConsensusError::ClientImport(
+				babe_err(Error::<Block>::NoIntermediate).into()
+			))?;
 
+			let epoch = intermediate.epoch;
 			let first_in_epoch = parent_slot < epoch.as_ref().start_slot;
 			(epoch, first_in_epoch, parent_weight)
 		};
