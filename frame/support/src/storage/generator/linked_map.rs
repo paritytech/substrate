@@ -61,14 +61,6 @@ pub trait KeyFormat {
 		Self::top_trie_key(key)
 	}
 
-	#[deprecated(note="Use `top_trie_key` instead")]
-	fn hashed_key_for<K>(key: &K) -> Vec<u8>
-	where
-		K: Encode,
-	{
-		Self::top_trie_key(key)
-	}
-
 	/// Generate the full key used in top storage.
 	fn top_trie_key<K>(key: &K) -> Vec<u8>
 	where
@@ -89,8 +81,13 @@ pub trait KeyFormat {
 		final_key
 	}
 
-	/// Generate the full key used in top storage to store the head of the linked map.
+	#[deprecated(note="Use `top_trie_head_key` instead")]
 	fn storage_linked_map_final_head_key() -> Vec<u8> {
+		Self::top_trie_head_key()
+	}
+
+	/// Generate the full key used in top storage to store the head of the linked map.
+	fn top_trie_head_key() -> Vec<u8> {
 		[
 			Twox128::hash(Self::module_prefix()),
 			Twox128::hash(Self::head_prefix()),
@@ -284,7 +281,7 @@ where
 	K: Decode,
 	F: KeyFormat,
 {
-	top::get(F::storage_linked_map_final_head_key().as_ref())
+	top::get(F::top_trie_head_key().as_ref())
 }
 
 /// Overwrite current head pointer.
@@ -297,8 +294,8 @@ where
 	F: KeyFormat,
 {
 	match head.as_ref() {
-		Some(head) => top::put(F::storage_linked_map_final_head_key().as_ref(), head),
-		None => top::kill(F::storage_linked_map_final_head_key().as_ref()),
+		Some(head) => top::put(F::top_trie_head_key().as_ref(), head),
+		None => top::kill(F::top_trie_head_key().as_ref()),
 	}
 }
 
@@ -328,9 +325,30 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 		<Self::KeyFormat as KeyFormat>::top_trie_key::<KeyArg>(&key)
 	}
 
+	#[deprecated(note="Use `top_trie_key` instead")]
+	fn storage_linked_map_final_key<KeyArg>(key: KeyArg) -> Vec<u8>
+	where
+		KeyArg: EncodeLike<K>,
+	{
+		Self::top_trie_key(key)
+	}
+
+	#[deprecated(note="Use `top_trie_key` instead")]
+	fn hashed_key_for<KeyArg>(key: KeyArg) -> Vec<u8>
+	where
+		KeyArg: EncodeLike<K>,
+	{
+		Self::top_trie_key(key)
+	}
+
 	/// Generate the hashed key for head
+	fn top_trie_head_key() -> Vec<u8> {
+		<Self::KeyFormat as KeyFormat>::top_trie_head_key()
+	}
+
+	#[deprecated(note="Use `top_trie_head_key` instead")]
 	fn storage_linked_map_final_head_key() -> Vec<u8> {
-		<Self::KeyFormat as KeyFormat>::storage_linked_map_final_head_key()
+		Self::top_trie_head_key()
 	}
 
 	/// Does the value (explicitly) exist in storage?
