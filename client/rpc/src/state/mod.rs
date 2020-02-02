@@ -263,15 +263,12 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageKey>> {
 		if count > STORAGE_KEYS_PAGED_MAX_COUNT {
-			return Box::new(result(Err(client_err(
-				sp_blockchain::Error::Msg(
-					format!(
-						"count exceeds maximum value. value: {}, max: {}",
-						count,
-						STORAGE_KEYS_PAGED_MAX_COUNT,
-					)
-				)
-			))));
+			return Box::new(result(Err(
+				Error::InvalidCount {
+					value: count,
+					max: STORAGE_KEYS_PAGED_MAX_COUNT,
+				}
+			)));
 		}
 		self.backend.storage_keys_paged(block, prefix.unwrap_or_else(|| StorageKey(vec![])), count, start_key)
 	}
