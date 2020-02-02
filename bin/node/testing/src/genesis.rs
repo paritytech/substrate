@@ -100,5 +100,6 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 			pot: 0,
 			max_members: 999,
 		}),
+		pallet_vesting: Some(Default::default()),
 	}
 }
