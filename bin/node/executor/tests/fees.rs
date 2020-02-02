@@ -30,7 +30,7 @@ use sp_runtime::{
 };
 use node_runtime::{
 	CheckedExtrinsic, Call, Runtime, Balances,
-	TransactionPayment, TransferFee, TransactionBaseFee, TransactionByteFee,
+	TransactionPayment, TransactionBaseFee, TransactionByteFee,
 	WeightFeeCoefficient, constants::currency::*,
 };
 use node_runtime::impls::LinearWeightToFee;
@@ -134,14 +134,14 @@ fn transaction_fee_is_correct_ultimate() {
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 		top: map![
-			<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
-				(100 * DOLLARS).encode()
+			<pallet_balances::Account<Runtime>>::hashed_key_for(alice()) => {
+				(100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
 			},
-			<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(bob()) => {
-				(10 * DOLLARS).encode()
+			<pallet_balances::Account<Runtime>>::hashed_key_for(bob()) => {
+				(10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
 			},
 			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-				(110 * DOLLARS).encode()
+				(110 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
 			},
 			<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
@@ -193,9 +193,7 @@ fn transaction_fee_is_correct_ultimate() {
 		// we know that weight to fee multiplier is effect-less in block 1.
 		assert_eq!(weight_fee as Balance, MILLICENTS);
 		balance_alice -= weight_fee;
-
 		balance_alice -= tip;
-		balance_alice -= TransferFee::get();
 
 		assert_eq!(Balances::total_balance(&alice()), balance_alice);
 	});

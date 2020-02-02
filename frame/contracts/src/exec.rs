@@ -573,7 +573,7 @@ impl<T: Trait> Token<T> for TransferFeeToken<BalanceOf<T>> {
 		let balance_fee = match self.kind {
 			TransferFeeKind::ContractInstantiate => metadata.contract_account_instantiate_fee,
 			TransferFeeKind::AccountCreate => metadata.account_create_fee,
-			TransferFeeKind::Transfer => metadata.transfer_fee,
+			TransferFeeKind::Transfer => return metadata.schedule.transfer_cost,
 		};
 		approx_gas_for_balance(self.gas_price, balance_fee)
 	}
