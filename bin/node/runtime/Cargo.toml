@@ -65,6 +65,7 @@ pallet-treasury = { version = "2.0.0", default-features = false, path = "../../.
 pallet-utility = { version = "2.0.0", default-features = false, path = "../../../frame/utility" }
 pallet-transaction-payment = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
+pallet-vesting = { version = "2.0.0", default-features = false, path = "../../../frame/vesting" }
 
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.4", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
@@ -125,4 +126,5 @@ std = [
 	"sp-version/std",
 	"pallet-society/std",
 	"pallet-recovery/std",
+	"pallet-vesting/std",
 ]

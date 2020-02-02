@@ -150,9 +150,16 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let future_limit = &self.options.future;
 
 		debug!(target: "txpool", "Pool Status: {:?}", status);
-
 		if ready_limit.is_exceeded(status.ready, status.ready_bytes)
-			|| future_limit.is_exceeded(status.future, status.future_bytes) {
+			|| future_limit.is_exceeded(status.future, status.future_bytes)
+		{
+			debug!(
+				target: "txpool",
+				"Enforcing limits ({}/{}kB ready, {}/{}kB future",
+				ready_limit.count, ready_limit.total_bytes / 1024,
+				future_limit.count, future_limit.total_bytes / 1024,
+			);
+
 			// clean up the pool
 			let removed = {
 				let mut pool = self.pool.write();
@@ -163,6 +170,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				removed
 			};
 			// run notifications
+			debug!(target: "txpool", "Enforcing limits: {} dropped", removed.len());
 			let mut listener = self.listener.write();
 			for h in &removed {
 				listener.dropped(h, None);

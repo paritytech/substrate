@@ -7,7 +7,7 @@ build = "build.rs"
 license = "GPL-3.0"
 
 [build-dependencies]
-prost-build = "0.5.0"
+prost-build = "0.6.1"
 
 [dependencies]
 bytes = "0.4.12"
