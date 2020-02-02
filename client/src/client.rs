@@ -99,6 +99,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	_phantom: PhantomData<RA>,
 }
 
+/// An `Iterator` that iterates keys in a given block under a prefix.
 pub struct KeyIterator<'a, State, Block> {
 	state: State,
 	prefix: &'a StorageKey,
