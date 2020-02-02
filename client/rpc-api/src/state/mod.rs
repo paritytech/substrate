@@ -50,7 +50,7 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_getKeysPaged", alias("state_getKeysPagedAt"))]
 	fn storage_keys_paged(
 		&self,
-		prefix: StorageKey,
+		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
 		hash: Option<Hash>,
