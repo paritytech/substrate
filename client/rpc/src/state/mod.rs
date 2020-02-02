@@ -38,7 +38,7 @@ use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
 
-const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 10_000;
+const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
 /// State backend API.
 pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static

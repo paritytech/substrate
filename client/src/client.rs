@@ -103,17 +103,15 @@ pub struct KeyIterator<'a, State, Block> {
 	state: State,
 	prefix: &'a StorageKey,
 	current_key: Vec<u8>,
-	remaining: usize,
 	_phantom: PhantomData<Block>,
 }
 
 impl <'a, State, Block> KeyIterator<'a, State, Block> {
-	fn new(state: State, prefix: &'a StorageKey, current_key: Vec<u8>, count: usize) -> Self {
+	fn new(state: State, prefix: &'a StorageKey, current_key: Vec<u8>) -> Self {
 		Self {
 			state,
 			prefix,
 			current_key,
-			remaining: count,
 			_phantom: PhantomData,
 		}
 	}
@@ -126,27 +124,13 @@ impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
 	type Item = StorageKey;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		if self.remaining == 0 {
-			return None;
-		}
-		let maybe_next_key = self.state
-			.next_storage_key(&self.current_key[..])
+		let next_key = self.state
+			.next_storage_key(&self.current_key)
 			.ok()
-			.unwrap_or_default()
-			.filter(|v| v.starts_with(&self.prefix.0[..]))
-			.map(StorageKey);
-		if let Some(ref next_key) = maybe_next_key {
-			self.current_key = next_key.0.clone();
-			self.remaining -= 1;
-		} else {
-			// no more
-			self.remaining = 0;
-		}
-		maybe_next_key
-	}
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		(0, Some(self.remaining))
+			.flatten()
+			.filter(|v| v.starts_with(&self.prefix.0[..]))?;
+		self.current_key = next_key.clone();
+		Some(StorageKey(next_key))
 	}
 }
 
@@ -291,17 +275,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(keys)
 	}
 
-	/// Paged version of `storage_keys`. Only return up to `count` keys after `start_key` or `prefix`.
-	pub fn storage_keys_paged<'a>(
+	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in that block.
+	pub fn storage_keys_iter<'a>(
 		&self,
 		id: &BlockId<Block>,
 		prefix: &'a StorageKey,
-		count: usize,
 		start_key: &Option<StorageKey>
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
 		let state = self.state_at(id)?;
 		let start_key = start_key.as_ref().unwrap_or(prefix);
-		Ok(KeyIterator::new(state, prefix, start_key.0.clone(), count))
+		Ok(KeyIterator::new(state, prefix, start_key.0.clone()))
 	}
 
 	/// Given a `BlockId` and a key, return the value under the key in that block.
@@ -3370,24 +3353,24 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn storage_keys_paged_prefix_and_start_key_works() {
+	fn storage_keys_iter_prefix_and_start_key_works() {
 		let client = substrate_test_runtime_client::new();
 
 		let prefix = StorageKey(hex!("3a").to_vec());
 
-		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 50, &None)
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &None)
 			.unwrap()
 			.map(|x| x.0)
 			.collect();
 		assert_eq!(res, [hex!("3a636f6465").to_vec(), hex!("3a686561707061676573").to_vec()]);
 
-		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 50, &Some(StorageKey(hex!("3a636f6465").to_vec())))
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &Some(StorageKey(hex!("3a636f6465").to_vec())))
 			.unwrap()
 			.map(|x| x.0)
 			.collect();
 		assert_eq!(res, [hex!("3a686561707061676573").to_vec()]);
 
-		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 50, &Some(StorageKey(hex!("3a686561707061676573").to_vec())))
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &Some(StorageKey(hex!("3a686561707061676573").to_vec())))
 			.unwrap()
 			.map(|x| x.0)
 			.collect();
@@ -3395,19 +3378,21 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn storage_keys_paged_count_works() {
+	fn storage_keys_iter_works() {
 		let client = substrate_test_runtime_client::new();
 
 		let prefix = StorageKey(hex!("").to_vec());
 
-		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 2, &None)
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &None)
 			.unwrap()
+			.take(2)
 			.map(|x| x.0)
 			.collect();
 		assert_eq!(res, [hex!("0befda6e1ca4ef40219d588a727f1271").to_vec(), hex!("3a636f6465").to_vec()]);
 
-		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 3, &Some(StorageKey(hex!("3a636f6465").to_vec())))
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &Some(StorageKey(hex!("3a636f6465").to_vec())))
 			.unwrap()
+			.take(3)
 			.map(|x| x.0)
 			.collect();
 		assert_eq!(res, [
@@ -3416,8 +3401,9 @@ pub(crate) mod tests {
 			hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
 		]);
 
-		let res: Vec<_> = client.storage_keys_paged(&BlockId::Number(0), &prefix, 1, &Some(StorageKey(hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec())))
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &Some(StorageKey(hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec())))
 			.unwrap()
+			.take(1)
 			.map(|x| x.0)
 			.collect();
 		assert_eq!(res, [hex!("cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f").to_vec()]);
