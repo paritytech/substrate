@@ -465,7 +465,14 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 				storage_changes: Some(storage_changes),
 				finalized: false,
 				auxiliary: Vec::new(), // block-weight is written in block import.
-				intermediates: Default::default(),
+				intermediates: {
+					let mut intermediates = HashMap::new();
+					intermediates.insert(
+						Cow::from(INTERMEDIATE_KEY),
+						Box::new(BabeIntermediate { epoch: None }) as Box<dyn Any>,
+					);
+					intermediates
+				},
 				fork_choice: None,
 				allow_missing_state: false,
 				import_existing: false,

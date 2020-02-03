@@ -594,7 +594,14 @@ fn propose_and_import_block<Transaction>(
 			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
-			intermediates: Default::default(),
+			intermediates: {
+				let mut intermediates = HashMap::new();
+				intermediates.insert(
+					Cow::from(INTERMEDIATE_KEY),
+					Box::new(BabeIntermediate { epoch: None }) as Box<dyn Any>,
+				);
+				intermediates
+			},
 			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
