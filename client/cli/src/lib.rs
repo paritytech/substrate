@@ -750,7 +750,7 @@ impl ParseAndPrepareBenchmark {
 		let spec = load_spec(&shared_params, spec_factory)?;
 		let execution_strategy = self.params.execution.unwrap_or(ExecutionStrategy::Native).into();
 		let wasm_method = self.params.wasm_method.into();
-		sc_service::chain_ops::benchmark_runtime::<B, D>(execution_strategy, wasm_method)?;
+		sc_service::chain_ops::benchmark_runtime::<B, D, _, _>(spec, execution_strategy, wasm_method)?;
 		Ok(())
 	}
 }

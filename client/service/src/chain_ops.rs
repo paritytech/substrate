@@ -22,8 +22,9 @@ use crate::error::Error;
 use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 use log::{warn, info};
 use futures::{future, prelude::*};
-use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
+use sp_runtime::{BuildStorage, traits::{
+		Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
+	}
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
@@ -45,12 +46,20 @@ pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<Strin
 	Ok(spec.to_json(raw)?)
 }
 
-pub fn benchmark_runtime<TBl: BlockT, TExecDisp: NativeExecutionDispatch + 'static>(
+/// Run runtime benchmarks.
+pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
+	spec: ChainSpec<G, E>,
 	strategy: ExecutionStrategy,
 	wasm_method: WasmExecutionMethod,
-) -> error::Result<()> {
+) -> error::Result<()> where
+	TBl: BlockT,
+	TExecDisp: NativeExecutionDispatch + 'static,
+	G: RuntimeGenesis,
+	E: Extension,
+{
+	let genesis_storage = spec.build_storage()?;
 	let mut changes = Default::default();
-	let state = BenchmarkingState::<TBl>::new()?;
+	let state = BenchmarkingState::<TBl>::new(genesis_storage)?;
 	let executor = NativeExecutor::<TExecDisp>::new(
 		wasm_method,
 		None, // heap pages

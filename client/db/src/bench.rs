@@ -25,12 +25,13 @@ use hash_db::Prefix;
 use sp_trie::{MemoryDB, prefixed_key};
 use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{Block as BlockT, HasherFor};
+use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend};
 use crate::{DatabaseSettings, DatabaseSettingsSrc, columns};
 use crate::utils::DatabaseType;
 //use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
-use kvdb::KeyValueDB;
+use kvdb::{KeyValueDB, DBTransaction};
 
 type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HasherFor<B>>>, HasherFor<B>
@@ -59,28 +60,47 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 }
 
 /// State that manages the backend database reference. Allows runtime to control the database.
-pub struct BenchmarkingState<Block: BlockT> {
-	state: Option<DbState<Block>>,
+pub struct BenchmarkingState<B: BlockT> {
+	state: Option<DbState<B>>,
+	db: Option<Arc<dyn KeyValueDB>>,
 	path: PathBuf,
+	root: B::Hash,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
 	/// Create a new instance that creates a database in a temporary dir.
-	pub fn new() -> Result<Self, String> {
+	pub fn new(genesis: Storage) -> Result<Self, String> {
 		let temp_dir = PathBuf::from(std::env::temp_dir());
 		let name: String = rand::thread_rng().sample_iter(&rand::distributions::Alphanumeric).take(10).collect();
 		let path = temp_dir.join(&name);
 
+		let mut root = B::Hash::default();
+		let mut mdb = MemoryDB::<HasherFor<B>>::default();
+		sp_state_machine::TrieDBMut::<HasherFor<B>>::new(&mut mdb, &mut root);
+
 		std::fs::create_dir(&path).map_err(|_| String::from("Error creating temp dir"))?;
 		let mut state = BenchmarkingState {
 			state: None,
+			db: None,
 			path,
+			root,
 		};
+
 		state.reopen()?;
+		let child_delta = genesis.children.into_iter().map(|(storage_key, child_content)|	(
+				storage_key,
+				child_content.data.into_iter().map(|(k, v)| (k, Some(v))), child_content.child_info),
+		);
+		let (root, transaction) = state.state.as_ref().unwrap().full_storage_root(
+			genesis.top.into_iter().map(|(k, v)| (k, Some(v))),
+			child_delta,
+		);
+		state.commit(root, transaction)?;
 		Ok(state)
 	}
 
 	fn reopen(&mut self) -> Result<(), String> {
+		self.db = None;
 		self.state = None;
 		let config = DatabaseSettings {
 			state_cache_size: 0,
@@ -91,14 +111,13 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 		let db = crate::utils::open_database::<B>(&config, DatabaseType::Full)
 			.map_err(|e| format!("Error opening dadabase: {:?}", e))?;
-		let mut root = B::Hash::default();
-		let mut mdb = MemoryDB::<HasherFor<B>>::default();
-		sp_state_machine::TrieDBMut::<HasherFor<B>>::new(&mut mdb, &mut root);
-		self.state = Some(DbState::<B>::new(Arc::new(StorageDb::<B> { db, _block: Default::default() }), root));
+		self.db = Some(db.clone());
+		self.state = Some(DbState::<B>::new(Arc::new(StorageDb::<B> { db, _block: Default::default() }), self.root));
 		Ok(())
 	}
 
 	fn kill(&mut self) -> Result<(), String> {
+		self.db = None;
 		self.state = None;
 		std::fs::remove_dir_all(&self.path).map_err(|_| "Error removing database dir".into())
 	}
@@ -106,7 +125,6 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 impl<B: BlockT> Drop for BenchmarkingState<B> {
 	fn drop(&mut self) {
-		self.state = None;
 		self.kill().ok();
 	}
 }
@@ -240,9 +258,23 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		self.state.as_mut().map_or(None, |s| s.as_trie_backend())
 	}
 
-	fn commit(&mut self, _storage_root: B::Hash, mut transaction: Self::Transaction) -> Result<(), Self::Error> {
-		println!("Committing: {:?}", transaction.drain());
-		self.reopen()
+	fn commit(&mut self, storage_root: B::Hash, mut transaction: Self::Transaction) -> Result<(), Self::Error> {
+		if let Some(db) = self.db.as_ref() {
+			let mut db_transaction = DBTransaction::new();
+
+			for (key, (val, rc)) in transaction.drain() {
+				if rc > 0 {
+					db_transaction.put(columns::STATE, &key, &val);
+				} else if rc < 0 {
+					db_transaction.delete(columns::STATE, &key);
+				}
+			}
+			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
+			self.root = storage_root;
+			self.reopen()
+		} else {
+			Err("Trying to commit to a closed db".into())
+		}
 	}
 
 	fn wipe(&mut self) -> Result<(), Self::Error> {

@@ -981,7 +981,7 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 			("revert", Some(matches)) => CoreParams::Revert(RevertCmd::from_clap(matches)),
 			("purge-chain", Some(matches)) =>
 				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
-			("benchrmark-runtime", Some(matches)) =>
+			("benchmark-runtime", Some(matches)) =>
 				CoreParams::Benchmark(BenchmarkCmd::from_clap(matches)),
 			(_, None) => CoreParams::Run(MergeParameters::from_clap(matches)),
 			_ => CoreParams::Custom(CC::from_clap(matches)),
