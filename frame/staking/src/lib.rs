@@ -1633,7 +1633,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Increment `ActiveEra` and reset `ActiveEraStart`
+	/// Increment `ActiveEra`, reset `ActiveEraStart`, update `BondedEras` and apply slashes.
 	fn start_era(start_session: SessionIndex) {
 		let active_era = ActiveEra::mutate(|s| {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
