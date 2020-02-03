@@ -57,12 +57,12 @@ where
 	config.telemetry_external_transport = Some(transport);
 	config.roles = Roles::LIGHT;
 	config.name = format!("{} (Browser)", name);
-	config.database = {
+	config.database = Some({
 		info!("Opening Indexed DB database '{}'...", name);
 		let db = kvdb_web::Database::open(name, 10)
 			.await?;
 		DatabaseConfig::Custom(Arc::new(db))
-	};
+	});
 	config.keystore = KeystoreConfig::InMemory;
 
 	Ok(config)
