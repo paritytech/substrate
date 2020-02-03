@@ -99,6 +99,11 @@ impl<H: Clone, BH: Clone> Sender<H, BH> {
 		self.is_finalized = true;
 	}
 
+	/// The block this extrinsic was included in has been retracted
+	pub fn retracted(&mut self) {
+		self.send(TransactionStatus::Retracted);
+	}
+
 	/// Extrinsic has been marked as invalid by the block builder.
 	pub fn invalid(&mut self) {
 		self.send(TransactionStatus::Invalid);

@@ -38,7 +38,7 @@ use sp_runtime::{
 };
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream, TxHash, TransactionFor,
-	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent, BlockHash
+	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
 };
 use wasm_timer::Instant;
 
@@ -160,7 +160,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> PoolResult<Box<TransactionStatusStreamFor<Self>>> {
+	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error> {
 		let at = *at;
 		let pool = self.pool.clone();
 
@@ -290,13 +290,11 @@ impl<N: Clone + Copy + SimpleArithmetic> RevalidationStatus<N> {
 impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
+		PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
 {
-	fn maintain(&self, event: &ChainEvent<Self>) -> Pin<Box<dyn Future<Output=()> + Send>> {
+	fn maintain(&self, event: ChainEvent<Self>) -> Pin<Box<dyn Future<Output=()> + Send>> {
 		match event {
-			ChainEvent::Canonical {
-				id, retracted, ..
-			} => {
+			ChainEvent::NewBlock { id, retracted, .. } => {
 				let id = id.clone();
 				let pool = self.pool.clone();
 				let api = self.api.clone();
@@ -339,6 +337,9 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 						let mut resubmit_transactions = Vec::new();
 
 						for retracted_hash in retracted {
+							// notify txs awaiting finality that it has been retracted
+							pool.retracted(&retracted_hash);
+
 							let block_transactions = api.block_body(&BlockId::hash(retracted_hash.clone())).await
 								.unwrap_or_else(|e| {
 									log::warn!("Failed to fetch block body {:?}!", e);
@@ -368,8 +369,16 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 				}.boxed()
 			}
 			ChainEvent::Finalized { hash } => {
-				self.pool().finalized(hash);
-				Box::pin(ready(()))
+				let pool = self.pool.clone();
+				async move {
+					if let Err(e) = pool.finalized(&hash).await {
+						log::warn!(
+							target: "txpool",
+							"Error [{}] occurred while attempting to notify watchers of finalization {}",
+							e, hash
+						)
+					}
+				}.boxed()
 			}
 		}
 	}

@@ -618,8 +618,6 @@ pub type HasherFor<B> = <HashFor<B> as Hash>::Hasher;
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
-/// Extract the hash type for a block
-pub type BlockHashFor<B> = <B as Block>::Hash;
 /// Extract the digest type for a block.
 pub type DigestFor<B> = Digest<<<B as Block>::Header as Header>::Hash>;
 /// Extract the digest item type for a block.

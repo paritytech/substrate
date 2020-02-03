@@ -57,7 +57,6 @@ impl<'a, Block: BlockT, B, E, RA> finality_grandpa::Chain<Block::Hash, NumberFor
 	}
 }
 
-/// TODO: augument this fn to take an Option<Sink> and an exectutor for sending out notifications
 fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 	client: &Arc<Client<B, E, Block, RA>>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
@@ -109,7 +108,6 @@ fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 		};
 
 		if let Some(_) = validation_result.ghost() {
-			// TODO: send finalization notifications here!
 			let finalized_hash = commit.target_hash;
 			let finalized_number = commit.target_number;
 

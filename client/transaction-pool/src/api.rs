@@ -25,7 +25,7 @@ use futures::{
 use sc_client_api::{
 	blockchain::HeaderBackend,
 	light::{Fetcher, RemoteCallRequest, RemoteBodyRequest},
-	BlockBody,
+	BlockBody, Backend
 };
 use sp_core::Hasher;
 use sp_runtime::{
@@ -64,7 +64,7 @@ impl<Client, Block> FullChainApi<Client, Block> where
 
 impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block> where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBody<Block> + BlockIdTo<Block> + 'static + Send + Sync,
+	Client: Backend<Block> + ProvideRuntimeApi<Block> + BlockBody<Block> + BlockIdTo<Block> + 'static + Send + Sync,
 	Client::Api: TaggedTransactionQueue<Block>,
 	sp_api::ApiErrorFor<Client, Block>: Send,
 {
@@ -76,6 +76,10 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 
 	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
 		ready(self.client.block_body(&id).map_err(|e| error::Error::from(e)))
+	}
+
+	fn block_header(&self, id: BlockId<Self::Block>) -> error::Result<Option<Block::Header>> {
+		Ok(self.client.blockchain().header(id)?)
 	}
 
 	fn validate_transaction(
@@ -232,5 +236,9 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 
 			Ok(Some(transactions))
 		}.boxed()
+	}
+
+	fn block_header(&self, id: BlockId<Block>) -> error::Result<Option<Block::Header>> {
+		Ok(self.client.header(id)?)
 	}
 }

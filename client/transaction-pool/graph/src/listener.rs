@@ -16,8 +16,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-	collections::HashMap,
-	hash,
+	collections::HashMap, hash,
 };
 use serde::Serialize;
 use crate::{watcher, ChainApi, BlockHash};
@@ -27,7 +26,7 @@ use sp_runtime::traits;
 /// Extrinsic pool default listener.
 pub struct Listener<H: hash::Hash + Eq, C: ChainApi> {
 	watchers: HashMap<H, watcher::Sender<H, BlockHash<C>>>,
-	finality_watchers: HashMap<BlockHash<C>, Vec<watcher::Sender<H, BlockHash<C>>>>,
+	finality_watchers: HashMap<BlockHash<C>, Vec<H>>,
 }
 
 impl<H: hash::Hash + Eq, C: ChainApi> Default for Listener<H, C> {
@@ -104,22 +103,24 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	/// Transaction was pruned from the pool.
 	pub fn pruned(&mut self, block_hash: BlockHash<C>, tx: &H) {
 		debug!(target: "txpool", "[{:?}] Pruned at {:?}", tx, block_hash);
-		self.fire(tx, |watcher| watcher.in_block(block_hash.clone()));
+		self.fire(tx, |s| s.in_block(block_hash.clone()));
+		self.finality_watchers.entry(block_hash).or_default().push(tx.clone());
+	}
 
-		if let Some(sender) = self.watchers.remove(tx) {
-			let senders = self.finality_watchers
-				.entry(block_hash.clone())
-				.or_insert_with(Vec::new);
-			senders.push(sender);
+	/// The block this transaction was included in has been retracted.
+	pub fn retracted(&mut self, block_hash: &BlockHash<C>) {
+		if let Some(hashes) = self.finality_watchers.remove(block_hash) {
+			for hash in hashes {
+				self.fire(&hash, |s| s.retracted())
+			}
 		}
 	}
 
-	/// Notify all watchers that transactions in the block with hash have been finalized
-	pub fn finalized(&mut self, block_hash: &BlockHash<C>) {
-		if let Some(senders) = self.finality_watchers.remove(block_hash) {
-			for mut sender in senders {
-				sender.finalized();
-			}
+	/// Notify all watchers that transactions have been finalized
+	pub fn finalized(&mut self, block_hash: &BlockHash<C>, txs: &[H]) {
+		self.finality_watchers.remove(block_hash);
+		for h in txs {
+			self.fire(h, |s| s.finalized())
 		}
 	}
 }

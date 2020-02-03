@@ -215,6 +215,14 @@ impl sc_transaction_graph::ChainApi for TestApi {
 			None
 		}))
 	}
+
+	fn block_header(&self, id: BlockId<Self::Block>) -> Result<Option<Header>, Self::Error> {
+		Ok(if let BlockId::Number(hash) = id {
+			self.chain.read().header_by_number.get(&hash).cloned()
+		} else {
+			None
+		})
+	}
 }
 
 fn number_of(at: &BlockId<Block>) -> u64 {

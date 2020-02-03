@@ -20,7 +20,7 @@ use futures::{future::{ready, Ready}, executor::block_on};
 use sc_transaction_graph::*;
 use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 use codec::Encode;
-use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
+use substrate_test_runtime::{Block, Extrinsic, Transfer, Header, H256, AccountId};
 use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
@@ -109,6 +109,10 @@ impl ChainApi for TestApi {
 
 	fn block_body(&self, _id: &BlockId<Self::Block>) -> Self::BodyFuture {
 		ready(Ok(None))
+	}
+
+	fn block_header(&self, id: BlockId<Self::Block>) -> Result<Option<Header>, Self::Error> {
+		Ok(None)
 	}
 }
 

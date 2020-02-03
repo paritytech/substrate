@@ -89,6 +89,12 @@ pub trait ChainApi: Send + Sync {
 
 	/// Returns a block body given the block id.
 	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
+
+	/// Returns block header
+	fn block_header(&self, at: BlockId<Self::Block>) -> Result<
+		Option<<Self::Block as traits::Block>::Header>,
+		Self::Error
+	>;
 }
 
 /// Pool configuration options.
@@ -455,8 +461,13 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Notify all watchers that transactions in the block with hash been finalized
-	pub fn finalized(&self, block_hash: &BlockHash<B>) {
-		self.validated_pool.finalized(block_hash);
+	pub async fn finalized(&self, block_hash: &BlockHash<B>) -> Result<(), B::Error> {
+		self.validated_pool.finalized(block_hash).await
+	}
+
+	/// Notify the listener of retracted blocks
+	pub fn retracted(&self, block_hash: &BlockHash<B>) {
+		self.validated_pool.retracted(block_hash)
 	}
 
 	/// Get ready transaction by hash, if it present in the pool.
@@ -482,7 +493,7 @@ mod tests {
 	use sp_transaction_pool::TransactionStatus;
 	use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 	use codec::Encode;
-	use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
+	use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId, Header};
 	use assert_matches::assert_matches;
 	use wasm_timer::Instant;
 	use crate::base_pool::Limit;
@@ -578,6 +589,10 @@ mod tests {
 
 		fn block_body(&self, _id: &BlockId<Self::Block>) -> Self::BodyFuture {
 			futures::future::ready(Ok(None))
+		}
+
+		fn block_header(&self, id: BlockId<Self::Block>) -> Result<Option<Header>, Self::Error> {
+			Ok(None)
 		}
 	}
 

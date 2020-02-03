@@ -31,7 +31,7 @@ use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{self, SaturatedConversion},
+	traits::{self, SaturatedConversion, Header as _},
 	transaction_validity::TransactionTag as Tag,
 };
 use sp_transaction_pool::{error, PoolStatus};
@@ -69,6 +69,7 @@ pub(crate) struct ValidatedPool<B: ChainApi> {
 		ExHash<B>,
 		ExtrinsicFor<B>,
 	>>,
+	last_finalized_hash: Arc<Mutex<BlockHash<B>>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<ExHash<B>>>>,
 	rotator: PoolRotator<ExHash<B>>,
 }
@@ -93,6 +94,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 			api,
 			options,
 			listener: Default::default(),
+			last_finalized_hash: Default::default(),
 			pool: RwLock::new(base_pool),
 			import_notification_sinks: Default::default(),
 			rotator: Default::default(),
@@ -137,21 +139,22 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let imported = self.pool.write().import(tx)?;
 
 				if let base::Imported::Ready { ref hash, .. } = imported {
-					self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(hash.clone()).is_ok());
+					self.import_notification_sinks.lock()
+						.retain(|sink| sink.unbounded_send(hash.clone()).is_ok());
 				}
 
 				let mut listener = self.listener.write();
 				fire_events(&mut *listener, &imported);
 				Ok(imported.hash().clone())
-			}
+			},
 			ValidatedTransaction::Invalid(hash, err) => {
 				self.rotator.ban(&Instant::now(), std::iter::once(hash));
 				Err(err.into())
-			}
+			},
 			ValidatedTransaction::Unknown(hash, err) => {
 				self.listener.write().invalid(&hash, false);
 				Err(err.into())
-			}
+			},
 		}
 	}
 
@@ -206,11 +209,11 @@ impl<B: ChainApi> ValidatedPool<B> {
 					.pop()
 					.expect("One extrinsic passed; one result returned; qed")
 					.map(|_| watcher)
-			}
+			},
 			ValidatedTransaction::Invalid(hash, err) => {
 				self.rotator.ban(&Instant::now(), std::iter::once(hash));
 				Err(err.into())
-			}
+			},
 			ValidatedTransaction::Unknown(_, err) => Err(err.into()),
 		}
 	}
@@ -286,10 +289,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 									for tx in removed {
 										final_statuses.insert(tx.hash.clone(), Status::Dropped);
 									}
-								}
+								},
 								base::Imported::Future { .. } => {
 									final_statuses.insert(hash, Status::Future);
-								}
+								},
 							},
 							Err(err) => {
 								// we do not want to fail if single transaction import has failed
@@ -306,7 +309,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 						},
 						ValidatedTransaction::Invalid(_, _) | ValidatedTransaction::Unknown(_, _) => {
 							final_statuses.insert(hash, Status::Failed);
-						}
+						},
 					}
 				}
 
@@ -522,8 +525,34 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Notify all watchers that transactions in the block with hash been finalized
-	pub fn finalized(&self, block_hash: &BlockHash<B>) {
-		self.listener.write().finalized(block_hash);
+	pub async fn finalized(&self, block_hash: &BlockHash<B>) -> Result<(), B::Error> {
+		let last_finalized_hash = *self.last_finalized_hash.lock();
+		let mut header = self.api.block_header(BlockId::Hash(block_hash.clone()))?
+			.expect("finalized block should have block header; qed");
+
+		while header.hash() != last_finalized_hash {
+			let hash = header.hash();
+			// fetch all extrinsic hashes
+			let tx_hashes = self.api.block_body(&BlockId::Hash(hash.clone())).await?
+				.expect("finalized block should have block body; qed")
+				.into_iter()
+				.map(|tx| self.api.hash_and_length(&tx).0)
+				.collect::<Vec<_>>();
+
+			self.listener.write().finalized(&hash, &tx_hashes);
+
+			header = self.api.block_header(BlockId::Hash(hash))?
+				.expect("finalized block should have block header; qed")
+		}
+
+		*self.last_finalized_hash.lock() = block_hash.clone();
+
+		Ok(())
+	}
+
+	/// Notify the listener of retracted blocks
+	pub fn retracted(&self, block_hash: &BlockHash<B>) {
+		self.listener.write().retracted(block_hash)
 	}
 }
 
@@ -546,9 +575,9 @@ fn fire_events<H, B, Ex>(
 			for p in promoted {
 				listener.ready(p, None);
 			}
-		}
+		},
 		base::Imported::Future { ref hash } => {
 			listener.future(hash)
-		}
+		},
 	}
 }

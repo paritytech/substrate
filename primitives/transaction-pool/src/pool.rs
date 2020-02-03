@@ -100,6 +100,8 @@ pub enum TransactionStatus<Hash, BlockHash> {
 	/// Transaction has been included in block with given hash.
 	#[serde(rename = "finalized")] // See #4438
 	InBlock(BlockHash),
+	/// The block this transaction was included in has been retracted.
+	Retracted,
 	/// Transaction has been finalized by a finality-gadget, e.g GRANDPA
 	Finalized,
 	/// Transaction has been replaced in the pool, by another transaction
@@ -124,7 +126,7 @@ pub type BlockHash<P> = <<P as TransactionPool>::Block as BlockT>::Hash;
 /// Transaction type for a pool.
 pub type TransactionFor<P> = <<P as TransactionPool>::Block as BlockT>::Extrinsic;
 /// Type of transactions event stream for a pool.
-pub type TransactionStatusStreamFor<P, BH> = TransactionStatusStream<TxHash<P>, BH>;
+pub type TransactionStatusStreamFor<P> = TransactionStatusStream<TxHash<P>, BlockHash<P>>;
 
 /// Typical future type used in transaction pool api.
 pub type PoolFuture<T, E> = std::pin::Pin<Box<dyn Future<Output=Result<T, E>> + Send>>;
@@ -190,7 +192,7 @@ pub trait TransactionPool: Send + Sync {
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> PoolFuture<Box<TransactionStatusStreamFor<Self, BlockHash<Self>>>, Self::Error>;
+	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error>;
 
 	// *** Block production / Networking
 	/// Get an iterator for ready transactions ordered by priority
@@ -222,9 +224,7 @@ pub trait TransactionPool: Send + Sync {
 /// Events that the transaction pool listens for.
 pub enum ChainEvent<TP: TransactionPool> {
 	/// New blocks have been added to the chain
-	Canonical {
-		/// is this the new best block?
-		is_new_best: bool,
+	NewBlock {
 		/// Id of the just imported block.
 		id: BlockId<TP::Block>,
 		/// Header of the just imported block
@@ -242,7 +242,7 @@ pub enum ChainEvent<TP: TransactionPool> {
 /// Trait for transaction pool maintenance.
 pub trait MaintainedTransactionPool: TransactionPool {
 	/// Perform maintenance
-	fn maintain(&self, event: &ChainEvent<Self>) -> Pin<Box<dyn Future<Output=()> + Send>>
+	fn maintain(&self, event: ChainEvent<Self>) -> Pin<Box<dyn Future<Output=()> + Send>>
 		where Self: Sized;
 }
 
