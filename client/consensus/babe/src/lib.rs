@@ -165,6 +165,10 @@ enum Error<B: BlockT> {
 	FetchParentHeader(sp_blockchain::Error),
 	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]
 	ExpectedEpochChange(B::Hash, u64),
+	#[display(fmt = "Could not look up epoch: {:?}", _0)]
+	CouldNotLookUpEpoch(Box<fork_tree::Error<sp_blockchain::Error>>),
+	#[display(fmt = "Block {} is not valid under any epoch.", _0)]
+	BlockNotValid(B::Hash),
 	#[display(fmt = "Unexpected epoch change")]
 	UnexpectedEpochChange,
 	#[display(fmt = "Parent block of {} has no associated weight", _0)]
@@ -200,8 +204,8 @@ macro_rules! babe_info {
 /// Intermediate value passed to block importer.
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct BabeIntermediate {
-	/// The epoch data.
-	pub epoch: ViableEpoch,
+	/// The epoch data, if available.
+	pub epoch: Option<ViableEpoch>,
 }
 
 /// Intermediate key for Babe engine.
@@ -809,7 +813,9 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 				let mut intermediates = HashMap::new();
 				intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+					Box::new(BabeIntermediate {
+						epoch: Some(epoch),
+					}) as Box<dyn Any>,
 				);
 
 				let block_import_params = BlockImportParams {
@@ -983,7 +989,25 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				INTERMEDIATE_KEY
 			)?;
 
-			let epoch = intermediate.epoch;
+			let epoch = match intermediate.epoch {
+				Some(epoch) => epoch,
+				None => {
+					epoch_changes.epoch_for_child_of(
+						descendent_query(&*self.client),
+						&parent_hash,
+						*parent_header.number(),
+						slot_number,
+						|slot| self.config.genesis_epoch(slot),
+					)
+						.map_err(|e: fork_tree::Error<sp_blockchain::Error>|
+								 ConsensusError::ChainLookup(
+									 babe_err(Error::<Block>::CouldNotLookUpEpoch(Box::new(e))).into()
+								 ))?
+						.ok_or_else(|| ConsensusError::ClientImport(
+							babe_err(Error::<Block>::BlockNotValid(hash)).into()
+						))?
+				},
+			};
 			let first_in_epoch = parent_slot < epoch.as_ref().start_slot;
 			(epoch, first_in_epoch, parent_weight)
 		};
