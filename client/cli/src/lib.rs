@@ -35,7 +35,7 @@ use sc_service::{
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 	AbstractService, Roles as ServiceRoles,
 };
-pub use sc_service::config::{VersionInfo};
+pub use sc_service::config::VersionInfo;
 use sc_network::{
 	self,
 	multiaddr::Protocol,
