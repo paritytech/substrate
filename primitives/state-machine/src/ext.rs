@@ -231,7 +231,7 @@ where
 	fn child_storage_hash(
 		&self,
 		storage_key: ChildStorageKey,
-		_child_info: ChildInfo,
+		child_info: ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
@@ -239,7 +239,8 @@ where
 			.child_storage(storage_key.as_ref(), key)
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(||
-				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+				self.backend.child_storage_hash(storage_key.as_ref(), child_info, key)
+					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
 		trace!(target: "state-trace", "{:04x}: ChildHash({}) {}={:?}",
