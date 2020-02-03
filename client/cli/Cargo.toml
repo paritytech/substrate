@@ -4,6 +4,7 @@ version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 clap = "2.33.0"
@@ -30,7 +31,6 @@ sc-service = { version = "0.8", default-features = false, path = "../service" }
 sp-state-machine = { version = "0.8", path = "../../primitives/state-machine" }
 sc-telemetry = { version = "2.0.0", path = "../telemetry" }
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
-pallet-identity = { version = "2.0.0", path = "../../frame/identity" }
 names = "0.11.0"
 structopt = "=0.3.7"
 sc-tracing = { version = "2.0.0", path = "../tracing" }

@@ -31,7 +31,7 @@ use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
 	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str,
-	BenchmarkResults,
+	BenchmarkResult, BenchmarkParameter,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::TransactionValidity;
@@ -78,11 +78,11 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
 	// Per convention: if the runtime behavior changes, increment spec_version
-	// and set impl_version to equal spec_version. If only runtime
+	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 205,
-	impl_version: 206,
+	spec_version: 209,
+	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -491,7 +491,8 @@ parameter_types! {
 	pub const BasicDeposit: Balance = 10 * DOLLARS;       // 258 bytes on-chain
 	pub const FieldDeposit: Balance = 250 * CENTS;        // 66 bytes on-chain
 	pub const SubAccountDeposit: Balance = 2 * DOLLARS;   // 53 bytes on-chain
-	pub const MaximumSubAccounts: u32 = 100;
+	pub const MaxSubAccounts: u32 = 100;
+	pub const MaxAdditionalFields: u32 = 100;
 }
 
 impl pallet_identity::Trait for Runtime {
@@ -501,7 +502,8 @@ impl pallet_identity::Trait for Runtime {
 	type BasicDeposit = BasicDeposit;
 	type FieldDeposit = FieldDeposit;
 	type SubAccountDeposit = SubAccountDeposit;
-	type MaximumSubAccounts = MaximumSubAccounts;
+	type MaxSubAccounts = MaxSubAccounts;
+	type MaxAdditionalFields = MaxAdditionalFields;
 	type RegistrarOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type ForceOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 }
@@ -808,8 +810,12 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_identity::IdentityBenchmarks<Block> for Runtime {
-		fn run_benchmarks() -> Vec<BenchmarkResults> {
-			Identity::run_benchmarks()
+		fn run_benchmark(parameters: Vec<(BenchmarkParameter, u32)>, repeat: u32) -> Vec<BenchmarkResult> {
+			Identity::run_benchmark(parameters, repeat)
+		}
+
+		fn get_components() -> Vec<(BenchmarkParameter, u32, u32)> {
+			pallet_identity::benchmarking::set_identity::components()
 		}
 	}
 }

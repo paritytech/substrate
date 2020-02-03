@@ -3,6 +3,7 @@ name = "substrate-frame-rpc-support"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>", "Andrew Dirksen <andrew@dirksen.com>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 futures = { version = "0.3.0", features = ["compat"] }

@@ -417,7 +417,10 @@ pub struct RunCmd {
 	pub no_grandpa: bool,
 
 	/// Experimental: Run in light client mode.
-	#[structopt(long = "light")]
+	#[structopt(
+		long = "light",
+		conflicts_with_all = &[ "validator" ]
+	)]
 	pub light: bool,
 
 	/// Listen to all RPC interfaces.
@@ -917,7 +920,7 @@ pub enum CoreParams<CC, RP> {
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
 
-	/// Benchmark the runtime.
+	/// Run runtime benchmark.
 	Benchmark(BenchmarkCmd),
 
 	/// Further custom subcommands.
@@ -960,8 +963,8 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 				.about("Remove the whole chain data.")
 		)
 		.subcommand(
-			BenchmarkCmd::augment_clap(SubCommand::with_name("benchmark"))
-				.about("Benchmark your FRAME pallets.")
+			BenchmarkCmd::augment_clap(SubCommand::with_name("benchmark-runtime"))
+			.about("Run runtime benchmarks")
 		)
 	}
 
@@ -978,7 +981,7 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 			("revert", Some(matches)) => CoreParams::Revert(RevertCmd::from_clap(matches)),
 			("purge-chain", Some(matches)) =>
 				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
-			("benchmark", Some(matches)) =>
+			("benchrmark-runtime", Some(matches)) =>
 				CoreParams::Benchmark(BenchmarkCmd::from_clap(matches)),
 			(_, None) => CoreParams::Run(MergeParameters::from_clap(matches)),
 			_ => CoreParams::Custom(CC::from_clap(matches)),
