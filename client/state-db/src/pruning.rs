@@ -40,7 +40,7 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	/// A queue of keys that should be deleted for each block in the pruning window.
 	death_rows: VecDeque<DeathRow<BlockHash, Key>>,
 	/// An index that maps each key from `death_rows` to block number.
-	death_index: HashMap<Option<ChildInfo>, HashMap<Key, u64>>,
+	death_index: HashMap<ChildInfo, HashMap<Key, u64>>,
 	/// Block number that corresponts to the front of `death_rows`
 	pending_number: u64,
 	/// Number of call of `note_canonical` after
@@ -52,8 +52,8 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 }
 
 impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
-	fn remove_death_index(&mut self, ct: &Option<ChildInfo>, key: &Key) -> Option<u64> {
-		if let Some(child_index) = self.death_index.get_mut(ct) {
+	fn remove_death_index(&mut self, child_info: &ChildInfo, key: &Key) -> Option<u64> {
+		if let Some(child_index) = self.death_index.get_mut(child_info) {
 			child_index.remove(key)
 		} else {
 			None
@@ -65,12 +65,12 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 struct DeathRow<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,
-	deleted: HashMap<Option<ChildInfo>, HashSet<Key>>,
+	deleted: HashMap<ChildInfo, HashSet<Key>>,
 }
 
 impl<BlockHash: Hash, Key: Hash> DeathRow<BlockHash, Key> {
-	fn remove_deleted(&mut self, ct: &Option<ChildInfo>, key: &Key) -> bool {
-		if let Some(child_index) = self.deleted.get_mut(ct) {
+	fn remove_deleted(&mut self, child_info: &ChildInfo, key: &Key) -> bool {
+		if let Some(child_index) = self.deleted.get_mut(child_info) {
 			child_index.remove(key)
 		} else {
 			false
@@ -104,8 +104,8 @@ impl<BlockHash: Hash, Key: Hash> From<JournalRecordCompat<BlockHash, Key>> for J
 	fn from(old: JournalRecordCompat<BlockHash, Key>) -> Self {
 		JournalRecordV1 {
 			hash: old.hash,
-			inserted: vec![(None, old.inserted)],
-			deleted: vec![(None, old.deleted)],
+			inserted: vec![(ChildInfo::top_trie(), old.inserted)],
+			deleted: vec![(ChildInfo::top_trie(), old.deleted)],
 		}
 	}
 }
@@ -153,7 +153,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		Ok(pruning)
 	}
 
-	fn import<I: IntoIterator<Item=(Option<ChildInfo>, Vec<Key>)>>(
+	fn import<I: IntoIterator<Item=(ChildInfo, Vec<Key>)>>(
 		&mut self,
 		hash: &BlockHash,
 		journal_key: Vec<u8>,
@@ -161,26 +161,26 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		deleted: Keys<Key>,
 	) {
 		// remove all re-inserted keys from death rows
-		for (ct, inserted) in inserted {
+		for (child_info, inserted) in inserted {
 			for k in inserted {
-				if let Some(block) = self.remove_death_index(&ct, &k) {
+				if let Some(block) = self.remove_death_index(&child_info, &k) {
 					self.death_rows[(block - self.pending_number) as usize]
-						.remove_deleted(&ct, &k);
+						.remove_deleted(&child_info, &k);
 				}
 			}
 		}
 
 		// add new keys
 		let imported_block = self.pending_number + self.death_rows.len() as u64;
-		for (ct, deleted) in deleted.iter() {
-			let entry = self.death_index.entry(ct.clone()).or_default();
+		for (child_info, deleted) in deleted.iter() {
+			let entry = self.death_index.entry(child_info.clone()).or_default();
 			for k in deleted.iter() {
 				entry.insert(k.clone(), imported_block);
 			}
 		}
-		let mut deleted_death_row = HashMap::<Option<ChildInfo>, HashSet<Key>>::new();
-		for (ct, deleted) in deleted.into_iter() {
-			let entry = deleted_death_row.entry(ct).or_default();
+		let mut deleted_death_row = HashMap::<ChildInfo, HashSet<Key>>::new();
+		for (child_info, deleted) in deleted.into_iter() {
+			let entry = deleted_death_row.entry(child_info).or_default();
 			entry.extend(deleted);
 		}
 
@@ -220,8 +220,8 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			let index = self.pending_number + self.pending_prunings as u64;
 
 			commit.data.extend_with(pruned.deleted.iter()
-				.map(|(ct, keys)| (
-					ct.clone(),
+				.map(|(child_info, keys)| (
+					child_info.clone(),
 					ChangeSet {
 						inserted: Vec::new(),
 						deleted: keys.iter().cloned().collect(),
@@ -272,8 +272,8 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		for _ in 0 .. self.pending_prunings {
 			let pruned = self.death_rows.pop_front().expect("pending_prunings is always < death_rows.len()");
 			trace!(target: "state-db", "Applying pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
-			for (ct, deleted) in pruned.deleted.iter() {
-				if let Some(child_index) = self.death_index.get_mut(ct) {
+			for (child_info, deleted) in pruned.deleted.iter() {
+				if let Some(child_index) = self.death_index.get_mut(child_info) {
 					for key in deleted.iter() {
 						child_index.remove(key);
 					}

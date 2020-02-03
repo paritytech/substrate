@@ -36,7 +36,7 @@ pub trait Storage<H: Hasher>: Send + Sync {
 	/// Get a trie node.
 	fn get(
 		&self,
-		trie: Option<&ChildInfo>,
+		trie: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String>;
@@ -409,7 +409,7 @@ pub trait TrieBackendStorage<H: Hasher>: TrieBackendStorageRef<H> + Send + Sync 
 impl<H: Hasher, B: TrieBackendStorageRef<H> + Send + Sync> TrieBackendStorage<H> for B {}
 
 // This implementation is used by normal storage trie clients.
-impl<H: Hasher> TrieBackendStorageRef<H> for (Arc<dyn Storage<H>>, Option<ChildInfo>) {
+impl<H: Hasher> TrieBackendStorageRef<H> for (Arc<dyn Storage<H>>, ChildInfo) {
 	type Overlay = PrefixedMemoryDB<H>;
 
 	fn get(
@@ -417,7 +417,7 @@ impl<H: Hasher> TrieBackendStorageRef<H> for (Arc<dyn Storage<H>>, Option<ChildI
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		Storage::<H>::get(self.0.deref(), self.1.as_ref(), key, prefix)
+		Storage::<H>::get(self.0.deref(), &self.1, key, prefix)
 	}
 }
 

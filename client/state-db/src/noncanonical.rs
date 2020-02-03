@@ -73,8 +73,8 @@ impl<BlockHash: Hash, Key: Hash> From<JournalRecordCompat<BlockHash, Key>> for J
 		JournalRecordV1 {
 			hash: old.hash,
 			parent_hash: old.parent_hash,
-			inserted: vec![(None, old.inserted)],
-			deleted: vec![(None, old.deleted)],
+			inserted: vec![(ChildInfo::top_trie(), old.inserted)],
+			deleted: vec![(ChildInfo::top_trie(), old.deleted)],
 		}
 	}
 }
@@ -99,8 +99,8 @@ fn insert_values<Key: Hash>(
 	values: &mut ChildKeyVals<Key>,
 	inserted: KeyVals<Key>,
 ) {
-	for (ct, inserted) in inserted {
-		let values = values.entry(ct).or_default();
+	for (child_info, inserted) in inserted {
+		let values = values.entry(child_info).or_default();
 		for (k, v) in inserted {
 			debug_assert!(values.get(&k).map_or(true, |(_, value)| *value == v));
 			let (ref mut counter, _) = values.entry(k).or_insert_with(|| (0, v));
@@ -110,8 +110,8 @@ fn insert_values<Key: Hash>(
 }
 
 fn discard_values<Key: Hash>(values: &mut ChildKeyVals<Key>, inserted: Keys<Key>) {
-	for (ct, inserted) in inserted {
-		let values = values.entry(ct).or_default();
+	for (child_info, inserted) in inserted {
+		let values = values.entry(child_info).or_default();
 		for k in inserted {
 			match values.entry(k) {
 				Entry::Occupied(mut e) => {
@@ -198,7 +198,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 							}
 						},
 					};
-					let inserted = record.inserted.iter().map(|(ct, rec)| (ct.clone(), rec.iter().map(|(k, _)| k.clone()).collect())).collect();
+					let inserted = record.inserted.iter().map(|(child_info, rec)|
+						(child_info.clone(), rec.iter().map(|(k, _)| k.clone()).collect())
+					).collect();
 					let overlay = BlockOverlay {
 						hash: record.hash.clone(),
 						journal_key,
@@ -460,9 +462,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Get a value from the node overlay. This searches in every existing changeset.
-	pub fn get(&self, trie: Option<&ChildInfo>, key: &Key) -> Option<DBValue> {
-		// TODO use top_trie instead of none
-		if let Some(values) = self.values.get(&trie.map(|t| t.to_owned())) {
+	pub fn get(&self, child_info: &ChildInfo, key: &Key) -> Option<DBValue> {
+		if let Some(values) = self.values.get(child_info) {
 			if let Some((_, value)) = values.get(&key) {
 				return Some(value.clone());
 			}
@@ -566,12 +567,14 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 mod tests {
 	use std::io;
 	use sp_core::H256;
+	use sp_core::storage::ChildInfo;
 	use super::{NonCanonicalOverlay, to_journal_key_v1};
 	use crate::CommitSet;
 	use crate::test::{make_db, make_childchangeset};
 
 	fn contains(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
-		overlay.get(None, &H256::from_low_u64_be(key)) == Some(H256::from_low_u64_be(key).as_bytes().to_vec())
+		overlay.get(&ChildInfo::top_trie(), &H256::from_low_u64_be(key))
+			== Some(H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 
 	#[test]

@@ -412,7 +412,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 
 	pub fn get<D: NodeDb>(
 		&self,
-		trie: Option<&ChildInfo>,
+		trie: &ChildInfo,
 		key: &Key,
 		db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>>
@@ -489,7 +489,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	/// Get a value from non-canonical/pruning overlay or the backing DB.
 	pub fn get<D: NodeDb>(
 		&self,
-		trie: Option<&ChildInfo>,
+		trie: &ChildInfo,
 		key: &Key,
 		db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>>

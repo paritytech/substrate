@@ -19,11 +19,11 @@
 use std::collections::HashMap;
 use sp_core::H256;
 use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb, ChildTrieChangeSets};
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildrenMap};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
-	pub data: HashMap<Option<ChildInfo>, HashMap<H256, DBValue>>,
+	pub data: ChildrenMap<HashMap<H256, DBValue>>,
 	pub meta: HashMap<Vec<u8>, DBValue>,
 }
 
@@ -40,7 +40,7 @@ impl NodeDb for TestDb {
 	type Key = H256;
 
 	fn get(&self, key: &H256) -> Result<Option<DBValue>, ()> {
-		Ok(self.data.get(&None).and_then(|data| data.get(key).cloned()))
+		Ok(self.data.get(&ChildInfo::top_trie()).and_then(|data| data.get(key).cloned()))
 	}
 }
 
@@ -83,7 +83,7 @@ pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 
 pub fn make_childchangeset(inserted: &[u64], deleted: &[u64]) -> ChildTrieChangeSets<H256> {
 	let mut result = ChildTrieChangeSets::default();
-	result.insert(None, make_changeset(inserted, deleted));
+	result.insert(ChildInfo::top_trie(), make_changeset(inserted, deleted));
 	result
 }
 
@@ -95,8 +95,8 @@ pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 }
 
 pub fn make_db(inserted: &[u64]) -> TestDb {
-	let mut data = HashMap::new();
-	data.insert(None, inserted.iter()
+	let mut data = ChildrenMap::default();
+	data.insert(ChildInfo::top_trie(), inserted.iter()
 		.map(|v| {
 			(H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec())
 		})

@@ -216,6 +216,14 @@ impl ChildInfo {
 		Self::new_default(&[])
 	}
 
+	/// Top trie defined as the unique crypto id trie with
+	/// 0 length unique id.
+	pub fn is_top_trie(&self) -> bool {
+		match self {
+			ChildInfo::Default(ChildTrie { data }) => data.len() == 0
+		}
+	}
+
 	/// Return a single byte vector containing packed child info content and its child info type.
 	/// This can be use as input for `resolve_child_info`.
 	pub fn info(&self) -> (&[u8], u32) {
@@ -295,17 +303,17 @@ impl ChildTrie {
 #[derive(Clone, PartialEq, Eq, Debug)]
 /// Type for storing a map of child trie related information.
 /// A few utilities methods are defined.
-pub struct ChildrenMap<T>(pub BTreeMap<Option<ChildInfo>, T>);
+pub struct ChildrenMap<T>(pub BTreeMap<ChildInfo, T>);
 
 /// Type alias for storage of children related content. 
-pub type ChildrenVec<T> = Vec<(Option<ChildInfo>, T)>;
+pub type ChildrenVec<T> = Vec<(ChildInfo, T)>;
 
 /// Type alias for storage of children related content. 
-pub type ChildrenSlice<'a, T> = &'a [(Option<ChildInfo>, T)];
+pub type ChildrenSlice<'a, T> = &'a [(ChildInfo, T)];
 
 #[cfg(feature = "std")]
 impl<T> sp_std::ops::Deref for ChildrenMap<T> {
-	type Target = BTreeMap<Option<ChildInfo>, T>;
+	type Target = BTreeMap<ChildInfo, T>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
@@ -333,7 +341,7 @@ impl<T> ChildrenMap<T> {
 	/// on each of its entries.
 	pub fn extend_with(
 		&mut self,
-		other: impl Iterator<Item = (Option<ChildInfo>, T)>,
+		other: impl Iterator<Item = (ChildInfo, T)>,
 		merge: impl Fn(&mut T, T),
 	) {
 		use sp_std::collections::btree_map::Entry;
@@ -352,7 +360,7 @@ impl<T> ChildrenMap<T> {
 	/// Extends two maps, by enxtending entries with the same key.
 	pub fn extend_replace(
 		&mut self,
-		other: impl Iterator<Item = (Option<ChildInfo>, T)>,
+		other: impl Iterator<Item = (ChildInfo, T)>,
 	) {
 		self.0.extend(other)
 	}
@@ -360,8 +368,8 @@ impl<T> ChildrenMap<T> {
 
 #[cfg(feature = "std")]
 impl<T> IntoIterator for ChildrenMap<T> {
-	type Item = (Option<ChildInfo>, T);
-	type IntoIter = sp_std::collections::btree_map::IntoIter<Option<ChildInfo>, T>;
+	type Item = (ChildInfo, T);
+	type IntoIter = sp_std::collections::btree_map::IntoIter<ChildInfo, T>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()

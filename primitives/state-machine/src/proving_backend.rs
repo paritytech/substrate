@@ -351,8 +351,8 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		let (root, mut tx) = self.0.storage_root(delta);
-		// We may rather want to return a btreemap
-		(root, tx.remove(&None))
+		// TODO should we prove over a collection of child trie instead?
+		(root, tx.remove(&ChildInfo::top_trie()))
 	}
 
 	fn child_storage_root<I>(
@@ -366,7 +366,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		H::Out: Ord
 	{
 		let (root, is_empty, mut tx) = self.0.child_storage_root(storage_key, child_info, delta);
-		(root, is_empty, tx.remove(&Some(child_info.to_owned())))
+		(root, is_empty, tx.remove(child_info))
 	}
 }
 
@@ -454,7 +454,7 @@ mod tests {
 		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
 		let (proving_root, proving_mdb) = proving_backend.storage_root(::std::iter::empty());
 		assert_eq!(trie_root, proving_root);
-		let mut trie_mdb = trie_mdb.remove(&None).unwrap();
+		let mut trie_mdb = trie_mdb.remove(&ChildInfo::top_trie()).unwrap();
 		assert_eq!(trie_mdb.drain(), proving_mdb.unwrap().drain());
 	}
 

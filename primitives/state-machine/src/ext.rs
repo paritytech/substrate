@@ -209,6 +209,9 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
+		if child_info.is_top_trie() {
+			return self.storage(key);
+		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.child_storage(storage_key.as_ref(), key)
@@ -231,15 +234,19 @@ where
 	fn child_storage_hash(
 		&self,
 		storage_key: ChildStorageKey,
-		_child_info: &ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
+		if child_info.is_top_trie() {
+			return self.storage_hash(key);
+		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.child_storage(storage_key.as_ref(), key)
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(||
-				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+				self.backend.child_storage_hash(storage_key.as_ref(), child_info, key)
+					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
 		trace!(target: "state-trace", "{:04x}: ChildHash({}) {}={:?}",
@@ -258,6 +265,9 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
+		if child_info.is_top_trie() {
+			return self.original_storage(key);
+		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.backend
 			.child_storage(storage_key.as_ref(), child_info, key)
@@ -279,6 +289,9 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
+		if child_info.is_top_trie() {
+			return self.original_storage_hash(key);
+		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.backend
 			.child_storage_hash(storage_key.as_ref(), child_info, key)
@@ -315,6 +328,9 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> bool {
+		if child_info.is_top_trie() {
+			return self.exists_storage(key);
+		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
 		let result = match self.overlay.child_storage(storage_key.as_ref(), key) {
@@ -354,6 +370,9 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageKey> {
+		if child_info.is_top_trie() {
+			return self.next_storage_key(key);
+		}
 		let next_backend_key = self.backend
 			.next_child_storage_key(storage_key.as_ref(), child_info, key)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
@@ -400,6 +419,9 @@ where
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
+		if child_info.is_top_trie() {
+			return self.place_storage(key, value);
+		}
 		trace!(target: "state-trace", "{:04x}: PutChild({}) {}={:?}",
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),
@@ -417,6 +439,10 @@ where
 		storage_key: ChildStorageKey,
 		child_info: &ChildInfo,
 	) {
+		if child_info.is_top_trie() {
+			trace!(target: "state-trace", "Ignoring kill_child_storage on top trie");
+			return;
+		}
 		trace!(target: "state-trace", "{:04x}: KillChild({})",
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),
@@ -454,6 +480,10 @@ where
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) {
+		if child_info.is_top_trie() {
+			return self.clear_prefix(prefix);
+		}
+
 		trace!(target: "state-trace", "{:04x}: ClearChildPrefix({}) {}",
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),

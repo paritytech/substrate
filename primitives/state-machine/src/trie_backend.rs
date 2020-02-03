@@ -207,7 +207,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			}
 		}
 		let mut tx = ChildrenMap::default();
-		tx.insert(None, write_overlay);
+		tx.insert(ChildInfo::top_trie(), write_overlay);
 		(root, tx)
 	}
 
@@ -256,7 +256,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		let is_default = root == default_root;
 
 		let mut tx = ChildrenMap::default();
-		tx.insert(Some(child_info.to_owned()), write_overlay);
+		tx.insert(child_info.clone(), write_overlay);
 		(root, is_default, tx)
 	}
 

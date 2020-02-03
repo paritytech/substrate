@@ -91,7 +91,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState<B> = sp_state_machine::TrieBackend<
-	(Arc<dyn sp_state_machine::Storage<HasherFor<B>>>, Option<ChildInfo>), HasherFor<B>
+	(Arc<dyn sp_state_machine::Storage<HasherFor<B>>>, ChildInfo), HasherFor<B>
 >;
 
 /// Re-export the KVDB trait so that one can pass an implementation of it.
@@ -667,7 +667,7 @@ struct StorageDb<Block: BlockT> {
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for StorageDb<Block> {
 	fn get(
 		&self,
-		trie: Option<&ChildInfo>,
+		trie: &ChildInfo,
 		key: &Block::Hash,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
@@ -700,7 +700,7 @@ impl<Block: BlockT> DbGenesisStorage<Block> {
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for DbGenesisStorage<Block> {
 	fn get(
 		&self,
-		_trie: Option<&ChildInfo>,
+		_trie: &ChildInfo,
 		_key: &Block::Hash,
 		_prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
@@ -1326,9 +1326,9 @@ impl<Block: BlockT> Backend<Block> {
 fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::CommitSet<Vec<u8>>) {
 	let mut key_buffer = Vec::new();
 	for child_data in commit.data.into_iter() {
-		if let Some(child_info) = child_data.0 {
+		if !child_data.0.is_top_trie() {
 			// children tries with prefixes
-			let keyspace = child_info.keyspace();
+			let keyspace = child_data.0.keyspace();
 			let keyspace_len = keyspace.len();
 			key_buffer.resize(keyspace_len, 0);
 			key_buffer[..keyspace_len].copy_from_slice(keyspace);
@@ -1598,7 +1598,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			BlockId::Hash(h) if h == Default::default() => {
 				let genesis_storage = DbGenesisStorage::<Block>::new();
 				let root = genesis_storage.0.clone();
-				let db_state = DbState::<Block>::new((Arc::new(genesis_storage), None), root);
+				let db_state = DbState::<Block>::new((Arc::new(genesis_storage), ChildInfo::top_trie()), root);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				return Ok(CachingState::new(state, self.shared_cache.clone(), None));
 			},
@@ -1617,7 +1617,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = hdr.state_root();
-					let db_state = DbState::<Block>::new((self.storage.clone(), None), *root);
+					let db_state = DbState::<Block>::new((self.storage.clone(), ChildInfo::top_trie()), *root);
 					let state = RefTrackingState::new(
 						db_state,
 						self.storage.clone(),
@@ -1647,7 +1647,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				Ok(Some(header)) => {
 					sp_state_machine::Storage::get(
 						self.storage.as_ref(),
-						None, // header in top trie
+						&ChildInfo::top_trie(),
 						&header.state_root(),
 						(&[], None),
 					).unwrap_or(None).is_some()
@@ -1916,7 +1916,9 @@ pub(crate) mod tests {
 				children: Default::default(),
 			}).unwrap();
 
-			key = op.db_updates.entry(None).or_insert_with(Default::default).insert(EMPTY_PREFIX, b"hello");
+			key = op.db_updates.entry(ChildInfo::top_trie())
+				.or_insert_with(Default::default)
+				.insert(EMPTY_PREFIX, b"hello");
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1952,8 +1954,14 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates.entry(None).or_insert_with(Default::default).insert(EMPTY_PREFIX, b"hello");
-			op.db_updates.entry(None).or_insert_with(Default::default).remove(&key, EMPTY_PREFIX);
+			op.db_updates
+				.entry(ChildInfo::top_trie())
+				.or_insert_with(Default::default)
+				.insert(EMPTY_PREFIX, b"hello");
+			op.db_updates
+				.entry(ChildInfo::top_trie())
+				.or_insert_with(Default::default)
+				.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1989,7 +1997,10 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates.entry(None).or_insert_with(Default::default).remove(&key, EMPTY_PREFIX);
+			op.db_updates
+				.entry(ChildInfo::top_trie())
+				.or_insert_with(Default::default)
+				.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),
