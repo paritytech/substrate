@@ -262,8 +262,8 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug, Parameter,
 	weights::SimpleDispatchInfo,
 	traits::{
-		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
-		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time, EstimateNextSessionChange,
+		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
+		Time, EstimateNextSessionChange,
 	}
 };
 use pallet_session::historical;
@@ -289,7 +289,12 @@ use frame_system::{
 	offchain::SubmitUnsignedTransaction,
 };
 
+<<<<<<< HEAD
 use sp_phragmen::{ExtendedBalance, StakedAssignment, generate_compact_solution_type};
+=======
+use sp_phragmen::ExtendedBalance;
+use frame_support::traits::OnReapAccount;
+>>>>>>> de2ffd937db78093efaa58d7cc08f5599a8f4728
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 // ------------- IMPORTANT NOTE: must be the same as `generate_compact_solution_type`.
@@ -1383,7 +1388,7 @@ decl_module! {
 		}
 
 		/// The ideal number of validators.
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
@@ -1396,7 +1401,7 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn force_no_eras(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNone);
@@ -1408,21 +1413,21 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNew);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
 		}
 
 		/// Force a current staker to become completely unstaked, immediately.
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn force_unstake(origin, stash: T::AccountId) {
 			ensure_root(origin)?;
 
@@ -1437,7 +1442,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage write
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn force_new_era_always(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceAlways);
@@ -1450,7 +1455,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage write.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
 			T::SlashCancelOrigin::try_origin(origin)
 				.map(|_| ())
@@ -1531,7 +1536,6 @@ impl<T: Trait> Module<T> {
 			STAKING_ID,
 			&ledger.stash,
 			ledger.total,
-			T::BlockNumber::max_value(),
 			WithdrawReasons::all(),
 		);
 		<Ledger<T>>::insert(controller, ledger);
@@ -2157,8 +2161,8 @@ impl<T: Trait> historical::SessionManager<T::AccountId, Exposure<T::AccountId, B
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(stash: &T::AccountId) {
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	fn on_reap_account(stash: &T::AccountId) {
 		Self::ensure_storage_upgraded();
 		Self::kill_stash(stash);
 	}

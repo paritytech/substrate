@@ -852,7 +852,10 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(
 			match r {
 				Ok(()) => Event::ExtrinsicSuccess(info),
-				Err(err) => Event::ExtrinsicFailed(err.clone(), info),
+				Err(err) => {
+					sp_runtime::print(err);
+					Event::ExtrinsicFailed(err.clone(), info)
+				},
 			}
 		);
 
@@ -957,6 +960,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	type AdditionalSigned = ();
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckWeight";
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
@@ -1037,6 +1041,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AdditionalSigned = ();
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckNonce";
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
@@ -1121,6 +1126,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type AdditionalSigned = T::Hash;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckEra";
 
 	fn validate(
 		&self,
@@ -1177,6 +1183,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AdditionalSigned = T::Hash;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckGenesis";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
@@ -1212,6 +1219,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
 	type AdditionalSigned = u32;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckVersion";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok(<Module<T>>::runtime_version().spec_version)

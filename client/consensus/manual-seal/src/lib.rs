@@ -231,8 +231,8 @@ mod tests {
 	use sc_transaction_pool::{
 		BasicPool,
 		txpool::Options,
-		testing::api::*,
 	};
+	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use sp_transaction_pool::TransactionPool;
 	use sp_runtime::generic::BlockId;
 	use sp_blockchain::HeaderBackend;
@@ -241,8 +241,8 @@ mod tests {
 	use sp_inherents::InherentDataProviders;
 	use sc_basic_authorship::ProposerFactory;
 
-	fn api() -> TestApi {
-		TestApi::empty()
+	fn api() -> Arc<TestApi> {
+		Arc::new(TestApi::empty())
 	}
 
 	#[tokio::test]
@@ -385,7 +385,8 @@ mod tests {
 		let client = Arc::new(builder.build());
 		let select_chain = LongestChain::new(backend.clone());
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api()));
+		let pool_api = api();
+		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone()));
 		let env = ProposerFactory {
 			transaction_pool: pool.clone(),
 			client: client.clone(),
@@ -419,7 +420,7 @@ mod tests {
 			finalize: false,
 		}).await.unwrap();
 		let created_block = rx.await.unwrap().unwrap();
-		pool.api().increment_nonce(Alice.into());
+		pool_api.increment_nonce(Alice.into());
 
 		// assert that the background task returns ok
 		assert_eq!(
@@ -449,7 +450,7 @@ mod tests {
 		}).await.is_ok());
 		assert!(rx1.await.unwrap().is_ok());
 		assert!(backend.blockchain().header(BlockId::Number(1)).unwrap().is_some());
-		pool.api().increment_nonce(Alice.into());
+		pool_api.increment_nonce(Alice.into());
 
 		assert!(pool.submit_one(&BlockId::Number(2), uxt(Alice, 2)).await.is_ok());
 		let (tx2, rx2) = futures::channel::oneshot::channel();

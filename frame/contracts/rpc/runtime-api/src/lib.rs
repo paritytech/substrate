@@ -22,9 +22,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::vec::Vec;
-use codec::{Encode, Decode, Codec};
+use codec::{Codec, Decode, Encode};
+use pallet_contracts_primitives::{GetStorageResult, RentProjectionResult};
 use sp_runtime::RuntimeDebug;
+use sp_std::vec::Vec;
 
 /// A result of execution of a contract.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
@@ -44,25 +45,12 @@ pub enum ContractExecResult {
 	Error,
 }
 
-/// A result type of the get storage call.
-///
-/// See [`ContractsApi::get_storage`] for more info.
-pub type GetStorageResult = Result<Option<Vec<u8>>, GetStorageError>;
-
-/// The possible errors that can happen querying the storage of a contract.
-#[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-pub enum GetStorageError {
-	/// The given address doesn't point on a contract.
-	ContractDoesntExist,
-	/// The specified contract is a tombstone and thus cannot have any storage.
-	IsTombstone,
-}
-
 sp_api::decl_runtime_apis! {
 	/// The API to interact with contracts without using executive.
-	pub trait ContractsApi<AccountId, Balance> where
+	pub trait ContractsApi<AccountId, Balance, BlockNumber> where
 		AccountId: Codec,
 		Balance: Codec,
+		BlockNumber: Codec,
 	{
 		/// Perform a call from a specified account to a given contract.
 		///
@@ -85,5 +73,13 @@ sp_api::decl_runtime_apis! {
 			address: AccountId,
 			key: [u8; 32],
 		) -> GetStorageResult;
+
+		/// Returns the projected time a given contract will be able to sustain paying its rent.
+		///
+		/// The returned projection is relevent for the current block, i.e. it is as if the contract
+		/// was accessed at the current block.
+		///
+		/// Returns `Err` if the contract is in a tombstone state or doesn't exist.
+		fn rent_projection(address: AccountId) -> RentProjectionResult<BlockNumber>;
 	}
 }
