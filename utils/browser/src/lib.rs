@@ -46,6 +46,8 @@ where
 
 	let transport = ExtTransport::new(transport);
 	let mut config = Configuration::default();
+	config.network.boot_nodes = chain_spec.boot_nodes().to_vec();
+	config.telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
 	config.chain_spec = Some(chain_spec);
 	config.network.transport = sc_network::config::TransportConfig::Normal {
 		wasm_external_transport: Some(transport.clone()),
