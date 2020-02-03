@@ -624,16 +624,16 @@ where
 			}
 		});
 
-	if config.rpc_http.is_none() {
+	if config.rpc_http.is_none() || cli.rpc_port.is_some() {
 		let rpc_interface: &str = interface_str(cli.rpc_external, cli.unsafe_rpc_external, cli.validator)?;
 		config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
 	}
-	if config.rpc_ws.is_none() {
+	if config.rpc_ws.is_none() || cli.ws_port.is_some() {
 		let ws_interface: &str = interface_str(cli.ws_external, cli.unsafe_ws_external, cli.validator)?;
 		config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
 	}
 
-	if config.grafana_port.is_none() {
+	if config.grafana_port.is_none() || cli.grafana_port.is_some() {
 		let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
 		config.grafana_port = Some(
 			parse_address(&format!("{}:{}", grafana_interface, 9955), cli.grafana_port)?
