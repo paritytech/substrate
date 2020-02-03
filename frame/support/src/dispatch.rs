@@ -1338,6 +1338,8 @@ macro_rules! decl_module {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
+							// Don't generate any warnings for unused variables
+							let _ = ( $( $param_name ),* );
 							stringify!($fn_name)
 						},
 					)*
