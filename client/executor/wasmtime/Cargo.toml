@@ -15,7 +15,7 @@ sp-wasm-interface = { version = "2.0.0", path = "../../../primitives/wasm-interf
 sp-runtime-interface = { version = "2.0.0", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime.git", rev = "448faed5" }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime.git", rev = "448faed5ca0e38c3ee5cdbe703b9f89f1e76e8a0" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
