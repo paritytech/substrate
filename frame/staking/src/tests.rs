@@ -2882,14 +2882,14 @@ mod offchain_phragmen {
 			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact));
 
 			let queued_result = Staking::queued_elected().unwrap();
-			assert_eq!(queued_result.compute, ElectionCompute::Submitted);
+			assert_eq!(queued_result.compute, ElectionCompute::Signed);
 
 			run_to_block(15);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
 
 			assert_eq!(
 				System::events()[3].event,
-				MetaEvent::staking(RawEvent::StakingElection(ElectionCompute::Submitted)),
+				MetaEvent::staking(RawEvent::StakingElection(ElectionCompute::Signed)),
 			);
 		})
 	}
@@ -2909,14 +2909,14 @@ mod offchain_phragmen {
 			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact));
 
 			let queued_result = Staking::queued_elected().unwrap();
-			assert_eq!(queued_result.compute, ElectionCompute::Submitted);
+			assert_eq!(queued_result.compute, ElectionCompute::Signed);
 
 			run_to_block(15);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
 
 			assert_eq!(
 				System::events()[3].event,
-				MetaEvent::staking(RawEvent::StakingElection(ElectionCompute::Submitted)),
+				MetaEvent::staking(RawEvent::StakingElection(ElectionCompute::Signed)),
 			);
 		})
 	}

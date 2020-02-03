@@ -263,7 +263,7 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		Time, EstimateNextSessionChange,
+		Time, EstimateNextSessionChange, OnReapAccount,
 	}
 };
 use pallet_session::historical;
@@ -289,12 +289,7 @@ use frame_system::{
 	offchain::SubmitUnsignedTransaction,
 };
 
-<<<<<<< HEAD
 use sp_phragmen::{ExtendedBalance, StakedAssignment, generate_compact_solution_type};
-=======
-use sp_phragmen::ExtendedBalance;
-use frame_support::traits::OnReapAccount;
->>>>>>> de2ffd937db78093efaa58d7cc08f5599a8f4728
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 // ------------- IMPORTANT NOTE: must be the same as `generate_compact_solution_type`.
