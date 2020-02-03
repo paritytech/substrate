@@ -220,6 +220,7 @@ where
 				_ => {
 					best_hash = genesis_hash;
 					best_block_id = genesis_block_id;
+					self.automaton.clear_usage();
 					self.runtime_state.clear_index();
 					self.runtime_state.clear_block_number();
 				}
@@ -292,7 +293,7 @@ where
 			} else {
 				// We reset the automaton, comming back to starting state,
 				// in order to get more extrinsics out of it.
-				self.automaton.clear_usage();
+				return CreateResult::Clear
 			}
 		}
 

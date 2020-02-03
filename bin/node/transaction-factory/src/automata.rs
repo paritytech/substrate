@@ -116,26 +116,8 @@ impl Automaton {
 			}
 
 			if let Some(edge) = max_out {
-				println!("looping {:?} exit_state {}", self.looping, self.exit_state);
-
-				if self.current_node >= edge.target && edge.used < edge.repeat {
-					// We're entering a loop.
-					if let Some(counter) = self.looping {
-						self.looping = Some(counter + 1);
-					} else {
-						self.looping = Some(0);
-						self.exit_state = self.current_node;
-					}
-				}
-
 				edge.used += 1;
 				self.current_node = edge.target;
-
-				if self.looping.is_some() && self.current_node > self.exit_state {
-					// We're exiting the loop.
-					self.looping = None;
-					self.exit_state = 0;
-				}
 
 				Some((edge.sender.clone(), edge.tx_module.clone(), edge.tx_name.clone(), edge.tx_params.clone(), self.looping))
 			} else {

@@ -164,7 +164,7 @@ impl RuntimeAdapter for RuntimeState {
 			"B" => (Keyring::Bob.to_account_id(), Keyring::Bob.pair()),
 			"C" => (Keyring::Charlie.to_account_id(), Keyring::Charlie.pair()),
 			"D" => (Keyring::Dave.to_account_id(), Keyring::Dave.pair()),
-			_ => (Keyring::Alice.to_account_id(), Keyring::Alice.pair()),
+			_ => (Default::default(), sr25519::Pair::from_seed(&Default::default())),
 		}
 	}
 
