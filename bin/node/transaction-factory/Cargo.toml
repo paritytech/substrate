@@ -9,6 +9,7 @@ log = "0.4.8"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 rand = "0.7.3"
 structopt = "=0.3.7"
+streaming-stats = "0.2"
 
 sc-cli = { version = "0.8.0", path = "../../../client/cli" }
 sc-client-api = { version = "2.0.0", path = "../../../client/api" }

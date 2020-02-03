@@ -3653,6 +3653,7 @@ dependencies = [
  "sp-consensus",
  "sp-core",
  "sp-runtime",
+ "streaming-stats",
  "structopt",
 ]
 
@@ -6372,7 +6373,6 @@ dependencies = [
  "serde",
  "serde_json",
  "slog",
- "streaming-stats",
  "tracing",
  "tracing-core",
 ]

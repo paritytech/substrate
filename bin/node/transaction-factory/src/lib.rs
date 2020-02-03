@@ -23,6 +23,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::cmp::PartialOrd;
 use std::fmt::Display;
+use std::fs::File;
+use std::io::prelude::*;
 
 use codec::{Decode, Encode};
 use structopt::clap::arg_enum;
@@ -318,5 +320,120 @@ where
 	/// This should iterate over all modules and all extrinsics.
 	fn next_sequential_state(&self) -> Option<(String, String, String, Vec<String>, Option<u32>)> {
 		None
+	}
+
+	pub fn print_data(&self) {
+		let mut stats: HashMap<String, Stats> = HashMap::new();
+		let mut files: HashMap<String, File> = HashMap::new();
+
+		for (module, name, time, result) in self.results.iter() {
+			let mut full_name = module.clone();
+			let time = *time;
+			full_name.push_str("::");
+			full_name.push_str(name);
+
+			match stats.get_mut(&full_name) {
+				Some(stat) => {
+					stat.total_time += time;
+					stat.total_executions += 1;
+					if time > stat.max_time {
+						stat.max_time = time;
+					}
+					if time < stat.min_time {
+						stat.min_time = time;
+					}
+					stat.times.push(time);
+
+					let mut file = files.get_mut(&full_name.clone()).expect("failed to get file");
+					let row = format!("{},{},{}\n", full_name, time, result);
+					file.write_all(row.as_bytes());
+				}
+				None => {
+					let mut stat = Stats::default();
+					stat.total_time = time;
+					stat.total_executions = 1;
+					stat.max_time = time;
+					stat.min_time = time;
+					stat.times.push(time);
+					stats.insert(full_name.clone(), stat);
+
+					let mut file_path = String::from("results/");
+					file_path.push_str(module);
+					file_path.push_str("-".into());
+					file_path.push_str(name);
+					file_path.push_str(".csv".into());
+
+					let mut file = File::create(file_path).expect("failed to create file for bench results");
+					let row = format!("{},{},{}\n", full_name.clone(), time, result);
+					file.write_all(row.as_bytes());
+					files.insert(full_name, file);
+				}
+			};
+		}
+
+		println!("\n\nSummary:");
+		println!("\n{:<name_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$}\n",
+			"Transaction",
+			"Executions",
+			"Total",
+			"Mean",
+			"Min",
+			"Max",
+			"Median",
+			"SD",
+			"Variance",
+			name_width=40,
+			time_width=15,
+		);
+
+		for (tx_name, stat) in stats.iter() {
+			// TODO: use another library for stats, statistical?
+			let median = format!("{:.1}", stats::median(stat.times.iter().cloned()).expect("failed to compute median"));
+			let mean = format!("{:.2}", stats::mean(stat.times.iter().cloned()));
+			let stddev = format!("{:.2}", stats::stddev(stat.times.iter().cloned()));
+			let variance = format!("{:.2}", stats::variance(stat.times.iter().cloned()));
+			
+			println!("{:<name_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$}",
+				tx_name,
+				stat.total_executions,
+				stat.total_time,
+				mean,
+				stat.min_time,
+				stat.max_time,
+				median,
+				stddev,
+				variance,
+				name_width=40,
+				time_width=15,
+			);
+		}
+	}
+}
+
+
+#[derive(Debug)]
+struct Stats {
+	/// Total execution time in nanoseconds.
+	total_time: u128,
+	/// Total number of executions.
+	total_executions: u128,
+	/// Minimum execution time.
+	min_time: u128,
+	/// Maximum execution time.
+	max_time: u128,
+	/// All execution times.
+	times: Vec<u128>,
+}
+
+
+impl Default for Stats {
+	fn default() -> Self {
+		Self {
+			total_time: 0,
+			total_executions: 0,
+			min_time: std::u128::MAX,
+			max_time: std::u128::MIN,
+			times: vec![],
+		}
 	}
 }
