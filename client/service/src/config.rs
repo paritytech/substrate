@@ -28,6 +28,27 @@ use sp_core::crypto::Protected;
 use target_info::Target;
 use sc_telemetry::TelemetryEndpoints;
 
+/// Executable version. Used to pass version information from the root crate.
+#[derive(Clone)]
+pub struct VersionInfo {
+	/// Implementation name.
+	pub name: &'static str,
+	/// Implementation version.
+	pub version: &'static str,
+	/// SCM Commit hash.
+	pub commit: &'static str,
+	/// Executable file name.
+	pub executable_name: &'static str,
+	/// Executable file description.
+	pub description: &'static str,
+	/// Executable file author.
+	pub author: &'static str,
+	/// Support URL.
+	pub support_url: &'static str,
+	/// Copyright starting year (x-current year)
+	pub copyright_start_year: i32,
+}
+
 /// Service configuration.
 pub struct Configuration<G, E = NoExtension> {
 	/// Implementation name
@@ -186,27 +207,13 @@ impl<G, E> Default for Configuration<G, E> {
 
 impl<G, E> Configuration<G, E> {
 	/// Create a default config using `VersionInfo`
-	pub fn new(version: &crate::VersionInfo) -> Self {
+	pub fn new(version: &VersionInfo) -> Self {
 		let mut config = Configuration::default();
-		config.impl_name = version.impl_name;
-		config.impl_version = version.impl_version;
-		config.impl_commit = version.impl_commit;
+		config.impl_name = version.name;
+		config.impl_version = version.version;
+		config.impl_commit = version.commit;
 
 		config
-	}
-
-	/// Load `chain_spec` using a factory
-	pub fn load_spec(&mut self, spec_factory: F) -> error::Result<()>
-	where
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	{
-		let chain_spec = crate::load_spec(shared_params, spec_factory)?;
-
-		self.network.boot_nodes = chain_spec.boot_nodes().to_vec();
-		self.telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
-		self.chain_spec = Some(chain_spec);
-
-		self.chain_spec.as_ref().unwrap()
 	}
 
 	/// Returns full version string of this configuration.
@@ -237,6 +244,15 @@ impl<G, E> Configuration<G, E> {
 	/// This method panic if the `chain_spec` is `None`
 	pub fn expect_chain_spec(&self) -> &ChainSpec<G, E> {
 		self.chain_spec.as_ref().expect("chain_spec must be specified")
+	}
+
+	/// Return a reference to the `DatabaseConfig` of this `Configuration`.
+	///
+	/// ### Panics
+	///
+	/// This method panic if the `database` is `None`
+	pub fn expect_database(&self) -> &DatabaseConfig {
+		self.database.as_ref().expect("database must be specified")
 	}
 }
 
