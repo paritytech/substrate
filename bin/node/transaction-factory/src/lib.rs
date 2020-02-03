@@ -121,6 +121,7 @@ where
 	client: Arc<Client<Backend, Exec, Block, RtApi>>,
 	select_chain: Sc,
 	options: Options,
+	results: Vec<(String, String, u128, String)>,
 }
 
 pub enum CreateResult<Block> {
@@ -156,6 +157,7 @@ where
 			automaton,
 			runtime_state,
 			options,
+			results: vec![],
 		}
 	}
 
@@ -205,6 +207,8 @@ where
 						import_existing: false,
 						intermediates: Default::default(),
 					};
+					self.results.extend(sc_tracing::get_data());
+					sc_tracing::clear_data();
 
 					self.client.clone().import_block(import, HashMap::new())
 						.expect("Failed to import block");
