@@ -24,6 +24,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::any::Any;
 
+use crate::Error;
 use crate::import_queue::{Verifier, CacheKeyId};
 
 /// Block import result.
@@ -145,7 +146,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// Intermediate values that are interpreted by block importers. Each block importer,
 	/// upon handling a value, removes it from the intermediate list. The final block importer
 	/// rejects block import if there are still intermediate values that remain unhandled.
-	pub intermediates: HashMap<&'static [u8], Box<dyn Any>>,
+	pub intermediates: HashMap<Cow<'static, [u8]>, Box<dyn Any>>,
 	/// Auxiliary consensus data produced by the block.
 	/// Contains a list of key-value pairs. If values are `None`, the keys
 	/// will be deleted.
@@ -226,29 +227,31 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	}
 
 	/// Take interemdiate by given key, and remove it from the processing list.
-	pub fn take_intermediate<T: 'static>(&mut self, key: &'static [u8]) -> Option<Box<T>> {
-		self.intermediates.remove(key)
-			.and_then(|value| {
-				match value.downcast::<T>() {
-					Ok(v) => Some(v),
-					Err(v) => {
-						self.intermediates.insert(key, v);
-						None
-					},
-				}
-			})
+	pub fn take_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<Box<T>, Error> {
+		if self.intermediates.contains_key(key) {
+			self.intermediates.remove(key)
+				.ok_or(Error::NoIntermediate)
+				.and_then(|value| {
+					value.downcast::<T>()
+						.map_err(|_| Error::NoIntermediate)
+				})
+		} else {
+			Err(Error::NoIntermediate)
+		}
 	}
 
 	/// Get a reference to a given intermediate.
-	pub fn intermediate<T: 'static>(&self, key: &'static [u8]) -> Option<&T> {
+	pub fn intermediate<T: 'static>(&self, key: &[u8]) -> Result<&T, Error> {
 		self.intermediates.get(key)
 			.and_then(|value| value.downcast_ref::<T>())
+			.ok_or(Error::NoIntermediate)
 	}
 
 	/// Get a mutable reference to a given intermediate.
-	pub fn intermediate_mut<T: 'static>(&mut self, key: &'static [u8]) -> Option<&mut T> {
+	pub fn intermediate_mut<T: 'static>(&mut self, key: &[u8]) -> Result<&mut T, Error> {
 		self.intermediates.get_mut(key)
 			.and_then(|value| value.downcast_mut::<T>())
+			.ok_or(Error::NoIntermediate)
 	}
 }
 

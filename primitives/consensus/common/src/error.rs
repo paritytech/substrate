@@ -31,6 +31,9 @@ pub enum Error {
 	/// I/O terminated unexpectedly
 	#[display(fmt="I/O terminated unexpectedly.")]
 	IoTerminated,
+	/// Intermediate missing.
+	#[display(fmt="Missing or invalid intermediate.")]
+	NoIntermediate,
 	/// Unable to schedule wakeup.
 	#[display(fmt="Timer error: {}", _0)]
 	FaultyTimer(std::io::Error),

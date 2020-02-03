@@ -31,6 +31,7 @@
 
 use std::sync::Arc;
 use std::any::Any;
+use std::borrow::Cow;
 use std::thread;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -316,7 +317,7 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 
 		let intermediate = block.take_intermediate::<PowIntermediate::<B, Algorithm::Difficulty>>(
 			INTERMEDIATE_KEY
-		).ok_or(Error::<B>::NoIntermediate)?;
+		)?;
 
 		let difficulty = match intermediate.difficulty {
 			Some(difficulty) => difficulty,
@@ -420,7 +421,7 @@ impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 			justification,
 			intermediates: {
 				let mut ret = HashMap::new();
-				ret.insert(INTERMEDIATE_KEY, Box::new(intermediate) as Box<dyn Any>);
+				ret.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<dyn Any>);
 				ret
 			},
 			auxiliary: vec![],
@@ -662,7 +663,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			storage_changes: Some(proposal.storage_changes),
 			intermediates: {
 				let mut ret = HashMap::new();
-				ret.insert(INTERMEDIATE_KEY, Box::new(intermediate) as Box<dyn Any>);
+				ret.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<dyn Any>);
 				ret
 			},
 			finalized: false,
