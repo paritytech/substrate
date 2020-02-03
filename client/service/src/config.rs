@@ -49,7 +49,7 @@ pub struct Configuration<G, E = NoExtension> {
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
 	/// Configuration for the database.
-	pub database: DatabaseConfig,
+	pub database: Option<DatabaseConfig>,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
@@ -147,7 +147,7 @@ pub enum DatabaseConfig {
 impl<G, E> Default for Configuration<G, E> {
 	/// Create a default config
 	fn default() -> Self {
-		let configuration = Configuration {
+		Configuration {
 			impl_name: "parity-substrate",
 			impl_version: "0.0.0",
 			impl_commit: "",
@@ -159,10 +159,7 @@ impl<G, E> Default for Configuration<G, E> {
 			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore: KeystoreConfig::None,
-			database: DatabaseConfig::Path {
-				path: Default::default(),
-				cache_size: Default::default(),
-			},
+			database: None,
 			state_cache_size: Default::default(),
 			state_cache_child_ratio: Default::default(),
 			pruning: PruningMode::default(),
@@ -183,14 +180,35 @@ impl<G, E> Default for Configuration<G, E> {
 			dev_key_seed: None,
 			tracing_targets: Default::default(),
 			tracing_receiver: Default::default(),
-		};
-
-		configuration
+		}
 	}
-
 }
 
 impl<G, E> Configuration<G, E> {
+	/// Create a default config using `VersionInfo`
+	pub fn new(version: &crate::VersionInfo) -> Self {
+		let mut config = Configuration::default();
+		config.impl_name = version.impl_name;
+		config.impl_version = version.impl_version;
+		config.impl_commit = version.impl_commit;
+
+		config
+	}
+
+	/// Load `chain_spec` using a factory
+	pub fn load_spec(&mut self, spec_factory: F) -> error::Result<()>
+	where
+		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	{
+		let chain_spec = crate::load_spec(shared_params, spec_factory)?;
+
+		self.network.boot_nodes = chain_spec.boot_nodes().to_vec();
+		self.telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
+		self.chain_spec = Some(chain_spec);
+
+		self.chain_spec.as_ref().unwrap()
+	}
+
 	/// Returns full version string of this configuration.
 	pub fn full_version(&self) -> String {
 		full_version_from_strs(self.impl_version, self.impl_commit)

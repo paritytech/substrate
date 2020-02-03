@@ -271,15 +271,13 @@ where
 	subcommand.run(config, builder)
 }
 
-/// Initialize substrate and its configuration
+/// Initialize substrate. This must be done only once.
 ///
 /// This method:
 ///
 /// 1.  set the panic handler
 /// 2.  raise the FD limit
 /// 3.  initialize the logger
-/// 4.  update the configuration provided with the chain specification, config directory,
-///     information (version, commit), database's path, boot nodes and telemetry endpoints
 pub fn init<G, E, F>(
 	mut config: &mut Configuration<G, E>,
 	spec_factory: F,
@@ -299,21 +297,6 @@ where
 
 	fdlimit::raise_fd_limit();
 	init_logger(shared_params.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
-
-	config.chain_spec = Some(load_spec(shared_params, spec_factory)?);
-	config.config_dir = Some(base_path(shared_params, version));
-	config.impl_commit = version.commit;
-	config.impl_version = version.version;
-
-	config.database = DatabaseConfig::Path {
-		path: config
-			.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
-			.expect("We provided a base_path/config_dir."),
-		cache_size: None,
-	};
-
-	config.network.boot_nodes = config.expect_chain_spec().boot_nodes().to_vec();
-	config.telemetry_endpoints = config.expect_chain_spec().telemetry_endpoints().clone();
 
 	Ok(())
 }
@@ -553,10 +536,26 @@ where
 pub fn update_config_for_running_node<G, E>(
 	mut config: &mut Configuration<G, E>,
 	cli: RunCmd,
+	version: &VersionInfo,
 ) -> error::Result<()>
 where
 	G: RuntimeGenesis,
 {
+	if config.config_dir.is_none() {
+		config.config_dir = Some(base_path(&cli.shared_params, version));
+	}
+
+	if config.database.is_none() {
+		// NOTE: the loading of the DatabaseConfig is voluntarily delayed to here
+		//       in case config.config_dir has been customized
+		config.database = DatabaseConfig::Path {
+			path: config
+				.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
+				.expect("We provided a base_path/config_dir."),
+			cache_size: None,
+		};
+	}
+
 	fill_config_keystore_password_and_path(&mut config, &cli)?;
 
 	let keyring = cli.get_keyring();
