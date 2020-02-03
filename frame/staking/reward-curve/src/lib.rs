@@ -386,7 +386,7 @@ fn generate_test_module(input: &INposInput) -> TokenStream2 {
 
 			#[test]
 			fn reward_curve_precision() {
-				for &base in [MILLION, u32::max_value()].into_iter() {
+				for &base in [MILLION, u32::max_value()].iter() {
 					let number_of_check = 100_000.min(base);
 					for check_index in 0..=number_of_check {
 						let i = (check_index as u64 * base as u64 / number_of_check as u64) as u32;

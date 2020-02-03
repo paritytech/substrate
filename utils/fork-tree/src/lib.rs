@@ -200,7 +200,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 			data,
 			hash: hash,
 			number: number,
-			children:  Vec::new(),
+			children: Vec::new(),
 		});
 
 		self.rebalance();
@@ -232,14 +232,39 @@ impl<H, N, V> ForkTree<H, N, V> where
 		number: &N,
 		is_descendent_of: &F,
 		predicate: &P,
-	) -> Result<Option<&Node<H, N, V>>, Error<E>>
-		where E: std::error::Error,
-			  F: Fn(&H, &H) -> Result<bool, E>,
-			  P: Fn(&V) -> bool,
+	) -> Result<Option<&Node<H, N, V>>, Error<E>> where
+		E: std::error::Error,
+		F: Fn(&H, &H) -> Result<bool, E>,
+		P: Fn(&V) -> bool,
 	{
 		// search for node starting from all roots
 		for root in self.roots.iter() {
 			let node = root.find_node_where(hash, number, is_descendent_of, predicate)?;
+
+			// found the node, early exit
+			if let FindOutcome::Found(node) = node {
+				return Ok(Some(node));
+			}
+		}
+
+		Ok(None)
+	}
+
+	/// Same as [`find_node_where`](Self::find_node_where), but returns mutable reference.
+	pub fn find_node_where_mut<F, E, P>(
+		&mut self,
+		hash: &H,
+		number: &N,
+		is_descendent_of: &F,
+		predicate: &P,
+	) -> Result<Option<&mut Node<H, N, V>>, Error<E>> where
+		E: std::error::Error,
+		F: Fn(&H, &H) -> Result<bool, E>,
+		P: Fn(&V) -> bool,
+	{
+		// search for node starting from all roots
+		for root in self.roots.iter_mut() {
+			let node = root.find_node_where_mut(hash, number, is_descendent_of, predicate)?;
 
 			// found the node, early exit
 			if let FindOutcome::Found(node) = node {
@@ -609,16 +634,17 @@ mod node_implementation {
 		/// when the predicate fails.
 		/// The given function `is_descendent_of` should return `true` if the second hash (target)
 		/// is a descendent of the first hash (base).
-		// FIXME: it would be useful if this returned a mutable reference but
-		// rustc can't deal with lifetimes properly. an option would be to try
-		// an iterative definition instead.
-		pub fn find_node_where<F, P, E>(
+		///
+		/// The returned indices are from last to first. The earliest index in the traverse path
+		/// goes last, and the final index in the traverse path goes first. An empty list means
+		/// that the current node is the result.
+		pub fn find_node_index_where<F, P, E>(
 			&self,
 			hash: &H,
 			number: &N,
 			is_descendent_of: &F,
 			predicate: &P,
-		) -> Result<FindOutcome<&Node<H, N, V>>, Error<E>>
+		) -> Result<FindOutcome<Vec<usize>>, Error<E>>
 			where E: std::error::Error,
 				  F: Fn(&H, &H) -> Result<bool, E>,
 				  P: Fn(&V) -> bool,
@@ -631,11 +657,14 @@ mod node_implementation {
 			let mut known_descendent_of = false;
 
 			// continue depth-first search through all children
-			for node in self.children.iter() {
+			for (i, node) in self.children.iter().enumerate() {
 				// found node, early exit
-				match node.find_node_where(hash, number, is_descendent_of, predicate)? {
+				match node.find_node_index_where(hash, number, is_descendent_of, predicate)? {
 					FindOutcome::Abort => return Ok(FindOutcome::Abort),
-					FindOutcome::Found(x) => return Ok(FindOutcome::Found(x)),
+					FindOutcome::Found(mut x) => {
+						x.push(i);
+						return Ok(FindOutcome::Found(x))
+					},
 					FindOutcome::Failure(true) => {
 						// if the block was a descendent of this child,
 						// then it cannot be a descendent of any others,
@@ -655,13 +684,77 @@ mod node_implementation {
 			if is_descendent_of {
 				// if the predicate passes we return the node
 				if predicate(&self.data) {
-					return Ok(FindOutcome::Found(self));
+					return Ok(FindOutcome::Found(Vec::new()));
 				}
 			}
 
 			// otherwise, tell our ancestor that we failed, and whether
 			// the block was a descendent.
 			Ok(FindOutcome::Failure(is_descendent_of))
+		}
+
+		/// Find a node in the tree that is the deepest ancestor of the given
+		/// block hash which also passes the given predicate, backtracking
+		/// when the predicate fails.
+		/// The given function `is_descendent_of` should return `true` if the second hash (target)
+		/// is a descendent of the first hash (base).
+		pub fn find_node_where<F, P, E>(
+			&self,
+			hash: &H,
+			number: &N,
+			is_descendent_of: &F,
+			predicate: &P,
+		) -> Result<FindOutcome<&Node<H, N, V>>, Error<E>>
+			where E: std::error::Error,
+				  F: Fn(&H, &H) -> Result<bool, E>,
+				  P: Fn(&V) -> bool,
+		{
+			let outcome = self.find_node_index_where(hash, number, is_descendent_of, predicate)?;
+
+			match outcome {
+				FindOutcome::Abort => Ok(FindOutcome::Abort),
+				FindOutcome::Failure(f) => Ok(FindOutcome::Failure(f)),
+				FindOutcome::Found(mut indexes) => {
+					let mut cur = self;
+
+					while let Some(i) = indexes.pop() {
+						cur = &cur.children[i];
+					}
+					Ok(FindOutcome::Found(cur))
+				},
+			}
+		}
+
+		/// Find a node in the tree that is the deepest ancestor of the given
+		/// block hash which also passes the given predicate, backtracking
+		/// when the predicate fails.
+		/// The given function `is_descendent_of` should return `true` if the second hash (target)
+		/// is a descendent of the first hash (base).
+		pub fn find_node_where_mut<F, P, E>(
+			&mut self,
+			hash: &H,
+			number: &N,
+			is_descendent_of: &F,
+			predicate: &P,
+		) -> Result<FindOutcome<&mut Node<H, N, V>>, Error<E>>
+			where E: std::error::Error,
+				  F: Fn(&H, &H) -> Result<bool, E>,
+				  P: Fn(&V) -> bool,
+		{
+			let outcome = self.find_node_index_where(hash, number, is_descendent_of, predicate)?;
+
+			match outcome {
+				FindOutcome::Abort => Ok(FindOutcome::Abort),
+				FindOutcome::Failure(f) => Ok(FindOutcome::Failure(f)),
+				FindOutcome::Found(mut indexes) => {
+					let mut cur = self;
+
+					while let Some(i) = indexes.pop() {
+						cur = &mut cur.children[i];
+					}
+					Ok(FindOutcome::Found(cur))
+				},
+			}
 		}
 	}
 }

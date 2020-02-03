@@ -251,10 +251,11 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
-		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
+		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
+			block.extrinsics().len(),
 			block.extrinsics()
 				.iter()
 				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))

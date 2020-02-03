@@ -47,7 +47,6 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 
 	pub const ExistentialDeposit: u64 = 0;
-	pub const TransferFee: u64 = 0;
 	pub const CreationFee: u64 = 0;
 }
 ord_parameter_types! {
@@ -76,14 +75,12 @@ impl frame_system::Trait for Test {
 
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnFreeBalanceZero = ();
 	type OnReapAccount = System;
 	type OnNewAccount = ();
 	type Event = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 }
 
@@ -144,7 +141,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(40, 500_000),
 			(99, 1),
 		],
-		vesting: vec![],
 	}.assimilate_storage(&mut t).unwrap();
 	GenesisConfig::<Test>{
 		pool: vec![
