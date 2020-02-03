@@ -19,9 +19,11 @@
 use std::iter;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::net::Ipv4Addr;
+use std::pin::Pin;
 use std::time::Duration;
 use log::info;
 use futures01::{Future, Stream, Poll};
+use futures::{FutureExt as _, TryFutureExt as _};
 use tempfile::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
@@ -131,10 +133,11 @@ fn node_config<G, E: Clone> (
 	index: usize,
 	spec: &ChainSpec<G, E>,
 	role: Roles,
+	task_executor: Box<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>) + Send>,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
-) -> Configuration<(), G, E>
+) -> Configuration<G, E>
 {
 	let root = root.path().join(format!("node-{}", index));
 
@@ -172,6 +175,7 @@ fn node_config<G, E: Clone> (
 		impl_version: "0.1",
 		impl_commit: "",
 		roles: role,
+		task_executor: Some(task_executor),
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::Path {
@@ -186,8 +190,7 @@ fn node_config<G, E: Clone> (
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
-		chain_spec: (*spec).clone(),
-		custom: Default::default(),
+		chain_spec: Some((*spec).clone()),
 		name: format!("Node {}", index),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
@@ -217,11 +220,11 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	fn new(
 		temp: &TempDir,
 		spec: ChainSpec<G, E>,
-		full: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>>,
-		light: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<L, Error>>,
+		full: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<L, Error>>,
 		authorities: impl Iterator<Item = (
 			String,
-			impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>
+			impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>
 		)>,
 		base_port: u16
 	) -> TestNet<G, E, F, L, U> {
@@ -244,17 +247,22 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	fn insert_nodes(
 		&mut self,
 		temp: &TempDir,
-		full: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>>,
-		light: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<L, Error>>,
-		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>)>
+		full: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<L, Error>>,
+		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>)>
 	) {
 		let executor = self.runtime.executor();
 
 		for (key, authority) in authorities {
+			let task_executor = {
+				let executor = executor.clone();
+				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
+			};
 			let node_config = node_config(
 				self.nodes,
 				&self.chain_spec,
 				Roles::AUTHORITY,
+				task_executor,
 				Some(key),
 				self.base_port,
 				&temp,
@@ -270,7 +278,11 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		}
 
 		for full in full {
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, None, self.base_port, &temp);
+			let task_executor = {
+				let executor = executor.clone();
+				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
+			};
+			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, task_executor, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
@@ -282,7 +294,11 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		}
 
 		for light in light {
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, None, self.base_port, &temp);
+			let task_executor = {
+				let executor = executor.clone();
+				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
+			};
+			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, task_executor, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
 
@@ -304,9 +320,9 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	light_builder: Lb,
 ) where
 	E: Clone,
-	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
+	Fb: Fn(Configuration<G, E>) -> Result<F, Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
 	L: AbstractService,
 {
 	const NUM_FULL_NODES: usize = 5;
@@ -403,9 +419,9 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	mut make_block_and_import: B,
 	mut extrinsic_factory: ExF
 ) where
-	Fb: Fn(Configuration<(), G, E>) -> Result<(F, U), Error>,
+	Fb: Fn(Configuration<G, E>) -> Result<(F, U), Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
 	L: AbstractService,
 	B: FnMut(&F, &mut U),
 	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
@@ -472,9 +488,9 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	light_builder: Lb,
 	authorities: impl IntoIterator<Item = String>
 ) where
-	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
+	Fb: Fn(Configuration<G, E>) -> Result<F, Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
 	L: AbstractService,
 	E: Clone,
 {

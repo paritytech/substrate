@@ -65,9 +65,9 @@ use sc_rpc_api::state::StateClient;
 /// decl_storage! {
 ///     trait Store for Module<T: Trait> as TestRuntime {
 ///         pub LastActionId: u64;
-///         pub Voxels: map Loc => Block;
-///         pub Actions: linked_map u64 => Loc;
-///         pub Prefab: double_map u128, (i8, i8, i8) => Block;
+///         pub Voxels: map hasher(blake2_256) Loc => Block;
+///         pub Actions: linked_map hasher(blake2_256) u64 => Loc;
+///         pub Prefab: double_map hasher(blake2_256) u128, hasher(blake2_256) (i8, i8, i8) => Block;
 ///     }
 /// }
 ///

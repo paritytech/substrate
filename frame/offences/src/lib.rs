@@ -54,10 +54,12 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
 		/// The primary structure that holds all offence records keyed by report identifiers.
-		Reports get(fn reports): map ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
+		Reports get(fn reports): map hasher(blake2_256) ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
 
 		/// A vector of reports of the same kind that happened at the same time slot.
-		ConcurrentReportsIndex: double_map Kind, OpaqueTimeSlot => Vec<ReportIdOf<T>>;
+		ConcurrentReportsIndex:
+			double_map hasher(blake2_256) Kind, hasher(blake2_256) OpaqueTimeSlot
+			=> Vec<ReportIdOf<T>>;
 
 		/// Enumerates all reports of a kind along with the time they happened.
 		///
@@ -65,7 +67,7 @@ decl_storage! {
 		///
 		/// Note that the actual type of this mapping is `Vec<u8>`, this is because values of
 		/// different types are not supported at the moment so we are doing the manual serialization.
-		ReportsByKindIndex: map Kind => Vec<u8>; // (O::TimeSlot, ReportIdOf<T>)
+		ReportsByKindIndex: map hasher(blake2_256) Kind => Vec<u8>; // (O::TimeSlot, ReportIdOf<T>)
 	}
 }
 

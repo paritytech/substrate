@@ -3,15 +3,16 @@ name = "sc-finality-grandpa"
 version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 fork-tree = { version = "2.0.0", path = "../../utils/fork-tree" }
-futures = "0.1.29"
-futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
+futures = "0.3.1"
 futures-timer = "2.0.2"
 log = "0.4.8"
 parking_lot = "0.9.0"
 rand = "0.7.2"
+assert_matches = "1.3.0"
 parity-scale-codec = { version = "1.0.0", features = ["derive"] }
 sp-arithmetic = { version = "2.0.0", path = "../../primitives/arithmetic" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
@@ -28,10 +29,11 @@ sc-network = { version = "0.8", path = "../network" }
 sc-network-gossip = { version = "0.8", path = "../network-gossip" }
 sp-finality-tracker = { version = "2.0.0", path = "../../primitives/finality-tracker" }
 sp-finality-grandpa = { version = "2.0.0", path = "../../primitives/finality-grandpa" }
-finality-grandpa = { version = "0.10.3", features = ["derive-codec"] }
+finality-grandpa = { version = "0.11.0", features = ["derive-codec"] }
+pin-project = "0.4.6"
 
 [dev-dependencies]
-finality-grandpa = { version = "0.10.3", features = ["derive-codec", "test-helpers"] }
+finality-grandpa = { version = "0.11.0", features = ["derive-codec", "test-helpers"] }
 sc-network = { version = "0.8", path = "../network" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
@@ -42,3 +44,4 @@ env_logger = "0.7.0"
 tokio = "0.1.22"
 tempfile = "3.1.0"
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
+futures01 = { package = "futures", version = "0.1.29" }

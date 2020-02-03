@@ -3,7 +3,14 @@ name = "sp-wasm-interface"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
-wasmi = "0.6.2"
+wasmi = { version = "0.6.2", optional = true }
 impl-trait-for-tuples = "0.1.2"
+sp-std = { version = "2.0.0", path = "../std", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.1.2", default-features = false, features = ["derive"] }
+
+[features]
+default = [ "std" ]
+std = [ "wasmi", "sp-std/std", "codec/std" ]

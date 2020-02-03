@@ -20,7 +20,10 @@ use sp_std::{fmt, prelude::*};
 use sp_io::hashing::blake2_256;
 use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
-	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, IdentifyAccount},
+	traits::{
+		self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, ExtrinsicMetadata,
+		IdentifyAccount,
+	},
 	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
 
@@ -128,6 +131,15 @@ where
 			},
 		})
 	}
+}
+
+impl<Address, Call, Signature, Extra> ExtrinsicMetadata
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+		where
+			Extra: SignedExtension,
+{
+	const VERSION: u8 = TRANSACTION_VERSION;
+	type SignedExtensions = Extra;
 }
 
 /// A payload that has been signed for an unchecked extrinsics.
@@ -262,6 +274,19 @@ impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> s
 	}
 }
 
+#[cfg(feature = "std")]
+impl<'a, Address: Decode, Signature: Decode, Call: Decode, Extra: SignedExtension> serde::Deserialize<'a>
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+{
+	fn deserialize<D>(de: D) -> Result<Self, D::Error> where
+		D: serde::Deserializer<'a>,
+	{
+		let r = sp_core::bytes::deserialize(de)?;
+		Decode::decode(&mut &r[..])
+			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
+	}
+}
+
 impl<Address, Call, Signature, Extra> fmt::Debug
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
@@ -316,6 +341,7 @@ mod tests {
 	#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd)]
 	struct TestExtra;
 	impl SignedExtension for TestExtra {
+		const IDENTIFIER: &'static str = "TestExtra";
 		type AccountId = u64;
 		type Call = ();
 		type AdditionalSigned = ();
