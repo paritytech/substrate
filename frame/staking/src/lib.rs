@@ -1356,6 +1356,7 @@ decl_module! {
 		///   then it indicates an instruction to skip the payout of all previous eras.
 		/// - `validators` is the list of all validators that `who` had exposure to during `era`.
 		///   If it is incomplete, then less than the full reward will be paid out.
+		///   It must not exceed `MAX_NOMINATIONS`.
 		///
 		/// WARNING: once an era is payed for a validator such validator can't claim the payout of
 		/// previous era.
@@ -1819,7 +1820,7 @@ impl<T: Trait> Module<T> {
 				let mut exposure_clipped = exposure;
 				let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
 				if exposure_clipped.others.len() > clipped_max_len {
-					exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value));
+					exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value).reverse());
 					exposure_clipped.others.truncate(clipped_max_len);
 					exposure_clipped.others.sort_unstable_by(|a, b| a.who.cmp(&b.who));
 				}
