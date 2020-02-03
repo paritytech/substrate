@@ -22,6 +22,7 @@ use serde::{Serialize, Deserialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::any::Any;
 
 use crate::import_queue::{Verifier, CacheKeyId};
 
@@ -144,7 +145,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// Intermediate values that are interpreted by block importers. Each block importer,
 	/// upon handling a value, removes it from the intermediate list. The final block importer
 	/// rejects block import if there are still intermediate values that remain unhandled.
-	pub intermediates: HashMap<Vec<u8>, Vec<u8>>,
+	pub intermediates: HashMap<&'static [u8], Box<dyn Any>>,
 	/// Auxiliary consensus data produced by the block.
 	/// Contains a list of key-value pairs. If values are `None`, the keys
 	/// will be deleted.
@@ -222,6 +223,32 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			fork_choice: self.fork_choice,
 			import_existing: self.import_existing,
 		}
+	}
+
+	/// Take interemdiate by given key, and remove it from the processing list.
+	pub fn take_intermediate<T: 'static>(&mut self, key: &'static [u8]) -> Option<Box<T>> {
+		self.intermediates.remove(key)
+			.and_then(|value| {
+				match value.downcast::<T>() {
+					Ok(v) => Some(v),
+					Err(v) => {
+						self.intermediates.insert(key, v);
+						None
+					},
+				}
+			})
+	}
+
+	/// Get a reference to a given intermediate.
+	pub fn intermediate<T: 'static>(&self, key: &'static [u8]) -> Option<&T> {
+		self.intermediates.get(key)
+			.and_then(|value| value.downcast_ref::<T>())
+	}
+
+	/// Get a mutable reference to a given intermediate.
+	pub fn intermediate_mut<T: 'static>(&mut self, key: &'static [u8]) -> Option<&mut T> {
+		self.intermediates.get_mut(key)
+			.and_then(|value| value.downcast_mut::<T>())
 	}
 }
 
