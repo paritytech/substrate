@@ -116,16 +116,24 @@ impl<A: PartialEq + Eq + Clone + sp_std::fmt::Debug> Node<A> {
 	/// vector of Nodes leading to the root. Hence the first element is the start itself and the
 	/// last one is the root. As convenient, the root itself is also returned as the first element
 	/// of the tuple.
+	///
+	/// This function detects cycles and breaks as soon a duplicate node is visited, returning the
+	/// cycle up to but not including the duplicate node.
+	///
+	/// If you are certain that no cycles exist, you can use [`root_unchecked`].
 	pub fn root(start: &NodeRef<A>) -> (NodeRef<A>, Vec<NodeRef<A>>) {
 		let mut parent_path: Vec<NodeRef<A>> = Vec::new();
-		let initial = start.clone();
+		let mut visited: Vec<NodeRef<A>> = Vec::new();
+
 		parent_path.push(start.clone());
+		visited.push(start.clone());
 		let mut current = start.clone();
 
 		while let Some(ref next_parent) = current.clone().borrow().parent {
-			if initial == next_parent.clone() { break; }
+			if visited.contains(next_parent) { break; }
 			parent_path.push(next_parent.clone());
 			current = next_parent.clone();
+			visited.push(current.clone());
 		}
 
 		(current, parent_path)
@@ -228,6 +236,24 @@ mod tests {
 		Node::set_parent_of(&a, &b);
 		Node::set_parent_of(&b, &c);
 		Node::set_parent_of(&c, &a);
+
+		let (root, path) = Node::root(&a);
+		assert_eq!(root, c);
+		assert_eq!(path.clone(), vec![a.clone(), b.clone(), c.clone()]);
+	}
+
+	#[test]
+	fn get_root_on_cycle_2() {
+		// A ---> B
+		// |   |  |
+		//     - C
+		let a = Node::new(id(1)).into_ref();
+		let b = Node::new(id(2)).into_ref();
+		let c = Node::new(id(3)).into_ref();
+
+		Node::set_parent_of(&a, &b);
+		Node::set_parent_of(&b, &c);
+		Node::set_parent_of(&c, &b);
 
 		let (root, path) = Node::root(&a);
 		assert_eq!(root, c);

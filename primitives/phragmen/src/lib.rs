@@ -41,6 +41,10 @@ use sp_runtime::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bo
 mod mock;
 #[cfg(test)]
 mod tests;
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
+#[cfg(feature = "std")]
+use codec::{Encode, Decode};
 
 mod node;
 mod reduce;
@@ -120,7 +124,7 @@ pub struct PhragmenResult<AccountId> {
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
 #[derive(RuntimeDebug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct Assignment<AccountId> {
 	/// Voter's identifier
 	pub who: AccountId,
@@ -150,7 +154,7 @@ impl<AccountId> Assignment<AccountId> {
 /// A voter's stake assignment among a set of targets, represented as absolute values in the scale
 /// of [`ExtendedBalance`].
 #[derive(RuntimeDebug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct StakedAssignment<AccountId> {
 	/// Voter's identifier
 	pub who: AccountId,
@@ -166,7 +170,7 @@ pub struct StakedAssignment<AccountId> {
 /// This, at the current version, resembles the `Exposure` defined in the staking SRML module, yet
 /// they do not necessarily have to be the same.
 #[derive(Default, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Eq, PartialEq))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Eq, PartialEq))]
 pub struct Support<AccountId> {
 	/// Total support.
 	pub total: ExtendedBalance,

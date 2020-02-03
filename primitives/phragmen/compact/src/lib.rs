@@ -144,7 +144,7 @@ fn struct_def(
 	}).collect::<TokenStream2>();
 
 	let compact_def = quote! (
-		/// A struct to encode a `Vec<StakedAssignment>` or `Vec<Assignment>` of the phragmen module
+		/// A struct to encode a `Vec<StakedAssignment>` or `Vec<_phragmen::Assignment>` of the phragmen module
 		/// in a compact way.
 		#[derive(Default, PartialEq, Eq, Clone, _sp_runtime::RuntimeDebug, _codec::Encode, _codec::Decode)]
 		#vis struct #ident<#account_type, #weight_type> {
@@ -214,14 +214,14 @@ fn convert_impl_for_assignment(
 
 	let from_impl = quote!(
 		impl<#account_type: _codec::Codec + Default + Clone>
-		From<Vec<Assignment<#account_type>>>
-		for #ident<#account_type, Perbill>
+		From<Vec<_phragmen::Assignment<#account_type>>>
+		for #ident<#account_type, _sp_runtime::Perbill>
 		{
 			fn from(
-				assignments: Vec<Assignment<#account_type>>,
+				assignments: Vec<_phragmen::Assignment<#account_type>>,
 			) -> Self {
-				let mut compact: #ident<#account_type, Perbill> = Default::default();
-				assignments.into_iter().for_each(|Assignment { who, distribution } | {
+				let mut compact: #ident<#account_type, _sp_runtime::Perbill> = Default::default();
+				assignments.into_iter().for_each(|_phragmen::Assignment { who, distribution } | {
 					match distribution.len() {
 						#from_impl_single
 						#from_impl_double
@@ -240,9 +240,9 @@ fn convert_impl_for_assignment(
 		let name = field_name_for(1);
 		quote!(
 			for (who, target) in self.#name {
-				assignments.push(Assignment {
+				assignments.push(_phragmen::Assignment {
 					who,
-					distribution: vec![(target, Perbill::one())],
+					distribution: vec![(target, _sp_runtime::Perbill::one())],
 				})
 			}
 		)
@@ -251,8 +251,8 @@ fn convert_impl_for_assignment(
 		let name = field_name_for(2);
 		quote!(
 			for (who, (t1, p1), t2) in self.#name {
-				let p2 = _sp_runtime::traits::Saturating::saturating_sub(Perbill::one(), p1);
-				assignments.push( Assignment {
+				let p2 = _sp_runtime::traits::Saturating::saturating_sub(_sp_runtime::Perbill::one(), p1);
+				assignments.push( _phragmen::Assignment {
 					who,
 					distribution: vec![
 						(t1, p1),
@@ -266,18 +266,18 @@ fn convert_impl_for_assignment(
 		let name = field_name_for(c);
 		quote!(
 			for (who, inners, t_last) in self.#name {
-				let mut sum = Perbill::zero();
+				let mut sum = _sp_runtime::Perbill::zero();
 				let mut inners_parsed = inners
 					.into_iter()
 					.map(|(ref c, p)| {
 						sum = _sp_runtime::traits::Saturating::saturating_add(sum, *p);
 						(c.clone(), *p)
-					}).collect::<Vec<(#account_type, Perbill)>>();
+					}).collect::<Vec<(#account_type, _sp_runtime::Perbill)>>();
 
-				let p_last = _sp_runtime::traits::Saturating::saturating_sub(Perbill::one(), sum);
+				let p_last = _sp_runtime::traits::Saturating::saturating_sub(_sp_runtime::Perbill::one(), sum);
 				inners_parsed.push((t_last, p_last));
 
-				assignments.push(Assignment {
+				assignments.push(_phragmen::Assignment {
 					who,
 					distribution: inners_parsed,
 				});
@@ -287,11 +287,11 @@ fn convert_impl_for_assignment(
 
 	let into_impl = quote!(
 		impl<#account_type: _codec::Codec + Default + Clone>
-		Into<Vec<Assignment<#account_type>>>
-		for #ident<#account_type, Perbill>
+		Into<Vec<_phragmen::Assignment<#account_type>>>
+		for #ident<#account_type, _sp_runtime::Perbill>
 		{
-			fn into(self) -> Vec<Assignment<#account_type>> {
-				let mut assignments: Vec<Assignment<#account_type>> = Default::default();
+			fn into(self) -> Vec<_phragmen::Assignment<#account_type>> {
+				let mut assignments: Vec<_phragmen::Assignment<#account_type>> = Default::default();
 				#into_impl_single
 				#into_impl_double
 				#into_impl_rest

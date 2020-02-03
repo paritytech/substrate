@@ -251,9 +251,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod migration;
-mod slashing;
-mod offchain_election;
 
+pub mod slashing;
+pub mod offchain_election;
 pub mod inflation;
 
 use sp_std::{prelude::*, result, convert::{TryInto, From}};
@@ -289,10 +289,7 @@ use frame_system::{
 	offchain::SubmitUnsignedTransaction,
 };
 
-use sp_phragmen::{
-	ExtendedBalance, Assignment, StakedAssignment,
-	generate_compact_solution_type,
-};
+use sp_phragmen::{ExtendedBalance, StakedAssignment, generate_compact_solution_type};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 // ------------- IMPORTANT NOTE: must be the same as `generate_compact_solution_type`.
@@ -562,8 +559,10 @@ pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 pub enum ElectionCompute {
 	/// Result was forcefully computed on chain at the end of the session.
 	OnChain,
-	/// Result was submitted and accepted to the chain.
-	Submitted,
+	/// Result was submitted and accepted to the chain via a signed transaction.
+	Signed,
+	/// Result was submitted by an authority (probably via an unsigned transaction)
+	Authority,
 }
 
 /// The result of an election round.
@@ -992,8 +991,9 @@ decl_module! {
 						);
 						debug::native::info!(
 							target: "staking",
-							"detected a good block to trigger offchain election. Submission will \
+							"detected a good block ({}) to trigger offchain election. Submission will \
 							be allowed from the next block.",
+							now,
 						);
 					}
 				}
@@ -1003,12 +1003,14 @@ decl_module! {
 		/// Check if the current block number is the one at which the election window has been set
 		/// to open. If so, it runs the offchain worker code.
 		fn offchain_worker(now: T::BlockNumber) {
+			debug::RuntimeLogger::init();
 			// runs only once.
 			if Self::era_election_status() == ElectionStatus::<T::BlockNumber>::Open(now) {
 				let _ = offchain_election::compute_offchain_election::<T>().map_err(|e| {
 					debug::native::warn!(
 						target: "staking",
-						"{:?}", e
+						"Error in phragmen offchain worker call: {:?}",
+						e,
 					);
 				});
 			}
@@ -1061,16 +1063,22 @@ decl_module! {
 		/// - O(N * E') to ensure nomination veracity. (E' is the average voter count per nominator
 		///   and it is less than `MAX_NOMINATIONS`)
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn submit_election_solution(
 			origin,
 			winners: Vec<T::AccountId>,
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
 		) {
 			let _who = ensure_signed(origin)?;
-			Self::check_and_replace_solution(winners, compact_assignments)?
+			Self::check_and_replace_solution(
+				winners,
+				compact_assignments,
+				ElectionCompute::Signed
+			)?
 		}
 
-		/// Unsigned version of `submit_election_solution`
+		/// Unsigned version of `submit_election_solution`. Will only be accepted from those who are
+		/// in the current validator set.
 		fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<T::AccountId>,
@@ -1081,7 +1089,11 @@ decl_module! {
 		) {
 			ensure_none(origin)?;
 			Encode::encode(&_signature);
-			Self::check_and_replace_solution(winners, compact_assignments)?
+			Self::check_and_replace_solution(
+				winners,
+				compact_assignments,
+				ElectionCompute::Authority
+			)?
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -1615,6 +1627,7 @@ impl<T: Trait> Module<T> {
 	fn check_and_replace_solution(
 		winners: Vec<T::AccountId>,
 		compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
+		compute: ElectionCompute,
 	) -> Result<(), Error<T>> {
 		// discard early solutions
 		match Self::era_election_status() {
@@ -1760,9 +1773,9 @@ impl<T: Trait> Module<T> {
 		);
 
 		<QueuedElected<T>>::put(ElectionResult {
-			compute: ElectionCompute::Submitted,
 			elected_stashes: winners,
 			score: submitted_score,
+			compute,
 			exposures,
 			slot_stake,
 		});
@@ -1918,10 +1931,9 @@ impl<T: Trait> Module<T> {
 	/// No storage item is updated.
 	fn try_do_phragmen() -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
 		// a phragmen result from either a stored submission or locally executed one.
-		let somehow_phragmen_results = <QueuedElected<T>>::take()
-			.or_else(|| Self::do_phragmen_with_post_processing(ElectionCompute::OnChain));
-
-		somehow_phragmen_results
+		<QueuedElected<T>>::take().or_else(||
+			Self::do_phragmen_with_post_processing(ElectionCompute::OnChain)
+		)
 	}
 
 	/// Execute phragmen and return the new results. The edge weights are processed into  support
@@ -2309,9 +2321,15 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			validator_index,
 			signature,
 		) = call {
-			// TODO: since unsigned is only for validators, and it is not increasing the block
-			// weight and fee etc. maybe we should only accept an unsigned solution when we don't
-			// have ANY solutions. Otherwise each block will get a LOT of these.
+			if let Some(queued_elected) = Self::queued_elected() {
+				if queued_elected.compute == ElectionCompute::Authority {
+					debug::native::debug!(
+						target: "staking",
+						"rejecting unsigned transaction because we already have one from an authority"
+					);
+					return InvalidTransaction::Future.into();
+				}
+			}
 
 			// check signature
 			let payload = (winners, compact, validator_index);
@@ -2334,7 +2352,8 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			Ok(ValidTransaction {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
-				provides: vec![],
+				// TODO: what is a good value for this?
+				provides: vec![(Self::current_era(), validator_key).encode()],
 				longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(150_u64),
 				propagate: true,
 			})
