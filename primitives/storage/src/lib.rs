@@ -22,6 +22,7 @@ use codec::{Decode, Encode, Output};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_debug_derive::RuntimeDebug;
+use ref_cast::RefCast;
 
 use sp_std::{vec, vec::Vec, borrow::Cow, borrow::Borrow,
 	borrow::ToOwned, convert::TryInto, ops::Deref};
@@ -178,7 +179,7 @@ impl<'a> ChildStorageKey<'a> {
 }
 
 #[repr(transparent)]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, RefCast)]
 /// Information related to a child state.
 pub struct ChildInfo([u8]);
 
@@ -206,9 +207,7 @@ impl Borrow<ChildInfo> for OwnedChildInfo {
 	#[inline]
 	fn borrow(&self) -> &ChildInfo {
 		let data: &[u8] = self.0.borrow();
-		unsafe {
-			sp_std::mem::transmute(data)
-		}
+		ChildInfo::ref_cast(data)
 	}
 }
 
@@ -225,11 +224,9 @@ impl ChildInfo {
 	/// Create child info from a linear byte packed value and a given type. 
 	pub fn resolve_child_info(data: &[u8]) -> Option<&Self> {
 		match ChildType::read_type(data) {
-			Some(x) if x == ChildType::CryptoUniqueId => Some({
-				unsafe {
-					sp_std::mem::transmute(data)
-				}
-			}),
+			Some(x) if x == ChildType::CryptoUniqueId => Some(
+				ChildInfo::ref_cast(data)
+			),
 			_ => None,
 		}
 	}
@@ -237,9 +234,7 @@ impl ChildInfo {
 	/// Instantiates information for a child trie.
 	/// No check is done on consistency.
 	pub fn new_unchecked(data: &[u8]) -> &Self {
-		unsafe {
-			sp_std::mem::transmute(data)
-		}
+		ChildInfo::ref_cast(data)
 	}
 
 	/// Top trie defined as the unique crypto id trie with
@@ -284,10 +279,14 @@ pub enum ChildType {
 	CryptoUniqueId = 1,
 }
 
-const LOWER_CHILD_TYPE: u32 = 1;
-const HIGHER_CHILD_TYPE: u32 = 1;
-
 impl ChildType {
+	fn new(repr: u32) -> Option<ChildType> {
+		Some(match repr {
+			r if r == ChildType::CryptoUniqueId as u32 => ChildType::CryptoUniqueId,
+			_ => return None,
+		})
+	}
+
 	/// Try to read type from child definition.
 	pub fn read_type(slice: &[u8]) -> Option<Self> {
 		if slice.len() < 4 {
@@ -295,16 +294,14 @@ impl ChildType {
 		}
 		slice[..4].try_into().ok()
 			.map(|b| u32::from_le_bytes(b))
-			.filter(|b| *b >= LOWER_CHILD_TYPE && *b <= HIGHER_CHILD_TYPE)
-			.map(|b| unsafe {
-				sp_std::mem::transmute(b)
-			})
+			.and_then(|b| ChildType::new(b))
 	}
 
 	fn read_type_unchecked(slice: &[u8]) -> Self {
-		let child_type = u32::from_le_bytes(slice[..4].try_into()
-			.expect("This function is only called on initialized child info."));
-		unsafe { sp_std::mem::transmute(child_type) }
+		slice[..4].try_into().ok()
+			.map(|b| u32::from_le_bytes(b))
+			.and_then(|b| ChildType::new(b))
+			.expect("This function is only called on initialized child info.")
 	}
 }
 
