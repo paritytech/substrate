@@ -37,11 +37,21 @@ use crate::base_pool::Transaction;
 ///
 /// Should be cheap to clone.
 #[derive(Debug)]
-pub struct TransactionRef<Hash, Ex> {
+pub struct TransactionRef<Hash, Ex>
+{
 	/// The actual transaction data.
 	pub transaction: Arc<Transaction<Hash, Ex>>,
 	/// Unique id when transaction was inserted into the pool.
 	pub insertion_id: u64,
+}
+
+impl<Hash, Ex> parity_util_mem::MallocSizeOf for TransactionRef<Hash, Ex>
+where Transaction<Hash, Ex>: parity_util_mem::MallocSizeOf
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.transaction.size_of(ops) +
+			self.insertion_id.size_of(ops)
+	}
 }
 
 impl<Hash, Ex> Clone for TransactionRef<Hash, Ex> {
@@ -74,7 +84,7 @@ impl<Hash, Ex> PartialEq for TransactionRef<Hash, Ex> {
 }
 impl<Hash, Ex> Eq for TransactionRef<Hash, Ex> {}
 
-#[derive(Debug)]
+#[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct ReadyTx<Hash, Ex> {
 	/// A reference to a transaction
 	pub transaction: TransactionRef<Hash, Ex>,
@@ -114,6 +124,19 @@ pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	ready: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
 	/// Best transactions that are ready to be included to the block without any other previous transaction.
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
+}
+
+impl<Hash: hash::Hash + Eq, Ex> parity_util_mem::MallocSizeOf for ReadyTransactions<Hash, Ex>
+where TransactionRef<Hash, Ex>: parity_util_mem::MallocSizeOf,
+	ReadyTx<Hash, Ex>: parity_util_mem::MallocSizeOf,
+	Hash: parity_util_mem::MallocSizeOf,
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.insertion_id.size_of(ops) +
+			self.provided_tags.size_of(ops) +
+			self.ready.size_of(ops) +
+			self.best.size_of(ops)
+	}
 }
 
 impl<Hash: hash::Hash + Eq, Ex> Default for ReadyTransactions<Hash, Ex> {
@@ -674,6 +697,24 @@ mod tests {
 		assert_eq!(it.next(), Some(4));
 		assert_eq!(it.next(), Some(5));
 		assert_eq!(it.next(), None);
+	}
+
+	#[test]
+	fn can_report_heap_size() {
+		let mut ready = ReadyTransactions::default();
+		let tx = Transaction {
+			data: vec![5],
+			bytes: 1,
+			hash: 5,
+			priority: 1,
+			valid_till: u64::max_value(),	// use the max_value() here for testing.
+			requires: vec![],
+			provides: vec![],
+			propagate: true,
+		};
+		import(&mut ready, tx).unwrap();
+
+		assert!(parity_util_mem::malloc_size(&ready) > 200);
 	}
 
 	#[test]
