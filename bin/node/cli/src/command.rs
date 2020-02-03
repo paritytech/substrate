@@ -28,8 +28,7 @@ where
 	let args: Vec<_> = args.collect();
 	let opt = sc_cli::from_iter::<Cli, _>(args.clone(), &version);
 
-	let mut config = sc_service::Configuration::default();
-	config.impl_name = "substrate-node";
+	let mut config = sc_service::Configuration::new(&version);
 
 	match opt.subcommand {
 		None => sc_cli::run(
