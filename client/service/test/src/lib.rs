@@ -183,10 +183,10 @@ fn node_config<G, E: Clone> (
 			password: None
 		},
 		config_dir: Some(root.clone()),
-		database: DatabaseConfig::Path {
+		database: Some(DatabaseConfig::Path {
 			path: root.join("db"),
 			cache_size: None
-		},
+		}),
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
