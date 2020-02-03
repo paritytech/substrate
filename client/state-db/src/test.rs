@@ -82,7 +82,7 @@ pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 }
 
 pub fn make_childchangeset(inserted: &[u64], deleted: &[u64]) -> ChildTrieChangeSets<H256> {
-	let mut result = ChildTrieChangeSets::new();
+	let mut result = ChildTrieChangeSets::default();
 	result.insert(None, make_changeset(inserted, deleted));
 	result
 }

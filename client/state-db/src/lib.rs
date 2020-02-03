@@ -36,11 +36,11 @@ mod pruning;
 use std::fmt;
 use parking_lot::RwLock;
 use codec::Codec;
-use std::collections::{BTreeMap, HashMap, hash_map::Entry, btree_map::Entry as BEntry};
+use std::collections::{HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildrenMap};
 
 const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
@@ -114,17 +114,23 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 
 /// A set of state node changes.
 #[derive(Default, Debug, Clone)]
-pub struct ChangeSet<H: Hash> {
+pub struct ChangeSet<H> {
 	/// Inserted nodes.
 	pub inserted: Vec<(H, DBValue)>,
 	/// Deleted nodes.
 	pub deleted: Vec<H>,
 }
 
+impl<H> ChangeSet<H> {
+	fn merge(&mut self, other: ChangeSet<H>) {
+		self.inserted.extend(other.inserted.into_iter());
+		self.deleted.extend(other.deleted.into_iter());
+	}
+}
 /// A set of state node changes for a child trie.
 /// TODO remove??
 #[derive(Debug, Clone)]
-pub struct ChildTrieChangeSet<H: Hash> {
+pub struct ChildTrieChangeSet<H> {
 	/// Change set of this element.
 	pub data: ChangeSet<H>,
 	/// Child trie descripton.
@@ -133,35 +139,18 @@ pub struct ChildTrieChangeSet<H: Hash> {
 }
 
 /// Change sets of all child trie (top is key None).
-pub type ChildTrieChangeSets<H> = BTreeMap<Option<ChildInfo>, ChangeSet<H>>;
-
-/// Extends for `ChildTrieChangeSets` is merging.
-fn extend_change_sets<H: Hash>(
-	set: &mut ChildTrieChangeSets<H>,
-	other: impl Iterator<Item = (Option<ChildInfo>, ChangeSet<H>)>,
-) {
-	for (ci, o_cs) in other {
-		match set.entry(ci) {
-			BEntry::Occupied(mut e) => {
-				let entry = e.get_mut();
-				entry.inserted.extend(o_cs.inserted);
-				entry.deleted.extend(o_cs.deleted);
-			},
-			BEntry::Vacant(e) => { e.insert(o_cs); },
-		}
-	}
-}
+pub type ChildTrieChangeSets<H> = ChildrenMap<ChangeSet<H>>;
 
 /// A set of changes to the backing database.
 #[derive(Default, Debug, Clone)]
-pub struct CommitSet<H: Hash> {
+pub struct CommitSet<H> {
 	/// State node changes.
 	pub data: ChildTrieChangeSets<H>,
 	/// Metadata changes.
 	pub meta: ChangeSet<Vec<u8>>,
 }
 
-impl<H:Hash> CommitSet<H> {
+impl<H> CommitSet<H> {
 	/// Number of inserted key value element in the set.
 	pub fn inserted_len(&self) -> usize {
 		self.data.iter().map(|set| set.1.inserted.len()).sum()

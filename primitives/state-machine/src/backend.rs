@@ -20,9 +20,8 @@ use log::warn;
 use sp_core::{Hasher, InnerHasher};
 use codec::Encode;
 
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildrenMap};
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
-use std::collections::{BTreeMap, btree_map::Entry};
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
@@ -334,14 +333,9 @@ impl Consolidate for Vec<(
 	}
 }
 
-impl<K: Ord, V: Consolidate> Consolidate for BTreeMap<K, V> {
+impl<V: Consolidate> Consolidate for ChildrenMap<V> {
 	fn consolidate(&mut self, other: Self) {
-		for (k, v) in other.into_iter() {
-			match self.entry(k) {
-				Entry::Occupied(mut e) => e.get_mut().consolidate(v),
-				Entry::Vacant(e) => { e.insert(v); },
-			}
-		}
+		self.extend_with(other.into_iter(), Consolidate::consolidate)
 	}
 }
 

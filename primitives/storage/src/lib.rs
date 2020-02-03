@@ -21,6 +21,8 @@
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
+#[cfg(feature = "std")]
+use sp_std::collections::btree_map::BTreeMap;
 use sp_debug_derive::RuntimeDebug;
 
 use sp_std::{vec::Vec, borrow::Cow};
@@ -44,7 +46,7 @@ pub struct StorageData(
 /// Map of data to use in a storage, it is a collection of
 /// byte key and values.
 #[cfg(feature = "std")]
-pub type StorageMap = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
+pub type StorageMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
 #[cfg(feature = "std")]
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -286,5 +288,82 @@ impl ChildTrie {
 		match other {
 			ChildInfo::Default(other) => self.data[..] == other.data[..],
 		}
+	}
+}
+
+#[cfg(feature = "std")]
+#[derive(Clone, PartialEq, Eq, Debug)]
+/// Type for storing a map of child trie related information.
+/// A few utilities methods are defined.
+pub struct ChildrenMap<T>(pub BTreeMap<Option<ChildInfo>, T>);
+
+/// Type alias for storage of children related content. 
+pub type ChildrenVec<T> = Vec<(Option<ChildInfo>, T)>;
+
+/// Type alias for storage of children related content. 
+pub type ChildrenSlice<'a, T> = &'a [(Option<ChildInfo>, T)];
+
+#[cfg(feature = "std")]
+impl<T> sp_std::ops::Deref for ChildrenMap<T> {
+	type Target = BTreeMap<Option<ChildInfo>, T>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T> sp_std::ops::DerefMut for ChildrenMap<T> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T> sp_std::default::Default for ChildrenMap<T> {
+	fn default() -> Self {
+		ChildrenMap(BTreeMap::new())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T> ChildrenMap<T> {
+	/// Extend for `ChildrenMap` is usually about merging entries,
+	/// this method extends two maps, by applying a merge function
+	/// on each of its entries.
+	pub fn extend_with(
+		&mut self,
+		other: impl Iterator<Item = (Option<ChildInfo>, T)>,
+		merge: impl Fn(&mut T, T),
+	) {
+		use sp_std::collections::btree_map::Entry;
+		for (child_info, child_content) in other {
+			match self.0.entry(child_info) {
+				Entry::Occupied(mut entry) => {
+					merge(entry.get_mut(), child_content)
+				},
+				Entry::Vacant(entry) => {
+					entry.insert(child_content);
+				},
+			}
+		}
+	}
+
+	/// Extends two maps, by enxtending entries with the same key.
+	pub fn extend_replace(
+		&mut self,
+		other: impl Iterator<Item = (Option<ChildInfo>, T)>,
+	) {
+		self.0.extend(other)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T> IntoIterator for ChildrenMap<T> {
+	type Item = (Option<ChildInfo>, T);
+	type IntoIter = sp_std::collections::btree_map::IntoIter<Option<ChildInfo>, T>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.into_iter()
 	}
 }

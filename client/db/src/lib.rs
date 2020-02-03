@@ -41,7 +41,7 @@ mod stats;
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::io;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::HashMap;
 
 use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo};
 use sc_client_api::backend::NewBlockState;
@@ -56,7 +56,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::RwLock;
 use sp_core::{ChangesTrieConfiguration, traits::CodeExecutor};
-use sp_core::storage::{well_known_keys, ChildInfo};
+use sp_core::storage::{well_known_keys, ChildInfo, ChildrenMap};
 use sp_runtime::{
 	generic::BlockId, Justification, Storage,
 	BuildStorage,
@@ -513,7 +513,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: CachingState<RefTrackingState<Block>, Block>,
-	db_updates: BTreeMap<Option<ChildInfo>, PrefixedMemoryDB<HasherFor<Block>>>,
+	db_updates: ChildrenMap<PrefixedMemoryDB<HasherFor<Block>>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<HasherFor<Block>>,
@@ -570,7 +570,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 	fn update_db_storage(
 		&mut self,
-		update: BTreeMap<Option<ChildInfo>, PrefixedMemoryDB<HasherFor<Block>>>,
+		update: ChildrenMap<PrefixedMemoryDB<HasherFor<Block>>>,
 	) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
@@ -1116,7 +1116,7 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			let finalized = if operation.commit_state {
-				let mut changesets = BTreeMap::<_, sc_state_db::ChangeSet<Vec<u8>>>::new();
+				let mut changesets = ChildrenMap::<sc_state_db::ChangeSet<Vec<u8>>>::default();
 				let mut ops: u64 = 0;
 				let mut bytes: u64 = 0;
 				for (info, mut updates) in operation.db_updates.into_iter() {

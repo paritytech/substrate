@@ -21,20 +21,20 @@
 //! `revert_pending`
 
 use std::fmt;
-use std::collections::{HashMap, VecDeque, hash_map::Entry, BTreeMap};
+use std::collections::{HashMap, VecDeque, hash_map::Entry};
 use super::{Error, DBValue, ChildTrieChangeSets, CommitSet, MetaDb, Hash, to_meta_key, ChangeSet};
 use codec::{Encode, Decode};
 use log::trace;
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildrenMap, ChildrenVec};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 // version at start to avoid collision when adding a unit
 const NON_CANONICAL_JOURNAL_V1: &[u8] = b"v1_non_canonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
 
-type Keys<Key> = Vec<(Option<ChildInfo>, Vec<Key>)>;
-type KeyVals<Key> = Vec<(Option<ChildInfo>, Vec<(Key, DBValue)>)>;
-type ChildKeyVals<Key> = BTreeMap<Option<ChildInfo>, HashMap<Key, (u32, DBValue)>>;
+type Keys<Key> = ChildrenVec<Vec<Key>>;
+type KeyVals<Key> = ChildrenVec<Vec<(Key, DBValue)>>;
+type ChildKeyVals<Key> = ChildrenMap<HashMap<Key, (u32, DBValue)>>;
 
 /// See module documentation.
 pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
@@ -174,7 +174,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 		let mut levels = VecDeque::new();
 		let mut parents = HashMap::new();
-		let mut values = BTreeMap::new();
+		let mut values = ChildrenMap::default();
 		if let Some((ref hash, mut block)) = last_canonicalized {
 			// read the journal
 			trace!(target: "state-db", "Reading uncanonicalized journal. Last canonicalized #{} ({:?})", block, hash);
@@ -389,7 +389,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 		// get the one we need to canonicalize
 		let overlay = &level[index];
-		crate::extend_change_sets(&mut commit.data, overlay.inserted.iter()
+		commit.data.extend_with(overlay.inserted.iter()
 			.map(|(ct, keys)| (
 				ct.clone(),
 				ChangeSet {
@@ -403,15 +403,15 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					)).collect(),
 					deleted: Vec::new(),
 				},
-			)));
-		crate::extend_change_sets(&mut commit.data, overlay.deleted.iter().cloned()
+			)), ChangeSet::merge);
+		commit.data.extend_with(overlay.deleted.iter().cloned()
 			.map(|(ct, keys)| (
 				ct,
 				ChangeSet {
 					inserted: Vec::new(),
 					deleted: keys,
 				},
-			)));
+			)), ChangeSet::merge);
 
 		commit.meta.deleted.append(&mut discarded_journals);
 		let canonicalized = (hash.clone(), self.front_block_number() + self.pending_canonicalizations.len() as u64);

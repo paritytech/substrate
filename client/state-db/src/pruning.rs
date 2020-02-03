@@ -26,14 +26,14 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use codec::{Encode, Decode};
 use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
 use log::{trace, warn};
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildrenVec};
 use super::ChangeSet;
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
 const OLD_PRUNING_JOURNAL: &[u8] = b"pruning_journal";
 const PRUNING_JOURNAL_V1: &[u8] = b"v1_pruning_journal";
 
-type Keys<Key> = Vec<(Option<ChildInfo>, Vec<Key>)>;
+type Keys<Key> = ChildrenVec<Vec<Key>>;
 
 /// See module documentation.
 pub struct RefWindow<BlockHash: Hash, Key: Hash> {
@@ -219,14 +219,14 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			trace!(target: "state-db", "Pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
 			let index = self.pending_number + self.pending_prunings as u64;
 
-			crate::extend_change_sets(&mut commit.data, pruned.deleted.iter()
+			commit.data.extend_with(pruned.deleted.iter()
 				.map(|(ct, keys)| (
 					ct.clone(),
 					ChangeSet {
 						inserted: Vec::new(),
 						deleted: keys.iter().cloned().collect(),
 					},
-				)));
+				)), ChangeSet::merge);
 
 			commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), index.encode()));
 			commit.meta.deleted.push(pruned.journal_key.clone());
