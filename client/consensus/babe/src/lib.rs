@@ -63,7 +63,10 @@ pub use sp_consensus_babe::{
 	CompatibleDigestItem,
 };
 pub use sp_consensus::SyncOracle;
-use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration}};
+use std::{
+	collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration},
+	any::Any, borrow::Cow
+};
 use codec::{Encode, Decode};
 use sp_consensus_babe;
 use sp_consensus::{ImportResult, CanAuthorWith};
@@ -168,8 +171,6 @@ enum Error<B: BlockT> {
 	ParentBlockNoAssociatedWeight(B::Hash),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
-	#[display(fmt = "Intermediate is missing or invalid for block import")]
-	NoIntermediate,
 	Client(sp_blockchain::Error),
 	Runtime(sp_inherents::Error),
 	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
@@ -807,8 +808,8 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 
 				let mut intermediates = HashMap::new();
 				intermediates.insert(
-					INTERMEDIATE_KEY.to_vec(),
-					BabeIntermediate { epoch }.encode()
+					Cow::from(INTERMEDIATE_KEY),
+					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
 				);
 
 				let block_import_params = BlockImportParams {
@@ -978,14 +979,9 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 					))?
 			};
 
-			let intermediate = BabeIntermediate::decode(
-				&mut &block.intermediates.remove(INTERMEDIATE_KEY)
-					.ok_or(ConsensusError::ClientImport(
-						babe_err(Error::<Block>::NoIntermediate).into()
-					))?[..]
-			).map_err(|_| ConsensusError::ClientImport(
-				babe_err(Error::<Block>::NoIntermediate).into()
-			))?;
+			let intermediate = block.take_intermediate::<BabeIntermediate>(
+				INTERMEDIATE_KEY
+			)?;
 
 			let epoch = intermediate.epoch;
 			let first_in_epoch = parent_slot < epoch.as_ref().start_slot;
