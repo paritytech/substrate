@@ -106,7 +106,7 @@ use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
 use sp_staking::SessionIndex;
 use frame_support::{dispatch, ConsensusEngineId, decl_module, decl_event, decl_storage, decl_error};
-use frame_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor, ValidatorRegistration}, Parameter};
+use frame_support::{ensure, traits::{OnReapAccount, Get, FindAuthor, ValidatorRegistration}, Parameter};
 use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
@@ -685,8 +685,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero<T::ValidatorId> for Module<T> {
-	fn on_free_balance_zero(who: &T::ValidatorId) {
+impl<T: Trait> OnReapAccount<T::ValidatorId> for Module<T> {
+	fn on_reap_account(who: &T::ValidatorId) {
 		Self::prune_dead_keys(who);
 	}
 }
@@ -763,7 +763,7 @@ mod tests {
 			let id = DUMMY;
 			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
 
-			Session::on_free_balance_zero(&1);
+			Session::on_reap_account(&1);
 			assert_eq!(Session::load_keys(&1), None);
 			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), None);
 		})

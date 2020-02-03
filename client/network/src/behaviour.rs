@@ -164,9 +164,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 	for Behaviour<B, S, H> {
 	fn inject_event(&mut self, event: debug_info::DebugInfoEvent) {
 		let debug_info::DebugInfoEvent::Identified { peer_id, mut info } = event;
-		if !info.protocol_version.contains("substrate") {
-			warn!(target: "sub-libp2p", "Connected to a non-Substrate node: {:?}", info);
-		}
 		if info.listen_addrs.len() > 30 {
 			debug!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
 				it is identified by {:?} and {:?}", peer_id, info.protocol_version,

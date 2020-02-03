@@ -237,7 +237,6 @@ pub fn testnet_genesis(
 				.map(|k| (k, ENDOWMENT))
 				.chain(initial_authorities.iter().map(|x| (x.0.clone(), STASH)))
 				.collect(),
-			vesting: vec![],
 		}),
 		pallet_indices: Some(IndicesConfig {
 			ids: endowed_accounts.iter().cloned()
@@ -298,7 +297,8 @@ pub fn testnet_genesis(
 			members: endowed_accounts[0..3].to_vec(),
 			pot: 0,
 			max_members: 999,
-		})
+		}),
+		pallet_vesting: Some(Default::default()),
 	}
 }
 

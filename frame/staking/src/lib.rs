@@ -265,7 +265,7 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 	dispatch::DispatchResult,
 	traits::{
-		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
+		Currency, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
@@ -275,7 +275,7 @@ use sp_runtime::{
 	RuntimeDebug,
 	curve::PiecewiseLinear,
 	traits::{
-		Convert, Zero, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
+		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
 		SimpleArithmetic, EnsureOrigin,
 	}
 };
@@ -288,6 +288,7 @@ use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 use sp_phragmen::ExtendedBalance;
+use frame_support::traits::OnReapAccount;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -1537,7 +1538,6 @@ impl<T: Trait> Module<T> {
 			STAKING_ID,
 			&ledger.stash,
 			ledger.total,
-			T::BlockNumber::max_value(),
 			WithdrawReasons::all(),
 		);
 		<Ledger<T>>::insert(controller, ledger);
@@ -1944,8 +1944,8 @@ impl<T: Trait> SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(stash: &T::AccountId) {
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	fn on_reap_account(stash: &T::AccountId) {
 		Self::ensure_storage_upgraded();
 		Self::kill_stash(stash);
 	}
