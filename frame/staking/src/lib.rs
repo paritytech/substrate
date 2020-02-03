@@ -805,6 +805,9 @@ decl_storage! {
 			map hasher(blake2_256) EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
 
 		/// A mapping from still-bonded eras to the first session index of that era.
+		///
+		/// Must contains information for eras for the range:
+		/// `[active_era - bounding_duration; active_era]`
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
 
 		/// All slashing events on validators, mapped by era to the highest slash proportion
@@ -1631,14 +1634,40 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Increment `ActiveEra` and reset `ActiveEraStart`
-	fn start_era(_start_session: SessionIndex) {
-		ActiveEra::mutate(|s| {
+	fn start_era(start_session: SessionIndex) {
+		let active_era = ActiveEra::mutate(|s| {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
+			s.unwrap()
 		});
 
 		// Set new active era start in next `on_finalize`. To guarantee usage of `Time::now`.
 		<ActiveEraStart<T>>::kill();
 
+		let bonding_duration = T::BondingDuration::get();
+
+		BondedEras::mutate(|bonded| {
+			bonded.push((active_era, start_session));
+
+			if active_era > bonding_duration {
+				let first_kept = active_era - bonding_duration;
+
+				// prune out everything that's from before the first-kept index.
+				let n_to_prune = bonded.iter()
+					.take_while(|&&(era_idx, _)| era_idx < first_kept)
+					.count();
+
+				// kill slashing metadata.
+				for (pruned_era, _) in bonded.drain(..n_to_prune) {
+					slashing::clear_era_metadata::<T>(pruned_era);
+				}
+
+				if let Some(&(_, first_session)) = bonded.first() {
+					T::SessionInterface::prune_historical_up_to(first_session);
+				}
+			}
+		});
+
+		Self::apply_unapplied_slashes(active_era);
 	}
 
 	/// Compute payout for era.
@@ -1681,42 +1710,17 @@ impl<T: Trait> Module<T> {
 			ErasStartSessionIndex::remove(old_era);
 		}
 
-		let bonding_duration = T::BondingDuration::get();
-
-		BondedEras::mutate(|bonded| {
-			bonded.push((current_era, start_session_index));
-
-			if current_era > bonding_duration {
-				let first_kept = current_era - bonding_duration;
-
-				// prune out everything that's from before the first-kept index.
-				let n_to_prune = bonded.iter()
-					.take_while(|&&(era_idx, _)| era_idx < first_kept)
-					.count();
-
-				// kill slashing metadata.
-				for (pruned_era, _) in bonded.drain(..n_to_prune) {
-					slashing::clear_era_metadata::<T>(pruned_era);
-				}
-
-				if let Some(&(_, first_session)) = bonded.first() {
-					T::SessionInterface::prune_historical_up_to(first_session);
-				}
-			}
-		});
-
 		// Set staking information for new era.
 		let maybe_new_validators = Self::select_validators(current_era);
-		Self::apply_unapplied_slashes(current_era);
 
 		maybe_new_validators
 	}
 
 	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
-	fn apply_unapplied_slashes(current_era: EraIndex) {
+	fn apply_unapplied_slashes(active_era: EraIndex) {
 		let slash_defer_duration = T::SlashDeferDuration::get();
 		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| if let Some(ref mut earliest) = earliest {
-			let keep_from = current_era.saturating_sub(slash_defer_duration);
+			let keep_from = active_era.saturating_sub(slash_defer_duration);
 			for era in (*earliest)..keep_from {
 				let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
 				for slash in era_slashes {
@@ -2026,18 +2030,13 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 			}
 			active_era.unwrap()
 		};
-		let current_era = Self::current_era()
-			.unwrap_or_else(|| {
-				frame_support::print("Error: current must exist if active_era exist");
-				0
-			});
 		let active_era_start_session_index = Self::eras_start_session_index(active_era)
 			.unwrap_or_else(|| {
 				frame_support::print("Error: start_session_index must be set for current_era");
 				0
 			});
 
-		let window_start = current_era.saturating_sub(T::BondingDuration::get());
+		let window_start = active_era.saturating_sub(T::BondingDuration::get());
 
 		// fast path for active-era report - most likely.
 		// `slash_session` cannot be in a future active era. It must be in `active_era` or before.
@@ -2055,7 +2054,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 
 		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
 			if earliest.is_none() {
-				*earliest = Some(current_era)
+				*earliest = Some(active_era)
 			}
 		});
 
@@ -2076,7 +2075,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 				exposure,
 				slash_era,
 				window_start,
-				now: current_era,
+				now: active_era,
 				reward_proportion,
 			});
 
@@ -2088,7 +2087,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 				} else {
 					// defer to end of some `slash_defer_duration` from now.
 					<Self as Store>::UnappliedSlashes::mutate(
-						current_era,
+						active_era,
 						move |for_later| for_later.push(unapplied),
 					);
 				}
