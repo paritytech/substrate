@@ -30,6 +30,8 @@
 //! clients.
 
 use std::sync::Arc;
+use std::any::Any;
+use std::borrow::Cow;
 use std::thread;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -63,8 +65,6 @@ pub enum Error<B: BlockT> {
 	InvalidSeal,
 	#[display(fmt = "PoW validation error: invalid difficulty")]
 	InvalidDifficulty,
-	#[display(fmt = "PoW block import expects an intermediate, but not found one")]
-	NoIntermediate,
 	#[display(fmt = "Rejecting block too far in future")]
 	TooFarInFuture,
 	#[display(fmt = "Fetching best header failed using select chain: {:?}", _0)]
@@ -257,6 +257,7 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
 	Algorithm: PowAlgorithm<B>,
+	Algorithm::Difficulty: 'static,
 {
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<C, B>;
@@ -312,10 +313,9 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 			_ => return Err(Error::<B>::HeaderUnsealed(block.header.hash()).into()),
 		};
 
-		let intermediate = PowIntermediate::<B, Algorithm::Difficulty>::decode(
-			&mut &block.intermediates.remove(INTERMEDIATE_KEY)
-				.ok_or(Error::<B>::NoIntermediate)?[..]
-		).map_err(|_| Error::<B>::NoIntermediate)?;
+		let intermediate = block.take_intermediate::<PowIntermediate::<B, Algorithm::Difficulty>>(
+			INTERMEDIATE_KEY
+		)?;
 
 		let difficulty = match intermediate.difficulty {
 			Some(difficulty) => difficulty,
@@ -392,6 +392,7 @@ impl<B: BlockT, Algorithm> PowVerifier<B, Algorithm> {
 
 impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 	Algorithm: PowAlgorithm<B> + Send + Sync,
+	Algorithm::Difficulty: 'static,
 {
 	fn verify(
 		&mut self,
@@ -418,7 +419,7 @@ impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 			justification,
 			intermediates: {
 				let mut ret = HashMap::new();
-				ret.insert(INTERMEDIATE_KEY.to_vec(), intermediate.encode());
+				ret.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<dyn Any>);
 				ret
 			},
 			auxiliary: vec![],
@@ -553,6 +554,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 ) -> Result<(), Error<B>> where
 	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi<B>,
 	Algorithm: PowAlgorithm<B>,
+	Algorithm::Difficulty: 'static,
 	E: Environment<B>,
 	E::Proposer: Proposer<B, Transaction = sp_api::TransactionFor<C, B>>,
 	E::Error: std::fmt::Debug,
@@ -659,7 +661,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			storage_changes: Some(proposal.storage_changes),
 			intermediates: {
 				let mut ret = HashMap::new();
-				ret.insert(INTERMEDIATE_KEY.to_vec(), intermediate.encode());
+				ret.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<dyn Any>);
 				ret
 			},
 			finalized: false,
