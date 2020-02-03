@@ -2019,23 +2019,30 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 
 		let reward_proportion = SlashRewardFraction::get();
 
-		let current_era = {
-			let current_era = Self::current_era();
-			if current_era.is_none() {
+		let active_era = {
+			let active_era = Self::active_era();
+			if active_era.is_none() {
 				return
 			}
-			current_era.unwrap()
+			active_era.unwrap()
 		};
-		let window_start = current_era.saturating_sub(T::BondingDuration::get());
-		let current_era_start_session_index = Self::eras_start_session_index(current_era)
+		let current_era = Self::current_era()
+			.unwrap_or_else(|| {
+				frame_support::print("Error: current must exist if active_era exist");
+				0
+			});
+		let active_era_start_session_index = Self::eras_start_session_index(active_era)
 			.unwrap_or_else(|| {
 				frame_support::print("Error: start_session_index must be set for current_era");
 				0
 			});
 
-		// fast path for current-era report - most likely.
-		let slash_era = if slash_session >= current_era_start_session_index {
-			current_era
+		let window_start = current_era.saturating_sub(T::BondingDuration::get());
+
+		// fast path for active-era report - most likely.
+		// `slash_session` cannot be in a future active era. It must be in `active_era` or before.
+		let slash_era = if slash_session >= active_era_start_session_index {
+			active_era
 		} else {
 			let eras = BondedEras::get();
 
