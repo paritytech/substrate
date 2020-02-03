@@ -233,7 +233,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 				.ok_or(Error::NoIntermediate)
 				.and_then(|value| {
 					value.downcast::<T>()
-						.map_err(|_| Error::NoIntermediate)
+						.map_err(|_| Error::InvalidIntermediate)
 				})
 		} else {
 			Err(Error::NoIntermediate)
@@ -243,15 +243,17 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	/// Get a reference to a given intermediate.
 	pub fn intermediate<T: 'static>(&self, key: &[u8]) -> Result<&T, Error> {
 		self.intermediates.get(key)
-			.and_then(|value| value.downcast_ref::<T>())
-			.ok_or(Error::NoIntermediate)
+			.ok_or(Error::NoIntermediate)?
+			.downcast_ref::<T>()
+			.ok_or(Error::InvalidIntermediate)
 	}
 
 	/// Get a mutable reference to a given intermediate.
 	pub fn intermediate_mut<T: 'static>(&mut self, key: &[u8]) -> Result<&mut T, Error> {
 		self.intermediates.get_mut(key)
-			.and_then(|value| value.downcast_mut::<T>())
-			.ok_or(Error::NoIntermediate)
+			.ok_or(Error::NoIntermediate)?
+			.downcast_mut::<T>()
+			.ok_or(Error::InvalidIntermediate)
 	}
 }
 
