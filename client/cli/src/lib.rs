@@ -692,7 +692,8 @@ fn interface_str(
 	}
 }
 
-fn parse_address(
+/// Parse an address and optionally set the port to `port` if provided in argument.
+pub fn parse_address(
 	address: &str,
 	port: Option<u16>,
 ) -> Result<SocketAddr, String> {
