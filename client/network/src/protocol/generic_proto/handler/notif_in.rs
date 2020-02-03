@@ -15,10 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Implementations of the `IntoProtocolsHandler` and `ProtocolsHandler` traits for ingoing
-//! substreams a single gossiping protocol.
+//! substreams for a single gossiping protocol.
 //!
 //! > **Note**: Each instance corresponds to a single protocol. In order to support multiple
-//! >			protocols, you need to create multiple instances.
+//! >			protocols, you need to create multiple instances and group them.
 //!
 
 use crate::protocol::generic_proto::upgrade::{NotificationsIn, NotificationsInSubstream};
@@ -35,7 +35,7 @@ use libp2p::swarm::{
 };
 use log::{error, warn};
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, marker::PhantomData, pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, fmt, marker::PhantomData, pin::Pin, str, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -48,6 +48,62 @@ pub struct NotifsInHandlerProto<TSubstream> {
 
 	/// Marker to pin the generic type.
 	marker: PhantomData<TSubstream>,
+}
+
+/// The actual handler once the connection has been established.
+pub struct NotifsInHandler<TSubstream> {
+	/// Configuration for the protocol upgrade to negotiate for inbound substreams.
+	in_protocol: NotificationsIn,
+
+	/// Substream that is open with the remote.
+	substream: Option<NotificationsInSubstream<Negotiated<TSubstream>>>,
+
+	/// If the substream is opened and closed rapidly, we can emit several `OpenRequest` and
+	/// `Closed` messages in a row without the handler having time to respond with `Accept` or
+	/// `Refuse`.
+	///
+	/// In order to keep the state consistent, we increment this variable every time an
+	/// `OpenRequest` is emitted and decrement it every time an `Accept` or `Refuse` is received.
+	pending_accept_refuses: usize,
+
+	/// Queue of events to send to the outside.
+	///
+	/// This queue is only ever modified to insert elements at the back, or remove the first
+	/// element.
+	events_queue: SmallVec<[ProtocolsHandlerEvent<DeniedUpgrade, (), NotifsInHandlerOut, void::Void>; 16]>,
+}
+
+/// Event that can be received by a `NotifsInHandler`.
+#[derive(Debug)]
+pub enum NotifsInHandlerIn {
+	/// Can be sent back as a response to an `OpenRequest`. Contains the status message to send
+	/// to the remote.
+	///
+	/// After sending this to the handler, the substream is now considered open and `Notif` events
+	/// can be received.
+	Accept(Vec<u8>),
+
+	/// Can be sent back as a response to an `OpenRequest`.
+	Refuse,
+}
+
+/// Event that can be emitted by a `NotifsInHandler`.
+#[derive(Debug)]
+pub enum NotifsInHandlerOut {
+	/// The remote wants to open a substream.
+	///
+	/// Every time this event is emitted, a corresponding `Accepted` or `Refused` **must** be sent
+	/// back even if a `Closed` is received.
+	OpenRequest,
+
+	/// The notifications substream has been closed by the remote. In order to avoid race
+	/// conditions, this does **not** cancel any previously-sent `OpenRequest`.
+	Closed,
+
+	/// Received a message on the notifications substream.
+	///
+	/// Can only happen after an `Accept` and before a `Closed`.
+	Notif(BytesMut),
 }
 
 impl<TSubstream> NotifsInHandlerProto<TSubstream> {
@@ -82,58 +138,6 @@ where
 	}
 }
 
-/// The actual handler once the connection has been established.
-pub struct NotifsInHandler<TSubstream> {
-	/// Configuration for the protocol upgrade to negotiate for inbound substreams.
-	in_protocol: NotificationsIn,
-
-	/// Substream that is open with the remote.
-	substream: Option<NotificationsInSubstream<Negotiated<TSubstream>>>,
-
-	/// If the substream is opened and closed rapidly, we can emit several `OpenRequest` messages
-	/// without the handler having time to respond with `Accept` or `Refuse`. Every time an
-	/// `OpenRequest` is emitted, we increment this variable in order to keep the state consistent.
-	pending_accept_refuses: usize,
-
-	/// Queue of events to send to the outside.
-	///
-	/// This queue must only ever be modified to insert elements at the back, or remove the first
-	/// element.
-	events_queue: SmallVec<[ProtocolsHandlerEvent<DeniedUpgrade, (), NotifsInHandlerOut, void::Void>; 16]>,
-}
-
-/// Event that can be received by a `NotifsInHandler`.
-#[derive(Debug)]
-pub enum NotifsInHandlerIn {
-	/// Can be sent back as a response to an `OpenRequest`. Contains the status message to send
-	/// to the remote.
-	///
-	/// The substream is now considered open, and `Notif` events can be received.
-	Accept(Vec<u8>),
-
-	/// Can be sent back as a response to an `OpenRequest`.
-	Refuse,
-}
-
-/// Event that can be emitted by a `NotifsInHandler`.
-#[derive(Debug)]
-pub enum NotifsInHandlerOut {
-	/// The remote wants to open a substream.
-	///
-	/// Every time this event is emitted, a corresponding `Accepted` or `Refused` **must** be sent
-	/// back.
-	OpenRequest,
-
-	/// The notifications substream has been closed by the remote. In order to avoid race
-	/// conditions, this does **not** cancel any previously-sent `OpenRequest`.
-	Closed,
-
-	/// Received a message on the notifications substream.
-	///
-	/// Can only happen after an `Accept` and before a `Closed`.
-	Notif(BytesMut),
-}
-
 impl<TSubstream> NotifsInHandler<TSubstream> {
 	/// Returns the name of the protocol that we accept.
 	pub fn protocol_name(&self) -> &[u8] {
@@ -160,13 +164,22 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static {
 		proto: <Self::InboundProtocol as InboundUpgrade<Negotiated<TSubstream>>>::Output
 	) {
 		if self.substream.is_some() {
-			warn!(target: "sub-libp2p", "Received duplicate inbound substream");
+			warn!(
+				target: "sub-libp2p",
+				"Received duplicate inbound notifications substream for {:?}",
+				str::from_utf8(self.in_protocol.protocol_name()),
+			);
 			return;
 		}
 
 		self.substream = Some(proto);
 		self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest));
-		self.pending_accept_refuses += 1;
+		self.pending_accept_refuses = self.pending_accept_refuses
+			.checked_add(1)
+			.unwrap_or_else(|| {
+				error!(target: "sub-libp2p", "Overflow in pending_accept_refuses");
+				usize::max_value()
+			});
 	}
 
 	fn inject_fully_negotiated_outbound(
@@ -182,8 +195,10 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static {
 		self.pending_accept_refuses = match self.pending_accept_refuses.checked_sub(1) {
 			Some(v) => v,
 			None => {
-				error!(target: "sub-libp2p", "Inconsistent state: received Accept/Refuse when no \
-					pending request exists");
+				error!(
+					target: "sub-libp2p",
+					"Inconsistent state: received Accept/Refuse when no pending request exists"
+				);
 				return;
 			}
 		};
@@ -242,6 +257,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static {
 impl<TSubstream> fmt::Debug for NotifsInHandler<TSubstream> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		f.debug_struct("NotifsInHandler")
+			.field("substream_open", &self.substream.is_some())
 			.finish()
 	}
 }

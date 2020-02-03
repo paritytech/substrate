@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 //! substreams of a single gossiping protocol.
 //!
 //! > **Note**: Each instance corresponds to a single protocol. In order to support multiple
-//! >			protocols, you need to create multiple instances.
+//! >			protocols, you need to create multiple instances and group them.
 //!
 
 use crate::protocol::generic_proto::upgrade::{NotificationsOut, NotificationsOutSubstream};
@@ -120,7 +120,12 @@ enum State<TSubstream> {
 	/// The handler is disabled and idle. No substream is open.
 	Disabled,
 
-	/// The handler is disabled. A substream is open and needs to be closed.
+	/// The handler is disabled. A substream is still open and needs to be closed.
+	///
+	/// > **Important**: Having this state means that `poll_close` has been called at least once,
+	/// >				 but the `Sink` API is unclear about whether or not the stream can then
+	/// >				 be recovered. Because of that, we must never switch from the
+	/// >				 `DisabledOpen` state to the `Open` state while keeping the same substream.
 	DisabledOpen(NotificationsOutSubstream<Negotiated<TSubstream>>),
 
 	/// The handler is disabled but we are still trying to open a substream with the remote.
@@ -154,7 +159,7 @@ pub enum NotifsOutHandlerIn {
 
 	/// Sends a message on the notifications substream. Ignored if the substream isn't open.
 	///
-	/// It is only valid to send this if the handler has been enabled.
+	/// It is only valid to send this if the notifications substream has been enabled.
 	Send(Vec<u8>),
 }
 
@@ -244,7 +249,9 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 			},
 			// If the handler was disabled while we were negotiating the protocol, immediately
 			// close it.
-			State::DisabledOpening => self.state = State::Disabled,
+			State::DisabledOpening => self.state = State::DisabledOpen(sub),
+
+			// Any other situation should never happen.
 			State::Disabled | State::Refused | State::Open(_) | State::DisabledOpen(_) =>
 				error!("State mismatch in notifications handler: substream already open"),
 			State::Poisoned => error!("Notifications handler in a poisoned state"),
@@ -319,13 +326,13 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 		// Flush the events queue if necessary.
 		if !self.events_queue.is_empty() {
 			let event = self.events_queue.remove(0);
-			return Poll::Ready(event)
+			return Poll::Ready(event);
 		}
 
 		match &mut self.state {
-			State::Open(sub) => match NotificationsOutSubstream::process(Pin::new(sub), cx) {
-				Ok(()) => {},
-				Err(err) => {
+			State::Open(sub) => match Sink::poll_flush(Pin::new(sub), cx) {
+				Poll::Pending | Poll::Ready(Ok(())) => {},
+				Poll::Ready(Err(err)) => {
 					// We try to re-open a substream.
 					self.state = State::Opening;
 					self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
@@ -337,9 +344,9 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(ev));
 				}
 			},
-			State::DisabledOpen(sub) => match NotificationsOutSubstream::process(Pin::new(sub), cx) {
-				Ok(()) => {},
-				Err(_) => {
+			State::DisabledOpen(sub) => match Sink::poll_close(Pin::new(sub), cx) {
+				Poll::Pending => {},
+				Poll::Ready(Ok(())) | Poll::Ready(Err(_)) => {
 					self.state = State::Disabled;
 					let ev = NotifsOutHandlerOut::Closed;
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(ev));

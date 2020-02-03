@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -283,46 +283,6 @@ impl<TSubstream> Sink<VecDeque<u8>> for NotificationsOutSubstream<TSubstream>
 	}
 }
 
-impl<TSubstream> NotificationsOutSubstream<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + Unpin,
-{
-	/// Pushes a message to the queue of messages.
-	// TODO: remove in favour of Sink
-	pub fn push_message(&mut self, message: impl Into<VecDeque<u8>>) {
-		// TODO: limit the size of the queue
-		self.messages_queue.push_back(message.into());
-	}
-
-	/// Processes the substream.
-	// TODO: remove in favour of Sink
-	pub fn process(self: Pin<&mut Self>, cx: &mut Context) -> Result<(), io::Error> {
-		let mut this = self.project();
-
-		while !this.messages_queue.is_empty() {
-			match Sink::poll_ready(this.socket.as_mut(), cx) {
-				Poll::Ready(Err(err)) => return Err(err),
-				Poll::Ready(Ok(())) => {
-					let msg = this.messages_queue.pop_front()
-						.expect("checked for !is_empty above; qed");
-					Sink::start_send(this.socket.as_mut(), msg)?;
-					*this.need_flush = true;
-				},
-				Poll::Pending => return Ok(()),
-			}
-		}
-
-		if *this.need_flush {
-			match Sink::poll_flush(this.socket.as_mut(), cx) {
-				Poll::Ready(Err(err)) => return Err(err),
-				Poll::Ready(Ok(())) => *this.need_flush = false,
-				Poll::Pending => {},
-			}
-		}
-
-		Ok(())
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::{NotificationsIn, NotificationsOut};
@@ -380,7 +340,8 @@ mod tests {
 			).await;
 
 			// Despite the protocol negotiation being successfully conducted on the listener
-			// side, we get an error here because the listener didn't send the handshake.
+			// side, we have to receive an error here because the listener didn't send the
+			// handshake.
 			assert!(outcome.is_err());
 		});
 
