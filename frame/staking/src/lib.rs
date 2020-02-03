@@ -539,7 +539,7 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	/// The validator's own stash that is exposed.
 	#[codec(compact)]
 	pub own: Balance,
-	/// The portions of nominators stashes that are exposed. Sorted by AccountId.
+	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
@@ -1373,7 +1373,7 @@ decl_module! {
 		///   bounded only economically (all nominators are required to place a minimum stake).
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn payout_nominator(origin, era: EraIndex, validators: Vec<T::AccountId>)
+		fn payout_nominator(origin, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
 			-> DispatchResult
 		{
 			let who = ensure_signed(origin)?;
@@ -1433,7 +1433,7 @@ impl<T: Trait> Module<T> {
 
 	// MUTABLES (DANGEROUS)
 
-	fn do_payout_nominator(who: T::AccountId, era: EraIndex, validators: Vec<T::AccountId>)
+	fn do_payout_nominator(who: T::AccountId, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
 		-> DispatchResult
 	{
 		let mut nominator_ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
@@ -1449,14 +1449,17 @@ impl<T: Trait> Module<T> {
 
 		// Note: iterator take only `MAX_NOMINATIONS` to avoid querying more validator exposure
 		// than necessary. Anyway a nominator can't validate more than `MAX_NOMINATIONS`.
-		for validator in validators.into_iter().take(MAX_NOMINATIONS) {
+		for (validator, nominator_index) in validators.into_iter().take(MAX_NOMINATIONS) {
 			let commission = Self::eras_validator_prefs(&era, &validator).commission;
 			let validator_exposure = <ErasStakersClipped<T>>::get(&era, &validator);
 
-			if let Ok(nominator_exposure) = validator_exposure.others
-				.binary_search_by(|exposure| exposure.who.cmp(&nominator_ledger.stash))
-				.map(|indice| &validator_exposure.others[indice])
+			if let Some(nominator_exposure) = validator_exposure.others
+				.get(nominator_index as usize)
 			{
+				if nominator_exposure.who != nominator_ledger.stash {
+					continue;
+				}
+
 				let nominator_exposure_part = Perbill::from_rational_approximation(
 					nominator_exposure.value,
 					validator_exposure.total,
@@ -1805,7 +1808,6 @@ impl<T: Trait> Module<T> {
 
 				total_staked = total_staked.saturating_add(total);
 
-				others.sort_unstable_by(|a, b| a.who.cmp(&b.who));
 				let exposure = Exposure {
 					own,
 					others,
@@ -1822,7 +1824,6 @@ impl<T: Trait> Module<T> {
 				if exposure_clipped.others.len() > clipped_max_len {
 					exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value).reverse());
 					exposure_clipped.others.truncate(clipped_max_len);
-					exposure_clipped.others.sort_unstable_by(|a, b| a.who.cmp(&b.who));
 				}
 				<ErasStakersClipped<T>>::insert(&current_era, &c, exposure_clipped);
 			}

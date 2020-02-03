@@ -475,8 +475,8 @@ fn nominating_and_rewards_should_work() {
 					total: 1000 + 800,
 					own: 1000,
 					others: vec![
-						IndividualExposure { who: 1, value: 400 },
 						IndividualExposure { who: 3, value: 400 },
+						IndividualExposure { who: 1, value: 400 },
 					]
 				},
 			);
@@ -486,8 +486,8 @@ fn nominating_and_rewards_should_work() {
 					total: 1000 + 1200,
 					own: 1000,
 					others: vec![
-						IndividualExposure { who: 1, value: 600 },
 						IndividualExposure { who: 3, value: 600 },
+						IndividualExposure { who: 1, value: 600 },
 					]
 				},
 			);
@@ -2793,9 +2793,9 @@ fn claim_reward_at_the_last_era() {
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 0));
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 1));
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 2));
-		assert_ok!(Staking::payout_nominator(Origin::signed(100), 0, vec![11]));
-		assert_ok!(Staking::payout_nominator(Origin::signed(100), 1, vec![11]));
-		assert_ok!(Staking::payout_nominator(Origin::signed(100), 2, vec![11]));
+		assert_ok!(Staking::payout_nominator(Origin::signed(100), 0, vec![(11, 0)]));
+		assert_ok!(Staking::payout_nominator(Origin::signed(100), 1, vec![(11, 0)]));
+		assert_ok!(Staking::payout_nominator(Origin::signed(100), 2, vec![(11, 0)]));
 		
 		// Era 0 can't be rewarded anymore, only era 1 and 2 can be rewarded
 

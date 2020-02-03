@@ -16,7 +16,7 @@
 
 //! Test utilities
 
-use std::{collections::HashSet, cell::RefCell};
+use std::{collections::{HashSet, HashMap}, cell::RefCell};
 use sp_runtime::{Perbill, KeyTypeId};
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, OnFinalize, SaturatedConversion};
@@ -390,9 +390,6 @@ pub fn check_exposure(expo: Exposure<AccountId, Balance>) {
 		expo.total as u128, expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
 		"wrong total exposure {:?}", expo,
 	);
-	let mut sorted = expo.others.clone();
-	sorted.sort_by_key(|e| e.who);
-	assert_eq!(sorted, expo.others);
 }
 
 /// Check that for each nominator: slashable_balance > sum(used_balance)
@@ -520,17 +517,22 @@ pub fn make_all_reward_payment(era: EraIndex) {
 		.collect::<Vec<_>>();
 
 	// reward nominators
-	let mut nominator_controllers = HashSet::new();
-	for exposure in ErasStakers::<Test>::iter_prefix(era) {
-		for controller in exposure.others.iter().filter_map(|other| Staking::bonded(other.who)) {
-			nominator_controllers.insert(controller);
+	let mut nominator_controllers = HashMap::new();
+	for validator in Staking::eras_reward_points(era).individual.keys() {
+		let validator_exposure = Staking::eras_stakers_clipped(era, validator);
+		for (nom_index, nom) in validator_exposure.others.iter().enumerate() {
+			if let Some(nom_ctrl) = Staking::bonded(nom.who) {
+				nominator_controllers.entry(nom_ctrl)
+					.or_insert(vec![])
+					.push((validator.clone(), nom_index as u32));
+			}
 		}
 	}
-	for nominator_controller in nominator_controllers {
+	for (nominator_controller, validators_with_nom_index) in nominator_controllers {
 		assert_ok!(Staking::payout_nominator(
 			Origin::signed(nominator_controller),
 			era,
-			validators_with_reward.clone()
+			validators_with_nom_index,
 		));
 	}
 

@@ -163,9 +163,8 @@ pub mod inner {
 		let current_elected = <Module<T> as Store>::CurrentElected::get();
 		let mut current_total_stake = <BalanceOf<T>>::zero();
 		for validator in &current_elected {
-			let mut exposure = <Module<T> as Store>::Stakers::get(validator);
+			let exposure = <Module<T> as Store>::Stakers::get(validator);
 			current_total_stake += exposure.total;
-			exposure.others.sort_unstable_by(|a, b| a.who.cmp(&b.who));
 			<Module<T> as Store>::ErasStakers::insert(current_era, validator, &exposure);
 
 			let mut exposure_clipped = exposure;
@@ -173,7 +172,6 @@ pub mod inner {
 			if exposure_clipped.others.len() > clipped_max_len {
 				exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value).reverse());
 				exposure_clipped.others.truncate(clipped_max_len);
-				exposure_clipped.others.sort_unstable_by(|a, b| a.who.cmp(&b.who));
 			}
 			<Module<T> as Store>::ErasStakersClipped::insert(current_era, validator, exposure_clipped);
 
