@@ -1066,7 +1066,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		message: impl Into<Vec<u8>>
 	) {
 		if let Some(proto_name) = self.protocol_name_by_engine.get(&engine_id) {
-			self.behaviour.write_notification(&target, proto_name.clone(), engine_id, message);
+			self.behaviour.write_notification(&target, proto_name.clone(), message);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -1089,7 +1089,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		if self.protocol_name_by_engine.insert(engine_id, protocol_name.clone()).is_some() {
 			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol_name);
 		} else {
-			self.behaviour.register_notif_protocol(protocol_name.clone(), Vec::new());
+			self.behaviour.register_notif_protocol(protocol_name.clone(), engine_id, Vec::new());
 			self.protocol_engine_by_name.insert(protocol_name, engine_id);
 		}
 

@@ -15,9 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
+use crate::protocol::message::generic::ConsensusMessage;
 use crate::protocol::generic_proto::handler::{NotifsHandlerProto, NotifsHandlerOut, NotifsHandlerIn};
 use crate::protocol::generic_proto::upgrade::RegisteredProtocol;
+
 use bytes::BytesMut;
+use codec::Encode as _;
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
@@ -75,12 +78,12 @@ use std::task::{Context, Poll};
 /// Note that this "banning" system is not an actual ban. If a "banned" node tries to connect to
 /// us, we accept the connection. The "banning" system is only about delaying dialing attempts.
 ///
-pub struct GenericProto< TSubstream> {
+pub struct GenericProto<TSubstream> {
 	/// Legacy protocol to open with peers. Never modified.
 	legacy_protocol: RegisteredProtocol,
 
 	/// Notification protocols. Entries are only ever added and not removed.
-	notif_protocols: Vec<(Cow<'static, [u8]>, Vec<u8>)>,
+	notif_protocols: Vec<(Cow<'static, [u8]>, ConsensusEngineId, Vec<u8>)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -269,14 +272,15 @@ impl<TSubstream> GenericProto<TSubstream> {
 	pub fn register_notif_protocol(
 		&mut self,
 		proto_name: impl Into<Cow<'static, [u8]>>,
+		engine_id: ConsensusEngineId,
 		handshake_msg: impl Into<Vec<u8>>
 	) {
-		self.notif_protocols.push((proto_name.into(), handshake_msg.into()));
+		self.notif_protocols.push((proto_name.into(), engine_id, handshake_msg.into()));
 	}
 
 	/// Returns a list of all the notification protocols that have been registered.
 	pub fn notif_protocols_names(&self) -> impl ExactSizeIterator<Item = &[u8]> {
-		self.notif_protocols.iter().map(|(n, _)| &**n)
+		self.notif_protocols.iter().map(|(n, _, _)| &**n)
 	}
 
 	/// Returns the list of all the peers we have an open channel to.
@@ -387,7 +391,6 @@ impl<TSubstream> GenericProto<TSubstream> {
 		&mut self,
 		target: &PeerId,
 		proto_name: Cow<'static, [u8]>,
-		engine_id: ConsensusEngineId,
 		message: impl Into<Vec<u8>>,
 	) {
 		if !self.is_open(target) {
@@ -402,7 +405,6 @@ impl<TSubstream> GenericProto<TSubstream> {
 			event: NotifsHandlerIn::SendNotification {
 				message: message.into(),
 				proto_name,
-				engine_id,
 			},
 		});
 	}
@@ -889,7 +891,7 @@ where
 		event: NotifsHandlerOut,
 	) {
 		match event {
-			NotifsHandlerOut::CustomProtocolClosed { reason } => {
+			NotifsHandlerOut::Closed { reason } => {
 				debug!(target: "sub-libp2p", "Handler({:?}) => Closed: {}", source, reason);
 
 				let mut entry = if let Entry::Occupied(entry) = self.peers.entry(source.clone()) {
@@ -942,7 +944,7 @@ where
 				}
 			}
 
-			NotifsHandlerOut::CustomProtocolOpen => {
+			NotifsHandlerOut::Open => {
 				debug!(target: "sub-libp2p", "Handler({:?}) => Open", source);
 				let endpoint = match self.peers.get_mut(&source) {
 					Some(PeerState::Enabled { ref mut open, ref connected_point }) |
@@ -966,13 +968,33 @@ where
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
 
-			NotifsHandlerOut::CustomMessage { proto_name, message } => {
+			NotifsHandlerOut::CustomMessage { message } => {
 				debug_assert!(self.is_open(&source));
 				trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
 				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
 				let event = GenericProtoOut::CustomMessage {
 					peer_id: source,
 					message,
+				};
+
+				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
+			}
+
+			NotifsHandlerOut::Notification { proto_name, engine_id, message } => {
+				// TODO: implement properly
+				debug_assert!(self.is_open(&source));
+				trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
+				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
+				let event = GenericProtoOut::CustomMessage {
+					peer_id: source,
+					message: {
+						let message = ConsensusMessage {
+							engine_id,
+							data: message.to_vec(),
+						};
+						// TODO: we clone the message here
+						From::from(&message.encode()[..])
+					},
 				};
 
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));

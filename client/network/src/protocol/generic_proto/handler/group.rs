@@ -14,6 +14,37 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Implementations of the `IntoProtocolsHandler` and `ProtocolsHandler` traits for both ingoing
+//! and outgoing substreams for all gossiping protocols together.
+//!
+//! This is the main implementation of `ProtocolsHandler` in this crate, that handles all the
+//! protocols that are Substrate-related and outside of the scope of libp2p.
+//!
+//! # Usage
+//!
+//! The handler can be in one of the following states: `Initial`, `Enabled`, `Disabled`.
+//!
+//! The `Initial` state is the state that the handler initially is in. It is a temporary state
+//! during which the user must either enable or disable the handler. After that, the handler stays
+//! either enabled or disabled.
+//!
+//! On the wire, we try to open the following substreams:
+//!
+//! - One substream for each notification protocol passed as parameter to the
+//!   `NotifsHandlerProto::new` function.
+//! - One "legacy" substream used for anything non-related to gossiping, and used as a fallback
+//!   in case the notification protocol can't be opened.
+//!
+//! When the handler is in the `Enabled` state, we immediately open and try to maintain all the
+//! aforementioned substreams. When the handler is in the `Disabled` state, we immediately close
+//! (or abort opening) all these substreams. It is intended that in the future we allow states in
+//! which some protocols are open and not others. Symmetrically, we allow incoming
+//! Substrate-related substreams if and only if we are in the `Enabled` state.
+//!
+//! The user has the choice between sending a message with `SendNotification`, to send a
+//! notification, and `SendLegacy`, to send any other kind of message.
+//!
+
 use crate::protocol::generic_proto::{
 	handler::legacy::{LegacyProtoHandler, LegacyProtoHandlerProto, LegacyProtoHandlerIn, LegacyProtoHandlerOut},
 	handler::notif_in::{NotifsInHandlerProto, NotifsInHandler, NotifsInHandlerIn, NotifsInHandlerOut},
@@ -21,11 +52,11 @@ use crate::protocol::generic_proto::{
 	upgrade::{NotificationsIn, NotificationsOut, RegisteredProtocol, SelectUpgrade, UpgradeCollec},
 };
 use crate::protocol::message::generic::ConsensusMessage;
+
 use bytes::BytesMut;
 use codec::Encode as _;
 use futures::prelude::*;
-use libp2p::core::{ConnectedPoint, Negotiated, PeerId};
-use libp2p::core::either::{EitherError, EitherOutput};
+use libp2p::core::{either::{EitherError, EitherOutput}, ConnectedPoint, Negotiated, PeerId};
 use libp2p::core::upgrade::{EitherUpgrade, ReadOneError, UpgradeError, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
@@ -43,24 +74,28 @@ use std::{borrow::Cow, error, io, task::{Context, Poll}};
 /// Every time a connection with a remote starts, an instance of this struct is created and
 /// sent to a background task dedicated to this connection. Once the connection is established,
 /// it is turned into a [`NotifsHandler`].
+///
+/// See the documentation at the module level for more information.
 pub struct NotifsHandlerProto<TSubstream> {
 	/// Prototypes for handlers for ingoing substreams.
-	in_handlers: Vec<NotifsInHandlerProto<TSubstream>>,
+	in_handlers: Vec<(NotifsInHandlerProto<TSubstream>, ConsensusEngineId)>,
 
 	/// Prototypes for handlers for outgoing substreams.
-	out_handlers: Vec<NotifsOutHandlerProto<TSubstream>>,
+	out_handlers: Vec<(NotifsOutHandlerProto<TSubstream>, ConsensusEngineId)>,
 
 	/// Prototype for handler for backwards-compatibility.
 	legacy: LegacyProtoHandlerProto<TSubstream>,
 }
 
 /// The actual handler once the connection has been established.
+///
+/// See the documentation at the module level for more information.
 pub struct NotifsHandler<TSubstream> {
 	/// Handlers for ingoing substreams.
-	in_handlers: Vec<NotifsInHandler<TSubstream>>,
+	in_handlers: Vec<(NotifsInHandler<TSubstream>, ConsensusEngineId)>,
 
 	/// Handlers for outgoing substreams.
-	out_handlers: Vec<NotifsOutHandler<TSubstream>>,
+	out_handlers: Vec<(NotifsOutHandler<TSubstream>, ConsensusEngineId)>,
 
 	/// Handler for backwards-compatibility.
 	legacy: LegacyProtoHandler<TSubstream>,
@@ -89,7 +124,7 @@ where
 
 	fn inbound_protocol(&self) -> SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol> {
 		let in_handlers = self.in_handlers.iter()
-			.map(|h| h.inbound_protocol())
+			.map(|(h, _)| h.inbound_protocol())
 			.collect::<UpgradeCollec<_>>();
 
 		SelectUpgrade::new(in_handlers, self.legacy.inbound_protocol())
@@ -99,11 +134,11 @@ where
 		NotifsHandler {
 			in_handlers: self.in_handlers
 				.into_iter()
-				.map(|p| p.into_handler(remote_peer_id, connected_point))
+				.map(|(p, e)| (p.into_handler(remote_peer_id, connected_point), e))
 				.collect(),
 			out_handlers: self.out_handlers
 				.into_iter()
-				.map(|p| p.into_handler(remote_peer_id, connected_point))
+				.map(|(p, e)| (p.into_handler(remote_peer_id, connected_point), e))
 				.collect(),
 			legacy: self.legacy.into_handler(remote_peer_id, connected_point),
 			enabled: EnabledState::Initial,
@@ -122,6 +157,8 @@ pub enum NotifsHandlerIn {
 	Disable,
 
 	/// Sends a message through the custom protocol substream.
+	///
+	/// > **Note**: This must **not** be an encoded `ConsensusMessage` message.
 	SendLegacy {
 		/// The message to send.
 		message: Vec<u8>,
@@ -132,11 +169,9 @@ pub enum NotifsHandlerIn {
 		/// Name of the protocol for the message.
 		///
 		/// Must match one of the registered protocols. For backwards-compatibility reasons, if
-		/// the remote doesn't support this protocol, we use the legacy substream.
+		/// the remote doesn't support this protocol, we use the legacy substream to send a
+		/// `ConsensusMessage` message.
 		proto_name: Cow<'static, [u8]>,
-
-		/// For legacy reasons, the name to use if we send the message on the legacy substream.
-		engine_id: ConsensusEngineId,
 
 		/// The message to send.
 		message: Vec<u8>,
@@ -146,24 +181,37 @@ pub enum NotifsHandlerIn {
 /// Event that can be emitted by a `NotifsHandler`.
 #[derive(Debug)]
 pub enum NotifsHandlerOut {
-	/// Opened a custom protocol with the remote.
-	CustomProtocolOpen,
+	/// Opened the substreams with the remote.
+	Open,
 
-	/// Closed a custom protocol with the remote.
-	CustomProtocolClosed {
+	/// Closed the substreams with the remote.
+	Closed {
 		/// Reason why the substream closed, for diagnostic purposes.
 		reason: Cow<'static, str>,
 	},
 
-	/// Receives a message on a custom protocol substream.
+	/// Received a non-gossiping message on the legacy substream.
 	CustomMessage {
-		/// Engine corresponding to the message, or `None` if this came from the legacy substream.
-		proto_name: Option<Cow<'static, [u8]>>,
+		/// Message that has been received.
+		///
+		/// Keep in mind that this can be a `ConsensusMessage` message, which then contains a
+		/// notification.
+		message: BytesMut,
+	},
+
+	/// Received a message on a custom protocol substream.
+	Notification {
+		/// Engine corresponding to the message.
+		proto_name: Cow<'static, [u8]>,
+
+		/// For legacy reasons, the name to use if we had received the message from the legacy
+		/// substream.
+		engine_id: ConsensusEngineId,
 
 		/// Message that has been received.
 		///
 		/// If `proto_name` is `None`, this decodes to a `Message`. If `proto_name` is `Some`,
-		/// this directly decodes to a gossiping message.
+		/// this is directly a gossiping message.
 		message: BytesMut,
 	},
 
@@ -185,12 +233,13 @@ pub enum NotifsHandlerOut {
 
 impl<TSubstream> NotifsHandlerProto<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
-	pub fn new(legacy: RegisteredProtocol, list: impl Into<Vec<(Cow<'static, [u8]>, Vec<u8>)>>) -> Self {
+	/// Builds a new handler.
+	pub fn new(legacy: RegisteredProtocol, list: impl Into<Vec<(Cow<'static, [u8]>, ConsensusEngineId, Vec<u8>)>>) -> Self {
 		let list = list.into();
 
 		NotifsHandlerProto {
-			in_handlers: list.clone().into_iter().map(|(p, _)| NotifsInHandlerProto::new(p)).collect(),
-			out_handlers: list.clone().into_iter().map(|(p, _)| NotifsOutHandlerProto::new(p)).collect(),
+			in_handlers: list.clone().into_iter().map(|(p, e, _)| (NotifsInHandlerProto::new(p), e)).collect(),
+			out_handlers: list.clone().into_iter().map(|(p, e, _)| (NotifsOutHandlerProto::new(p), e)).collect(),
 			legacy: LegacyProtoHandlerProto::new(legacy),
 		}
 	}
@@ -210,11 +259,12 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	>;
 	type InboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol>;
 	type OutboundProtocol = EitherUpgrade<NotificationsOut, RegisteredProtocol>;
-	type OutboundOpenInfo = Option<usize>;	// Index within the `out_handlers`; None for legacy
+	// Index within the `out_handlers`; None for legacy
+	type OutboundOpenInfo = Option<usize>;
 
 	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
 		let in_handlers = self.in_handlers.iter()
-			.map(|h| h.listen_protocol().into_upgrade().1)
+			.map(|h| h.0.listen_protocol().into_upgrade().1)
 			.collect::<UpgradeCollec<_>>();
 
 		let proto = SelectUpgrade::new(in_handlers, self.legacy.listen_protocol().into_upgrade().1);
@@ -227,7 +277,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	) {
 		match out {
 			EitherOutput::First((out, num)) =>
-				self.in_handlers[num].inject_fully_negotiated_inbound(out),
+				self.in_handlers[num].0.inject_fully_negotiated_inbound(out),
 			EitherOutput::Second(out) =>
 				self.legacy.inject_fully_negotiated_inbound(out),
 		}
@@ -240,7 +290,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	) {
 		match (out, num) {
 			(EitherOutput::First(out), Some(num)) =>
-				self.out_handlers[num].inject_fully_negotiated_outbound(out, ()),
+				self.out_handlers[num].0.inject_fully_negotiated_outbound(out, ()),
 			(EitherOutput::Second(out), None) =>
 				self.legacy.inject_fully_negotiated_outbound(out, ()),
 			_ => error!("inject_fully_negotiated_outbound called with wrong parameters"),
@@ -253,40 +303,60 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 				self.enabled = EnabledState::Enabled;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
 				for handler in &mut self.out_handlers {
-					handler.inject_event(NotifsOutHandlerIn::Enable);
+					handler.0.inject_event(NotifsOutHandlerIn::Enable);
 				}
 				for num in self.pending_in.drain(..) {
-					self.in_handlers[num].inject_event(NotifsInHandlerIn::Accept(vec![1]));		// TODO: message
+					self.in_handlers[num].0.inject_event(NotifsInHandlerIn::Accept(vec![1]));		// TODO: handshake message
 				}
 			},
 			NotifsHandlerIn::Disable => {
-				self.enabled = EnabledState::Disabled;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
-				for handler in &mut self.out_handlers {
-					if handler.is_enabled() {
-						handler.inject_event(NotifsOutHandlerIn::Disable);
+				// The notifications protocols start in the disabled state. If we were in the
+				// "Initial" state, then we shouldn't disable the notifications protocols again.
+				if self.enabled != EnabledState::Initial {
+					for handler in &mut self.out_handlers {
+						handler.0.inject_event(NotifsOutHandlerIn::Disable);
 					}
 				}
+				self.enabled = EnabledState::Disabled;
 				for num in self.pending_in.drain(..) {
-					self.in_handlers[num].inject_event(NotifsInHandlerIn::Refuse);
+					self.in_handlers[num].0.inject_event(NotifsInHandlerIn::Refuse);
 				}
 			},
 			NotifsHandlerIn::SendLegacy { message } =>
 				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
-			NotifsHandlerIn::SendNotification { message, engine_id, proto_name } => {
+			NotifsHandlerIn::SendNotification { message, proto_name } => {
+				let mut engine_id = None;
+
 				for handler in &mut self.out_handlers {
-					if handler.is_open() && handler.protocol_name() == &proto_name[..] {
-						handler.inject_event(NotifsOutHandlerIn::Send(message));
+					if handler.0.protocol_name() != &proto_name[..] {
+						break;
+					}
+
+					if handler.0.is_open() {
+						handler.0.inject_event(NotifsOutHandlerIn::Send(message));
 						return;
+					} else {
+						engine_id = Some(handler.1);
 					}
 				}
 
-				let message = ConsensusMessage {
-					engine_id,
-					data: message,
-				};
+				if let Some(engine_id) = engine_id {
+					let message = ConsensusMessage {
+						engine_id,
+						data: message,
+					};
 
-				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message: message.encode() });
+					self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage {
+						message: message.encode()
+					});
+
+				} else {
+					error!(
+						target: "sub-libp2p",
+						"Tried to send notification with bad protocol: {:?}", proto_name
+					);
+				}
 			},
 		}
 	}
@@ -298,21 +368,21 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	) {
 		match (err, num) {
 			(ProtocolsHandlerUpgrErr::Timeout, Some(num)) =>
-				self.out_handlers[num].inject_dial_upgrade_error(
+				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Timeout
 				),
 			(ProtocolsHandlerUpgrErr::Timeout, None) =>
 				self.legacy.inject_dial_upgrade_error((), ProtocolsHandlerUpgrErr::Timeout),
 			(ProtocolsHandlerUpgrErr::Timer, Some(num)) =>
-				self.out_handlers[num].inject_dial_upgrade_error(
+				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Timer
 				),
 			(ProtocolsHandlerUpgrErr::Timer, None) =>
 				self.legacy.inject_dial_upgrade_error((), ProtocolsHandlerUpgrErr::Timer),
 			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err)), Some(num)) =>
-				self.out_handlers[num].inject_dial_upgrade_error(
+				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err))
 				),
@@ -322,7 +392,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err))
 				),
 			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(EitherError::A(err))), Some(num)) =>
-				self.out_handlers[num].inject_dial_upgrade_error(
+				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err))
 				),
@@ -343,7 +413,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 			return KeepAlive::Yes;
 		}
 
-		for handler in &self.in_handlers {
+		for (handler, _) in &self.in_handlers {
 			let val = handler.connection_keep_alive();
 			if val.is_yes() {
 				return KeepAlive::Yes;
@@ -351,7 +421,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 			if ret < val { ret = val; }
 		}
 
-		for handler in &self.out_handlers {
+		for (handler, _) in &self.out_handlers {
 			let val = handler.connection_keep_alive();
 			if val.is_yes() {
 				return KeepAlive::Yes;
@@ -368,7 +438,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	) -> Poll<
 		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>
 	> {
-		for (handler_num, handler) in self.in_handlers.iter_mut().enumerate() {
+		for (handler_num, (handler, engine_id)) in self.in_handlers.iter_mut().enumerate() {
 			if let Poll::Ready(ev) = handler.poll(cx) {
 				match ev {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
@@ -378,15 +448,16 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 						match self.enabled {
 							EnabledState::Initial => self.pending_in.push(handler_num),
 							EnabledState::Enabled =>
-								handler.inject_event(NotifsInHandlerIn::Accept(vec![1, 2, 3, 4])),		// TODO: message
+								handler.inject_event(NotifsInHandlerIn::Accept(vec![1])),		// TODO: message
 							EnabledState::Disabled =>
 								handler.inject_event(NotifsInHandlerIn::Refuse),
 						},
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => {},
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
-						let msg = NotifsHandlerOut::CustomMessage {
+						let msg = NotifsHandlerOut::Notification {
 							message,
-							proto_name: Some(handler.protocol_name().to_owned().into()),
+							engine_id: *engine_id,
+							proto_name: handler.protocol_name().to_owned().into(),
 						};
 						return Poll::Ready(ProtocolsHandlerEvent::Custom(msg));
 					},
@@ -394,7 +465,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 			}
 		}
 
-		for (handler_num, handler) in self.out_handlers.iter_mut().enumerate() {
+		for (handler_num, (handler, _)) in self.out_handlers.iter_mut().enumerate() {
 			if let Poll::Ready(ev) = handler.poll(cx) {
 				match ev {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
@@ -403,9 +474,16 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 							info: Some(handler_num),
 						}),
 					ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }) => {},		// TODO:
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => {},		// TODO:
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => {},		// TODO:
+
+					// At the moment we don't actually care whether any notifications protocol
+					// opens or closes.
+					// Whether our communications with the remote are open or closed entirely
+					// depends on the legacy substream, because as long as we are open the user of
+					// this struct might try to send legacy protocol messages which we need to
+					// deliver for things to work properly.
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { .. }) => {},
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => {},
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => {},
 				}
 			}
 		}
@@ -419,15 +497,15 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 					}),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { .. }) =>
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::CustomProtocolOpen
+						NotifsHandlerOut::Open
 					)),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { reason }) =>
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::CustomProtocolClosed { reason }
+						NotifsHandlerOut::Closed { reason }
 					)),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) =>
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::CustomMessage { message, proto_name: None }
+						NotifsHandlerOut::CustomMessage { message }
 					)),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::Clogged { messages }) =>
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(
