@@ -48,6 +48,7 @@ pub struct Automaton {
 	current_node: u32,
 	looping: Option<u32>,
 	exit_state: u32,
+	difficulty: u32,
 }
 
 impl Automaton {
@@ -57,13 +58,15 @@ impl Automaton {
 			current_node: 0,
 			looping: None,
 			exit_state: 0,
+			difficulty: 0,
 		}
 	}
 
-	pub fn new_from_file(file_name_path: &str) -> Self {
+	pub fn new_from_file(file_name_path: &str, difficulty: u32) -> Self {
 		let contents = fs::read_to_string(file_name_path)
 			.expect("something went wrong reading the bench file");
 		let mut automaton = Automaton::new();
+		automaton.difficulty = difficulty;
 		
 		for line in contents.lines() {
 			let line: Vec<&str> = line.split_whitespace().collect();
@@ -119,7 +122,7 @@ impl Automaton {
 				edge.used += 1;
 				self.current_node = edge.target;
 
-				Some((edge.sender.clone(), edge.tx_module.clone(), edge.tx_name.clone(), edge.tx_params.clone(), self.looping))
+				Some((edge.sender.clone(), edge.tx_module.clone(), edge.tx_name.clone(), edge.tx_params.clone(), Some(self.difficulty)))
 			} else {
 				None
 			}

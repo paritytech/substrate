@@ -56,6 +56,10 @@ pub struct BenchmarkCmd {
 	#[structopt(long="bench-file", default_value = "./factory_tests/test.txt")]
 	pub bench_file: String,
 
+	/// Difficulty of transactions to generate.
+	#[structopt(long="difficulty", default_value = "0")]
+	pub difficulty: u32,
+
 	/// Number of blocks to generate.
 	#[structopt(long="blocks", default_value = "10")]
 	pub blocks: u32,
@@ -171,8 +175,9 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				blocks: cli_args.blocks,
 				tx_per_block: cli_args.tx_per_block,
 				mode: cli_args.mode,
+				difficulty: cli_args.difficulty,
 			};
-			let automaton = Automaton::new_from_file(&options.bench_file);
+			let automaton = Automaton::new_from_file(&options.bench_file, options.difficulty);
 			let runtime_state = RuntimeState::new();
 
 			let service_builder = new_full_start!(config).0;

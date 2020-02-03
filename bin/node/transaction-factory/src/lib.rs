@@ -112,6 +112,7 @@ pub struct Options {
 	pub blocks: u32,
 	pub tx_per_block: u32,
 	pub mode: Mode,
+	pub difficulty: u32,
 }
 
 pub struct FactoryState<RA, Backend, Exec, Block, RtApi, Sc> 
