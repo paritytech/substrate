@@ -1765,9 +1765,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 		};
 
 		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
-			if earliest.is_none() {
-				*earliest = Some(era_now)
-			}
+			*earliest = Some(earliest.unwrap_or(era_now).min(era_now));
 		});
 
 		let slash_defer_duration = T::SlashDeferDuration::get();
