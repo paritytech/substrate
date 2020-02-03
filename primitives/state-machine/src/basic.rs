@@ -289,7 +289,7 @@ impl Externalities for BasicExternalities {
 			let delta = child.data.clone().into_iter().map(|(k, v)| (k, Some(v)));
 
 			InMemoryBackend::<Blake2Hasher>::default()
-				.child_storage_root(storage_key.as_ref(), &*child.child_info, delta).0
+				.child_storage_root(storage_key.as_ref(), &child.child_info, delta).0
 		} else {
 			default_child_trie_root::<Layout<Blake2Hasher>>(storage_key.as_ref())
 		}.encode()
@@ -315,7 +315,7 @@ mod tests {
 	use sp_core::storage::well_known_keys::CODE;
 	use hex_literal::hex;
 
-	const CHILD_INFO_1: &'static [u8] = b"\x01\x00\x00\x00unique_id_1";
+	const CHILD_INFO_1: &'static [u8] = b"unique_id_1";
 
 	#[test]
 	fn commit_should_work() {
@@ -340,7 +340,7 @@ mod tests {
 
 	#[test]
 	fn children_works() {
-		let child_info1 = ChildInfo::resolve_child_info(CHILD_INFO_1).unwrap();
+		let child_info1 = ChildInfo::new_default(CHILD_INFO_1);
 		let child_storage = b":child_storage:default:test".to_vec();
 
 		let mut ext = BasicExternalities::new(Storage {
@@ -348,23 +348,23 @@ mod tests {
 			children: map![
 				child_storage.clone() => StorageChild {
 					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
-					child_info: child_info1.to_owned(),
+					child_info: child_info1.clone(),
 				}
 			]
 		});
 
 		let child = || ChildStorageKey::from_vec(child_storage.clone()).unwrap();
 
-		assert_eq!(ext.child_storage(child(), child_info1, b"doe"), Some(b"reindeer".to_vec()));
+		assert_eq!(ext.child_storage(child(), &child_info1, b"doe"), Some(b"reindeer".to_vec()));
 
-		ext.set_child_storage(child(), child_info1, b"dog".to_vec(), b"puppy".to_vec());
-		assert_eq!(ext.child_storage(child(), child_info1, b"dog"), Some(b"puppy".to_vec()));
+		ext.set_child_storage(child(), &child_info1, b"dog".to_vec(), b"puppy".to_vec());
+		assert_eq!(ext.child_storage(child(), &child_info1, b"dog"), Some(b"puppy".to_vec()));
 
-		ext.clear_child_storage(child(), child_info1, b"dog");
-		assert_eq!(ext.child_storage(child(), child_info1, b"dog"), None);
+		ext.clear_child_storage(child(), &child_info1, b"dog");
+		assert_eq!(ext.child_storage(child(), &child_info1, b"dog"), None);
 
-		ext.kill_child_storage(child(), child_info1);
-		assert_eq!(ext.child_storage(child(), child_info1, b"doe"), None);
+		ext.kill_child_storage(child(), &child_info1);
+		assert_eq!(ext.child_storage(child(), &child_info1, b"doe"), None);
 	}
 
 	#[test]

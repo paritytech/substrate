@@ -411,8 +411,8 @@ mod tests {
 	use crate::proving_backend::create_proof_check_backend;
 	use sp_trie::PrefixedMemoryDB;
 
-	const CHILD_INFO_1: &'static [u8] = b"\x01\x00\x00\x00unique_id_1";
-	const CHILD_INFO_2: &'static [u8] = b"\x01\x00\x00\x00unique_id_2";
+	const CHILD_INFO_1: &'static [u8] = b"unique_id_1";
+	const CHILD_INFO_2: &'static [u8] = b"unique_id_2";
 
 	fn test_proving<'a>(
 		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>,Blake2Hasher>,
@@ -482,17 +482,17 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
-		let child_info1 = ChildInfo::resolve_child_info(CHILD_INFO_1).unwrap();
-		let child_info2 = ChildInfo::resolve_child_info(CHILD_INFO_2).unwrap();
+		let child_info1 = ChildInfo::new_default(CHILD_INFO_1);
+		let child_info2 = ChildInfo::new_default(CHILD_INFO_2);
 		let subtrie1 = ChildStorageKey::from_slice(b":child_storage:default:sub1").unwrap();
 		let subtrie2 = ChildStorageKey::from_slice(b":child_storage:default:sub2").unwrap();
 		let own1 = subtrie1.into_owned();
 		let own2 = subtrie2.into_owned();
 		let contents = vec![
 			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect()),
-			(Some((own1.clone(), child_info1.to_owned())),
+			(Some((own1.clone(), child_info1.clone())),
 				(28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
-			(Some((own2.clone(), child_info2.to_owned())),
+			(Some((own2.clone(), child_info2.clone())),
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
 		let in_memory = InMemoryBackend::<Blake2Hasher>::default();
@@ -507,11 +507,11 @@ mod tests {
 			vec![i]
 		));
 		(28..65).for_each(|i| assert_eq!(
-			in_memory.child_storage(&own1[..], child_info1, &[i]).unwrap().unwrap(),
+			in_memory.child_storage(&own1[..], &child_info1, &[i]).unwrap().unwrap(),
 			vec![i]
 		));
 		(10..15).for_each(|i| assert_eq!(
-			in_memory.child_storage(&own2[..], child_info2, &[i]).unwrap().unwrap(),
+			in_memory.child_storage(&own2[..], &child_info2, &[i]).unwrap().unwrap(),
 			vec![i]
 		));
 
@@ -539,7 +539,7 @@ mod tests {
 		assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
 		let proving = ProvingBackend::new(trie);
-		assert_eq!(proving.child_storage(&own1[..], child_info1, &[64]), Ok(Some(vec![64])));
+		assert_eq!(proving.child_storage(&own1[..], &child_info1, &[64]), Ok(Some(vec![64])));
 
 		let proof = proving.extract_proof();
 		let proof_check = create_proof_check_backend::<Blake2Hasher>(
@@ -547,7 +547,7 @@ mod tests {
 			proof
 		).unwrap();
 		assert_eq!(
-			proof_check.child_storage(&own1[..], child_info1, &[64]).unwrap().unwrap(),
+			proof_check.child_storage(&own1[..], &child_info1, &[64]).unwrap().unwrap(),
 			vec![64]
 		);
 	}

@@ -677,7 +677,7 @@ mod tests {
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
-	const CHILD_KEY_1: &'static [u8] = b"\x01\x00\x00\x00unique_id_1";
+	const CHILD_KEY_1: &'static [u8] = b"unique_id_1";
 
 	#[test]
 	fn smoke() {
@@ -968,7 +968,7 @@ mod tests {
 
 	#[test]
 	fn should_track_used_size_correctly() {
-		let child_info1 = ChildInfo::resolve_child_info(CHILD_KEY_1).unwrap();
+		let child_info1 = ChildInfo::new_default(CHILD_KEY_1);
 		let root_parent = H256::random();
 		let shared = new_shared_cache::<Block>(109, ((109-36), 109));
 		let h0 = H256::random();
@@ -996,7 +996,7 @@ mod tests {
 			&[],
 			&[],
 			vec![],
-			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))], child_info1.to_owned())],
+			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))], child_info1)],
 			Some(h0),
 			Some(0),
 			true,

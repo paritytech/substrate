@@ -24,7 +24,7 @@ use parking_lot::RwLock;
 use codec::{Decode, Encode};
 
 use sp_core::ChangesTrieConfiguration;
-use sp_core::storage::{well_known_keys, ChildInfo, OwnedChildInfo};
+use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_core::offchain::storage::InMemOffchainStorage;
 use sp_state_machine::{
 	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction,
@@ -312,7 +312,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		self.changes_trie_config_update = Some(changes_trie_config);
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
-		let mut storage: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, _> = HashMap::new();
+		let mut storage: HashMap<Option<(Vec<u8>, ChildInfo)>, _> = HashMap::new();
 		storage.insert(None, input.top);
 
 		// create a list of children keys to re-compute roots for

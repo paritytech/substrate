@@ -27,7 +27,7 @@ use sp_trie::{
 	MemoryDB, default_child_trie_root, TrieConfiguration, trie_types::Layout,
 };
 use codec::Codec;
-use sp_core::storage::{ChildInfo, OwnedChildInfo, Storage};
+use sp_core::storage::{ChildInfo, Storage};
 
 /// Error impossible.
 // FIXME: use `!` type when stabilized. https://github.com/rust-lang/rust/issues/35121
@@ -47,7 +47,7 @@ impl error::Error for Void {
 /// In-memory backend. Fully recomputes tries each time `as_trie_backend` is called but useful for
 /// tests and proof checking.
 pub struct InMemory<H: Hasher> {
-	inner: HashMap<Option<(StorageKey, OwnedChildInfo)>, BTreeMap<StorageKey, StorageValue>>,
+	inner: HashMap<Option<(StorageKey, ChildInfo)>, BTreeMap<StorageKey, StorageValue>>,
 	// This field is only needed for returning reference in `as_trie_backend`.
 	trie: Option<TrieBackend<MemoryDB<H>, H>>,
 	_hasher: PhantomData<H>,
@@ -88,7 +88,7 @@ impl<H: Hasher> PartialEq for InMemory<H> {
 impl<H: Hasher> InMemory<H> {
 	/// Copy the state, with applied updates
 	pub fn update<
-		T: IntoIterator<Item = (Option<(StorageKey, OwnedChildInfo)>, StorageCollection)>
+		T: IntoIterator<Item = (Option<(StorageKey, ChildInfo)>, StorageCollection)>
 	>(
 		&self,
 		changes: T,
@@ -107,10 +107,10 @@ impl<H: Hasher> InMemory<H> {
 	}
 }
 
-impl<H: Hasher> From<HashMap<Option<(StorageKey, OwnedChildInfo)>, BTreeMap<StorageKey, StorageValue>>>
+impl<H: Hasher> From<HashMap<Option<(StorageKey, ChildInfo)>, BTreeMap<StorageKey, StorageValue>>>
 	for InMemory<H>
 {
-	fn from(inner: HashMap<Option<(StorageKey, OwnedChildInfo)>, BTreeMap<StorageKey, StorageValue>>) -> Self {
+	fn from(inner: HashMap<Option<(StorageKey, ChildInfo)>, BTreeMap<StorageKey, StorageValue>>) -> Self {
 		InMemory {
 			inner,
 			trie: None,
@@ -121,7 +121,7 @@ impl<H: Hasher> From<HashMap<Option<(StorageKey, OwnedChildInfo)>, BTreeMap<Stor
 
 impl<H: Hasher> From<Storage> for InMemory<H> {
 	fn from(inners: Storage) -> Self {
-		let mut inner: HashMap<Option<(StorageKey, OwnedChildInfo)>, BTreeMap<StorageKey, StorageValue>>
+		let mut inner: HashMap<Option<(StorageKey, ChildInfo)>, BTreeMap<StorageKey, StorageValue>>
 			= inners.children.into_iter().map(|(k, c)| (Some((k, c.child_info)), c.data)).collect();
 		inner.insert(None, inners.top);
 		InMemory {
@@ -144,12 +144,12 @@ impl<H: Hasher> From<BTreeMap<StorageKey, StorageValue>> for InMemory<H> {
 	}
 }
 
-impl<H: Hasher> From<Vec<(Option<(StorageKey, OwnedChildInfo)>, StorageCollection)>>
+impl<H: Hasher> From<Vec<(Option<(StorageKey, ChildInfo)>, StorageCollection)>>
 	for InMemory<H> {
 	fn from(
-		inner: Vec<(Option<(StorageKey, OwnedChildInfo)>, StorageCollection)>,
+		inner: Vec<(Option<(StorageKey, ChildInfo)>, StorageCollection)>,
 	) -> Self {
-		let mut expanded: HashMap<Option<(StorageKey, OwnedChildInfo)>, BTreeMap<StorageKey, StorageValue>>
+		let mut expanded: HashMap<Option<(StorageKey, ChildInfo)>, BTreeMap<StorageKey, StorageValue>>
 			= HashMap::new();
 		for (child_info, key_values) in inner {
 			let entry = expanded.entry(child_info).or_default();
@@ -167,7 +167,7 @@ impl<H: Hasher> InMemory<H> {
 	/// child storage key iterator
 	pub fn child_storage_keys(&self) -> impl Iterator<Item=(&[u8], &ChildInfo)> {
 		self.inner.iter().filter_map(|item|
-			item.0.as_ref().map(|v|(&v.0[..], &*v.1))
+			item.0.as_ref().map(|v|(&v.0[..], &v.1))
 		)
 	}
 }
@@ -175,7 +175,7 @@ impl<H: Hasher> InMemory<H> {
 impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	type Error = Void;
 	type Transaction = Vec<(
-		Option<(StorageKey, OwnedChildInfo)>,
+		Option<(StorageKey, ChildInfo)>,
 		StorageCollection,
 	)>;
 	type TrieBackendStorage = MemoryDB<H>;
@@ -366,7 +366,7 @@ mod tests {
 	#[test]
 	fn in_memory_with_child_trie_only() {
 		let storage = InMemory::<sp_core::Blake2Hasher>::default();
-		let child_info = OwnedChildInfo::new_default(b"unique_id_1");
+		let child_info = ChildInfo::new_default(b"unique_id_1");
 		let mut storage = storage.update(
 			vec![(
 				Some((b"1".to_vec(), child_info.clone())),
@@ -374,7 +374,7 @@ mod tests {
 			)]
 		);
 		let trie_backend = storage.as_trie_backend().unwrap();
-		assert_eq!(trie_backend.child_storage(b"1", &*child_info, b"2").unwrap(),
+		assert_eq!(trie_backend.child_storage(b"1", &child_info, b"2").unwrap(),
 			Some(b"3".to_vec()));
 		assert!(trie_backend.storage(b"1").unwrap().is_some());
 	}

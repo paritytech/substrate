@@ -19,7 +19,7 @@ use log::{warn, debug};
 use sp_core::Hasher;
 use sp_trie::{Trie, delta_trie_root, default_child_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use sp_core::storage::{ChildInfo, OwnedChildInfo};
+use sp_core::storage::ChildInfo;
 use std::collections::BTreeMap;
 use codec::{Codec, Decode};
 use crate::{
@@ -72,7 +72,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	H::Out: Ord + Codec,
 {
 	type Error = String;
-	type Transaction = BTreeMap<Option<OwnedChildInfo>, S::Overlay>;
+	type Transaction = BTreeMap<Option<ChildInfo>, S::Overlay>;
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
@@ -190,7 +190,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, BTreeMap<Option<OwnedChildInfo>, S::Overlay>)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, BTreeMap<Option<ChildInfo>, S::Overlay>)
 		where I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>
 	{
 		let mut write_overlay = S::Overlay::default();
@@ -299,10 +299,10 @@ pub mod tests {
 
 	const CHILD_KEY_1: &[u8] = b":child_storage:default:sub1";
 
-	const CHILD_UUID_1: &[u8] = b"\x01\x00\x00\x00unique_id_1";
+	const CHILD_UUID_1: &[u8] = b"unique_id_1";
 
 	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256) {
-		let child_info1 = ChildInfo::resolve_child_info(CHILD_UUID_1).unwrap();
+		let child_info1 = ChildInfo::new_default(CHILD_UUID_1);
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 		{
@@ -340,10 +340,10 @@ pub mod tests {
 
 	#[test]
 	fn read_from_child_storage_returns_some() {
-		let child_info1 = ChildInfo::resolve_child_info(CHILD_UUID_1).unwrap();
+		let child_info1 = ChildInfo::new_default(CHILD_UUID_1);
 		let test_trie = test_trie();
 		assert_eq!(
-			test_trie.child_storage(CHILD_KEY_1, child_info1, b"value3").unwrap(),
+			test_trie.child_storage(CHILD_KEY_1, &child_info1, b"value3").unwrap(),
 			Some(vec![142u8]),
 		);
 	}

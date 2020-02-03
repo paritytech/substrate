@@ -138,7 +138,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		trie_id.and_then(|id| if let Some(child_info) = child_info {
 			child::get_raw(id, child_info, &blake2_256(location))
 		} else {
-			child::get_raw(id, &*crate::trie_unique_id(&id[..]), &blake2_256(location))
+			child::get_raw(id, &crate::trie_unique_id(&id[..]), &blake2_256(location))
 		})
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
@@ -184,13 +184,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					(false, Some(info), _) => info,
 					// Existing contract is being removed.
 					(true, Some(info), None) => {
-						child::kill_storage(&info.trie_id, &*info.child_trie_unique_id());
+						child::kill_storage(&info.trie_id, &info.child_trie_unique_id());
 						<ContractInfoOf<T>>::remove(&address);
 						continue;
 					}
 					// Existing contract is being replaced by a new one.
 					(true, Some(info), Some(code_hash)) => {
-						child::kill_storage(&info.trie_id, &*info.child_trie_unique_id());
+						child::kill_storage(&info.trie_id, &info.child_trie_unique_id());
 						AliveContractInfo::<T> {
 							code_hash,
 							storage_size: T::StorageSizeOffset::get(),
@@ -227,7 +227,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					new_info.last_write = Some(<frame_system::Module<T>>::block_number());
 				}
 
-				let child_info = &*new_info.child_trie_unique_id();
+				let child_info = &new_info.child_trie_unique_id();
 				for (k, v) in changed.storage.into_iter() {
 					if let Some(value) = child::get_raw(
 						&new_info.trie_id[..],

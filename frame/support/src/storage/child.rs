@@ -27,7 +27,7 @@
 
 use crate::sp_std::prelude::*;
 use codec::{Codec, Encode, Decode};
-pub use sp_core::storage::{ChildInfo, OwnedChildInfo};
+pub use sp_core::storage::ChildInfo;
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(

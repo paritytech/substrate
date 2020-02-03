@@ -33,7 +33,7 @@ use sc_client::{
 	Client, CallExecutor, BlockchainEvents
 };
 use sp_core::{
-	storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, OwnedChildInfo, ChildType},
+	storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
 	Bytes,
 };
 use sp_version::RuntimeVersion;
@@ -291,7 +291,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 				.and_then(|block| self.client.child_storage_keys(
 					&BlockId::Hash(block),
 					&child_storage_key,
-					&*resolve_child_info(child_type, &child_info.0[..])
+					&ChildInfo::resolve_child_info(child_type, &child_info.0[..])
 						.ok_or_else(child_resolution_error)?,
 					&prefix,
 				))
@@ -311,7 +311,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 				.and_then(|block| self.client.child_storage(
 					&BlockId::Hash(block),
 					&child_storage_key,
-					&*resolve_child_info(child_type, &child_info.0[..])
+					&ChildInfo::resolve_child_info(child_type, &child_info.0[..])
 						.ok_or_else(child_resolution_error)?,
 					&key,
 				))
@@ -331,7 +331,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 				.and_then(|block| self.client.child_storage_hash(
 					&BlockId::Hash(block),
 					&child_storage_key,
-					&*resolve_child_info(child_type, &child_info.0[..])
+					&ChildInfo::resolve_child_info(child_type, &child_info.0[..])
 						.ok_or_else(child_resolution_error)?,
 					&key,
 				))
@@ -490,15 +490,6 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		Ok(self.subscriptions.cancel(id))
 	}
 }
-
-fn resolve_child_info(child_type: u32, child_definition: &[u8]) -> Option<OwnedChildInfo> {
-	if child_type != ChildType::CryptoUniqueId as u32 {
-		None
-	} else {
-		Some(OwnedChildInfo::new_default(&child_definition[..]))
-	}
-}
-
 
 /// Splits passed range into two subranges where:
 /// - first range has at least one element in it;

@@ -79,7 +79,6 @@ use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
-use sp_core::storage::OwnedChildInfo;
 
 #[cfg(feature = "test-helpers")]
 use sc_client::in_mem::Backend as InMemoryBackend;
@@ -92,7 +91,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState<B> = sp_state_machine::TrieBackend<
-	(Arc<dyn sp_state_machine::Storage<HasherFor<B>>>, Option<OwnedChildInfo>), HasherFor<B>
+	(Arc<dyn sp_state_machine::Storage<HasherFor<B>>>, Option<ChildInfo>), HasherFor<B>
 >;
 
 /// Re-export the KVDB trait so that one can pass an implementation of it.
@@ -514,7 +513,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: CachingState<RefTrackingState<Block>, Block>,
-	db_updates: BTreeMap<Option<OwnedChildInfo>, PrefixedMemoryDB<HasherFor<Block>>>,
+	db_updates: BTreeMap<Option<ChildInfo>, PrefixedMemoryDB<HasherFor<Block>>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<HasherFor<Block>>,
@@ -571,7 +570,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 	fn update_db_storage(
 		&mut self,
-		update: BTreeMap<Option<OwnedChildInfo>, PrefixedMemoryDB<HasherFor<Block>>>,
+		update: BTreeMap<Option<ChildInfo>, PrefixedMemoryDB<HasherFor<Block>>>,
 	) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())

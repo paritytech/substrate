@@ -26,21 +26,21 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use codec::{Encode, Decode};
 use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
 use log::{trace, warn};
-use sp_core::storage::OwnedChildInfo;
+use sp_core::storage::ChildInfo;
 use super::ChangeSet;
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
 const OLD_PRUNING_JOURNAL: &[u8] = b"pruning_journal";
 const PRUNING_JOURNAL_V1: &[u8] = b"v1_pruning_journal";
 
-type Keys<Key> = Vec<(Option<OwnedChildInfo>, Vec<Key>)>;
+type Keys<Key> = Vec<(Option<ChildInfo>, Vec<Key>)>;
 
 /// See module documentation.
 pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	/// A queue of keys that should be deleted for each block in the pruning window.
 	death_rows: VecDeque<DeathRow<BlockHash, Key>>,
 	/// An index that maps each key from `death_rows` to block number.
-	death_index: HashMap<Option<OwnedChildInfo>, HashMap<Key, u64>>,
+	death_index: HashMap<Option<ChildInfo>, HashMap<Key, u64>>,
 	/// Block number that corresponts to the front of `death_rows`
 	pending_number: u64,
 	/// Number of call of `note_canonical` after
@@ -52,7 +52,7 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 }
 
 impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
-	fn remove_death_index(&mut self, ct: &Option<OwnedChildInfo>, key: &Key) -> Option<u64> {
+	fn remove_death_index(&mut self, ct: &Option<ChildInfo>, key: &Key) -> Option<u64> {
 		if let Some(child_index) = self.death_index.get_mut(ct) {
 			child_index.remove(key)
 		} else {
@@ -65,11 +65,11 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 struct DeathRow<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,
-	deleted: HashMap<Option<OwnedChildInfo>, HashSet<Key>>,
+	deleted: HashMap<Option<ChildInfo>, HashSet<Key>>,
 }
 
 impl<BlockHash: Hash, Key: Hash> DeathRow<BlockHash, Key> {
-	fn remove_deleted(&mut self, ct: &Option<OwnedChildInfo>, key: &Key) -> bool {
+	fn remove_deleted(&mut self, ct: &Option<ChildInfo>, key: &Key) -> bool {
 		if let Some(child_index) = self.deleted.get_mut(ct) {
 			child_index.remove(key)
 		} else {
@@ -153,7 +153,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		Ok(pruning)
 	}
 
-	fn import<I: IntoIterator<Item=(Option<OwnedChildInfo>, Vec<Key>)>>(
+	fn import<I: IntoIterator<Item=(Option<ChildInfo>, Vec<Key>)>>(
 		&mut self,
 		hash: &BlockHash,
 		journal_key: Vec<u8>,
@@ -178,7 +178,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 				entry.insert(k.clone(), imported_block);
 			}
 		}
-		let mut deleted_death_row = HashMap::<Option<OwnedChildInfo>, HashSet<Key>>::new();
+		let mut deleted_death_row = HashMap::<Option<ChildInfo>, HashSet<Key>>::new();
 		for (ct, deleted) in deleted.into_iter() {
 			let entry = deleted_death_row.entry(ct).or_default();
 			entry.extend(deleted);

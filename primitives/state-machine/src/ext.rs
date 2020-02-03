@@ -714,14 +714,14 @@ mod tests {
 	fn next_child_storage_key_works() {
 		const CHILD_KEY_1: &[u8] = b":child_storage:default:Child1";
 
-		const CHILD_UUID_1: &[u8] = b"\x01\x00\x00\x00unique_id_1";
-		let child_info1 = ChildInfo::resolve_child_info(CHILD_UUID_1).unwrap();
+		const CHILD_UUID_1: &[u8] = b"unique_id_1";
+		let child_info1 = ChildInfo::new_default(CHILD_UUID_1);
 
 		let mut cache = StorageTransactionCache::default();
 		let child = || ChildStorageKey::from_slice(CHILD_KEY_1).unwrap();
 		let mut overlay = OverlayedChanges::default();
-		overlay.set_child_storage(child().as_ref().to_vec(), child_info1, vec![20], None);
-		overlay.set_child_storage(child().as_ref().to_vec(), child_info1, vec![30], Some(vec![31]));
+		overlay.set_child_storage(child().as_ref().to_vec(), &child_info1, vec![20], None);
+		overlay.set_child_storage(child().as_ref().to_vec(), &child_info1, vec![30], Some(vec![31]));
 		let backend = Storage {
 			top: map![],
 			children: map![
@@ -731,7 +731,7 @@ mod tests {
 						vec![20] => vec![20],
 						vec![40] => vec![40]
 					],
-					child_info: child_info1.to_owned(),
+					child_info: child_info1.clone(),
 				}
 			],
 		}.into();
@@ -740,22 +740,22 @@ mod tests {
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
 		// next_backend < next_overlay
-		assert_eq!(ext.next_child_storage_key(child(), child_info1, &[5]), Some(vec![10]));
+		assert_eq!(ext.next_child_storage_key(child(), &child_info1, &[5]), Some(vec![10]));
 
 		// next_backend == next_overlay but next_overlay is a delete
-		assert_eq!(ext.next_child_storage_key(child(), child_info1, &[10]), Some(vec![30]));
+		assert_eq!(ext.next_child_storage_key(child(), &child_info1, &[10]), Some(vec![30]));
 
 		// next_overlay < next_backend
-		assert_eq!(ext.next_child_storage_key(child(), child_info1, &[20]), Some(vec![30]));
+		assert_eq!(ext.next_child_storage_key(child(), &child_info1, &[20]), Some(vec![30]));
 
 		// next_backend exist but next_overlay doesn't exist
-		assert_eq!(ext.next_child_storage_key(child(), child_info1, &[30]), Some(vec![40]));
+		assert_eq!(ext.next_child_storage_key(child(), &child_info1, &[30]), Some(vec![40]));
 
 		drop(ext);
-		overlay.set_child_storage(child().as_ref().to_vec(), child_info1, vec![50], Some(vec![50]));
+		overlay.set_child_storage(child().as_ref().to_vec(), &child_info1, vec![50], Some(vec![50]));
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
 		// next_overlay exist but next_backend doesn't exist
-		assert_eq!(ext.next_child_storage_key(child(), child_info1, &[40]), Some(vec![50]));
+		assert_eq!(ext.next_child_storage_key(child(), &child_info1, &[40]), Some(vec![50]));
 	}
 }

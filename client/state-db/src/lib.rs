@@ -40,7 +40,7 @@ use std::collections::{BTreeMap, HashMap, hash_map::Entry, btree_map::Entry as B
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
-use sp_core::storage::{OwnedChildInfo, ChildInfo};
+use sp_core::storage::ChildInfo;
 
 const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
@@ -129,14 +129,17 @@ pub struct ChildTrieChangeSet<H: Hash> {
 	pub data: ChangeSet<H>,
 	/// Child trie descripton.
 	/// If not set, this is the top trie.
-	pub info: Option<OwnedChildInfo>,
+	pub info: Option<ChildInfo>,
 }
 
 /// Change sets of all child trie (top is key None).
-pub type ChildTrieChangeSets<H> = BTreeMap<Option<OwnedChildInfo>, ChangeSet<H>>;
+pub type ChildTrieChangeSets<H> = BTreeMap<Option<ChildInfo>, ChangeSet<H>>;
 
 /// Extends for `ChildTrieChangeSets` is merging.
-fn extend_change_sets<H: Hash>(set: &mut ChildTrieChangeSets<H>, other: impl Iterator<Item = (Option<OwnedChildInfo>, ChangeSet<H>)>) {
+fn extend_change_sets<H: Hash>(
+	set: &mut ChildTrieChangeSets<H>,
+	other: impl Iterator<Item = (Option<ChildInfo>, ChangeSet<H>)>,
+) {
 	for (ci, o_cs) in other {
 		match set.entry(ci) {
 			BEntry::Occupied(mut e) => {

@@ -22,7 +22,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::rc::Rc;
 use serde::{Serialize, Deserialize};
-use sp_core::storage::{StorageKey, StorageData, OwnedChildInfo, Storage, StorageChild};
+use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
 use sp_runtime::BuildStorage;
 use serde_json as json;
 use crate::RuntimeGenesis;
@@ -77,7 +77,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 			Genesis::Raw(RawGenesis { top: map, children: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 				children: children_map.into_iter().map(|(sk, child_content)| {
-					let child_info = OwnedChildInfo::new_default(child_content.child_info.as_slice());
+					let child_info = ChildInfo::new_default(child_content.child_info.as_slice());
 					(
 						sk.0,
 						StorageChild {

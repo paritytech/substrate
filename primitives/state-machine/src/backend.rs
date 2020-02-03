@@ -20,7 +20,7 @@ use log::warn;
 use sp_core::{Hasher, InnerHasher};
 use codec::Encode;
 
-use sp_core::storage::{ChildInfo, OwnedChildInfo};
+use sp_core::storage::ChildInfo;
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 use std::collections::{BTreeMap, btree_map::Entry};
 use crate::{
@@ -184,7 +184,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	where
 		I1: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		I2i: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		I2: IntoIterator<Item=(StorageKey, I2i, OwnedChildInfo)>,
+		I2: IntoIterator<Item=(StorageKey, I2i, ChildInfo)>,
 		H::Out: Ord + Encode,
 	{
 		let mut txs: Self::Transaction = Default::default();
@@ -193,7 +193,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		// child first
 		for (storage_key, child_delta, child_info) in child_deltas {
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(&storage_key[..], &*child_info, child_delta);
+				self.child_storage_root(&storage_key[..], &child_info, child_delta);
 			txs.consolidate(child_txs);
 			if empty {
 				if return_child_roots {
@@ -326,7 +326,7 @@ impl Consolidate for () {
 }
 
 impl Consolidate for Vec<(
-		Option<(StorageKey, OwnedChildInfo)>,
+		Option<(StorageKey, ChildInfo)>,
 		StorageCollection,
 	)> {
 	fn consolidate(&mut self, mut other: Self) {

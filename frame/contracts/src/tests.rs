@@ -322,8 +322,8 @@ fn account_removal_removes_storage() {
 		let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
 		let child_info1 = crate::trie_unique_id(trie_id1.as_ref());
 		let child_info2 = crate::trie_unique_id(trie_id2.as_ref());
-		let child_info1 = Some(&*child_info1);
-		let child_info2 = Some(&*child_info2);
+		let child_info1 = Some(&child_info1);
+		let child_info2 = Some(&child_info2);
 		let key1 = &[1; 32];
 		let key2 = &[2; 32];
 

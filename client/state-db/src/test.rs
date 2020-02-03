@@ -19,11 +19,11 @@
 use std::collections::HashMap;
 use sp_core::H256;
 use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb, ChildTrieChangeSets};
-use sp_core::storage::OwnedChildInfo;
+use sp_core::storage::ChildInfo;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
-	pub data: HashMap<Option<OwnedChildInfo>, HashMap<H256, DBValue>>,
+	pub data: HashMap<Option<ChildInfo>, HashMap<H256, DBValue>>,
 	pub meta: HashMap<Vec<u8>, DBValue>,
 }
 

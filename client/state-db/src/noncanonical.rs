@@ -25,16 +25,16 @@ use std::collections::{HashMap, VecDeque, hash_map::Entry, BTreeMap};
 use super::{Error, DBValue, ChildTrieChangeSets, CommitSet, MetaDb, Hash, to_meta_key, ChangeSet};
 use codec::{Encode, Decode};
 use log::trace;
-use sp_core::storage::{ChildInfo, OwnedChildInfo};
+use sp_core::storage::ChildInfo;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 // version at start to avoid collision when adding a unit
 const NON_CANONICAL_JOURNAL_V1: &[u8] = b"v1_non_canonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
 
-type Keys<Key> = Vec<(Option<OwnedChildInfo>, Vec<Key>)>;
-type KeyVals<Key> = Vec<(Option<OwnedChildInfo>, Vec<(Key, DBValue)>)>;
-type ChildKeyVals<Key> = BTreeMap<Option<OwnedChildInfo>, HashMap<Key, (u32, DBValue)>>;
+type Keys<Key> = Vec<(Option<ChildInfo>, Vec<Key>)>;
+type KeyVals<Key> = Vec<(Option<ChildInfo>, Vec<(Key, DBValue)>)>;
+type ChildKeyVals<Key> = BTreeMap<Option<ChildInfo>, HashMap<Key, (u32, DBValue)>>;
 
 /// See module documentation.
 pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
@@ -461,7 +461,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 	/// Get a value from the node overlay. This searches in every existing changeset.
 	pub fn get(&self, trie: Option<&ChildInfo>, key: &Key) -> Option<DBValue> {
-		// TODO make storage over data representation of OwnedChildInfo to use borrow
+		// TODO use top_trie instead of none
 		if let Some(values) = self.values.get(&trie.map(|t| t.to_owned())) {
 			if let Some((_, value)) = values.get(&key) {
 				return Some(value.clone());

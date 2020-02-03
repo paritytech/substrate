@@ -351,8 +351,8 @@ mod test {
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use super::*;
 
-	const CHILD_INFO_1: &'static [u8] = b"\x01\x00\x00\x00unique_id_1";
-	const CHILD_INFO_2: &'static [u8] = b"\x01\x00\x00\x00unique_id_2";
+	const CHILD_INFO_1: &'static [u8] = b"unique_id_1";
+	const CHILD_INFO_2: &'static [u8] = b"unique_id_2";
 
 	fn prepare_for_build(zero: u64) -> (
 		InMemoryBackend<Blake2Hasher>,
@@ -361,8 +361,8 @@ mod test {
 		Configuration,
 	) {
 
-		let child_info1 = ChildInfo::resolve_child_info(CHILD_INFO_1).unwrap();
-		let child_info2 = ChildInfo::resolve_child_info(CHILD_INFO_2).unwrap();
+		let child_info1 = ChildInfo::new_default(CHILD_INFO_1);
+		let child_info2 = ChildInfo::new_default(CHILD_INFO_2);
 		let backend: InMemoryBackend<_> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
