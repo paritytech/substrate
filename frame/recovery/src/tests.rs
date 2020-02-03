@@ -35,7 +35,7 @@ fn basic_setup_works() {
 		assert_eq!(Recovery::active_recovery(&1, &2), None);
 		assert_eq!(Recovery::recovery_config(&1), None);
 		// Everyone should have starting balance of 100
-		assert_eq!(Balances::free_balance(&1), 100);
+		assert_eq!(Balances::free_balance(1), 100);
 	});
 }
 
@@ -219,7 +219,7 @@ fn initiate_recovery_handles_basic_errors() {
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
 		assert_noop!(Recovery::initiate_recovery(Origin::signed(1), 5), Error::<Test>::AlreadyStarted);
 		// No double deposit
-		assert_eq!(Balances::reserved_balance(&1), 10);
+		assert_eq!(Balances::reserved_balance(1), 10);
 	});
 }
 
@@ -234,7 +234,7 @@ fn initiate_recovery_works() {
 		// Recovery can be initiated
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
 		// Deposit is reserved
-		assert_eq!(Balances::reserved_balance(&1), 10);
+		assert_eq!(Balances::reserved_balance(1), 10);
 		// Recovery status object is created correctly
 		let recovery_status = ActiveRecovery {
 			created: 1,

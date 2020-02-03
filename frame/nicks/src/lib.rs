@@ -288,19 +288,16 @@ mod tests {
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
 		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 	parameter_types! {
@@ -334,7 +331,6 @@ mod tests {
 				(1, 10),
 				(2, 10),
 			],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
@@ -359,9 +355,9 @@ mod tests {
 			);
 
 			assert_ok!(Nicks::set_name(Origin::signed(2), b"Dave".to_vec()));
-			assert_eq!(Balances::reserved_balance(&2), 2);
+			assert_eq!(Balances::reserved_balance(2), 2);
 			assert_ok!(Nicks::force_name(Origin::signed(1), 2, b"Dr. David Brubeck, III".to_vec()));
-			assert_eq!(Balances::reserved_balance(&2), 2);
+			assert_eq!(Balances::reserved_balance(2), 2);
 			assert_eq!(<NameOf<Test>>::get(2).unwrap(), (b"Dr. David Brubeck, III".to_vec(), 2));
 		});
 	}
@@ -370,18 +366,18 @@ mod tests {
 	fn normal_operation_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Nicks::set_name(Origin::signed(1), b"Gav".to_vec()));
-			assert_eq!(Balances::reserved_balance(&1), 2);
-			assert_eq!(Balances::free_balance(&1), 8);
+			assert_eq!(Balances::reserved_balance(1), 2);
+			assert_eq!(Balances::free_balance(1), 8);
 			assert_eq!(<NameOf<Test>>::get(1).unwrap().0, b"Gav".to_vec());
 
 			assert_ok!(Nicks::set_name(Origin::signed(1), b"Gavin".to_vec()));
-			assert_eq!(Balances::reserved_balance(&1), 2);
-			assert_eq!(Balances::free_balance(&1), 8);
+			assert_eq!(Balances::reserved_balance(1), 2);
+			assert_eq!(Balances::free_balance(1), 8);
 			assert_eq!(<NameOf<Test>>::get(1).unwrap().0, b"Gavin".to_vec());
 
 			assert_ok!(Nicks::clear_name(Origin::signed(1)));
-			assert_eq!(Balances::reserved_balance(&1), 0);
-			assert_eq!(Balances::free_balance(&1), 10);
+			assert_eq!(Balances::reserved_balance(1), 0);
+			assert_eq!(Balances::free_balance(1), 10);
 		});
 	}
 

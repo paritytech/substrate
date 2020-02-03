@@ -703,19 +703,16 @@ mod tests {
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
 		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = TestEvent;
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 	parameter_types! {
@@ -742,7 +739,6 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 10)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}

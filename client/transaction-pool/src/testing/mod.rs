@@ -16,8 +16,4 @@
 
 //! Tests for top-level transaction pool api
 
-#[cfg(any(feature = "test-helpers", test))]
-pub mod api;
-
-#[cfg(test)]
 mod pool;

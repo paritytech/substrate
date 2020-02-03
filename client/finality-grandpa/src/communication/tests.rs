@@ -31,7 +31,8 @@ use sp_finality_grandpa::{AuthorityList, GRANDPA_ENGINE_ID};
 use super::gossip::{self, GossipValidator};
 use super::{AuthorityId, VoterSet, Round, SetId};
 
-enum Event {
+#[derive(Debug)]
+pub(crate) enum Event {
 	EventStream(mpsc::UnboundedSender<NetworkEvent>),
 	WriteNotification(sc_network::PeerId, Vec<u8>),
 	Report(sc_network::PeerId, sc_network::ReputationChange),
@@ -39,7 +40,7 @@ enum Event {
 }
 
 #[derive(Clone)]
-struct TestNetwork {
+pub(crate) struct TestNetwork {
 	sender: mpsc::UnboundedSender<Event>,
 }
 
@@ -101,10 +102,10 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 	fn send_topic(&mut self, _: &sc_network::PeerId, _: Hash, _: bool) { }
 }
 
-struct Tester {
-	net_handle: super::NetworkBridge<Block, TestNetwork>,
+pub(crate) struct Tester {
+	pub(crate) net_handle: super::NetworkBridge<Block, TestNetwork>,
 	gossip_validator: Arc<GossipValidator<Block>>,
-	events: mpsc::UnboundedReceiver<Event>,
+	pub(crate) events: mpsc::UnboundedReceiver<Event>,
 }
 
 impl Tester {
@@ -121,6 +122,14 @@ impl Tester {
 				Poll::Pending => return Poll::Pending,
 			}
 		})
+	}
+
+	pub(crate) fn trigger_gossip_validator_reputation_change(&self, p: &PeerId) {
+		self.gossip_validator.validate(
+			&mut crate::communication::tests::NoopContext,
+			p,
+			&vec![1, 2, 3],
+		);
 	}
 }
 
@@ -156,7 +165,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 }
 
 // needs to run in a tokio runtime.
-fn make_test_network(executor: &impl futures::task::Spawn) -> (
+pub(crate) fn make_test_network(executor: &impl futures::task::Spawn) -> (
 	impl Future<Output = Tester>,
 	TestNetwork,
 ) {
