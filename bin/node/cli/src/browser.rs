@@ -22,19 +22,19 @@ use browser_utils::{
 	Transport, Client,
 	browser_configuration, set_console_error_panic_hook, init_console_log,
 };
+use std::str::FromStr;
 
 /// Starts the client.
 #[wasm_bindgen]
-pub async fn start_client(wasm_ext: Transport) -> Result<Client, JsValue> {
-	start_inner(wasm_ext)
+pub async fn start_client(log_level: String, wasm_ext: Transport) -> Result<Client, JsValue> {
+	start_inner(log_level, wasm_ext)
 		.await
 		.map_err(|err| JsValue::from_str(&err.to_string()))
 }
 
-async fn start_inner(wasm_ext: Transport) -> Result<Client, Box<dyn std::error::Error>> {
+async fn start_inner(log_level: String, wasm_ext: Transport) -> Result<Client, Box<dyn std::error::Error>> {
 	set_console_error_panic_hook();
-	init_console_log(log::Level::Info)?;
-
+	init_console_log(log::Level::from_str(&log_level)?)?;
 	let chain_spec = ChainSpec::FlamingFir.load()
 		.map_err(|e| format!("{:?}", e))?;
 
