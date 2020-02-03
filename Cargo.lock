@@ -3272,6 +3272,7 @@ dependencies = [
  "pallet-indices 2.0.0",
  "pallet-randomness-collective-flip 2.0.0",
  "pallet-sudo 2.0.0",
+ "pallet-template 2.0.0",
  "pallet-timestamp 2.0.0",
  "pallet-transaction-payment 2.0.0",
  "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4034,6 +4035,19 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
  "sp-std 2.0.0",
+]
+
+[[package]]
+name = "pallet-template"
+version = "2.0.0"
+dependencies = [
+ "frame-support 2.0.0",
+ "frame-system 2.0.0",
+ "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-core 2.0.0",
+ "sp-io 2.0.0",
+ "sp-runtime 2.0.0",
 ]
 
 [[package]]
