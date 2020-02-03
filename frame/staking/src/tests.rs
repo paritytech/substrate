@@ -3029,3 +3029,52 @@ fn six_session_delay() {
 		assert_eq!(Staking::eras_reward_points(init_active_era + 1).total, 2);
 	});
 }
+
+#[test]
+fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward() {
+	// Test:
+	// * If nominator nomination is below the $MaxNominatorRewardedPerValidator other nominator
+	//   then the nominator can't claim its reward
+	// * A nominator can't claim another nominator reward
+	ExtBuilder::default().build().execute_with(|| {
+		for i in 0..=<Test as Trait>::MaxNominatorRewardedPerValidator::get() {
+			let stash = 10_000 + i as u64;
+			let controller = 20_000 + i as u64;
+			let balance = 10_000 + i as u64;
+			Balances::make_free_balance_be(&stash, balance);
+			assert_ok!(
+				Staking::bond(
+					Origin::signed(stash),
+					controller,
+					balance,
+					RewardDestination::Stash
+				)
+			);
+			assert_ok!(Staking::nominate(Origin::signed(controller), vec![11]));
+		}
+		mock::start_era(1);
+
+		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
+
+		mock::start_era(2);
+		mock::make_all_reward_payment(1);
+
+		// nominator 10_000 can't get its reward because exposure is clipped. However it will try
+		// to query other people reward.
+		assert_ok!(Staking::payout_nominator(Origin::signed(20_000), 1, vec![(11, 0)]));
+
+		// Assert only nominators from 1 to Max are rewarded
+		for i in 0..=<Test as Trait>::MaxNominatorRewardedPerValidator::get() {
+			let stash = 10_000 + i as u64;
+			let balance = 10_000 + i as u64;
+			if stash == 10_000 {
+				assert!(Balances::free_balance(&stash) == balance);
+			} else {
+				assert!(Balances::free_balance(&stash) > balance);
+			}
+		}
+	});
+}
