@@ -28,7 +28,7 @@ pub use crate::weights::{
 	TransactionPriority, Weight, WeighBlock, PaysFee,
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError, DispatchResult};
-pub use crate::traits::{CallMetadata, GetCallMetadata};
+pub use crate::traits::{CallMetadata, GetCallMetadata, GetCallName};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -1325,29 +1325,24 @@ macro_rules! decl_module {
 							}
 						},
 					)*
-					_ => unreachable!("__PhantomItem should never be used."),
+					$call_type::__PhantomItem(_, _) => unreachable!("__PhantomItem should never be used."),
 				}
 			}
 		}
 
-		// Implement GetCallMetadata for the Call.
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetCallMetadata
+		// Implement GetCallName for the Call.
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetCallName
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn get_call_metadata(&self) -> $crate::dispatch::CallMetadata {
+			fn get_call_name(&self) -> &'static str {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
 							let function_name = stringify!($fn_name);
-							// We assign the pallet_name as None as it is not available here.
-							// It is assigned a value where we call this function in impl_outer_dispatch.
-							$crate::dispatch::CallMetadata { 
-								function_name,
-								pallet_name: None,
-							}
+							function_name
 						},
 					)*
-					_ => unreachable!("__PhantomItem should never be used."),
+					$call_type::__PhantomItem(_, _) => unreachable!("__PhantomItem should never be used."),
 				}
 			}
 		}
@@ -1513,11 +1508,12 @@ macro_rules! impl_outer_dispatch {
 		}
 		impl $crate::dispatch::GetCallMetadata for $call_type {
 			fn get_call_metadata(&self) -> $crate::dispatch::CallMetadata {
+				use $crate::dispatch::GetCallName;
 				match self {
 					$( $call_type::$camelcase(call) => {
-						let mut info = call.get_call_metadata();
-						info.pallet_name = Some(stringify!($camelcase));
-						info
+						let function_name = call.get_call_name();
+						let pallet_name = stringify!($camelcase);
+						$crate::dispatch::CallMetadata { function_name, pallet_name }
 					}, )*
 				}
 			}
@@ -1893,7 +1889,7 @@ mod tests {
 	use super::*;
 	use crate::sp_runtime::traits::{OnInitialize, OnFinalize};
 	use crate::weights::{DispatchInfo, DispatchClass};
-	use crate::traits::{CallMetadata, GetCallMetadata};
+	use crate::traits::{CallMetadata, GetCallMetadata, GetCallName};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
 		type Origin;
@@ -2109,10 +2105,16 @@ mod tests {
 	}
 
 	#[test]
+	fn call_name() {
+		let name = Call::<TraitImpl>::aux_3().get_call_name();
+		assert_eq!("aux_3", name);
+	}
+
+	#[test]
 	fn call_metadata() {
 		let call = OuterCall::Test(Call::<TraitImpl>::aux_3());
 		let metadata = call.get_call_metadata();
-		let expected = CallMetadata { function_name: "aux_3".into(), pallet_name: Some("Test".into()) };
+		let expected = CallMetadata { function_name: "aux_3".into(), pallet_name: "Test".into() };
 		assert_eq!(metadata, expected);
 	}
 }
