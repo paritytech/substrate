@@ -152,14 +152,13 @@
 mod mock;
 #[cfg(test)]
 mod tests;
-mod migration;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
-		weights::SimpleDispatchInfo, traits::{
+	weights::SimpleDispatchInfo, traits::{
 		UpdateBalanceOutcome, Currency, OnReapAccount, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive
@@ -173,7 +172,7 @@ use sp_runtime::{
 	},
 };
 use frame_system::{self as system, IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
-use migration::{get_storage_value, put_storage_value, StorageIterator};
+use frame_support::storage::migration::{get_storage_value, put_storage_value, StorageIterator};
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 

@@ -25,6 +25,7 @@ pub mod hashed;
 pub mod child;
 #[doc(hidden)]
 pub mod generator;
+pub mod migration;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
@@ -42,6 +43,10 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query;
+
+	/// Try to get the underlying value from the provided storage instance; `Ok` if it exists,
+	/// `Err` if not.
+	fn try_get() -> Result<T, ()>;
 
 	/// Translate a value from some previous type (`O`) to the current type.
 	///

@@ -27,6 +27,29 @@ use sp_runtime::{
 };
 
 use crate::dispatch::Parameter;
+use crate::storage::StorageValue;
+
+/// An abstraction of a value stored within storage, but possibly as part of a larger composite
+/// item.
+pub trait StoredValue<T> {
+	/// Get the item.
+	fn get() -> T;
+	/// Mutate the item.
+	fn mutate<R>(f: impl FnOnce(&mut T) -> R) -> R;
+	/// Set the item to something new.
+	fn put(t: T) { Self::mutate(|i| *i = t); }
+}
+
+/// A shim for placing around a storage item in order to use it as a `StoredValue`. Ideally this
+/// wouldn't be needed as `StorageValue`s should blanket implement `StoredValue`s, however this
+/// would break the ability to have custom impls of `StoredValue`. The other workaround is to
+/// implement it directly in the macro, but that's left for later.
+pub struct StorageValueShim<S>(S);
+impl<S: StorageValue<T, Query=T>, T: FullCodec> StoredValue<T> for StorageValueShim<S> {
+	fn get() -> T { S::get() }
+	fn mutate<R>(f: impl FnOnce(&mut T) -> R) -> R { S::mutate(f) }
+	fn put(t: T) { S::put(t) }
+}
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -62,6 +85,25 @@ pub trait Contains<T: Ord> {
 
 	/// Get the number of items in the set.
 	fn count() -> usize { Self::sorted_members().len() }
+}
+
+/// Determiner to say whether a given account is unused.
+pub trait IsDeadAccount<AccountId> {
+	/// Is the given account dead?
+	fn is_dead_account(who: &AccountId) -> bool;
+}
+
+impl<AccountId> IsDeadAccount<AccountId> for () {
+	fn is_dead_account(_who: &AccountId) -> bool {
+		true
+	}
+}
+
+/// Handler for when a new account has been created.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+pub trait OnNewAccount<AccountId> {
+	/// A new account `who` has been registered.
+	fn on_new_account(who: &AccountId);
 }
 
 /// The account with the given id was reaped.
