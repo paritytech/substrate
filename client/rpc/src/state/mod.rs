@@ -67,7 +67,7 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,
-		prefix: StorageKey,
+		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
 	) -> FutureResult<Vec<StorageKey>>;
@@ -270,7 +270,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 				}
 			)));
 		}
-		self.backend.storage_keys_paged(block, prefix.unwrap_or_else(|| StorageKey(vec![])), count, start_key)
+		self.backend.storage_keys_paged(block, prefix, count, start_key)
 	}
 
 	fn storage(&self, key: StorageKey, block: Option<Block::Hash>) -> FutureResult<Option<StorageData>> {

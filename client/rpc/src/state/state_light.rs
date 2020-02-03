@@ -202,7 +202,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 	fn storage_keys_paged(
 		&self,
 		_block: Option<Block::Hash>,
-		_prefix: StorageKey,
+		_prefix: Option<StorageKey>,
 		_count: u32,
 		_start_key: Option<StorageKey>,
 	) -> FutureResult<Vec<StorageKey>> {

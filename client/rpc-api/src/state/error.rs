@@ -71,6 +71,11 @@ impl From<Error> for rpc::Error {
 				message: format!("{}", e),
 				data: None,
 			},
+			Error::InvalidCount { .. } => rpc::Error {
+				code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
+				message: format!("{}", e),
+				data: None,
+			},
 			e => errors::internal(e),
 		}
 	}

@@ -102,13 +102,13 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 /// An `Iterator` that iterates keys in a given block under a prefix.
 pub struct KeyIterator<'a, State, Block> {
 	state: State,
-	prefix: &'a StorageKey,
+	prefix: Option<&'a StorageKey>,
 	current_key: Vec<u8>,
 	_phantom: PhantomData<Block>,
 }
 
 impl <'a, State, Block> KeyIterator<'a, State, Block> {
-	fn new(state: State, prefix: &'a StorageKey, current_key: Vec<u8>) -> Self {
+	fn new(state: State, prefix: Option<&'a StorageKey>, current_key: Vec<u8>) -> Self {
 		Self {
 			state,
 			prefix,
@@ -128,8 +128,12 @@ impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
 		let next_key = self.state
 			.next_storage_key(&self.current_key)
 			.ok()
-			.flatten()
-			.filter(|v| v.starts_with(&self.prefix.0[..]))?;
+			.flatten()?;
+		if let Some(prefix) = self.prefix {
+			if !next_key.starts_with(&prefix.0[..]) {
+				return None;
+			}
+		}
 		self.current_key = next_key.clone();
 		Some(StorageKey(next_key))
 	}
@@ -280,12 +284,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn storage_keys_iter<'a>(
 		&self,
 		id: &BlockId<Block>,
-		prefix: &'a StorageKey,
-		start_key: &Option<StorageKey>
+		prefix: Option<&'a StorageKey>,
+		start_key: Option<&StorageKey>
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
 		let state = self.state_at(id)?;
-		let start_key = start_key.as_ref().unwrap_or(prefix);
-		Ok(KeyIterator::new(state, prefix, start_key.0.clone()))
+		let start_key = start_key
+			.or(prefix)
+			.map(|key| key.0.clone())
+			.unwrap_or_else(Vec::new);
+		Ok(KeyIterator::new(state, prefix, start_key))
 	}
 
 	/// Given a `BlockId` and a key, return the value under the key in that block.
@@ -3359,19 +3366,19 @@ pub(crate) mod tests {
 
 		let prefix = StorageKey(hex!("3a").to_vec());
 
-		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &None)
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
 			.unwrap()
 			.map(|x| x.0)
 			.collect();
 		assert_eq!(res, [hex!("3a636f6465").to_vec(), hex!("3a686561707061676573").to_vec()]);
 
-		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &Some(StorageKey(hex!("3a636f6465").to_vec())))
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("3a636f6465").to_vec())))
 			.unwrap()
 			.map(|x| x.0)
 			.collect();
 		assert_eq!(res, [hex!("3a686561707061676573").to_vec()]);
 
-		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &Some(StorageKey(hex!("3a686561707061676573").to_vec())))
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("3a686561707061676573").to_vec())))
 			.unwrap()
 			.map(|x| x.0)
 			.collect();
@@ -3384,14 +3391,14 @@ pub(crate) mod tests {
 
 		let prefix = StorageKey(hex!("").to_vec());
 
-		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &None)
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
 			.unwrap()
 			.take(2)
 			.map(|x| x.0)
 			.collect();
 		assert_eq!(res, [hex!("0befda6e1ca4ef40219d588a727f1271").to_vec(), hex!("3a636f6465").to_vec()]);
 
-		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &Some(StorageKey(hex!("3a636f6465").to_vec())))
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("3a636f6465").to_vec())))
 			.unwrap()
 			.take(3)
 			.map(|x| x.0)
@@ -3402,7 +3409,7 @@ pub(crate) mod tests {
 			hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
 		]);
 
-		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), &prefix, &Some(StorageKey(hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec())))
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec())))
 			.unwrap()
 			.take(1)
 			.map(|x| x.0)

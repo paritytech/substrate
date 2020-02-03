@@ -257,7 +257,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,
-		prefix: StorageKey,
+		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
 	) -> FutureResult<Vec<StorageKey>> {
@@ -265,7 +265,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 			self.block_or_best(block)
 				.and_then(|block|
 					self.client.storage_keys_iter(
-						&BlockId::Hash(block), &prefix, &start_key
+						&BlockId::Hash(block), prefix.as_ref(), start_key.as_ref()
 					)
 				)
 				.map(|v| v.take(count as usize).collect())
