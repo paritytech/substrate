@@ -27,9 +27,11 @@ use sp_runtime::traits::{
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
-use sc_client::Client;
+use sc_client::{Client, ExecutionStrategy, StateMachine};
+use sc_client_db::BenchmarkingState;
 use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
 use sp_consensus::BlockOrigin;
+use sc_executor::{NativeExecutor, NativeExecutionDispatch, WasmExecutionMethod};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
 
@@ -42,6 +44,30 @@ pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<Strin
 {
 	Ok(spec.to_json(raw)?)
 }
+
+pub fn benchmark_runtime<TBl: BlockT, TExecDisp: NativeExecutionDispatch + 'static>(
+	strategy: ExecutionStrategy,
+	wasm_method: WasmExecutionMethod,
+) -> error::Result<()> {
+	let mut changes = Default::default();
+	let state = BenchmarkingState::<TBl>::new()?;
+	let executor = NativeExecutor::<TExecDisp>::new(
+		wasm_method,
+		None, // heap pages
+	);
+	let _ = StateMachine::<_, _, NumberFor<TBl>, _>::new(
+		&state,
+		None,
+		&mut changes,
+		&executor,
+		"run_benchmark",
+		&[],
+		Default::default(),
+	).execute(strategy).map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
+	info!("Done.");
+	Ok(())
+}
+
 
 impl<
 	TBl, TRtApi, TCfg, TGen, TCSExt, TBackend,

@@ -861,9 +861,32 @@ pub struct BenchmarkCmd {
 	#[structopt(short, long)]
 	pub pallet: Option<String>,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
+	/// The execution strategy that should be used for benchmarks
+	#[structopt(
+		long = "execution",
+		value_name = "STRATEGY",
+		possible_values = &ExecutionStrategy::variants(),
+		case_insensitive = true,
+	)]
+	pub execution: Option<ExecutionStrategy>,
+
+	/// Method for executing Wasm runtime code.
+	#[structopt(
+		long = "wasm-execution",
+		value_name = "METHOD",
+		possible_values = &WasmExecutionMethod::enabled_variants(),
+		case_insensitive = true,
+		default_value = "Interpreted"
+	)]
+	pub wasm_method: WasmExecutionMethod,
+
+	/// Specify the chain specification (one of dev, local or staging).
+	#[structopt(long = "chain", value_name = "CHAIN_SPEC")]
+	pub chain: Option<String>,
+
+	/// Sets a custom logging filter.
+	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
+	pub log: Option<String>,
 }
 
 /// All core commands that are provided by default.

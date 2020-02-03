@@ -582,6 +582,24 @@ where
 
 		root.map(|r| r.map(|o| o.encode()))
 	}
+
+	fn wipe(&mut self) {
+		self.overlay.drain_storage_changes(&self.backend, None, Default::default(), self.storage_transaction_cache)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+		self.storage_transaction_cache.reset();
+		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	fn commit(&mut self) {
+		self.overlay.commit_prospective();
+		self.overlay.drain_storage_changes(&self.backend, None, Default::default(), self.storage_transaction_cache)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+		self.backend.commit(
+			self.storage_transaction_cache.transaction_storage_root.take().expect(EXT_NOT_ALLOWED_TO_FAIL),
+			self.storage_transaction_cache.transaction.take().expect(EXT_NOT_ALLOWED_TO_FAIL),
+		).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		self.storage_transaction_cache.reset();
+	}
 }
 
 impl<'a, H, B, N> sp_externalities::ExtensionStore for Ext<'a, H, N, B>

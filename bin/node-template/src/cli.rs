@@ -7,6 +7,7 @@ use sc_cli::{display_role, informant, parse_and_prepare, ParseAndPrepare, NoCust
 use sc_service::{AbstractService, Roles as ServiceRoles, Configuration};
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use crate::chain_spec;
+use node_template_runtime::opaque::Block;
 use log::info;
 
 /// Parse command line arguments into service configuration.
@@ -51,7 +52,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 		ParseAndPrepare::CheckBlock(cmd) => cmd.run_with_builder(|config: Config<_>|
 			Ok(new_full_start!(config).0), load_spec, exit),
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
-		ParseAndPrepare::Benchmark(cmd) => cmd.run(load_spec),
+		ParseAndPrepare::Benchmark(cmd) => cmd.run::<Block, service::Executor, _, _, _>(load_spec),
 		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder(|config: Config<_>|
 			Ok(new_full_start!(config).0), load_spec),
 		ParseAndPrepare::CustomCommand(_) => Ok(())

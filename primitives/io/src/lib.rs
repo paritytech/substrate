@@ -784,6 +784,16 @@ pub trait Benchmarking {
 				.expect("Unix time doesn't go backwards; qed")
 				.as_nanos()
 		}
+
+		/// Reset state to empty.
+		fn wipe_db(&mut self) {
+			self.wipe()
+		}
+
+		/// Commit pending storage changes to the trie database.
+		fn commit_db(&mut self) {
+			self.commit()
+		}
 }
 
 /// Wasm-only interface that provides functions for interacting with the sandbox.
