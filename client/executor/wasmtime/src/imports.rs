@@ -199,7 +199,7 @@ fn into_value(val: Val) -> Value {
 		Val::I64(v) => Value::I64(v),
 		Val::F32(f_bits) => Value::F32(f_bits),
 		Val::F64(f_bits) => Value::F64(f_bits),
-		_ => panic!(),
+		_ => panic!("Given value type is unsupported by substrate"),
 	}
 }
 
