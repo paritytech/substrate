@@ -65,8 +65,6 @@ pub enum Error<B: BlockT> {
 	InvalidSeal,
 	#[display(fmt = "PoW validation error: invalid difficulty")]
 	InvalidDifficulty,
-	#[display(fmt = "PoW block import expects an intermediate, but not found one")]
-	NoIntermediate,
 	#[display(fmt = "Rejecting block too far in future")]
 	TooFarInFuture,
 	#[display(fmt = "Fetching best header failed using select chain: {:?}", _0)]
