@@ -802,8 +802,8 @@ impl ModuleToIndex for () {
 	fn module_to_index<M: 'static>() -> Option<usize> { Some(0) }
 }
 
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug)]
 /// The function and pallet name of the Call.
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct CallMetadata {
 	/// Name of the function.
 	pub function_name: &'static str,
@@ -819,6 +819,6 @@ pub trait GetCallName {
 
 /// Gets the metadata for the Call - function name and pallet name.
 pub trait GetCallMetadata {
-	/// Return a `CallMetadata`, containing function and pallet name of the Call.
+	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
 	fn get_call_metadata(&self) -> CallMetadata;
 }

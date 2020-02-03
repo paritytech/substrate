@@ -1338,8 +1338,7 @@ macro_rules! decl_module {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
-							let function_name = stringify!($fn_name);
-							function_name
+							stringify!($fn_name)
 						},
 					)*
 					$call_type::__PhantomItem(_, _) => unreachable!("__PhantomItem should never be used."),
