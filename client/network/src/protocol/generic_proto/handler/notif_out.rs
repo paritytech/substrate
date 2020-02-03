@@ -263,20 +263,39 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 			NotifsOutHandlerIn::Enable => {
 				match mem::replace(&mut self.state, State::Poisoned) {
 					State::Disabled => {
+						let proto = NotificationsOut::new(self.proto_name.clone());
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							protocol: SubstreamProtocol::new(NotificationsOut::new(self.proto_name.clone()))
-								.with_timeout(OPEN_TIMEOUT),
+							protocol: SubstreamProtocol::new(proto).with_timeout(OPEN_TIMEOUT),
 							info: (),
 						});
 						self.state = State::Opening;
 					},
 					State::DisabledOpening => self.state = State::Opening,
-					State::DisabledOpen(sub) => self.state = State::Open(sub),
+					State::DisabledOpen(mut sub) => {
+						// As documented above, in this state we have already called `poll_close`
+						// once on the substream, and it is unclear whether the substream can then
+						// be recovered. When in doubt, let's drop the existing substream and
+						// open a new one.
+						if sub.close().now_or_never().is_none() {
+							log::warn!(
+								target: "sub-libp2p",
+								"Improperly closed outbound notifications substream"
+							);
+						}
+
+						let proto = NotificationsOut::new(self.proto_name.clone());
+						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+							protocol: SubstreamProtocol::new(proto).with_timeout(OPEN_TIMEOUT),
+							info: (),
+						});
+						self.state = State::Opening;
+					},
 					State::Opening | State::Refused | State::Open(_) =>
 						error!("Tried to enable notifications handler that was already enabled"),
 					State::Poisoned => error!("Notifications handler in a poisoned state"),
 				}
-			},
+			}
+
 			NotifsOutHandlerIn::Disable => {
 				match mem::replace(&mut self.state, State::Poisoned) {
 					State::Disabled | State::DisabledOpening =>
@@ -287,10 +306,24 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 					State::Open(sub) => self.state = State::DisabledOpen(sub),
 					State::Poisoned => error!("Notifications handler in a poisoned state"),
 				}
-			},
+			}
+
 			NotifsOutHandlerIn::Send(msg) =>
 				if let State::Open(sub) = &mut self.state {
-					sub.push_message(msg);
+					// TODO: we clone the message here :(
+					if let Some(Ok(_)) = sub.send(msg.into_iter().collect()).now_or_never() {
+					} else {
+						log::warn!(
+							target: "sub-libp2p",
+							"Failed to push message to queue, dropped it"
+						);
+					}
+				} else {
+					// This is an API misuse.
+					log::warn!(
+						target: "sub-libp2p",
+						"Tried to send a notification on a disabled handler"
+					);
 				},
 		}
 	}
@@ -312,6 +345,9 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 
 	fn connection_keep_alive(&self) -> KeepAlive {
 		match self.state {
+			// We have a small grace period of `INITIAL_KEEPALIVE_TIME` during which we keep the
+			// connection open no matter what, in order to avoid closing and reopening
+			// connections all the time.
 			State::Disabled | State::DisabledOpen(_) | State::DisabledOpening =>
 				KeepAlive::Until(self.when_connection_open + INITIAL_KEEPALIVE_TIME),
 			State::Opening | State::Open(_) => KeepAlive::Yes,
@@ -335,15 +371,16 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 				Poll::Ready(Err(err)) => {
 					// We try to re-open a substream.
 					self.state = State::Opening;
+					let proto = NotificationsOut::new(self.proto_name.clone());
 					self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-						protocol: SubstreamProtocol::new(NotificationsOut::new(self.proto_name.clone()))
-							.with_timeout(OPEN_TIMEOUT),
+						protocol: SubstreamProtocol::new(proto).with_timeout(OPEN_TIMEOUT),
 						info: (),
 					});
 					let ev = NotifsOutHandlerOut::Closed;
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(ev));
 				}
 			},
+
 			State::DisabledOpen(sub) => match Sink::poll_close(Pin::new(sub), cx) {
 				Poll::Pending => {},
 				Poll::Ready(Ok(())) | Poll::Ready(Err(_)) => {
@@ -352,6 +389,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(ev));
 				},
 			},
+
 			_ => {}
 		}
 
