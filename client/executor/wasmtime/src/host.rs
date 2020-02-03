@@ -65,11 +65,13 @@ impl HostState {
 		}
 	}
 
+	/// Destruct the host state and extract the `InstanceWrapper` passed at the creation.
 	pub fn into_instance(self) -> InstanceWrapper {
 		self.instance
 	}
 
-	pub fn materialize(&self) -> HostContext {
+	/// Materialize `HostContext` that can be used to invoke a substrate host `dyn Function`.
+	pub fn materialize<'a>(&'a self) -> HostContext<'a> {
 		HostContext(self)
 	}
 }
