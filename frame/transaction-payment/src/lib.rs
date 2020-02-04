@@ -76,7 +76,7 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
+		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
 	}
 }
 
@@ -178,9 +178,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
 
 			let base_fee = T::TransactionBaseFee::get();
-			let final_fee = base_fee.saturating_add(adjusted_fee).saturating_add(tip);
-
-			final_fee
+			base_fee.saturating_add(adjusted_fee).saturating_add(tip)
 		} else {
 			tip
 		}
@@ -307,21 +305,18 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 		pub const ExistentialDeposit: u64 = 0;
 	}
 
 	impl pallet_balances::Trait for Runtime {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
 		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 
@@ -407,7 +402,6 @@ mod tests {
 					(5, 50 * self.balance_factor),
 					(6, 60 * self.balance_factor)
 				],
-				vesting: vec![],
 			}.assimilate_storage(&mut t).unwrap();
 			t.into()
 		}
@@ -432,14 +426,14 @@ mod tests {
 					.pre_dispatch(&1, CALL, info_from_weight(5), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&1), 100 - 5 - 5 - 10);
+			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 					.pre_dispatch(&2, CALL, info_from_weight(3), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&2), 200 - 5 - 10 - 3 - 5);
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 3 - 5);
 		});
 	}
 
@@ -474,7 +468,7 @@ mod tests {
 			.execute_with(||
 		{
 			// 1 ain't have a penny.
-			assert_eq!(Balances::free_balance(&1), 0);
+			assert_eq!(Balances::free_balance(1), 0);
 
 			let len = 100;
 
@@ -521,7 +515,7 @@ mod tests {
 					.pre_dispatch(&1, CALL, info_from_weight(3), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
+			assert_eq!(Balances::free_balance(1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
 		})
 	}
 

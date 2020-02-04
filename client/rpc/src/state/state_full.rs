@@ -37,7 +37,6 @@ use sp_core::{
 	Bytes,
 };
 use sp_version::RuntimeVersion;
-use sp_state_machine::ExecutionStrategy;
 use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion},
 };

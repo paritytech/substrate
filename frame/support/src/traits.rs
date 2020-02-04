@@ -64,13 +64,6 @@ pub trait Contains<T: Ord> {
 	fn count() -> usize { Self::sorted_members().len() }
 }
 
-/// The account with the given id was killed.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
-pub trait OnFreeBalanceZero<AccountId> {
-	/// The account with the given id was killed.
-	fn on_free_balance_zero(who: &AccountId);
-}
-
 /// The account with the given id was reaped.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnReapAccount<AccountId> {
@@ -84,6 +77,12 @@ pub enum UpdateBalanceOutcome {
 	Updated,
 	/// The update led to killing the account.
 	AccountKilled,
+	/// Free balance became zero as a result of this update.
+	FreeBalanceZero,
+	/// Reserved balance became zero as a result of this update.
+	ReservedBalanceZero,
+	/// The account started and ended non-existent.
+	StillDead,
 }
 
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained
@@ -376,9 +375,7 @@ pub trait Currency<AccountId> {
 	/// This is the only balance that matters in terms of most operations on tokens. It alone
 	/// is used to determine the balance when in the contract execution environment. When this
 	/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
-	/// deleted: specifically `FreeBalance`. Further, the `OnFreeBalanceZero` callback
-	/// is invoked, giving a chance to external modules to clean up data associated with
-	/// the deleted account.
+	/// deleted: specifically `FreeBalance`.
 	///
 	/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
@@ -581,7 +578,6 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 		id: LockIdentifier,
 		who: &AccountId,
 		amount: Self::Balance,
-		until: Self::Moment,
 		reasons: WithdrawReasons,
 	);
 
@@ -592,13 +588,11 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// applies the most severe constraints of the two, while `set_lock` replaces the lock
 	/// with the new parameters. As in, `extend_lock` will set:
 	/// - maximum `amount`
-	/// - farthest duration (`until`)
 	/// - bitwise mask of all `reasons`
 	fn extend_lock(
 		id: LockIdentifier,
 		who: &AccountId,
 		amount: Self::Balance,
-		until: Self::Moment,
 		reasons: WithdrawReasons,
 	);
 
@@ -609,13 +603,17 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	);
 }
 
-/// A currency whose accounts can have balances which vest over time.
-pub trait VestingCurrency<AccountId>: Currency<AccountId> {
+/// A vesting schedule over a currency. This allows a particular currency to have vesting limits
+/// applied to it.
+pub trait VestingSchedule<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
+	/// The currency that this schedule applies to.
+	type Currency: Currency<AccountId>;
+
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
-	fn vesting_balance(who: &AccountId) -> Self::Balance;
+	fn vesting_balance(who: &AccountId) -> <Self::Currency as Currency<AccountId>>::Balance;
 
 	/// Adds a vesting schedule to a given account.
 	///
@@ -623,8 +621,8 @@ pub trait VestingCurrency<AccountId>: Currency<AccountId> {
 	/// and nothing is updated.
 	fn add_vesting_schedule(
 		who: &AccountId,
-		locked: Self::Balance,
-		per_block: Self::Balance,
+		locked: <Self::Currency as Currency<AccountId>>::Balance,
+		per_block: <Self::Currency as Currency<AccountId>>::Balance,
 		starting_block: Self::Moment,
 	) -> DispatchResult;
 
@@ -644,7 +642,7 @@ bitmask! {
 		TransactionPayment = 0b00000001,
 		/// In order to transfer ownership.
 		Transfer = 0b00000010,
-		/// In order to reserve some funds for a later return or repatriation
+		/// In order to reserve some funds for a later return or repatriation.
 		Reserve = 0b00000100,
 		/// In order to pay some other (higher-level) fees.
 		Fee = 0b00001000,

@@ -113,7 +113,7 @@ mod tests {
 	#[test]
 	fn test_node_key_config_input() {
 		fn secret_input(net_config_dir: Option<String>) -> error::Result<()> {
-			NodeKeyType::variants().into_iter().try_for_each(|t| {
+			NodeKeyType::variants().iter().try_for_each(|t| {
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let sk = match node_key_type {
 					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
@@ -139,7 +139,7 @@ mod tests {
 	#[test]
 	fn test_node_key_config_file() {
 		fn secret_file(net_config_dir: Option<String>) -> error::Result<()> {
-			NodeKeyType::variants().into_iter().try_for_each(|t| {
+			NodeKeyType::variants().iter().try_for_each(|t| {
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let tmp = tempfile::Builder::new().prefix("alice").tempdir()?;
 				let file = tmp.path().join(format!("{}_mysecret", t)).to_path_buf();
@@ -166,7 +166,7 @@ mod tests {
 		where
 			F: Fn(NodeKeyParams) -> error::Result<()>
 		{
-			NodeKeyType::variants().into_iter().try_for_each(|t| {
+			NodeKeyType::variants().iter().try_for_each(|t| {
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				f(NodeKeyParams {
 					node_key_type,
