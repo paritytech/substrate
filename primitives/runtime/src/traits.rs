@@ -1319,9 +1319,12 @@ pub trait BlockIdTo<Block: self::Block> {
 }
 
 /// The module benchmarking trait.
-pub trait Benchmarking<T, U> {
+pub trait Benchmarking<T> {
+	const STEPS: u32;
+	const REPEATS: u32;
+
 	/// Run the benchmarks for this module.
-	fn run_benchmark(parameters: Vec<(T, u32)>, repeat: u32) -> Vec<U>;
+	fn run_benchmarks() -> Vec<T>;
 }
 
 #[cfg(test)]

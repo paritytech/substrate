@@ -686,7 +686,7 @@ pub enum BenchmarkParameter {
 
 /// Results from running benchmarks on a FRAME pallet.
 /// Contains duration of the function call in nanoseconds after executing the same function multiple times.
-pub type BenchmarkResult = u128;
+pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128);
 
 #[cfg(test)]
 mod tests {
