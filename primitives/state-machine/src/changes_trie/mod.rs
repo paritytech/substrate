@@ -69,6 +69,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use hash_db::Prefix;
 use sp_core::Hasher;
+use sp_core::storage::ChildInfo;
 use num_traits::{One, Zero};
 use codec::{Decode, Encode};
 use sp_core;
@@ -160,8 +161,11 @@ pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 		functor: &mut dyn FnMut(&HashMap<Option<StorageKey>, HashSet<StorageKey>>),
 	) -> bool;
 	/// Get a trie node.
+	/// Note that child info is use only for case where we use this trait
+	/// as an adapter to storage.
 	fn get(
 		&self,
+		child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String>;
@@ -175,10 +179,11 @@ impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorageRef<H> for TrieBack
 
 	fn get(
 		&self,
+		child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		self.0.get(key, prefix)
+		self.0.get(child_info, key, prefix)
 	}
 }
 

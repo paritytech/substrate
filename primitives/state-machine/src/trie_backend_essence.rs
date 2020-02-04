@@ -25,7 +25,7 @@ use sp_core::Hasher;
 use hash_db::{self, EMPTY_PREFIX, Prefix};
 use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	read_trie_value, check_if_empty_root,
-	for_keys_in_trie, KeySpacedDB, keyspace_as_prefix_alloc};
+	for_keys_in_trie};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
 use sp_core::storage::ChildInfo;
@@ -74,8 +74,8 @@ impl<S: TrieBackendStorageRef<H>, H: Hasher> TrieBackendEssence<S, H> where H::O
 
 	/// Return the next key in the trie i.e. the minimum key that is strictly superior to `key` in
 	/// lexicographic order.
-	pub fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, String> {
-		let eph = BackendStorageDBRef::new(&self.storage);
+	pub fn next_storage_key(&self, child_info: &ChildInfo, key: &[u8]) -> Result<Option<StorageKey>, String> {
+		let eph = BackendStorageDBRef::new(&self.storage, child_info);
 
 		let trie = TrieDB::<H>::new(&eph, &self.root)
 			.map_err(|e| format!("TrieDB creation error: {}", e))?;
@@ -107,8 +107,8 @@ impl<S: TrieBackendStorageRef<H>, H: Hasher> TrieBackendEssence<S, H> where H::O
 	}
 
 	/// Get the value of storage at given key.
-	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, String> {
-		let eph = BackendStorageDBRef::new(&self.storage);
+	pub fn storage(&self, child_info: &ChildInfo, key: &[u8]) -> Result<Option<StorageValue>, String> {
+		let eph = BackendStorageDBRef::new(&self.storage, child_info);
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
@@ -118,9 +118,10 @@ impl<S: TrieBackendStorageRef<H>, H: Hasher> TrieBackendEssence<S, H> where H::O
 	/// Retrieve all entries keys of storage and call `f` for each of those keys.
 	pub fn for_keys<F: FnMut(&[u8])>(
 		&self,
+		child_info: &ChildInfo,
 		f: F,
 	) {
-		let eph = BackendStorageDBRef::new(&self.storage);
+		let eph = BackendStorageDBRef::new(&self.storage, child_info);
 
 		if let Err(e) = for_keys_in_trie::<Layout<H>, _, BackendStorageDBRef<S, H>>(
 			&eph,
@@ -132,8 +133,8 @@ impl<S: TrieBackendStorageRef<H>, H: Hasher> TrieBackendEssence<S, H> where H::O
 	}
 
 	/// Execute given closure for all keys starting with prefix.
-	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
-		self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| f(k), None)
+	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, child_info: &ChildInfo, prefix: &[u8], mut f: F) {
+		self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| f(k), child_info)
 	}
 
 	fn keys_values_with_prefix_inner<F: FnMut(&[u8], &[u8])>(
@@ -141,9 +142,9 @@ impl<S: TrieBackendStorageRef<H>, H: Hasher> TrieBackendEssence<S, H> where H::O
 		root: &H::Out,
 		prefix: &[u8],
 		mut f: F,
-		child_info: Option<&ChildInfo>,
+		child_info: &ChildInfo,
 	) {
-		let eph = BackendStorageDBRef::new(&self.storage);
+		let eph = BackendStorageDBRef::new(&self.storage, child_info);
 
 		let mut iter = move |db| -> Result<(), Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(db, root)?;
@@ -164,20 +165,14 @@ impl<S: TrieBackendStorageRef<H>, H: Hasher> TrieBackendEssence<S, H> where H::O
 			Ok(())
 		};
 
-		let result = if let Some(child_info) = child_info {
-			let db = KeySpacedDB::new(&eph, child_info.keyspace());
-			iter(&db)
-		} else {
-			iter(&eph)
-		};
-		if let Err(e) = result {
+		if let Err(e) = iter(&eph) {
 			debug!(target: "trie", "Error while iterating by prefix: {}", e);
 		}
 	}
 
 	/// Execute given closure for all key and values starting with prefix.
-	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.keys_values_with_prefix_inner(&self.root, prefix, f, None)
+	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, child_info: &ChildInfo, prefix: &[u8], f: F) {
+		self.keys_values_with_prefix_inner(&self.root, prefix, f, child_info)
 	}
 }
 
@@ -187,6 +182,7 @@ pub(crate) struct Ephemeral<'a, S, H, O> where
 	O: hash_db::HashDB<H, DBValue> + Default + Consolidate,
 {
 	storage: &'a S,
+	child_info: &'a ChildInfo,
 	overlay: &'a mut O,
 	_ph: PhantomData<H>,
 }
@@ -196,6 +192,7 @@ pub(crate) struct BackendStorageDBRef<'a, S, H> where
 	H: 'a + Hasher,
 {
 	storage: &'a S,
+	child_info: &'a ChildInfo,
 	_ph: PhantomData<H>,
 }
 
@@ -224,9 +221,10 @@ impl<'a, S, H, O> Ephemeral<'a, S, H, O> where
 	H: 'a + Hasher,
 	O: hash_db::HashDB<H, DBValue> + Default + Consolidate,
 {
-	pub fn new(storage: &'a S, overlay: &'a mut O) -> Self {
+	pub fn new(storage: &'a S, child_info: &'a ChildInfo, overlay: &'a mut O) -> Self {
 		Ephemeral {
 			storage,
+			child_info,
 			overlay,
 			_ph: PhantomData,
 		}
@@ -237,9 +235,10 @@ impl<'a, S, H> BackendStorageDBRef<'a, S, H> where
 	S: 'a + TrieBackendStorageRef<H>,
 	H: 'a + Hasher,
 {
-	pub fn new(storage: &'a S) -> Self {
+	pub fn new(storage: &'a S, child_info: &'a ChildInfo) -> Self {
 		BackendStorageDBRef {
 			storage,
+			child_info,
 			_ph: PhantomData,
 		}
 	}
@@ -276,7 +275,7 @@ impl<'a, S, H, O> hash_db::PlainDBRef<H::Out, DBValue> for Ephemeral<'a, S, H, O
 		if let Some(val) = hash_db::HashDB::get(self.overlay, key, EMPTY_PREFIX) {
 			Some(val)
 		} else {
-			match self.storage.get(&key, EMPTY_PREFIX) {
+			match self.storage.get(self.child_info, &key, EMPTY_PREFIX) {
 				Ok(x) => x,
 				Err(e) => {
 					warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -300,7 +299,7 @@ impl<'a, S, H> hash_db::PlainDBRef<H::Out, DBValue> for BackendStorageDBRef<'a, 
 			return Some(vec![0u8]);
 		}
 
-		match self.storage.get(&key, EMPTY_PREFIX) {
+		match self.storage.get(self.child_info, &key, EMPTY_PREFIX) {
 			Ok(x) => x,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -351,7 +350,7 @@ impl<'a, S, H, O> hash_db::HashDBRef<H, DBValue> for Ephemeral<'a, S, H, O> wher
 		if let Some(val) = hash_db::HashDB::get(self.overlay, key, prefix) {
 			Some(val)
 		} else {
-			match self.storage.get(&key, prefix) {
+			match self.storage.get(self.child_info, &key, prefix) {
 				Ok(x) => x,
 				Err(e) => {
 					warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -375,7 +374,7 @@ impl<'a, S, H> hash_db::HashDBRef<H, DBValue> for BackendStorageDBRef<'a, S, H> 
 			return Some(vec![0u8]);
 		}
 
-		match self.storage.get(&key, prefix) {
+		match self.storage.get(self.child_info, &key, prefix) {
 			Ok(x) => x,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -397,6 +396,7 @@ pub trait TrieBackendStorageRef<H: Hasher> {
 	/// Get the value stored at key.
 	fn get(
 		&self,
+		child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String>;
@@ -408,22 +408,24 @@ pub trait TrieBackendStorage<H: Hasher>: TrieBackendStorageRef<H> + Send + Sync 
 impl<H: Hasher, B: TrieBackendStorageRef<H> + Send + Sync> TrieBackendStorage<H> for B {}
 
 // This implementation is used by normal storage trie clients.
+// TODO remove stored ChildInfo
 impl<H: Hasher> TrieBackendStorageRef<H> for (Arc<dyn Storage<H>>, ChildInfo) {
 	type Overlay = PrefixedMemoryDB<H>;
 
 	fn get(
 		&self,
+		child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		Storage::<H>::get(self.0.deref(), &self.1, key, prefix)
+		Storage::<H>::get(self.0.deref(), child_info, key, prefix)
 	}
 }
-
 
 /// This is an essence for the child trie backend.
 pub struct ChildTrieBackendStorage<'a, H: Hasher, B: TrieBackendStorageRef<H>> {
 	db: &'a B,
+	// TODO is it usefull? -> seems like not -> TODO remove this struct
 	info: Option<&'a ChildInfo>,
 	_ph: PhantomData<H>,
 }
@@ -444,15 +446,11 @@ impl<'a, H: Hasher, B: TrieBackendStorageRef<H>> TrieBackendStorageRef<H> for Ch
 
 	fn get(
 		&self,
+		child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		if let Some(keyspace) = self.info.as_ref().map(|ci| ci.keyspace()) {
-			let prefix = keyspace_as_prefix_alloc(keyspace, prefix);
-			self.db.get(key, (prefix.0.as_slice(), prefix.1))
-		} else {
-			self.db.get(key, prefix)
-		}
+		self.db.get(child_info, key, prefix)
 	}
 }
 
@@ -463,9 +461,11 @@ impl<H: Hasher> TrieBackendStorageRef<H> for PrefixedMemoryDB<H> {
 
 	fn get(
 		&self,
+		_child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
+		// No need to use keyspace for in memory db, ignoring child_info parameter.
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
 }
@@ -475,9 +475,11 @@ impl<H: Hasher> TrieBackendStorageRef<H> for MemoryDB<H> {
 
 	fn get(
 		&self,
+		_child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
+		// No need to use keyspace for in memory db, ignoring child_info parameter.
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
 }
@@ -485,7 +487,7 @@ impl<H: Hasher> TrieBackendStorageRef<H> for MemoryDB<H> {
 #[cfg(test)]
 mod test {
 	use sp_core::{Blake2Hasher, H256};
-	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
+	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut};
 	use super::*;
 	use crate::trie_backend::TrieBackend;
 	use crate::backend::Backend;
@@ -506,16 +508,8 @@ mod test {
 			trie.insert(b"6", &[1]).expect("insert failed");
 		}
 		{
-			let mut mdb = KeySpacedDBMut::new(&mut mdb, child_info.keyspace());
-			// reuse of root_1 implicitly assert child trie root is same
-			// as top trie (contents must remain the same).
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root_1);
-			trie.insert(b"3", &[1]).expect("insert failed");
-			trie.insert(b"4", &[1]).expect("insert failed");
-			trie.insert(b"6", &[1]).expect("insert failed");
-		}
-		{
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root_2);
+			// using top trie as child trie (both with same content)
 			trie.insert(b"MyChild", root_1.as_ref()).expect("insert failed");
 		};
 

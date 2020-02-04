@@ -681,8 +681,17 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 	type Error = io::Error;
 	type Key = [u8];
 
-	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.db.get(columns::STATE, key).map(|r| r.map(|v| v.to_vec()))
+	fn get(&self, child_info: &ChildInfo, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		if child_info.is_top_trie() {
+			self.db.get(columns::STATE, key)
+		} else {
+			let keyspace = child_info.keyspace();
+			// TODO try to switch api to &mut and use a key buffer from StorageDB
+			let mut key_buffer = vec![0; keyspace.len() + key.len()];
+			key_buffer[..keyspace.len()].copy_from_slice(keyspace);
+			key_buffer[keyspace.len()..].copy_from_slice(&key[..]);
+			self.db.get(columns::STATE, &key_buffer[..])
+		}.map(|r| r.map(|v| v.to_vec()))
 	}
 }
 

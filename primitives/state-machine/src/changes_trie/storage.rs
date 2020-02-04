@@ -19,6 +19,7 @@
 use std::collections::{BTreeMap, HashSet, HashMap};
 use hash_db::{Prefix, EMPTY_PREFIX};
 use sp_core::Hasher;
+use sp_core::storage::ChildInfo;
 use sp_trie::DBValue;
 use sp_trie::MemoryDB;
 use parking_lot::RwLock;
@@ -190,10 +191,11 @@ impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, N
 
 	fn get(
 		&self,
+		child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
+		MemoryDB::<H>::get(&self.data.read().mdb, child_info, key, prefix)
 	}
 }
 
@@ -212,9 +214,10 @@ impl<'a, H, Number> TrieBackendStorageRef<H> for TrieBackendAdapter<'a, H, Numbe
 
 	fn get(
 		&self,
+		child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		self.storage.get(key, prefix)
+		self.storage.get(child_info, key, prefix)
 	}
 }

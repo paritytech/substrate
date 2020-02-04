@@ -67,6 +67,7 @@ pub fn key_changes<'a, H: Hasher, Number: BlockNumber>(
 
 			_hasher: ::std::marker::PhantomData::<H>::default(),
 		},
+		child_info: sp_core::storage::ChildInfo::top_trie(),
 	})
 }
 
@@ -177,6 +178,7 @@ pub fn key_changes_proof_check_with_db<'a, H: Hasher, Number: BlockNumber>(
 
 			_hasher: ::std::marker::PhantomData::<H>::default(),
 		},
+		child_info: sp_core::storage::ChildInfo::top_trie(),
 	}.collect()
 }
 
@@ -314,6 +316,10 @@ pub struct DrilldownIterator<'a, H, Number>
 		H::Out: 'a,
 {
 	essence: DrilldownIteratorEssence<'a, H, Number>,
+	/// This is always top trie info, but it cannot be
+	/// statically instantiated at the time (vec of null
+	/// size could be in theory).
+	child_info: sp_core::storage::ChildInfo,
 }
 
 impl<'a, H: Hasher, Number: BlockNumber> Iterator for DrilldownIterator<'a, H, Number>
@@ -322,8 +328,11 @@ impl<'a, H: Hasher, Number: BlockNumber> Iterator for DrilldownIterator<'a, H, N
 	type Item = Result<(Number, u32), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {
+		let child_info = &self.child_info;
 		self.essence.next(|storage, root, key|
-			TrieBackendEssence::<_, H>::new(TrieBackendAdapter::new(storage), root).storage(key))
+			TrieBackendEssence::<_, H>::new(TrieBackendAdapter::new(storage), root)
+				.storage(child_info, key)
+		)
 	}
 }
 

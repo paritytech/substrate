@@ -26,7 +26,7 @@ mod trie_stream;
 use sp_std::boxed::Box;
 use sp_std::marker::PhantomData;
 use sp_std::vec::Vec;
-use sp_core::{Hasher, InnerHasher, Prefix};
+use sp_core::{Hasher, InnerHasher};
 use trie_db::proof::{generate_proof, verify_proof};
 pub use trie_db::proof::VerifyError;
 /// Our `NodeCodec`-specific error.
@@ -47,7 +47,7 @@ pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 
 #[derive(Default)]
 /// substrate trie layout
-pub struct Layout<H>(sp_std::marker::PhantomData<H>);
+pub struct Layout<H>(PhantomData<H>);
 
 impl<H: InnerHasher> TrieLayout for Layout<H> {
 	const USE_EXTENSION: bool = false;
@@ -267,127 +267,6 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 	}
 
 	Ok(())
-}
-
-/// Read a value from the child trie with given query.
-pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=DBValue>, DB>(
-	_storage_key: &[u8],
-	keyspace: &[u8],
-	db: &DB,
-	root_slice: &[u8],
-	key: &[u8],
-	query: Q
-) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
-	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
-{
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_slice);
-
-	let db = KeySpacedDB::new(&*db, keyspace);
-	Ok(TrieDB::<L>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
-}
-
-/// `HashDB` implementation that append a encoded prefix (unique id bytes) in addition to the
-/// prefix of every key value.
-pub struct KeySpacedDB<'a, DB, H>(&'a DB, &'a [u8], PhantomData<H>);
-
-#[cfg(feature="test-helpers")]
-/// `HashDBMut` implementation that append a encoded prefix (unique id bytes) in addition to the
-/// prefix of every key value.
-///
-/// Mutable variant of `KeySpacedDB`, see [`KeySpacedDB`].
-pub struct KeySpacedDBMut<'a, DB, H>(&'a mut DB, &'a [u8], PhantomData<H>);
-
-/// Utility function used to merge some byte data (keyspace) and `prefix` data
-/// before calling key value database primitives.
-pub fn keyspace_as_prefix_alloc(ks: &[u8], prefix: Prefix) -> (Vec<u8>, Option<u8>) {
-	let mut result = sp_std::vec![0; ks.len() + prefix.0.len()];
-	result[..ks.len()].copy_from_slice(ks);
-	result[ks.len()..].copy_from_slice(prefix.0);
-	(result, prefix.1)
-}
-
-impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
-	H: InnerHasher,
-{
-	/// instantiate new keyspaced db
-	pub fn new(db: &'a DB, ks: &'a [u8]) -> Self {
-		KeySpacedDB(db, ks, PhantomData)
-	}
-}
-
-#[cfg(feature="test-helpers")]
-impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
-	H: InnerHasher,
-{
-	/// instantiate new keyspaced db
-	pub fn new(db: &'a mut DB, ks: &'a [u8]) -> Self {
-		KeySpacedDBMut(db, ks, PhantomData)
-	}
-}
-
-impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
-	DB: hash_db::HashDBRef<H, T>,
-	H: InnerHasher,
-	T: From<&'static [u8]>,
-{
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<T> {
-		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.get(key, (&derived_prefix.0, derived_prefix.1))
-	}
-
-	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.contains(key, (&derived_prefix.0, derived_prefix.1))
-	}
-}
-
-#[cfg(feature="test-helpers")]
-impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
-	DB: hash_db::HashDB<H, T>,
-	H: InnerHasher,
-	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
-{
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<T> {
-		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.get(key, (&derived_prefix.0, derived_prefix.1))
-	}
-
-	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.contains(key, (&derived_prefix.0, derived_prefix.1))
-	}
-
-	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H::Out {
-		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.insert((&derived_prefix.0, derived_prefix.1), value)
-	}
-
-	fn emplace(&mut self, key: H::Out, prefix: Prefix, value: T) {
-		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.emplace(key, (&derived_prefix.0, derived_prefix.1), value)
-	}
-
-	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
-		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.remove(key, (&derived_prefix.0, derived_prefix.1))
-	}
-}
-
-#[cfg(feature="test-helpers")]
-impl<'a, DB, H, T> hash_db::AsHashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
-	DB: hash_db::HashDB<H, T>,
-	H: InnerHasher,
-	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
-{
-	fn as_hash_db(&self) -> &dyn hash_db::HashDB<H, T> { &*self }
-
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, T> + 'b) {
-		&mut *self
-	}
 }
 
 /// Constants used into trie simplification codec.

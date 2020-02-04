@@ -566,10 +566,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 			fn get(
 				&self,
+				child_info: &ChildInfo,
 				key: &Block::Hash,
 				prefix: Prefix,
 			) -> Result<Option<DBValue>, String> {
-				self.storage.get(key, prefix)
+				self.storage.get(child_info, key, prefix)
 			}
 		}
 

@@ -39,8 +39,8 @@ impl NodeDb for TestDb {
 	type Error = ();
 	type Key = H256;
 
-	fn get(&self, key: &H256) -> Result<Option<DBValue>, ()> {
-		Ok(self.data.get(&ChildInfo::top_trie()).and_then(|data| data.get(key).cloned()))
+	fn get(&self, child_info: &ChildInfo, key: &H256) -> Result<Option<DBValue>, ()> {
+		Ok(self.data.get(child_info).and_then(|data| data.get(key).cloned()))
 	}
 }
 

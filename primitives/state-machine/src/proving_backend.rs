@@ -23,13 +23,14 @@ use log::debug;
 use hash_db::{HashDB, EMPTY_PREFIX, Prefix};
 use sp_core::{Hasher, InnerHasher};
 use sp_trie::{
-	MemoryDB, default_child_trie_root, read_trie_value_with, read_child_trie_value_with,
-	record_all_keys
+	MemoryDB, default_child_trie_root, read_trie_value_with,
+	record_all_keys,
 };
 pub use sp_trie::Recorder;
 pub use sp_trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
-use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage, TrieBackendStorageRef};
+use crate::trie_backend_essence::{BackendStorageDBRef, TrieBackendEssence,
+	TrieBackendStorage, TrieBackendStorageRef};
 use crate::{Error, ExecutionError, Backend};
 use std::collections::{HashMap, HashSet};
 use crate::DBValue;
@@ -125,15 +126,15 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 {
 	/// Produce proof for a key query.
 	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(
+		let child_info = ChildInfo::top_trie();
+		let eph = BackendStorageDBRef::new(
 			self.backend.backend_storage(),
-			&mut read_overlay,
+			&child_info,
 		);
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value_with::<Layout<H>, _, Ephemeral<S, H, _>>(
+		read_trie_value_with::<Layout<H>, _, BackendStorageDBRef<S, H>>(
 			&eph,
 			self.backend.root(),
 			key,
@@ -146,36 +147,33 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 		&mut self,
 		storage_key: &[u8],
 		child_info: &ChildInfo,
-		key: &[u8]
+		key: &[u8],
 	) -> Result<Option<Vec<u8>>, String> {
 		let root = self.storage(storage_key)?
 			.and_then(|r| Decode::decode(&mut &r[..]).ok())
 			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
 
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(
+		let eph = BackendStorageDBRef::new(
 			self.backend.backend_storage(),
-			&mut read_overlay,
+			child_info,
 		);
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value_with::<Layout<H>, _, _>(
-			storage_key,
-			child_info.keyspace(),
+		read_trie_value_with::<Layout<H>, _, _>(
 			&eph,
-			&root.as_ref(),
+			&root,
 			key,
 			&mut *self.proof_recorder
 		).map_err(map_e)
 	}
 
 	/// Produce proof for the whole backend.
-	pub fn record_all_keys(&mut self) {
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(
+	pub fn record_all_top_trie_keys(&mut self) {
+		let child_info = ChildInfo::top_trie();
+		let eph = BackendStorageDBRef::new(
 			self.backend.backend_storage(),
-			&mut read_overlay,
+			&child_info,
 		);
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
@@ -248,13 +246,14 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorageRef<H>
 
 	fn get(
 		&self,
+		child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.read().get(key) {
 			return Ok(v.clone());
 		}
-		let backend_value =  self.backend.get(key, prefix)?;
+		let backend_value =  self.backend.get(child_info, key, prefix)?;
 		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
 		Ok(backend_value)
 	}
