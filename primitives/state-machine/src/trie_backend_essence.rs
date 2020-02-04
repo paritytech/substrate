@@ -407,9 +407,7 @@ pub trait TrieBackendStorage<H: Hasher>: TrieBackendStorageRef<H> + Send + Sync 
 
 impl<H: Hasher, B: TrieBackendStorageRef<H> + Send + Sync> TrieBackendStorage<H> for B {}
 
-// This implementation is used by normal storage trie clients.
-// TODO remove stored ChildInfo
-impl<H: Hasher> TrieBackendStorageRef<H> for (Arc<dyn Storage<H>>, ChildInfo) {
+impl<H: Hasher> TrieBackendStorageRef<H> for Arc<dyn Storage<H>> {
 	type Overlay = PrefixedMemoryDB<H>;
 
 	fn get(
@@ -418,31 +416,12 @@ impl<H: Hasher> TrieBackendStorageRef<H> for (Arc<dyn Storage<H>>, ChildInfo) {
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		Storage::<H>::get(self.0.deref(), child_info, key, prefix)
+		Storage::<H>::get(self.deref(), child_info, key, prefix)
 	}
 }
 
-/// This is an essence for the child trie backend.
-pub struct ChildTrieBackendStorage<'a, H: Hasher, B: TrieBackendStorageRef<H>> {
-	db: &'a B,
-	// TODO is it usefull? -> seems like not -> TODO remove this struct
-	info: Option<&'a ChildInfo>,
-	_ph: PhantomData<H>,
-}
-
-impl<'a, H: Hasher, B: TrieBackendStorageRef<H>> ChildTrieBackendStorage<'a, H, B> {
-	/// Instantiate a `ChildTrieBackendStorage`.
-	pub fn new(db: &'a B, info: Option<&'a ChildInfo>) -> Self {
-		ChildTrieBackendStorage {
-			db,
-			info,
-			_ph: PhantomData,
-		}
-	}
-}
-
-impl<'a, H: Hasher, B: TrieBackendStorageRef<H>> TrieBackendStorageRef<H> for ChildTrieBackendStorage<'a, H, B> {
-	type Overlay = PrefixedMemoryDB<H>;
+impl<H: Hasher, S: TrieBackendStorageRef<H>> TrieBackendStorageRef<H> for &S {
+	type Overlay = <S as TrieBackendStorageRef<H>>::Overlay;
 
 	fn get(
 		&self,
@@ -450,10 +429,9 @@ impl<'a, H: Hasher, B: TrieBackendStorageRef<H>> TrieBackendStorageRef<H> for Ch
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		self.db.get(child_info, key, prefix)
+		<S as TrieBackendStorageRef<H>>::get(self, child_info, key, prefix)
 	}
 }
-
 
 // This implementation is used by test storage trie clients.
 impl<H: Hasher> TrieBackendStorageRef<H> for PrefixedMemoryDB<H> {

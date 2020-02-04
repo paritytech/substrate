@@ -23,7 +23,7 @@ use sp_core::storage::{ChildInfo, ChildrenMap};
 use codec::{Codec, Decode};
 use crate::{
 	StorageKey, StorageValue, Backend,
-	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral, BackendStorageDBRef, ChildTrieBackendStorage},
+	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral, BackendStorageDBRef},
 };
 
 /// Patricia trie-based backend. Transaction type is overlays of changes to commit
@@ -88,7 +88,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
-		if let Some(essence) = self.child_essence(storage_key, child_info)? {
+		if let Some(essence) = self.child_essence(storage_key)? {
 			essence.storage(child_info, key)
 		} else {
 			Ok(None)
@@ -105,7 +105,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
-		if let Some(essence) = self.child_essence(storage_key, child_info)? {
+		if let Some(essence) = self.child_essence(storage_key)? {
 			essence.next_storage_key(child_info, key)
 		} else {
 			Ok(None)
@@ -126,7 +126,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info) {
+		if let Ok(Some(essence)) = self.child_essence(storage_key) {
 			essence.for_keys(child_info, f)
 		}
 	}
@@ -138,7 +138,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		prefix: &[u8],
 		f: F,
 	) {
-		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info) {
+		if let Ok(Some(essence)) = self.child_essence(storage_key) {
 			essence.for_keys_with_prefix(child_info, prefix, f)
 		}
 	}
@@ -231,10 +231,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		};
 
 		{
-			let child_essence = ChildTrieBackendStorage::new(self.essence.backend_storage(), Some(child_info));
+			let storage = self.essence.backend_storage();
 			// Do not write prefix in overlay.
 			let mut eph = Ephemeral::new(
-				&child_essence,
+				storage,
 				child_info,
 				&mut write_overlay,
 			);
@@ -267,15 +267,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where
 	fn child_essence<'a>(
 		&'a self,
 		storage_key: &[u8],
-		child_info: &'a ChildInfo,
-	) -> Result<Option<TrieBackendEssence<ChildTrieBackendStorage<'a, H, S>, H>>, <Self as Backend<H>>::Error> {
+	) -> Result<Option<TrieBackendEssence<&'a S, H>>, <Self as Backend<H>>::Error> {
 		let root: Option<H::Out> = self.storage(storage_key)?
 			.and_then(|encoded_root| Decode::decode(&mut &encoded_root[..]).ok());
 		Ok(if let Some(root) = root {
-			Some(TrieBackendEssence::new(ChildTrieBackendStorage::new(
-				self.essence.backend_storage(),
-				Some(child_info),
-			), root))
+			Some(TrieBackendEssence::new(self.essence.backend_storage(), root))
 		} else {
 			None
 		})
