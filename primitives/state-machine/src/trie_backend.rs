@@ -84,8 +84,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
-		let mut buf = Vec::new();
-		if let Some(essence) = self.child_essence(storage_key, child_info, &mut buf)? {
+		if let Some(essence) = self.child_essence(storage_key, child_info)? {
 			essence.storage(key)
 		} else {
 			Ok(None)
@@ -102,8 +101,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
-		let mut buf = Vec::new();
-		if let Some(essence) = self.child_essence(storage_key, child_info, &mut buf)? {
+		if let Some(essence) = self.child_essence(storage_key, child_info)? {
 			essence.next_storage_key(key)
 		} else {
 			Ok(None)
@@ -124,8 +122,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		let mut buf = Vec::new();
-		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info, &mut buf) {
+		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info) {
 			essence.for_keys(f)
 		}
 	}
@@ -137,8 +134,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		prefix: &[u8],
 		f: F,
 	) {
-		let mut buf = Vec::new();
-		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info, &mut buf) {
+		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info) {
 			essence.for_keys_with_prefix(prefix, f)
 		}
 	}
@@ -230,8 +226,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		};
 
 		{
-			let mut buf = Vec::new();
-			let child_essence = ChildTrieBackendStorage::new(self.essence.backend_storage(), Some(child_info), &mut buf);
+			let child_essence = ChildTrieBackendStorage::new(self.essence.backend_storage(), Some(child_info));
 			// Do not write prefix in overlay.
 			let mut eph = Ephemeral::new(
 				&child_essence,
@@ -267,7 +262,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where
 		&'a self,
 		storage_key: &[u8],
 		child_info: &'a ChildInfo,
-		buffer: &'a mut Vec<u8>,
 	) -> Result<Option<TrieBackendEssence<ChildTrieBackendStorage<'a, H, S>, H>>, <Self as Backend<H>>::Error> {
 		let root: Option<H::Out> = self.storage(storage_key)?
 			.and_then(|encoded_root| Decode::decode(&mut &encoded_root[..]).ok());
@@ -275,7 +269,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where
 			Some(TrieBackendEssence::new(ChildTrieBackendStorage::new(
 				self.essence.backend_storage(),
 				Some(child_info),
-				buffer,
 			), root))
 		} else {
 			None

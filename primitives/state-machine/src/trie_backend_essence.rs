@@ -430,11 +430,10 @@ pub struct ChildTrieBackendStorage<'a, H: Hasher, B: TrieBackendStorageRef<H>> {
 
 impl<'a, H: Hasher, B: TrieBackendStorageRef<H>> ChildTrieBackendStorage<'a, H, B> {
 	/// Instantiate a `ChildTrieBackendStorage`.
-	pub fn new(db: &'a B, info: Option<&'a ChildInfo>, buffer: &'a mut Vec<u8>) -> Self {
+	pub fn new(db: &'a B, info: Option<&'a ChildInfo>) -> Self {
 		ChildTrieBackendStorage {
 			db,
 			info,
-			buffer,
 			_ph: PhantomData,
 		}
 	}
