@@ -387,9 +387,13 @@ impl<TSubstream> GenericProto<TSubstream> {
 	///
 	/// Also note that even we have a valid open substream, it may in fact be already closed
 	/// without us knowing, in which case the packet will not be received.
+	///
+	/// > **Note**: Ideally the `engine_id` parameter wouldn't be necessary. See the documentation
+	/// >			of [`NotifsHandlerIn`] for more information.
 	pub fn write_notification(
 		&mut self,
 		target: &PeerId,
+		engine_id: ConsensusEngineId,
 		proto_name: Cow<'static, [u8]>,
 		message: impl Into<Vec<u8>>,
 	) {
@@ -404,6 +408,7 @@ impl<TSubstream> GenericProto<TSubstream> {
 			peer_id: target.clone(),
 			event: NotifsHandlerIn::SendNotification {
 				message: message.into(),
+				engine_id,
 				proto_name,
 			},
 		});

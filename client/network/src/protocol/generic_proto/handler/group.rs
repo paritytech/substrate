@@ -173,6 +173,14 @@ pub enum NotifsHandlerIn {
 		/// `ConsensusMessage` message.
 		proto_name: Cow<'static, [u8]>,
 
+		/// The engine ID to use, in case we need to send this message over the legacy substream.
+		///
+		/// > **Note**: Ideally this field wouldn't be necessary, and we would deduce the engine
+		/// >			ID from the existing handlers. However, it is possible (especially in test
+		/// >			situations) that we open connections before all the notification protocols
+		/// >			have been registered, in which case we always rely on the legacy substream.
+		engine_id: ConsensusEngineId,
+
 		/// The message to send.
 		message: Vec<u8>,
 	},
@@ -302,8 +310,8 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 			NotifsHandlerIn::Enable => {
 				self.enabled = EnabledState::Enabled;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
-				for handler in &mut self.out_handlers {
-					handler.0.inject_event(NotifsOutHandlerIn::Enable);
+				for (handler, _) in &mut self.out_handlers {
+					handler.inject_event(NotifsOutHandlerIn::Enable);
 				}
 				for num in self.pending_in.drain(..) {
 					self.in_handlers[num].0.inject_event(NotifsInHandlerIn::Accept(vec![1]));		// TODO: handshake message
@@ -314,8 +322,8 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 				// The notifications protocols start in the disabled state. If we were in the
 				// "Initial" state, then we shouldn't disable the notifications protocols again.
 				if self.enabled != EnabledState::Initial {
-					for handler in &mut self.out_handlers {
-						handler.0.inject_event(NotifsOutHandlerIn::Disable);
+					for (handler, _) in &mut self.out_handlers {
+						handler.inject_event(NotifsOutHandlerIn::Disable);
 					}
 				}
 				self.enabled = EnabledState::Disabled;
@@ -325,38 +333,28 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 			},
 			NotifsHandlerIn::SendLegacy { message } =>
 				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
-			NotifsHandlerIn::SendNotification { message, proto_name } => {
-				let mut engine_id = None;
-
-				for handler in &mut self.out_handlers {
-					if handler.0.protocol_name() != &proto_name[..] {
+			NotifsHandlerIn::SendNotification { message, engine_id, proto_name } => {
+				for (handler, ngn_id) in &mut self.out_handlers {
+					if handler.protocol_name() != &proto_name[..] {
 						break;
 					}
 
-					if handler.0.is_open() {
-						handler.0.inject_event(NotifsOutHandlerIn::Send(message));
+					if handler.is_open() {
+						handler.inject_event(NotifsOutHandlerIn::Send(message));
 						return;
 					} else {
-						engine_id = Some(handler.1);
+						debug_assert_eq!(engine_id, *ngn_id);
 					}
 				}
 
-				if let Some(engine_id) = engine_id {
-					let message = ConsensusMessage {
-						engine_id,
-						data: message,
-					};
+				let message = ConsensusMessage {
+					engine_id,
+					data: message,
+				};
 
-					self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage {
-						message: message.encode()
-					});
-
-				} else {
-					error!(
-						target: "sub-libp2p",
-						"Tried to send notification with bad protocol: {:?}", proto_name
-					);
-				}
+				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage {
+					message: message.encode()
+				});
 			},
 		}
 	}
