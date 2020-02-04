@@ -948,6 +948,9 @@ impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 	fn get(k: &T::AccountId) -> T::AccountData {
 		Account::<T>::get(k).1
 	}
+	fn is_explicit(k: &T::AccountId) -> bool {
+		Account::<T>::exists(k)
+	}
 	fn insert(k: &T::AccountId, t: T::AccountData) {
 		let existed = Account::<T>::exists(k);
 		Account::<T>::insert(k, (T::Index::default(), t));

@@ -35,6 +35,15 @@ pub trait StoredMap<K, T> {
 	/// Get the item, or its default if it doesn't yet exist; we make no distinction between the
 	/// two.
 	fn get(k: &K) -> T;
+	/// Get whether the item takes up any storage. If this is `false`, then `get` will certainly
+	/// return the `T::default()`. If `true`, then there is no implication for `get` (i.e. it
+	/// may return any value, including the default).
+	///
+	/// NOTE: This may still be `true`, even after `remove` is called. This is the case where
+	/// a single storage entry is shared between multiple `StoredMap` items single, without
+	/// additional logic to enforce it, deletion of any one them doesn't automatically imply
+	/// deletion of them all.
+	fn is_explicit(k: &K) -> bool;
 	/// Mutate the item.
 	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R;
 	/// Mutate the item, removing or resetting to default value if it has been mutated to `None`.
@@ -80,6 +89,7 @@ impl<
 	T: FullCodec
 > StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
 	fn get(k: &K) -> T { S::get(k) }
+	fn is_explicit(k: &K) -> bool { S::exists(k) }
 	fn insert(k: &K, t: T) {
 		S::insert(k, t);
 		if !S::exists(&k) {

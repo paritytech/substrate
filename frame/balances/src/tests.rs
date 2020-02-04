@@ -490,8 +490,8 @@ fn transferring_incomplete_reserved_balance_should_work() {
 #[test]
 fn transferring_too_high_value_should_not_panic() {
 	ExtBuilder::default().build().execute_with(|| {
-		Account::<Test>::insert(1, AccountData { free: u64::max_value(), .. Default::default() });
-		Account::<Test>::insert(2, AccountData { free: 1, .. Default::default() });
+		Balances::make_free_balance_be(&1, u64::max_value());
+		Balances::make_free_balance_be(&2, 1);
 
 		assert_err!(
 			Balances::transfer(Some(1).into(), 2, u64::max_value()),
@@ -582,7 +582,7 @@ fn burn_must_work() {
 fn transfer_keep_alive_works() {
 	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&1, 100);
-		assert_err!(
+		assert_noop!(
 			Balances::transfer_keep_alive(Some(1).into(), 2, 100),
 			Error::<Test, _>::KeepAlive
 		);

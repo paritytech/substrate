@@ -655,22 +655,17 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// as its "endowment".
 	fn post_mutation(
 		who: &T::AccountId,
-		mut old: AccountData<T::Balance>,
 		new: AccountData<T::Balance>,
-	) -> (Option<AccountData<T::Balance>>, Option<T::Balance>) {
+	) -> Option<AccountData<T::Balance>> {
 		let total = new.total();
-		let was_zero = old.total().is_zero();
 		if total < T::ExistentialDeposit::get() {
 			if !total.is_zero() {
 				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
 				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
 			}
-			(None, None)
+			None
 		} else {
-			let free_balance = new.free.clone();
-			old.free = new.free;
-			old.reserved = new.reserved;
-			(Some(old), if was_zero { Some(free_balance) } else { None })
+			Some(new)
 		}
 	}
 
@@ -703,26 +698,25 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>) -> Result<R, E>
 	) -> Result<R, E> {
-		let result = T::AccountStore::try_mutate_exists(who, |account| {
-			let old = account.take().unwrap_or_default();
-			let mut new = old.clone();
-			f(&mut new).map(move |v| {
-				let (a, maybe_endowed) = Self::post_mutation(who, old, new);
-				*account = a;
-				(maybe_endowed, v)
+		T::AccountStore::try_mutate_exists(who, |maybe_account| {
+			let mut account = maybe_account.take().unwrap_or_default();
+			let was_zero = account.total().is_zero();
+			f(&mut account).map(move |result| {
+				let maybe_endowed = if was_zero { Some(account.free) } else { None };
+				*maybe_account = Self::post_mutation(who, account);
+				(maybe_endowed, result)
 			})
-		});
-		result.map(|(maybe_endowed, v)| {
+		}).map(|(maybe_endowed, result)| {
 			if let Some(endowed) = maybe_endowed {
 				Self::deposit_event(RawEvent::Endowed(who.clone(), endowed));
 			}
-			v
+			result
 		})
 	}
 
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
-		Account::<T, I>::mutate(who, |b| {
+		Self::mutate_account(who, |b| {
 			b.misc_frozen = Zero::zero();
 			b.fee_frozen = Zero::zero();
 			for l in locks.iter() {
@@ -1362,12 +1356,11 @@ where
 	}
 }
 
-impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I>
-where
+impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I> where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		// this should always be exactly equivalent to `Self::account(who).total().is_zero()`
-		!Account::<T, I>::exists(who)
+		!T::AccountStore::is_explicit(who)
 	}
 }

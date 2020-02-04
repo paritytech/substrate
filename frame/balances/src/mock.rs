@@ -71,7 +71,7 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
-	type AccountData = ();
+	type AccountData = super::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnReapAccount = Balances;
 }
@@ -94,12 +94,12 @@ impl Trait for Test {
 	type Event = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type CreationFee = CreationFee;
-	type AccountStore = StorageMapShim<
+	type AccountStore = System;/*StorageMapShim<
 		super::Account<Test>,
 		system::CallOnCreatedAccount<Test>,
 		system::CallKillAccount<Test>,
 		u64, super::AccountData<u64>
-	>;
+	>;*/
 }
 
 pub struct ExtBuilder {
