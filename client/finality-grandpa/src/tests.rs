@@ -528,7 +528,6 @@ fn finalize_3_voters_no_observers() {
 
 #[test]
 fn finalize_3_voters_1_full_observer() {
-	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let threads_pool = futures::executor::ThreadPool::new().unwrap();
 

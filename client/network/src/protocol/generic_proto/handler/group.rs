@@ -51,7 +51,7 @@ use crate::protocol::generic_proto::{
 	handler::notif_out::{NotifsOutHandlerProto, NotifsOutHandler, NotifsOutHandlerIn, NotifsOutHandlerOut},
 	upgrade::{NotificationsIn, NotificationsOut, RegisteredProtocol, SelectUpgrade, UpgradeCollec},
 };
-use crate::protocol::message::generic::ConsensusMessage;
+use crate::protocol::message::generic::{Message as GenericMessage, ConsensusMessage};
 
 use bytes::BytesMut;
 use codec::Encode as _;
@@ -347,10 +347,10 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 					}
 				}
 
-				let message = ConsensusMessage {
+				let message = GenericMessage::<(), (), (), ()>::Consensus(ConsensusMessage {
 					engine_id,
 					data: message,
-				};
+				});
 
 				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage {
 					message: message.encode()

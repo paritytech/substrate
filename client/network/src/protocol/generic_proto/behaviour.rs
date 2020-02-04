@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::protocol::message::generic::ConsensusMessage;
+use crate::protocol::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::protocol::generic_proto::handler::{NotifsHandlerProto, NotifsHandlerOut, NotifsHandlerIn};
 use crate::protocol::generic_proto::upgrade::RegisteredProtocol;
 
@@ -398,11 +398,7 @@ impl<TSubstream> GenericProto<TSubstream> {
 		proto_name: Cow<'static, [u8]>,
 		message: impl Into<Vec<u8>>,
 	) {
-		self.send_packet(target, ConsensusMessage {
-			engine_id,
-			data: message.into(),
-		}.encode());
-		/*if !self.is_open(target) {
+		if !self.is_open(target) {
 			return;
 		}
 
@@ -421,7 +417,7 @@ impl<TSubstream> GenericProto<TSubstream> {
 				engine_id,
 				proto_name,
 			},
-		});*/
+		});
 	}
 
 	/// Sends a message to a peer.
@@ -1008,10 +1004,10 @@ where
 				let event = GenericProtoOut::CustomMessage {
 					peer_id: source,
 					message: {
-						let message = ConsensusMessage {
+						let message = GenericMessage::<(), (), (), ()>::Consensus(ConsensusMessage {
 							engine_id,
 							data: message.to_vec(),
-						};
+						});
 						// TODO: we clone the message here
 						From::from(&message.encode()[..])
 					},
