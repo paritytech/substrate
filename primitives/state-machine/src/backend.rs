@@ -215,12 +215,12 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Wipe the state database.
-	fn wipe(&mut self) -> Result<(), Self::Error> {
+	fn wipe(&self) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
 
 	/// Commit given transaction to storage.
-	fn commit(&mut self, _storage_root: H::Out, _transaction: Self::Transaction) -> Result<(), Self::Error> {
+	fn commit(&self, _storage_root: H::Out, _transaction: Self::Transaction) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
 }

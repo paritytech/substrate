@@ -584,6 +584,7 @@ where
 	}
 
 	fn wipe(&mut self) {
+		self.overlay.discard_prospective();
 		self.overlay.drain_storage_changes(&self.backend, None, Default::default(), self.storage_transaction_cache)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.storage_transaction_cache.reset();
@@ -592,11 +593,11 @@ where
 
 	fn commit(&mut self) {
 		self.overlay.commit_prospective();
-		self.overlay.drain_storage_changes(&self.backend, None, Default::default(), self.storage_transaction_cache)
+		let changes = self.overlay.drain_storage_changes(&self.backend, None, Default::default(), self.storage_transaction_cache)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend.commit(
-			self.storage_transaction_cache.transaction_storage_root.take().expect(EXT_NOT_ALLOWED_TO_FAIL),
-			self.storage_transaction_cache.transaction.take().expect(EXT_NOT_ALLOWED_TO_FAIL),
+			changes.transaction_storage_root,
+			changes.transaction,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.storage_transaction_cache.reset();
 	}

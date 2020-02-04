@@ -19,9 +19,10 @@
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::io;
+use std::cell::{Cell, RefCell};
 use rand::Rng;
 
-use hash_db::Prefix;
+use hash_db::{Prefix, Hasher};
 use sp_trie::{MemoryDB, prefixed_key};
 use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{Block as BlockT, HasherFor};
@@ -61,10 +62,11 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 
 /// State that manages the backend database reference. Allows runtime to control the database.
 pub struct BenchmarkingState<B: BlockT> {
-	state: Option<DbState<B>>,
-	db: Option<Arc<dyn KeyValueDB>>,
 	path: PathBuf,
-	root: B::Hash,
+	root: Cell<B::Hash>,
+	state: RefCell<Option<DbState<B>>>,
+	db: Cell<Option<Arc<dyn KeyValueDB>>>,
+	genesis: <DbState<B> as StateBackend<HasherFor<B>>>::Transaction,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -80,10 +82,11 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 		std::fs::create_dir(&path).map_err(|_| String::from("Error creating temp dir"))?;
 		let mut state = BenchmarkingState {
-			state: None,
-			db: None,
+			state: RefCell::new(None),
+			db: Cell::new(None),
 			path,
-			root,
+			root: Cell::new(root),
+			genesis: Default::default(),
 		};
 
 		state.reopen()?;
@@ -91,17 +94,18 @@ impl<B: BlockT> BenchmarkingState<B> {
 				storage_key,
 				child_content.data.into_iter().map(|(k, v)| (k, Some(v))), child_content.child_info),
 		);
-		let (root, transaction) = state.state.as_ref().unwrap().full_storage_root(
+		let (root, transaction) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
 			genesis.top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta,
 		);
+		state.genesis = transaction.clone();
 		state.commit(root, transaction)?;
 		Ok(state)
 	}
 
-	fn reopen(&mut self) -> Result<(), String> {
-		self.db = None;
-		self.state = None;
+	fn reopen(&self) -> Result<(), String> {
+		*self.state.borrow_mut() = None;
+		self.db.set(None);
 		let config = DatabaseSettings {
 			state_cache_size: 0,
 			state_cache_child_ratio: None,
@@ -111,14 +115,20 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 		let db = crate::utils::open_database::<B>(&config, DatabaseType::Full)
 			.map_err(|e| format!("Error opening dadabase: {:?}", e))?;
-		self.db = Some(db.clone());
-		self.state = Some(DbState::<B>::new(Arc::new(StorageDb::<B> { db, _block: Default::default() }), self.root));
+		self.db.set(Some(db.clone()));
+		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
+		*self.state.borrow_mut() = Some(DbState::<B>::new(storage_db, self.root.get()));
 		Ok(())
 	}
 
-	fn kill(&mut self) -> Result<(), String> {
-		self.db = None;
-		self.state = None;
+	fn kill(&self) -> Result<(), String> {
+		self.db.set(None);
+		*self.state.borrow_mut() = None;
+		let mut root = B::Hash::default();
+		let mut mdb = MemoryDB::<HasherFor<B>>::default();
+		sp_state_machine::TrieDBMut::<HasherFor<B>>::new(&mut mdb, &mut root);
+		self.root.set(root);
+
 		std::fs::remove_dir_all(&self.path).map_err(|_| "Error removing database dir".into())
 	}
 }
@@ -139,11 +149,11 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 	type TrieBackendStorage = <DbState<B> as StateBackend<HasherFor<B>>>::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.as_ref().ok_or_else(state_err)?.storage(key)
+		self.state.borrow().as_ref().ok_or_else(state_err)?.storage(key)
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<B::Hash>, Self::Error> {
-		self.state.as_ref().ok_or_else(state_err)?.storage_hash(key)
+		self.state.borrow().as_ref().ok_or_else(state_err)?.storage_hash(key)
 	}
 
 	fn child_storage(
@@ -152,11 +162,11 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.as_ref().ok_or_else(state_err)?.child_storage(storage_key, child_info, key)
+		self.state.borrow().as_ref().ok_or_else(state_err)?.child_storage(storage_key, child_info, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
-		self.state.as_ref().ok_or_else(state_err)?.exists_storage(key)
+		self.state.borrow().as_ref().ok_or_else(state_err)?.exists_storage(key)
 	}
 
 	fn exists_child_storage(
@@ -165,11 +175,11 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		self.state.as_ref().ok_or_else(state_err)?.exists_child_storage(storage_key, child_info, key)
+		self.state.borrow().as_ref().ok_or_else(state_err)?.exists_child_storage(storage_key, child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.as_ref().ok_or_else(state_err)?.next_storage_key(key)
+		self.state.borrow().as_ref().ok_or_else(state_err)?.next_storage_key(key)
 	}
 
 	fn next_child_storage_key(
@@ -178,17 +188,17 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.as_ref().ok_or_else(state_err)?.next_child_storage_key(storage_key, child_info, key)
+		self.state.borrow().as_ref().ok_or_else(state_err)?.next_child_storage_key(storage_key, child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		if let Some(state) = self.state.as_ref() {
+		if let Some(ref state) = *self.state.borrow() {
 			state.for_keys_with_prefix(prefix, f)
 		}
 	}
 
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		if let Some(state) = self.state.as_ref() {
+		if let Some(ref state) = *self.state.borrow() {
 			state.for_key_values_with_prefix(prefix, f)
 		}
 	}
@@ -199,7 +209,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		child_info: ChildInfo,
 		f: F,
 	) {
-		if let Some(state) = self.state.as_ref() {
+		if let Some(ref state) = *self.state.borrow() {
 			state.for_keys_in_child_storage(storage_key, child_info, f)
 		}
 	}
@@ -211,7 +221,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		prefix: &[u8],
 		f: F,
 	) {
-		if let Some(state) = self.state.as_ref() {
+		if let Some(ref state) = *self.state.borrow() {
 			state.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
 		}
 	}
@@ -220,7 +230,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.state.as_ref().map_or(Default::default(), |s| s.storage_root(delta))
+		self.state.borrow().as_ref().map_or(Default::default(), |s| s.storage_root(delta))
 	}
 
 	fn child_storage_root<I>(
@@ -232,15 +242,15 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.as_ref().map_or(Default::default(), |s| s.child_storage_root(storage_key, child_info, delta))
+		self.state.borrow().as_ref().map_or(Default::default(), |s| s.child_storage_root(storage_key, child_info, delta))
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state.as_ref().map_or(Default::default(), |s| s.pairs())
+		self.state.borrow().as_ref().map_or(Default::default(), |s| s.pairs())
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.as_ref().map_or(Default::default(), |s| s.keys(prefix))
+		self.state.borrow().as_ref().map_or(Default::default(), |s| s.keys(prefix))
 	}
 
 	fn child_keys(
@@ -249,17 +259,17 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		child_info: ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
-		self.state.as_ref().map_or(Default::default(), |s| s.child_keys(storage_key, child_info, prefix))
+		self.state.borrow().as_ref().map_or(Default::default(), |s| s.child_keys(storage_key, child_info, prefix))
 	}
 
 	fn as_trie_backend(&mut self)
 		-> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HasherFor<B>>>
 	{
-		self.state.as_mut().map_or(None, |s| s.as_trie_backend())
+		None
 	}
 
-	fn commit(&mut self, storage_root: B::Hash, mut transaction: Self::Transaction) -> Result<(), Self::Error> {
-		if let Some(db) = self.db.as_ref() {
+	fn commit(&self, storage_root: <HasherFor<B> as Hasher>::Out, mut transaction: Self::Transaction) -> Result<(), Self::Error> {
+		if let Some(db) = self.db.take() {
 			let mut db_transaction = DBTransaction::new();
 
 			for (key, (val, rc)) in transaction.drain() {
@@ -270,16 +280,18 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 				}
 			}
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
-			self.root = storage_root;
-			self.reopen()
+			self.root.set(storage_root);
 		} else {
-			Err("Trying to commit to a closed db".into())
+			return Err("Trying to commit to a closed db".into())
 		}
+		self.reopen()
 	}
 
-	fn wipe(&mut self) -> Result<(), Self::Error> {
+	fn wipe(&self) -> Result<(), Self::Error> {
 		self.kill()?;
-		self.reopen()
+		self.reopen()?;
+		self.commit(self.root.get(), self.genesis.clone())?;
+		Ok(())
 	}
 }
 
