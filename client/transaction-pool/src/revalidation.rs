@@ -47,8 +47,6 @@ struct RevalidationWorker<Api: ChainApi> {
 	api: Arc<Api>,
 	pool: Arc<Pool<Api>>,
 	best_block: NumberFor<Api>,
-	from_queue: mpsc::UnboundedReceiver<WorkerPayload<Api>>,
-	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	block_ordered: BTreeMap<NumberFor<Api>, HashSet<ExHash<Api>>>,
 	members: HashMap<ExHash<Api>, NumberFor<Api>>,
 }
@@ -127,13 +125,10 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 	fn new(
 		api: Arc<Api>,
 		pool: Arc<Pool<Api>>,
-		from_queue: mpsc::UnboundedReceiver<WorkerPayload<Api>>
 	) -> Self {
 		Self {
 			api,
 			pool,
-			from_queue,
-			tick_timeout: Box::pin(interval(BACKGROUND_REVALIDATION_INTERVAL)),
 			block_ordered: Default::default(),
 			members: Default::default(),
 			best_block: Zero::zero(),
@@ -191,53 +186,32 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			self.members.insert(ext_hash.clone(), block_number);
 		}
 	}
-}
 
-impl<Api: ChainApi> Future for RevalidationWorker<Api>
-where
-	Api: 'static,
-{
-	type Output = ();
-
-	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
-		let this = &mut *self;
-		let mut process_some_immediately = false;
-
-		while let Poll::Ready(msg) = this.from_queue.poll_next_unpin(cx) {
-			match msg {
-				Some(worker_payload) => {
-					this.best_block = worker_payload.at;
-					this.push(worker_payload);
-					process_some_immediately = true;
-					continue;
-				},
-				// R.I.P. worker!
-				None => return Poll::Ready(()),
-			}
-		}
+	pub async fn run(mut self, from_queue: mpsc::UnboundedReceiver<WorkerPayload<Api>>) {
+		let interval = interval(BACKGROUND_REVALIDATION_INTERVAL).fuse();
+		let from_queue = from_queue.fuse();
+		futures::pin_mut!(interval, from_queue);
+		let this = &mut self;
 
 		loop {
-			match (this.tick_timeout.poll_next_unpin(cx), process_some_immediately) {
-				(Poll::Ready(Some(_)), _) | (_, true) => {
-					process_some_immediately = false;
-
+			futures::select! {
+				_ = interval.next() => {
 					let next_batch = this.prepare_batch();
-					let batch_revalidate_fut =
-						batch_revalidate(this.pool.clone(), this.api.clone(), this.best_block, next_batch);
-
-					futures::pin_mut!(batch_revalidate_fut);
-					match batch_revalidate_fut.poll_unpin(cx)
-					{
-						Poll::Ready(_) => continue,
-						_ => break,
-					}
+					batch_revalidate(this.pool.clone(), this.api.clone(), this.best_block, next_batch).await;
 				},
-				_ => break,
+				workload = from_queue.next() => {
+					match workload {
+						Some(worker_payload) => {
+							this.best_block = worker_payload.at;
+							this.push(worker_payload);
+							continue;
+						},
+						// R.I.P. worker!
+						None => break,
+					}
+				}
 			}
 		}
-
-
-		Poll::Pending
 	}
 }
 
@@ -280,8 +254,8 @@ where
 
 		let (to_worker, from_queue) = mpsc::unbounded();
 
-		let worker = RevalidationWorker::new(api.clone(), pool.clone(), from_queue);
-		spawner.spawn_ok(worker);
+		let worker = RevalidationWorker::new(api.clone(), pool.clone());
+		spawner.spawn_ok(worker.run(from_queue));
 
 		Self {
 			api,
