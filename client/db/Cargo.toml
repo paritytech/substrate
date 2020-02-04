@@ -13,7 +13,7 @@ kvdb-rocksdb = { version = "0.4", optional = true }
 kvdb-memorydb = "0.3.0"
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
-parity-util-mem = { version = "0.4", default-features = false, features = ["std"] }
+parity-util-mem = { version = "0.4.2", default-features = false, features = ["std"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 
 sc-client-api = { version = "2.0.0", path = "../api" }
