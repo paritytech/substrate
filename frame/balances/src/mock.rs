@@ -20,7 +20,7 @@ use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header
 use sp_core::H256;
 use sp_io;
 use frame_support::{impl_outer_origin, parameter_types};
-use frame_support::traits::Get;
+use frame_support::traits::{Get, StorageMapShim};
 use frame_support::weights::{Weight, DispatchInfo};
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
@@ -71,6 +71,9 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnReapAccount = Balances;
 }
 parameter_types! {
 	pub const TransactionBaseFee: u64 = 0;
@@ -86,13 +89,17 @@ impl pallet_transaction_payment::Trait for Test {
 }
 impl Trait for Test {
 	type Balance = u64;
-	type OnReapAccount = System;
-	type OnNewAccount = ();
-	type Event = ();
-	type DustRemoval = ();
 	type TransferPayment = ();
+	type DustRemoval = ();
+	type Event = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type CreationFee = CreationFee;
+	type AccountStore = StorageMapShim<
+		super::Account<Test>,
+		system::CallOnCreatedAccount<Test>,
+		system::CallKillAccount<Test>,
+		u64, super::AccountData<u64>
+	>;
 }
 
 pub struct ExtBuilder {

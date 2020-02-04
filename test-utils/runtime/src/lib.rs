@@ -338,8 +338,8 @@ impl_outer_origin!{
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Event;
 
-impl From<frame_system::Event> for Event {
-	fn from(_evt: frame_system::Event) -> Self {
+impl From<frame_system::Event<Runtime>> for Event {
+	fn from(_evt: frame_system::Event<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }

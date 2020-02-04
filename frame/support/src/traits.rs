@@ -27,28 +27,104 @@ use sp_runtime::{
 };
 
 use crate::dispatch::Parameter;
-use crate::storage::StorageValue;
+use crate::storage::StorageMap;
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
-pub trait StoredValue<T> {
-	/// Get the item.
-	fn get() -> T;
+pub trait StoredMap<K, T> {
+	/// Get the item, or its default if it doesn't yet exist; we make no distinction between the
+	/// two.
+	fn get(k: &K) -> T;
 	/// Mutate the item.
-	fn mutate<R>(f: impl FnOnce(&mut T) -> R) -> R;
+	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R;
+	/// Mutate the item, removing or resetting to default value if it has been mutated to `None`.
+	fn mutate_exists<R>(k: &K, f: impl FnOnce(&mut Option<T>) -> R) -> R;
+	/// Maybe mutate the item only if an `Ok` value is returned from `f`. Do nothing if an `Err` is
+	/// returned. It is removed or reset to default value if it has been mutated to `None`
+	fn try_mutate_exists<R, E>(k: &K, f: impl FnOnce(&mut Option<T>) -> Result<R, E>) -> Result<R, E>;
 	/// Set the item to something new.
-	fn put(t: T) { Self::mutate(|i| *i = t); }
+	fn insert(k: &K, t: T) { Self::mutate(k, |i| *i = t); }
+	/// Remove the item or otherwise replace it with its default value; we don't care which.
+	fn remove(k: &K);
+}
+
+/// A simple, generic one-parameter event notifier/handler.
+pub trait Happened<T> {
+	/// The thing happened.
+	fn happened(t: &T);
 }
 
 /// A shim for placing around a storage item in order to use it as a `StoredValue`. Ideally this
 /// wouldn't be needed as `StorageValue`s should blanket implement `StoredValue`s, however this
 /// would break the ability to have custom impls of `StoredValue`. The other workaround is to
-/// implement it directly in the macro, but that's left for later.
-pub struct StorageValueShim<S>(S);
-impl<S: StorageValue<T, Query=T>, T: FullCodec> StoredValue<T> for StorageValueShim<S> {
-	fn get() -> T { S::get() }
-	fn mutate<R>(f: impl FnOnce(&mut T) -> R) -> R { S::mutate(f) }
-	fn put(t: T) { S::put(t) }
+/// implement it directly in the macro.
+///
+/// This form has the advantage that two additional types are provides, `Created` and `Removed`,
+/// which are both generic events that can be tied to handlers to do something in the case of being
+/// about to create an account where one didn't previously exist (at all; not just where it used to
+/// be the default value), or where the account is being removed or reset back to the default value
+/// where previously it did exist (though may have been in a default state). This works well with
+/// system module's `CallOnCreatedAccount` and `CallKillAccount`.
+pub struct StorageMapShim<
+	S,
+	Created,
+	Removed,
+	K,
+	T
+>(sp_std::marker::PhantomData<(S, Created, Removed, K, T)>);
+impl<
+	S: StorageMap<K, T, Query=T>,
+	Created: Happened<K>,
+	Removed: Happened<K>,
+	K: FullCodec,
+	T: FullCodec
+> StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
+	fn get(k: &K) -> T { S::get(k) }
+	fn insert(k: &K, t: T) {
+		S::insert(k, t);
+		if !S::exists(&k) {
+			Created::happened(k);
+		}
+	}
+	fn remove(k: &K) {
+		if S::exists(&k) {
+			Removed::happened(&k);
+		}
+		S::remove(k);
+	}
+	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R {
+		let r = S::mutate(k, f);
+		if !S::exists(&k) {
+			Created::happened(k);
+		}
+		r
+	}
+	fn mutate_exists<R>(k: &K, f: impl FnOnce(&mut Option<T>) -> R) -> R {
+		let (existed, exists, r) = S::mutate_exists(k, |maybe_value| {
+			let existed = maybe_value.is_some();
+			let r = f(maybe_value);
+			(existed, maybe_value.is_some(), r)
+		});
+		if !existed && exists {
+			Created::happened(k);
+		} else if existed && !exists {
+			Removed::happened(k);
+		}
+		r
+	}
+	fn try_mutate_exists<R, E>(k: &K, f: impl FnOnce(&mut Option<T>) -> Result<R, E>) -> Result<R, E> {
+		S::try_mutate_exists(k, |maybe_value| {
+			let existed = maybe_value.is_some();
+			f(maybe_value).map(|v| (existed, maybe_value.is_some(), v))
+		}).map(|(existed, exists, v)| {
+			if !existed && exists {
+				Created::happened(k);
+			} else if existed && !exists {
+				Removed::happened(k);
+			}
+			v
+		})
+	}
 }
 
 /// Anything that can have a `::len()` method.

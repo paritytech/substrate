@@ -113,11 +113,13 @@ use sp_runtime::{
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
-	traits::{Contains, Get, ModuleToIndex, OnNewAccount, OnReapAccount, IsDeadAccount},
+	traits::{
+		Contains, Get, ModuleToIndex, OnNewAccount, OnReapAccount, IsDeadAccount, Happened,
+		StoredMap
+	},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
-	storage::migration::{get_storage_value, put_storage_value, StorageIterator},
 };
-use codec::{Encode, Decode, FullCodec};
+use codec::{Encode, Decode, FullCodec, EncodeLike};
 
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
@@ -182,7 +184,7 @@ pub trait Trait: 'static + Eq + Clone {
 	>;
 
 	/// The aggregated event type of the runtime.
-	type Event: Parameter + Member + From<Event> + Debug;
+	type Event: Parameter + Member + From<Event<Self>> + Debug;
 
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount: Get<Self::BlockNumber>;
@@ -211,7 +213,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// module does regardless).
 	type AccountData: Member + FullCodec + Clone + Default;
 
-	/// Handler for when a new account is created.
+	/// Handler for when a new account has just been created.
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
 	/// A function that is invoked when an account has been determined to be dead.
@@ -293,7 +295,7 @@ decl_storage! {
 		/// The full account information for a particular account ID.
 		// TODO: should be hasher(twox64_concat) - will need staged migration
 		// TODO: should not including T::Index (the nonce)
-		pub Account get(fn account_nonce): map hasher(blake2_256) T::AccountId => (T::Index, T::AccountData);
+		pub Account get(fn account): map hasher(blake2_256) T::AccountId => (T::Index, T::AccountData);
 
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
@@ -375,13 +377,17 @@ decl_storage! {
 
 decl_event!(
 	/// Event for the System module.
-	pub enum Event {
+	pub enum Event<T> where AccountId = <T as Trait>::AccountId {
 		/// An extrinsic completed successfully.
 		ExtrinsicSuccess(DispatchInfo),
 		/// An extrinsic failed.
 		ExtrinsicFailed(DispatchError, DispatchInfo),
 		/// `:code` was updated.
 		CodeUpdated,
+		/// A new account was created.
+		NewAccount(AccountId),
+		/// An account was reaped.
+		ReapedAccount(AccountId),
 	}
 );
 
@@ -410,14 +416,6 @@ decl_error! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
-
-		fn on_initialize() {
-			// migrate to new account model
-			if !IsUpgraded::get() {
-				IsUpgraded::put(true);
-				Self::do_upgrade();
-			}
-		}
 
 		/// A big dispatch that will disallow any other transaction to be included.
 		// TODO: this must be preferable available for testing really (not possible at the moment).
@@ -464,7 +462,7 @@ decl_module! {
 			}
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
-			Self::deposit_event(Event::CodeUpdated);
+			Self::deposit_event(RawEvent::CodeUpdated);
 		}
 
 		/// Set the new runtime code without doing any checks of the given `code`.
@@ -472,7 +470,7 @@ decl_module! {
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
-			Self::deposit_event(Event::CodeUpdated);
+			Self::deposit_event(RawEvent::CodeUpdated);
 		}
 
 		/// Set the new changes trie configuration.
@@ -641,15 +639,6 @@ impl<T: Trait> Module<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {
 		Self::deposit_event_indexed(&[], event.into());
-	}
-
-	// Upgrade from the a split balances/nonce to a composite account.
-	pub fn do_upgrade() {
-		sp_runtime::print("Upgrading accounts...");
-		for (hash, balances) in StorageIterator::<u128>::new(b"Balances", b"Account").drain() {
-			let nonce = get_storage_value::<T::Index>(b"System", b"AccountNonce", &hash);
-			put_storage_value(b"System", b"Account", &hash, (nonce, balances));
-		}
 	}
 
 		/// Deposits an event into this block's event record adding this event
@@ -862,8 +851,13 @@ impl<T: Trait> Module<T> {
 	/// Return the chain's current runtime version.
 	pub fn runtime_version() -> RuntimeVersion { T::Version::get() }
 
+	/// Retrieve the account transaction counter from storage.
+	pub fn account_nonce(who: impl EncodeLike<T::AccountId>) -> T::Index {
+		Account::<T>::get(who).0
+	}
+
 	/// Increment a particular account's nonce by 1.
-	pub fn inc_account_nonce(who: &T::AccountId) {
+	pub fn inc_account_nonce(who: impl EncodeLike<T::AccountId>) {
 		Account::<T>::mutate(who, |a| a.0 += T::Index::one());
 	}
 
@@ -881,10 +875,10 @@ impl<T: Trait> Module<T> {
 	pub fn note_applied_extrinsic(r: &DispatchOutcome, _encoded_len: u32, info: DispatchInfo) {
 		Self::deposit_event(
 			match r {
-				Ok(()) => Event::ExtrinsicSuccess(info),
+				Ok(()) => RawEvent::ExtrinsicSuccess(info),
 				Err(err) => {
 					sp_runtime::print(err);
-					Event::ExtrinsicFailed(err.clone(), info)
+					RawEvent::ExtrinsicFailed(err.clone(), info)
 				},
 			}
 		);
@@ -910,10 +904,114 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
 
+	/// An account is being created.
+	pub fn on_created_account(who: T::AccountId) {
+		T::OnNewAccount::on_new_account(&who);
+		Self::deposit_event(RawEvent::NewAccount(who));
+	}
+
 	/// Kill the account and reap any related information.
 	pub fn kill_account(who: T::AccountId) {
-		Account::<T>::remove(&who);
+		if Account::<T>::exists(&who) {
+			Account::<T>::remove(&who);
+			Self::on_killed_account(who);
+		}
+	}
+
+	/// Do anything that needs to be done after an account has been killed.
+	fn on_killed_account(who: T::AccountId) {
 		T::OnReapAccount::on_reap_account(&who);
+		Self::deposit_event(RawEvent::ReapedAccount(who));
+	}
+}
+
+/// Event handler which calls on_created_account when it happens.
+pub struct CallOnCreatedAccount<T>(PhantomData<T>);
+impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
+	fn happened(who: &T::AccountId) {
+		Module::<T>::on_created_account(who.clone());
+	}
+}
+
+/// Event handler which calls kill_account when it happens.
+pub struct CallKillAccount<T>(PhantomData<T>);
+impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
+	fn happened(who: &T::AccountId) {
+		Module::<T>::kill_account(who.clone());
+	}
+}
+
+// Implement StoredMap for a simple single-item, kill-account-on-remove system. This works fine for
+// storing a single item which is required to not be empty/default for the account to exist.
+// Anything more complex will need more sophisticated logic.
+impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
+	fn get(k: &T::AccountId) -> T::AccountData {
+		Account::<T>::get(k).1
+	}
+	fn insert(k: &T::AccountId, t: T::AccountData) {
+		let existed = Account::<T>::exists(k);
+		Account::<T>::insert(k, (T::Index::default(), t));
+		if !existed {
+			Self::on_created_account(k.clone());
+		}
+	}
+	fn remove(k: &T::AccountId) {
+		if Account::<T>::exists(&k) {
+			Self::kill_account(k.clone());
+		}
+	}
+	fn mutate<R>(k: &T::AccountId, f: impl FnOnce(&mut T::AccountData) -> R) -> R {
+		let existed = Account::<T>::exists(k);
+		let r = Account::<T>::mutate(k, |a| f(&mut a.1));
+		if !existed {
+			Self::on_created_account(k.clone());
+		}
+		r
+	}
+	fn mutate_exists<R>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> R) -> R {
+		let (existed, exists, r) = Account::<T>::mutate_exists(k, |maybe_value| {
+			let existed = maybe_value.is_some();
+			let (maybe_nonce, mut maybe_extra) = split_inner(maybe_value.take(), |v| v);
+			let r = f(&mut maybe_extra);
+			*maybe_value = maybe_extra.map(|extra| (maybe_nonce.unwrap_or_default(), extra));
+			(existed, maybe_value.is_some(), r)
+		});
+		if !existed && exists {
+			Self::on_created_account(k.clone());
+		} else if existed && !exists {
+			Self::on_killed_account(k.clone());
+		}
+		r
+	}
+	fn try_mutate_exists<R, E>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>) -> Result<R, E> {
+		Account::<T>::try_mutate_exists(k, |maybe_value| {
+			let existed = maybe_value.is_some();
+			let (maybe_nonce, mut maybe_extra) = split_inner(maybe_value.take(), |v| v);
+			f(&mut maybe_extra).map(|v| {
+				*maybe_value = maybe_extra.map(|extra| (maybe_nonce.unwrap_or_default(), extra));
+				(existed, maybe_value.is_some(), v)
+			})
+		}).map(|(existed, exists, v)| {
+			if !existed && exists {
+				Self::on_created_account(k.clone());
+			} else if existed && !exists {
+				Self::on_killed_account(k.clone());
+			}
+			v
+		})
+	}
+}
+
+/// Split an `option` into two constituent options, as defined by a `splitter` function.
+pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S))
+	-> (Option<R>, Option<S>)
+{
+	match option {
+		Some(inner) => {
+			let (r, s) = splitter(inner);
+			(Some(r), Some(s))
+		}
+		None => (None, None),
 	}
 }
 
@@ -1327,12 +1425,13 @@ mod tests {
 		type OnReapAccount = ();
 	}
 
-	impl From<Event> for u16 {
-		fn from(e: Event) -> u16 {
+	impl From<Event<Test>> for u16 {
+		fn from(e: Event<Test>) -> u16 {
 			match e {
-				Event::ExtrinsicSuccess(..) => 100,
-				Event::ExtrinsicFailed(..) => 101,
-				Event::CodeUpdated => 102,
+				Event::<Test>::ExtrinsicSuccess(..) => 100,
+				Event::<Test>::ExtrinsicFailed(..) => 101,
+				Event::<Test>::CodeUpdated => 102,
+				_ => 103,
 			}
 		}
 	}
