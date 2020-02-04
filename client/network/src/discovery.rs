@@ -489,7 +489,7 @@ mod tests {
 				let user_defined = user_defined.clone();
 				let keypair_public = keypair.public();
 				async move {
-					DiscoveryBehaviour::new(keypair_public, user_defined, false, true).await
+					DiscoveryBehaviour::new(keypair_public, user_defined, false, true, 50).await
 				}
 			});
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
