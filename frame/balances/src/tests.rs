@@ -384,8 +384,7 @@ fn deducting_balance_should_work() {
 fn refunding_balance_should_work() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&1, 42);
-		let account = Balances::account(&1);
-		Balances::set_account(&1, &AccountData { reserved: 69, ..account }, &account);
+		Balances::mutate_account(&1, |a| a.reserved = 69);
 		Balances::unreserve(&1, 69);
 		assert_eq!(Balances::free_balance(1), 111);
 		assert_eq!(Balances::reserved_balance(1), 0);
