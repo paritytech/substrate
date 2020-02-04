@@ -18,14 +18,13 @@
 ///
 /// The Substrate notifications protocol consists in the following:
 ///
-/// - Node A opens a substream to node B.
-/// - If node B accepts the substream, it sends back a message which contains some
-///   protocol-specific higher-level logic. This message is prefixed with a variable-length
-///   integer message length. This message can be empty, in which case `0` is sent. Afterwards,
-///   the sending side of B is closed.
-/// - If instead the node refuses the connection (which typically happens because no empty slot
-///   is available), then it immediately closes the substream after the multistream-select
-///   negotiation.
+/// - Node A opens a substream to node B and sends a message which contains some protocol-specific
+///   higher-level logic. This message is prefixed with a variable-length integer message length.
+///   This message can be empty, in which case `0` is sent.
+/// - If node B accepts the substream, it sends back a message with the same properties.
+///   Afterwards, the sending side of B is closed.
+/// - If instead B refuses the connection (which typically happens because no empty slot is
+///   available), then it immediately closes the substream without sending back anything.
 /// - Node A can then send notifications to B, prefixed with a variable-length integer indicating
 ///   the length of the message.
 /// - Node A closes its writing side if it doesn't want the notifications substream anymore.
@@ -41,6 +40,9 @@ use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade};
 use log::error;
 use std::{borrow::Cow, collections::VecDeque, io, iter, mem, pin::Pin, task::{Context, Poll}};
 use unsigned_varint::codec::UviBytes;
+
+/// Maximum allows size of the handshake, in bytes.
+const MAX_HANDSHAKE_SIZE: usize = 1024;
 
 /// Upgrade that accepts a substream, sends back a status message, then becomes a unidirectional
 /// stream of messages.
@@ -117,20 +119,23 @@ impl UpgradeInfo for NotificationsIn {
 }
 
 impl<TSubstream> InboundUpgrade<TSubstream> for NotificationsIn
-where TSubstream: AsyncRead + AsyncWrite + 'static,
+where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
 	type Output = NotificationsInSubstream<TSubstream>;
-	type Future = future::Ready<Result<Self::Output, Self::Error>>;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 	type Error = upgrade::ReadOneError;
 
 	fn upgrade_inbound(
 		self,
-		socket: TSubstream,
+		mut socket: TSubstream,
 		_: Self::Info,
 	) -> Self::Future {
-		future::ok(NotificationsInSubstream {
-			socket: Framed::new(socket, UviBytes::default()),
-			handshake: NotificationsInSubstreamHandshake::NotSent,
+		Box::pin(async move {
+			let initial_message = upgrade::read_one(&mut socket, MAX_HANDSHAKE_SIZE).await?;
+			Ok(NotificationsInSubstream {
+				socket: Framed::new(socket, UviBytes::default()),
+				handshake: NotificationsInSubstreamHandshake::NotSent,
+			})
 		})
 	}
 }
@@ -223,7 +228,12 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 		proto_name: Self::Info,
 	) -> Self::Future {
 		Box::pin(async move {
-			let handshake = upgrade::read_one(&mut socket, 1024).await?;
+			// TODO: debug_assert!(initial_message.len() < MAX_HANDSHAKE_SIZE);
+			upgrade::write_with_len_prefix(&mut socket, &[1, 2, 3, 4]).await?; // TODO: initial message
+			let handshake = upgrade::read_one(&mut socket, MAX_HANDSHAKE_SIZE).await?;
+			if handshake.is_empty() {
+				return Err(From::from(io::Error::from(io::ErrorKind::UnexpectedEof)));
+			}
 			Ok((handshake, NotificationsOutSubstream {
 				socket: Framed::new(socket, UviBytes::default()),
 				messages_queue: VecDeque::new(),
@@ -297,7 +307,7 @@ mod tests {
 		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
-		async_std::task::spawn(async move {
+		let server = async_std::task::spawn(async move {
 			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
 			let (handshake, mut substream) = upgrade::apply_outbound(
 				socket,
@@ -324,6 +334,8 @@ mod tests {
 			let msg = substream.next().await.unwrap().unwrap();
 			assert_eq!(msg.as_ref(), b"test message");
 		});
+
+		async_std::task::block_on(server);
 	}
 
 	#[test]
@@ -331,7 +343,7 @@ mod tests {
 		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
-		async_std::task::spawn(async move {
+		let server = async_std::task::spawn(async move {
 			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
 			let outcome = upgrade::apply_outbound(
 				socket,
@@ -358,6 +370,8 @@ mod tests {
 			// We successfully upgrade to the protocol, but then close the substream.
 			drop(substream);
 		});
+
+		async_std::task::block_on(server);
 	}
 
 	// TODO: more testing around queue of messages and all

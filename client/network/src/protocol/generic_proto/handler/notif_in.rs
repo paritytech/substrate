@@ -120,7 +120,7 @@ impl<TSubstream> NotifsInHandlerProto<TSubstream> {
 
 impl<TSubstream> IntoProtocolsHandler for NotifsInHandlerProto<TSubstream>
 where
-	TSubstream: AsyncRead + AsyncWrite + Unpin + 'static,
+	TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
 	type Handler = NotifsInHandler<TSubstream>;
 
@@ -146,7 +146,7 @@ impl<TSubstream> NotifsInHandler<TSubstream> {
 }
 
 impl<TSubstream> ProtocolsHandler for NotifsInHandler<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static {
+where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	type InEvent = NotifsInHandlerIn;
 	type OutEvent = NotifsInHandlerOut;
 	type Substream = TSubstream;
