@@ -166,7 +166,7 @@ use frame_support::{
 	decl_event, decl_module, decl_storage, ensure, decl_error,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
-		SignedImbalance, UpdateBalanceOutcome, WithdrawReason, WithdrawReasons, TryDrop,
+		SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop,
 	},
 	Parameter, StorageMap,
 };

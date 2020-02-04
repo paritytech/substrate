@@ -189,20 +189,6 @@ pub trait OnReapAccount<AccountId> {
 	fn on_reap_account(who: &AccountId);
 }
 
-/// Outcome of a balance update.
-pub enum UpdateBalanceOutcome {
-	/// Account balance was simply updated.
-	Updated,
-	/// The update led to killing the account.
-	AccountKilled,
-	/// Free balance became zero as a result of this update.
-	FreeBalanceZero,
-	/// Reserved balance became zero as a result of this update.
-	ReservedBalanceZero,
-	/// The account started and ended non-existent.
-	StillDead,
-}
-
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained
 /// within it.
 pub trait FindAuthor<Author> {

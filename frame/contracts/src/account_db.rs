@@ -26,7 +26,7 @@ use sp_std::collections::btree_map::{BTreeMap, Entry};
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Zero};
-use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
+use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance};
 use frame_support::{storage::child, StorageMap};
 use frame_system;
 

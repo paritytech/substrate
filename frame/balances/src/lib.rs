@@ -159,7 +159,7 @@ use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
 	weights::SimpleDispatchInfo, traits::{
-		UpdateBalanceOutcome, Currency, OnReapAccount, OnUnbalanced, TryDrop, StoredMap,
+		Currency, OnReapAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
 		ExistenceRequirement::AllowDeath, IsDeadAccount
@@ -664,7 +664,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		who: &T::AccountId,
 		account: &AccountData<T::Balance>,
 		old: &AccountData<T::Balance>,
-	) -> UpdateBalanceOutcome {
+	) {
 		let total = account.free + account.reserved;
 		if total < T::ExistentialDeposit::get() {
 			if !total.is_zero() {
@@ -673,9 +673,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			}
 			if !old.total().is_zero() {
 				T::AccountStore::remove(&who);
-				UpdateBalanceOutcome::AccountKilled
-			} else {
-				UpdateBalanceOutcome::StillDead
 			}
 		} else {
 			let free_balance = account.free;
@@ -683,7 +680,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			if old.total().is_zero() {
 				Self::deposit_event(RawEvent::Endowed(who.clone(), free_balance));
 			}
-			UpdateBalanceOutcome::Updated
 		}
 	}
 
