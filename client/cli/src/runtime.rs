@@ -113,7 +113,6 @@ where
 	T: AbstractService + Unpin,
 {
 	let mut runtime = build_runtime()?;
-	let colour_output = config.colour_output;
 
 	config.task_executor = {
 		let runtime_handle = runtime.handle().clone();
@@ -122,7 +121,7 @@ where
 
 	let service = service_builder(config)?;
 
-	let informant_future = sc_informant::build(&service, colour_output);
+	let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
 	let _informant_handle = runtime.spawn(informant_future);
 
 	// we eagerly drop the service so that the internal exit future is fired,

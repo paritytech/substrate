@@ -22,6 +22,7 @@ use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturatin
 use sc_service::NetworkStatus;
 use std::{convert::{TryFrom, TryInto}, fmt};
 use wasm_timer::Instant;
+use crate::OutputFormat;
 
 /// State of the informant display system.
 ///
@@ -42,17 +43,17 @@ pub struct InformantDisplay<B: BlockT> {
 	last_number: Option<NumberFor<B>>,
 	/// The last time `display` or `new` has been called.
 	last_update: Instant,
-	/// Whether to colour output or not.
-	colour_output: bool
+	/// The format to print output in.
+	format: OutputFormat,
 }
 
 impl<B: BlockT> InformantDisplay<B> {
 	/// Builds a new informant display system.
-	pub fn new(colour_output: bool) -> InformantDisplay<B> {
+	pub fn new(format: OutputFormat) -> InformantDisplay<B> {
 		InformantDisplay {
 			last_number: None,
 			last_update: Instant::now(),
-			colour_output,
+			format,
 		}
 	}
 
@@ -72,7 +73,7 @@ impl<B: BlockT> InformantDisplay<B> {
 			(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed), format!(", target=#{}", n)),
 		};
 
-		if self.colour_output {
+		if self.format == OutputFormat::Coloured {
 			info!(
 				target: "substrate",
 				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",

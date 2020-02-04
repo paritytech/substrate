@@ -25,11 +25,18 @@ use std::time::Duration;
 
 mod display;
 
+/// The format to print telemetry output in.
+#[derive(PartialEq)]
+pub enum OutputFormat {
+	Coloured,
+	Plain,
+}
+
 /// Creates an informant in the form of a `Future` that must be polled regularly.
-pub fn build(service: &impl AbstractService, colour_output: bool) -> impl futures::Future<Output = ()> {
+pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futures::Future<Output = ()> {
 	let client = service.client();
 
-	let mut display = display::InformantDisplay::new(colour_output);
+	let mut display = display::InformantDisplay::new(format);
 
 	let display_notifications = service
 		.network_status(Duration::from_millis(5000))

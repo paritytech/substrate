@@ -209,7 +209,6 @@ fn node_config<G, E: Clone> (
 		dev_key_seed: key_seed,
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
-		colour_output: true
 	}
 }
 
