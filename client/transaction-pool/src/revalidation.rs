@@ -22,8 +22,7 @@ use sp_runtime::traits::{Zero, SaturatedConversion};
 use sp_runtime::generic::BlockId;
 use sp_runtime::transaction_validity::TransactionValidityError;
 
-use futures::{prelude::*, channel::mpsc, task::Poll, stream::unfold};
-use std::pin::Pin;
+use futures::{prelude::*, channel::mpsc, stream::unfold};
 use std::time::Duration;
 use futures_timer::Delay;
 
