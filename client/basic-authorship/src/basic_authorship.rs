@@ -204,8 +204,8 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 		let mut unqueue_invalid = Vec::new();
 		let pending_iterator = self.transaction_pool.ready();
 
-		debug!("Attempting to push transactions from the pool.");
-		debug!("Pool status: {:?}", self.transaction_pool.status());
+		println!("Attempting to push transactions from the pool.");
+		println!("Pool status: {:?}", self.transaction_pool.status());
 		for pending_tx in pending_iterator {
 			if (self.now)() > deadline {
 				debug!(
@@ -217,7 +217,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 
 			let pending_tx_data = pending_tx.data().clone();
 			let pending_tx_hash = pending_tx.hash().clone();
-			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
+			println!("[{:?}] Pushing to the block.", pending_tx_hash);
 			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
@@ -306,7 +306,7 @@ mod tests {
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(self.client.clone())));
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)])

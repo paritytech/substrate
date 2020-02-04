@@ -382,7 +382,7 @@ impl<B: ChainApi> Pool<B> {
 			let (hash, validated_tx) = self.verify_one(at, block_number, xt, force).await;
 			result.insert(hash, validated_tx);
 		}
-
+		println!("verify result {:?}", result);
 		Ok(result)
 	}
 
@@ -403,6 +403,8 @@ impl<B: ChainApi> Pool<B> {
 		}
 
 		let validation_result = self.validated_pool.api().validate_transaction(block_id, xt.clone()).await;
+
+		println!("validate result -> {:?}", validation_result);
 
 		let status = match validation_result {
 			Ok(status) => status,

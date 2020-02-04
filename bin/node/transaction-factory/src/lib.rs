@@ -25,6 +25,9 @@ use std::cmp::PartialOrd;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::prelude::*;
+use std::time;
+
+use parking_lot::Mutex;
 
 use codec::{Decode, Encode};
 use structopt::clap::arg_enum;
@@ -36,13 +39,16 @@ use sp_block_builder::BlockBuilder;
 use sp_api::{ConstructRuntimeApi, ProvideRuntimeApi, ApiExt};
 use sp_consensus::{
 	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy,
-	SelectChain
+	SelectChain, Proposer,
 };
 use sp_consensus::block_import::BlockImport;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, SimpleArithmetic, One, Zero,
 };
+use sc_basic_authorship::ProposerFactory;
+use sc_transaction_pool::{BasicPool, FullChainApi};
+use futures::prelude::*;
 
 pub mod automata;
 
@@ -115,13 +121,15 @@ pub struct Options {
 	pub difficulty: u32,
 }
 
-pub struct FactoryState<RA, Backend, Exec, Block, RtApi, Sc> 
+pub struct FactoryState<RA, Backend, Exec, Block, RtApi, Sc, TransactionPool> 
 where 
 	Block: BlockT,
+	TransactionPool: sp_transaction_pool::TransactionPool,
 {
 	runtime_state: RA,
 	automaton: automata::Automaton,
 	client: Arc<Client<Backend, Exec, Block, RtApi>>,
+	transaction_pool: Arc<TransactionPool>,
 	select_chain: Sc,
 	options: Options,
 	results: Vec<(String, String, u128, String)>,
@@ -133,22 +141,24 @@ pub enum CreateResult<Block> {
 	End,
 }
 
-impl<RA, Backend, Exec, Block, RtApi, Sc> FactoryState<RA, Backend, Exec, Block, RtApi, Sc>
+impl<RA, Backend, Exec, Block, RtApi, Sc, TransactionPool> FactoryState<RA, Backend, Exec, Block, RtApi, Sc, TransactionPool>
 where 
 	Block: BlockT,
-	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
-	Backend: sc_client_api::backend::Backend<Block> + Send,
+	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone + 'static,
+	Backend: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
 		BlockBuilder<Block, Error = sp_blockchain::Error> +
 		ApiExt<Block, StateBackend = Backend::State>,
-	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
+	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync + 'static,
 	Sc: SelectChain<Block>,
-	RA: RuntimeAdapter<Block = Block>,
+	RA: RuntimeAdapter<Block = Block> + Send + Sync + 'static,
 	Block::Hash: From<sp_core::H256>,
+	TransactionPool: sp_transaction_pool::TransactionPool<Block = Block> + 'static,
 {
 	pub fn new(
 		client: Arc<Client<Backend, Exec, Block, RtApi>>,
+		transaction_pool: Arc<TransactionPool>,
 		select_chain: Sc,
 		automaton: automata::Automaton,
 		runtime_state: RA,
@@ -156,6 +166,7 @@ where
 	) -> Self {
 		Self {
 			client,
+			transaction_pool,
 			select_chain,
 			automaton,
 			runtime_state,
@@ -165,68 +176,161 @@ where
 	}
 
 	pub fn run(&mut self) -> sc_cli::error::Result<()> {
+		// let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(self.client.clone())));
+		let inherents = self.runtime_state.inherent_extrinsics();
+		// let inherents = self.client.runtime_api()
+		// 	.inherent_extrinsics(&BlockId::number(0.into()), inherents)
+		// 	.expect("Failed to create inherent extrinsics");
+		let genesis_hash = self.client.block_hash(Zero::zero())?
+			.expect("genesis should exist");
+		
 		let best_header = self.select_chain.best_chain()
 			.map_err(|e| format!("{:?}", e))?;
 		let mut best_hash = best_header.hash();
+
+		let mut best_hash = best_header.hash();
 		let mut best_block_id = BlockId::<Block>::hash(best_hash);
+
 		let runtime_version = self.client.runtime_version_at(&best_block_id)?.spec_version;
-		let genesis_hash = self.client.block_hash(Zero::zero())?
-			.expect("genesis should exist");
-		let genesis_block_id = BlockId::<Block>::hash(genesis_hash);
-		let mut blocks = 0;
-		loop {
-			if blocks >= self.options.blocks {
-				break
-			}
-			match self.create_block(
-				runtime_version,
-				genesis_hash,
-				best_hash,
-				best_block_id,
-			) {
-				CreateResult::Block(block) => {
-					self.runtime_state.increase_block_number();
+		
+		let mut transactions = vec![];
 
-					info!("Created block {}/{} with hash {}.",
-						blocks,
-						self.options.blocks,
-						best_hash,
-					);
+		let extrinsic = self.runtime_state.create_extrinsic(
+			"A".into(),
+			"Balances".into(),
+			"transfer".into(),
+			vec![],
+			None,
+			runtime_version,
+			&genesis_hash,
+			&best_hash,
+		);
+		let e = Decode::decode(&mut &extrinsic.encode()[..])
+			.expect("decode failed");
 
-					best_hash = block.header().hash();
-					best_block_id = BlockId::<Block>::hash(best_hash);
+		transactions.push(e);
 
-					let import = BlockImportParams {
-						origin: BlockOrigin::File,
-						header: block.header().clone(),
-						post_digests: Vec::new(),
-						body: Some(block.extrinsics().to_vec()),
-						storage_changes: None,
-						finalized: false,
-						justification: None,
-						auxiliary: Vec::new(),
-						fork_choice: Some(ForkChoiceStrategy::LongestChain),
-						allow_missing_state: false,
-						import_existing: false,
-						intermediates: Default::default(),
-					};
-					self.results.extend(sc_tracing::get_data());
-					sc_tracing::clear_data();
+		futures::executor::block_on(
+			self.transaction_pool.submit_at(&BlockId::number(0.into()), transactions)
+		).unwrap();
 
-					self.client.clone().import_block(import, HashMap::new())
-						.expect("Failed to import block");
-					blocks += 1;
-					info!("Imported block at {}\n\n", self.runtime_state.block_number());
-				}
-				_ => {
-					best_hash = genesis_hash;
-					best_block_id = genesis_block_id;
-					self.automaton.clear_usage();
-					self.runtime_state.clear_index();
-					self.runtime_state.clear_block_number();
-				}
-			}
-		}
+
+		let mut proposer_factory = sc_basic_authorship::ProposerFactory {
+			client: self.client.clone(),
+			transaction_pool: self.transaction_pool.clone(),
+		};
+
+		let cell = Mutex::new(time::Instant::now());
+		let mut proposer = proposer_factory.init_with_now(
+			&self.client.header(&BlockId::number(0.into())).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				let old = *value;
+				let new = old + time::Duration::from_secs(2);
+				*value = new;
+				old
+			})
+		);
+
+		let deadline = time::Duration::from_secs(3);
+		let block = futures::executor::block_on(
+			proposer.propose(inherents, Default::default(), deadline, sp_consensus::RecordProof::No)
+		).map(|r| r.block).unwrap();
+
+		// then
+		// block should have some extrinsics although we have some more in the pool.
+		assert_eq!(block.extrinsics().len(), 2);
+		assert_eq!(proposer_factory.transaction_pool.ready().count(), 1);
+
+		self.results.extend(sc_tracing::get_data());
+		sc_tracing::clear_data();
+
+
+		let import = BlockImportParams {
+			origin: BlockOrigin::File,
+			header: block.header().clone(),
+			post_digests: Vec::new(),
+			body: Some(block.extrinsics().to_vec()),
+			storage_changes: None,
+			finalized: false,
+			justification: None,
+			auxiliary: Vec::new(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
+			allow_missing_state: false,
+			import_existing: false,
+			intermediates: Default::default(),
+		};
+		self.client.clone().import_block(import, HashMap::new())
+			.expect("Failed to import block");
+		// blocks += 1;
+		info!("Imported block at {}\n\n", self.runtime_state.block_number());
+
+		self.results.extend(sc_tracing::get_data());
+		// sc_tracing::clear_data();
+
+
+		// let best_header = self.select_chain.best_chain()
+		// 	.map_err(|e| format!("{:?}", e))?;
+		// let mut best_hash = best_header.hash();
+		// let mut best_block_id = BlockId::<Block>::hash(best_hash);
+		// let runtime_version = self.client.runtime_version_at(&best_block_id)?.spec_version;
+		// let genesis_hash = self.client.block_hash(Zero::zero())?
+		// 	.expect("genesis should exist");
+		// let genesis_block_id = BlockId::<Block>::hash(genesis_hash);
+		// let mut blocks = 0;
+		// loop {
+		// 	if blocks >= self.options.blocks {
+		// 		break
+		// 	}
+		// 	match self.create_block(
+		// 		runtime_version,
+		// 		genesis_hash,
+		// 		best_hash,
+		// 		best_block_id,
+		// 	) {
+		// 		CreateResult::Block(block) => {
+		// 			self.runtime_state.increase_block_number();
+
+		// 			info!("Created block {}/{} with hash {}.",
+		// 				blocks,
+		// 				self.options.blocks,
+		// 				best_hash,
+		// 			);
+
+		// 			best_hash = block.header().hash();
+		// 			best_block_id = BlockId::<Block>::hash(best_hash);
+
+		// 			let import = BlockImportParams {
+		// 				origin: BlockOrigin::File,
+		// 				header: block.header().clone(),
+		// 				post_digests: Vec::new(),
+		// 				body: Some(block.extrinsics().to_vec()),
+		// 				storage_changes: None,
+		// 				finalized: false,
+		// 				justification: None,
+		// 				auxiliary: Vec::new(),
+		// 				fork_choice: Some(ForkChoiceStrategy::LongestChain),
+		// 				allow_missing_state: false,
+		// 				import_existing: false,
+		// 				intermediates: Default::default(),
+		// 			};
+		// 			self.results.extend(sc_tracing::get_data());
+		// 			sc_tracing::clear_data();
+
+		// 			self.client.clone().import_block(import, HashMap::new())
+		// 				.expect("Failed to import block");
+		// 			blocks += 1;
+		// 			info!("Imported block at {}\n\n", self.runtime_state.block_number());
+		// 		}
+		// 		_ => {
+		// 			best_hash = genesis_hash;
+		// 			best_block_id = genesis_block_id;
+		// 			self.automaton.clear_usage();
+		// 			self.runtime_state.clear_index();
+		// 			self.runtime_state.clear_block_number();
+		// 		}
+		// 	}
+		// }
 
 		Ok(())
 	}

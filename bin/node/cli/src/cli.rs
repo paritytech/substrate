@@ -183,6 +183,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 			let service_builder = new_full_start!(config).0;
 			let mut factory_state = FactoryState::new(
 				service_builder.client().clone(),
+				service_builder.transaction_pool.clone(),
 				service_builder.select_chain().expect("initialized by new_full_start").clone(),
 				automaton,
 				runtime_state,

@@ -131,14 +131,18 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 				let mut listener = self.listener.write();
 				fire_events(&mut *listener, &imported);
+				println!("tx imported ok {:?}", imported.hash().clone());
 				Ok(imported.hash().clone())
 			}
 			ValidatedTransaction::Invalid(hash, err) => {
 				self.rotator.ban(&std::time::Instant::now(), std::iter::once(hash));
+				println!("tx invalid {:?}", err);
+
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(hash, err) => {
 				self.listener.write().invalid(&hash, false);
+				println!("tx unknown {:?}", err);
 				Err(err.into())
 			}
 		}
@@ -149,7 +153,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let ready_limit = &self.options.ready;
 		let future_limit = &self.options.future;
 
-		debug!(target: "txpool", "Pool Status: {:?}", status);
+		println!("Pool Status: {:?}", status);
 
 		if ready_limit.is_exceeded(status.ready, status.ready_bytes)
 			|| future_limit.is_exceeded(status.future, status.future_bytes) {

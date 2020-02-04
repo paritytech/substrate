@@ -10,11 +10,15 @@ codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive
 rand = "0.7.3"
 structopt = "=0.3.7"
 streaming-stats = "0.2"
+futures = "0.3.1"
+parking_lot = "0.9"
 
 sc-cli = { version = "0.8.0", path = "../../../client/cli" }
 sc-client-api = { version = "2.0.0", path = "../../../client/api" }
 sc-client = { version = "0.8", path = "../../../client" }
 sc-tracing = { version = "2.0.0", path = "../../../client/tracing" }
+sc-basic-authorship = { path  = "../../../client/basic-authorship" }
+sc-transaction-pool = { version = "2.0.0", path = "../../../client/transaction-pool" }
 
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
 sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
@@ -23,3 +27,4 @@ sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sc-service = { version = "0.8", path = "../../../client/service" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
+sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
