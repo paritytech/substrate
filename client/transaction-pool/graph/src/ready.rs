@@ -37,8 +37,7 @@ use crate::base_pool::Transaction;
 ///
 /// Should be cheap to clone.
 #[derive(Debug)]
-pub struct TransactionRef<Hash, Ex>
-{
+pub struct TransactionRef<Hash, Ex> {
 	/// The actual transaction data.
 	pub transaction: Arc<Transaction<Hash, Ex>>,
 	/// Unique id when transaction was inserted into the pool.
