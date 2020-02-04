@@ -1071,40 +1071,36 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> DispatchResult {
 		if value.is_zero() || transactor == dest { return Ok(()) }
 
-		let old_from_account = Self::account(transactor);
-		let mut from_account = old_from_account.clone();
-		let old_to_account = Self::account(dest);
-		let mut to_account = old_to_account.clone();
+		let fee = Self::try_mutate_account(dest, |to_account| -> Result<T::Balance, DispatchError> {
+			let would_create = to_account.total().is_zero();
+			let fee = if would_create { T::CreationFee::get() } else { Zero::zero() };
+			let liability = value.checked_add(&fee).ok_or(Error::<T, I>::Overflow)?;
 
-		let would_create = to_account.total().is_zero();
-		let fee = if would_create { T::CreationFee::get() } else { Zero::zero() };
-		let liability = value.checked_add(&fee).ok_or(Error::<T, I>::Overflow)?;
+			Self::try_mutate_account(transactor, |from_account| -> DispatchResult {
+				from_account.free = from_account.free.checked_sub(&liability)
+					.ok_or(Error::<T, I>::InsufficientBalance)?;
 
-		from_account.free = from_account.free.checked_sub(&liability)
-			.ok_or(Error::<T, I>::InsufficientBalance)?;
+				// NOTE: total stake being stored in the same type means that this could never overflow
+				// but better to be safe than sorry.
+				to_account.free = to_account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 
-		// NOTE: total stake being stored in the same type means that this could never overflow
-		// but better to be safe than sorry.
-		to_account.free = to_account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
+				let ed = T::ExistentialDeposit::get();
+				ensure!(to_account.total() >= ed, Error::<T, I>::ExistentialDeposit);
 
-		let ed = T::ExistentialDeposit::get();
-		ensure!(to_account.free >= ed, Error::<T, I>::ExistentialDeposit);
+				Self::ensure_can_withdraw(
+					transactor,
+					value,
+					WithdrawReason::Transfer.into(),
+					from_account.free,
+				)?;
 
-		Self::ensure_can_withdraw(
-			transactor,
-			value,
-			WithdrawReason::Transfer.into(),
-			from_account.free,
-		)?;
+				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
+				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
 
-		let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-		ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
-
-		Self::set_account(transactor, &from_account, &old_from_account);
-
-		// Take action on the set_account call.
-		// This will emit events that _resulted_ from the transfer.
-		Self::set_account(dest, &to_account, &old_to_account);
+				Ok(())
+			})?;
+			Ok(fee)
+		})?;
 
 		// Emit transfer event.
 		Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
