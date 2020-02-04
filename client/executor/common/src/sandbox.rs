@@ -148,12 +148,6 @@ pub trait SandboxCapabilities {
 	/// Represents a function reference into the supervisor environment.
 	type SupervisorFuncRef;
 
-	/// Returns a reference to an associated sandbox `Store`.
-	fn store(&self) -> &Store<Self::SupervisorFuncRef>;
-
-	/// Returns a mutable reference to an associated sandbox `Store`.
-	fn store_mut(&mut self) -> &mut Store<Self::SupervisorFuncRef>;
-
 	/// Allocate space of the specified length in the supervisor memory.
 	///
 	/// # Errors
@@ -433,6 +427,46 @@ fn decode_environment_definition(
 	))
 }
 
+/// An environment in which the guest module is instantiated.
+pub struct GuestEnvironment {
+	imports: Imports,
+	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
+}
+
+impl GuestEnvironment {
+	/// Decodes an environment definition from the given raw bytes.
+	///
+	/// Returns `Err` if the definition cannot be decoded.
+	pub fn decode<FR>(
+		store: &Store<FR>,
+		raw_env_def: &[u8],
+	) -> std::result::Result<Self, InstantiationError> {
+		let (imports, guest_to_supervisor_mapping) =
+			decode_environment_definition(raw_env_def, &store.memories)?;
+		Ok(Self {
+			imports,
+			guest_to_supervisor_mapping,
+		})
+	}
+}
+
+/// An unregistered sandboxed instance.
+///
+/// To finish off the instantiation the user must call `register`.
+#[must_use]
+pub struct UnregisteredInstance<FR> {
+	sandbox_instance: Rc<SandboxInstance<FR>>,
+}
+
+impl<FR> UnregisteredInstance<FR> {
+	/// Finalizes instantiation of this module.
+	pub fn register(self, store: &mut Store<FR>) -> u32 {
+		// At last, register the instance.
+		let instance_idx = store.register_sandbox_instance(self.sandbox_instance);
+		instance_idx
+	}
+}
+
 /// Instantiate a guest module and return it's index in the store.
 ///
 /// The guest module's code is specified in `wasm`. Environment that will be available to
@@ -447,18 +481,16 @@ fn decode_environment_definition(
 /// - Module in `wasm` is invalid or couldn't be instantiated.
 ///
 /// [`EnvironmentDefinition`]: ../sandbox/struct.EnvironmentDefinition.html
-pub fn instantiate<FE: SandboxCapabilities>(
+pub fn instantiate<'a, FE: SandboxCapabilities>(
 	supervisor_externals: &mut FE,
 	dispatch_thunk: FE::SupervisorFuncRef,
 	wasm: &[u8],
-	raw_env_def: &[u8],
+	host_env: GuestEnvironment,
 	state: u32,
-) -> std::result::Result<u32, InstantiationError> {
-	let (imports, guest_to_supervisor_mapping) =
-		decode_environment_definition(raw_env_def, &supervisor_externals.store().memories)?;
-
+) -> std::result::Result<UnregisteredInstance<FE::SupervisorFuncRef>, InstantiationError> {
 	let module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
-	let instance = ModuleInstance::new(&module, &imports).map_err(|_| InstantiationError::Instantiation)?;
+	let instance = ModuleInstance::new(&module, &host_env.imports)
+		.map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
@@ -466,7 +498,7 @@ pub fn instantiate<FE: SandboxCapabilities>(
 		// for the purpose of running `start` function which should be ok.
 		instance: instance.not_started_instance().clone(),
 		dispatch_thunk,
-		guest_to_supervisor_mapping,
+		guest_to_supervisor_mapping: host_env.guest_to_supervisor_mapping,
 	});
 
 	with_guest_externals(
@@ -480,11 +512,7 @@ pub fn instantiate<FE: SandboxCapabilities>(
 		},
 	)?;
 
-	// At last, register the instance.
-	let instance_idx = supervisor_externals
-		.store_mut()
-		.register_sandbox_instance(sandbox_instance);
-	Ok(instance_idx)
+	Ok(UnregisteredInstance { sandbox_instance })
 }
 
 /// This struct keeps track of all sandboxed components.
