@@ -12,6 +12,10 @@
 use frame_support::{decl_module, decl_storage, decl_event, decl_error, dispatch};
 use system::ensure_signed;
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
 mod tests;
 
 /// The pallet's configuration trait.
