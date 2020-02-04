@@ -63,9 +63,8 @@ where
 		self.parent_hash.size_of(ops) +
 			self.number.size_of(ops) +
 			self.state_root.size_of(ops) +
-			self.extrinsics_root.size_of(ops)
-			// TODO:
-			// +self.digest.size_oof(ops)
+			self.extrinsics_root.size_of(ops) +
+			self.digest.size_of(ops)
 	}
 }
 
