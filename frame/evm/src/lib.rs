@@ -174,6 +174,8 @@ decl_event! {
 	pub enum Event {
 		/// Ethereum events from contracts.
 		Log(Log),
+		/// A contract has been created at given address.
+		Created(H160),
 	}
 }
 
@@ -343,6 +345,7 @@ decl_module! {
 			}
 			executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
 
+			let create_address = executor.create_address(source, evm::CreateScheme::Dynamic);
 			let reason = executor.transact_create(
 				source,
 				value,
@@ -351,7 +354,10 @@ decl_module! {
 			);
 
 			let ret = match reason {
-				ExitReason::Succeed(_) => Ok(()),
+				ExitReason::Succeed(_) => {
+					Module::<T>::deposit_event(Event::Created(create_address));
+					Ok(())
+				},
 				ExitReason::Error(_) => Err(Error::<T>::ExitReasonFailed),
 				ExitReason::Revert(_) => Err(Error::<T>::ExitReasonRevert),
 				ExitReason::Fatal(_) => Err(Error::<T>::ExitReasonFatal),
