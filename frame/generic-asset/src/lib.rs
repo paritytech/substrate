@@ -1106,12 +1106,15 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type Lookup = T::Lookup;
 	type Header = T::Header;
 	type Event = ();
+	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
-	type BlockHashCount = T::BlockHashCount;
 	type Version = T::Version;
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnReapAccount = ();
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;

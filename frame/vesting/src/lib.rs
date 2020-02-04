@@ -50,7 +50,7 @@ use sp_std::prelude::*;
 use sp_std::fmt::Debug;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
-	StaticLookup, Zero, SimpleArithmetic, MaybeSerializeDeserialize, Saturating, Convert
+	StaticLookup, Zero, SimpleArithmetic, MaybeSerializeDeserialize, Convert
 }};
 use frame_support::{decl_module, decl_event, decl_storage, ensure, decl_error};
 use frame_support::traits::{
@@ -115,6 +115,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, BalanceOf<T>)>;
 		build(|config: &GenesisConfig<T>| {
+			use sp_runtime::traits::Saturating;
 			// Generate initial vesting configuration
 			// * who - Account which we are generating vesting configuration for
 			// * begin - Block when the account will start to vest

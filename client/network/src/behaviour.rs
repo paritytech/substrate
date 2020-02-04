@@ -25,7 +25,7 @@ use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
-use log::{debug, warn};
+use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, Justification};
 use std::{iter, task::Context, task::Poll};
