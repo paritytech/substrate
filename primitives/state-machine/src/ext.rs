@@ -633,10 +633,7 @@ mod tests {
 	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend>;
 
 	const CHILD_KEY_1: &[u8] = b":child_storage:default:Child1";
-
 	const CHILD_UUID_1: &[u8] = b"unique_id_1";
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_UUID_1);
-
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
@@ -748,9 +745,7 @@ mod tests {
 
 	#[test]
 	fn next_child_storage_key_works() {
-		const CHILD_KEY_1: &[u8] = b":child_storage:default:Child1";
 
-		const CHILD_UUID_1: &[u8] = b"unique_id_1";
 		let child_info1 = ChildInfo::new_default(CHILD_UUID_1);
 
 		let mut cache = StorageTransactionCache::default();
@@ -797,11 +792,15 @@ mod tests {
 
 	#[test]
 	fn child_storage_works() {
+		use sp_core::InnerHasher;
+
+		let child_info1 = ChildInfo::new_default(CHILD_UUID_1);
+
 		let mut cache = StorageTransactionCache::default();
 		let child = || ChildStorageKey::from_slice(CHILD_KEY_1).unwrap();
 		let mut overlay = OverlayedChanges::default();
-		overlay.set_child_storage(child().as_ref().to_vec(), CHILD_INFO_1, vec![20], None);
-		overlay.set_child_storage(child().as_ref().to_vec(), CHILD_INFO_1, vec![30], Some(vec![31]));
+		overlay.set_child_storage(child().as_ref().to_vec(), &child_info1, vec![20], None);
+		overlay.set_child_storage(child().as_ref().to_vec(), &child_info1, vec![30], Some(vec![31]));
 		let backend = Storage {
 			top: map![],
 			children: map![
@@ -811,31 +810,31 @@ mod tests {
 						vec![20] => vec![20],
 						vec![30] => vec![40]
 					],
-					child_info: CHILD_INFO_1.to_owned(),
+					child_info: child_info1.clone(),
 				}
 			],
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
-		assert_eq!(ext.child_storage(child(), CHILD_INFO_1, &[10]), Some(vec![10]));
-		assert_eq!(ext.original_child_storage(child(), CHILD_INFO_1, &[10]), Some(vec![10]));
+		assert_eq!(ext.child_storage(child(), &child_info1, &[10]), Some(vec![10]));
+		assert_eq!(ext.original_child_storage(child(), &child_info1, &[10]), Some(vec![10]));
 		assert_eq!(
-			ext.child_storage_hash(child(), CHILD_INFO_1, &[10]),
+			ext.child_storage_hash(child(), &child_info1, &[10]),
 			Some(Blake2Hasher::hash(&[10]).as_ref().to_vec()),
 		);
 
-		assert_eq!(ext.child_storage(child(), CHILD_INFO_1, &[20]), None);
-		assert_eq!(ext.original_child_storage(child(), CHILD_INFO_1, &[20]), Some(vec![20]));
+		assert_eq!(ext.child_storage(child(), &child_info1, &[20]), None);
+		assert_eq!(ext.original_child_storage(child(), &child_info1, &[20]), Some(vec![20]));
 		assert_eq!(
-			ext.child_storage_hash(child(), CHILD_INFO_1, &[20]),
+			ext.child_storage_hash(child(), &child_info1, &[20]),
 			None,
 		);
 
-		assert_eq!(ext.child_storage(child(), CHILD_INFO_1, &[30]), Some(vec![31]));
-		assert_eq!(ext.original_child_storage(child(), CHILD_INFO_1, &[30]), Some(vec![40]));
+		assert_eq!(ext.child_storage(child(), &child_info1, &[30]), Some(vec![31]));
+		assert_eq!(ext.original_child_storage(child(), &child_info1, &[30]), Some(vec![40]));
 		assert_eq!(
-			ext.child_storage_hash(child(), CHILD_INFO_1, &[30]),
+			ext.child_storage_hash(child(), &child_info1, &[30]),
 			Some(Blake2Hasher::hash(&[31]).as_ref().to_vec()),
 		);
 
