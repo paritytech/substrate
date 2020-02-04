@@ -154,7 +154,7 @@ mod mock;
 mod tests;
 
 use sp_std::prelude::*;
-use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
+use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
@@ -687,51 +687,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 	}
 
-	/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
-	/// `ExistentialDeposit` law, annulling the account as needed.
-	///
-	/// Will return `AccountKilled` if either reserved or free are too low.
-	///
-	/// NOTE: Doesn't do any preparatory work for creating a new account, so should only be used
-	/// when it is known that the account already exists.
-	///
-	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
-	/// the caller will do this.
-	fn mutate_account<R>(
-		who: &T::AccountId,
-		f: impl FnOnce(&mut AccountData<T::Balance>) -> R
-	) -> R {
-		let (maybe_endowed, result) = T::AccountStore::mutate_exists(who, |account| {
-			let old = account.take().unwrap_or_default();
-			let mut new = old.clone();
-			let r = f(&mut new);
-
-			let total = new.free.clone() + new.reserved.clone();
-			let was_zero = old.total().is_zero();
-			let (maybe_endowed, _outcome) = if total < T::ExistentialDeposit::get() {
-				if !total.is_zero() {
-					T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
-					Self::deposit_event(RawEvent::DustLost(who.clone(), total));
-				}
-				*account = None;
-				(None, if was_zero {
-					UpdateBalanceOutcome::StillDead
-				} else {
-					UpdateBalanceOutcome::AccountKilled
-				})
-			} else {
-				let free_balance = new.free;
-				*account = Some(AccountData { free: new.free, reserved: new.reserved, .. old });
-				(if was_zero { Some(free_balance) } else { None }, UpdateBalanceOutcome::Updated)
-			};
-			(maybe_endowed, r)
-		});
-		if let Some(endowed) = maybe_endowed {
-			Self::deposit_event(RawEvent::Endowed(who.clone(), endowed));
-		}
-		result
-	}
-
 	/// Places the `free` and `reserved` parts of `new` into `account`. Also does any steps needed
 	/// after mutating an account. This includes DustRemoval unbalancing, in the case than the `new`
 	/// account's total balance is non-zero but below ED.
@@ -759,6 +714,31 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 	}
 
+	/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
+	/// `ExistentialDeposit` law, annulling the account as needed.
+	///
+	/// NOTE: Doesn't do any preparatory work for creating a new account, so should only be used
+	/// when it is known that the account already exists.
+	///
+	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+	/// the caller will do this.
+	fn mutate_account<R>(
+		who: &T::AccountId,
+		f: impl FnOnce(&mut AccountData<T::Balance>) -> R
+	) -> R {
+		Self::try_mutate_account(who, |a| -> Result<R, Infallible> { Ok(f(a)) })
+			.expect("Error is infallible; qed")
+	}
+
+	/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
+	/// `ExistentialDeposit` law, annulling the account as needed. This will do nothing if the
+	/// result of `f` is an `Err`.
+	///
+	/// NOTE: Doesn't do any preparatory work for creating a new account, so should only be used
+	/// when it is known that the account already exists.
+	///
+	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+	/// the caller will do this.
 	fn try_mutate_account<R, E>(
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>) -> Result<R, E>
