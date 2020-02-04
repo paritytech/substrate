@@ -733,9 +733,4 @@ mod tests {
 		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 	}
-
-	#[test]
-	fn can_track_memory() {
-		
-	}
 }

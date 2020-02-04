@@ -304,8 +304,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 pub struct TestXt<Call, Extra>(pub Option<(u64, Extra)>, pub Call);
 
 #[cfg(feature = "std")]
-impl<Call, Extra> parity_util_mem::MallocSizeOf
-	for TestXt<Call, Extra>
+impl<Call, Extra> parity_util_mem::MallocSizeOf for TestXt<Call, Extra>
 {
 	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
 		// Non-opaque extrinsics always 0 (TODO: check if needed)
