@@ -26,10 +26,10 @@ use std::time::Duration;
 mod display;
 
 /// Creates an informant in the form of a `Future` that must be polled regularly.
-pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()> {
+pub fn build(service: &impl AbstractService, colour_output: bool) -> impl futures::Future<Output = ()> {
 	let client = service.client();
 
-	let mut display = display::InformantDisplay::new();
+	let mut display = display::InformantDisplay::new(colour_output);
 
 	let display_notifications = service
 		.network_status(Duration::from_millis(5000))

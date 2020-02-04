@@ -42,14 +42,17 @@ pub struct InformantDisplay<B: BlockT> {
 	last_number: Option<NumberFor<B>>,
 	/// The last time `display` or `new` has been called.
 	last_update: Instant,
+	/// Whether to colour output or not.
+	colour_output: bool
 }
 
 impl<B: BlockT> InformantDisplay<B> {
 	/// Builds a new informant display system.
-	pub fn new() -> InformantDisplay<B> {
+	pub fn new(colour_output: bool) -> InformantDisplay<B> {
 		InformantDisplay {
 			last_number: None,
 			last_update: Instant::now(),
+			colour_output,
 		}
 	}
 
@@ -69,33 +72,35 @@ impl<B: BlockT> InformantDisplay<B> {
 			(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed), format!(", target=#{}", n)),
 		};
 
-		// Colour informant output if we're running natively.
-
-		#[cfg(not(target_os = "unknown"))]
-		let status = Colour::White.bold().paint(&status);
-
-		#[cfg(not(target_os = "unknown"))]
-		let num_connected_peers = Colour::White.bold().paint(format!("{}", num_connected_peers));
-
-		#[cfg(not(target_os = "unknown"))]
-		let best_number = Colour::White.paint(format!("{}", best_number));
-
-		#[cfg(not(target_os = "unknown"))]
-		let finalized_number = Colour::White.paint(format!("{}", finalized_number));
-
-		info!(
-			target: "substrate",
-			"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
-			status,
-			target,
-			num_connected_peers,
-			best_number,
-			best_hash,
-			finalized_number,
-			info.chain.finalized_hash,
-			TransferRateFormat(net_status.average_download_per_sec),
-			TransferRateFormat(net_status.average_upload_per_sec),
-		);
+		if self.colour_output {
+			info!(
+				target: "substrate",
+				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+				Colour::White.bold().paint(&status),
+				target,
+				Colour::White.bold().paint(format!("{}", num_connected_peers)),
+				Colour::White.paint(format!("{}", best_number)),
+				best_hash,
+				Colour::White.paint(format!("{}", finalized_number)),
+				info.chain.finalized_hash,
+				TransferRateFormat(net_status.average_download_per_sec),
+				TransferRateFormat(net_status.average_upload_per_sec),
+			);
+		} else {
+			info!(
+				target: "substrate",
+				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+				status,
+				target,
+				num_connected_peers,
+				best_number,
+				best_hash,
+				finalized_number,
+				info.chain.finalized_hash,
+				TransferRateFormat(net_status.average_download_per_sec),
+				TransferRateFormat(net_status.average_upload_per_sec),
+			);
+		}
 	}
 }
 
