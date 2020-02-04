@@ -608,6 +608,15 @@ pub trait Extrinsic: Sized {
 	fn new(_call: Self::Call, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> { None }
 }
 
+/// Implementor is an [`Extrinsic`] and provides metadata about this extrinsic.
+pub trait ExtrinsicMetadata {
+	/// The version of the `Extrinsic`.
+	const VERSION: u8;
+
+	/// Signed extensions attached to this `Extrinsic`.
+	type SignedExtensions: SignedExtension;
+}
+
 /// Extract the hasher type for a block.
 pub type HasherFor<B> = <HashFor<B> as Hash>::Hasher;
 /// Extract the hashing type for a block.
@@ -668,6 +677,12 @@ pub trait Dispatchable {
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
 pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq {
+	/// Unique identifier of this signed extension.
+	///
+	/// This will be exposed in the metadata to identify the signed extension used
+	/// in an extrinsic.
+	const IDENTIFIER: &'static str;
+
 	/// The type which encodes the sender identity.
 	type AccountId;
 
@@ -765,6 +780,17 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Do any post-flight stuff for a transaction.
 	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
+
+	/// Returns the list of unique identifier for this signed extension.
+	///
+	/// As a [`SignedExtension`] can be a tuple of [`SignedExtension`]`s we need to return a `Vec`
+	/// that holds all the unique identifiers. Each individual `SignedExtension` must return
+	/// *exactly* one identifier.
+	///
+	/// This method provides a default implementation that returns `vec![SELF::IDENTIFIER]`.
+	fn identifier() -> Vec<&'static str> {
+		sp_std::vec![Self::IDENTIFIER]
+	}
 }
 
 #[impl_for_tuples(1, 12)]
@@ -773,6 +799,7 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 	type AccountId = AccountId;
 	type Call = Call;
 	type DispatchInfo = Info;
+	const IDENTIFIER: &'static str = "You should call `identifier()`!";
 	for_tuples!( type AdditionalSigned = ( #( Tuple::AdditionalSigned ),* ); );
 	for_tuples!( type Pre = ( #( Tuple::Pre ),* ); );
 
@@ -823,6 +850,12 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 	) {
 		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info.clone(), len); )* )
 	}
+
+	fn identifier() -> Vec<&'static str> {
+		let mut ids = Vec::new();
+		for_tuples!( #( ids.extend(Tuple::identifier()); )* );
+		ids
+	}
 }
 
 /// Only for bare bone testing when you don't care about signed extensions at all.
@@ -833,6 +866,7 @@ impl SignedExtension for () {
 	type Call = ();
 	type Pre = ();
 	type DispatchInfo = ();
+	const IDENTIFIER: &'static str = "UnitSignedExtension";
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 }
 

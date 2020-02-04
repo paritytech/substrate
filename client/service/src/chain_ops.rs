@@ -28,7 +28,7 @@ use sp_runtime::{BuildStorage, traits::{
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
-use sc_client::{Client, ExecutionStrategy, StateMachine};
+use sc_client::{Client, ExecutionStrategy, StateMachine, LocalCallExecutor};
 use sc_client_db::BenchmarkingState;
 use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
 use sp_consensus::BlockOrigin;
@@ -79,20 +79,22 @@ pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 
 
 impl<
-	TBl, TRtApi, TCfg, TGen, TCSExt, TBackend,
-	TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP,
+	TBl, TRtApi, TGen, TCSExt, TBackend,
+	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP,
 	TExPool, TRpc, Backend
 > ServiceBuilderCommand for ServiceBuilder<
-	TBl, TRtApi, TCfg, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
+	TBl, TRtApi, TGen, TCSExt,
+	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
 	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
 > where
 	TBl: BlockT,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
+	TExecDisp: 'static + NativeExecutionDispatch,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
 {
 	type Block = TBl;
+	type NativeDispatch = TExecDisp;
 
 	fn import_blocks(
 		self,
