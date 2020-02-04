@@ -354,7 +354,10 @@ decl_module! {
 			);
 
 			let ret = match reason {
-				ExitReason::Succeed(_) => Ok(()),
+				ExitReason::Succeed(_) => {
+					Module::<T>::deposit_event(Event::Created(create_address));
+					Ok(())
+				},
 				ExitReason::Error(_) => Err(Error::<T>::ExitReasonFailed),
 				ExitReason::Revert(_) => Err(Error::<T>::ExitReasonRevert),
 				ExitReason::Fatal(_) => Err(Error::<T>::ExitReasonFatal),
@@ -364,7 +367,6 @@ decl_module! {
 
 			let (values, logs) = executor.deconstruct();
 			backend.apply(values, logs, true);
-			Module::<T>::deposit_event(Event::Created(create_address));
 
 			ret.map_err(Into::into)
 		}
