@@ -611,10 +611,7 @@ pub trait Currency<AccountId> {
 	fn make_free_balance_be(
 		who: &AccountId,
 		balance: Self::Balance,
-	) -> (
-		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
-		UpdateBalanceOutcome,
-	);
+	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance>;
 }
 
 /// A currency where funds can be reserved from the user.

@@ -1189,7 +1189,7 @@ where
 	}
 
 	fn deposit_creating(who: &T::AccountId, value: Self::Balance) -> Self::PositiveImbalance {
-		let (imbalance, _) = Self::make_free_balance_be(who, Self::free_balance(who) + value);
+		let imbalance = Self::make_free_balance_be(who, Self::free_balance(who) + value);
 		if let SignedImbalance::Positive(p) = imbalance {
 			p
 		} else {
@@ -1201,10 +1201,7 @@ where
 	fn make_free_balance_be(
 		who: &T::AccountId,
 		balance: Self::Balance,
-	) -> (
-		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
-		UpdateBalanceOutcome,
-	) {
+	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
 		let original = <Module<T>>::free_balance(&U::asset_id(), who);
 		let imbalance = if original <= balance {
 			SignedImbalance::Positive(PositiveImbalance::new(balance - original))
@@ -1212,7 +1209,7 @@ where
 			SignedImbalance::Negative(NegativeImbalance::new(original - balance))
 		};
 		<Module<T>>::set_free_balance(&U::asset_id(), who, balance);
-		(imbalance, UpdateBalanceOutcome::Updated)
+		imbalance
 	}
 
 	fn can_slash(who: &T::AccountId, value: Self::Balance) -> bool {

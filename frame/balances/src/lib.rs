@@ -162,7 +162,7 @@ use frame_support::{
 		UpdateBalanceOutcome, Currency, OnReapAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		IsDeadAccount
+		ExistenceRequirement::AllowDeath, IsDeadAccount
 	}
 };
 use sp_runtime::{
@@ -1177,27 +1177,22 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> Self::PositiveImbalance {
 		if value.is_zero() { return Self::PositiveImbalance::zero() }
 
-		let old_account = Self::account(who);
-		let mut account = old_account.clone();
-		let ed = T::ExistentialDeposit::get();
+		Self::try_mutate_account(who, |account| -> Result<Self::PositiveImbalance, Self::PositiveImbalance> {
+			// bail if not yet created and this operation wouldn't be enough to create it.
+			let ed = T::ExistentialDeposit::get();
+			ensure!(value >= ed || !account.total().is_zero(), Self::PositiveImbalance::zero());
 
-		// bail if not yet created and this operation wouldn't be enough to create it.
-		if value < ed && account.total().is_zero() { return Self::PositiveImbalance::zero() }
+			// defensive only: overflow should never happen, however in case it does, then this
+			// operation is a no-op.
+			account.free = account.free.checked_add(&value).ok_or(Self::PositiveImbalance::zero())?;
 
-		// defensive only: overflow should never happen, however in case it does, then this
-		// operation is a no-op.
-		account.free = match account.free.checked_add(&value) {
-			Some(f) => f,
-			None => return Self::PositiveImbalance::zero(),
-		};
-
-		Self::set_account(who, &account, &old_account);
-
-		PositiveImbalance::new(value)
+			Ok(PositiveImbalance::new(value))
+		}).unwrap_or_else(|x| x)
 	}
 
-	// Withdraw some free balance from an account, respecting existence requirements.
-	// Is a no-op if value to be withdrawn is zero.
+	/// Withdraw some free balance from an account, respecting existence requirements.
+	///
+	/// Is a no-op if value to be withdrawn is zero.
 	fn withdraw(
 		who: &T::AccountId,
 		value: Self::Balance,
@@ -1206,36 +1201,32 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> result::Result<Self::NegativeImbalance, DispatchError> {
 		if value.is_zero() { return Ok(NegativeImbalance::zero()); }
 
-		let old_account = Self::account(who);
-		let mut account = old_account.clone();
-		if let Some(new_free_account) = account.free.checked_sub(&value) {
-			// if we need to keep the account alive...
-			if liveness == ExistenceRequirement::KeepAlive
-				// ...and it would be dead afterwards...
-				&& new_free_account < T::ExistentialDeposit::get()
-				// ...yet is was alive before
-				&& account.free >= T::ExistentialDeposit::get()
-			{
-				Err(Error::<T, I>::KeepAlive)?
-			}
+		Self::try_mutate_account(who, |account| -> Result<Self::NegativeImbalance, DispatchError> {
+			let new_free_account = account.free.checked_sub(&value)
+				.ok_or(Error::<T, I>::InsufficientBalance)?;
+
+			// bail if we need to keep the account alive and this would kill it.
+			let ed = T::ExistentialDeposit::get();
+			let would_kill = new_free_account < ed && account.free >= ed;
+			ensure!(liveness == AllowDeath || !would_kill, Error::<T, I>::KeepAlive);
+
 			Self::ensure_can_withdraw(who, value, reasons, new_free_account)?;
+
 			account.free = new_free_account;
-			Self::set_account(who, &account, &old_account);
+
 			Ok(NegativeImbalance::new(value))
-		} else {
-			Err(Error::<T, I>::InsufficientBalance)?
-		}
+		})
 	}
 
 	/// Force the new free balance of a target account `who` to some new value `balance`.
-	fn make_free_balance_be(who: &T::AccountId, value: Self::Balance) -> (
-		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
-		UpdateBalanceOutcome
-	) {
-		let old_account = Self::account(who);
-		let mut account = old_account.clone();
-
-		if value < T::ExistentialDeposit::get() && account.free.is_zero() {
+	fn make_free_balance_be(who: &T::AccountId, value: Self::Balance)
+		-> SignedImbalance<Self::Balance, Self::PositiveImbalance>
+	{
+		Self::try_mutate_account(who, |account| -> Result<
+			SignedImbalance<Self::Balance, Self::PositiveImbalance>,
+			()
+		> {
+			let ed = T::ExistentialDeposit::get();
 			// If we're attempting to set an existing account to less than ED, then
 			// bypass the entire operation. It's a no-op if you follow it through, but
 			// since this is an instance where we might account for a negative imbalance
@@ -1243,24 +1234,16 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			// equal and opposite cause (returned as an Imbalance), then in the
 			// instance that there's no other accounts on the system at all, we might
 			// underflow the issuance and our arithmetic will be off.
-			return (
-				SignedImbalance::Positive(Self::PositiveImbalance::zero()),
-				UpdateBalanceOutcome::AccountKilled,
-			)
-		}
-		let imbalance = if account.free <= value {
-			SignedImbalance::Positive(PositiveImbalance::new(value - account.free))
-		} else {
-			SignedImbalance::Negative(NegativeImbalance::new(account.free - value))
-		};
-		account.free = value;
+			ensure!(value >= ed || !account.free.is_zero(), ());
 
-		// If the balance is too low, then the account is reaped.
-		// Free balance can never be less than ED. If that happens, it gets reduced to zero
-		// and the account information relevant to this subsystem is deleted (i.e. the
-		// account is reaped).
-		let outcome = Self::set_account(who, &account, &old_account);
-		(imbalance, outcome)
+			let imbalance = if account.free <= value {
+				SignedImbalance::Positive(PositiveImbalance::new(value - account.free))
+			} else {
+				SignedImbalance::Negative(NegativeImbalance::new(account.free - value))
+			};
+			account.free = value;
+			Ok(imbalance)
+		}).unwrap_or(SignedImbalance::Positive(Self::PositiveImbalance::zero()))
 	}
 }
 
