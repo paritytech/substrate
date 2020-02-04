@@ -251,7 +251,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.keys(&key_prefix.0)
 			.into_iter()
 			.map(|k| {
-				let d = state.storage(&k).ok().unwrap_or_default();
+				let d = state.storage(&k).ok().flatten().unwrap_or_default();
 				(StorageKey(k), StorageData(d))
 			})
 			.collect();
