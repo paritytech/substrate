@@ -31,7 +31,7 @@ use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
 	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str,
-	BenchmarkResult, BenchmarkParameter,
+	BenchmarkResults, BenchmarkParameter,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::TransactionValidity;
@@ -810,12 +810,8 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_identity::IdentityBenchmarks<Block> for Runtime {
-		fn run_benchmark(parameters: Vec<(BenchmarkParameter, u32)>, repeat: u32) -> Vec<BenchmarkResult> {
-			Identity::run_benchmark(parameters, repeat)
-		}
-
-		fn get_components() -> Vec<(BenchmarkParameter, u32, u32)> {
-			pallet_identity::benchmarking::set_identity::components()
+		fn run_benchmarks() -> Vec<BenchmarkResults> {
+			Identity::run_benchmarks()
 		}
 	}
 }

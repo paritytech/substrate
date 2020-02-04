@@ -64,15 +64,16 @@ pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 		wasm_method,
 		None, // heap pages
 	);
-	let _ = StateMachine::<_, _, NumberFor<TBl>, _>::new(
+	let result = StateMachine::<_, _, NumberFor<TBl>, _>::new(
 		&state,
 		None,
 		&mut changes,
 		&executor,
-		"run_benchmark",
+		"IdentityBenchmarks_run_benchmarks",
 		&[],
 		Default::default(),
 	).execute(strategy).map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
+	println!("{:?}", result);
 	info!("Done.");
 	Ok(())
 }
