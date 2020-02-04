@@ -29,7 +29,8 @@ use log::{debug, error, trace, warn};
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use sp_runtime::ConsensusEngineId;
-use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
+use std::{borrow::Cow, collections::hash_map::Entry, cmp};
+use std::{error, marker::PhantomData, mem, pin::Pin, str};
 use std::time::{Duration, Instant};
 use std::task::{Context, Poll};
 
@@ -397,11 +398,20 @@ impl<TSubstream> GenericProto<TSubstream> {
 		proto_name: Cow<'static, [u8]>,
 		message: impl Into<Vec<u8>>,
 	) {
-		if !self.is_open(target) {
+		self.send_packet(target, ConsensusMessage {
+			engine_id,
+			data: message.into(),
+		}.encode());
+		/*if !self.is_open(target) {
 			return;
 		}
 
-		trace!(target: "sub-libp2p", "External API => Notification for {:?} with protocol {:?}", target, proto_name);
+		trace!(
+			target: "sub-libp2p",
+			"External API => Notification for {:?} with protocol {:?}",
+			target,
+			str::from_utf8(&proto_name)
+		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 
 		self.events.push(NetworkBehaviourAction::SendEvent {
@@ -411,7 +421,7 @@ impl<TSubstream> GenericProto<TSubstream> {
 				engine_id,
 				proto_name,
 			},
-		});
+		});*/
 	}
 
 	/// Sends a message to a peer.
@@ -988,7 +998,12 @@ where
 			NotifsHandlerOut::Notification { proto_name, engine_id, message } => {
 				// TODO: implement properly
 				debug_assert!(self.is_open(&source));
-				trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
+				trace!(
+					target: "sub-libp2p",
+					"Handler({:?}) => Notification({:?})",
+					source,
+					str::from_utf8(&proto_name)
+				);
 				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
 				let event = GenericProtoOut::CustomMessage {
 					peer_id: source,
