@@ -118,24 +118,6 @@ impl<'a> FunctionExecutor<'a> {
 impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 	type SupervisorFuncRef = SupervisorFuncRef;
 
-	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>> {
-		self.heap.allocate(self.memory, len).map_err(Into::into)
-	}
-
-	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()> {
-		self.heap.deallocate(self.memory, ptr).map_err(Into::into)
-	}
-
-	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()> {
-		write_memory_from(self.memory, ptr, data)
-	}
-
-	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>> {
-		let mut output = vec![0; len as usize];
-		read_memory_into(self.memory, ptr, output.as_mut())?;
-		Ok(output)
-	}
-
 	fn invoke(
 		&mut self,
 		dispatch_thunk: &Self::SupervisorFuncRef,

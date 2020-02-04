@@ -66,25 +66,6 @@ impl<'a> FunctionExecutor<'a> {
 impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 	type SupervisorFuncRef = wasmi::FuncRef;
 
-	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>, Error> {
-		let heap = &mut self.heap;
-		self.memory.with_direct_access_mut(|mem| {
-			heap.allocate(mem, len).map_err(Into::into)
-		})
-	}
-	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<(), Error> {
-		let heap = &mut self.heap;
-		self.memory.with_direct_access_mut(|mem| {
-			heap.deallocate(mem, ptr).map_err(Into::into)
-		})
-	}
-	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<(), Error> {
-		self.memory.set(ptr.into(), data).map_err(Into::into)
-	}
-	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>, Error> {
-		self.memory.get(ptr.into(), len as usize).map_err(Into::into)
-	}
-
 	fn invoke(
 		&mut self,
 		dispatch_thunk: &Self::SupervisorFuncRef,
