@@ -65,6 +65,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 		allow_private_ipv4: bool,
+		discovery_only_if_under_num: u64,
 	) -> Self {
 		Behaviour {
 			substrate,
@@ -73,7 +74,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 				local_public_key,
 				known_addresses,
 				enable_mdns,
-				allow_private_ipv4
+				allow_private_ipv4,
+				discovery_only_if_under_num,
 			).await,
 			events: Vec::new(),
 		}
