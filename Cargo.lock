@@ -6341,6 +6341,7 @@ dependencies = [
  "derive_more",
  "futures 0.3.1",
  "futures-diagnose",
+ "futures-timer 2.0.2",
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.9.0",
