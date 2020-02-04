@@ -351,7 +351,7 @@ where
 
 			if next_action.revalidate {
 				let hashes = pool.ready().map(|tx| tx.hash.clone()).collect();
-				revalidation_queue.offload(block_number, hashes).await;
+				revalidation_queue.revalidate_later(block_number, hashes).await;
 			}
 
 			revalidation_strategy.lock().clear();

@@ -69,7 +69,7 @@ async fn batch_revalidate<Api: ChainApi>(
 	let mut invalid_hashes = Vec::new();
 	let mut revalidated = HashMap::new();
 
-	for ext_hash in batch.into_iter() {
+	for ext_hash in batch {
 		let ext = match pool.ready_transaction(&ext_hash) {
 			Some(ext) => ext,
 			None => continue,
@@ -77,13 +77,13 @@ async fn batch_revalidate<Api: ChainApi>(
 
 		match api.validate_transaction(&BlockId::Number(at), ext.data.clone()).await {
 			Ok(Err(TransactionValidityError::Invalid(err))) => {
-				log::debug!(target: "txpool", "[{:?}]: Removed during revalidation: {:?}", ext_hash, err);
+				log::debug!(target: "txpool", "[{:?}]: Revalidation: invalid {:?}", ext_hash, err);
 				invalid_hashes.push(ext_hash);
 			},
 			Ok(Err(TransactionValidityError::Unknown(err))) => {
 				// skipping unknown, they might be pushed by valid or invalid transaction
 				// when latter resubmitted.
-				log::debug!(target: "txpool", "[{:?}]: Unknown during revalidation: {:?}", ext_hash, err);
+				log::trace!(target: "txpool", "[{:?}]: Unknown during revalidation: {:?}", ext_hash, err);
 			},
 			Ok(Ok(validity)) => {
 				let data = ext.data.clone();
@@ -172,7 +172,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		let transactions = worker_payload.transactions;
 		let block_number = worker_payload.at;
 
-		for ext_hash in transactions.into_iter() {
+		for ext_hash in transactions {
 			// we don't add something that already scheduled for revalidation
 			if self.members.contains_key(&ext_hash) { continue; }
 
@@ -266,12 +266,12 @@ where
 		}
 	}
 
-	/// Offload some revalidation to the queue.
+	/// Queue some transaction for later revalidation.
 	///
 	/// If queue configured with background worker, this will return immediately.
 	/// If queue configured without background worker, this will resolve after
 	/// revalidation is actually done.
-	pub async fn offload(&self, at: NumberFor<Api>, transactions: Vec<ExHash<Api>>) {
+	pub async fn revalidate_later(&self, at: NumberFor<Api>, transactions: Vec<ExHash<Api>>) {
 		if let Some(ref background) = self.background {
 			background.to_worker.unbounded_send(WorkerPayload { at, transactions })
 				.expect("background task is never dropped");
@@ -310,7 +310,7 @@ mod tests {
 		let uxt = uxt(Alice, 0);
 		let uxt_hash = block_on(pool.submit_one(&BlockId::number(0), uxt.clone())).expect("Should be valid");
 
-		block_on(queue.offload(0, vec![uxt_hash]));
+		block_on(queue.revalidate_later(0, vec![uxt_hash]));
 
 		// revalidated in sync offload 2nd time
 		assert_eq!(api.validation_requests().len(), 2);
