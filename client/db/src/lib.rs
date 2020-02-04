@@ -686,7 +686,6 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 			self.db.get(columns::STATE, key)
 		} else {
 			let keyspace = child_info.keyspace();
-			// TODO try to switch api to &mut and use a key buffer from StorageDB
 			let mut key_buffer = vec![0; keyspace.len() + key.len()];
 			key_buffer[..keyspace.len()].copy_from_slice(keyspace);
 			key_buffer[keyspace.len()..].copy_from_slice(&key[..]);
