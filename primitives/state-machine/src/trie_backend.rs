@@ -84,7 +84,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
-		// TODO switch to &mut self like in overlay pr
 		let mut buf = Vec::new();
 		if let Some(essence) = self.child_essence(storage_key, child_info, &mut buf)? {
 			essence.storage(key)
@@ -103,7 +102,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
-		// TODO switch to &mut self like in overlay pr
 		let mut buf = Vec::new();
 		if let Some(essence) = self.child_essence(storage_key, child_info, &mut buf)? {
 			essence.next_storage_key(key)
@@ -126,7 +124,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		// TODO switch to &mut self like in overlay pr
 		let mut buf = Vec::new();
 		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info, &mut buf) {
 			essence.for_keys(f)
@@ -140,7 +137,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		prefix: &[u8],
 		f: F,
 	) {
-		// TODO switch to &mut self like in overlay pr
 		let mut buf = Vec::new();
 		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info, &mut buf) {
 			essence.for_keys_with_prefix(prefix, f)
@@ -234,7 +230,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		};
 
 		{
-			// TODO switch to &mut self like in overlay pr
 			let mut buf = Vec::new();
 			let child_essence = ChildTrieBackendStorage::new(self.essence.backend_storage(), Some(child_info), &mut buf);
 			// Do not write prefix in overlay.

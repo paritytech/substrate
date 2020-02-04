@@ -127,16 +127,6 @@ impl<H> ChangeSet<H> {
 		self.deleted.extend(other.deleted.into_iter());
 	}
 }
-/// A set of state node changes for a child trie.
-/// TODO remove??
-#[derive(Debug, Clone)]
-pub struct ChildTrieChangeSet<H> {
-	/// Change set of this element.
-	pub data: ChangeSet<H>,
-	/// Child trie descripton.
-	/// If not set, this is the top trie.
-	pub info: Option<ChildInfo>,
-}
 
 /// Change sets of all child trie (top is key None).
 pub type ChildTrieChangeSets<H> = ChildrenMap<ChangeSet<H>>;

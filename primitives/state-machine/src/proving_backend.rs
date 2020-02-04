@@ -239,6 +239,8 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 }
 
+// proof run on a flatten storage of tries and currently only need implement a single
+// trie backend storage api.
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorageRef<H>
 	for ProofRecorderBackend<'a, S, H>
 {
@@ -249,7 +251,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorageRef<H>
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		// TODO switch proof model too (use a trie)
 		if let Some(v) = self.proof_recorder.read().get(key) {
 			return Ok(v.clone());
 		}
@@ -351,7 +352,6 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		let (root, mut tx) = self.0.storage_root(delta);
-		// TODO should we prove over a collection of child trie instead?
 		(root, tx.remove(&ChildInfo::top_trie()))
 	}
 

@@ -273,7 +273,6 @@ impl<'a, S, H, O> hash_db::PlainDBRef<H::Out, DBValue> for Ephemeral<'a, S, H, O
 	O: hash_db::HashDB<H, DBValue> + Default + Consolidate,
 {
 	fn get(&self, key: &H::Out) -> Option<DBValue> {
-		// TODO need new trait with ct as parameter!!!
 		if let Some(val) = hash_db::HashDB::get(self.overlay, key, EMPTY_PREFIX) {
 			Some(val)
 		} else {
@@ -426,7 +425,6 @@ impl<H: Hasher> TrieBackendStorageRef<H> for (Arc<dyn Storage<H>>, ChildInfo) {
 pub struct ChildTrieBackendStorage<'a, H: Hasher, B: TrieBackendStorageRef<H>> {
 	db: &'a B,
 	info: Option<&'a ChildInfo>,
-	buffer: &'a mut Vec<u8>,
 	_ph: PhantomData<H>,
 }
 
@@ -451,12 +449,6 @@ impl<'a, H: Hasher, B: TrieBackendStorageRef<H>> TrieBackendStorageRef<H> for Ch
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
 		if let Some(keyspace) = self.info.as_ref().map(|ci| ci.keyspace()) {
-			// TODO switch to &mut self like in overlay pr and use commented code
-			/*self.buffer.resize(keyspace.len() + prefix.0.len(), 0);
-			self.buffer[..keyspace.len()].copy_from_slice(keyspace);
-			self.buffer[keyspace.len()..].copy_from_slice(prefix.0);
-			self.db.get(key, (self.buffer.as_slice(), prefix.1))*/
-
 			let prefix = keyspace_as_prefix_alloc(keyspace, prefix);
 			self.db.get(key, (prefix.0.as_slice(), prefix.1))
 		} else {
@@ -475,8 +467,6 @@ impl<H: Hasher> TrieBackendStorageRef<H> for PrefixedMemoryDB<H> {
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		// TODO should we split prefixed memory db too?? -> likely yes: sharing
-		// rc does not make sense -> change type of PrefixedMemoryDB.
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
 }
