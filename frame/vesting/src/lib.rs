@@ -54,8 +54,9 @@ use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
 }};
 use frame_support::{decl_module, decl_event, decl_storage, ensure, decl_error};
 use frame_support::traits::{
-	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier
+	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier, ExistenceRequirement
 };
+use frame_support::weights::SimpleDispatchInfo;
 use frame_system::{self as system, ensure_signed};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -204,6 +205,35 @@ decl_module! {
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
+		}
+
+		/// Create a vested transfer. 
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `target`: The account that should be transferred the vested funds.
+		/// - `amount`: The amount of funds to transfer and will be vested.
+		/// - `schedule`: The vesting schedule attached to the transfer.
+		///
+		/// Emits `VestingCreated`.
+		///
+		/// # <weight>
+		/// -
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		pub fn vested_transfer(
+			origin,
+			target: <T::Lookup as StaticLookup>::Source,
+			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>
+		) -> DispatchResult {
+			let transactor = ensure_signed(origin)?;
+			let who = T::Lookup::lookup(target)?;
+
+			Self::add_vesting_schedule(&who, schedule.locked, schedule.per_block, schedule.starting_block)?;
+
+			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
+			
+			Ok(())
 		}
 	}
 }
@@ -605,6 +635,85 @@ mod tests {
 
 				// Account 12 can still send liquid funds
 				assert_ok!(Balances::transfer(Some(12).into(), 3, 256 * 5));
+			});
+	}
+
+	#[test]
+	fn vested_transfer_works() {
+		ExtBuilder::default()
+			.existential_deposit(256)
+			.build()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), 1);
+				let user3_free_balance = Balances::free_balance(&3);
+				let user4_free_balance = Balances::free_balance(&4);
+				assert_eq!(user3_free_balance, 256 * 30);
+				assert_eq!(user4_free_balance, 256 * 40);
+				// Account 4 should not have any vesting yet.
+				assert_eq!(Vesting::vesting(&4), None);
+				// Make the schedule for the new transfer.
+				let new_vesting_schedule = VestingInfo {
+					locked: 256 * 5,
+					per_block: 64, // Vesting over 20 blocks
+					starting_block: 10,
+				};
+				assert_ok!(Vesting::vested_transfer(Some(3).into(), 4, new_vesting_schedule));
+				// Now account 4 should have vesting.
+				assert_eq!(Vesting::vesting(&4), Some(new_vesting_schedule));
+				// Ensure the transfer happened correctly.
+				let user3_free_balance_updated = Balances::free_balance(&3);
+				assert_eq!(user3_free_balance_updated, 256 * 25);
+				let user4_free_balance_updated = Balances::free_balance(&4);
+				assert_eq!(user4_free_balance_updated, 256 * 45);
+				// Account 4 has 5 * 256 locked.
+				assert_eq!(Vesting::vesting_balance(&4), 256 * 5);
+
+				System::set_block_number(20);
+				assert_eq!(System::block_number(), 20);
+
+				// Account 4 has 5 * 64 unites vested by block 20.
+				assert_eq!(Vesting::vesting_balance(&4), 10 * 64);
+
+				System::set_block_number(30);
+				assert_eq!(System::block_number(), 30);
+
+				// Account 4 has fully vested.
+				assert_eq!(Vesting::vesting_balance(&4), 0);
+			});
+	}
+
+	#[test]
+	fn vested_transfer_correctly_fails() {
+		ExtBuilder::default()
+			.existential_deposit(256)
+			.build()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), 1);
+				let user2_free_balance = Balances::free_balance(&2);
+				let user4_free_balance = Balances::free_balance(&4);
+				assert_eq!(user2_free_balance, 256 * 20);
+				assert_eq!(user4_free_balance, 256 * 40);
+				// Account 2 should already have a vesting schedule.
+				let user2_vesting_schedule = VestingInfo {
+					locked: 256 * 20,
+					per_block: 256, // Vesting over 20 blocks
+					starting_block: 10,
+				};
+				assert_eq!(Vesting::vesting(&2), Some(user2_vesting_schedule));
+
+				// The vesting schedule we will try to create.
+				let new_vesting_schedule = VestingInfo {
+					locked: 256 * 5,
+					per_block: 64, // Vesting over 20 blocks
+					starting_block: 10,
+				};
+				assert_noop!(
+					Vesting::vested_transfer(Some(4).into(), 2, new_vesting_schedule),
+					Error::<Test>::ExistingVestingSchedule
+				);
+				// Verify no currency transfer happened.
+				assert_eq!(user2_free_balance, 256 * 20);
+				assert_eq!(user4_free_balance, 256 * 40);
 			});
 	}
 }
