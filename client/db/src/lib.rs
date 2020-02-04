@@ -1811,6 +1811,10 @@ pub(crate) mod tests {
 	#[test]
 	fn set_state_data() {
 		let db = Backend::<Block>::new_test(2, 0);
+
+		let child_info = sp_core::storage::ChildInfo::new_default(b"unique_id");
+		let storage_key = b":child_storage:default:key1";
+
 		let hash = {
 			let mut op = db.begin_operation().unwrap();
 			db.begin_state_operation(&mut op, BlockId::Hash(Default::default())).unwrap();
@@ -1827,16 +1831,28 @@ pub(crate) mod tests {
 				(vec![1, 2, 3], vec![9, 9, 9]),
 			];
 
-			header.state_root = op.old_state.storage_root(storage
+			let child_storage = vec![
+				(vec![2, 3, 5], Some(vec![4, 4, 6])),
+				(vec![2, 2, 3], Some(vec![7, 9, 9])),
+			];
+
+			header.state_root = op.old_state.full_storage_root(storage
 				.iter()
 				.cloned()
-				.map(|(x, y)| (x, Some(y)))
+				.map(|(x, y)| (x, Some(y))),
+				vec![(storage_key.to_vec(), child_storage.clone(), child_info.clone())],
+				false,
 			).0.into();
 			let hash = header.hash();
 
+			let mut children = HashMap::default();
+			children.insert(storage_key.to_vec(), sp_core::storage::StorageChild {
+				child_info: child_info.clone(),
+				data: child_storage.iter().map(|(k, v)| (k.clone(), v.clone().unwrap())).collect(),
+			});
 			op.reset_storage(Storage {
 				top: storage.iter().cloned().collect(),
-				children: Default::default(),
+				children,
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -1852,6 +1868,10 @@ pub(crate) mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), Some(vec![2, 4, 6]));
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), None);
+			assert_eq!(
+				state.child_storage(&storage_key[..], &child_info, &[2, 3, 5]).unwrap(),
+				Some(vec![4, 4, 6]),
+			);
 
 			hash
 		};
@@ -1890,6 +1910,12 @@ pub(crate) mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), None);
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
+			assert_eq!(
+				state.child_storage(&storage_key[..], &child_info, &[2, 3, 5]).unwrap(),
+				Some(vec![4, 4, 6]),
+			);
+
+
 		}
 	}
 
