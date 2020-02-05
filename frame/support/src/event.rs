@@ -468,15 +468,15 @@ macro_rules! impl_outer_event {
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $name {
-				system($system::Event),
+				system($system::Event < $runtime > ),
 				$(
 					[< $module_name $(_ $generic_instance )? >](
 						$module_name::Event < $( $generic_param )? $(, $module_name::$generic_instance )? >
 					),
 				)*
 			}
-			impl From<$system::Event> for $name {
-				fn from(x: $system::Event) -> Self {
+			impl From<$system::Event < $runtime >> for $name {
+				fn from(x: $system::Event < $runtime >) -> Self {
 					$name::system(x)
 				}
 			}

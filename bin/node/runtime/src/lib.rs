@@ -129,7 +129,7 @@ impl frame_system::Trait for Runtime {
 	type ModuleToIndex = ModuleToIndex;
 	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = Indices;
-	type OnReapAccount = (System, Staking, Contracts, Session, Recovery);
+	type OnReapAccount = (Balances, Staking, Contracts, Session, Recovery);
 }
 
 parameter_types! {
