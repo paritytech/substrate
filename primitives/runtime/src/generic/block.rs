@@ -63,7 +63,7 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 
 /// Abstraction over a substrate block.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, parity_util_mem::MallocSizeOf))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Block<Header, Extrinsic: MaybeSerialize> {
@@ -71,18 +71,6 @@ pub struct Block<Header, Extrinsic: MaybeSerialize> {
 	pub header: Header,
 	/// The accompanying extrinsics.
 	pub extrinsics: Vec<Extrinsic>,
-}
-
-#[cfg(feature = "std")]
-impl<Header, Extrinsic> parity_util_mem::MallocSizeOf for Block<Header, Extrinsic>
-where
-	Header: parity_util_mem::MallocSizeOf,
-	Extrinsic: MaybeSerialize + parity_util_mem::MallocSizeOf,
-{
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.header.size_of(ops) +
-			self.extrinsics.size_of(ops)
-	}
 }
 
 impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
