@@ -149,8 +149,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
-mod mock;
+mod tests_local;
 #[cfg(test)]
+mod tests_composite;
+#[cfg(test)]
+#[macro_use]
 mod tests;
 
 use sp_std::prelude::*;

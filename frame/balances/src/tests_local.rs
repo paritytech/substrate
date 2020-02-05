@@ -23,7 +23,7 @@ use frame_support::{impl_outer_origin, parameter_types};
 use frame_support::traits::{Get, StorageMapShim};
 use frame_support::weights::{Weight, DispatchInfo};
 use std::cell::RefCell;
-use crate::{GenesisConfig, Module, Trait};
+use crate::{GenesisConfig, Module, Trait, decl_tests};
 
 use frame_system as system;
 impl_outer_origin!{
@@ -31,7 +31,7 @@ impl_outer_origin!{
 }
 
 thread_local! {
-	pub(crate) static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
+	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
 }
 
@@ -73,7 +73,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = super::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnReapAccount = Balances;
+	type OnReapAccount = Module<Test>;
 }
 parameter_types! {
 	pub const TransactionBaseFee: u64 = 0;
@@ -94,12 +94,12 @@ impl Trait for Test {
 	type Event = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type CreationFee = CreationFee;
-	type AccountStore = System;/*StorageMapShim<
+	type AccountStore = StorageMapShim<
 		super::Account<Test>,
 		system::CallOnCreatedAccount<Test>,
 		system::CallKillAccount<Test>,
 		u64, super::AccountData<u64>
-	>;*/
+	>;
 }
 
 pub struct ExtBuilder {
@@ -156,12 +156,4 @@ impl ExtBuilder {
 	}
 }
 
-pub type System = frame_system::Module<Test>;
-pub type Balances = Module<Test>;
-
-pub const CALL: &<Test as frame_system::Trait>::Call = &();
-
-/// create a transaction info struct from weight. Handy to avoid building the whole struct.
-pub fn info_from_weight(w: Weight) -> DispatchInfo {
-	DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
-}
+decl_tests!{ Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
