@@ -1187,7 +1187,7 @@ ServiceBuilder<
 			task_executor: if let Some(exec) = config.task_executor {
 				exec
 			} else {
-				return Err(Error::TasksExecutorRequired);
+				return Err(Error::TaskExecutorRequired);
 			},
 			rpc_handlers,
 			_rpc: rpc,
