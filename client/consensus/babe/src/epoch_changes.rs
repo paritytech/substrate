@@ -72,14 +72,12 @@ impl<'a, H, Block> IsDescendentOfBuilder<Block::Hash>
 }
 
 /// An unimported genesis epoch.
-#[derive(Decode, Encode, Debug, Clone)]
 pub struct UnimportedGenesis(Epoch);
 
 /// The viable epoch under which a block can be verified.
 ///
 /// If this is the first non-genesis block in the chain, then it will
 /// hold an `UnimportedGenesis` epoch.
-#[derive(Decode, Encode, Debug, Clone)]
 pub enum ViableEpoch {
 	Genesis(UnimportedGenesis),
 	Regular(Epoch),

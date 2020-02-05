@@ -67,7 +67,6 @@ use std::{
 	collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration},
 	any::Any, borrow::Cow
 };
-use codec::{Encode, Decode};
 use sp_consensus_babe;
 use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
@@ -202,7 +201,6 @@ macro_rules! babe_info {
 
 
 /// Intermediate value passed to block importer.
-#[derive(Encode, Decode, Clone, Debug)]
 pub struct BabeIntermediate {
 	/// The epoch data, if available.
 	pub epoch: Option<ViableEpoch>,
