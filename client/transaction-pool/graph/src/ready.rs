@@ -36,21 +36,12 @@ use crate::base_pool::Transaction;
 /// An in-pool transaction reference.
 ///
 /// Should be cheap to clone.
-#[derive(Debug)]
+#[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct TransactionRef<Hash, Ex> {
 	/// The actual transaction data.
 	pub transaction: Arc<Transaction<Hash, Ex>>,
 	/// Unique id when transaction was inserted into the pool.
 	pub insertion_id: u64,
-}
-
-impl<Hash, Ex> parity_util_mem::MallocSizeOf for TransactionRef<Hash, Ex>
-where Transaction<Hash, Ex>: parity_util_mem::MallocSizeOf
-{
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.transaction.size_of(ops) +
-			self.insertion_id.size_of(ops)
-	}
 }
 
 impl<Hash, Ex> Clone for TransactionRef<Hash, Ex> {
