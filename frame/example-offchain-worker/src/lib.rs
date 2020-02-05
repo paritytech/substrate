@@ -252,21 +252,13 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::marker::PhantomData;
 use frame_support::{
 	debug,
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
-	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
+	weights::SimpleDispatchInfo,
 };
-use frame_system::{self as system, ensure_signed, ensure_root, offchain};
-use codec::{Encode, Decode};
-use sp_runtime::{
-	traits::{SignedExtension, Bounded, SaturatedConversion},
-	transaction_validity::{
-		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
-	},
-	offchain::http,
-};
+use frame_system::{self as system, ensure_signed, offchain};
+use sp_runtime::offchain::http;
 use sp_core::crypto::KeyTypeId;
 use serde_json as json;
 
@@ -315,6 +307,7 @@ decl_module! {
 		///
 		/// TODO [ToDr] Document that this happens on-chain
 		/// and is triggered by transaction.
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		pub fn submit_price(origin, price: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
