@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 
 use std::{
-	path::{PathBuf, Path}, collections::HashMap, fs::{File, self}, io::{Read, Write},
+	path::{PathBuf, Path}, collections::HashMap, fs::{File, OpenOptions, self}, io::{Read, Write},
 	process::Command
 };
 
@@ -88,7 +88,7 @@ fn replace_path_dependencies_with_git(cargo_toml_path: &Path, commit_id: &str, c
 	// remove `Cargo.toml`
 	cargo_toml_path.pop();
 
-	for &table in &["dependencies", "build-dependencies"] {
+	for &table in &["dependencies", "build-dependencies", "dev-dependencies"] {
 		let mut dependencies: toml::value::Table = match cargo_toml
 			.remove(table)
 			.and_then(|v| v.try_into().ok()) {
@@ -212,10 +212,20 @@ fn main() {
 	let node_template_path = build_dir.path().join(node_template_folder);
 
 	copy_node_template(&options.node_template, build_dir.path());
-	let cargo_tomls = find_cargo_tomls(build_dir.path().to_owned());
+	let mut cargo_tomls = find_cargo_tomls(build_dir.path().to_owned());
 
 	let commit_id = get_git_commit_id(&options.node_template);
 	let top_level_cargo_toml_path = node_template_path.join("Cargo.toml");
+
+	// Check if top level Cargo.toml exists. If not, create one in the destination
+	if !cargo_tomls.contains(&top_level_cargo_toml_path) {
+		// create the top_level_cargo_toml
+		OpenOptions::new().create(true).write(true).open(top_level_cargo_toml_path.clone())
+			.expect("Create root level `Cargo.toml` failed.");
+
+		// push into our data structure
+		cargo_tomls.push(PathBuf::from(top_level_cargo_toml_path.clone()));
+	}
 
 	cargo_tomls.iter().for_each(|t| {
 		let mut cargo_toml = parse_cargo_toml(&t);
