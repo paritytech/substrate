@@ -530,7 +530,7 @@ macro_rules! __impl_outer_event_json_metadata {
 				$crate::event::OuterEventMetadata {
 					name: $crate::event::DecodeDifferent::Encode(stringify!($event_name)),
 					events: $crate::event::DecodeDifferent::Encode(&[
-						("system", $crate::event::FnEncode($system::Event::metadata))
+						("system", $crate::event::FnEncode($system::Event::<$runtime>::metadata))
 						$(
 							, (
 								stringify!($module_name),
