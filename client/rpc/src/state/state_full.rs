@@ -33,8 +33,7 @@ use sc_client::{
 	Client, CallExecutor, BlockchainEvents
 };
 use sp_core::{
-	storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
-	Bytes,
+	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{

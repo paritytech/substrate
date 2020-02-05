@@ -253,18 +253,13 @@ impl ChildInfo {
 	}
 }
 
-/// Type of child, it is encoded in the four first byte of the
-/// encoded child info (LE u32).
+/// Type of child.
 /// It does not strictly define different child type, it can also
 /// be related to technical consideration or api variant.
 #[repr(u32)]
 #[derive(Clone, Copy, PartialEq)]
 pub enum ChildType {
 	/// Default, it uses a cryptographic strong unique id as input.
-	/// All bytes following the type in encoded form are this unique
-	/// id.
-	/// If the trie got a unique id of length 0 it is considered
-	/// as a top child trie.
 	CryptoUniqueId = 1,
 }
 
@@ -357,12 +352,26 @@ impl<T> ChildrenMap<T> {
 		}
 	}
 
-	/// Extends two maps, by enxtending entries with the same key.
+	/// Extends two maps, by extending entries with the same key.
 	pub fn extend_replace(
 		&mut self,
 		other: impl Iterator<Item = (ChildInfo, T)>,
 	) {
 		self.0.extend(other)
+	}
+
+	/// Retains only the elements specified by the predicate.
+	pub fn retain(&mut self, mut f: impl FnMut(&ChildInfo, &mut T) -> bool) {
+		let mut to_del = Vec::new();
+		for (k, v) in self.0.iter_mut() {
+			if !f(k, v) {
+				// this clone can be avoid with unsafe code
+				to_del.push(k.clone());
+			}
+		}
+		for k in to_del {
+			self.0.remove(&k);
+		}
 	}
 }
 

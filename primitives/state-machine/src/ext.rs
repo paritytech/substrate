@@ -537,7 +537,7 @@ where
 		} else {
 			let storage_key = storage_key.as_ref();
 
-			if let Some(child_info) = self.overlay.child_info(storage_key).to_owned() {
+			if let Some(child_info) = self.overlay.child_info(storage_key).clone() {
 				let (root, _is_empty, _) = {
 					let delta = self.overlay.committed.children.get(storage_key)
 						.into_iter()

@@ -702,7 +702,7 @@ mod tests {
 		fallback_succeeds: bool,
 	}
 
-	const CHILD_INFO_1: &'static [u8] = b"unique_id_1";
+	const CHILD_UID_1: &'static [u8] = b"unique_id_1";
 
 	impl CodeExecutor for DummyCodeExecutor {
 		type Error = u8;
@@ -933,7 +933,7 @@ mod tests {
 	#[test]
 	fn set_child_storage_works() {
 
-		let child_info1 = ChildInfo::new_default(CHILD_INFO_1);
+		let child_info1 = ChildInfo::new_default(CHILD_UID_1);
 		let mut state = InMemoryBackend::<Blake2Hasher>::default();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
@@ -977,7 +977,7 @@ mod tests {
 	#[test]
 	fn prove_read_and_proof_check_works() {
 
-		let child_info1 = ChildInfo::new_default(CHILD_INFO_1);
+		let child_info1 = ChildInfo::new_default(CHILD_UID_1);
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;

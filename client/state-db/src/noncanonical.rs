@@ -28,7 +28,6 @@ use log::trace;
 use sp_core::storage::{ChildInfo, ChildrenMap, ChildrenVec};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
-// version at start to avoid collision when adding a unit
 const NON_CANONICAL_JOURNAL_V1: &[u8] = b"v1_non_canonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
 
@@ -67,8 +66,7 @@ struct JournalRecordV1<BlockHash: Hash, Key: Hash> {
 
 impl<BlockHash: Hash, Key: Hash> From<JournalRecordCompat<BlockHash, Key>> for JournalRecordV1<BlockHash, Key> {
 	// Note that this compatibility only works as long as the backend
-	// db strategy match the one from current implementation, that
-	// is for default child trie which use same state column as top.
+	// child storage format is the same in both case. 
 	fn from(old: JournalRecordCompat<BlockHash, Key>) -> Self {
 		JournalRecordV1 {
 			hash: old.hash,

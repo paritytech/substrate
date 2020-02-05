@@ -22,7 +22,6 @@ sp-externalities = { version = "0.8.0", path = "../externalities" }
 
 [dev-dependencies]
 hex-literal = "0.2.1"
-sp-trie = { version = "2.0.0", path = "../trie", features = ["test-helpers"] }
 
 [features]
 default = []

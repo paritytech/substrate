@@ -315,8 +315,6 @@ mod tests {
 	use sp_core::storage::well_known_keys::CODE;
 	use hex_literal::hex;
 
-	const CHILD_INFO_1: &'static [u8] = b"unique_id_1";
-
 	#[test]
 	fn commit_should_work() {
 		let mut ext = BasicExternalities::default();
@@ -340,7 +338,7 @@ mod tests {
 
 	#[test]
 	fn children_works() {
-		let child_info1 = ChildInfo::new_default(CHILD_INFO_1);
+		let child_info1 = ChildInfo::new_default(b"unique_id_1");
 		let child_storage = b":child_storage:default:test".to_vec();
 
 		let mut ext = BasicExternalities::new(Storage {

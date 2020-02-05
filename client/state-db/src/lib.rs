@@ -141,12 +141,12 @@ pub struct CommitSet<H> {
 }
 
 impl<H> CommitSet<H> {
-	/// Number of inserted key value element in the set.
+	/// Number of inserted key value elements in the set.
 	pub fn inserted_len(&self) -> usize {
 		self.data.iter().map(|set| set.1.inserted.len()).sum()
 	}
 
-	/// Number of deleted key value element in the set.
+	/// Number of deleted key value elements in the set.
 	pub fn deleted_len(&self) -> usize {
 		self.data.iter().map(|set| set.1.deleted.len()).sum()
 	}
@@ -261,7 +261,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		hash: &BlockHash,
 		number: u64,
 		parent_hash: &BlockHash,
-		mut changeset: ChildTrieChangeSets<Key>,
+		mut changesets: ChildTrieChangeSets<Key>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 		let mut meta = ChangeSet::default();
 		if number == 0 {
@@ -271,17 +271,17 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 
 		match self.mode {
 			PruningMode::ArchiveAll => {
-				for changeset in changeset.iter_mut() {
+				for changeset in changesets.iter_mut() {
 					changeset.1.deleted.clear();
 				}
 				// write changes immediately
 				Ok(CommitSet {
-					data: changeset,
+					data: changesets,
 					meta: meta,
 				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				let commit = self.non_canonical.insert(hash, number, parent_hash, changeset);
+				let commit = self.non_canonical.insert(hash, number, parent_hash, changesets);
 				commit.map(|mut c| {
 					c.meta.inserted.extend(meta.inserted);
 					c
@@ -456,9 +456,9 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 		hash: &BlockHash,
 		number: u64,
 		parent_hash: &BlockHash,
-		changeset: ChildTrieChangeSets<Key>,
+		changesets: ChildTrieChangeSets<Key>,
 	) -> Result<CommitSet<Key>, Error<E>> {
-		self.db.write().insert_block(hash, number, parent_hash, changeset)
+		self.db.write().insert_block(hash, number, parent_hash, changesets)
 	}
 
 	/// Finalize a previously inserted block.

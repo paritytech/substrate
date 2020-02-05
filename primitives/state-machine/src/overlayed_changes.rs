@@ -130,7 +130,7 @@ pub struct StorageTransactionCache<Transaction, H: Hasher, N: BlockNumber> {
 	pub(crate) transaction: Option<Transaction>,
 	/// The storage root after applying the transaction.
 	pub(crate) transaction_storage_root: Option<H::Out>,
-	/// The child root storage root after applying the transaction.
+	/// The storage child roots after applying the transaction.
 	pub(crate) transaction_child_storage_root: BTreeMap<StorageKey, Option<H::Out>>,
 	/// Contains the changes trie transaction.
 	pub(crate) changes_trie_transaction: Option<Option<ChangesTrieTransaction<H, N>>>,
@@ -539,7 +539,7 @@ impl OverlayedChanges {
 					),
 				self.child_info(storage_key)
 					.expect("child info initialized in either committed or prospective")
-					.to_owned(),
+					.clone(),
 			)
 		);
 
@@ -589,10 +589,10 @@ impl OverlayedChanges {
 	/// Take the latest value so prospective first.
 	pub fn child_info(&self, storage_key: &[u8]) -> Option<&ChildInfo> {
 		if let Some((_, ci)) = self.prospective.children.get(storage_key) {
-			return Some(&*ci);
+			return Some(&ci);
 		}
 		if let Some((_, ci)) = self.committed.children.get(storage_key) {
-			return Some(&*ci);
+			return Some(&ci);
 		}
 		None
 	}

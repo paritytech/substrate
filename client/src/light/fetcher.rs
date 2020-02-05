@@ -351,7 +351,7 @@ pub mod tests {
 	use sp_state_machine::Backend;
 	use super::*;
 
-	const CHILD_INFO_1: &'static [u8] = b"unique_id_1";
+	const CHILD_UID_1: &'static [u8] = b"unique_id_1";
 
 	type TestChecker = LightDataChecker<
 		NativeExecutor<substrate_test_runtime_client::LocalExecutor>,
@@ -399,7 +399,7 @@ pub mod tests {
 	}
 
 	fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, Vec<u8>) {
-		let child_info1 = ChildInfo::new_default(CHILD_INFO_1);
+		let child_info1 = ChildInfo::new_default(CHILD_UID_1);
 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
 		use substrate_test_runtime_client::TestClientBuilderExt;
 		// prepare remote client
@@ -506,7 +506,7 @@ pub mod tests {
 			result,
 		) = prepare_for_read_child_proof_check();
 
-		let child_info = ChildInfo::new_default(CHILD_INFO_1);
+		let child_info = ChildInfo::new_default(CHILD_UID_1);
 		let child_infos = child_info.info();
 		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_child_proof(
 			&RemoteReadChildRequest::<Header> {

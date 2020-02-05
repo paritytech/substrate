@@ -488,11 +488,9 @@ where
 
 	fn get(
 		&self,
-		child_info: &sp_core::storage::ChildInfo,
 		key: &Block::Hash,
 		_prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		debug_assert!(child_info.is_top_trie());
 		self.db.get(self.changes_tries_column, key.as_ref())
 			.map_err(|err| format!("{}", err))
 	}
@@ -532,6 +530,7 @@ mod tests {
 	};
 	use sp_blockchain::HeaderBackend as BlockchainHeaderBackend;
 	use sp_core::H256;
+	use sp_core::storage::ChildInfo;
 	use sp_runtime::testing::{Digest, Header};
 	use sp_runtime::traits::{Hash, BlakeTwo256};
 	use sp_state_machine::{ChangesTrieRootsStorage, ChangesTrieStorage};
@@ -596,9 +595,8 @@ mod tests {
 			assert_eq!(backend.changes_tries_storage.root(&anchor, block), Ok(Some(changes_root)));
 
 			let storage = backend.changes_tries_storage.storage();
-			let top_trie = sp_core::storage::ChildInfo::top_trie();
 			for (key, (val, _)) in changes_trie_update.drain() {
-				assert_eq!(storage.get(&top_trie, &key, EMPTY_PREFIX), Ok(Some(val)));
+				assert_eq!(storage.get(&key, EMPTY_PREFIX), Ok(Some(val)));
 			}
 		};
 
@@ -708,7 +706,6 @@ mod tests {
 				.cloned();
 			match trie_root {
 				Some(trie_root) => backend.changes_tries_storage.get(
-					&sp_core::storage::ChildInfo::top_trie(),
 					&trie_root,
 					EMPTY_PREFIX,
 				).unwrap().is_none(),

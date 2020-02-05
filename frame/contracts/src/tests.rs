@@ -318,8 +318,8 @@ fn account_removal_removes_storage() {
 		let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
 		let child_info1 = crate::trie_unique_id(trie_id1.as_ref());
 		let child_info2 = crate::trie_unique_id(trie_id2.as_ref());
-		let child_info1 = Some(&child_info1);
-		let child_info2 = Some(&child_info2);
+		let child_info1 = Some((&trie_id1, &child_info1));
+		let child_info2 = Some((&trie_id2, &child_info2));
 		let key1 = &[1; 32];
 		let key2 = &[2; 32];
 
@@ -365,15 +365,15 @@ fn account_removal_removes_storage() {
 		// Verify that all entries from account 1 is removed, while
 		// entries from account 2 is in place.
 		{
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), child_info1, key1).is_none());
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), child_info2, key2).is_none());
+			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, child_info1, key1).is_none());
+			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, child_info1, key2).is_none());
 
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), child_info2, key1),
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, child_info2, key1),
 				Some(b"3".to_vec())
 			);
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), child_info2, key2),
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, child_info2, key2),
 				Some(b"4".to_vec())
 			);
 		}

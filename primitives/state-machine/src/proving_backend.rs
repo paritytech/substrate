@@ -410,9 +410,6 @@ mod tests {
 	use crate::proving_backend::create_proof_check_backend;
 	use sp_trie::PrefixedMemoryDB;
 
-	const CHILD_INFO_1: &'static [u8] = b"unique_id_1";
-	const CHILD_INFO_2: &'static [u8] = b"unique_id_2";
-
 	fn test_proving<'a>(
 		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>,Blake2Hasher>,
 	) -> ProvingBackend<'a, PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher> {
@@ -481,8 +478,8 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
-		let child_info1 = ChildInfo::new_default(CHILD_INFO_1);
-		let child_info2 = ChildInfo::new_default(CHILD_INFO_2);
+		let child_info1 = ChildInfo::new_default(b"unique_id_1");
+		let child_info2 = ChildInfo::new_default(b"unique_id_2");
 		let subtrie1 = ChildStorageKey::from_slice(b":child_storage:default:sub1").unwrap();
 		let subtrie2 = ChildStorageKey::from_slice(b":child_storage:default:sub2").unwrap();
 		let own1 = subtrie1.into_owned();

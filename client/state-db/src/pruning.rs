@@ -26,7 +26,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use codec::{Encode, Decode};
 use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
 use log::{trace, warn};
-use sp_core::storage::{ChildInfo, ChildrenVec};
+use sp_core::storage::{ChildInfo, ChildrenVec, ChildrenMap};
 use super::ChangeSet;
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
@@ -40,7 +40,7 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	/// A queue of keys that should be deleted for each block in the pruning window.
 	death_rows: VecDeque<DeathRow<BlockHash, Key>>,
 	/// An index that maps each key from `death_rows` to block number.
-	death_index: HashMap<ChildInfo, HashMap<Key, u64>>,
+	death_index: ChildrenMap<HashMap<Key, u64>>,
 	/// Block number that corresponts to the front of `death_rows`
 	pending_number: u64,
 	/// Number of call of `note_canonical` after
@@ -51,21 +51,11 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	pending_prunings: usize,
 }
 
-impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
-	fn remove_death_index(&mut self, child_info: &ChildInfo, key: &Key) -> Option<u64> {
-		if let Some(child_index) = self.death_index.get_mut(child_info) {
-			child_index.remove(key)
-		} else {
-			None
-		}
-	}
-}
-
 #[derive(Debug, PartialEq, Eq)]
 struct DeathRow<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,
-	deleted: HashMap<ChildInfo, HashSet<Key>>,
+	deleted: ChildrenMap<HashSet<Key>>,
 }
 
 impl<BlockHash: Hash, Key: Hash> DeathRow<BlockHash, Key> {
@@ -162,10 +152,12 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 	) {
 		// remove all re-inserted keys from death rows
 		for (child_info, inserted) in inserted {
-			for k in inserted {
-				if let Some(block) = self.remove_death_index(&child_info, &k) {
-					self.death_rows[(block - self.pending_number) as usize]
-						.remove_deleted(&child_info, &k);
+			if let Some(child_index) = self.death_index.get_mut(&child_info) {
+				for k in inserted {
+					if let Some(block) = child_index.remove(&k) {
+						self.death_rows[(block - self.pending_number) as usize]
+							.remove_deleted(&child_info, &k);
+					}
 				}
 			}
 		}
@@ -178,7 +170,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 				entry.insert(k.clone(), imported_block);
 			}
 		}
-		let mut deleted_death_row = HashMap::<ChildInfo, HashSet<Key>>::new();
+		let mut deleted_death_row = ChildrenMap::<HashSet<Key>>::default();
 		for (child_info, deleted) in deleted.into_iter() {
 			let entry = deleted_death_row.entry(child_info).or_default();
 			entry.extend(deleted);

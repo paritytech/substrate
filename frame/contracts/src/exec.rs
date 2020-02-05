@@ -699,13 +699,11 @@ where
 	type T = T;
 
 	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
-		let (trie_id, child_info) = self.ctx.self_trie_info.as_ref()
-			.map(|info| (Some(&info.0), Some(&info.1)))
-			.unwrap_or((None, None));
+		let trie_id = self.ctx.self_trie_info.as_ref()
+			.map(|info| ((&info.0, &info.1)));
 		self.ctx.overlay.get_storage(
 			&self.ctx.self_account,
 			trie_id,
-			child_info,
 			key,
 		)
 	}

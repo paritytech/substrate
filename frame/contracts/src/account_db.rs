@@ -111,8 +111,7 @@ pub trait AccountDb<T: Trait> {
 	fn get_storage(
 		&self,
 		account: &T::AccountId,
-		trie_id: Option<&TrieId>,
-		child_info: Option<&ChildInfo>,
+		trie_id: Option<(&TrieId, &ChildInfo)>,
 		location: &StorageKey
 	) -> Option<Vec<u8>>;
 	/// If account has an alive contract then return the code hash associated.
@@ -131,15 +130,10 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(
 		&self,
 		_account: &T::AccountId,
-		trie_id: Option<&TrieId>,
-		child_info: Option<&ChildInfo>,
+		trie_id: Option<(&TrieId, &ChildInfo)>,
 		location: &StorageKey
 	) -> Option<Vec<u8>> {
-		trie_id.and_then(|id| if let Some(child_info) = child_info {
-			child::get_raw(id, child_info, &blake2_256(location))
-		} else {
-			child::get_raw(id, &crate::trie_unique_id(&id[..]), &blake2_256(location))
-		})
+		trie_id.and_then(|(id, child_info)| child::get_raw(id, child_info, &blake2_256(location)))
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
@@ -345,15 +339,14 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 	fn get_storage(
 		&self,
 		account: &T::AccountId,
-		trie_id: Option<&TrieId>,
-		child_info: Option<&ChildInfo>,
+		trie_id: Option<(&TrieId, &ChildInfo)>,
 		location: &StorageKey
 	) -> Option<Vec<u8>> {
 		self.local
 			.borrow()
 			.get(account)
 			.and_then(|changes| changes.storage(location))
-			.unwrap_or_else(|| self.underlying.get_storage(account, trie_id, child_info, location))
+			.unwrap_or_else(|| self.underlying.get_storage(account, trie_id, location))
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		self.local

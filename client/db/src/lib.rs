@@ -688,7 +688,7 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 			let keyspace = child_info.keyspace();
 			let mut key_buffer = vec![0; keyspace.len() + key.len()];
 			key_buffer[..keyspace.len()].copy_from_slice(keyspace);
-			key_buffer[keyspace.len()..].copy_from_slice(&key[..]);
+			key_buffer[keyspace.len()..].copy_from_slice(key);
 			self.db.get(columns::STATE, &key_buffer[..])
 		}.map(|r| r.map(|v| v.to_vec()))
 	}
@@ -1128,18 +1128,18 @@ impl<Block: BlockT> Backend<Block> {
 				let mut ops: u64 = 0;
 				let mut bytes: u64 = 0;
 				for (info, mut updates) in operation.db_updates.into_iter() {
-					let data = changesets.entry(info).or_default();
+					let changeset = changesets.entry(info).or_default();
 					for (key, (val, rc)) in updates.drain() {
 						if rc > 0 {
 							ops += 1;
 							bytes += key.len() as u64 + val.len() as u64;
 
-							data.inserted.push((key, val.to_vec()));
+							changeset.inserted.push((key, val.to_vec()));
 						} else if rc < 0 {
 							ops += 1;
 							bytes += key.len() as u64;
 
-							data.deleted.push(key);
+							changeset.deleted.push(key);
 						}
 					}
 				}
@@ -1334,8 +1334,15 @@ impl<Block: BlockT> Backend<Block> {
 fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::CommitSet<Vec<u8>>) {
 	let mut key_buffer = Vec::new();
 	for child_data in commit.data.into_iter() {
-		if !child_data.0.is_top_trie() {
-			// children tries with prefixes
+		if child_data.0.is_top_trie() {
+			// empty prefix
+			for (key, val) in child_data.1.inserted.into_iter() {
+				transaction.put(columns::STATE, &key[..], &val);
+			}
+			for key in child_data.1.deleted.into_iter() {
+				transaction.delete(columns::STATE, &key[..]);
+			}
+		} else {
 			let keyspace = child_data.0.keyspace();
 			let keyspace_len = keyspace.len();
 			key_buffer.resize(keyspace_len, 0);
@@ -1349,14 +1356,6 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::Comm
 				key_buffer.resize(keyspace_len + key.len(), 0);
 				key_buffer[keyspace_len..].copy_from_slice(&key[..]);
 				transaction.delete(columns::STATE, &key_buffer[..]);
-			}
-		} else {
-			// top trie without prefixes
-			for (key, val) in child_data.1.inserted.into_iter() {
-				transaction.put(columns::STATE, &key[..], &val);
-			}
-			for key in child_data.1.deleted.into_iter() {
-				transaction.delete(columns::STATE, &key[..]);
 			}
 		}
 	}

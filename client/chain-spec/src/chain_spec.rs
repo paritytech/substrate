@@ -77,7 +77,10 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 			Genesis::Raw(RawGenesis { top: map, children: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 				children: children_map.into_iter().map(|(sk, child_content)| {
-					let child_info = ChildInfo::new_default(child_content.child_info.as_slice());
+					let child_info = ChildInfo::resolve_child_info(
+						child_content.child_type,
+						child_content.child_info.as_slice(),
+					).expect("chain spec contains correct content");
 					(
 						sk.0,
 						StorageChild {

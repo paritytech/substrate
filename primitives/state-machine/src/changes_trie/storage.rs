@@ -191,11 +191,10 @@ impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, N
 
 	fn get(
 		&self,
-		child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		MemoryDB::<H>::get(&self.data.read().mdb, child_info, key, prefix)
+		MemoryDB::<H>::get(&self.data.read().mdb, &ChildInfo::top_trie(), key, prefix)
 	}
 }
 
@@ -218,6 +217,7 @@ impl<'a, H, Number> TrieBackendStorageRef<H> for TrieBackendAdapter<'a, H, Numbe
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		self.storage.get(child_info, key, prefix)
+		debug_assert!(child_info.is_top_trie());
+		self.storage.get(key, prefix)
 	}
 }

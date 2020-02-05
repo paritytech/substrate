@@ -21,6 +21,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use codec::{Decode, Encode, Codec};
 use sp_core::Hasher;
+use sp_core::storage::ChildInfo;
 use num_traits::Zero;
 use sp_trie::Recorder;
 use crate::changes_trie::{AnchorBlockId, ConfigurationRange, RootsStorage, Storage, BlockNumber};
@@ -67,7 +68,7 @@ pub fn key_changes<'a, H: Hasher, Number: BlockNumber>(
 
 			_hasher: ::std::marker::PhantomData::<H>::default(),
 		},
-		child_info: sp_core::storage::ChildInfo::top_trie(),
+		child_info: ChildInfo::top_trie(),
 	})
 }
 
@@ -178,7 +179,7 @@ pub fn key_changes_proof_check_with_db<'a, H: Hasher, Number: BlockNumber>(
 
 			_hasher: ::std::marker::PhantomData::<H>::default(),
 		},
-		child_info: sp_core::storage::ChildInfo::top_trie(),
+		child_info: ChildInfo::top_trie(),
 	}.collect()
 }
 
@@ -319,7 +320,7 @@ pub struct DrilldownIterator<'a, H, Number>
 	/// This is always top trie info, but it cannot be
 	/// statically instantiated at the time (vec of null
 	/// size could be in theory).
-	child_info: sp_core::storage::ChildInfo,
+	child_info: ChildInfo,
 }
 
 impl<'a, H: Hasher, Number: BlockNumber> Iterator for DrilldownIterator<'a, H, Number>
