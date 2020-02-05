@@ -59,6 +59,14 @@ pub use sp_phragmen_compact::generate_compact_solution_type;
 // substrate's account id.
 pub trait IdentifierT: Clone + Eq + Default + Ord + Debug {}
 
+/// The errors that might occur in the this crate and compact.
+#[derive(Debug, Eq, PartialEq)]
+pub enum Error {
+	/// While going from compact to staked, the stake of all the edges has gone above the
+	/// total and the last stake cannot be assigned.
+	CompactStakeOverflow
+}
+
 impl<T: Clone + Eq + Default + Ord + Debug> IdentifierT for T {}
 
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.
@@ -133,17 +141,28 @@ pub struct Assignment<AccountId> {
 }
 
 impl<AccountId> Assignment<AccountId> {
-	pub fn into_staked<Balance, FS, C>(self, stake_of: FS) -> StakedAssignment<AccountId>
+	pub fn into_staked<Balance, FS, C>(self, stake_of: FS, fill: bool) -> StakedAssignment<AccountId>
 	where
 		C: Convert<Balance, u64>,
 		for<'r> FS: Fn(&'r AccountId) -> Balance,
 	{
 		let stake = C::convert(stake_of(&self.who)) as ExtendedBalance;
-		let distribution = self.distribution.into_iter().map(|(target, p)| {
+		let mut sum: ExtendedBalance = Bounded::min_value();
+		let mut distribution = self.distribution.into_iter().map(|(target, p)| {
 			let distribution_stake = p * stake;
+			// defensive only. We assume that balance cannot exceed extended balance.
+			sum = sum.saturating_add(distribution_stake);
 			(target, distribution_stake)
 		}).collect::<Vec<(AccountId, ExtendedBalance)>>();
 
+		if fill {
+			// if leftover is zero it is effectless.
+			if let Some(leftover) = stake.checked_sub(sum) {
+				if let Some(last) = distribution.last_mut() {
+					last.1 += leftover;
+				}
+			}
+		}
 		StakedAssignment {
 			who: self.who,
 			distribution,
@@ -425,12 +444,11 @@ pub fn elect<AccountId, Balance, FS, C>(
 /// assignment.
 ///
 /// `O(E)` where `E` is the total number of edges.
-pub fn build_support_map<Balance, AccountId>(
+pub fn build_support_map<AccountId>(
 	winners: &Vec<AccountId>,
 	assignments: &Vec<StakedAssignment<AccountId>>,
 ) -> (SupportMap<AccountId>, u32) where
 	AccountId: Default + Ord + Member,
-	Balance: Default + Copy + SimpleArithmetic,
 {
 	let mut errors = 0;
 	// Initialize the support of each candidate.

@@ -2748,25 +2748,16 @@ mod offchain_phragmen {
 				}
 			];
 
-			let compact = <CompactAssignments<AccountId, ExtendedBalance>>::from_staked(malicious_assignments);
+			let compact = <CompactAssignments<AccountId, ExtendedBalance>>::from_staked(
+				malicious_assignments,
+			);
 
 			assert_eq!(compact.votes3[0], (1, [(10, 5), (20, 8)], 30));
 
-			// converting this back will yield no stake for 0
-			let fixed_assignments = compact.into_staked::<_, _, CurrencyToVoteHandler>(&stake_of);
-
-			assert_eq!(
-				fixed_assignments,
-				vec![
-					StakedAssignment {
-						who: 1,
-						distribution: vec![(10, 5), (20, 8), (30, 0)],
-					}
-				]
+			// converting this back will yield error. This must be provided by the compact lib code.
+			assert!(
+				compact.into_staked::<_, _, CurrencyToVoteHandler>(&stake_of).is_err()
 			);
-
-			// Note: this is still wrong and sums to 13, but submitting it will yield an error
-			// anyway.
 		})
 	}
 
@@ -2878,8 +2869,13 @@ mod offchain_phragmen {
 			run_to_block(12);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-			let (compact, winners) = do_phragmen_with_post_processing(true);
-			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact));
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			assert_ok!(Staking::submit_election_solution(
+				Origin::signed(10),
+				winners,
+				compact,
+				score,
+			));
 
 			let queued_result = Staking::queued_elected().unwrap();
 			assert_eq!(queued_result.compute, ElectionCompute::Signed);
@@ -2905,8 +2901,15 @@ mod offchain_phragmen {
 			run_to_block(14);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-			let (compact, winners) = do_phragmen_with_post_processing(true);
-			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact));
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			assert_ok!(
+				Staking::submit_election_solution(
+					Origin::signed(10),
+					winners,
+					compact,
+					score,
+				)
+			);
 
 			let queued_result = Staking::queued_elected().unwrap();
 			assert_eq!(queued_result.compute, ElectionCompute::Signed);
@@ -2934,9 +2937,9 @@ mod offchain_phragmen {
 			run_to_block(11);
 			// submission is allowed
 			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
-			let (compact, winners) = do_phragmen_with_post_processing(true);
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact),
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenEarlySubmission,
 			);
 		})
@@ -2956,13 +2959,13 @@ mod offchain_phragmen {
 			run_to_block(12);
 
 			// a good solution
-			let (compact, winners) = do_phragmen_with_post_processing(true);
-			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact));
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact, score));
 
 			// a bad solution
-			let (compact, winners) = horrible_phragmen_with_post_processing(false);
+			let (compact, winners, score) = horrible_phragmen_with_post_processing(false);
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact),
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenWeakSubmission,
 			);
 		})
@@ -2982,12 +2985,12 @@ mod offchain_phragmen {
 			run_to_block(12);
 
 			// a meeeeh solution
-			let (compact, winners) = horrible_phragmen_with_post_processing(false);
-			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact));
+			let (compact, winners, score) = horrible_phragmen_with_post_processing(false);
+			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact, score));
 
 			// a better solution
-			let (compact, winners) = do_phragmen_with_post_processing(true);
-			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact));
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact, score));
 		})
 	}
 
@@ -3017,11 +3020,9 @@ mod offchain_phragmen {
 
 			let call = extrinsic.1;
 			match call {
-				mock::Call::Staking(crate::Call::submit_election_solution(_, _)) => {},
+				mock::Call::Staking(crate::Call::submit_election_solution(_, _, _)) => {},
 				_ => panic!("wrong call submitted"),
 			};
-
-			// TODO: dispatch the call
 		})
 	}
 
@@ -3051,16 +3052,16 @@ mod offchain_phragmen {
 			let call = extrinsic.1;
 			let inner = match call {
 				mock::Call::Staking(inner) => { inner },
-				_ => panic!("wrong call submitted"),
 			};
 
 			// pass this call to ValidateUnsigned
+			let signing_key = dummy_sr25519::dummy_key_for(11);
 			assert_eq!(
 				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(&inner),
 				TransactionValidity::Ok(ValidTransaction {
 					priority: TransactionPriority::max_value(),
 					requires: vec![],
-					provides: vec![],
+					provides: vec![(Staking::current_era(), signing_key).encode()],
 					longevity: TryInto::<u64>::try_into(
 						<Test as Trait>::ElectionLookahead::get()
 					).unwrap_or(150_u64),
@@ -3084,14 +3085,14 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (mut compact, winners) = do_phragmen_with_post_processing(false);
+			let (mut compact, winners, scores) = do_phragmen_with_post_processing(true, |_| {});
 			assert_eq_uvec!(winners, vec![10, 20, 30, 40]);
 
 			// inject a correct nominator voting for a correct, but non-winner validator.
 			compact.votes1.push((1, 999));
 
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact),
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, scores),
 				Error::<Test>::PhragmenBogusEdge,
 			);
 		})
@@ -3112,11 +3113,11 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (compact, mut winners) = do_phragmen_with_post_processing(false);
+			let (compact, mut winners, score) = do_phragmen_with_post_processing(true, |_| {});
 			winners.push(999);
 
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact),
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenBogusWinner,
 			);
 		})
@@ -3148,8 +3149,11 @@ mod offchain_phragmen {
 
 			let mut staked: Vec<sp_phragmen::StakedAssignment<AccountId>> = assignments
 				.into_iter()
-				.map(|a| a.into_staked::<_, _, CurrencyToVoteHandler>(Staking::slashable_balance_of))
+				.map(|a| a.into_staked::<_, _, CurrencyToVoteHandler>(Staking::slashable_balance_of, true))
 				.collect();
+
+			let (support, _) = sp_phragmen::build_support_map::<AccountId>(&winners, &staked);
+			let score = sp_phragmen::evaluate_support::<AccountId>(&support);
 
 			staked.push(sp_phragmen::StakedAssignment { who: 666, distribution: vec![(999, 1)] });
 			winners.push(999);
@@ -3158,7 +3162,7 @@ mod offchain_phragmen {
 			let compact = <CompactAssignments<AccountId, ExtendedBalance>>::from_staked(staked);
 
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact),
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenBogusWinner,
 			);
 		})
@@ -3178,14 +3182,20 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (mut compact, winners) = do_phragmen_with_post_processing(false);
+			let (compact, winners, score) = do_phragmen_with_post_processing(false, |a| {
+				// inject a wrong nominator voting for a valid validator.
+				a.push(StakedAssignment::<AccountId> { who: 999, distribution: vec![(10, 10)]});
+			});
 
-			// inject a wrong nominator voting for a valid validator.
-			compact.votes1.push((999, 10));
-
+			// This will cause a score mismatch since 99 doesn't have any money.
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners.clone(), compact.clone()),
-				Error::<Test>::PhragmenBogusNominator,
+				Staking::submit_election_solution(
+					Origin::signed(10),
+					winners.clone(),
+					compact.clone(),
+					score,
+				),
+				Error::<Test>::PhragmenBogusScore, // TODO: we can catch this in PhragmenBogusNominatorStake.
 			);
 
 			// even when it is bonded but not nominating.
@@ -3193,7 +3203,7 @@ mod offchain_phragmen {
 			assert_ok!(Staking::bond(Origin::signed(999), 998, 10, Default::default()));
 
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact),
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenBogusNominator,
 			);
 		})
@@ -3212,14 +3222,16 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (mut compact, winners) = do_phragmen_with_post_processing(false);
-
-			// mutate a self vote to target someone else.
-			compact.votes1.iter_mut().find(|x| x.0 == 10).map(|(_voter, target)| *target = 20);
-			dbg!(&compact);
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |a| {
+				// mutate a self vote to target someone else. That someone else is still among the
+				// winners
+				a.iter_mut().find(|x| x.who == 10).map(|x|
+					x.distribution.iter_mut().find(|y| y.0 == 10).map(|y| y.0 = 20)
+				);
+			});
 
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact),
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenBogusSelfVote,
 			);
 		})
@@ -3238,16 +3250,16 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (mut compact, winners) = do_phragmen_with_post_processing(false);
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |a| {
+				// Remove the self vote.
+				a.retain(|x| x.who != 10);
+				// add is as a new double vote
+				a.push(StakedAssignment { who: 10, distribution: vec![(10, 50), (20, 50)]});
+			});
 
-			// mutate a self vote to target someone else.
-			compact.votes1.retain(|x| x.0 != 10);
-
-			// add 10 as a double vote
-			compact.votes2.push((10, (10, 5), 20));
-
+			// This raises score issue.
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact),
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenBogusSelfVote,
 			);
 		})
@@ -3266,13 +3278,13 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (mut compact, winners) = do_phragmen_with_post_processing(false);
+			let (mut compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
 
 			// 3 has: (3, (20, 50), 40) which means evenly distributed between 20 and 40 (50 each).
 			compact.votes2.iter_mut().find(|x| x.0 == 3).map(|(_who, v1, _v2)| v1.1 = 120);
 
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact),
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenBogusNominatorStake,
 			);
 		})
@@ -3300,15 +3312,40 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (mut compact, winners) = do_phragmen_with_post_processing(false);
-
-			// 3 has: (3, (20, 50), 40). We add a fake vote to 30.
-			compact.votes2.retain(|x| x.0 != 3);
-			compact.votes3.push((3, [(20, 50), (40, 30)], 30));
+			let (compact, winners, score) = do_phragmen_with_post_processing(false, |a| {
+				// 3 has: (3, (20, 50), 40). We add a fake vote to 30. The stake sum is still
+				// correctly 100.
+				a.iter_mut().find(|x| x.who == 3).map(|x| {
+					x.distribution = vec![(20, 50), (40, 30), (30, 20)]
+				});
+			});
 
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact),
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenBogusNomination,
+			);
+		})
+	}
+
+	#[test]
+	fn invalid_phragmen_result_wrong_score() {
+		// A valid voter who's total distributed stake is more than what they bond
+		ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(4)
+			.has_stakers(false)
+			.build()
+			.execute_with(
+		|| {
+			build_offchain_phragmen_test_ext();
+			run_to_block(12);
+
+			let (compact, winners, mut score) = do_phragmen_with_post_processing(true, |_| {});
+			score[0] += 1;
+
+			assert_noop!(
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+				Error::<Test>::PhragmenBogusScore,
 			);
 		})
 	}

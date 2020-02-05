@@ -37,6 +37,8 @@ pub(crate) enum OffchainElectionError {
 /// better `this`.
 ///
 /// Evaluation is done in a lexicographic manner.
+///
+/// Note that the third component should be minimized.
 pub(crate) fn is_score_better(this: [ExtendedBalance; 3], that: [ExtendedBalance; 3]) -> bool {
 	match that
 		.iter()
@@ -80,11 +82,18 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 			// convert into staked. This is needed to be able to reduce.
 			let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
 				.into_iter()
-				.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(<Module<T>>::slashable_balance_of))
+				.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(
+					<Module<T>>::slashable_balance_of,
+					true,
+				))
 				.collect();
 
 			// reduce the assignments. This will remove some additional edges.
 			reduce(&mut staked);
+
+			// get support and score.
+			let (support, _) = sp_phragmen::build_support_map::<T::AccountId>(&winners, &staked);
+			let score = sp_phragmen::evaluate_support(&support);
 
 			// compact encode the assignment.
 			let compact = <CompactAssignments<T::AccountId, ExtendedBalance>>::from_staked(staked);
@@ -97,11 +106,12 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 			#[cfg(not(feature = "signed"))]
 			{
 				let signature_payload =
-					(winners.clone(), compact.clone(), index as u32).encode();
+					(winners.clone(), compact.clone(), score, index as u32).encode();
 				let signature = pubkey.sign(&signature_payload).unwrap();
 				let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
 					winners,
 					compact,
+					score,
 					index as u32,
 					signature,
 				)

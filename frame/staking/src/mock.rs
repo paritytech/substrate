@@ -741,6 +741,7 @@ pub fn horrible_phragmen_with_post_processing(
 ) -> (
 	CompactAssignments<AccountId, ExtendedBalance>,
 	Vec<AccountId>,
+	ElectionScore,
 ) {
 	use std::collections::BTreeMap;
 
@@ -809,34 +810,33 @@ pub fn horrible_phragmen_with_post_processing(
 
 	// Ensure that this result is worse than seq-phragmen. Otherwise, it should not have been used
 	// for testing.
-	{
-		let (better_compact, better_winners) = do_phragmen_with_post_processing(true);
-		let better_assignments = better_compact
-			.into_staked::<_, _, CurrencyToVoteHandler>(Staking::slashable_balance_of);
+	let score = {
+		let (_, _, better_score) = do_phragmen_with_post_processing(true, |_| {});
 
-		let support = build_support_map::<Balance, AccountId>(&winners, &assignments).0;
-		let better_support =
-			build_support_map::<Balance, AccountId>(&better_winners, &better_assignments).0;
-
+		let support = build_support_map::<AccountId>(&winners, &assignments).0;
 		let score = evaluate_support(&support);
-		let better_score = evaluate_support(&better_support);
 
 		assert!(offchain_election::is_score_better(score, better_score));
-	}
+
+		score
+	};
 
 	if do_reduce {
 		reduce(&mut assignments);
 	}
+
 	let compact = <CompactAssignments<AccountId, ExtendedBalance>>::from_staked(assignments);
 
-	(compact, winners)
+	(compact, winners, score)
 }
 
 pub fn do_phragmen_with_post_processing(
 	do_reduce: bool,
+	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
 ) -> (
 	CompactAssignments<AccountId, ExtendedBalance>,
 	Vec<AccountId>,
+	ElectionScore,
 ) {
 	// run phragmen on the default stuff.
 	let sp_phragmen::PhragmenResult {
@@ -847,16 +847,22 @@ pub fn do_phragmen_with_post_processing(
 
 	let mut staked: Vec<StakedAssignment<AccountId>> = assignments
 		.into_iter()
-		.map(|a| a.into_staked::<_, _, CurrencyToVoteHandler>(Staking::slashable_balance_of))
+		.map(|a| a.into_staked::<_, _, CurrencyToVoteHandler>(Staking::slashable_balance_of, true))
 		.collect();
+
+	// apply custom tweaks. awesome for testing.
+	tweak(&mut staked);
 
 	if do_reduce {
 		reduce(&mut staked);
 	}
 
+	let (support_map, _) = build_support_map::<AccountId>(&winners, &staked);
+	let score = evaluate_support::<AccountId>(&support_map);
+
 	let compact = <CompactAssignments<AccountId, ExtendedBalance>>::from_staked(staked);
 
-	(compact, winners)
+	(compact, winners, score)
 }
 
 #[macro_export]

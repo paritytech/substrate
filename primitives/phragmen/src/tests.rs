@@ -20,8 +20,7 @@
 
 use crate::mock::*;
 use crate::{
-	elect, equalize, build_support_map,
-	Support, StakedAssignment, Assignment, PhragmenResult,
+	elect, equalize, build_support_map, Support, StakedAssignment, Assignment, PhragmenResult,
 };
 use substrate_test_utils::assert_eq_uvec;
 use sp_runtime::Perbill;
@@ -485,16 +484,13 @@ fn self_votes_should_be_kept() {
 
 	let staked_assignments: Vec<StakedAssignment<AccountId>> = result.assignments
 		.into_iter()
-		.map(|a| a.into_staked::<_, _, TestCurrencyToVote>(&stake_of))
+		.map(|a| a.into_staked::<_, _, TestCurrencyToVote>(&stake_of, true))
 		.collect();
 
-	let (mut supports, _) = build_support_map::<
-		Balance,
-		AccountId,
-		>(
-			&result.winners.into_iter().map(|(who, _)| who).collect(),
-			&staked_assignments,
-		);
+	let (mut supports, _) = build_support_map::<AccountId>(
+		&result.winners.into_iter().map(|(who, _)| who).collect(),
+		&staked_assignments,
+	);
 
 	assert_eq!(supports.get(&5u64), None);
 	assert_eq!(
@@ -525,14 +521,14 @@ fn self_votes_should_be_kept() {
 }
 
 mod compact {
-	use crate::generate_compact_solution_type;
-	// these need to come from the same dev-dependency `sp-phragmen`, not from the crate.
-	use sp_phragmen::{Assignment, StakedAssignment};
-
-	use super::{AccountId, Balance};
-	use sp_runtime::Perbill;
 	use codec::{Decode, Encode};
+	use crate::generate_compact_solution_type;
 	use crate::mock::{TestCurrencyToVote};
+	use super::{AccountId, Balance};
+	// these need to come from the same dev-dependency `sp-phragmen`, not from the crate.
+	use sp_phragmen::{Assignment, StakedAssignment, Error as PhragmenError};
+	use sp_std::convert::TryInto;
+	use sp_runtime::Perbill;
 
 	generate_compact_solution_type!(TestCompact, 16);
 
@@ -608,7 +604,7 @@ mod compact {
 		);
 
 		assert_eq!(
-			<TestCompact<u64, Perbill> as Into<Vec<Assignment<u64>>>>::into(compacted),
+			<TestCompact<u64, Perbill> as TryInto<Vec<Assignment<u64>>>>::try_into(compacted).unwrap(),
 			assignments
 		);
 	}
@@ -669,8 +665,85 @@ mod compact {
 		let max_of: Box<dyn Fn(&AccountId) -> Balance> = Box::new(max_of_fn);
 
 		assert_eq!(
-			compacted.into_staked::<Balance, _, TestCurrencyToVote>(&max_of),
+			compacted.into_staked::<Balance, _, TestCurrencyToVote>(&max_of).unwrap(),
 			assignments
+		);
+	}
+
+	#[test]
+	fn compact_into_stake_must_report_budget_overflow() {
+		// The last edge which is computed from the rest should ALWAYS be positive.
+		// in votes2
+		let compact = TestCompact::<AccountId, u128> {
+			votes1: Default::default(),
+			votes2: vec![(1, (10, 10), 20)],
+			..Default::default()
+		};
+
+		let max_of_fn = |_: &AccountId| -> Balance { 5 };
+		let max_of: Box<dyn Fn(&AccountId) -> Balance> = Box::new(max_of_fn);
+
+		assert_eq!(
+			compact.into_staked::<Balance, _, TestCurrencyToVote>(&max_of).unwrap_err(),
+			PhragmenError::CompactStakeOverflow,
+		);
+
+		// in votes3 onwards
+		let compact = TestCompact::<AccountId, u128> {
+			votes1: Default::default(),
+			votes2: Default::default(),
+			votes3: vec![(1, [(10, 7), (20, 8)], 30)],
+			..Default::default()
+		};
+
+		assert_eq!(
+			compact.into_staked::<Balance, _, TestCurrencyToVote>(&max_of).unwrap_err(),
+			PhragmenError::CompactStakeOverflow,
+		);
+
+		// Also if equal
+		let compact = TestCompact::<AccountId, u128> {
+			votes1: Default::default(),
+			votes2: Default::default(),
+			// 5 is total, we cannot leave none for 30 here.
+			votes3: vec![(1, [(10, 3), (20, 2)], 30)],
+			..Default::default()
+		};
+
+		assert_eq!(
+			compact.into_staked::<Balance, _, TestCurrencyToVote>(&max_of).unwrap_err(),
+			PhragmenError::CompactStakeOverflow,
+		);
+	}
+
+
+	#[test]
+	fn compact_into_stake_must_report_ratio_overflow() {
+		// in votes2
+		let compact = TestCompact::<AccountId, Perbill> {
+			votes1: Default::default(),
+			votes2: vec![(1, (10, Perbill::from_percent(100)), 20)],
+			..Default::default()
+		};
+
+		assert_eq!(
+			<TestCompact<AccountId, Perbill> as TryInto<Vec<Assignment<AccountId>>>>::try_into(compact)
+				.unwrap_err(),
+			PhragmenError::CompactStakeOverflow,
+		);
+
+		// in votes3 onwards
+		let compact = TestCompact::<AccountId, Perbill> {
+			votes1: Default::default(),
+			votes2: Default::default(),
+			votes3: vec![(1, [(10, Perbill::from_percent(70)), (20, Perbill::from_percent(80))], 30)],
+			..Default::default()
+		};
+
+		assert_eq!(
+			<TestCompact<AccountId, Perbill> as TryInto<Vec<Assignment<AccountId>>>>::try_into(compact)
+				.unwrap_err(),
+			PhragmenError::CompactStakeOverflow,
 		);
 	}
 }

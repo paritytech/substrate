@@ -576,8 +576,6 @@ pub struct ElectionResult<AccountId, Balance: HasCompact> {
 	elected_stashes: Vec<AccountId>,
 	/// Flat list of new exposures, to be updated in the [`Exposure`] storage.
 	exposures: Vec<(AccountId, Exposure<AccountId, Balance>)>,
-	/// The score of the result based on [`sp_phragmen::evaluate_support`].
-	score: [ExtendedBalance; 3],
 }
 
 /// The status of the upcoming (offchain) election.
@@ -594,6 +592,8 @@ impl<BlockNumber> Default for ElectionStatus<BlockNumber> {
 		Self::None
 	}
 }
+
+pub type ElectionScore = [ExtendedBalance; 3];
 
 pub type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -721,8 +721,6 @@ pub trait Trait: frame_system::Trait {
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
 	/// Key type used to sign and verify transaction.
-	// TODO: this can be fetched from `SubmitTransaction` as well, but for now both me and @todr
-	// gave up.
 	type KeyType: RuntimeAppPublic + Member + Parameter;
 }
 
@@ -792,6 +790,9 @@ decl_storage! {
 		/// result of an offchain worker), it is immediately used. Otherwise, the on-chain election
 		/// is executed.
 		pub QueuedElected get(fn queued_elected): Option<ElectionResult<T::AccountId, BalanceOf<T>>>;
+
+		/// The score of the current [`QueuedElected`].
+		pub QueuedScore get(fn queued_score): Option<ElectionScore>;
 
 		/// Flag to control the execution of the offchain election.
 		pub EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
@@ -950,6 +951,8 @@ decl_error! {
 		PhragmenBogusNomination,
 		/// A self vote must only be originated from a validator to ONLY themselves.
 		PhragmenBogusSelfVote,
+		/// The claimed score does not match with the one computed from the data.
+		PhragmenBogusScore,
 	}
 }
 
@@ -991,8 +994,7 @@ decl_module! {
 						);
 						debug::native::info!(
 							target: "staking",
-							"detected a good block ({}) to trigger offchain election. Submission will \
-							be allowed from the next block.",
+							"Election window is Open({:?})",
 							now,
 						);
 					}
@@ -1006,13 +1008,13 @@ decl_module! {
 			debug::RuntimeLogger::init();
 			// runs only once.
 			if Self::era_election_status() == ElectionStatus::<T::BlockNumber>::Open(now) {
-				let _ = offchain_election::compute_offchain_election::<T>().map_err(|e| {
+				if let Err(e) = offchain_election::compute_offchain_election::<T>() {
 					debug::native::warn!(
 						target: "staking",
 						"Error in phragmen offchain worker call: {:?}",
 						e,
 					);
-				});
+				};
 			}
 		}
 
@@ -1024,75 +1026,100 @@ decl_module! {
 		}
 
 		/// Submit a phragmen result to the chain. If the solution:
+		///
 		/// 1. is valid
 		/// 2. has a better score than a potentially existing solution on chain
 		///
 		/// it will replace it.
 		///
 		/// A solution consists of two pieces of data:
+		///
 		/// 1. `winners`: a flat vector of all the winners of the round.
 		/// 2. `assignments`: the compact version of an assignment vector that encodes the edge
 		///    weights.
 		///
 		/// Both of which may be computed using the [`phragmen`], or any other algorithm.
 		///
-		/// A solution is valid if
+		/// Additionally, the submitter must provide:
+		///
+		/// 1. The score that they claim their solution has.
+		/// 2. The block number at which the solution is computed.
+		///
+		/// A solution is valid if:
+		///
 		/// 1. All the presented winners are actually on-chain candidates.
 		/// 2. All the presented edges contain:
 		///   - a voter who is an on-chain nominator.
-		///   - a target who is an on-chain candidate.
+		///   - a target who is an on-chain candidate and among the presented winners.
 		///   - that target must actually be among the nominations of the voter.
+		/// 3. For all the presented nominators, their total stake must actually add up to their
+		///    staked amount on chain. This does not need to be calculated. Converting compact ->
+		///    staked will assure it.
+		/// 4. The solution must have been submitted when [`ElectionStatus`] is `Open`.
+		/// 5. The claimed score is valid, and, if an on-chain solution exists, it is better than
+		///    the on on-chain, as defined by [`is_score_better`].
 		///
 		/// A solutions score is consisted of 3 parameters:
+		///
 		/// 1. `min { support.total }` for each support of a winner. This value should be maximized.
 		/// 2. `sum { support.total }` for each support of a winner. This value should be minimized.
 		/// 3. `sum { support.total^2 }` for each support of a winner. This value should be
 		///    minimized (to ensure less variance)
 		///
 		/// # <weight>
-		/// major steps:
-		/// - decode from compact: E(E)
+		/// E: number of edges.
+		/// m: size of winner committee.
+		/// n: number of nominators.
+		/// d: edge degree aka MAX_NOMINATIONS = 16
+		///
+		/// major steps (all done in `check_and_replace_solution`):
+		///
+		/// - 1 read. `ElectionScore`. O(1).
+		/// - `m` calls `Validators::exists()` for validator veracity.
+		///
+		/// - decode from compact and convert into assignments: O(E)  TODO: if our reduce is correct, this will be at most `n + m`
 		/// - build_support_map: O(E)
-		/// - evaluate_support: E(E)
-		/// - 1 read which decodes a `ElectionResult` from storage.
-		/// - 1 read which decodes a `ElectionStatus` from storage.
-		/// - `2*W` reads each of which decodes an `AccountId` and a `ValidatorPrefs` to ensure
-		///   winner veracity.
-		/// - N reads from `Bonded`, `Validators` and `Nominators` to ensure nominator veracity. N
-		///   is the number of nominators.
-		/// - O(N * E') to ensure nomination veracity. (E' is the average voter count per nominator
-		///   and it is less than `MAX_NOMINATIONS`)
+		/// - evaluate_support: O(E)
+		///
+		/// - `n` reads from [`Bonded`], [`Ledger`] and [`Nominators`], and `n` calls to
+		///   `Validators::exists()` to ensure nominator veracity.
+		///
+		/// - O(N * d) to ensure vote veracity.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn submit_election_solution(
 			origin,
 			winners: Vec<T::AccountId>,
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
+			score: ElectionScore,
 		) {
 			let _who = ensure_signed(origin)?;
 			Self::check_and_replace_solution(
 				winners,
 				compact_assignments,
-				ElectionCompute::Signed
+				ElectionCompute::Signed,
+				score,
 			)?
 		}
 
 		/// Unsigned version of `submit_election_solution`. Will only be accepted from those who are
 		/// in the current validator set.
+		// TODO: weight should be noted.
 		fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<T::AccountId>,
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
-			// already used and checked.
+			score: ElectionScore,
+			// already used and checked in ValidateUnsigned.
 			_validator_index: u32,
 			_signature: <T::KeyType as RuntimeAppPublic>::Signature,
 		) {
 			ensure_none(origin)?;
-			Encode::encode(&_signature);
 			Self::check_and_replace_solution(
 				winners,
 				compact_assignments,
-				ElectionCompute::Authority
+				ElectionCompute::Authority,
+				score,
 			)?
 		}
 
@@ -1627,6 +1654,8 @@ impl<T: Trait> Module<T> {
 		winners: Vec<T::AccountId>,
 		compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
 		compute: ElectionCompute,
+		claimed_score: ElectionScore,
+		// at: T::BlockNumber,
 	) -> Result<(), Error<T>> {
 		// discard early solutions
 		match Self::era_election_status() {
@@ -1634,48 +1663,43 @@ impl<T: Trait> Module<T> {
 			ElectionStatus::Open(_) => { /* Open and no solutions received. Allowed. */ },
 		}
 
-		// convert into staked.
-		let staked_assignments = compact_assignments.into_staked::<
-			_,
-			_,
-			T::CurrencyToVote,
-		>(Self::slashable_balance_of);
-
-		// build the support map thereof in order to evaluate.
-		// OPTIMIZATION: we could merge this with the `staked_assignments.iter()` below and
-		// iterate only once.
-		let (supports, num_error) = sp_phragmen::build_support_map::<BalanceOf<T>, T::AccountId>(
-			&winners,
-			&staked_assignments,
-		);
-
-		ensure!(num_error == 0, Error::<T>::PhragmenBogusEdge);
-
-		// score the result. Go further only if it is better than what we already have.
-		let submitted_score = sp_phragmen::evaluate_support(&supports);
-		if let Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
-			score,
-			..
-		}) = Self::queued_elected() {
-			// OPTIMIZATION: we can read first the score and then the rest to do less decoding.
-			// if the local score is better in any of the three parameters.
+		// assume the given score is valid. Is it better than what we have on-chain, if we have any?
+		if let Some(queued_score) = Self::queued_score() {
 			ensure!(
-				offchain_election::is_score_better(score, submitted_score),
+				offchain_election::is_score_better(queued_score, claimed_score),
 				Error::<T>::PhragmenWeakSubmission,
 			)
 		}
 
-		// Either the result is better than the one on chain, or we don't have an any on chain.
-		// do the sanity check. Each claimed edge must exist. Also, each claimed winner must
-		// have a support associated.
-
-		// check all winners being actual validators.
+		// check if all winners were legit; this is rather cheap.
 		for w in winners.iter() {
 			ensure!(
 				<Validators<T>>::exists(&w),
 				Error::<T>::PhragmenBogusWinner,
 			)
 		}
+
+		// convert into staked.
+		let staked_assignments = compact_assignments.into_staked::<
+			_,
+			_,
+			T::CurrencyToVote,
+		>(Self::slashable_balance_of).map_err(|_| Error::<T>::PhragmenBogusNominatorStake)?;
+
+		// build the support map thereof in order to evaluate.
+		// OPTIMIZATION: we could merge this with the `staked_assignments.iter()` below and
+		// iterate only once.
+		let (supports, num_error) = sp_phragmen::build_support_map::<T::AccountId>(
+			&winners,
+			&staked_assignments,
+		);
+		// This technically checks that all targets in all nominators were among the winners.
+		ensure!(num_error == 0, Error::<T>::PhragmenBogusEdge);
+
+
+		// Check if the score is the same as the claimed one.
+		let submitted_score = sp_phragmen::evaluate_support(&supports);
+		ensure!(submitted_score == claimed_score, Error::<T>::PhragmenBogusScore);
 
 		// check all nominators being bonded, and actually including the claimed vote, and
 		// summing up to their ledger stake.
@@ -1707,17 +1731,13 @@ impl<T: Trait> Module<T> {
 					"exactly one of maybe_validator and maybe_nomination is true. \
 					is_validator is false; maybe_nomination is some; qed"
 				);
-				let mut total_stake: ExtendedBalance = Zero::zero();
+				// NOTE: we don't really have to check here if the sum of all edges are teh
+				// nominator budged. By definition, compact -> staked ensures this.
 				ensure!(
-					distribution.into_iter().all(|(v, w)| {
-						total_stake += w;
-						nomination.targets.iter().find(|t| *t == v).is_some()
+					distribution.into_iter().all(|(t, _)| {
+						nomination.targets.iter().find(|&tt| tt == t).is_some()
 					}),
 					Error::<T>::PhragmenBogusNomination,
-				);
-				ensure!(
-					total_stake == active_extended_stake,
-					Error::<T>::PhragmenBogusNominatorStake
 				);
 			} else {
 				// a self vote
@@ -1773,11 +1793,11 @@ impl<T: Trait> Module<T> {
 
 		<QueuedElected<T>>::put(ElectionResult {
 			elected_stashes: winners,
-			score: submitted_score,
 			compute,
 			exposures,
 			slot_stake,
 		});
+		QueuedScore::put(submitted_score);
 
 		Ok(())
 	}
@@ -1882,18 +1902,22 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Runs [`try_do_phragmen`] and updates the following storage items:
-	/// - [`Stakers`]
-	/// - [`SlotStake`]
-	/// - [`CurrentElected]
+	/// - [`Stakers`]: with the new staker set.
+	/// - [`SlotStake`]: with the new slot stake.
+	/// - [`CurrentElected`]: with the new elected set.
+	/// - [`EraElectionStatus`]: with `None`
 	///
-	/// If the election has been successful. It passes the new set upwards.
+	/// Internally, [`QueuedElected`] and [`QueuedScore`] are also consumed.
+	///
+	/// If the election has been successful, It passes the new set upwards.
+	///
+	/// This should only be called at the end of an era.
 	fn select_and_update_validators() -> Option<Vec<T::AccountId>> {
 		if let Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
 			elected_stashes,
 			exposures,
 			slot_stake,
 			compute,
-			.. // TODO: this means that we are never storing the score of a winning chain. It this okay?
 		}) = Self::try_do_phragmen() {
 			// We have chosen the new validator set. Submission is no longer allowed.
 			<EraElectionStatus<T>>::put(ElectionStatus::None);
@@ -1927,12 +1951,18 @@ impl<T: Trait> Module<T> {
 	/// Select a new validator set from the assembled stakers and their role preferences. It tries
 	/// first to peek into [`QueuedElected`]. Otherwise, it runs a new phragmen.
 	///
-	/// No storage item is updated.
+	/// If [`QueuedElected`] and [`QueuedScore`] exists, they are both removed. No further storage
+	/// is updated.
 	fn try_do_phragmen() -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
 		// a phragmen result from either a stored submission or locally executed one.
-		<QueuedElected<T>>::take().or_else(||
+		let next_result = <QueuedElected<T>>::take().or_else(||
 			Self::do_phragmen_with_post_processing(ElectionCompute::OnChain)
-		)
+		);
+
+		// either way, kill this
+		QueuedScore::kill();
+
+		next_result
 	}
 
 	/// Execute phragmen and return the new results. The edge weights are processed into  support
@@ -1948,10 +1978,10 @@ impl<T: Trait> Module<T> {
 
 			let staked_assignments: Vec<StakedAssignment<T::AccountId>> = assignments
 				.into_iter()
-				.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(Self::slashable_balance_of))
+				.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(Self::slashable_balance_of, true))
 				.collect();
 
-			let (supports, _) = sp_phragmen::build_support_map::<BalanceOf<T>, T::AccountId>(
+			let (supports, _) = sp_phragmen::build_support_map::<T::AccountId>(
 				&elected_stashes,
 				&staked_assignments,
 			);
@@ -1961,7 +1991,6 @@ impl<T: Trait> Module<T> {
 				<Stakers<T>>::remove(v);
 			}
 
-			let score = sp_phragmen::evaluate_support(&supports);
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
@@ -2008,7 +2037,6 @@ impl<T: Trait> Module<T> {
 				slot_stake,
 				exposures,
 				compute,
-				score,
 			})
 		} else {
 			// There were not enough candidates for even our minimal level of functionality.
@@ -2317,9 +2345,12 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		if let Call::submit_election_solution_unsigned(
 			winners,
 			compact,
+			score,
 			validator_index,
 			signature,
 		) = call {
+			// TODO: Double check if this is a good idea. I have to make sure that the offchain code
+			// is the same for everyone.
 			if let Some(queued_elected) = Self::queued_elected() {
 				if queued_elected.compute == ElectionCompute::Authority {
 					debug::native::debug!(
@@ -2331,7 +2362,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			// check signature
-			let payload = (winners, compact, validator_index);
+			let payload = (winners, compact, score, validator_index);
 			let current_validators = T::SessionInterface::keys::<T::KeyType>();
 			let (_, validator_key) = current_validators.get(*validator_index as usize)
 				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(0u8).into()))?;

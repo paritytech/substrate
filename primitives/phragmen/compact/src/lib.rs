@@ -27,6 +27,8 @@ use syn::{GenericArgument, Type, parse::{Parse, ParseStream, Result}};
 // prefix used for struct fields in compact.
 const PREFIX: &'static str = "votes";
 
+// TODO: what to do if additions overflow in into staked.
+
 /// Generates a struct to store the phragmen assignments in a compact way. The struct can only store
 /// distributions up to the given input count. The given count must be greater than 2.
 ///
@@ -179,11 +181,19 @@ fn imports() -> Result<TokenStream2> {
 		}
 		Err(e) => return Err(syn::Error::new(Span::call_site(), &e)),
 	};
+	let sp_std_imports = match crate_name("sp-std") {
+		Ok(sp_std) => {
+			let ident = syn::Ident::new(&sp_std, Span::call_site());
+			quote!( extern crate #ident as _sp_std; )
+		}
+		Err(e) => return Err(syn::Error::new(Span::call_site(), &e)),
+	};
 
 	Ok(quote!(
 		#runtime_imports
 		#codec_imports
 		#sp_phragmen_imports
+		#sp_std_imports
 	))
 }
 
@@ -251,6 +261,10 @@ fn convert_impl_for_assignment(
 		let name = field_name_for(2);
 		quote!(
 			for (who, (t1, p1), t2) in self.#name {
+				if p1 >= _sp_runtime::Perbill::one() {
+					return Err(_phragmen::Error::CompactStakeOverflow);
+				}
+				// defensive only. Since perbill doesn't have `Sub`.
 				let p2 = _sp_runtime::traits::Saturating::saturating_sub(_sp_runtime::Perbill::one(), p1);
 				assignments.push( _phragmen::Assignment {
 					who,
@@ -268,12 +282,16 @@ fn convert_impl_for_assignment(
 			for (who, inners, t_last) in self.#name {
 				let mut sum = _sp_runtime::Perbill::zero();
 				let mut inners_parsed = inners
-					.into_iter()
+					.iter()
 					.map(|(ref c, p)| {
 						sum = _sp_runtime::traits::Saturating::saturating_add(sum, *p);
 						(c.clone(), *p)
 					}).collect::<Vec<(#account_type, _sp_runtime::Perbill)>>();
 
+				if sum >= _sp_runtime::Perbill::one() {
+					return Err(_phragmen::Error::CompactStakeOverflow);
+				}
+				// defensive only. Since perbill doesn't have `Sub`.
 				let p_last = _sp_runtime::traits::Saturating::saturating_sub(_sp_runtime::Perbill::one(), sum);
 				inners_parsed.push((t_last, p_last));
 
@@ -287,16 +305,18 @@ fn convert_impl_for_assignment(
 
 	let into_impl = quote!(
 		impl<#account_type: _codec::Codec + Default + Clone>
-		Into<Vec<_phragmen::Assignment<#account_type>>>
+		_sp_std::convert::TryInto<Vec<_phragmen::Assignment<#account_type>>>
 		for #ident<#account_type, _sp_runtime::Perbill>
 		{
-			fn into(self) -> Vec<_phragmen::Assignment<#account_type>> {
+			type Error = _phragmen::Error;
+
+			fn try_into(self) -> Result<Vec<_phragmen::Assignment<#account_type>>, Self::Error> {
 				let mut assignments: Vec<_phragmen::Assignment<#account_type>> = Default::default();
 				#into_impl_single
 				#into_impl_double
 				#into_impl_rest
 
-				assignments
+				Ok(assignments)
 			}
 		}
 	);
@@ -355,7 +375,13 @@ fn convert_impl_for_staked_assignment(
 		quote!(
 			for (who, (t1, w1), t2) in self.#name {
 				let all_stake = C::convert(max_of(&who)) as u128;
-				let w2 = all_stake.saturating_sub(w1);
+
+				if w1 >= all_stake {
+					return Err(_phragmen::Error::CompactStakeOverflow);
+				}
+
+				// w2 is ensured to be positive.
+				let w2 = all_stake - w1;
 				assignments.push( _phragmen::StakedAssignment {
 					who,
 					distribution: vec![
@@ -373,13 +399,18 @@ fn convert_impl_for_staked_assignment(
 				let mut sum = u128::min_value();
 				let all_stake = C::convert(max_of(&who)) as u128;
 				let mut inners_parsed = inners
-					.into_iter()
+					.iter()
 					.map(|(ref c, w)| {
 						sum = sum.saturating_add(*w);
 						(c.clone(), *w)
 					}).collect::<Vec<(#account_type, u128)>>();
 
-				let w_last = all_stake.saturating_sub(sum);
+				if sum >= all_stake {
+					return Err(_phragmen::Error::CompactStakeOverflow);
+				}
+				// w_last is proved to be positive.
+				let w_last = all_stake - sum;
+
 				inners_parsed.push((t_last, w_last));
 
 				assignments.push(_phragmen::StakedAssignment {
@@ -398,7 +429,7 @@ fn convert_impl_for_staked_assignment(
 			/// weight of a voter. It is used to subtract the sum of all the encoded weights to
 			/// infer the last one.
 			fn into_staked<Balance, FM, C>(self, max_of: FM)
-				-> Vec<_phragmen::StakedAssignment<#account_type>>
+				-> Result<Vec<_phragmen::StakedAssignment<#account_type>>, _phragmen::Error>
 			where
 				for<'r> FM: Fn(&'r #account_type) -> Balance,
 				C: _sp_runtime::traits::Convert<Balance, u64>
@@ -408,7 +439,7 @@ fn convert_impl_for_staked_assignment(
 				#into_impl_double
 				#into_impl_rest
 
-				assignments
+				Ok(assignments)
 			}
 
 			/// Generate self from a vector of `StakedAssignment`.
