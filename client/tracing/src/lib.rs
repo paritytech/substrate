@@ -34,7 +34,7 @@
 //! let span = tracing::span!(tracing::Level::INFO, "my_span_name", my_number = 10, a_key = "a value");
 //! let _guard = span.enter();
 //! ```
-//! Currently we provide `Log` (default), `Telemetry` and `Prometheus` variants for `Receiver`
+//! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
 
 use std::collections::HashMap;
 use std::fmt;
@@ -62,8 +62,6 @@ pub enum TracingReceiver {
 	Log,
 	/// Output to telemetry
 	Telemetry,
-	/// Output to Prometheus endpoint
-	Prometheus,
 }
 
 impl Default for TracingReceiver {
@@ -254,7 +252,6 @@ impl ProfilingSubscriber {
 		match self.receiver {
 			TracingReceiver::Log => print_log(span_datum),
 			TracingReceiver::Telemetry => send_telemetry(span_datum),
-			TracingReceiver::Prometheus => send_prometheus(span_datum),
 		}
 	}
 }
@@ -290,6 +287,3 @@ fn send_telemetry(span_datum: SpanDatum) {
 	);
 }
 
-fn send_prometheus(_span_datum: SpanDatum) {
-	unimplemented!()
-}

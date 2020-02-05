@@ -66,14 +66,12 @@ async fn request_metrics(req: Request<Body>, registry: Registry) -> Result<Respo
 		let encoder = TextEncoder::new();
 		encoder.encode(&metric_families, &mut buffer).unwrap();
 
-		Response::builder()
-			.status(StatusCode::OK)
+		Response::builder().status(StatusCode::OK)
 			.header("Content-Type", encoder.format_type())
 			.body(Body::from(buffer))
 			.map_err(Error::Http)
 	} else {
-		Response::builder()
-		.status(StatusCode::NOT_FOUND)
+		Response::builder().status(StatusCode::NOT_FOUND)
 		.body(Body::from("Not found."))
 		.map_err(Error::Http)
 	}

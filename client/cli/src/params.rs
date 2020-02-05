@@ -480,9 +480,9 @@ pub struct RunCmd {
 	#[structopt(long = "prometheus-port", value_name = "PORT")]
 	pub prometheus_port: Option<u16>,
 
-	/// Disable connecting to the Substrate prometheus.
+	/// Do not expose a Prometheus metric endpoint.
 	///
-	/// prometheus is on by default on global chains.
+	/// Prometheus metric endpoint is enabled by default.
 	#[structopt(long = "no-prometheus")]
 	pub no_prometheus: bool,
 
