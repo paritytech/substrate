@@ -268,6 +268,7 @@ use sp_runtime::{
 	offchain::http,
 };
 use sp_core::crypto::KeyTypeId;
+use serde_json as json;
 
 #[cfg(test)]
 mod tests;
@@ -343,7 +344,7 @@ decl_module! {
 
 			let average: Option<u32> = Self::average_price();
 			debug::warn!("Hello World from offchain workers!");
-			debug::warn!("Current price of BTC is: {:?}", average);
+			debug::warn!("Current price is: {:?}", average);
 
 			// TODO [ToDr] Document
 			let block_hash = <system::Module<T>>::block_hash(block_number - 1.into());
@@ -351,11 +352,11 @@ decl_module! {
 
 			let price = match Self::fetch_price() {
 				Ok(price) => {
-					debug::warn!("Got BTC price: {} cents", price);
+					debug::warn!("Got price: {} cents", price);
 					price
 				},
 				Err(_) => {
-					debug::warn!("Error fetching BTC price.");
+					debug::warn!("Error fetching price.");
 					return
 				}
 			};
@@ -387,26 +388,19 @@ impl<T: Trait> Module<T> {
 			return Err(http::Error::Unknown);
 		}
 
-		const START_IDX: usize = "{\"USD\":".len();
 		let body = response.body().collect::<Vec<u8>>();
-		let json = match core::str::from_utf8(&body) {
-			Ok(json) if json.len() > START_IDX => json,
-			_ => {
-				debug::warn!("Unexpected (non-utf8 or too short) response received: {:?}", body);
-				return Err(http::Error::Unknown);
+		let val: Result<json::Value, _> = json::from_slice(&body);
+		let price = val.ok().and_then(|v| v.get("USD").and_then(|v| v.as_f64()));
+		match price {
+			Some(pricef) => {
+				Ok((pricef * 100.) as u32)
+			},
+			None => {
+				let s = core::str::from_utf8(&body);
+				debug::warn!("Unable to extract price from the response: {:?}", s);
+				Err(http::Error::Unknown)
 			}
-		};
-
-		let price = &json[START_IDX .. json.len() - 1];
-		let pricef: f64 = match price.parse() {
-			Ok(pricef) => pricef,
-			Err(_) => {
-				debug::warn!("Unparsable price: {:?}", price);
-				return Err(http::Error::Unknown);
-			}
-		};
-
-		Ok((pricef * 100.) as u32)
+		}
 	}
 
 	fn submit_price_on_chain(price: u32) {
