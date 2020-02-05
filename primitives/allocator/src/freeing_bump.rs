@@ -140,29 +140,28 @@ impl FreeingBumpHeapAllocator {
 		let list_index = (item_size.trailing_zeros() - 3) as usize;
 		let ptr: u32 = if self.heads[list_index] != u32::max_value() {
 			// Something from the free list
-			let item = self.heads[list_index];
-			let ptr = item + PREFIX_SIZE;
+			let ptr = self.heads[list_index];
 			assert!(
-				ptr + item_size <= max_heap_size,
+				ptr + item_size + PREFIX_SIZE <= max_heap_size,
 				"Pointer is looked up in list of free entries, into which
 				only valid values are inserted; qed"
 			);
 
-			self.heads[list_index] = self.get_heap_u64(mem, item)?
+			self.heads[list_index] = self.get_heap_u64(mem, ptr)?
 				.try_into()
 				.map_err(|_| error("read invalid free list pointer"))?;
 			ptr
 		} else {
 			// Nothing to be freed. Bump.
-			self.bump(item_size, max_heap_size)? + PREFIX_SIZE
+			self.bump(item_size, max_heap_size)?
 		};
 
-		self.set_heap_u64(mem, ptr - PREFIX_SIZE, list_index as u64)?;
+		self.set_heap_u64(mem, ptr, list_index as u64)?;
 
 		self.total_size = self.total_size + item_size + PREFIX_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
 
-		Ok(Pointer::new(self.ptr_offset + ptr))
+		Ok(Pointer::new(self.ptr_offset + ptr + PREFIX_SIZE))
 	}
 
 	/// Deallocates the space which was allocated for a pointer.
@@ -173,18 +172,18 @@ impl FreeingBumpHeapAllocator {
 	/// - `ptr` - pointer to the allocated chunk
 	pub fn deallocate(&mut self, mem: &mut [u8], ptr: Pointer<u8>) -> Result<(), Error> {
 		let ptr = u32::from(ptr) - self.ptr_offset;
-		if ptr < PREFIX_SIZE {
-			return Err(error("Invalid pointer for deallocation"));
-		}
+		let ptr = ptr.checked_sub(PREFIX_SIZE).ok_or_else(||
+			error("Invalid pointer for deallocation")
+		)?;
 
-		let list_index: usize = self.get_heap_u64(mem, ptr - PREFIX_SIZE)?
+		let list_index: usize = self.get_heap_u64(mem, ptr)?
 			.try_into()
 			.map_err(|_| error("read invalid list index"))?;
 		if list_index > self.heads.len() {
 			return Err(error("read invalid list index"));
 		}
-		self.set_heap_u64(mem, ptr - PREFIX_SIZE, self.heads[list_index] as u64)?;
-		self.heads[list_index] = ptr - PREFIX_SIZE;
+		self.set_heap_u64(mem, ptr, self.heads[list_index] as u64)?;
+		self.heads[list_index] = ptr;
 
 		let item_size = Self::get_item_size_from_index(list_index);
 		self.total_size = self.total_size.checked_sub(item_size as u32 + PREFIX_SIZE)
