@@ -32,17 +32,11 @@ impl_outer_origin!{
 
 thread_local! {
 	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
-	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
 }
 
 pub struct ExistentialDeposit;
 impl Get<u64> for ExistentialDeposit {
 	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
-}
-
-pub struct CreationFee;
-impl Get<u64> for CreationFee {
-	fn get() -> u64 { CREATION_FEE.with(|v| *v.borrow()) }
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -89,24 +83,20 @@ impl pallet_transaction_payment::Trait for Test {
 }
 impl Trait for Test {
 	type Balance = u64;
-	type TransferPayment = ();
 	type DustRemoval = ();
 	type Event = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type CreationFee = CreationFee;
-	type AccountStore = system::Module<Test>;
+type AccountStore = system::Module<Test>;
 }
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
-	creation_fee: u64,
 	monied: bool,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 0,
-			creation_fee: 0,
 			monied: false,
 		}
 	}
@@ -114,10 +104,6 @@ impl Default for ExtBuilder {
 impl ExtBuilder {
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
-		self
-	}
-	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
-		self.creation_fee = creation_fee;
 		self
 	}
 	pub fn monied(mut self, monied: bool) -> Self {
@@ -129,7 +115,6 @@ impl ExtBuilder {
 	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
-		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();

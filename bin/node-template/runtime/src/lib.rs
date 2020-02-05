@@ -202,7 +202,6 @@ impl timestamp::Trait for Runtime {
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 500;
-	pub const CreationFee: u128 = 0;
 }
 
 impl balances::Trait for Runtime {
@@ -211,10 +210,8 @@ impl balances::Trait for Runtime {
 	/// The ubiquitous event type.
 	type Event = Event;
 	type DustRemoval = ();
-	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type CreationFee = CreationFee;
-	type AccountStore = System;
+type AccountStore = System;
 }
 
 parameter_types! {

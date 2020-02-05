@@ -1230,18 +1230,15 @@ mod tests {
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
-		pub const CreationFee: u64 = 0;
-	}
+}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
-	}
+}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 2;
 		pub const VotingPeriod: u64 = 2;

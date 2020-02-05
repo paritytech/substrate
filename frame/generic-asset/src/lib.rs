@@ -1080,8 +1080,8 @@ mod imbalances {
 // its type declaration).
 // This works as long as `increase_total_issuance_by` doesn't use the Imbalance
 // types (basically for charging fees).
-// This should eventually be refactored so that the three type items that do
-// depend on the Imbalance type (TransactionPayment, TransferPayment, DustRemoval)
+// This should eventually be refactored so that the two type items that do
+// depend on the Imbalance type (TransactionPayment, DustRemoval)
 // are placed in their own SRML module.
 struct ElevatedTrait<T: Subtrait>(T);
 impl<T: Subtrait> Clone for ElevatedTrait<T> {

@@ -35,7 +35,7 @@ use frame_system::{self, EventRecord, Phase};
 
 use node_runtime::{
 	Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
-	System, TransactionPayment, Event, TransactionBaseFee, TransactionByteFee, CreationFee,
+	System, TransactionPayment, Event, TransactionBaseFee, TransactionByteFee,
 	constants::currency::*,
 };
 use node_primitives::{Balance, Hash};
@@ -274,7 +274,7 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 	assert!(r.is_ok());
 
 	t.execute_with(|| {
-		let fees = transfer_fee(&xt(), fm) + CreationFee::get();
+		let fees = transfer_fee(&xt(), fm);
 		assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - fees);
 		assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 	});
@@ -317,7 +317,7 @@ fn successful_execution_with_foreign_code_gives_ok() {
 	assert!(r.is_ok());
 
 	t.execute_with(|| {
-		let fees = transfer_fee(&xt(), fm) + CreationFee::get();
+		let fees = transfer_fee(&xt(), fm);
 		assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - fees);
 		assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 	});
@@ -781,7 +781,7 @@ fn successful_execution_gives_ok() {
 		.expect("Extrinsic did not fail");
 
 	t.execute_with(|| {
-		let fees = transfer_fee(&xt(), fm) + CreationFee::get();
+		let fees = transfer_fee(&xt(), fm);
 		assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - fees);
 		assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 	});

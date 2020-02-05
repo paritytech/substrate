@@ -51,7 +51,6 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 
 	pub const ExistentialDeposit: u64 = 0;
-	pub const CreationFee: u64 = 0;
 }
 
 ord_parameter_types! {
@@ -82,11 +81,9 @@ impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type OnNewAccount = ();
 	type Event = ();
-	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type CreationFee = CreationFee;
-	type OnReapAccount = System;
+type OnReapAccount = System;
 }
 
 impl Trait for Test {

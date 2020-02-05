@@ -331,18 +331,15 @@ mod tests {
 		type ModuleToIndex = ();
 	}
 	parameter_types! {
-		pub const CreationFee: u64 = 0;
-	}
+}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
-	}
+}
 	impl Trait for Test {
 		type Event = ();
 		type Currency = Balances;

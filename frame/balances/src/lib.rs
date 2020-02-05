@@ -190,10 +190,6 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The minimum amount required to keep an account open.
 	type ExistentialDeposit: Get<Self::Balance>;
 
-	/// The fee required to create an account. If you're doing significant stuff with `OnNewAccount`
-	/// then you'll probably want to make this non-zero.
-	type CreationFee: Get<Self::Balance>;
-
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 }
@@ -202,10 +198,6 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
-
-	/// Handler for the unbalanced reduction when taking fees associated with balance
-	/// transfer (which may also include account creation).
-	type TransferPayment: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 	/// Handler for the unbalanced reduction when removing a dust account.
 	type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
@@ -216,9 +208,6 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The minimum amount required to keep an account open.
 	type ExistentialDeposit: Get<Self::Balance>;
 
-	/// The fee required to create an account.
-	type CreationFee: Get<Self::Balance>;
-
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 }
@@ -226,7 +215,6 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
 	type ExistentialDeposit = T::ExistentialDeposit;
-	type CreationFee = T::CreationFee;
 	type AccountStore = T::AccountStore;
 }
 
@@ -240,8 +228,8 @@ decl_event!(
 		/// An account was removed whose balance was non-zero but below ExistentialDeposit,
 		/// resulting in an outright loss.
 		DustLost(AccountId, Balance),
-		/// Transfer succeeded (from, to, value, fees).
-		Transfer(AccountId, AccountId, Balance, Balance),
+		/// Transfer succeeded (from, to, value).
+		Transfer(AccountId, AccountId, Balance),
 		/// A balance was set by root (who, free, reserved).
 		BalanceSet(AccountId, Balance, Balance),
 		/// Some amount was deposited (e.g. for transaction fees).
@@ -404,9 +392,6 @@ decl_module! {
 
 		/// The minimum amount required to keep an account open.
 		const ExistentialDeposit: T::Balance = T::ExistentialDeposit::get();
-
-		/// The fee required to create an account.
-		const CreationFee: T::Balance = T::CreationFee::get();
 
 		fn deposit_event() = default;
 
@@ -904,9 +889,8 @@ mod imbalances {
 // its type declaration).
 // This works as long as `increase_total_issuance_by` doesn't use the Imbalance
 // types (basically for charging fees).
-// This should eventually be refactored so that the three type items that do
-// depend on the Imbalance type (TransferPayment, DustRemoval)
-// are placed in their own SRML module.
+// This should eventually be refactored so that the type item that
+// depends on the Imbalance type (DustRemoval) is placed in its own SRML module.
 struct ElevatedTrait<T: Subtrait<I>, I: Instance>(T, I);
 impl<T: Subtrait<I>, I: Instance> Clone for ElevatedTrait<T, I> {
 	fn clone(&self) -> Self { unimplemented!() }
@@ -939,10 +923,8 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
 	type Event = ();
-	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = T::ExistentialDeposit;
-	type CreationFee = T::CreationFee;
 	type AccountStore = T::AccountStore;
 }
 
@@ -1032,13 +1014,9 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> DispatchResult {
 		if value.is_zero() || transactor == dest { return Ok(()) }
 
-		let fee = Self::try_mutate_account(dest, |to_account| -> Result<T::Balance, DispatchError> {
-			let would_create = to_account.total().is_zero();
-			let fee = if would_create { T::CreationFee::get() } else { Zero::zero() };
-			let liability = value.checked_add(&fee).ok_or(Error::<T, I>::Overflow)?;
-
+		Self::try_mutate_account(dest, |to_account| -> DispatchResult {
 			Self::try_mutate_account(transactor, |from_account| -> DispatchResult {
-				from_account.free = from_account.free.checked_sub(&liability)
+				from_account.free = from_account.free.checked_sub(&value)
 					.ok_or(Error::<T, I>::InsufficientBalance)?;
 
 				// NOTE: total stake being stored in the same type means that this could never overflow
@@ -1059,14 +1037,11 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
 
 				Ok(())
-			})?;
-			Ok(fee)
+			})
 		})?;
 
 		// Emit transfer event.
-		Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
-
-		T::TransferPayment::on_unbalanced(NegativeImbalance::new(fee));
+		Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value));
 
 		Ok(())
 	}

@@ -58,17 +58,14 @@ impl frame_system::Trait for Test {
 
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 0;
-	pub const CreationFee: u64 = 0;
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type OnNewAccount = ();
 	type OnReapAccount = System;
 	type Event = Event;
-	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type CreationFee = CreationFee;
 }
 
 parameter_types! {

@@ -139,18 +139,13 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 }
-parameter_types! {
-	pub const CreationFee: Balance = 0;
-}
 impl pallet_balances::Trait for Test {
 	type Balance = Balance;
 	type OnReapAccount = (System, Staking);
 	type OnNewAccount = ();
 	type Event = ();
-	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type CreationFee = CreationFee;
 }
 parameter_types! {
 	pub const Period: BlockNumber = 1;

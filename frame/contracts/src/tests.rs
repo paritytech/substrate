@@ -83,11 +83,6 @@ impl Get<u64> for TransferFee {
 	fn get() -> u64 { TRANSFER_FEE.with(|v| *v.borrow()) }
 }
 
-pub struct CreationFee;
-impl Get<u64> for CreationFee {
-	fn get() -> u64 { INSTANTIATION_FEE.with(|v| *v.borrow()) }
-}
-
 pub struct BlockGasLimit;
 impl Get<u64> for BlockGasLimit {
 	fn get() -> u64 { BLOCK_GAS_LIMIT.with(|v| *v.borrow()) }
@@ -125,9 +120,7 @@ impl pallet_balances::Trait for Test {
 	type OnNewAccount = ();
 	type Event = MetaEvent;
 	type DustRemoval = ();
-	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type CreationFee = CreationFee;
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
@@ -169,7 +162,6 @@ impl Trait for Test {
 	type RentByteFee = RentByteFee;
 	type RentDepositOffset = RentDepositOffset;
 	type SurchargeReward = SurchargeReward;
-	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type ContractFee = ContractFee;

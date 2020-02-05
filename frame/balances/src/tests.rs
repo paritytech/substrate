@@ -219,7 +219,6 @@ macro_rules! decl_tests {
 		fn default_indexing_on_new_accounts_should_not_work2() {
 			<$ext_builder>::default()
 				.existential_deposit(10)
-				.creation_fee(50)
 				.monied(true)
 				.build()
 				.execute_with(|| {
@@ -291,29 +290,10 @@ macro_rules! decl_tests {
 					System::inc_account_nonce(&2);
 					assert_eq!(System::account_nonce(&2), 1);
 					assert_eq!(Balances::total_balance(&2), 2000);
-
-					assert_ok!(Balances::transfer(Some(2).into(), 5, 1901)); // index 1 (account 2) becomes zombie
+					 // index 1 (account 2) becomes zombie
+					assert_ok!(Balances::transfer(Some(2).into(), 5, 1901));
 					assert_eq!(Balances::total_balance(&2), 0);
 					assert_eq!(Balances::total_balance(&5), 1901);
-					assert_eq!(System::account_nonce(&2), 0);
-				});
-		}
-
-		#[test]
-		fn dust_account_removal_should_work2() {
-			<$ext_builder>::default()
-				.existential_deposit(100)
-				.creation_fee(50)
-				.monied(true)
-				.build()
-				.execute_with(|| {
-					System::inc_account_nonce(&2);
-					assert_eq!(System::account_nonce(&2), 1);
-					assert_eq!(Balances::total_balance(&2), 2000);
-					// index 1 (account 2) becomes zombie for 256*10 + 50(fee) < 256 * 10 (ext_deposit)
-					assert_ok!(Balances::transfer(Some(2).into(), 5, 1851));
-					assert_eq!(Balances::total_balance(&2), 0);
-					assert_eq!(Balances::total_balance(&5), 1851);
 					assert_eq!(System::account_nonce(&2), 0);
 				});
 		}
@@ -563,19 +543,6 @@ macro_rules! decl_tests {
 
 				// Verify that TotalIssuance tracks balance removal when free balance is too low.
 				assert_eq!(<TotalIssuance<$test>>::get(), 130);
-			});
-		}
-
-		#[test]
-		fn transfer_overflow_isnt_exploitable() {
-			<$ext_builder>::default().creation_fee(50).build().execute_with(|| {
-				// Craft a value that will overflow if summed with `creation_fee`.
-				let evil_value = u64::max_value() - 49;
-
-				assert_err!(
-					Balances::transfer(Some(1).into(), 5, evil_value),
-					Error::<$test, _>::Overflow,
-				);
 			});
 		}
 

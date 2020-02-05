@@ -305,8 +305,7 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const CreationFee: u64 = 0;
-		pub const ExistentialDeposit: u64 = 0;
+pub const ExistentialDeposit: u64 = 0;
 	}
 
 	impl pallet_balances::Trait for Runtime {
@@ -314,11 +313,9 @@ mod tests {
 		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
-	}
+}
 
 	thread_local! {
 		static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
