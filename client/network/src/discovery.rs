@@ -304,12 +304,12 @@ where
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
-		error!(target: "sub-libp2p", "Error on libp2p listener {}: {}", id, err);
+		error!(target: "sub-libp2p", "Error on libp2p listener {:?}: {}", id, err);
 		NetworkBehaviour::inject_listener_error(&mut self.kademlia, id, err);
 	}
 
 	fn inject_listener_closed(&mut self, id: ListenerId) {
-		error!(target: "sub-libp2p", "Libp2p listener {} closed", id);
+		error!(target: "sub-libp2p", "Libp2p listener {:?} closed", id);
 		NetworkBehaviour::inject_listener_closed(&mut self.kademlia, id);
 	}
 
