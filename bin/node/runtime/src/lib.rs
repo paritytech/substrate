@@ -808,8 +808,8 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_identity::benchmarking::IdentityBenchmarks<Block> for Runtime {
-		fn run_benchmarks() -> Vec<BenchmarkResults> {
-			Identity::run_benchmarks()
+		fn run_benchmarks(input: Vec<u8>) -> Vec<BenchmarkResults> {
+			Identity::run_benchmarks(input)
 		}
 	}
 }

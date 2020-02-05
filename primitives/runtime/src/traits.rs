@@ -1324,7 +1324,7 @@ pub trait Benchmarking<T> {
 	const REPEATS: u32;
 
 	/// Run the benchmarks for this module.
-	fn run_benchmarks() -> Vec<T>;
+	fn run_benchmarks(input: Vec<u8>) -> Vec<T>;
 }
 
 #[cfg(test)]

@@ -51,6 +51,8 @@ pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 	spec: ChainSpec<G, E>,
 	strategy: ExecutionStrategy,
 	wasm_method: WasmExecutionMethod,
+	pallet: String,
+	extrinsic: String,
 ) -> error::Result<()> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
@@ -69,8 +71,8 @@ pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 		None,
 		&mut changes,
 		&executor,
-		"IdentityBenchmarks_run_benchmarks",
-		&[],
+		&(pallet + "Benchmarks_run_benchmarks"),
+		&extrinsic.encode(),
 		Default::default(),
 	).execute(strategy).map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 	println!("{:?}", result);

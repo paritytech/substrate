@@ -161,9 +161,14 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 	const STEPS: u32 = 10;
 	const REPEATS: u32 = 100;
 
-	fn run_benchmarks() -> Vec<BenchmarkResults> {
+	fn run_benchmarks(input: Vec<u8>) -> Vec<BenchmarkResults> {
 
-		let selected_benchmark = SelectedBenchmark::SetIdentity;
+		let selected_benchmark = match input.as_slice() {
+			b"set_identity" => SelectedBenchmark::SetIdentity,
+			b"add_registrar" => SelectedBenchmark::AddRegistrar,
+			_ => return Vec::new(),
+		};
+
 		// first one is set_identity.		
 		let components = <SelectedBenchmark as BenchmarkingSetup<T>>::components(&selected_benchmark);
 		// results go here
@@ -173,9 +178,9 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 			// Create up to `STEPS` steps for that component between high and low.
 			let step_size = ((high - low) / Self::STEPS).max(1);
 			let num_of_steps = (high - low) / step_size;
-			for s in *low..num_of_steps {
+			for s in 0..num_of_steps {
 				// This is the value we will be testing for component `name`
-				let component_value = step_size * s;
+				let component_value = low + step_size * s;
 
 				// Select the mid value for all the other components.
 				let c: Vec<(BenchmarkParameter, u32)> = components.iter()
@@ -205,6 +210,6 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 sp_api::decl_runtime_apis! {
 	pub trait IdentityBenchmarks
 	{
-		fn run_benchmarks() -> Vec<BenchmarkResults>;
+		fn run_benchmarks(input: Vec<u8>) -> Vec<BenchmarkResults>;
 	}
 }

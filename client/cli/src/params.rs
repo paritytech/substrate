@@ -1249,7 +1249,9 @@ impl BenchmarkCmd {
 		let spec = config.chain_spec.expect("chain_spec is always Some");
 		let execution_strategy = self.execution.unwrap_or(ExecutionStrategy::Native).into();
 		let wasm_method = self.wasm_method.into();
-		sc_service::chain_ops::benchmark_runtime::<BB, BC::NativeDispatch, _, _>(spec, execution_strategy, wasm_method)?;
+		let pallet = self.pallet;
+		let extrinsic = self.extrinsic;
+		sc_service::chain_ops::benchmark_runtime::<BB, BC::NativeDispatch, _, _>(spec, execution_strategy, wasm_method, pallet, extrinsic)?;
 		Ok(())
 	}
 }
