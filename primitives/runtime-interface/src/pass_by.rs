@@ -14,11 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Provides the [`PassBy`](pass_by::PassBy) trait to simplify the implementation of the
+//! Provides the [`PassBy`](PassBy) trait to simplify the implementation of the
 //! runtime interface traits for custom types.
 //!
-//! [`Codec`](pass_by::Codec), [`Inner`](pass_by::Inner) and [`Enum`](pass_by::Enum) are the
-//! provided strategy implementations.
+//! [`Codec`], [`Inner`] and [`Enum`] are the provided strategy implementations.
 
 use crate::{RIType, util::{unpack_ptr_and_len, pack_ptr_and_len}};
 
