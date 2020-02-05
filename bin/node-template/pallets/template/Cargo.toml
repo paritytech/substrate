@@ -4,20 +4,14 @@ edition = '2018'
 name = 'pallet-template'
 version = '2.0.0'
 
-[dependencies.codec]
-default-features = false
-features = ['derive']
-package = 'parity-scale-codec'
-version = '1.0.0'
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+safe-mix = { default-features = false, version = '1.0.0' }
 
 [dependencies.frame-support]
 default-features = false
 version = '2.0.0'
 path = "../../../../frame/support"
-
-[dependencies.safe-mix]
-default-features = false
-version = '1.0.0'
 
 [dependencies.system]
 default-features = false
