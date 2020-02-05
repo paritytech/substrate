@@ -4069,14 +4069,14 @@ dependencies = [
 name = "pallet-example-offchain-worker"
 version = "2.0.0"
 dependencies = [
- "frame-support 2.0.0",
- "frame-system 2.0.0",
- "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-core 2.0.0",
- "sp-io 2.0.0",
- "sp-runtime 2.0.0",
- "sp-std 2.0.0",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]

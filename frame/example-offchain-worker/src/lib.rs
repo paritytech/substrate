@@ -254,16 +254,18 @@
 
 use sp_std::marker::PhantomData;
 use frame_support::{
+	debug,
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root, offchain};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
+	offchain::http,
 };
 use sp_core::crypto::KeyTypeId;
 
@@ -280,6 +282,8 @@ pub mod crypto {
 
 // TODO [ToDr] docs
 pub trait Trait: frame_system::Trait {
+	/// The overarching event type.
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// The overarching event type.
 	type Call: From<Call<Self>>;
 
@@ -310,7 +314,7 @@ decl_module! {
 		///
 		/// TODO [ToDr] Document that this happens on-chain
 		/// and is triggered by transaction.
-		pub fn submit_price(origin, price: u32) -> dispatch::DispatchResult {
+		pub fn submit_price(origin, price: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			debug::info!("Adding to the average: {}", price);
@@ -357,7 +361,7 @@ decl_module! {
 			};
 
 			// TODO [ToDr] do something with unsigned transaction too.
-			Self::submit_btc_price_on_chain(price);
+			Self::submit_price_on_chain(price);
 		}
 	}
 }
@@ -372,7 +376,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn fetch_btc_price() -> Result<u32, http::Error> {
+	fn fetch_price() -> Result<u32, http::Error> {
 		let pending = http::Request::get(
 			"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD"
 		).send().map_err(|_| http::Error::IoError)?;
@@ -405,10 +409,10 @@ impl<T: Trait> Module<T> {
 		Ok((pricef * 100.) as u32)
 	}
 
-	fn submit_btc_price_on_chain(price: u32) {
+	fn submit_price_on_chain(price: u32) {
 		use system::offchain::SubmitSignedTransaction;
 
-		let call = Call::submit_btc_price(price);
+		let call = Call::submit_price(price);
 		let res = T::SubmitTransaction::submit_signed(call);
 
 		if res.is_empty() {
