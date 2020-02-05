@@ -60,7 +60,7 @@ pub struct Configuration<G, E = NoExtension> {
 	/// Node roles.
 	pub roles: Roles,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
+	pub task_executor: Option<Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>>,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
