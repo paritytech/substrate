@@ -43,8 +43,8 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 			}
 			trace!(
 				target: "usage",
-				"Subsystems memory [txpool: {}]",
-				parity_util_mem::malloc_size(&*pool),
+				"Subsystems memory [txpool: {} kB]",
+				parity_util_mem::malloc_size(&*pool) / 1024,
 			);
 			display.display(&info, net_status);
 			future::ready(())
