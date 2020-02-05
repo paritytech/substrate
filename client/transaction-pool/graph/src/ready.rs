@@ -104,7 +104,7 @@ Hence every hash retrieved from `provided_tags` is always present in `ready`;
 qed
 "#;
 
-#[derive(Debug)]
+#[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// Insertion id
 	insertion_id: u64,
@@ -114,19 +114,6 @@ pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	ready: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
 	/// Best transactions that are ready to be included to the block without any other previous transaction.
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
-}
-
-impl<Hash: hash::Hash + Eq, Ex> parity_util_mem::MallocSizeOf for ReadyTransactions<Hash, Ex>
-where TransactionRef<Hash, Ex>: parity_util_mem::MallocSizeOf,
-	ReadyTx<Hash, Ex>: parity_util_mem::MallocSizeOf,
-	Hash: parity_util_mem::MallocSizeOf,
-{
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.insertion_id.size_of(ops) +
-			self.provided_tags.size_of(ops) +
-			self.ready.size_of(ops) +
-			self.best.size_of(ops)
-	}
 }
 
 impl<Hash: hash::Hash + Eq, Ex> Default for ReadyTransactions<Hash, Ex> {
