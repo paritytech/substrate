@@ -418,7 +418,7 @@ where
 				NetworkBehaviourAction::GenerateEvent(event) => {
 					match event {
 						MdnsEvent::Discovered(list) => {
-							if self.num_connections < self.discovery_only_if_under_num {
+							if self.num_connections >= self.discovery_only_if_under_num {
 								continue;
 							}
 
