@@ -398,8 +398,6 @@ fn fill_network_configuration(
 		];
 	}
 
-	config.public_addresses = Vec::new();
-
 	config.client_version = client_id;
 	config.node_key = node_key::node_key_config(cli.node_key_params, &config.net_config_path)?;
 
@@ -573,16 +571,13 @@ where
 		(_, Some(keyring)) => keyring.to_string(),
 		(None, None) => generate_node_name(),
 	};
-	match node_key::is_node_name_valid(&config.name) {
-		Ok(_) => (),
-		Err(msg) => Err(
-			error::Error::Input(
-				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
-					config.name,
-					msg
-				)
+	if let Err(msg) = node_key::is_node_name_valid(&config.name) {
+		return Err(error::Error::Input(
+			format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
+				config.name,
+				msg,
 			)
-		)?
+		));
 	}
 
 	// set sentry mode (i.e. act as an authority but **never** actively participate)
@@ -808,5 +803,61 @@ mod tests {
 
 			assert_eq!(expected_path, node_config.keystore.path().unwrap().to_owned());
 		}
+	}
+
+	#[test]
+	fn ensure_load_spec_provide_defaults() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			vec!["boo".to_string()],
+			Some(TelemetryEndpoints::new(vec![("foo".to_string(), 42)])),
+			None,
+			None,
+			None::<()>,
+		);
+
+		let args: Vec<&str> = vec![];
+		let cli = RunCmd::from_iter(args);
+
+		let mut config = Configuration::new(TEST_VERSION_INFO);
+		load_spec(&mut config, &cli.shared_params, |_| Ok(Some(chain_spec))).unwrap();
+
+		assert!(config.chain_spec.is_some());
+		assert!(!config.network.boot_nodes.is_empty());
+		assert!(config.telemetry_endpoints.is_some());
+	}
+
+	#[test]
+	fn ensure_update_config_for_running_node_provides_defaults() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			vec![],
+			None,
+			None,
+			None,
+			None::<()>,
+		);
+
+		let args: Vec<&str> = vec![];
+		let cli = RunCmd::from_iter(args);
+
+		let mut config = Configuration::new(TEST_VERSION_INFO);
+		config.chain_spec = Some(chain_spec);
+		update_config_for_running_node(&mut config, cli, TEST_VERSION_INFO).unwrap();
+
+		assert!(config.config_dir.is_some());
+		assert!(config.database.is_some());
+		if let Some(DatabaseConfig::Path { ref cache_size, .. }) = config.database {
+			assert!(cache_size.is_some());
+		} else {
+			panic!("invalid config.database variant");
+		}
+		assert_ne!(config.name, "");
+		assert!(config.network.config_path.is_some());
+		assert!(!config.network.listen_addresses.is_empty());
 	}
 }
