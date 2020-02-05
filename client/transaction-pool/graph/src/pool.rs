@@ -27,6 +27,7 @@ use serde::Serialize;
 use futures::{
 	Future, FutureExt,
 	channel::mpsc,
+	future::join_all,
 };
 use sp_runtime::{
 	generic::BlockId,
@@ -166,7 +167,7 @@ impl<B: ChainApi> Pool<B> {
 		xt: ExtrinsicFor<B>,
 	) -> Result<Watcher<ExHash<B>, BlockHash<B>>, B::Error> {
 		let block_number = self.resolve_block_number(at)?;
-		let (_, tx) = self.verify_one(at, block_number, xt, false).await;
+		let (_, tx) = self.verify_one(at, block_number, xt, false, 0).await;
 		self.validated_pool.submit_and_watch(tx)
 	}
 
@@ -374,15 +375,19 @@ impl<B: ChainApi> Pool<B> {
 		xts: impl IntoIterator<Item=ExtrinsicFor<B>>,
 		force: bool,
 	) -> Result<HashMap<ExHash<B>, ValidatedTransactionFor<B>>, B::Error> {
+		println!("STARTING VERIFY");
 		// we need a block number to compute tx validity
 		let block_number = self.resolve_block_number(at)?;
 		let mut result = HashMap::new();
+		let mut idx = 0;
 
 		for xt in xts {
-			let (hash, validated_tx) = self.verify_one(at, block_number, xt, force).await;
+			let (hash, validated_tx) = self.verify_one(at, block_number, xt, force, 0).await;
+			println!("verify one hash = {:?}", hash);
 			result.insert(hash, validated_tx);
 		}
-		println!("verify result {:?}", result);
+		println!("FINISHING VERIFY");
+		// println!("verify result {:?}", result);
 		Ok(result)
 	}
 
@@ -393,6 +398,7 @@ impl<B: ChainApi> Pool<B> {
 		block_number: NumberFor<B>,
 		xt: ExtrinsicFor<B>,
 		force: bool,
+		idx: u32,
 	) -> (ExHash<B>, ValidatedTransactionFor<B>) {
 		let (hash, bytes) = self.validated_pool.api().hash_and_length(&xt);
 		if !force && self.validated_pool.is_banned(&hash) {
@@ -403,8 +409,6 @@ impl<B: ChainApi> Pool<B> {
 		}
 
 		let validation_result = self.validated_pool.api().validate_transaction(block_id, xt.clone()).await;
-
-		println!("validate result -> {:?}", validation_result);
 
 		let status = match validation_result {
 			Ok(status) => status,
@@ -436,7 +440,7 @@ impl<B: ChainApi> Pool<B> {
 			Err(TransactionValidityError::Unknown(e)) =>
 				ValidatedTransaction::Unknown(hash.clone(), error::Error::UnknownTransaction(e).into()),
 		};
-
+		println!("finished verifying {}", idx);
 		(hash, validity)
 	}
 

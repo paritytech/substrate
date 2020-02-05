@@ -111,7 +111,7 @@ pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// tags that are provided by Ready transactions
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
-	ready: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
+	pub ready: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
 	/// Best transactions that are ready to be included to the block without any other previous transaction.
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }

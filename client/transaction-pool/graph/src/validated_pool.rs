@@ -102,6 +102,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	pub fn submit<T>(&self, txs: T) -> Vec<Result<ExHash<B>, B::Error>> where
 		T: IntoIterator<Item=ValidatedTransactionFor<B>>
 	{
+		println!("STARTING SUBMIT");
 		let results = txs.into_iter()
 			.map(|validated_tx| self.submit_one(validated_tx))
 			.collect::<Vec<_>>();
@@ -113,10 +114,13 @@ impl<B: ChainApi> ValidatedPool<B> {
 			Default::default()
 		};
 
-		results.into_iter().map(|res| match res {
+		let r = results.into_iter().map(|res| match res {
 			Ok(ref hash) if removed.contains(hash) => Err(error::Error::ImmediatelyDropped.into()),
 			other => other,
-		}).collect()
+		}).collect();
+		println!("FINISHING SUBMIT");
+
+		r
 	}
 
 	/// Submit single pre-validated transaction to the pool.

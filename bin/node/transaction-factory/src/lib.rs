@@ -31,7 +31,7 @@ use parking_lot::Mutex;
 
 use codec::{Decode, Encode};
 use structopt::clap::arg_enum;
-use rand::seq::SliceRandom;
+// use rand::seq::SliceRandom;
 use log::info;
 
 use sc_client::Client;
@@ -176,6 +176,8 @@ where
 	}
 
 	pub fn run(&mut self) -> sc_cli::error::Result<()> {
+		use rand::{thread_rng, Rng, };
+		
 		// let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(self.client.clone())));
 		let inherents = self.runtime_state.inherent_extrinsics();
 		// let inherents = self.client.runtime_api()
@@ -195,20 +197,24 @@ where
 		
 		let mut transactions = vec![];
 
-		let extrinsic = self.runtime_state.create_extrinsic(
-			"A".into(),
-			"Balances".into(),
-			"transfer".into(),
-			vec![],
-			None,
-			runtime_version,
-			&genesis_hash,
-			&best_hash,
-		);
-		let e = Decode::decode(&mut &extrinsic.encode()[..])
-			.expect("decode failed");
+		for _ in 0..10 {
+			let s: String = thread_rng().gen_ascii_chars().take(10).collect();
+			let extrinsic = self.runtime_state.create_extrinsic(
+				"A".into(),
+				"Balances".into(),
+				"transfer".into(),
+				vec![s],
+				None,
+				runtime_version,
+				&genesis_hash,
+				&best_hash,
+			);
+			let e = Decode::decode(&mut &extrinsic.encode()[..])
+				.expect("decode failed");
 
-		transactions.push(e);
+			transactions.push(e);
+			self.runtime_state.increase_index();
+		}
 
 		futures::executor::block_on(
 			self.transaction_pool.submit_at(&BlockId::number(0.into()), transactions)
@@ -226,21 +232,20 @@ where
 			Box::new(move || {
 				let mut value = cell.lock();
 				let old = *value;
-				let new = old + time::Duration::from_secs(2);
+				// let new = old + time::Duration::from_secs(2);
+				let new = old;
 				*value = new;
 				old
 			})
 		);
 
-		let deadline = time::Duration::from_secs(3);
+		let deadline = time::Duration::from_secs(2);
 		let block = futures::executor::block_on(
 			proposer.propose(inherents, Default::default(), deadline, sp_consensus::RecordProof::No)
 		).map(|r| r.block).unwrap();
 
-		// then
-		// block should have some extrinsics although we have some more in the pool.
-		assert_eq!(block.extrinsics().len(), 2);
-		assert_eq!(proposer_factory.transaction_pool.ready().count(), 1);
+		println!("Block extrinsics: {:?}", block.extrinsics().len());
+		println!("Tx pool: {:?}", proposer_factory.transaction_pool.ready().count());
 
 		self.results.extend(sc_tracing::get_data());
 		sc_tracing::clear_data();
@@ -411,16 +416,17 @@ where
 	}
 
 	fn random_state(&self) -> Option<(String, String, String, Vec<String>, Option<u32>)> {
-		let modules = self.runtime_state.all_modules();
-		loop {
-			let random_module = modules.choose(&mut rand::thread_rng())
-				.expect("failed to choose module");
-			let calls = self.runtime_state.all_calls(random_module.to_string());
+		None
+		// let modules = self.runtime_state.all_modules();
+		// loop {
+		// 	let random_module = modules.choose(&mut rand::thread_rng())
+		// 		.expect("failed to choose module");
+		// 	let calls = self.runtime_state.all_calls(random_module.to_string());
 
-			if let Some(random_call) = calls.choose(&mut rand::thread_rng()) {
-				return Some(("A".into(), random_module.clone(), random_call.clone(), vec![], None))
-			}
-		}
+		// 	if let Some(random_call) = calls.choose(&mut rand::thread_rng()) {
+		// 		return Some(("A".into(), random_module.clone(), random_call.clone(), vec![], None))
+		// 	}
+		// }
 	}
 
 	/// This should iterate over all modules and all extrinsics.

@@ -203,10 +203,14 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
 		let pending_iterator = self.transaction_pool.ready();
-
+		
 		println!("Attempting to push transactions from the pool.");
 		println!("Pool status: {:?}", self.transaction_pool.status());
 		for pending_tx in pending_iterator {
+
+
+			println!("\nITERATING OVER PENDING TX {:?} {:?}\n", (self.now)(), deadline);
+
 			if (self.now)() > deadline {
 				debug!(
 					"Consensus deadline reached when pushing block transactions, \

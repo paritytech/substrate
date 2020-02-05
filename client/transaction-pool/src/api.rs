@@ -30,7 +30,7 @@ use sc_client_api::{
 use sp_core::Hasher;
 use sp_runtime::{
 	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
-	transaction_validity::TransactionValidity,
+	transaction_validity::{TransactionValidity, TransactionValidityError, InvalidTransaction}
 };
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_api::ProvideRuntimeApi;
