@@ -22,8 +22,9 @@
 use sp_std::{prelude::*, marker::PhantomData, convert::TryInto};
 use codec::{Encode, Codec};
 use sp_runtime::traits::{One, SimpleArithmetic, StaticLookup, Member, LookupError};
-use frame_support::{Parameter, decl_module, decl_event, decl_storage};
-use frame_support::traits::{IsDeadAccount, OnNewAccount};
+use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
+use frame_support::traits::IsDeadAccount;
+use frame_system::{self as system, ensure_signed};
 
 use self::address::Address as RawAddress;
 
@@ -71,25 +72,6 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
-decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
-		fn deposit_event() = default;
-	}
-}
-
-decl_event!(
-	pub enum Event<T> where
-		<T as frame_system::Trait>::AccountId,
-		<T as Trait>::AccountIndex
-	{
-		/// A new account index was assigned.
-		///
-		/// This event is not triggered when an existing index is reassigned
-		/// to another `AccountId`.
-		NewAccountIndex(AccountId, AccountIndex),
-	}
-);
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Indices {
 		/// The next free enumeration set.
@@ -115,8 +97,113 @@ decl_storage! {
 	}
 }
 
+decl_event!(
+	pub enum Event<T> where
+		<T as frame_system::Trait>::AccountId,
+		<T as Trait>::AccountIndex
+	{
+		/// A new account index was assigned.
+		NewAccountIndex(AccountId, AccountIndex),
+		/// A previously used account index was re-assigned.
+		ReassignedAccountIndex(AccountId, AccountIndex),
+	}
+);
+
+decl_error! {
+	pub enum Error for Module<T: Trait> {
+		/// The index-taking function is not the first transaction sent from the account.
+		NotFirst,
+		/// The index-taking function is not in the first 10 transactions sent from the account.
+		TooOld,
+		/// The index provided overflowed a `usize`.
+		Overflow,
+		/// The index provided has not yet been allocated.
+		TooBig,
+		/// The index that was required was not available.
+		InUse,
+	}
+}
+
+decl_module! {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
+		fn deposit_event() = default;
+
+		/// Grab a new index.
+		fn forge_index(origin) {
+			let who = ensure_signed(origin)?;
+
+			ensure!(system::Module::<T>::account_nonce(&who) <= 1.into(), Error::<T>::TooOld);
+
+			// insert normally as a back up
+			let mut set_index = Self::next_enum_set();
+			// defensive only: this loop should never iterate since we keep NextEnumSet up to date
+			// later.
+			let mut set = loop {
+				let set = Self::enum_set(set_index);
+				if set.len() < ENUM_SET_SIZE as usize {
+					break set;
+				}
+				set_index += One::one();
+			};
+
+			let index = set_index * Self::enum_set_size() + T::AccountIndex::from(set.len() as u32);
+
+			// update set.
+			set.push(who.clone());
+
+			// keep NextEnumSet up to date
+			if set.len() == ENUM_SET_SIZE as usize {
+				<NextEnumSet<T>>::put(set_index + One::one());
+			}
+
+			// write set.
+			<EnumSet<T>>::insert(set_index, set);
+
+			Self::deposit_event(RawEvent::NewAccountIndex(who.clone(), index));
+		}
+
+		/// Attempt to grab a preexisting index. The Nonce must be less than 3; so you can grab at
+		/// most that number of accounts.
+		fn reuse_index(origin, index: T::AccountIndex) {
+			let who = ensure_signed(origin)?;
+
+			ensure!(system::Module::<T>::account_nonce(&who) <= 3.into(), Error::<T>::TooOld);
+
+			// then check to see if this account id identifies a dead account index.
+			let enum_set_size = Self::enum_set_size();
+			let set_index = index / enum_set_size;
+			let mut try_set = Self::enum_set(set_index);
+			let item_index = (index % enum_set_size).try_into().map_err(|_| Error::<T>::Overflow)?;
+			ensure!(item_index < try_set.len(), Error::<T>::TooBig);
+			ensure!(T::IsDeadAccount::is_dead_account(&try_set[item_index]), Error::<T>::InUse);
+
+			// yup - this index refers to a dead account. can be reused.
+			try_set[item_index] = who.clone();
+			<EnumSet<T>>::insert(set_index, try_set);
+
+			Self::deposit_event(RawEvent::ReassignedAccountIndex(who.clone(), index));
+		}
+	}
+}
+
 impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
+
+	/// Implementation of the config type managing the creation of new accounts.
+	/// See Balances module for a concrete example.
+	///
+	/// # <weight>
+	/// - Independent of the arguments.
+	/// - Given the correct value of `Self::next_enum_set`, it always has a limited
+	///   number of reads and writes and no complex computation.
+	///
+	/// As for storage, calling this function with _non-dead-indices_ will linearly grow the length of
+	/// of `Self::enum_set`. Appropriate economic incentives should exist to make callers of this
+	/// function provide a `who` argument that reclaims a dead account.
+	///
+	/// At the time of this writing, only the Balances module calls this function upon creation
+	/// of new accounts.
+	/// # </weight>
 
 	/// Lookup an T::AccountIndex to get an Id, if there's one there.
 	pub fn lookup_index(index: T::AccountIndex) -> Option<T::AccountId> {
@@ -152,72 +239,6 @@ impl<T: Trait> Module<T> {
 
 	fn enum_set_size() -> T::AccountIndex {
 		ENUM_SET_SIZE.into()
-	}
-}
-
-impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
-	// Implementation of the config type managing the creation of new accounts.
-	// See Balances module for a concrete example.
-	//
-	// # <weight>
-	// - Independent of the arguments.
-	// - Given the correct value of `Self::next_enum_set`, it always has a limited
-	//   number of reads and writes and no complex computation.
-	//
-	// As for storage, calling this function with _non-dead-indices_ will linearly grow the length of
-	// of `Self::enum_set`. Appropriate economic incentives should exist to make callers of this
-	// function provide a `who` argument that reclaims a dead account.
-	//
-	// At the time of this writing, only the Balances module calls this function upon creation
-	// of new accounts.
-	// # </weight>
-	fn on_new_account(who: &T::AccountId) {
-		let enum_set_size = Self::enum_set_size();
-		let next_set_index = Self::next_enum_set();
-
-		if let Some(try_index) = T::ResolveHint::resolve_hint(who) {
-			// then check to see if this account id identifies a dead account index.
-			let set_index = try_index / enum_set_size;
-			let mut try_set = Self::enum_set(set_index);
-			if let Ok(item_index) = (try_index % enum_set_size).try_into() {
-				if item_index < try_set.len() {
-					if T::IsDeadAccount::is_dead_account(&try_set[item_index]) {
-						// yup - this index refers to a dead account. can be reused.
-						try_set[item_index] = who.clone();
-						<EnumSet<T>>::insert(set_index, try_set);
-
-						return
-					}
-				}
-			}
-		}
-
-		// insert normally as a back up
-		let mut set_index = next_set_index;
-		// defensive only: this loop should never iterate since we keep NextEnumSet up to date
-		// later.
-		let mut set = loop {
-			let set = Self::enum_set(set_index);
-			if set.len() < ENUM_SET_SIZE as usize {
-				break set;
-			}
-			set_index += One::one();
-		};
-
-		let index = set_index * enum_set_size + T::AccountIndex::from(set.len() as u32);
-
-		// update set.
-		set.push(who.clone());
-
-		// keep NextEnumSet up to date
-		if set.len() == ENUM_SET_SIZE as usize {
-			<NextEnumSet<T>>::put(set_index + One::one());
-		}
-
-		// write set.
-		<EnumSet<T>>::insert(set_index, set);
-
-		Self::deposit_event(RawEvent::NewAccountIndex(who.clone(), index));
 	}
 }
 

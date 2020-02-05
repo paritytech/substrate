@@ -23,7 +23,7 @@ use sp_runtime::testing::Header;
 use sp_runtime::Perbill;
 use sp_core::H256;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
-use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
+use crate::{GenesisConfig, Module, Trait, IsDeadAccount, ResolveHint};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime where system = frame_system {}
@@ -35,7 +35,6 @@ thread_local! {
 
 pub fn make_account(who: u64) {
 	ALIVE.with(|a| a.borrow_mut().insert(who));
-	Indices::on_new_account(&who);
 }
 
 pub fn kill_account(who: u64) {
@@ -87,6 +86,9 @@ impl frame_system::Trait for Runtime {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnReapAccount = ();
 }
 
 impl Trait for Runtime {

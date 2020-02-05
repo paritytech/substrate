@@ -164,7 +164,7 @@ impl system::Trait for Runtime {
 	/// What to do if a new account is created.
 	type OnNewAccount = Indices;
 	/// What to do if an account is fully reaped from the system.
-	type OnReapAccount = System;
+	type OnReapAccount = Balances;
 	/// The data to be stored in an account.
 	type AccountData = balances::AccountData<Balance>;
 }
@@ -247,7 +247,7 @@ construct_runtime!(
 		NodeBlock = opaque::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Storage, Config<T>, Event<T>},
+		System: system,
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},

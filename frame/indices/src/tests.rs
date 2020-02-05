@@ -19,7 +19,8 @@
 #![cfg(test)]
 
 use super::*;
-use crate::mock::{Indices, new_test_ext, make_account, kill_account, TestIsDeadAccount};
+use crate::mock::{Indices, new_test_ext, make_account, kill_account, TestIsDeadAccount, Runtime};
+use frame_support::{assert_ok, assert_noop};
 
 #[test]
 fn indexing_lookup_should_work() {
@@ -37,6 +38,7 @@ fn default_indexing_on_new_accounts_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Indices::lookup_index(4), None);
 		make_account(5);
+		assert_ok!(Indices::forge_index(Some(5).into()));
 		assert_eq!(Indices::lookup_index(4), Some(5));
 	});
 }
@@ -49,7 +51,7 @@ fn reclaim_indexing_on_new_accounts_should_work() {
 
 		kill_account(2);					// index 1 no longer locked to id 2
 
-		make_account(1 + 256);				// id 257 takes index 1.
+		assert_ok!(Indices::reuse_index(Some(257).into(), 1));
 		assert_eq!(Indices::lookup_index(1), Some(257));
 	});
 }
@@ -61,7 +63,6 @@ fn alive_account_should_prevent_reclaim() {
 		assert_eq!(Indices::lookup_index(1), Some(2));
 		assert_eq!(Indices::lookup_index(4), None);
 
-		make_account(1 + 256);				// id 257 takes index 1.
-		assert_eq!(Indices::lookup_index(4), Some(257));
+		assert_noop!(Indices::reuse_index(Some(257).into(), 1), Error::<Runtime>::InUse);
 	});
 }
