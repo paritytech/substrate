@@ -161,7 +161,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 	const STEPS: u32 = 10;
 	const REPEATS: u32 = 100;
 
-	fn run_benchmarks(input: Vec<u8>) -> Vec<BenchmarkResults> {
+	fn run_benchmark(input: Vec<u8>) -> Vec<BenchmarkResults> {
 
 		let selected_benchmark = match input.as_slice() {
 			b"set_identity" => SelectedBenchmark::SetIdentity,
@@ -204,12 +204,5 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 			}
 		}
 		return results;
-	}
-}
-
-sp_api::decl_runtime_apis! {
-	pub trait IdentityBenchmarks
-	{
-		fn run_benchmarks(input: Vec<u8>) -> Vec<BenchmarkResults>;
 	}
 }

@@ -71,8 +71,8 @@ pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 		None,
 		&mut changes,
 		&executor,
-		&(pallet + "Benchmarks_run_benchmarks"),
-		&extrinsic.encode(),
+		"Benchmark_run_benchmark",
+		&(pallet, extrinsic).encode(),
 		Default::default(),
 	).execute(strategy).map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 	println!("{:?}", result);
