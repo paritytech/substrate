@@ -25,4 +25,4 @@ tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
 [dev-dependencies]
 sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-parking_lot = "0.9"
+parking_lot = "0.10.0"
