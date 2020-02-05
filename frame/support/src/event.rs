@@ -545,7 +545,7 @@ macro_rules! __impl_outer_event_json_metadata {
 
 			$crate::__impl_outer_event_json_metadata! {
 				@DECL_MODULE_EVENT_FNS
-				$system <> ;
+				$system <$runtime> ;
 				$( $module_name < $( $generic_params ),* > $( $instance )? ; )*
 			}
 		}
