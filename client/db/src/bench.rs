@@ -18,7 +18,6 @@
 
 use std::sync::Arc;
 use std::path::PathBuf;
-use std::io;
 use std::cell::{Cell, RefCell};
 use rand::Rng;
 
@@ -28,11 +27,8 @@ use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{Block as BlockT, HasherFor};
 use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend};
-use crate::{DatabaseSettings, DatabaseSettingsSrc, columns};
-use crate::utils::DatabaseType;
-//use log::{trace, debug, warn};
-pub use sc_state_db::PruningMode;
 use kvdb::{KeyValueDB, DBTransaction};
+use kvdb_rocksdb::{Database, DatabaseConfig};
 
 type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HasherFor<B>>>, HasherFor<B>
@@ -46,17 +42,8 @@ struct StorageDb<Block: BlockT> {
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<HasherFor<Block>>(key, prefix);
-		self.db.get(columns::STATE, &key)
+		self.db.get(0, &key)
 			.map_err(|e| format!("Database backend error: {:?}", e))
-	}
-}
-
-impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
-	type Error = io::Error;
-	type Key = [u8];
-
-	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.db.get(columns::STATE, key).map(|r| r.map(|v| v.to_vec()))
 	}
 }
 
@@ -106,15 +93,10 @@ impl<B: BlockT> BenchmarkingState<B> {
 	fn reopen(&self) -> Result<(), String> {
 		*self.state.borrow_mut() = None;
 		self.db.set(None);
-		let config = DatabaseSettings {
-			state_cache_size: 0,
-			state_cache_child_ratio: None,
-			pruning: PruningMode::ArchiveAll,
-			source: DatabaseSettingsSrc::Path { path: self.path.clone(), cache_size: None },
-		};
-
-		let db = crate::utils::open_database::<B>(&config, DatabaseType::Full)
-			.map_err(|e| format!("Error opening dadabase: {:?}", e))?;
+		let db_config = DatabaseConfig::with_columns(1);
+		let path = self.path.to_str()
+			.ok_or_else(|| String::from("Invalid database path"))?;
+		let db = Arc::new(Database::open(&db_config, &path).map_err(|e| format!("Error opening dadabase: {:?}", e))?);
 		self.db.set(Some(db.clone()));
 		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
 		*self.state.borrow_mut() = Some(DbState::<B>::new(storage_db, self.root.get()));
@@ -274,9 +256,9 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 			for (key, (val, rc)) in transaction.drain() {
 				if rc > 0 {
-					db_transaction.put(columns::STATE, &key, &val);
+					db_transaction.put(0, &key, &val);
 				} else if rc < 0 {
-					db_transaction.delete(columns::STATE, &key);
+					db_transaction.delete(0, &key);
 				}
 			}
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
