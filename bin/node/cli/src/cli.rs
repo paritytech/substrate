@@ -28,6 +28,7 @@ pub struct Cli {
 	/// Possible subcommand with parameters.
 	#[structopt(subcommand)]
 	pub subcommand: Option<Subcommand>,
+	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	#[allow(missing_docs)]
 	pub run: RunCmd,

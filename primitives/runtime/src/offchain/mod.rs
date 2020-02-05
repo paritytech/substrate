@@ -17,3 +17,4 @@
 //! A collection of higher lever helpers for offchain calls.
 
 pub mod http;
+pub mod storage;

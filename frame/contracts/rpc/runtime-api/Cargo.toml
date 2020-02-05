@@ -10,6 +10,7 @@ sp-api = { version = "2.0.0", default-features = false, path = "../../../../prim
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0", default-features = false, path = "../../../../primitives/std" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../../../primitives/runtime" }
+pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "../../common" }
 
 [features]
 default = ["std"]
@@ -18,4 +19,5 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"sp-runtime/std",
+	"pallet-contracts-primitives/std",
 ]

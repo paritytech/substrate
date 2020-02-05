@@ -300,10 +300,10 @@ pub struct NodeKeyParams {
 #[derive(Debug, StructOpt, Clone)]
 pub struct TransactionPoolParams {
 	/// Maximum number of transactions in the transaction pool.
-	#[structopt(long = "pool-limit", value_name = "COUNT", default_value = "512")]
+	#[structopt(long = "pool-limit", value_name = "COUNT", default_value = "8192")]
 	pub pool_limit: usize,
 	/// Maximum number of kilobytes of all transactions stored in the pool.
-	#[structopt(long = "pool-kbytes", value_name = "COUNT", default_value = "10240")]
+	#[structopt(long = "pool-kbytes", value_name = "COUNT", default_value = "20480")]
 	pub pool_kbytes: usize,
 }
 
