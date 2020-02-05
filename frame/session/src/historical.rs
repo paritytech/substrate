@@ -48,25 +48,30 @@ pub trait Trait: super::Trait {
 	/// validator, since they may be outdated by the time this is queried from a
 	/// historical trie.
 	///
-	/// This mapping is expected to remain stable in between calls to
-	/// `Self::OnSessionEnding::on_session_ending` which return new validators.
+	/// It must return the identification for the current session index.
 	type FullIdentificationOf: Convert<Self::ValidatorId, Option<Self::FullIdentification>>;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// Mapping from historical session indices to session-data root hash and validator count.
-		HistoricalSessions get(fn historical_root): map SessionIndex => Option<(T::Hash, ValidatorCount)>;
-		/// Queued full identifications for queued sessions whose validators have become obsolete.
-		CachedObsolete get(fn cached_obsolete): map SessionIndex
-			=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
+		HistoricalSessions get(fn historical_root):
+			map hasher(blake2_256) SessionIndex => Option<(T::Hash, ValidatorCount)>;
 		/// The range of historical sessions we store. [first, last)
 		StoredRange: Option<(SessionIndex, SessionIndex)>;
+		/// Deprecated.
+		CachedObsolete:
+			map hasher(blake2_256) SessionIndex
+			=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
 	}
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn on_initialize(_n: T::BlockNumber) {
+			CachedObsolete::<T>::remove_all();
+		}
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -97,52 +102,52 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-/// Specialization of the crate-level `OnSessionEnding` which returns the old
-/// set of full identification when changing the validator set.
-pub trait OnSessionEnding<ValidatorId, FullIdentification>: crate::OnSessionEnding<ValidatorId> {
-	/// If there was a validator set change, its returns the set of new validators along with the
-	/// old validators and their full identifications.
-	fn on_session_ending(ending: SessionIndex, will_apply_at: SessionIndex)
-		-> Option<(Vec<ValidatorId>, Vec<(ValidatorId, FullIdentification)>)>;
+/// Specialization of the crate-level `SessionManager` which returns the set of full identification
+/// when creating a new session.
+pub trait SessionManager<ValidatorId, FullIdentification>: crate::SessionManager<ValidatorId> {
+	/// If there was a validator set change, its returns the set of new validators along with their
+	/// full identifications.
+	fn new_session(new_index: SessionIndex) -> Option<Vec<(ValidatorId, FullIdentification)>>;
+	fn end_session(end_index: SessionIndex);
 }
 
-/// An `OnSessionEnding` implementation that wraps an inner `I` and also
+/// An `SessionManager` implementation that wraps an inner `I` and also
 /// sets the historical trie root of the ending session.
 pub struct NoteHistoricalRoot<T, I>(sp_std::marker::PhantomData<(T, I)>);
 
-impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<T, I>
-	where I: OnSessionEnding<T::ValidatorId, T::FullIdentification>
+impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T, I>
+	where I: SessionManager<T::ValidatorId, T::FullIdentification>
 {
-	fn on_session_ending(ending: SessionIndex, applied_at: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		StoredRange::mutate(|range| {
-			range.get_or_insert_with(|| (ending, ending)).1 = ending + 1;
+			range.get_or_insert_with(|| (new_index, new_index)).1 = new_index + 1;
 		});
 
-		// do all of this _before_ calling the other `on_session_ending` impl
-		// so that we have e.g. correct exposures from the _current_.
+		let new_validators_and_id = <I as SessionManager<_, _>>::new_session(new_index);
+		let new_validators = new_validators_and_id.as_ref().map(|new_validators| {
+			new_validators.iter().map(|(v, _id)| v.clone()).collect()
+		});
 
-		let count = <SessionModule<T>>::validators().len() as u32;
-		match ProvingTrie::<T>::generate_for(ending) {
-			Ok(trie) => <HistoricalSessions<T>>::insert(ending, &(trie.root, count)),
-			Err(reason) => {
-				print("Failed to generate historical ancestry-inclusion proof.");
-				print(reason);
+		if let Some(new_validators) = new_validators_and_id {
+			let count = new_validators.len() as u32;
+			match ProvingTrie::<T>::generate_for(new_validators) {
+				Ok(trie) => <HistoricalSessions<T>>::insert(new_index, &(trie.root, count)),
+				Err(reason) => {
+					print("Failed to generate historical ancestry-inclusion proof.");
+					print(reason);
+				}
+			};
+		} else {
+			let previous_index = new_index.saturating_sub(1);
+			if let Some(previous_session) = <HistoricalSessions<T>>::get(previous_index) {
+				<HistoricalSessions<T>>::insert(new_index, previous_session);
 			}
-		};
-
-		// trie has been generated for this session, so it's no longer queued.
-		<CachedObsolete<T>>::remove(&ending);
-
-		let (new_validators, old_exposures) = <I as OnSessionEnding<_, _>>::on_session_ending(ending, applied_at)?;
-
-		// every session from `ending+1 .. applied_at` now has obsolete `FullIdentification`
-		// now that a new validator election has occurred.
-		// we cache these in the trie until those sessions themselves end.
-		for obsolete in (ending + 1) .. applied_at {
-			<CachedObsolete<T>>::insert(obsolete, &old_exposures);
 		}
 
-		Some(new_validators)
+		new_validators
+	}
+	fn end_session(end_index: SessionIndex) {
+		<I as SessionManager<_, _>>::end_session(end_index)
 	}
 }
 
@@ -158,15 +163,14 @@ pub struct ProvingTrie<T: Trait> {
 }
 
 impl<T: Trait> ProvingTrie<T> {
-	fn generate_for(now: SessionIndex) -> Result<Self, &'static str> {
+	fn generate_for<I>(validators: I) -> Result<Self, &'static str>
+		where I: IntoIterator<Item=(T::ValidatorId, T::FullIdentification)>
+	{
 		let mut db = MemoryDB::default();
 		let mut root = Default::default();
 
-		fn build<T: Trait, I>(root: &mut T::Hash, db: &mut MemoryDB<HasherOf<T>>, validators: I)
-			-> Result<(), &'static str>
-			where I: IntoIterator<Item=(T::ValidatorId, Option<T::FullIdentification>)>
 		{
-			let mut trie = TrieDBMut::new(db, root);
+			let mut trie = TrieDBMut::new(&mut db, &mut root);
 			for (i, (validator, full_id)) in validators.into_iter().enumerate() {
 				let i = i as u32;
 				let keys = match <SessionModule<T>>::load_keys(&validator) {
@@ -174,11 +178,7 @@ impl<T: Trait> ProvingTrie<T> {
 					Some(k) => k,
 				};
 
-				let full_id = full_id.or_else(|| T::FullIdentificationOf::convert(validator.clone()));
-				let full_id = match full_id {
-					None => return Err("no full identification for a current validator"),
-					Some(full) => (validator, full),
-				};
+				let full_id = (validator, full_id);
 
 				// map each key to the owner index.
 				for key_id in T::Keys::key_ids() {
@@ -194,17 +194,6 @@ impl<T: Trait> ProvingTrie<T> {
 				let _ = i.using_encoded(|k| full_id.using_encoded(|v| trie.insert(k, v)))
 					.map_err(|_| "failed to insert into trie")?;
 			}
-
-			Ok(())
-		}
-
-		// if the current session's full identifications are obsolete but cached,
-		// use those.
-		if let Some(obsolete) = <CachedObsolete<T>>::get(&now) {
-			build::<T, _>(&mut root, &mut db, obsolete.into_iter().map(|(v, f)| (v, Some(f))))?
-		} else {
-			let validators = <SessionModule<T>>::validators();
-			build::<T, _>(&mut root, &mut db, validators.into_iter().map(|v| (v, None)))?
 		}
 
 		Ok(ProvingTrie {
@@ -281,7 +270,12 @@ impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTy
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
 		let session = <SessionModule<T>>::current_index();
-		let trie = ProvingTrie::<T>::generate_for(session).ok()?;
+		let validators = <SessionModule<T>>::validators().into_iter()
+			.filter_map(|validator| {
+				T::FullIdentificationOf::convert(validator.clone())
+					.map(|full_id| (validator, full_id))
+			});
+		let trie = ProvingTrie::<T>::generate_for(validators).ok()?;
 
 		let (id, data) = key;
 
@@ -348,12 +342,8 @@ mod tests {
 			set_next_validators(vec![1, 2, 4]);
 			force_new_session();
 
-			assert!(Historical::cached_obsolete(&(proof.session + 1)).is_none());
-
 			System::set_block_number(2);
 			Session::on_initialize(2);
-
-			assert!(Historical::cached_obsolete(&(proof.session + 1)).is_some());
 
 			assert!(Historical::historical_root(proof.session).is_some());
 			assert!(Session::current_index() > proof.session);
@@ -366,15 +356,13 @@ mod tests {
 			force_new_session();
 			System::set_block_number(3);
 			Session::on_initialize(3);
-
-			assert!(Historical::cached_obsolete(&(proof.session + 1)).is_none());
 		});
 	}
 
 	#[test]
 	fn prune_up_to_works() {
 		new_test_ext().execute_with(|| {
-			for i in 1..101u64 {
+			for i in 1..99u64 {
 				set_next_validators(vec![i]);
 				force_new_session();
 
@@ -385,7 +373,7 @@ mod tests {
 
 			assert_eq!(StoredRange::get(), Some((0, 100)));
 
-			for i in 1..100 {
+			for i in 0..100 {
 				assert!(Historical::historical_root(i).is_some())
 			}
 
@@ -405,7 +393,7 @@ mod tests {
 			Historical::prune_up_to(100);
 			assert_eq!(StoredRange::get(), None);
 
-			for i in 101..201u64 {
+			for i in 99..199u64 {
 				set_next_validators(vec![i]);
 				force_new_session();
 
@@ -416,14 +404,14 @@ mod tests {
 
 			assert_eq!(StoredRange::get(), Some((100, 200)));
 
-			for i in 101..200 {
+			for i in 100..200 {
 				assert!(Historical::historical_root(i).is_some())
 			}
 
 			Historical::prune_up_to(9999);
 			assert_eq!(StoredRange::get(), None);
 
-			for i in 101..200 {
+			for i in 100..200 {
 				assert!(Historical::historical_root(i).is_none())
 			}
 		});

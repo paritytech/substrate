@@ -28,5 +28,6 @@ pub use rpc::IoHandlerExtension as RpcExtension;
 
 pub mod author;
 pub mod chain;
+pub mod offchain;
 pub mod state;
 pub mod system;

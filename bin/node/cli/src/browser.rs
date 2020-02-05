@@ -38,13 +38,13 @@ async fn start_inner(wasm_ext: Transport) -> Result<Client, Box<dyn std::error::
 	let chain_spec = ChainSpec::FlamingFir.load()
 		.map_err(|e| format!("{:?}", e))?;
 
-	let config: Configuration<(), _, _> = browser_configuration(wasm_ext, chain_spec)
+	let config: Configuration<_, _> = browser_configuration(wasm_ext, chain_spec)
 		.await?;
 
 	info!("Substrate browser node");
 	info!("  version {}", config.full_version());
-	info!("  by Parity Technologies, 2017-2019");
-	info!("Chain specification: {}", config.chain_spec.name());
+	info!("  by Parity Technologies, 2017-2020");
+	info!("Chain specification: {}", config.expect_chain_spec().name());
 	info!("Node name: {}", config.name);
 	info!("Roles: {:?}", config.roles);
 

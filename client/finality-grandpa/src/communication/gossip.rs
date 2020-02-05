@@ -90,8 +90,7 @@ use sp_finality_grandpa::AuthorityId;
 
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug};
-use futures::prelude::*;
-use futures03::channel::mpsc;
+use futures::channel::mpsc;
 use rand::seq::SliceRandom;
 
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
@@ -1445,6 +1444,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 	}
 }
 
+/// Report specifying a reputation change for a given peer.
 pub(super) struct PeerReport {
 	pub who: PeerId,
 	pub cost_benefit: ReputationChange,
