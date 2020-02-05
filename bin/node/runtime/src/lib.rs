@@ -808,9 +808,9 @@ impl_runtime_apis! {
 	}
 
 	impl crate::Benchmark<Block> for Runtime {
-		fn run_benchmark(module: Vec<u8>, extrinsic: Vec<u8>) -> Vec<BenchmarkResults> {
+		fn dispatch_benchmark(module: Vec<u8>, extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Vec<BenchmarkResults> {
 			match module.as_slice() {
-				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic),
+				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat),
 				_ => return Vec::new(),
 			}
 		}
@@ -820,7 +820,7 @@ impl_runtime_apis! {
 sp_api::decl_runtime_apis! {
 	pub trait Benchmark
 	{
-		fn run_benchmark(module: Vec<u8>, extrinsic: Vec<u8>) -> Vec<BenchmarkResults>;
+		fn dispatch_benchmark(module: Vec<u8>, extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Vec<BenchmarkResults>;
 	}
 }
 

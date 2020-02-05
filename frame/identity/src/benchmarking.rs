@@ -120,15 +120,14 @@ impl<T: Trait> BenchmarkingSetup<T> for AddRegistrar {
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap();
 		for i in 0..r.1 {
-			sp_std::if_std!{
-				println!("Components {:?} Index {:?}", components, i);
-			}
 			let _ = T::Currency::make_free_balance_be(&account::<T>(i), BalanceOf::<T>::max_value());
 			assert_eq!(Identity::<T>::add_registrar(RawOrigin::Root.into(), account::<T>(i)), Ok(()));
-			sp_std::if_std!{
-				println!("# Registrars {:?}", Registrars::<T>::get().len());
-			}
 		}
+
+		sp_std::if_std!{
+			println!("# Registrars {:?}", Registrars::<T>::get().len());
+		}
+
 		// Return the `add_registrar` r + 1 call
 		(crate::Call::<T>::add_registrar(account::<T>(r.1 + 1)), RawOrigin::Root)
 	}
@@ -158,12 +157,9 @@ impl<T: Trait> BenchmarkingSetup<T> for SelectedBenchmark {
 }
 
 impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
-	const STEPS: u32 = 10;
-	const REPEATS: u32 = 100;
+	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Vec<BenchmarkResults> {
 
-	fn run_benchmark(input: Vec<u8>) -> Vec<BenchmarkResults> {
-
-		let selected_benchmark = match input.as_slice() {
+		let selected_benchmark = match extrinsic.as_slice() {
 			b"set_identity" => SelectedBenchmark::SetIdentity,
 			b"add_registrar" => SelectedBenchmark::AddRegistrar,
 			_ => return Vec::new(),
@@ -176,7 +172,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		// Select the component we will be benchmarking. Each component will be benchmarked.
 		for (name, low, high) in components.iter() {
 			// Create up to `STEPS` steps for that component between high and low.
-			let step_size = ((high - low) / Self::STEPS).max(1);
+			let step_size = ((high - low) / steps).max(1);
 			let num_of_steps = (high - low) / step_size;
 			for s in 0..num_of_steps {
 				// This is the value we will be testing for component `name`
@@ -188,7 +184,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 						(*n, if n == name { component_value } else { (h - l) / 2 + l })
 					).collect();
 
-				for r in 0..Self::REPEATS {
+				for r in 0..repeat {
 					sp_std::if_std!{
 						println!("STEP {:?} REPEAT {:?}", s, r);
 					}

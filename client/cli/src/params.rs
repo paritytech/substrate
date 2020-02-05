@@ -852,9 +852,17 @@ pub struct BenchmarkCmd {
 	#[structopt(short, long)]
 	pub pallet: String,
 
-	/// Select a FRAME pallet to benchmark.
+	/// Select an extrinsic to benchmark.
 	#[structopt(short, long)]
 	pub extrinsic: String,
+
+	/// Select how many steps of the parameters should we test.
+	#[structopt(short, long, default_value = "1")]
+	pub steps: u32,
+
+	/// Select how many repetitions of this benchmark should run.
+	#[structopt(short, long, default_value = "1")]
+	pub repeat: u32,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -1251,7 +1259,9 @@ impl BenchmarkCmd {
 		let wasm_method = self.wasm_method.into();
 		let pallet = self.pallet;
 		let extrinsic = self.extrinsic;
-		sc_service::chain_ops::benchmark_runtime::<BB, BC::NativeDispatch, _, _>(spec, execution_strategy, wasm_method, pallet, extrinsic)?;
+		let steps = self.steps;
+		let repeat = self.repeat;
+		sc_service::chain_ops::benchmark_runtime::<BB, BC::NativeDispatch, _, _>(spec, execution_strategy, wasm_method, pallet, extrinsic, steps, repeat)?;
 		Ok(())
 	}
 }
