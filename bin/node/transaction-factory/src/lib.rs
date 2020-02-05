@@ -26,7 +26,6 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::prelude::*;
 use std::time;
-
 use parking_lot::Mutex;
 
 use codec::{Decode, Encode};
@@ -39,8 +38,9 @@ use sp_block_builder::BlockBuilder;
 use sp_api::{ConstructRuntimeApi, ProvideRuntimeApi, ApiExt};
 use sp_consensus::{
 	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy,
-	SelectChain, Proposer,
+	SelectChain, Proposer, Environment
 };
+
 use sp_consensus::block_import::BlockImport;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
@@ -197,7 +197,7 @@ where
 		
 		let mut transactions = vec![];
 
-		for _ in 0..10 {
+		for _ in 0..750 {
 			let s: String = thread_rng().gen_ascii_chars().take(10).collect();
 			let extrinsic = self.runtime_state.create_extrinsic(
 				"A".into(),
@@ -227,19 +227,16 @@ where
 		};
 
 		let cell = Mutex::new(time::Instant::now());
-		let mut proposer = proposer_factory.init_with_now(
-			&self.client.header(&BlockId::number(0.into())).unwrap().unwrap(),
-			Box::new(move || {
-				let mut value = cell.lock();
-				let old = *value;
-				// let new = old + time::Duration::from_secs(2);
-				let new = old;
-				*value = new;
-				old
-			})
-		);
+		let mut proposer = futures::executor::block_on(
+			proposer_factory.init(
+				&self.client.header(&BlockId::number(0.into())).unwrap().unwrap(),
+			)
+		).unwrap();
+		// let mut proposer = proposer_factory.init(
+		// 	&self.client.header(&BlockId::number(0.into())).unwrap().unwrap(),
+		// );
 
-		let deadline = time::Duration::from_secs(2);
+		let deadline = time::Duration::from_secs(3);
 		let block = futures::executor::block_on(
 			proposer.propose(inherents, Default::default(), deadline, sp_consensus::RecordProof::No)
 		).map(|r| r.block).unwrap();
