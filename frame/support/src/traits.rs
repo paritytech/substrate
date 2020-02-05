@@ -22,6 +22,7 @@ use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
+	RuntimeDebug,
 	ConsensusEngineId, DispatchResult, DispatchError,
 	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, TrailingZeroInput},
 };
@@ -799,4 +800,25 @@ pub trait ModuleToIndex {
 
 impl ModuleToIndex for () {
 	fn module_to_index<M: 'static>() -> Option<usize> { Some(0) }
+}
+
+/// The function and pallet name of the Call.
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug)]
+pub struct CallMetadata {
+	/// Name of the function.
+	pub function_name: &'static str,
+	/// Name of the pallet to which the function belongs.
+	pub pallet_name: &'static str,
+}
+
+/// Gets the function name of the Call.
+pub trait GetCallName {
+	/// Return the function name of the Call.
+	fn get_call_name(&self) -> &'static str;
+}
+
+/// Gets the metadata for the Call - function name and pallet name.
+pub trait GetCallMetadata {
+	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
+	fn get_call_metadata(&self) -> CallMetadata;
 }
