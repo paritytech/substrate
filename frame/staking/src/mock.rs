@@ -140,19 +140,16 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 }
 parameter_types! {
-	pub const TransferFee: Balance = 0;
 	pub const CreationFee: Balance = 0;
 }
 impl pallet_balances::Trait for Test {
 	type Balance = Balance;
-	type OnFreeBalanceZero = Staking;
-	type OnReapAccount = System;
+	type OnReapAccount = (System, Staking);
 	type OnNewAccount = ();
 	type Event = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 }
 parameter_types! {
@@ -323,7 +320,6 @@ impl ExtBuilder {
 					// This allow us to have a total_payout different from 0.
 					(999, 1_000_000_000_000),
 			],
-			vesting: vec![],
 		}.assimilate_storage(&mut storage);
 
 		let stake_21 = if self.fair { 1000 } else { 2000 };
