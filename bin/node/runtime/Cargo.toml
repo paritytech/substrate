@@ -4,8 +4,10 @@ version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
+license = "GPL-3.0"
 
 [dependencies]
+
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
 integer-sqrt = { version = "0.1.2" }
@@ -40,6 +42,7 @@ pallet-babe = { version = "2.0.0", default-features = false, path = "../../../fr
 pallet-balances = { version = "2.0.0", default-features = false, path = "../../../frame/balances" }
 pallet-collective = { version = "2.0.0", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "2.0.0", default-features = false, path = "../../../frame/contracts" }
+pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "../../../frame/contracts/common/" }
 pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
 pallet-democracy = { version = "2.0.0", default-features = false, path = "../../../frame/democracy" }
 pallet-elections-phragmen = { version = "2.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
@@ -62,6 +65,7 @@ pallet-treasury = { version = "2.0.0", default-features = false, path = "../../.
 pallet-utility = { version = "2.0.0", default-features = false, path = "../../../frame/utility" }
 pallet-transaction-payment = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
+pallet-vesting = { version = "2.0.0", default-features = false, path = "../../../frame/vesting" }
 
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.4", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
@@ -81,8 +85,9 @@ std = [
 	"sp-block-builder/std",
 	"codec/std",
 	"pallet-collective/std",
-	"pallet-contracts-rpc-runtime-api/std",
 	"pallet-contracts/std",
+	"pallet-contracts-primitives/std",
+	"pallet-contracts-rpc-runtime-api/std",
 	"pallet-democracy/std",
 	"pallet-elections-phragmen/std",
 	"frame-executive/std",
@@ -121,4 +126,5 @@ std = [
 	"sp-version/std",
 	"pallet-society/std",
 	"pallet-recovery/std",
+	"pallet-vesting/std",
 ]

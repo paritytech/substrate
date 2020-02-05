@@ -14,10 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::traits::GetSharedParams;
-
 use std::{str::FromStr, path::PathBuf};
-use structopt::{StructOpt, StructOptInternal, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
+use structopt::{StructOpt, clap::arg_enum};
+use sc_service::{
+	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
+	config::DatabaseConfig,
+};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use crate::VersionInfo;
+use crate::error;
+use std::fmt::Debug;
+use log::info;
+use sc_network::config::build_multiaddr;
+use std::io;
+use std::fs;
+use std::io::{Read, Write, Seek};
+use sp_runtime::generic::BlockId;
+use crate::runtime::run_until_exit;
+use crate::node_key::node_key_config;
 use crate::execution_strategy::*;
 
 pub use crate::execution_strategy::ExecutionStrategy;
@@ -286,10 +300,10 @@ pub struct NodeKeyParams {
 #[derive(Debug, StructOpt, Clone)]
 pub struct TransactionPoolParams {
 	/// Maximum number of transactions in the transaction pool.
-	#[structopt(long = "pool-limit", value_name = "COUNT", default_value = "512")]
+	#[structopt(long = "pool-limit", value_name = "COUNT", default_value = "8192")]
 	pub pool_limit: usize,
 	/// Maximum number of kilobytes of all transactions stored in the pool.
-	#[structopt(long = "pool-kbytes", value_name = "COUNT", default_value = "10240")]
+	#[structopt(long = "pool-kbytes", value_name = "COUNT", default_value = "20480")]
 	pub pool_kbytes: usize,
 }
 
@@ -408,7 +422,7 @@ pub struct RunCmd {
 	/// available to relay to private nodes.
 	#[structopt(
 		long = "sentry",
-		conflicts_with_all = &[ "validator" ]
+		conflicts_with_all = &[ "validator", "light" ]
 	)]
 	pub sentry: bool,
 
@@ -417,7 +431,7 @@ pub struct RunCmd {
 	pub no_grandpa: bool,
 
 	/// Experimental: Run in light client mode.
-	#[structopt(long = "light")]
+	#[structopt(long = "light", conflicts_with = "sentry")]
 	pub light: bool,
 
 	/// Listen to all RPC interfaces.
@@ -529,9 +543,37 @@ pub struct RunCmd {
 	#[structopt(flatten)]
 	pub pool_config: TransactionPoolParams,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub keyring: Keyring,
+	/// Shortcut for `--name Alice --validator` with session keys for `Alice` added to keystore.
+	#[structopt(long, conflicts_with_all = &["bob", "charlie", "dave", "eve", "ferdie", "one", "two"])]
+	pub alice: bool,
+
+	/// Shortcut for `--name Bob --validator` with session keys for `Bob` added to keystore.
+	#[structopt(long, conflicts_with_all = &["alice", "charlie", "dave", "eve", "ferdie", "one", "two"])]
+	pub bob: bool,
+
+	/// Shortcut for `--name Charlie --validator` with session keys for `Charlie` added to keystore.
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "dave", "eve", "ferdie", "one", "two"])]
+	pub charlie: bool,
+
+	/// Shortcut for `--name Dave --validator` with session keys for `Dave` added to keystore.
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "eve", "ferdie", "one", "two"])]
+	pub dave: bool,
+
+	/// Shortcut for `--name Eve --validator` with session keys for `Eve` added to keystore.
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "ferdie", "one", "two"])]
+	pub eve: bool,
+
+	/// Shortcut for `--name Ferdie --validator` with session keys for `Ferdie` added to keystore.
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "one", "two"])]
+	pub ferdie: bool,
+
+	/// Shortcut for `--name One --validator` with session keys for `One` added to keystore.
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "two"])]
+	pub one: bool,
+
+	/// Shortcut for `--name Two --validator` with session keys for `Two` added to keystore.
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "one"])]
+	pub two: bool,
 
 	/// Enable authoring even when offline.
 	#[structopt(long = "force-authoring")]
@@ -579,71 +621,20 @@ pub struct RunCmd {
 	pub password_filename: Option<PathBuf>
 }
 
-/// Stores all required Cli values for a keyring test account.
-struct KeyringTestAccountCliValues {
-	help: String,
-	conflicts_with: Vec<String>,
-	name: String,
-	variant: sp_keyring::Sr25519Keyring,
-}
+impl RunCmd {
+	/// Get the `Sr25519Keyring` matching one of the flag
+	pub fn get_keyring(&self) -> Option<sp_keyring::Sr25519Keyring> {
+		use sp_keyring::Sr25519Keyring::*;
 
-lazy_static::lazy_static! {
-	/// The Cli values for all test accounts.
-	static ref TEST_ACCOUNTS_CLI_VALUES: Vec<KeyringTestAccountCliValues> = {
-		sp_keyring::Sr25519Keyring::iter().map(|a| {
-			let help = format!(
-				"Shortcut for `--name {} --validator` with session keys for `{}` added to keystore.",
-				a,
-				a,
-			);
-			let conflicts_with = sp_keyring::Sr25519Keyring::iter()
-				.filter(|b| a != *b)
-				.map(|b| b.to_string().to_lowercase())
-				.chain(std::iter::once("name".to_string()))
-				.collect::<Vec<_>>();
-			let name = a.to_string().to_lowercase();
-
-			KeyringTestAccountCliValues {
-				help,
-				conflicts_with,
-				name,
-				variant: a,
-			}
-		}).collect()
-	};
-}
-
-/// Wrapper for exposing the keyring test accounts into the Cli.
-#[derive(Debug, Clone)]
-pub struct Keyring {
-	pub account: Option<sp_keyring::Sr25519Keyring>,
-}
-
-impl StructOpt for Keyring {
-	fn clap<'a, 'b>() -> App<'a, 'b> {
-		unimplemented!("Should not be called for `TestAccounts`.")
-	}
-
-	fn from_clap(m: &structopt::clap::ArgMatches) -> Self {
-		Keyring {
-			account: TEST_ACCOUNTS_CLI_VALUES.iter().find(|a| m.is_present(&a.name)).map(|a| a.variant),
-		}
-	}
-}
-
-impl StructOptInternal for Keyring {
-	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
-		TEST_ACCOUNTS_CLI_VALUES.iter().fold(app, |app, a| {
-			let conflicts_with_strs = a.conflicts_with.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-
-			app.arg(
-				Arg::with_name(&a.name)
-					.long(&a.name)
-					.help(&a.help)
-					.conflicts_with_all(&conflicts_with_strs)
-					.takes_value(false)
-			)
-		})
+		if self.alice { Some(Alice) }
+		else if self.bob { Some(Bob) }
+		else if self.charlie { Some(Charlie) }
+		else if self.dave { Some(Dave) }
+		else if self.eve { Some(Eve) }
+		else if self.ferdie { Some(Ferdie) }
+		else if self.one { Some(One) }
+		else if self.two { Some(Two) }
+		else { None }
 	}
 }
 
@@ -859,11 +850,8 @@ pub struct PurgeChainCmd {
 /// The core commands are split into multiple subcommands and `Run` is the default subcommand. From
 /// the CLI user perspective, it is not visible that `Run` is a subcommand. So, all parameters of
 /// `Run` are exported as main executable parameters.
-#[derive(Debug, Clone)]
-pub enum CoreParams<CC, RP> {
-	/// Run a node.
-	Run(MergeParameters<RunCmd, RP>),
-
+#[derive(Debug, Clone, StructOpt)]
+pub enum Subcommand {
 	/// Build a spec.json file, outputing to stdout.
 	BuildSpec(BuildSpecCmd),
 
@@ -881,112 +869,323 @@ pub enum CoreParams<CC, RP> {
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
-
-	/// Further custom subcommands.
-	Custom(CC),
 }
 
-impl<CC, RP> StructOpt for CoreParams<CC, RP> where
-	CC: StructOpt + GetSharedParams,
-	RP: StructOpt + StructOptInternal,
-{
-	fn clap<'a, 'b>() -> App<'a, 'b> {
-		RP::augment_clap(
-			RunCmd::augment_clap(
-				CC::clap().unset_setting(AppSettings::SubcommandRequiredElseHelp)
-			)
-		).subcommand(
-			BuildSpecCmd::augment_clap(SubCommand::with_name("build-spec"))
-				.about("Build a spec.json file, outputting to stdout.")
-		)
-		.subcommand(
-			ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks"))
-				.about("Export blocks to a file. This file can only be re-imported \
-						if it is in binary format (not JSON!)."
-					)
-		)
-		.subcommand(
-			ImportBlocksCmd::augment_clap(SubCommand::with_name("import-blocks"))
-				.about("Import blocks from file.")
-		)
-		.subcommand(
-			CheckBlockCmd::augment_clap(SubCommand::with_name("check-block"))
-				.about("Re-validate a known block.")
-		)
-		.subcommand(
-			RevertCmd::augment_clap(SubCommand::with_name("revert"))
-				.about("Revert chain to the previous state.")
-		)
-		.subcommand(
-			PurgeChainCmd::augment_clap(SubCommand::with_name("purge-chain"))
-				.about("Remove the whole chain data.")
-		)
+impl Subcommand {
+	/// Get the shared parameters of a `CoreParams` command
+	pub fn get_shared_params(&self) -> &SharedParams {
+		use Subcommand::*;
+
+		match self {
+			BuildSpec(params) => &params.shared_params,
+			ExportBlocks(params) => &params.shared_params,
+			ImportBlocks(params) => &params.shared_params,
+			CheckBlock(params) => &params.shared_params,
+			Revert(params) => &params.shared_params,
+			PurgeChain(params) => &params.shared_params,
+		}
 	}
 
-	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
-		match matches.subcommand() {
-			("build-spec", Some(matches)) =>
-				CoreParams::BuildSpec(BuildSpecCmd::from_clap(matches)),
-			("export-blocks", Some(matches)) =>
-				CoreParams::ExportBlocks(ExportBlocksCmd::from_clap(matches)),
-			("import-blocks", Some(matches)) =>
-				CoreParams::ImportBlocks(ImportBlocksCmd::from_clap(matches)),
-			("check-block", Some(matches)) =>
-				CoreParams::CheckBlock(CheckBlockCmd::from_clap(matches)),
-			("revert", Some(matches)) => CoreParams::Revert(RevertCmd::from_clap(matches)),
-			("purge-chain", Some(matches)) =>
-				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
-			(_, None) => CoreParams::Run(MergeParameters::from_clap(matches)),
-			_ => CoreParams::Custom(CC::from_clap(matches)),
+	/// Run any `CoreParams` command
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		config: Configuration<G, E>,
+		builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		match self {
+			Subcommand::BuildSpec(cmd) => cmd.run(config),
+			Subcommand::ExportBlocks(cmd) => cmd.run(config, builder),
+			Subcommand::ImportBlocks(cmd) => cmd.run(config, builder),
+			Subcommand::CheckBlock(cmd) => cmd.run(config, builder),
+			Subcommand::PurgeChain(cmd) => cmd.run(config),
+			Subcommand::Revert(cmd) => cmd.run(config, builder),
 		}
 	}
 }
 
-/// A special commandline parameter that expands to nothing.
-/// Should be used as custom subcommand/run arguments if no custom values are required.
-#[derive(Clone, Debug, Default)]
-pub struct NoCustom {}
+impl RunCmd {
+	/// Run the command that runs the node
+	pub fn run<G, E, FNL, FNF, SL, SF>(
+		self,
+		mut config: Configuration<G, E>,
+		new_light: FNL,
+		new_full: FNF,
+		version: &VersionInfo,
+	) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
+		FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
+		SL: AbstractService + Unpin,
+		SF: AbstractService + Unpin,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-impl StructOpt for NoCustom {
-	fn clap<'a, 'b>() -> App<'a, 'b> {
-		App::new("NoCustom")
-	}
+		crate::update_config_for_running_node(
+			&mut config,
+			self,
+		)?;
 
-	fn from_clap(_: &::structopt::clap::ArgMatches) -> Self {
-		NoCustom {}
+		crate::run_node(config, new_light, new_full, &version)
 	}
 }
 
-impl StructOptInternal for NoCustom {
-	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
-		app
-	}
-}
+impl BuildSpecCmd {
+	/// Run the build-spec command
+	pub fn run<G, E>(
+		self,
+		config: Configuration<G, E>,
+	) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-impl GetSharedParams for NoCustom {
-	fn shared_params(&self) -> Option<&SharedParams> {
-		None
-	}
-}
+		info!("Building chain spec");
+		let mut spec = config.expect_chain_spec().clone();
+		let raw_output = self.raw;
 
-/// Merge all CLI parameters of `L` and `R` into the same level.
-#[derive(Clone, Debug)]
-pub struct MergeParameters<L, R> {
-	/// The left side parameters.
-	pub left: L,
-	/// The right side parameters.
-	pub right: R,
-}
-
-impl<L, R> StructOpt for MergeParameters<L, R> where L: StructOpt + StructOptInternal, R: StructOpt {
-	fn clap<'a, 'b>() -> App<'a, 'b> {
-		L::augment_clap(R::clap())
-	}
-
-	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
-		MergeParameters {
-			left: L::from_clap(matches),
-			right: R::from_clap(matches),
+		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
+			let node_key = node_key_config(
+				self.node_key_params.clone(),
+				&Some(config
+					.in_chain_config_dir(crate::DEFAULT_NETWORK_CONFIG_PATH)
+					.expect("We provided a base_path")),
+			)?;
+			let keys = node_key.into_keypair()?;
+			let peer_id = keys.public().into_peer_id();
+			let addr = build_multiaddr![
+				Ip4([127, 0, 0, 1]),
+				Tcp(30333u16),
+				P2p(peer_id)
+			];
+			spec.add_boot_node(addr)
 		}
+
+		let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
+
+		print!("{}", json);
+
+		Ok(())
+	}
+}
+
+impl ExportBlocksCmd {
+	/// Run the export-blocks command
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		mut config: Configuration<G, E>,
+		builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		crate::fill_config_keystore_in_memory(&mut config)?;
+
+		if let DatabaseConfig::Path { ref path, .. } = &config.database {
+			info!("DB path: {}", path.display());
+		}
+		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
+		let to = self.to.as_ref().and_then(|t| t.parse().ok());
+
+		let json = self.json;
+
+		let file: Box<dyn io::Write> = match &self.output {
+			Some(filename) => Box::new(fs::File::create(filename)?),
+			None => Box::new(io::stdout()),
+		};
+
+		run_until_exit(config, |config| {
+			Ok(builder(config)?.export_blocks(file, from.into(), to, json))
+		})
+	}
+}
+
+/// Internal trait used to cast to a dynamic type that implements Read and Seek.
+trait ReadPlusSeek: Read + Seek {}
+
+impl<T: Read + Seek> ReadPlusSeek for T {}
+
+impl ImportBlocksCmd {
+	/// Run the import-blocks command
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		mut config: Configuration<G, E>,
+		builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		crate::fill_import_params(
+			&mut config,
+			&self.import_params,
+			sc_service::Roles::FULL,
+			self.shared_params.dev,
+		)?;
+
+		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
+			Some(filename) => Box::new(fs::File::open(filename)?),
+			None => {
+				let mut buffer = Vec::new();
+				io::stdin().read_to_end(&mut buffer)?;
+				Box::new(io::Cursor::new(buffer))
+			},
+		};
+
+		run_until_exit(config, |config| {
+			Ok(builder(config)?.import_blocks(file, false))
+		})
+	}
+}
+
+impl CheckBlockCmd {
+	/// Run the check-block command
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		mut config: Configuration<G, E>,
+		builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		crate::fill_import_params(
+			&mut config,
+			&self.import_params,
+			sc_service::Roles::FULL,
+			self.shared_params.dev,
+		)?;
+		crate::fill_config_keystore_in_memory(&mut config)?;
+
+		let input = if self.input.starts_with("0x") { &self.input[2..] } else { &self.input[..] };
+		let block_id = match FromStr::from_str(input) {
+			Ok(hash) => BlockId::hash(hash),
+			Err(_) => match self.input.parse::<u32>() {
+				Ok(n) => BlockId::number((n as u32).into()),
+				Err(_) => return Err(error::Error::Input("Invalid hash or number specified".into())),
+			}
+		};
+
+		let start = std::time::Instant::now();
+		run_until_exit(config, |config| {
+			Ok(builder(config)?.check_block(block_id))
+		})?;
+		println!("Completed in {} ms.", start.elapsed().as_millis());
+
+		Ok(())
+	}
+}
+
+impl PurgeChainCmd {
+	/// Run the purge command
+	pub fn run<G, E>(
+		self,
+		mut config: Configuration<G, E>,
+	) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		crate::fill_config_keystore_in_memory(&mut config)?;
+
+		let db_path = match config.database {
+			DatabaseConfig::Path { path, .. } => path,
+			_ => {
+				eprintln!("Cannot purge custom database implementation");
+				return Ok(());
+			}
+		};
+
+		if !self.yes {
+			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
+			io::stdout().flush().expect("failed to flush stdout");
+
+			let mut input = String::new();
+			io::stdin().read_line(&mut input)?;
+			let input = input.trim();
+
+			match input.chars().nth(0) {
+				Some('y') | Some('Y') => {},
+				_ => {
+					println!("Aborted");
+					return Ok(());
+				},
+			}
+		}
+
+		match fs::remove_dir_all(&db_path) {
+			Ok(_) => {
+				println!("{:?} removed.", &db_path);
+				Ok(())
+			},
+			Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
+				eprintln!("{:?} did not exist.", &db_path);
+				Ok(())
+			},
+			Err(err) => Result::Err(err.into())
+		}
+	}
+}
+
+impl RevertCmd {
+	/// Run the revert command
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		mut config: Configuration<G, E>,
+		builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		crate::fill_config_keystore_in_memory(&mut config)?;
+
+		let blocks = self.num.parse()?;
+		builder(config)?.revert_chain(blocks)?;
+
+		Ok(())
 	}
 }

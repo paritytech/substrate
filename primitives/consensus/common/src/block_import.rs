@@ -16,14 +16,15 @@
 
 //! Block import helpers.
 
-use sp_runtime::{
-	Justification,
-	traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor, HasherFor},
-};
+use sp_runtime::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor, HasherFor};
+use sp_runtime::Justification;
+use serde::{Serialize, Deserialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::any::Any;
 
+use crate::Error;
 use crate::import_queue::{Verifier, CacheKeyId};
 
 /// Block import result.
@@ -42,7 +43,7 @@ pub enum ImportResult {
 }
 
 /// Auxiliary data associated with an imported block result.
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImportedAux {
 	/// Only the header has been imported. Block body verification was skipped.
 	pub header_only: bool,
@@ -142,13 +143,21 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// Is this block finalized already?
 	/// `true` implies instant finality.
 	pub finalized: bool,
+	/// Intermediate values that are interpreted by block importers. Each block importer,
+	/// upon handling a value, removes it from the intermediate list. The final block importer
+	/// rejects block import if there are still intermediate values that remain unhandled.
+	pub intermediates: HashMap<Cow<'static, [u8]>, Box<dyn Any>>,
 	/// Auxiliary consensus data produced by the block.
 	/// Contains a list of key-value pairs. If values are `None`, the keys
 	/// will be deleted.
 	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	/// Fork choice strategy of this import. This should only be set by a
 	/// synchronous import, otherwise it may race against other imports.
-	pub fork_choice: ForkChoiceStrategy,
+	/// `None` indicates that the current verifier or importer cannot yet
+	/// determine the fork choice value, and it expects subsequent importer
+	/// to modify it. If `None` is passed all the way down to bottom block
+	/// importer, the import fails with an `IncompletePipeline` error.
+	pub fork_choice: Option<ForkChoiceStrategy>,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
 	/// Re-validate existing block.
@@ -210,10 +219,41 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			storage_changes: None,
 			finalized: self.finalized,
 			auxiliary: self.auxiliary,
+			intermediates: self.intermediates,
 			allow_missing_state: self.allow_missing_state,
 			fork_choice: self.fork_choice,
 			import_existing: self.import_existing,
 		}
+	}
+
+	/// Take interemdiate by given key, and remove it from the processing list.
+	pub fn take_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<Box<T>, Error> {
+		if self.intermediates.contains_key(key) {
+			self.intermediates.remove(key)
+				.ok_or(Error::NoIntermediate)
+				.and_then(|value| {
+					value.downcast::<T>()
+						.map_err(|_| Error::InvalidIntermediate)
+				})
+		} else {
+			Err(Error::NoIntermediate)
+		}
+	}
+
+	/// Get a reference to a given intermediate.
+	pub fn intermediate<T: 'static>(&self, key: &[u8]) -> Result<&T, Error> {
+		self.intermediates.get(key)
+			.ok_or(Error::NoIntermediate)?
+			.downcast_ref::<T>()
+			.ok_or(Error::InvalidIntermediate)
+	}
+
+	/// Get a mutable reference to a given intermediate.
+	pub fn intermediate_mut<T: 'static>(&mut self, key: &[u8]) -> Result<&mut T, Error> {
+		self.intermediates.get_mut(key)
+			.ok_or(Error::NoIntermediate)?
+			.downcast_mut::<T>()
+			.ok_or(Error::InvalidIntermediate)
 	}
 }
 

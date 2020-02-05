@@ -3,6 +3,7 @@ name = "sc-executor-wasmi"
 version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 log = "0.4.8"
@@ -13,3 +14,4 @@ sc-executor-common = { version = "0.8", path = "../common" }
 sp-wasm-interface = { version = "2.0.0", path = "../../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "2.0.0", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
+sp-allocator = { version = "2.0.0", path = "../../../primitives/allocator" }

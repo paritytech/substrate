@@ -3,6 +3,7 @@ name = "pallet-contracts-rpc"
 version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0" }
@@ -15,6 +16,7 @@ sp-rpc = { version = "2.0.0", path = "../../../primitives/rpc" }
 serde = { version = "1.0.101", features = ["derive"] }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
+pallet-contracts-primitives = { version = "2.0.0", path = "../common" }
 pallet-contracts-rpc-runtime-api = { version = "0.8.0", path = "./runtime-api" }
 
 [dev-dependencies]

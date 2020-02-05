@@ -4,9 +4,10 @@ version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
+license = "GPL-3.0"
 
 [build-dependencies]
-prost-build = "0.5.0"
+prost-build = "0.6.1"
 
 [dependencies]
 bytes = "0.4.12"
@@ -14,9 +15,9 @@ codec = { package = "parity-scale-codec", default-features = false, version = "1
 derive_more = "0.99.2"
 futures = "0.3.1"
 futures-timer = "2.0"
-libp2p = { version = "0.14.0-alpha.1", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
+libp2p = { version = "0.15.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"
-prost = "0.5.0"
+prost = "0.6.1"
 rand = "0.7.2"
 sc-client-api = { version = "2.0.0", path = "../api" }
 sc-keystore = { version = "2.0.0", path = "../keystore" }
