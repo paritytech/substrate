@@ -106,7 +106,7 @@ impl FreeingBumpHeapAllocator {
 
 		FreeingBumpHeapAllocator {
 			bumper: 0,
-			heads: [0; N],
+			heads: [u32::max_value(); N],
 			ptr_offset,
 			total_size: 0,
 		}
@@ -138,7 +138,7 @@ impl FreeingBumpHeapAllocator {
 		}
 
 		let list_index = (item_size.trailing_zeros() - 3) as usize;
-		let ptr: u32 = if self.heads[list_index] != 0 {
+		let ptr: u32 = if self.heads[list_index] != u32::max_value() {
 			// Something from the free list
 			let item = self.heads[list_index];
 			let ptr = item + PREFIX_SIZE;
@@ -357,7 +357,7 @@ mod tests {
 		// then
 		// should have re-allocated
 		assert_eq!(ptr3, to_pointer(padded_offset + 16 + PREFIX_SIZE));
-		assert_eq!(heap.heads, [0; N]);
+		assert_eq!(heap.heads, [u32::max_value(); N]);
 	}
 
 	#[test]
@@ -563,4 +563,16 @@ mod tests {
 		assert_eq!(item_size as u32, MAX_POSSIBLE_ALLOCATION);
 	}
 
+	#[test]
+	fn deallocate_needs_to_maintain_linked_list() {
+		let mut mem = [0u8; 8 * 2 * 4 + ALIGNMENT as usize];
+		let mut heap = FreeingBumpHeapAllocator::new(0);
+
+		// Allocate and free some pointers
+		let ptrs = (0..4).map(|_| heap.allocate(&mut mem, 8).unwrap()).collect::<Vec<_>>();
+		ptrs.into_iter().for_each(|ptr| heap.deallocate(&mut mem, ptr).unwrap());
+
+		// Second time we should be able to allocate all of them again.
+		let _ = (0..4).map(|_| heap.allocate(&mut mem, 8).unwrap()).collect::<Vec<_>>();
+	}
 }
