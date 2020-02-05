@@ -247,7 +247,6 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 
 #[cfg(test)]
 mod tests {
-
 	use super::*;
 
 	#[test]
