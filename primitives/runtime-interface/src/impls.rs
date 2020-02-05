@@ -192,6 +192,11 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 	fn from_ffi_value(arg: u64) -> Vec<T> {
 		let (ptr, len) = unpack_ptr_and_len(arg);
 		let len = len as usize;
+
+		if len == 0 {
+			return Vec::new();
+		}
+
 		let data = unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) };
 
 		if TypeId::of::<T>() == TypeId::of::<u8>() {
