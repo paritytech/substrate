@@ -69,8 +69,8 @@ use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
-use sp_runtime::{DispatchResult, RuntimeDebug, BenchmarkResults, BenchmarkParameter};
-use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput, Dispatchable, Benchmarking};
+use sp_runtime::{DispatchResult, RuntimeDebug};
+use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput, Dispatchable};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
@@ -872,56 +872,6 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::IdentityKilled(target, deposit));
 		}
-	}
-}
-
-impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
-	const STEPS: u32 = 10;
-	const REPEATS: u32 = 100;
-
-	fn run_benchmarks() -> Vec<BenchmarkResults> {
-		// first one is set_identity.
-		let components = benchmarking::set_identity::components();
-		// results go here
-		let mut results: Vec<BenchmarkResults> = Vec::new();
-		// Select the component we will be benchmarking. Each component will be benchmarked.
-		for (name, low, high) in components.iter() {
-			// Create up to `STEPS` steps for that component between high and low.
-			let step_size = ((high - low) / Self::STEPS).max(1);
-			let num_of_steps = (high - low) / step_size;
-			for s in 0..num_of_steps {
-				// This is the value we will be testing for component `name`
-				let component_value = step_size * s;
-
-				// Select the mid value for all the other components.
-				let c: Vec<(BenchmarkParameter, u32)> = components.iter()
-					.map(|(n, l, h)|
-						(*n, if n == name { component_value } else { (h - l) / 2 + l })
-					).collect();
-
-				for r in 0..Self::REPEATS {
-					sp_std::if_std!{
-						println!("STEP {:?} REPEAT {:?}", s, r);
-					}
-					let (call, caller) = benchmarking::set_identity::instance::<T>(&c);
-					sp_io::benchmarking::commit_db();
-					let start = sp_io::benchmarking::current_time();
-					assert_eq!(call.dispatch(frame_system::RawOrigin::Signed(caller).into()), Ok(()));
-					let finish = sp_io::benchmarking::current_time();
-					let elapsed = finish - start;
-					sp_io::benchmarking::wipe_db();
-					results.push((c.clone(), elapsed));
-				}
-			}
-		}
-		return results;
-	}
-}
-
-sp_api::decl_runtime_apis! {
-	pub trait IdentityBenchmarks
-	{
-		fn run_benchmarks() -> Vec<BenchmarkResults>;
 	}
 }
 

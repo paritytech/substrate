@@ -807,7 +807,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_identity::IdentityBenchmarks<Block> for Runtime {
+	impl pallet_identity::benchmarking::IdentityBenchmarks<Block> for Runtime {
 		fn run_benchmarks() -> Vec<BenchmarkResults> {
 			Identity::run_benchmarks()
 		}

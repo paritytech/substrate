@@ -850,7 +850,11 @@ pub struct PurgeChainCmd {
 pub struct BenchmarkCmd {
 	/// Select a FRAME pallet to benchmark.
 	#[structopt(short, long)]
-	pub pallet: Option<String>,
+	pub pallet: String,
+
+	/// Select a FRAME pallet to benchmark.
+	#[structopt(short, long)]
+	pub extrinsic: String,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
