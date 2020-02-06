@@ -67,16 +67,6 @@ const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 // to which it belongs.
 const PREFIX_SIZE: u32 = 8;
 
-/// An implementation of freeing bump allocator.
-///
-/// Refer to the module-level documentation for further details.
-pub struct FreeingBumpHeapAllocator {
-	bumper: u32,
-	heads: [u32; N],
-	ptr_offset: u32,
-	total_size: u32,
-}
-
 /// Create an allocator error.
 fn error(msg: &'static str) -> Error {
 	Error::Other(msg)
@@ -91,6 +81,16 @@ macro_rules! trace {
 			log::trace!(target: "wasm-heap", $( $args ),+);
 		}
 	}
+}
+
+/// An implementation of freeing bump allocator.
+///
+/// Refer to the module-level documentation for further details.
+pub struct FreeingBumpHeapAllocator {
+	bumper: u32,
+	heads: [u32; N],
+	ptr_offset: u32,
+	total_size: u32,
 }
 
 impl FreeingBumpHeapAllocator {
