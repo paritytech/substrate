@@ -566,7 +566,17 @@ fn propose_and_import_block<Transaction>(
 		],
 	};
 
+	let parent_hash = parent.hash();
+
 	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap().block;
+
+	let epoch = proposer_factory.epoch_changes.lock().epoch_for_child_of(
+		descendent_query(&*proposer_factory.client),
+		&parent_hash,
+		*parent.number(),
+		slot_number,
+		|slot| proposer_factory.config.genesis_epoch(slot)
+	).unwrap().unwrap();
 
 	let seal = {
 		// sign the pre-sealed hash of the block and then
@@ -598,7 +608,7 @@ fn propose_and_import_block<Transaction>(
 				let mut intermediates = HashMap::new();
 				intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate { epoch: None }) as Box<dyn Any>,
+					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
 				);
 				intermediates
 			},
