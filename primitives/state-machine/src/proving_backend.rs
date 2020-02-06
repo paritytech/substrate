@@ -398,7 +398,7 @@ mod tests {
 	use crate::InMemoryBackend;
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
-	use sp_core::{Blake2Hasher, storage::ChildStorageKey};
+	use sp_core::{Blake2Hasher};
 	use crate::proving_backend::create_proof_check_backend;
 	use sp_trie::PrefixedMemoryDB;
 
@@ -472,10 +472,10 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
-		let subtrie1 = ChildStorageKey::from_slice(b":child_storage:default:sub1").unwrap();
-		let subtrie2 = ChildStorageKey::from_slice(b":child_storage:default:sub2").unwrap();
-		let own1 = subtrie1.into_owned();
-		let own2 = subtrie2.into_owned();
+		let subtrie1 = b"sub1";
+		let subtrie2 = b"sub2";
+		let own1 = subtrie1.to_vec();
+		let own2 = subtrie2.to_vec();
 		let contents = vec![
 			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect()),
 			(Some((own1.clone(), CHILD_INFO_1.to_owned())),

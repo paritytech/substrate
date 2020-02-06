@@ -1555,7 +1555,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
-		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
+		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(
+			request.child_type,
+			&request.child_info[..],
+			&request.storage_key[..],
+		) {
 			match self.context_data.chain.read_child_proof(
 				&request.block,
 				&request.storage_key,

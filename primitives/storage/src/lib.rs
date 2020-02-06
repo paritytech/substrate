@@ -63,6 +63,9 @@ pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
 	/// Children trie storage data by storage key.
+	/// Note that the key is not including child prefix, this will
+	/// not be possible if a different kind of trie than `default`
+	/// get in use.
 	pub children: std::collections::HashMap<Vec<u8>, StorageChild>,
 }
 

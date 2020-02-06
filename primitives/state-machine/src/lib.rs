@@ -692,7 +692,7 @@ mod tests {
 	use super::*;
 	use super::ext::Ext;
 	use super::changes_trie::Configuration as ChangesTrieConfig;
-	use sp_core::{Blake2Hasher, map, traits::Externalities, storage::ChildStorageKey};
+	use sp_core::{Blake2Hasher, map, traits::Externalities};
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
@@ -945,26 +945,26 @@ mod tests {
 		);
 
 		ext.set_child_storage(
-			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+			b"testchild".to_vec(),
 			CHILD_INFO_1,
 			b"abc".to_vec(),
 			b"def".to_vec()
 		);
 		assert_eq!(
 			ext.child_storage(
-				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+				b"testchild",
 				CHILD_INFO_1,
 				b"abc"
 			),
 			Some(b"def".to_vec())
 		);
 		ext.kill_child_storage(
-			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+			b"testchild",
 			CHILD_INFO_1,
 		);
 		assert_eq!(
 			ext.child_storage(
-				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+				b"testchild",
 				CHILD_INFO_1,
 				b"abc"
 			),
@@ -1000,20 +1000,20 @@ mod tests {
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_child_read(
 			remote_backend,
-			b":child_storage:default:sub1",
+			b"sub1",
 			CHILD_INFO_1,
 			&[b"value3"],
 		).unwrap();
 		let local_result1 = read_child_proof_check::<Blake2Hasher, _>(
 			remote_root,
 			remote_proof.clone(),
-			b":child_storage:default:sub1",
+			b"sub1",
 			&[b"value3"],
 		).unwrap();
 		let local_result2 = read_child_proof_check::<Blake2Hasher, _>(
 			remote_root,
 			remote_proof.clone(),
-			b":child_storage:default:sub1",
+			b"sub1",
 			&[b"value2"],
 		).unwrap();
 		assert_eq!(
@@ -1033,8 +1033,8 @@ mod tests {
 		use crate::trie_backend::tests::test_trie;
 		let mut overlay = OverlayedChanges::default();
 
-		let subtrie1 = ChildStorageKey::from_slice(b":child_storage:default:sub_test1").unwrap();
-		let subtrie2 = ChildStorageKey::from_slice(b":child_storage:default:sub_test2").unwrap();
+		let subtrie1 = b"sub_test1";
+		let subtrie2 = b"sub_test2";
 		let mut transaction = {
 			let backend = test_trie();
 			let mut cache = StorageTransactionCache::default();
@@ -1045,8 +1045,8 @@ mod tests {
 				changes_trie::disabled_state::<_, u64>(),
 				None,
 			);
-			ext.set_child_storage(subtrie1, CHILD_INFO_1, b"abc".to_vec(), b"def".to_vec());
-			ext.set_child_storage(subtrie2, CHILD_INFO_2, b"abc".to_vec(), b"def".to_vec());
+			ext.set_child_storage(subtrie1.to_vec(), CHILD_INFO_1, b"abc".to_vec(), b"def".to_vec());
+			ext.set_child_storage(subtrie2.to_vec(), CHILD_INFO_2, b"abc".to_vec(), b"def".to_vec());
 			ext.storage_root();
 			cache.transaction.unwrap()
 		};

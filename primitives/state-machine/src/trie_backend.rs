@@ -250,8 +250,7 @@ pub mod tests {
 	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
 	use super::*;
 
-	const CHILD_KEY_1: &[u8] = b":child_storage:default:sub1";
-
+	const CHILD_KEY_1: &[u8] = b"sub1";
 	const CHILD_UUID_1: &[u8] = b"unique_id_1";
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_UUID_1);
 

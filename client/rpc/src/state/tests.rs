@@ -36,7 +36,7 @@ const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"unique_id");
 fn should_return_storage() {
 	const KEY: &[u8] = b":mock";
 	const VALUE: &[u8] = b"hello world";
-	const STORAGE_KEY: &[u8] = b":child_storage:default:child";
+	const STORAGE_KEY: &[u8] = b"child";
 	const CHILD_VALUE: &[u8] = b"hello world !";
 
 	let mut core = tokio::runtime::Runtime::new().unwrap();

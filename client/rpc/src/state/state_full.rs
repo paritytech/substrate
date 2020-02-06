@@ -308,7 +308,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	fn child_storage_keys(
 		&self,
 		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
+		storage_key: StorageKey,
 		child_info: StorageKey,
 		child_type: u32,
 		prefix: StorageKey,
@@ -317,8 +317,8 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 			self.block_or_best(block)
 				.and_then(|block| self.client.child_storage_keys(
 					&BlockId::Hash(block),
-					&child_storage_key,
-					ChildInfo::resolve_child_info(child_type, &child_info.0[..])
+					&storage_key,
+					ChildInfo::resolve_child_info(child_type, &child_info.0[..], &storage_key.0[..])
 						.ok_or_else(child_resolution_error)?,
 					&prefix,
 				))
@@ -328,7 +328,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	fn child_storage(
 		&self,
 		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
+		storage_key: StorageKey,
 		child_info: StorageKey,
 		child_type: u32,
 		key: StorageKey,
@@ -337,8 +337,8 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 			self.block_or_best(block)
 				.and_then(|block| self.client.child_storage(
 					&BlockId::Hash(block),
-					&child_storage_key,
-					ChildInfo::resolve_child_info(child_type, &child_info.0[..])
+					&storage_key,
+					ChildInfo::resolve_child_info(child_type, &child_info.0[..], &storage_key.0[..])
 						.ok_or_else(child_resolution_error)?,
 					&key,
 				))
@@ -348,7 +348,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	fn child_storage_hash(
 		&self,
 		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
+		storage_key: StorageKey,
 		child_info: StorageKey,
 		child_type: u32,
 		key: StorageKey,
@@ -357,8 +357,8 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 			self.block_or_best(block)
 				.and_then(|block| self.client.child_storage_hash(
 					&BlockId::Hash(block),
-					&child_storage_key,
-					ChildInfo::resolve_child_info(child_type, &child_info.0[..])
+					&storage_key,
+					ChildInfo::resolve_child_info(child_type, &child_info.0[..], &storage_key.0[..])
 						.ok_or_else(child_resolution_error)?,
 					&key,
 				))
