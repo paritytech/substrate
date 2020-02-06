@@ -137,32 +137,33 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 
 	fn prepare_batch(&mut self) -> Vec<ExHash<Api>> {
 		let mut queued_exts = Vec::new();
-		let mut empty = Vec::<NumberFor<Api>>::new();
+		let mut left = BACKGROUND_REVALIDATION_BATCH_SIZE;
 
 		// Take maximum of count transaction by order
 		// which they got into the pool
-		for (block_number, ext_map) in self.block_ordered.iter_mut() {
-			if queued_exts.len() >= BACKGROUND_REVALIDATION_BATCH_SIZE { break; }
+		while left > 0 {
+			let first_block = match self.block_ordered.keys().next().cloned() {
+			  Some(bn) => bn,
+			  None => break,
+			};
+			let mut block_drained = false;
+			if let Some(extrinsics) = self.block_ordered.get_mut(&first_block) {
+				let to_queue = extrinsics.iter().take(left).cloned().collect::<Vec<_>>();
+				if to_queue.len() == extrinsics.len() {
+				   block_drained = true;
+				} else {
+					for xt in &to_queue {
+						extrinsics.remove(xt);
+					}
+				}
+				left -= to_queue.len();
+				queued_exts.extend(to_queue);
+			}
 
-			loop {
-				let next_key = match ext_map.iter().nth(0) {
-					Some(k) => k.clone(),
-					None => { break; }
-				};
-
-				ext_map.remove(&next_key);
-				self.members.remove(&next_key);
-
-				queued_exts.push(next_key);
-
-				if ext_map.len() == 0 { empty.push(*block_number); }
-
-				if queued_exts.len() >= BACKGROUND_REVALIDATION_BATCH_SIZE { break; }
+			if block_drained {
+			  self.block_ordered.remove(&first_block);
 			}
 		}
-
-		// retain only non-empty
-		for empty_block_number in empty.into_iter() { self.block_ordered.remove(&empty_block_number); }
 
 		queued_exts
 	}
