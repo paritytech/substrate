@@ -211,27 +211,28 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `size` - size in bytes of the allocation request
-	pub fn allocate(&mut self, mem: &mut [u8], size: WordSize) -> Result<Pointer<u8>, Error> {
-		let max_heap_size =
-			u32::try_from(mem.len()).expect("size of Wasm linear memory is <2^32; qed");
-
+	pub fn allocate<M: Memory>(
+		&mut self,
+		mut mem: M,
+		size: WordSize,
+	) -> Result<Pointer<u8>, Error> {
 		let order = Order::from_size(size)?;
 
 		let ptr: u32 = if let Link::Ptr(ptr) = self.heads[order.0 as usize] {
 			assert!(
-				ptr + order.size() + HEADER_SIZE <= max_heap_size,
+				ptr + order.size() + HEADER_SIZE <= mem.size(),
 				"Pointer is looked up in list of free entries, into which
 				only valid values are inserted; qed"
 			);
 
-			self.heads[order.0 as usize] = Link::from_raw(self.get_heap_u64(mem, ptr)?);
+			self.heads[order.0 as usize] = Link::from_raw(mem.read_le_u64(ptr)?);
 			ptr
 		} else {
 			// Nothing to be freed. Bump.
-			self.bump(order.size(), max_heap_size)?
+			self.bump(order.size(), mem.size())?
 		};
 
-		self.set_heap_u64(mem, ptr, order.0 as u64)?;
+		mem.write_le_u64(ptr, order.0 as u64)?;
 
 		self.total_size = self.total_size + order.size() + HEADER_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
@@ -245,18 +246,18 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk
-	pub fn deallocate(&mut self, mem: &mut [u8], ptr: Pointer<u8>) -> Result<(), Error> {
+	pub fn deallocate<M: Memory>(&mut self, mut mem: M, ptr: Pointer<u8>) -> Result<(), Error> {
 		let ptr = u32::from(ptr)
 			.checked_sub(HEADER_SIZE)
 			.ok_or_else(|| error("Invalid pointer for deallocation"))?;
 
 		let order = Order::from_raw(
-			self.get_heap_u64(mem, ptr)?
+			mem.read_le_u64(ptr)?
 				.try_into()
 				.map_err(|_| error("read invalid list index"))?,
 		)?;
 
-		self.set_heap_u64(mem, ptr, self.heads[order.0 as usize].into_raw())?;
+		mem.write_le_u64(ptr, self.heads[order.0 as usize].into_raw())?;
 		self.heads[order.0 as usize] = Link::Ptr(ptr);
 
 		let item_size = order.size();
@@ -274,8 +275,8 @@ impl FreeingBumpHeapAllocator {
 	/// Returns the `bumper` from before the increase.
 	/// Returns an `Error::AllocatorOutOfSpace` if the operation
 	/// would exhaust the heap.
-	fn bump(&mut self, item_size: u32, max_heap_size: u32) -> Result<u32, Error> {
-		if self.bumper + HEADER_SIZE + item_size > max_heap_size {
+	fn bump(&mut self, item_size: u32, heap_end: u32) -> Result<u32, Error> {
+		if self.bumper + HEADER_SIZE + item_size > heap_end {
 			return Err(Error::AllocatorOutOfSpace);
 		}
 
@@ -283,36 +284,46 @@ impl FreeingBumpHeapAllocator {
 		self.bumper += item_size + HEADER_SIZE;
 		Ok(res)
 	}
+}
 
-	// Read a u64 from the heap in LE form. Used to read heap allocation prefixes.
-	fn get_heap_u64(&self, heap: &[u8], offset: u32) -> Result<u64, Error> {
-		let range = self
-			.heap_range(offset, 8, heap.len())
-			.ok_or_else(|| error("read out of heap bounds"))?;
-		let bytes = heap[range]
+/// A trait for abstraction of accesses to linear memory.
+pub trait Memory {
+	/// Read a u64 from the heap in LE form. Used to read heap allocation prefixes.
+	fn read_le_u64(&self, ptr: u32) -> Result<u64, Error>;
+	/// Write a u64 to the heap in LE form. Used to write heap allocation prefixes.
+	fn write_le_u64(&mut self, ptr: u32, val: u64) -> Result<(), Error>;
+	/// Returns the full size of the memory.
+	fn size(&self) -> u32;
+}
+
+impl Memory for &mut [u8] {
+	fn read_le_u64(&self, ptr: u32) -> Result<u64, Error> {
+		let range =
+			heap_range(ptr, 8, self.len()).ok_or_else(|| error("read out of heap bounds"))?;
+		let bytes = self[range]
 			.try_into()
 			.expect("[u8] slice of length 8 must be convertible to [u8; 8]");
 		Ok(u64::from_le_bytes(bytes))
 	}
-
-	// Write a u64 to the heap in LE form. Used to write heap allocation prefixes.
-	fn set_heap_u64(&self, heap: &mut [u8], offset: u32, val: u64) -> Result<(), Error> {
-		let range = self
-			.heap_range(offset, 8, heap.len())
-			.ok_or_else(|| error("write out of heap bounds"))?;
+	fn write_le_u64(&mut self, ptr: u32, val: u64) -> Result<(), Error> {
+		let range =
+			heap_range(ptr, 8, self.len()).ok_or_else(|| error("write out of heap bounds"))?;
 		let bytes = val.to_le_bytes();
-		&mut heap[range].copy_from_slice(&bytes[..]);
+		&mut self[range].copy_from_slice(&bytes[..]);
 		Ok(())
 	}
+	fn size(&self) -> u32 {
+		u32::try_from(self.len()).expect("size of Wasm linear memory is <2^32; qed")
+	}
+}
 
-	fn heap_range(&self, offset: u32, length: u32, heap_len: usize) -> Option<Range<usize>> {
-		let start = offset as usize;
-		let end = offset.checked_add(length)? as usize;
-		if end <= heap_len {
-			Some(start..end)
-		} else {
-			None
-		}
+fn heap_range(offset: u32, length: u32, heap_len: usize) -> Option<Range<usize>> {
+	let start = offset as usize;
+	let end = offset.checked_add(length)? as usize;
+	if end <= heap_len {
+		Some(start..end)
+	} else {
+		None
 	}
 }
 
@@ -535,7 +546,7 @@ mod tests {
 		assert_eq!(heap.bumper, 64);
 
 		// when
-		// the `bumper` value is equal to `max_heap_size` here and any
+		// the `bumper` value is equal to `size` here and any
 		// further allocation which would increment the bumper must fail.
 		// we try to allocate 8 bytes here, which will increment the
 		// bumper since no 8 byte item has been allocated+freed before.
@@ -597,13 +608,12 @@ mod tests {
 	fn should_read_and_write_u64_correctly() {
 		// given
 		let mut mem = [0u8; PAGE_SIZE as usize];
-		let heap = FreeingBumpHeapAllocator::new(16);
 
 		// when
-		heap.set_heap_u64(&mut mem[..], 40, 4480113).unwrap();
+		Memory::write_le_u64(&mut mem.as_mut(), 40, 4480113).unwrap();
 
 		// then
-		let value = heap.get_heap_u64(&mut mem[..], 40).unwrap();
+		let value = Memory::read_le_u64(&mut mem.as_mut(), 40).unwrap();
 		assert_eq!(value, 4480113);
 	}
 
@@ -637,10 +647,10 @@ mod tests {
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		// Allocate and free some pointers
-		let ptrs = (0..4).map(|_| heap.allocate(&mut mem, 8).unwrap()).collect::<Vec<_>>();
-		ptrs.into_iter().for_each(|ptr| heap.deallocate(&mut mem, ptr).unwrap());
+		let ptrs = (0..4).map(|_| heap.allocate(&mut mem[..], 8).unwrap()).collect::<Vec<_>>();
+		ptrs.into_iter().for_each(|ptr| heap.deallocate(&mut mem[..], ptr).unwrap());
 
 		// Second time we should be able to allocate all of them again.
-		let _ = (0..4).map(|_| heap.allocate(&mut mem, 8).unwrap()).collect::<Vec<_>>();
+		let _ = (0..4).map(|_| heap.allocate(&mut mem[..], 8).unwrap()).collect::<Vec<_>>();
 	}
 }
