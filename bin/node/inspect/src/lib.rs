@@ -191,7 +191,7 @@ impl<TBlock: Block, TPrinter: PrettyPrinter<TBlock>> Inspector<TBlock, TPrinter>
 					.get(index)
 					.cloned()
 					.ok_or_else(|| Error::NotFound(format!(
-						"Could not find extrinsic {} in block {}", index, block
+						"Could not find extrinsic {} in block {:?}", index, block
 					)))?
 			},
 			cli::ExtrinsicAddress::Bytes(bytes) => {
