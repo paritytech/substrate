@@ -26,7 +26,9 @@ use frame_support::{
 use frame_system::offchain::{CreateTransaction, Signer, TransactionSubmitter};
 use sp_core::H256;
 use sp_io;
-use sp_phragmen::{build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment};
+use sp_phragmen::{
+	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, PhragmenScore,
+};
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::testing::{Header, TestXt, UintAuthorityId};
 use sp_runtime::traits::{
@@ -741,7 +743,7 @@ pub fn horrible_phragmen_with_post_processing(
 ) -> (
 	CompactAssignments<AccountId, ExtendedBalance>,
 	Vec<AccountId>,
-	ElectionScore,
+	PhragmenScore,
 ) {
 	use std::collections::BTreeMap;
 
@@ -836,7 +838,7 @@ pub fn do_phragmen_with_post_processing(
 ) -> (
 	CompactAssignments<AccountId, ExtendedBalance>,
 	Vec<AccountId>,
-	ElectionScore,
+	PhragmenScore,
 ) {
 	// run phragmen on the default stuff.
 	let sp_phragmen::PhragmenResult {

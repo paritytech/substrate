@@ -77,6 +77,9 @@ impl<T: Clone + Eq + Default + Ord + Debug> IdentifierT for T {}
 /// Balance types converted to `ExtendedBalance` are referred to as `Votes`.
 pub type ExtendedBalance = u128;
 
+/// The score of an assignment. This can be computed from the support map via [`evaluate_support`].
+pub type PhragmenScore = [ExtendedBalance; 3];
+
 /// The denominator used for loads. Since votes are collected as u64, the smallest ratio that we
 /// might collect is `1/approval_stake` where approval stake is the sum of votes. Hence, some number
 /// bigger than u64::max_value() is needed. For maximum accuracy we simply use u128;
@@ -141,6 +144,11 @@ pub struct Assignment<AccountId> {
 }
 
 impl<AccountId> Assignment<AccountId> {
+	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
+	///
+	/// It needs `stake_of` to know how the total budget of each voter. If `fill` is set to true,
+	/// it ensures that all the potential rounding errors are compensated and the distribution's sum
+	/// is exactly equal to the total budget.
 	pub fn into_staked<Balance, FS, C>(self, stake_of: FS, fill: bool) -> StakedAssignment<AccountId>
 	where
 		C: Convert<Balance, u64>,
@@ -480,7 +488,7 @@ pub fn build_support_map<AccountId>(
 /// `O(E)` where `E` is the total number of edges.
 pub fn evaluate_support<AccountId>(
 	support: &SupportMap<AccountId>,
-) -> [ExtendedBalance; 3] {
+) -> PhragmenScore {
 	let mut min_support = ExtendedBalance::max_value();
 	let mut sum: ExtendedBalance = Zero::zero();
 	// TODO: this will probably saturate but using big num makes it even slower. We'll have to see.

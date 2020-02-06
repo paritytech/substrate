@@ -289,7 +289,10 @@ use frame_system::{
 	offchain::SubmitUnsignedTransaction,
 };
 
-use sp_phragmen::{ExtendedBalance, StakedAssignment, generate_compact_solution_type};
+use sp_phragmen::{
+	ExtendedBalance, StakedAssignment, PhragmenScore, PhragmenResult,
+	generate_compact_solution_type, build_support_map, evaluate_support, elect,
+};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 // ------------- IMPORTANT NOTE: must be the same as `generate_compact_solution_type`.
@@ -593,8 +596,6 @@ impl<BlockNumber> Default for ElectionStatus<BlockNumber> {
 	}
 }
 
-pub type ElectionScore = [ExtendedBalance; 3];
-
 pub type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type PositiveImbalanceOf<T> =
@@ -792,7 +793,7 @@ decl_storage! {
 		pub QueuedElected get(fn queued_elected): Option<ElectionResult<T::AccountId, BalanceOf<T>>>;
 
 		/// The score of the current [`QueuedElected`].
-		pub QueuedScore get(fn queued_score): Option<ElectionScore>;
+		pub QueuedScore get(fn queued_score): Option<PhragmenScore>;
 
 		/// Flag to control the execution of the offchain election.
 		pub EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
@@ -1074,7 +1075,7 @@ decl_module! {
 		///
 		/// major steps (all done in `check_and_replace_solution`):
 		///
-		/// - 1 read. `ElectionScore`. O(1).
+		/// - 1 read. `PhragmenScore`. O(1).
 		/// - `m` calls `Validators::exists()` for validator veracity.
 		///
 		/// - decode from compact and convert into assignments: O(E)  TODO: if our reduce is correct, this will be at most `n + m`
@@ -1091,7 +1092,7 @@ decl_module! {
 			origin,
 			winners: Vec<T::AccountId>,
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
-			score: ElectionScore,
+			score: PhragmenScore,
 		) {
 			let _who = ensure_signed(origin)?;
 			Self::check_and_replace_solution(
@@ -1109,7 +1110,7 @@ decl_module! {
 			origin,
 			winners: Vec<T::AccountId>,
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
-			score: ElectionScore,
+			score: PhragmenScore,
 			// already used and checked in ValidateUnsigned.
 			_validator_index: u32,
 			_signature: <T::KeyType as RuntimeAppPublic>::Signature,
@@ -1654,7 +1655,7 @@ impl<T: Trait> Module<T> {
 		winners: Vec<T::AccountId>,
 		compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
 		compute: ElectionCompute,
-		claimed_score: ElectionScore,
+		claimed_score: PhragmenScore,
 		// at: T::BlockNumber,
 	) -> Result<(), Error<T>> {
 		// discard early solutions
@@ -1689,7 +1690,7 @@ impl<T: Trait> Module<T> {
 		// build the support map thereof in order to evaluate.
 		// OPTIMIZATION: we could merge this with the `staked_assignments.iter()` below and
 		// iterate only once.
-		let (supports, num_error) = sp_phragmen::build_support_map::<T::AccountId>(
+		let (supports, num_error) = build_support_map::<T::AccountId>(
 			&winners,
 			&staked_assignments,
 		);
@@ -1698,7 +1699,7 @@ impl<T: Trait> Module<T> {
 
 
 		// Check if the score is the same as the claimed one.
-		let submitted_score = sp_phragmen::evaluate_support(&supports);
+		let submitted_score = evaluate_support(&supports);
 		ensure!(submitted_score == claimed_score, Error::<T>::PhragmenBogusScore);
 
 		// check all nominators being bonded, and actually including the claimed vote, and
@@ -1981,7 +1982,7 @@ impl<T: Trait> Module<T> {
 				.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(Self::slashable_balance_of, true))
 				.collect();
 
-			let (supports, _) = sp_phragmen::build_support_map::<T::AccountId>(
+			let (supports, _) = build_support_map::<T::AccountId>(
 				&elected_stashes,
 				&staked_assignments,
 			);
@@ -2053,7 +2054,7 @@ impl<T: Trait> Module<T> {
 	/// weights are returned.
 	///
 	/// No storage item is updated.
-	fn do_phragmen() -> Option<sp_phragmen::PhragmenResult<T::AccountId>> {
+	fn do_phragmen() -> Option<PhragmenResult<T::AccountId>> {
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let all_validator_candidates_iter = <Validators<T>>::enumerate();
 		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
@@ -2080,7 +2081,7 @@ impl<T: Trait> Module<T> {
 		});
 		all_nominators.extend(nominator_votes);
 
-		sp_phragmen::elect::<_, _, _, T::CurrencyToVote>(
+		elect::<_, _, _, T::CurrencyToVote>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,
