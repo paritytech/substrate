@@ -51,7 +51,7 @@ where
 	Extra: SignedExtension
 {
 	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		// Exists only in runtime (TODO: is it?)
+		// Instantiated only in runtime.
 		0
 	}
 }
