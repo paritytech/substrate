@@ -65,7 +65,7 @@ const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 
 // Each pointer is prefixed with 8 bytes, which identify the list index
 // to which it belongs.
-const PREFIX_SIZE: u32 = 8;
+const HEADER_SIZE: u32 = 8;
 
 /// Create an allocator error.
 fn error(msg: &'static str) -> Error {
@@ -219,7 +219,7 @@ impl FreeingBumpHeapAllocator {
 
 		let ptr: u32 = if let Link::Ptr(ptr) = self.heads[order.0 as usize] {
 			assert!(
-				ptr + order.size() + PREFIX_SIZE <= max_heap_size,
+				ptr + order.size() + HEADER_SIZE <= max_heap_size,
 				"Pointer is looked up in list of free entries, into which
 				only valid values are inserted; qed"
 			);
@@ -233,10 +233,10 @@ impl FreeingBumpHeapAllocator {
 
 		self.set_heap_u64(mem, ptr, order.0 as u64)?;
 
-		self.total_size = self.total_size + order.size() + PREFIX_SIZE;
+		self.total_size = self.total_size + order.size() + HEADER_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
 
-		Ok(Pointer::new(ptr + PREFIX_SIZE))
+		Ok(Pointer::new(ptr + HEADER_SIZE))
 	}
 
 	/// Deallocates the space which was allocated for a pointer.
@@ -247,7 +247,7 @@ impl FreeingBumpHeapAllocator {
 	/// - `ptr` - pointer to the allocated chunk
 	pub fn deallocate(&mut self, mem: &mut [u8], ptr: Pointer<u8>) -> Result<(), Error> {
 		let ptr = u32::from(ptr)
-			.checked_sub(PREFIX_SIZE)
+			.checked_sub(HEADER_SIZE)
 			.ok_or_else(|| error("Invalid pointer for deallocation"))?;
 
 		let order = Order::from_raw(
@@ -262,25 +262,25 @@ impl FreeingBumpHeapAllocator {
 		let item_size = order.size();
 		self.total_size = self
 			.total_size
-			.checked_sub(item_size as u32 + PREFIX_SIZE)
+			.checked_sub(item_size as u32 + HEADER_SIZE)
 			.ok_or_else(|| error("Unable to subtract from total heap size without overflow"))?;
 		trace!("Heap size is {} bytes after deallocation", self.total_size);
 
 		Ok(())
 	}
 
-	/// Increases the `bumper` by `item_size + PREFIX_SIZE`.
+	/// Increases the `bumper` by `item_size + HEADER_SIZE`.
 	///
 	/// Returns the `bumper` from before the increase.
 	/// Returns an `Error::AllocatorOutOfSpace` if the operation
 	/// would exhaust the heap.
 	fn bump(&mut self, item_size: u32, max_heap_size: u32) -> Result<u32, Error> {
-		if self.bumper + PREFIX_SIZE + item_size > max_heap_size {
+		if self.bumper + HEADER_SIZE + item_size > max_heap_size {
 			return Err(Error::AllocatorOutOfSpace);
 		}
 
 		let res = self.bumper;
-		self.bumper += item_size + PREFIX_SIZE;
+		self.bumper += item_size + HEADER_SIZE;
 		Ok(res)
 	}
 
@@ -337,8 +337,8 @@ mod tests {
 		let ptr = heap.allocate(&mut mem[..], 1).unwrap();
 
 		// then
-		// returned pointer must start right after `PREFIX_SIZE`
-		assert_eq!(ptr, to_pointer(PREFIX_SIZE));
+		// returned pointer must start right after `HEADER_SIZE`
+		assert_eq!(ptr, to_pointer(HEADER_SIZE));
 	}
 
 	#[test]
@@ -369,14 +369,14 @@ mod tests {
 
 		// then
 		// a prefix of 8 bytes is prepended to each pointer
-		assert_eq!(ptr1, to_pointer(PREFIX_SIZE));
+		assert_eq!(ptr1, to_pointer(HEADER_SIZE));
 
 		// the prefix of 8 bytes + the content of ptr1 padded to the lowest possible
 		// item size of 8 bytes + the prefix of ptr1
 		assert_eq!(ptr2, to_pointer(24));
 
 		// ptr2 + its content of 16 bytes + the prefix of 8 bytes
-		assert_eq!(ptr3, to_pointer(24 + 16 + PREFIX_SIZE));
+		assert_eq!(ptr3, to_pointer(24 + 16 + HEADER_SIZE));
 	}
 
 	#[test]
@@ -386,7 +386,7 @@ mod tests {
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 		let ptr1 = heap.allocate(&mut mem[..], 1).unwrap();
 		// the prefix of 8 bytes is prepended to the pointer
-		assert_eq!(ptr1, to_pointer(PREFIX_SIZE));
+		assert_eq!(ptr1, to_pointer(HEADER_SIZE));
 
 		let ptr2 = heap.allocate(&mut mem[..], 1).unwrap();
 		// the prefix of 8 bytes + the content of ptr 1 is prepended to the pointer
@@ -398,7 +398,7 @@ mod tests {
 		// then
 		// then the heads table should contain a pointer to the
 		// prefix of ptr2 in the leftmost entry
-		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr2) - PREFIX_SIZE));
+		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr2) - HEADER_SIZE));
 	}
 
 	#[test]
@@ -410,13 +410,13 @@ mod tests {
 
 		let ptr1 = heap.allocate(&mut mem[..], 1).unwrap();
 		// the prefix of 8 bytes is prepended to the pointer
-		assert_eq!(ptr1, to_pointer(padded_offset + PREFIX_SIZE));
+		assert_eq!(ptr1, to_pointer(padded_offset + HEADER_SIZE));
 
 		let ptr2 = heap.allocate(&mut mem[..], 9).unwrap();
 		// the padded_offset + the previously allocated ptr (8 bytes prefix +
 		// 8 bytes content) + the prefix of 8 bytes which is prepended to the
 		// current pointer
-		assert_eq!(ptr2, to_pointer(padded_offset + 16 + PREFIX_SIZE));
+		assert_eq!(ptr2, to_pointer(padded_offset + 16 + HEADER_SIZE));
 
 		// when
 		heap.deallocate(&mut mem[..], ptr2).unwrap();
@@ -424,7 +424,7 @@ mod tests {
 
 		// then
 		// should have re-allocated
-		assert_eq!(ptr3, to_pointer(padded_offset + 16 + PREFIX_SIZE));
+		assert_eq!(ptr3, to_pointer(padded_offset + 16 + HEADER_SIZE));
 		assert_eq!(heap.heads, [Link::Null; N]);
 	}
 
@@ -444,12 +444,12 @@ mod tests {
 		heap.deallocate(&mut mem[..], ptr3).unwrap();
 
 		// then
-		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr3) - PREFIX_SIZE));
+		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr3) - HEADER_SIZE));
 
 		let ptr4 = heap.allocate(&mut mem[..], 8).unwrap();
 		assert_eq!(ptr4, ptr3);
 
-		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr2) - PREFIX_SIZE));
+		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr2) - HEADER_SIZE));
 	}
 
 	#[test]
@@ -473,8 +473,8 @@ mod tests {
 		// given
 		let mut mem = [0u8; PAGE_SIZE as usize];
 		let mut heap = FreeingBumpHeapAllocator::new(0);
-		let ptr1 = heap.allocate(&mut mem[..], (PAGE_SIZE / 2) - PREFIX_SIZE).unwrap();
-		assert_eq!(ptr1, to_pointer(PREFIX_SIZE));
+		let ptr1 = heap.allocate(&mut mem[..], (PAGE_SIZE / 2) - HEADER_SIZE).unwrap();
+		assert_eq!(ptr1, to_pointer(HEADER_SIZE));
 
 		// when
 		let ptr2 = heap.allocate(&mut mem[..], PAGE_SIZE / 2);
@@ -497,7 +497,7 @@ mod tests {
 		let ptr = heap.allocate(&mut mem[..], MAX_POSSIBLE_ALLOCATION).unwrap();
 
 		// then
-		assert_eq!(ptr, to_pointer(PREFIX_SIZE));
+		assert_eq!(ptr, to_pointer(HEADER_SIZE));
 	}
 
 	#[test]
@@ -523,7 +523,7 @@ mod tests {
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		let ptr1 = heap.allocate(&mut mem[..], 32).unwrap();
-		assert_eq!(ptr1, to_pointer(PREFIX_SIZE));
+		assert_eq!(ptr1, to_pointer(HEADER_SIZE));
 		heap.deallocate(&mut mem[..], ptr1).expect("failed freeing ptr1");
 		assert_eq!(heap.total_size, 0);
 		assert_eq!(heap.bumper, 40);
@@ -559,7 +559,7 @@ mod tests {
 		heap.allocate(&mut mem[..], 9).unwrap();
 
 		// then
-		assert_eq!(heap.total_size, PREFIX_SIZE + 16);
+		assert_eq!(heap.total_size, HEADER_SIZE + 16);
 	}
 
 	#[test]
@@ -570,7 +570,7 @@ mod tests {
 
 		// when
 		let ptr = heap.allocate(&mut mem[..], 42).unwrap();
-		assert_eq!(ptr, to_pointer(16 + PREFIX_SIZE));
+		assert_eq!(ptr, to_pointer(16 + HEADER_SIZE));
 		heap.deallocate(&mut mem[..], ptr).unwrap();
 
 		// then
