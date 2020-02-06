@@ -161,7 +161,6 @@ pub struct Header {
 	/// Merkle root of block's extrinsics
 	pub extrinsics_root: H256,
 	/// Digest items
-	#[ignore_malloc_size_of = "TODO"]
 	pub digest: Digest,
 }
 

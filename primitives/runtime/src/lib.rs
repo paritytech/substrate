@@ -640,8 +640,7 @@ macro_rules! assert_eq_error_rate {
 pub struct OpaqueExtrinsic(pub Vec<u8>);
 
 #[cfg(feature = "std")]
-impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic
-{
+impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
 	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
 		self.0.size_of(ops)
 	}
