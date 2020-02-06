@@ -140,7 +140,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnReapAccount = Balances;
+	type OnReapAccount = (Balances, Staking, Session);
 }
 impl pallet_balances::Trait for Test {
 	type Balance = Balance;

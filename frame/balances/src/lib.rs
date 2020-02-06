@@ -602,7 +602,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			put_storage_value(b"Balances", b"Account", &hash, account);
 		}
 
-		for (hash, balances) in StorageIterator::<T::Balance>::new(b"Balances", b"Account").drain() {
+		for (hash, balances) in StorageIterator::<AccountData<T::Balance>>::new(b"Balances", b"Account").drain() {
 			let nonce = take_storage_value::<T::Index>(b"System", b"AccountNonce", &hash).unwrap_or_default();
 			put_storage_value(b"System", b"Account", &hash, (nonce, balances));
 		}

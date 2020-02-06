@@ -1423,7 +1423,7 @@ mod tests {
 
 			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 3));
 			assert_eq!(
-				System::events()[1].event,
+				System::events()[7].event,
 				Event::elections(RawEvent::VoterReported(3, 5, true))
 			);
 
@@ -1452,7 +1452,7 @@ mod tests {
 
 			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 4));
 			assert_eq!(
-				System::events()[1].event,
+				System::events()[7].event,
 				Event::elections(RawEvent::VoterReported(4, 5, false))
 			);
 
@@ -1863,7 +1863,7 @@ mod tests {
 			assert_eq!(balances(&5), (45, 2));
 
 			assert_eq!(
-				System::events()[0].event,
+				System::events()[6].event,
 				Event::elections(RawEvent::NewTerm(vec![(4, 40), (5, 50)])),
 			);
 		})

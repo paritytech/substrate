@@ -37,6 +37,9 @@ pub use frame_support::{
 	weights::Weight,
 };
 
+/// Importing a template pallet
+pub use template;
+
 /// An index to a block.
 pub type BlockNumber = u32;
 
@@ -62,9 +65,6 @@ pub type Hash = sp_core::H256;
 
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
-
-/// Used for the module template in `./template.rs`
-mod template;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats

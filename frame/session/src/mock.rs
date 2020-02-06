@@ -177,7 +177,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnReapAccount = ();
+	type OnReapAccount = Session;
 }
 
 impl pallet_timestamp::Trait for Test {

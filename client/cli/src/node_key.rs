@@ -93,8 +93,8 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use sc_network::config::identity::ed25519;
+	use super::*;
 
 	#[test]
 	fn tests_node_name_good() {
