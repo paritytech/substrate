@@ -26,7 +26,7 @@
 use codec::Encode;
 use sp_trie;
 
-use sp_core::{H256, convert_hash, self};
+use sp_core::{H256, convert_hash};
 use sp_runtime::traits::{Header as HeaderT, SimpleArithmetic, Zero, One};
 use sp_state_machine::{
 	MemoryDB, TrieBackend, Backend as StateBackend, StorageProof, InMemoryBackend,

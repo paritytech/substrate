@@ -1126,24 +1126,24 @@ impl<Block: BlockT> Backend<Block> {
 			let finalized = if operation.commit_state {
 				let mut changesets = ChildrenMap::<sc_state_db::ChangeSet<Vec<u8>>>::default();
 				let mut ops: u64 = 0;
-				let mut bytes: u64 = 0;
+				let mut bytes = 0;
 				for (info, mut updates) in operation.db_updates.into_iter() {
 					let changeset = changesets.entry(info).or_default();
 					for (key, (val, rc)) in updates.drain() {
 						if rc > 0 {
 							ops += 1;
-							bytes += key.len() as u64 + val.len() as u64;
+							bytes += key.len() + val.len();
 
 							changeset.inserted.push((key, val.to_vec()));
 						} else if rc < 0 {
 							ops += 1;
-							bytes += key.len() as u64;
+							bytes += key.len();
 
 							changeset.deleted.push(key);
 						}
 					}
 				}
-				self.state_usage.tally_writes(ops, bytes);
+				self.state_usage.tally_writes(ops, bytes as u64);
 
 				let number_u64 = number.saturated_into::<u64>();
 				let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changesets)
