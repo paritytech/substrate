@@ -120,6 +120,12 @@ impl Roles {
 	}
 }
 
+impl fmt::Display for Roles {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{:?}", self)
+	}
+}
+
 impl codec::Encode for Roles {
 	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())

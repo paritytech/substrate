@@ -18,7 +18,7 @@ use std::{str::FromStr, path::PathBuf};
 use structopt::{StructOpt, clap::arg_enum};
 use sc_service::{
 	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	config::DatabaseConfig,
+	config::DatabaseConfig, ChainSpec, PruningMode,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use crate::VersionInfo;
@@ -115,6 +115,35 @@ pub struct SharedParams {
 	pub log: Option<String>,
 }
 
+impl SharedParams {
+	/// Load spec to `Configuration` from `SharedParams` and spec factory.
+	pub fn update_config<'a, G, E, F>(
+		&self,
+		mut config: &'a mut Configuration<G, E>,
+		spec_factory: F,
+	) -> error::Result<&'a ChainSpec<G, E>> where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	{
+		let chain_key = match self.chain {
+			Some(ref chain) => chain.clone(),
+			None => if self.dev { "dev".into() } else { "".into() }
+		};
+		let spec = match spec_factory(&chain_key)? {
+			Some(spec) => spec,
+			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
+		};
+
+		config.network.boot_nodes = spec.boot_nodes().to_vec();
+		config.telemetry_endpoints = spec.telemetry_endpoints().clone();
+
+		config.chain_spec = Some(spec);
+
+		Ok(config.chain_spec.as_ref().unwrap())
+	}
+}
+
 /// Parameters for block import.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ImportParams {
@@ -155,6 +184,71 @@ pub struct ImportParams {
 	/// Specify the state cache size.
 	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
+}
+
+impl ImportParams {
+	/// Put block import CLI params into `config` object.
+	pub fn update_config<G, E>(
+		self,
+		config: &mut Configuration<G, E>,
+		role: sc_service::Roles,
+		is_dev: bool,
+	) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+	{
+		use sc_client_api::execution_extensions::ExecutionStrategies;
+
+		if let Some(DatabaseConfig::Path { ref mut cache_size, .. }) = config.database {
+			*cache_size = Some(self.database_cache_size);
+		}
+
+		config.state_cache_size = self.state_cache_size;
+
+		// by default we disable pruning if the node is an authority (i.e.
+		// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
+		// node is an authority and pruning is enabled explicitly, then we error
+		// unless `unsafe_pruning` is set.
+		config.pruning = match &self.pruning {
+			Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
+			None if role == sc_service::Roles::AUTHORITY => PruningMode::ArchiveAll,
+			None => PruningMode::default(),
+			Some(s) => {
+				if role == sc_service::Roles::AUTHORITY && !self.unsafe_pruning {
+					return Err(error::Error::Input(
+						"Validators should run with state pruning disabled (i.e. archive). \
+						You can ignore this check with `--unsafe-pruning`.".to_string()
+					));
+				}
+
+				PruningMode::keep_blocks(s.parse()
+					.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
+				)
+			},
+		};
+
+		config.wasm_method = self.wasm_method.into();
+
+		let exec = &self.execution_strategies;
+		let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
+			exec.execution.unwrap_or(if strat == default && is_dev {
+				ExecutionStrategy::Native
+			} else {
+				strat
+			}).into()
+		};
+
+		config.execution_strategies = ExecutionStrategies {
+			syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
+			importing: exec_all_or(exec.execution_import_block, DEFAULT_EXECUTION_IMPORT_BLOCK),
+			block_construction:
+				exec_all_or(exec.execution_block_construction, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION),
+			offchain_worker:
+				exec_all_or(exec.execution_offchain_worker, DEFAULT_EXECUTION_OFFCHAIN_WORKER),
+			other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
+		};
+		Ok(())
+	}
 }
 
 /// Parameters used to create the network configuration.
@@ -1044,9 +1138,8 @@ impl ImportBlocksCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		crate::fill_import_params(
+		self.import_params.update_config(
 			&mut config,
-			&self.import_params,
 			sc_service::Roles::FULL,
 			self.shared_params.dev,
 		)?;
@@ -1084,9 +1177,8 @@ impl CheckBlockCmd {
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-		crate::fill_import_params(
+		self.import_params.update_config(
 			&mut config,
-			&self.import_params,
 			sc_service::Roles::FULL,
 			self.shared_params.dev,
 		)?;

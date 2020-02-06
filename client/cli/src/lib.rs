@@ -80,13 +80,6 @@ const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
 /// The maximum number of characters for a node name.
 const NODE_NAME_MAX_LENGTH: usize = 32;
 
-fn get_chain_key(cli: &SharedParams) -> String {
-	match cli.chain {
-		Some(ref chain) => chain.clone(),
-		None => if cli.dev { "dev".into() } else { "".into() }
-	}
-}
-
 fn generate_node_name() -> String {
 	let result = loop {
 		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
@@ -98,30 +91,6 @@ fn generate_node_name() -> String {
 	};
 
 	result
-}
-
-/// Load spec to `Configuration` from shared params and spec factory.
-pub fn load_spec<'a, G, E, F>(
-	mut config: &'a mut Configuration<G, E>,
-	cli: &SharedParams,
-	factory: F,
-) -> error::Result<&'a ChainSpec<G, E>> where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-{
-	let chain_key = get_chain_key(cli);
-	let spec = match factory(&chain_key)? {
-		Some(spec) => spec,
-		None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
-	};
-
-	config.network.boot_nodes = spec.boot_nodes().to_vec();
-	config.telemetry_endpoints = spec.telemetry_endpoints().clone();
-
-	config.chain_spec = Some(spec);
-
-	Ok(config.chain_spec.as_ref().unwrap())
 }
 
 fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
@@ -234,7 +203,7 @@ where
 	SF: AbstractService + Unpin,
 {
 	init(&run_cmd.shared_params, version)?;
-	load_spec(&mut config, &run_cmd.shared_params, spec_factory)?;
+	run_cmd.shared_params.update_config(&mut config, spec_factory)?;
 	run_cmd.run(config, new_light, new_full, version)
 }
 
@@ -259,7 +228,7 @@ where
 	let shared_params = subcommand.get_shared_params();
 
 	init(shared_params, version)?;
-	load_spec(&mut config, shared_params, spec_factory)?;
+	shared_params.update_config(&mut config, spec_factory)?;
 	subcommand.run(config, builder)
 }
 
@@ -306,7 +275,7 @@ where
 	info!("  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
 	info!("Chain specification: {}", config.expect_chain_spec().name());
 	info!("Node name: {}", config.name);
-	info!("Roles: {}", display_role(&config));
+	info!("Roles: {}", config.display_role());
 
 	match config.roles {
 		ServiceRoles::LIGHT => run_service_until_exit(
@@ -317,17 +286,6 @@ where
 			config,
 			new_full,
 		),
-	}
-}
-
-/// Returns a string displaying the node role, special casing the sentry mode
-/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
-/// doesn't participate.
-pub fn display_role<G, E>(config: &Configuration<G, E>) -> String {
-	if config.sentry_mode {
-		"SENTRY".to_string()
-	} else {
-		format!("{:?}", config.roles)
 	}
 }
 
@@ -450,67 +408,6 @@ fn fill_config_keystore_password_and_path<G, E>(
 	Ok(())
 }
 
-/// Put block import CLI params into `config` object.
-pub fn fill_import_params<G, E>(
-	config: &mut Configuration<G, E>,
-	cli: &ImportParams,
-	role: sc_service::Roles,
-	is_dev: bool,
-) -> error::Result<()>
-where
-	G: RuntimeGenesis,
-{
-	if let Some(DatabaseConfig::Path { ref mut cache_size, .. }) = config.database {
-		*cache_size = Some(cli.database_cache_size);
-	}
-
-	config.state_cache_size = cli.state_cache_size;
-
-	// by default we disable pruning if the node is an authority (i.e.
-	// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
-	// node is an authority and pruning is enabled explicitly, then we error
-	// unless `unsafe_pruning` is set.
-	config.pruning = match &cli.pruning {
-		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-		None if role == sc_service::Roles::AUTHORITY => PruningMode::ArchiveAll,
-		None => PruningMode::default(),
-		Some(s) => {
-			if role == sc_service::Roles::AUTHORITY && !cli.unsafe_pruning {
-				return Err(error::Error::Input(
-					"Validators should run with state pruning disabled (i.e. archive). \
-					You can ignore this check with `--unsafe-pruning`.".to_string()
-				));
-			}
-
-			PruningMode::keep_blocks(s.parse()
-				.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
-			)
-		},
-	};
-
-	config.wasm_method = cli.wasm_method.into();
-
-	let exec = &cli.execution_strategies;
-	let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
-		exec.execution.unwrap_or(if strat == default && is_dev {
-			ExecutionStrategy::Native
-		} else {
-			strat
-		}).into()
-	};
-
-	config.execution_strategies = ExecutionStrategies {
-		syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
-		importing: exec_all_or(exec.execution_import_block, DEFAULT_EXECUTION_IMPORT_BLOCK),
-		block_construction:
-			exec_all_or(exec.execution_block_construction, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION),
-		offchain_worker:
-			exec_all_or(exec.execution_offchain_worker, DEFAULT_EXECUTION_OFFCHAIN_WORKER),
-		other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
-	};
-	Ok(())
-}
-
 /// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`
 pub fn update_config_for_running_node<G, E>(
 	mut config: &mut Configuration<G, E>,
@@ -551,7 +448,7 @@ where
 			sc_service::Roles::FULL
 		};
 
-	fill_import_params(&mut config, &cli.import_params, role, is_dev)?;
+	cli.import_params.update_config(&mut config, role, is_dev)?;
 
 	config.name = match (cli.name.as_ref(), keyring) {
 		(Some(name), _) => name.to_string(),
