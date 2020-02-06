@@ -28,6 +28,7 @@
 
 pub mod light;
 pub mod offchain;
+pub mod bench;
 
 mod children;
 mod cache;
@@ -79,6 +80,7 @@ use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
+pub use bench::BenchmarkingState;
 
 #[cfg(feature = "test-helpers")]
 use sc_client::in_mem::Backend as InMemoryBackend;
@@ -104,6 +106,7 @@ pub use kvdb;
 pub struct RefTrackingState<Block: BlockT> {
 	state: DbState<Block>,
 	storage: Arc<StorageDb<Block>>,
+
 	parent_hash: Option<Block::Hash>,
 }
 

@@ -207,7 +207,7 @@ impl OpaqueMultiaddr {
 
 /// Opaque timestamp type
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode)]
-pub struct Timestamp(u64);
+pub struct Timestamp(pub u64);
 
 /// Duration type
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode)]
