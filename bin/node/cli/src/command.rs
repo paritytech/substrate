@@ -50,6 +50,8 @@ where
 				cli_args.shared_params.dev,
 			)?;
 
+			sc_cli::fill_config_keystore_in_memory(&mut config)?;
+
 			match ChainSpec::from(config.expect_chain_spec().id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
 				_ => panic!("Factory is only supported for development and local testnet."),
