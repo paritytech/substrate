@@ -33,6 +33,8 @@ fn running_the_node_works_and_can_be_interrupted() {
 				None => sleep(Duration::from_secs(1)),
 			}
 		}
+		eprintln!("Took to long to exit. Killing...");
+		let _ = child.kill();
 
 		None
 	}
