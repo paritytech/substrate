@@ -181,7 +181,6 @@ impl Link {
 pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	heads: [Link; N],
-	ptr_offset: u32,
 	total_size: u32,
 }
 
@@ -193,13 +192,11 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `heap_base` - the offset from the beginning of the linear memory where the heap starts.
 	pub fn new(heap_base: u32) -> Self {
-		// ptr_offset is the next alignment boundary on or after heap_base.
-		let ptr_offset = (heap_base + ALIGNMENT - 1) / ALIGNMENT * ALIGNMENT;
+		let aligned_heap_base = (heap_base + ALIGNMENT - 1) / ALIGNMENT * ALIGNMENT;
 
 		FreeingBumpHeapAllocator {
-			bumper: 0,
+			bumper: aligned_heap_base,
 			heads: [Link::Null; N],
-			ptr_offset,
 			total_size: 0,
 		}
 	}
@@ -215,8 +212,8 @@ impl FreeingBumpHeapAllocator {
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `size` - size in bytes of the allocation request
 	pub fn allocate(&mut self, mem: &mut [u8], size: WordSize) -> Result<Pointer<u8>, Error> {
-		let mem_size = u32::try_from(mem.len()).expect("size of Wasm linear memory is <2^32; qed");
-		let max_heap_size = mem_size - self.ptr_offset;
+		let max_heap_size =
+			u32::try_from(mem.len()).expect("size of Wasm linear memory is <2^32; qed");
 
 		let order = Order::from_size(size)?;
 
@@ -239,7 +236,7 @@ impl FreeingBumpHeapAllocator {
 		self.total_size = self.total_size + order.size() + PREFIX_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
 
-		Ok(Pointer::new(self.ptr_offset + ptr + PREFIX_SIZE))
+		Ok(Pointer::new(ptr + PREFIX_SIZE))
 	}
 
 	/// Deallocates the space which was allocated for a pointer.
@@ -249,8 +246,7 @@ impl FreeingBumpHeapAllocator {
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk
 	pub fn deallocate(&mut self, mem: &mut [u8], ptr: Pointer<u8>) -> Result<(), Error> {
-		let ptr = u32::from(ptr) - self.ptr_offset;
-		let ptr = ptr
+		let ptr = u32::from(ptr)
 			.checked_sub(PREFIX_SIZE)
 			.ok_or_else(|| error("Invalid pointer for deallocation"))?;
 
@@ -290,16 +286,19 @@ impl FreeingBumpHeapAllocator {
 
 	// Read a u64 from the heap in LE form. Used to read heap allocation prefixes.
 	fn get_heap_u64(&self, heap: &[u8], offset: u32) -> Result<u64, Error> {
-		let range = self.heap_range(offset, 8, heap.len())
+		let range = self
+			.heap_range(offset, 8, heap.len())
 			.ok_or_else(|| error("read out of heap bounds"))?;
-		let bytes = heap[range].try_into()
+		let bytes = heap[range]
+			.try_into()
 			.expect("[u8] slice of length 8 must be convertible to [u8; 8]");
 		Ok(u64::from_le_bytes(bytes))
 	}
 
 	// Write a u64 to the heap in LE form. Used to write heap allocation prefixes.
 	fn set_heap_u64(&self, heap: &mut [u8], offset: u32, val: u64) -> Result<(), Error> {
-		let range = self.heap_range(offset, 8, heap.len())
+		let range = self
+			.heap_range(offset, 8, heap.len())
 			.ok_or_else(|| error("write out of heap bounds"))?;
 		let bytes = val.to_le_bytes();
 		&mut heap[range].copy_from_slice(&bytes[..]);
@@ -307,13 +306,8 @@ impl FreeingBumpHeapAllocator {
 	}
 
 	fn heap_range(&self, offset: u32, length: u32, heap_len: usize) -> Option<Range<usize>> {
-		let start = offset
-			.checked_add(self.ptr_offset)?
-			as usize;
-		let end = offset
-			.checked_add(self.ptr_offset)?
-			.checked_add(length)?
-			as usize;
+		let start = offset as usize;
+		let end = offset.checked_add(length)? as usize;
 		if end <= heap_len {
 			Some(start..end)
 		} else {
