@@ -48,13 +48,13 @@ pub trait IsDescendentOfBuilder<Hash> {
 }
 
 /// Produce a descendent query object given the client.
-pub(crate) fn descendent_query<H, Block>(client: &H) -> HeaderBackendDescendentBuilder<&H, Block> {
+pub fn descendent_query<H, Block>(client: &H) -> HeaderBackendDescendentBuilder<&H, Block> {
 	HeaderBackendDescendentBuilder(client, std::marker::PhantomData)
 }
 
 /// Wrapper to get around unconstrained type errors when implementing
 /// `IsDescendentOfBuilder` for header backends.
-pub(crate) struct HeaderBackendDescendentBuilder<H, Block>(H, std::marker::PhantomData<Block>);
+pub struct HeaderBackendDescendentBuilder<H, Block>(H, std::marker::PhantomData<Block>);
 
 impl<'a, H, Block> IsDescendentOfBuilder<Block::Hash>
 	for HeaderBackendDescendentBuilder<&'a H, Block> where

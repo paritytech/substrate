@@ -104,7 +104,7 @@ use log::{warn, debug, info, trace};
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
 };
-use epoch_changes::{descendent_query, ViableEpoch};
+use epoch_changes::ViableEpoch;
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	HeaderBackend, ProvideCache, HeaderMetadata
@@ -122,7 +122,7 @@ mod tests;
 pub use sp_consensus_babe::{
 	AuthorityId, AuthorityPair, AuthoritySignature, Epoch, NextEpochDescriptor,
 };
-pub use epoch_changes::{EpochChanges, EpochChangesFor, SharedEpochChanges};
+pub use epoch_changes::{descendent_query, EpochChanges, EpochChangesFor, SharedEpochChanges};
 
 #[derive(derive_more::Display, Debug)]
 enum Error<B: BlockT> {
@@ -615,6 +615,19 @@ pub struct BabeLink<Block: BlockT> {
 	epoch_changes: SharedEpochChanges<Block>,
 	config: Config,
 }
+
+impl<Block: BlockT> BabeLink<Block> {
+	/// Get the epoch changes of this link.
+	pub fn epoch_changes(&self) -> &SharedEpochChanges<Block> {
+		&self.epoch_changes
+	}
+
+	/// Get the config of this link.
+	pub fn config(&self) -> &Config {
+		&self.config
+	}
+}
+
 /// A verifier for Babe blocks.
 pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA> {
 	client: Arc<Client<B, E, Block, RA>>,
