@@ -63,8 +63,6 @@ const N: usize = 22;
 const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes
 const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 
-const EMPTY_MARKER: u32 = u32::max_value();
-
 // Each pointer is prefixed with 8 bytes, which identify the list index
 // to which it belongs.
 const PREFIX_SIZE: u32 = 8;
@@ -145,13 +143,44 @@ impl Order {
 	}
 }
 
+/// A marker for denoting the end of the linked list.
+const EMPTY_MARKER: u32 = u32::max_value();
+
+/// A link between headers in the free list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Link {
+	/// Null, denotes that there is no next element.
+	Null,
+	/// Link to the next element represented as a pointer to the a header.
+	Ptr(u32),
+}
+
+impl Link {
+	/// Creates a link from raw value.
+	fn from_raw(raw: u64) -> Self {
+		debug_assert_eq!(raw as u32 as u64, raw);
+		if raw as u32 != EMPTY_MARKER {
+			Self::Ptr(raw as u32)
+		} else {
+			Self::Null
+		}
+	}
+
+	/// Converts this link into a raw u64.
+	fn into_raw(self) -> u64 {
+		match self {
+			Self::Null => EMPTY_MARKER as u64,
+			Self::Ptr(ptr) => ptr as u64,
+		}
+	}
+}
 
 /// An implementation of freeing bump allocator.
 ///
 /// Refer to the module-level documentation for further details.
 pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
-	heads: [u32; N],
+	heads: [Link; N],
 	ptr_offset: u32,
 	total_size: u32,
 }
@@ -169,7 +198,7 @@ impl FreeingBumpHeapAllocator {
 
 		FreeingBumpHeapAllocator {
 			bumper: 0,
-			heads: [EMPTY_MARKER; N],
+			heads: [Link::Null; N],
 			ptr_offset,
 			total_size: 0,
 		}
@@ -190,19 +219,15 @@ impl FreeingBumpHeapAllocator {
 		let max_heap_size = mem_size - self.ptr_offset;
 
 		let order = Order::from_size(size)?;
-		let ptr: u32 = if self.heads[order.0 as usize] != EMPTY_MARKER {
-			// Something from the free list
-			let ptr = self.heads[order.0 as usize];
+
+		let ptr: u32 = if let Link::Ptr(ptr) = self.heads[order.0 as usize] {
 			assert!(
 				ptr + order.size() + PREFIX_SIZE <= max_heap_size,
 				"Pointer is looked up in list of free entries, into which
 				only valid values are inserted; qed"
 			);
 
-			self.heads[order.0 as usize] = self
-				.get_heap_u64(mem, ptr)?
-				.try_into()
-				.map_err(|_| error("read invalid free list pointer"))?;
+			self.heads[order.0 as usize] = Link::from_raw(self.get_heap_u64(mem, ptr)?);
 			ptr
 		} else {
 			// Nothing to be freed. Bump.
@@ -235,8 +260,8 @@ impl FreeingBumpHeapAllocator {
 				.map_err(|_| error("read invalid list index"))?,
 		)?;
 
-		self.set_heap_u64(mem, ptr, self.heads[order.0 as usize] as u64)?;
-		self.heads[order.0 as usize] = ptr;
+		self.set_heap_u64(mem, ptr, self.heads[order.0 as usize].into_raw())?;
+		self.heads[order.0 as usize] = Link::Ptr(ptr);
 
 		let item_size = order.size();
 		self.total_size = self
@@ -379,7 +404,7 @@ mod tests {
 		// then
 		// then the heads table should contain a pointer to the
 		// prefix of ptr2 in the leftmost entry
-		assert_eq!(heap.heads[0], u32::from(ptr2) - PREFIX_SIZE);
+		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr2) - PREFIX_SIZE));
 	}
 
 	#[test]
@@ -406,7 +431,7 @@ mod tests {
 		// then
 		// should have re-allocated
 		assert_eq!(ptr3, to_pointer(padded_offset + 16 + PREFIX_SIZE));
-		assert_eq!(heap.heads, [u32::max_value(); N]);
+		assert_eq!(heap.heads, [Link::Null; N]);
 	}
 
 	#[test]
@@ -425,12 +450,12 @@ mod tests {
 		heap.deallocate(&mut mem[..], ptr3).unwrap();
 
 		// then
-		assert_eq!(heap.heads[0], u32::from(ptr3) - PREFIX_SIZE);
+		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr3) - PREFIX_SIZE));
 
 		let ptr4 = heap.allocate(&mut mem[..], 8).unwrap();
 		assert_eq!(ptr4, ptr3);
 
-		assert_eq!(heap.heads[0], u32::from(ptr2) - PREFIX_SIZE);
+		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr2) - PREFIX_SIZE));
 	}
 
 	#[test]
