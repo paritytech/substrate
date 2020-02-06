@@ -127,6 +127,11 @@ pub mod well_known_keys {
 		}
 		has_right_prefix
 	}
+
+	/// Return true if the variable part of the key is empty.
+	pub fn is_child_trie_key_empty(storage_key: &[u8]) -> bool {
+		storage_key.len() == b":child_storage:default:".len()
+	}
 }
 
 /// A wrapper around a child storage key.
@@ -176,6 +181,12 @@ impl<'a> ChildStorageKey<'a> {
 	pub fn into_owned(self) -> Vec<u8> {
 		self.storage_key.into_owned()
 	}
+
+	/// Return true if the variable part of the key is empty.
+	pub fn is_empty(&self) -> bool {
+		well_known_keys::is_child_trie_key_empty(&*self.storage_key)
+	}
+
 }
 
 

@@ -210,7 +210,11 @@ where
 		key: &[u8],
 	) -> Option<StorageValue> {
 		if child_info.is_top_trie() {
-			return self.storage(key);
+			if storage_key.is_empty() {
+				return self.storage(key);
+			} else {
+				return None;
+			}
 		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
@@ -238,7 +242,11 @@ where
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		if child_info.is_top_trie() {
-			return self.storage_hash(key);
+			if storage_key.is_empty() {
+				return self.storage_hash(key);
+			} else {
+				return None;
+			}
 		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
@@ -266,7 +274,11 @@ where
 		key: &[u8],
 	) -> Option<StorageValue> {
 		if child_info.is_top_trie() {
-			return self.original_storage(key);
+			if storage_key.is_empty() {
+				return self.original_storage(key);
+			} else {
+				return None;
+			}
 		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.backend
@@ -290,7 +302,11 @@ where
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		if child_info.is_top_trie() {
-			return self.original_storage_hash(key);
+			if storage_key.is_empty() {
+				return self.original_storage_hash(key);
+			} else {
+				return None;
+			}
 		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.backend
@@ -329,7 +345,11 @@ where
 		key: &[u8],
 	) -> bool {
 		if child_info.is_top_trie() {
-			return self.exists_storage(key);
+			if storage_key.is_empty() {
+				return self.exists_storage(key);
+			} else {
+				return false;
+			}
 		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
@@ -371,7 +391,11 @@ where
 		key: &[u8],
 	) -> Option<StorageKey> {
 		if child_info.is_top_trie() {
-			return self.next_storage_key(key);
+			if storage_key.is_empty() {
+				return self.next_storage_key(key);
+			} else {
+				return None;
+			}
 		}
 		let next_backend_key = self.backend
 			.next_child_storage_key(storage_key.as_ref(), child_info, key)
@@ -420,7 +444,12 @@ where
 		value: Option<StorageValue>,
 	) {
 		if child_info.is_top_trie() {
-			return self.place_storage(key, value);
+			if storage_key.is_empty() {
+				return self.place_storage(key, value);
+			} else {
+				trace!(target: "state-trace", "Ignoring place_child_storage on top trie");
+				return;
+			}
 		}
 		trace!(target: "state-trace", "{:04x}: PutChild({}) {}={:?}",
 			self.id,
@@ -481,7 +510,12 @@ where
 		prefix: &[u8],
 	) {
 		if child_info.is_top_trie() {
-			return self.clear_prefix(prefix);
+			if storage_key.is_empty() {
+				return self.clear_prefix(prefix);
+			} else {
+				trace!(target: "state-trace", "Ignoring clear_child_prefix on top trie");
+				return;
+			}
 		}
 
 		trace!(target: "state-trace", "{:04x}: ClearChildPrefix({}) {}",
