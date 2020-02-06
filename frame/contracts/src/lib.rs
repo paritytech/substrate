@@ -960,7 +960,6 @@ pub struct Config<T: Trait> {
 	pub max_depth: u32,
 	pub max_value_size: u32,
 	pub contract_account_instantiate_fee: BalanceOf<T>,
-	pub account_create_fee: BalanceOf<T>,
 }
 
 impl<T: Trait> Config<T> {

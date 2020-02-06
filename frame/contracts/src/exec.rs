@@ -554,7 +554,6 @@ where
 #[derive(Copy, Clone)]
 pub enum TransferFeeKind {
 	ContractInstantiate,
-	AccountCreate,
 	Transfer,
 }
 
@@ -572,7 +571,6 @@ impl<T: Trait> Token<T> for TransferFeeToken<BalanceOf<T>> {
 	fn calculate_amount(&self, metadata: &Config<T>) -> Gas {
 		let balance_fee = match self.kind {
 			TransferFeeKind::ContractInstantiate => metadata.contract_account_instantiate_fee,
-			TransferFeeKind::AccountCreate => metadata.account_create_fee,
 			TransferFeeKind::Transfer => return metadata.schedule.transfer_cost,
 		};
 		approx_gas_for_balance(self.gas_price, balance_fee)
@@ -612,28 +610,14 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	use self::TransferCause::*;
 	use self::TransferFeeKind::*;
 
-	let to_balance = ctx.overlay.get_balance(dest);
-
-	// `would_create` indicates whether the account will be created if this transfer gets executed.
-	// This flag is orthogonal to `cause.
-	// For example, we can instantiate a contract at the address which already has some funds. In this
-	// `would_create` will be `false`. Another example would be when this function is called from `call`,
-	// and account with the address `dest` doesn't exist yet `would_create` will be `true`.
-	let would_create = to_balance.is_zero();
-
 	let token = {
 		let kind: TransferFeeKind = match cause {
 			// If this function is called from `Instantiate` routine, then we always
 			// charge contract account creation fee.
 			Instantiate => ContractInstantiate,
 
-			// Otherwise the fee depends on whether we create a new account or transfer
-			// to an existing one.
-			Call => if would_create {
-				TransferFeeKind::AccountCreate
-			} else {
-				TransferFeeKind::Transfer
-			},
+			// Otherwise the fee is to transfer to an account.
+			Call => TransferFeeKind::Transfer,
 		};
 		TransferFeeToken {
 			kind,
@@ -651,7 +635,8 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 		Some(b) => b,
 		None => Err("balance too low to send value")?,
 	};
-	if would_create && value < ctx.config.existential_deposit {
+	let to_balance = ctx.overlay.get_balance(dest);
+	if to_balance.is_zero() && value < ctx.config.existential_deposit {
 		Err("value too low to create account")?
 	}
 	T::Currency::ensure_can_withdraw(
@@ -1105,7 +1090,7 @@ mod tests {
 				toks,
 				ExecFeeToken::Call,
 				TransferFeeToken {
-					kind: TransferFeeKind::AccountCreate,
+					kind: TransferFeeKind::Transfer,
 					gas_price: 1u64
 				},
 			);
