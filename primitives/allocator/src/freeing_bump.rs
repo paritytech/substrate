@@ -218,26 +218,26 @@ impl FreeingBumpHeapAllocator {
 	) -> Result<Pointer<u8>, Error> {
 		let order = Order::from_size(size)?;
 
-		let ptr: u32 = if let Link::Ptr(ptr) = self.heads[order.0 as usize] {
+		let header_ptr: u32 = if let Link::Ptr(header_ptr) = self.heads[order.0 as usize] {
 			assert!(
-				ptr + order.size() + HEADER_SIZE <= mem.size(),
+				header_ptr + order.size() + HEADER_SIZE <= mem.size(),
 				"Pointer is looked up in list of free entries, into which
 				only valid values are inserted; qed"
 			);
-
-			self.heads[order.0 as usize] = Link::from_raw(mem.read_le_u64(ptr)?);
-			ptr
+			self.heads[order.0 as usize] = Link::from_raw(mem.read_le_u64(header_ptr)?);
+			header_ptr
 		} else {
 			// Nothing to be freed. Bump.
 			self.bump(order.size(), mem.size())?
 		};
 
-		mem.write_le_u64(ptr, order.0 as u64)?;
+		// Write the order in the occupied header.
+		mem.write_le_u64(header_ptr, order.0 as u64)?;
 
 		self.total_size = self.total_size + order.size() + HEADER_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
 
-		Ok(Pointer::new(ptr + HEADER_SIZE))
+		Ok(Pointer::new(header_ptr + HEADER_SIZE))
 	}
 
 	/// Deallocates the space which was allocated for a pointer.
@@ -247,19 +247,23 @@ impl FreeingBumpHeapAllocator {
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk
 	pub fn deallocate<M: Memory>(&mut self, mut mem: M, ptr: Pointer<u8>) -> Result<(), Error> {
-		let ptr = u32::from(ptr)
+		let header_ptr = u32::from(ptr)
 			.checked_sub(HEADER_SIZE)
 			.ok_or_else(|| error("Invalid pointer for deallocation"))?;
 
+		// Read the order from the occupied header.
 		let order = Order::from_raw(
-			mem.read_le_u64(ptr)?
+			mem.read_le_u64(header_ptr)?
 				.try_into()
 				.map_err(|_| error("read invalid list index"))?,
 		)?;
 
-		mem.write_le_u64(ptr, self.heads[order.0 as usize].into_raw())?;
-		self.heads[order.0 as usize] = Link::Ptr(ptr);
+		// Insert the just freed header into the free list.
+		let prev_head = self.heads[order.0 as usize].into_raw();
+		mem.write_le_u64(header_ptr, prev_head)?;
+		self.heads[order.0 as usize] = Link::Ptr(header_ptr);
 
+		// Do the total_size book keeping.
 		let item_size = order.size();
 		self.total_size = self
 			.total_size
