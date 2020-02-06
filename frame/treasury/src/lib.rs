@@ -756,21 +756,20 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
-		type AccountData = ();
+		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnReapAccount = Balances;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
 }
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnNewAccount = ();
-		type OnReapAccount = System;
 		type Event = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-}
+		type AccountStore = System;
+	}
 	pub struct TenToFourteen;
 	impl Contains<u64> for TenToFourteen {
 		fn contains(n: &u64) -> bool {

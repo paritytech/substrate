@@ -70,15 +70,17 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = pallet_balances::AccountData<u64>;
+	type OnNewAccount = ();
+	type OnReapAccount = Balances;
 }
 
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnReapAccount = System;
-	type OnNewAccount = ();
 	type Event = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = System;
 }
 
 thread_local! {

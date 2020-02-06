@@ -593,7 +593,7 @@ construct_runtime!(
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Config, Storage},
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Utility: pallet_utility::{Module, Call, Storage, Event<T>},
 		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},

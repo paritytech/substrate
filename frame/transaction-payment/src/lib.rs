@@ -302,9 +302,9 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
-		type AccountData = ();
+		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnReapAccount = Balances;
 	}
 
 	parameter_types! {
@@ -313,14 +313,12 @@ pub const ExistentialDeposit: u64 = 0;
 
 	impl pallet_balances::Trait for Runtime {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-}
-
-	thread_local! {
+		type AccountStore = System;
+	}
+thread_local! {
 		static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
 		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
 		static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);

@@ -138,14 +138,16 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = pallet_balances::AccountData<u64>;
+	type OnNewAccount = ();
+	type OnReapAccount = Balances;
 }
 impl pallet_balances::Trait for Test {
 	type Balance = Balance;
-	type OnReapAccount = (System, Staking);
-	type OnNewAccount = ();
 	type Event = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = System;
 }
 parameter_types! {
 	pub const Period: BlockNumber = 1;

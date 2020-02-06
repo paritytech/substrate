@@ -922,22 +922,21 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
-		type AccountData = ();
+		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnReapAccount = Balances;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
 }
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-}
-	parameter_types! {
+		type AccountStore = System;
+	}
+parameter_types! {
 		pub const BasicDeposit: u64 = 10;
 		pub const FieldDeposit: u64 = 10;
 		pub const SubAccountDeposit: u64 = 10;

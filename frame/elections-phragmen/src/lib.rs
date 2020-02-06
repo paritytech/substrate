@@ -811,9 +811,9 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
-		type AccountData = ();
+		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnReapAccount = Balances;
 	}
 
 	parameter_types! {
@@ -822,11 +822,10 @@ mod tests {
 
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnNewAccount = ();
-		type OnReapAccount = System;
 		type Event = Event;
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
+		type AccountStore = frame_system::Module<Test>;
 }
 
 	parameter_types! {
@@ -934,7 +933,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: system::{Module, Call, Event},
+			System: system::{Module, Call, Event<T>},
 			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 			Elections: elections::{Module, Call, Event<T>},
 		}

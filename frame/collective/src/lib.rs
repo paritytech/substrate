@@ -457,7 +457,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: system::{Module, Call, Event},
+			System: system::{Module, Call, Event<T>},
 			Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
 			DefaultCollective: collective::{Module, Call, Event<T>, Origin<T>, Config<T>},
 		}

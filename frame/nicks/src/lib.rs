@@ -285,9 +285,9 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
-		type AccountData = ();
+		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnReapAccount = Balances;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;

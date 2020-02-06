@@ -66,6 +66,9 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnReapAccount = ();
 }
 
 impl_opaque_keys! {

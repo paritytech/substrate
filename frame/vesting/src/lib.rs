@@ -329,20 +329,17 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
-		type AccountData = ();
+		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnReapAccount = Balances;
 	}
-	parameter_types! {
-}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
-		type Event = ();
 		type DustRemoval = ();
+		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
-}
+		type AccountStore = System;
+	}
 	impl Trait for Test {
 		type Event = ();
 		type Currency = Balances;
