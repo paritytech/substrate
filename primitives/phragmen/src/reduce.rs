@@ -335,7 +335,8 @@ fn reduce_all<A: IdentifierT>(
 	for assignment_index in 0..assignments.len() {
 		let voter = assignments[assignment_index].who.clone();
 
-		for dist_index in 0..assignments[assignment_index].distribution.len() {
+		let mut dist_index = 0;
+		loop {
 			// A distribution could have been removed. We don't know for sure. Hence, we check.
 			let maybe_dist = assignments[assignment_index].distribution.get(dist_index);
 			if maybe_dist.is_none() {
@@ -362,14 +363,17 @@ fn reduce_all<A: IdentifierT>(
 			match (voter_exists, target_exists) {
 				(false, false) => {
 					Node::set_parent_of(&target_node, &voter_node);
+					dist_index += 1;
 					continue;
 				},
 				(false, true) => {
 					Node::set_parent_of(&voter_node, &target_node);
+					dist_index += 1;
 					continue;
 				},
 				(true, false) => {
 					Node::set_parent_of(&target_node, &voter_node);
+					dist_index += 1;
 					continue;
 				}
 				(true, true) => { /* don't continue and execute the rest */ }
@@ -381,6 +385,7 @@ fn reduce_all<A: IdentifierT>(
 			if voter_root != target_root {
 				// swap
 				merge(voter_root_path, target_root_path);
+				dist_index += 1;
 			} else {
 				// find common and cycle.
 				let common_count = trailing_common(&voter_root_path, &target_root_path);
@@ -400,6 +405,7 @@ fn reduce_all<A: IdentifierT>(
 				// a cycle's length shall always be multiple of two.
 				#[cfg(feature = "std")]
 				debug_assert_eq!(cycle.len() % 2, 0);
+
 
 				// find minimum of cycle.
 				let mut min_value: ExtendedBalance = Bounded::max_value();
@@ -450,13 +456,14 @@ fn reduce_all<A: IdentifierT>(
 				let min_chain_in_voter = (min_index + min_direction as usize) > target_chunk;
 
 				// walk over the cycle and update the weights
+				let mut should_inc_counter = true;
 				let start_operation_add = ((min_index % 2) + min_direction as usize) % 2 == 1;
 				let mut additional_removed = Vec::new();
 				for i in 0..cycle.len() {
 					let current = cycle[i].borrow();
 					if current.id.role == NodeRole::Voter {
 						let prev = cycle[prev_index(i)].borrow();
-						assignments.iter_mut().filter(|a| a.who == current.id.who).for_each(|ass| {
+						assignments.iter_mut().enumerate().filter(|(_, a)| a.who == current.id.who).for_each(|(target_ass_index, ass)| {
 							ass.distribution.iter_mut().position(|(t, _)| *t == prev.id.who).map(|idx| {
 								let next_value = if i % 2 == 0 {
 									if start_operation_add {
@@ -473,6 +480,9 @@ fn reduce_all<A: IdentifierT>(
 								};
 
 								if next_value.is_zero() {
+									// if the removed edge is from the current assignment, dis_index
+									// should NOT be increased.
+									if target_ass_index == assignment_index { should_inc_counter = false }
 									ass.distribution.remove(idx);
 									num_changed += 1;
 									// only add if this is not the min itself.
@@ -486,7 +496,7 @@ fn reduce_all<A: IdentifierT>(
 						});
 
 						let next = cycle[next_index(i)].borrow();
-						assignments.iter_mut().filter(|a| a.who == current.id.who).for_each(|ass| {
+						assignments.iter_mut().enumerate().filter(|(_, a)| a.who == current.id.who).for_each(|(target_ass_index, ass)| {
 							ass.distribution.iter_mut().position(|(t, _)| *t == next.id.who).map(|idx| {
 								let next_value = if i % 2 == 0 {
 									if start_operation_add {
@@ -503,6 +513,9 @@ fn reduce_all<A: IdentifierT>(
 								};
 
 								if next_value.is_zero() {
+									// if the removed edge is from the current assignment, dis_index
+									// should NOT be increased.
+									if target_ass_index == assignment_index { should_inc_counter = false }
 									ass.distribution.remove(idx);
 									num_changed += 1;
 									if !(i == min_index && min_direction == 1) {
@@ -558,6 +571,8 @@ fn reduce_all<A: IdentifierT>(
 					}
 				}
 
+				// increment the counter if needed.
+				if should_inc_counter { dist_index += 1; }
 			}
 		}
 	}
@@ -1061,5 +1076,108 @@ mod tests {
 				},
 			],
 		)
+	}
+
+	#[test]
+	fn bound_should_be_kept() {
+		let mut assignments = vec![
+			StakedAssignment {
+				who: 1,
+				distribution: vec![
+					(
+						103,
+						72,
+					),
+					(
+						101,
+						53,
+					),
+					(
+						100,
+						83,
+					),
+					(
+						102,
+						38,
+					),
+				],
+			},
+			StakedAssignment {
+				who: 2,
+				distribution: vec![
+					(
+						103,
+						18,
+					),
+					(
+						101,
+						36,
+					),
+					(
+						102,
+						54,
+					),
+					(
+						100,
+						94,
+					),
+				],
+			},
+			StakedAssignment {
+				who: 3,
+				distribution: vec![
+					(
+						100,
+						96,
+					),
+					(
+						101,
+						35,
+					),
+					(
+						102,
+						52,
+					),
+					(
+						103,
+						69,
+					),
+				],
+			},
+			StakedAssignment {
+				who: 4,
+				distribution: vec![
+					(
+						102,
+						34,
+					),
+					(
+						100,
+						47,
+					),
+					(
+						103,
+						91,
+					),
+					(
+						101,
+						73,
+					),
+				],
+			},
+		];
+
+		let winners = vec![
+			103,
+			101,
+			100,
+			102,
+		];
+
+		let n = 4;
+		let m = winners.len() as u32;
+		let num_reduced = reduce_all(&mut assignments);
+		assert!(16 - num_reduced <= n + m);
+
 	}
 }

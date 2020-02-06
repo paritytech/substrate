@@ -1121,6 +1121,7 @@ dependencies = [
  "sp-state-machine 0.8.0",
  "sp-std 2.0.0",
  "sp-trie 2.0.0",
+ "sp-wasm-interface 2.0.0",
 ]
 
 [[package]]
@@ -1135,6 +1136,7 @@ dependencies = [
 name = "sp-phragmen"
 version = "2.0.0"
 dependencies = [
+ "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-phragmen-compact 2.0.0",
  "sp-runtime 2.0.0",
@@ -1252,6 +1254,8 @@ name = "sp-wasm-interface"
 version = "2.0.0"
 dependencies = [
  "impl-trait-for-tuples 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-std 2.0.0",
  "wasmi 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

@@ -43,7 +43,6 @@ fn main() {
 	 			6,
 	 		);
 			reduce_and_compare(&assignments, &winners);
-			dbg!("Spme");
 	 	});
 	}
 }
@@ -58,29 +57,30 @@ fn generate_random_phragmen_assignment(
 	let rr_128 = |a: u128, b: u128| -> u128 { rand::thread_rng().gen_range(a, b) };
 
 	// prefix to distinguish the voter and target account ranges.
-	let target_prefix = 1_000_000_000;
+	let target_prefix = 1_000_000;
+	// let target_prefix = 1000;
 	assert!(voter_count < target_prefix);
 
 	let mut assignments = Vec::with_capacity(voter_count as usize);
 	let mut winners: Vec<AccountId> = Vec::new();
 
-	let all_targets = (target_prefix..=(target_prefix + target_count))
+	let all_targets = (target_prefix..(target_prefix + target_count))
 		.map(|a| a as AccountId)
 		.collect::<Vec<AccountId>>();
 
 	(1..=voter_count).for_each(|acc| {
 		let mut targets_to_chose_from = all_targets.clone();
-		let targets_to_chose = rr(
+		let targets_to_chose = if edge_per_voter_var > 0 { rr(
 			avg_edge_per_voter - edge_per_voter_var,
 			avg_edge_per_voter + edge_per_voter_var,
-		);
+		) } else { avg_edge_per_voter };
 
 		let distribution = (0..targets_to_chose).map(|_| {
 			let target = targets_to_chose_from.remove(rr(0, targets_to_chose_from.len()));
 			if winners.iter().find(|w| **w == target).is_none() {
 				winners.push(target.clone());
 			}
-			(target, rr_128(KSM, 100 * KSM))
+			(target, rr_128(1 * KSM, 100 * KSM))
 		}).collect::<Vec<(AccountId, ExtendedBalance)>>();
 
 		assignments.push(StakedAssignment {
@@ -98,8 +98,8 @@ fn assert_assignments_equal(
 	ass2: &Vec<StakedAssignment<AccountId>>,
 ) {
 
-	let (support_1, _) = build_support_map::<Balance, AccountId>(winners, ass1);
-	let (support_2, _) = build_support_map::<Balance, AccountId>(winners, ass2);
+	let (support_1, _) = build_support_map::<AccountId>(winners, ass1);
+	let (support_2, _) = build_support_map::<AccountId>(winners, ass2);
 
 	for (who, support) in support_1.iter() {
 		assert_eq!(support.total, support_2.get(who).unwrap().total);
@@ -111,12 +111,33 @@ fn reduce_and_compare(
 	winners: &Vec<AccountId>,
 ) {
 	let mut altered_assignment = assignment.clone();
+	let n = assignment.len() as u32;
+	let m = winners.len() as u32;
+
+	let edges_before = assignment_len(&assignment);
 	let num_changed = reduce(&mut altered_assignment);
+	let edges_after = edges_before - num_changed;
+
+	assert!(
+		edges_after <= m + n,
+		"reduce bound not satisfied. n = {}, m = {}, edges after reduce = {} (removed {})",
+		n,
+		m,
+		edges_after,
+		num_changed,
+	);
+
 	assert_assignments_equal(
 		winners,
 		&assignment,
 		&altered_assignment,
 	);
+}
+
+fn assignment_len(assignments: &[StakedAssignment<AccountId>]) -> u32 {
+	let mut counter = 0;
+	assignments.iter().for_each(|x| x.distribution.iter().for_each(|_| counter += 1));
+	counter
 }
 
 fn rr(a: usize, b: usize) -> usize {
