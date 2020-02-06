@@ -1179,14 +1179,14 @@ fn election_present_when_presenter_is_poor_should_not_work() {
 
  				// -3
 				assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
-				assert_eq!(Balances::free_balance(&1), 12);
+				assert_eq!(Balances::free_balance(1), 12);
  				// -2 -5
 				assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0, 15));
 				assert_ok!(Elections::end_block(System::block_number()));
 
 				System::set_block_number(6);
-				assert_eq!(Balances::free_balance(&1), 5);
-				assert_eq!(Balances::reserved_balance(&1), 5);
+				assert_eq!(Balances::free_balance(1), 5);
+				assert_eq!(Balances::reserved_balance(1), 5);
 				if p > 5 {
 					assert_noop!(Elections::present_winner(
 						Origin::signed(1), 1, 10, 0),

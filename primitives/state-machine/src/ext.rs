@@ -231,7 +231,7 @@ where
 	fn child_storage_hash(
 		&self,
 		storage_key: ChildStorageKey,
-		_child_info: ChildInfo,
+		child_info: ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
@@ -239,7 +239,8 @@ where
 			.child_storage(storage_key.as_ref(), key)
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(||
-				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+				self.backend.child_storage_hash(storage_key.as_ref(), child_info, key)
+					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
 		trace!(target: "state-trace", "{:04x}: ChildHash({}) {}={:?}",
@@ -613,6 +614,12 @@ mod tests {
 	type TestBackend = InMemoryBackend<Blake2Hasher>;
 	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend>;
 
+	const CHILD_KEY_1: &[u8] = b":child_storage:default:Child1";
+
+	const CHILD_UUID_1: &[u8] = b"unique_id_1";
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_UUID_1);
+
+
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
 			prospective: vec![
@@ -768,5 +775,51 @@ mod tests {
 
 		// next_overlay exist but next_backend doesn't exist
 		assert_eq!(ext.next_child_storage_key(child(), CHILD_INFO_1, &[40]), Some(vec![50]));
+	}
+
+	#[test]
+	fn child_storage_works() {
+		let mut cache = StorageTransactionCache::default();
+		let child = || ChildStorageKey::from_slice(CHILD_KEY_1).unwrap();
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_child_storage(child().as_ref().to_vec(), CHILD_INFO_1, vec![20], None);
+		overlay.set_child_storage(child().as_ref().to_vec(), CHILD_INFO_1, vec![30], Some(vec![31]));
+		let backend = Storage {
+			top: map![],
+			children: map![
+				child().as_ref().to_vec() => StorageChild {
+					data: map![
+						vec![10] => vec![10],
+						vec![20] => vec![20],
+						vec![30] => vec![40]
+					],
+					child_info: CHILD_INFO_1.to_owned(),
+				}
+			],
+		}.into();
+
+		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
+
+		assert_eq!(ext.child_storage(child(), CHILD_INFO_1, &[10]), Some(vec![10]));
+		assert_eq!(ext.original_child_storage(child(), CHILD_INFO_1, &[10]), Some(vec![10]));
+		assert_eq!(
+			ext.child_storage_hash(child(), CHILD_INFO_1, &[10]),
+			Some(Blake2Hasher::hash(&[10]).as_ref().to_vec()),
+		);
+
+		assert_eq!(ext.child_storage(child(), CHILD_INFO_1, &[20]), None);
+		assert_eq!(ext.original_child_storage(child(), CHILD_INFO_1, &[20]), Some(vec![20]));
+		assert_eq!(
+			ext.child_storage_hash(child(), CHILD_INFO_1, &[20]),
+			None,
+		);
+
+		assert_eq!(ext.child_storage(child(), CHILD_INFO_1, &[30]), Some(vec![31]));
+		assert_eq!(ext.original_child_storage(child(), CHILD_INFO_1, &[30]), Some(vec![40]));
+		assert_eq!(
+			ext.child_storage_hash(child(), CHILD_INFO_1, &[30]),
+			Some(Blake2Hasher::hash(&[31]).as_ref().to_vec()),
+		);
+
 	}
 }

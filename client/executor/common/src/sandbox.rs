@@ -27,7 +27,7 @@ use wasmi::{
 	Externals, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
 	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
 };
-use sp_wasm_interface::{Pointer, WordSize};
+use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 
 /// Index of a function inside the supervisor.
 ///
@@ -144,47 +144,9 @@ impl ImportResolver for Imports {
 /// This trait encapsulates sandboxing capabilities.
 ///
 /// Note that this functions are only called in the `supervisor` context.
-pub trait SandboxCapabilities {
+pub trait SandboxCapabilities: FunctionContext {
 	/// Represents a function reference into the supervisor environment.
 	type SupervisorFuncRef;
-
-	/// Returns a reference to an associated sandbox `Store`.
-	fn store(&self) -> &Store<Self::SupervisorFuncRef>;
-
-	/// Returns a mutable reference to an associated sandbox `Store`.
-	fn store_mut(&mut self) -> &mut Store<Self::SupervisorFuncRef>;
-
-	/// Allocate space of the specified length in the supervisor memory.
-	///
-	/// # Errors
-	///
-	/// Returns `Err` if allocation not possible or errors during heap management.
-	///
-	/// Returns pointer to the allocated block.
-	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>>;
-
-	/// Deallocate space specified by the pointer that was previously returned by [`allocate`].
-	///
-	/// # Errors
-	///
-	/// Returns `Err` if deallocation not possible or because of errors in heap management.
-	///
-	/// [`allocate`]: #tymethod.allocate
-	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()>;
-
-	/// Write `data` into the supervisor memory at offset specified by `ptr`.
-	///
-	/// # Errors
-	///
-	/// Returns `Err` if `ptr + data.len()` is out of bounds.
-	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()>;
-
-	/// Read `len` bytes from the supervisor memory.
-	///
-	/// # Errors
-	///
-	/// Returns `Err` if `ptr + len` is out of bounds.
-	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>>;
 
 	/// Invoke a function in the supervisor environment.
 	///
@@ -270,8 +232,14 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 		// Move serialized arguments inside the memory and invoke dispatch thunk and
 		// then free allocated memory.
 		let invoke_args_len = invoke_args_data.len() as WordSize;
-		let invoke_args_ptr = self.supervisor_externals.allocate(invoke_args_len)?;
-		self.supervisor_externals.write_memory(invoke_args_ptr, &invoke_args_data)?;
+		let invoke_args_ptr = self
+			.supervisor_externals
+			.allocate_memory(invoke_args_len)
+			.map_err(|_| trap("Can't allocate memory in supervisor for the arguments"))?;
+		self
+			.supervisor_externals
+			.write_memory(invoke_args_ptr, &invoke_args_data)
+			.map_err(|_| trap("Can't write invoke args into memory"))?;
 		let result = self.supervisor_externals.invoke(
 			&self.sandbox_instance.dispatch_thunk,
 			invoke_args_ptr,
@@ -279,7 +247,10 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 			state,
 			func_idx,
 		)?;
-		self.supervisor_externals.deallocate(invoke_args_ptr)?;
+		self
+			.supervisor_externals
+			.deallocate_memory(invoke_args_ptr)
+			.map_err(|_| trap("Can't deallocate memory for dispatch thunk's invoke arguments"))?;
 
 		// dispatch_thunk returns pointer to serialized arguments.
 		// Unpack pointer and len of the serialized result data.
@@ -292,9 +263,11 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 		};
 
 		let serialized_result_val = self.supervisor_externals
-			.read_memory(serialized_result_val_ptr, serialized_result_val_len)?;
+			.read_memory(serialized_result_val_ptr, serialized_result_val_len)
+			.map_err(|_| trap("Can't read the serialized result from dispatch thunk"))?;
 		self.supervisor_externals
-			.deallocate(serialized_result_val_ptr)?;
+			.deallocate_memory(serialized_result_val_ptr)
+			.map_err(|_| trap("Can't deallocate memory for dispatch thunk's result"))?;
 
 		deserialize_result(&serialized_result_val)
 	}
@@ -433,6 +406,46 @@ fn decode_environment_definition(
 	))
 }
 
+/// An environment in which the guest module is instantiated.
+pub struct GuestEnvironment {
+	imports: Imports,
+	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
+}
+
+impl GuestEnvironment {
+	/// Decodes an environment definition from the given raw bytes.
+	///
+	/// Returns `Err` if the definition cannot be decoded.
+	pub fn decode<FR>(
+		store: &Store<FR>,
+		raw_env_def: &[u8],
+	) -> std::result::Result<Self, InstantiationError> {
+		let (imports, guest_to_supervisor_mapping) =
+			decode_environment_definition(raw_env_def, &store.memories)?;
+		Ok(Self {
+			imports,
+			guest_to_supervisor_mapping,
+		})
+	}
+}
+
+/// An unregistered sandboxed instance.
+///
+/// To finish off the instantiation the user must call `register`.
+#[must_use]
+pub struct UnregisteredInstance<FR> {
+	sandbox_instance: Rc<SandboxInstance<FR>>,
+}
+
+impl<FR> UnregisteredInstance<FR> {
+	/// Finalizes instantiation of this module.
+	pub fn register(self, store: &mut Store<FR>) -> u32 {
+		// At last, register the instance.
+		let instance_idx = store.register_sandbox_instance(self.sandbox_instance);
+		instance_idx
+	}
+}
+
 /// Instantiate a guest module and return it's index in the store.
 ///
 /// The guest module's code is specified in `wasm`. Environment that will be available to
@@ -447,18 +460,16 @@ fn decode_environment_definition(
 /// - Module in `wasm` is invalid or couldn't be instantiated.
 ///
 /// [`EnvironmentDefinition`]: ../sandbox/struct.EnvironmentDefinition.html
-pub fn instantiate<FE: SandboxCapabilities>(
+pub fn instantiate<'a, FE: SandboxCapabilities>(
 	supervisor_externals: &mut FE,
 	dispatch_thunk: FE::SupervisorFuncRef,
 	wasm: &[u8],
-	raw_env_def: &[u8],
+	host_env: GuestEnvironment,
 	state: u32,
-) -> std::result::Result<u32, InstantiationError> {
-	let (imports, guest_to_supervisor_mapping) =
-		decode_environment_definition(raw_env_def, &supervisor_externals.store().memories)?;
-
+) -> std::result::Result<UnregisteredInstance<FE::SupervisorFuncRef>, InstantiationError> {
 	let module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
-	let instance = ModuleInstance::new(&module, &imports).map_err(|_| InstantiationError::Instantiation)?;
+	let instance = ModuleInstance::new(&module, &host_env.imports)
+		.map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
@@ -466,7 +477,7 @@ pub fn instantiate<FE: SandboxCapabilities>(
 		// for the purpose of running `start` function which should be ok.
 		instance: instance.not_started_instance().clone(),
 		dispatch_thunk,
-		guest_to_supervisor_mapping,
+		guest_to_supervisor_mapping: host_env.guest_to_supervisor_mapping,
 	});
 
 	with_guest_externals(
@@ -480,11 +491,7 @@ pub fn instantiate<FE: SandboxCapabilities>(
 		},
 	)?;
 
-	// At last, register the instance.
-	let instance_idx = supervisor_externals
-		.store_mut()
-		.register_sandbox_instance(sandbox_instance);
-	Ok(instance_idx)
+	Ok(UnregisteredInstance { sandbox_instance })
 }
 
 /// This struct keeps track of all sandboxed components.

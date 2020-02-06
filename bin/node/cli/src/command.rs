@@ -20,7 +20,7 @@ use node_transaction_factory::RuntimeAdapter;
 use crate::{Cli, service, ChainSpec, load_spec, Subcommand, factory_impl::FactoryState};
 
 /// Parse command line arguments into service configuration.
-pub fn run<I, T>(args: I, version: sc_cli::VersionInfo) -> error::Result<()>
+pub fn run<I, T>(args: I, version: VersionInfo) -> error::Result<()>
 where
 	I: Iterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,

@@ -56,8 +56,15 @@ struct TestSetup {
 impl Default for TestSetup {
 	fn default() -> Self {
 		let keystore = KeyStore::new();
-		let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
-		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let client = Arc::new(
+			substrate_test_runtime_client::TestClientBuilder::new()
+				.set_keystore(keystore.clone())
+				.build()
+		);
+		let pool = Arc::new(BasicPool::new(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone())),
+		));
 		TestSetup {
 			runtime: runtime::Runtime::new().expect("Failed to create runtime in test setup"),
 			client,
