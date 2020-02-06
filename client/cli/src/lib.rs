@@ -856,7 +856,7 @@ mod tests {
 		} else {
 			panic!("invalid config.database variant");
 		}
-		assert_ne!(config.name, "");
+		assert!(!config.name.is_empty());
 		assert!(config.network.config_path.is_some());
 		assert!(!config.network.listen_addresses.is_empty());
 	}
