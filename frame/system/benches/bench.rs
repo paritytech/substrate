@@ -46,6 +46,7 @@ impl_outer_origin!{
 
 impl_outer_event! {
 	pub enum Event for Runtime {
+		system<T>,
 		module,
 	}
 }
