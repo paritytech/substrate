@@ -525,7 +525,7 @@ publish-gh-doc:
       insteadOf = "https://github.com/"
       EOC
     - unset GITHUB_TOKEN
-    - git clone https://github.com/substrate-developer-hub/rustdocs.git
+    - git clone --depth 1 https://github.com/substrate-developer-hub/rustdocs.git
     - rsync -ax --delete ./crate-docs/ ./rustdocs/${CI_COMMIT_REF_NAME}/
     - cd ./rustdocs; git add .
     - git commit -m "update rustdoc ${CI_COMMIT_REF_NAME}"
