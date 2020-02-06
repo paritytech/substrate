@@ -127,11 +127,17 @@ impl FreeingBumpHeapAllocator {
 			.expect("size of Wasm linear memory is <2^32; qed");
 		let max_heap_size = mem_size - self.ptr_offset;
 
-		if size > MAX_POSSIBLE_ALLOCATION {
+		// Clamp the size, so that the following holds:
+		//
+		// MIN_POSSIBLE_ALLOCATION <= size <= MAX_POSSIBLE_ALLOCATION
+		let size = if size > MAX_POSSIBLE_ALLOCATION {
 			return Err(Error::RequestedAllocationTooLarge);
-		}
+		} else if size < MIN_POSSIBLE_ALLOCATION {
+			MIN_POSSIBLE_ALLOCATION
+		};
 
-		let size = size.max(MIN_POSSIBLE_ALLOCATION);
+		// Take the next power of two from the given requested size. It returns the same size if the
+		// size is already a power of two.
 		let item_size = size.next_power_of_two();
 		if item_size + PREFIX_SIZE + self.total_size > max_heap_size {
 			return Err(Error::AllocatorOutOfSpace);
