@@ -24,6 +24,7 @@ use std::fmt::Display;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
+use crate::BenchmarkParameter;
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -1322,6 +1323,15 @@ pub trait BlockIdTo<Block: self::Block> {
 pub trait Benchmarking<T> {
 	/// Run the benchmarks for this module.
 	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Vec<T>;
+}
+
+/// The required setup for creating a benchmark.
+pub trait BenchmarkingSetup<T, Call, RawOrigin> {
+	/// Return the components and their ranges which should be tested in this benchmark.
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
+
+	/// Set up the storage, and prepare a call and caller to test in a single run of the benchmark.
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> (Call, RawOrigin);
 }
 
 #[cfg(test)]

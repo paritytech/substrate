@@ -3506,6 +3506,7 @@ dependencies = [
  "pallet-authorship",
  "pallet-babe",
  "pallet-balances",
+ "pallet-benchmark",
  "pallet-collective",
  "pallet-contracts",
  "pallet-contracts-primitives",
@@ -3941,6 +3942,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-benchmark"
+version = "2.0.0"
+dependencies = [
+ "enumflags2",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-collective"
 version = "2.0.0"
 dependencies = [
@@ -4165,7 +4182,6 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "serde",
- "sp-api",
  "sp-core",
  "sp-io",
  "sp-runtime",

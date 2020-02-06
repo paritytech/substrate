@@ -21,26 +21,17 @@ use super::*;
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{BenchmarkResults, BenchmarkParameter};
-use sp_runtime::traits::{Bounded, Benchmarking};
+use sp_runtime::traits::{Bounded, Benchmarking, BenchmarkingSetup, Dispatchable};
 
 use crate::Module as Identity;
 
-pub fn account<T: Trait>(index: u32) -> T::AccountId {
+fn account<T: Trait>(index: u32) -> T::AccountId {
 	let entropy = (b"benchmark", index).using_encoded(blake2_256);
 	T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 }
 
-trait BenchmarkingSetup<T> where
-	T: Trait,
-{
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
-
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> (crate::Call<T>, RawOrigin<T::AccountId>);
-
-}
-
 struct SetIdentity;
-impl<T: Trait> BenchmarkingSetup<T> for SetIdentity {
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetIdentity {
 
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
@@ -99,7 +90,7 @@ impl<T: Trait> BenchmarkingSetup<T> for SetIdentity {
 }
 
 struct AddRegistrar;
-impl<T: Trait> BenchmarkingSetup<T> for AddRegistrar {
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for AddRegistrar {
 
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
@@ -138,20 +129,20 @@ enum SelectedBenchmark {
 	AddRegistrar,
 }
 
-impl<T: Trait> BenchmarkingSetup<T> for SelectedBenchmark {
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>
 	{
 		match self {
-			Self::SetIdentity => <SetIdentity as BenchmarkingSetup<T>>::components(&SetIdentity),
-			Self::AddRegistrar => <AddRegistrar as BenchmarkingSetup<T>>::components(&AddRegistrar),
+			Self::SetIdentity => <SetIdentity as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&SetIdentity),
+			Self::AddRegistrar => <AddRegistrar as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&AddRegistrar),
 		}
 	}
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> (crate::Call<T>, RawOrigin<T::AccountId>)
 	{
 		match self {
-			Self::SetIdentity => <SetIdentity as BenchmarkingSetup<T>>::instance(&SetIdentity, components),
-			Self::AddRegistrar => <AddRegistrar as BenchmarkingSetup<T>>::instance(&AddRegistrar, components),
+			Self::SetIdentity => <SetIdentity as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&SetIdentity, components),
+			Self::AddRegistrar => <AddRegistrar as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&AddRegistrar, components),
 		}
 	}
 }
@@ -165,8 +156,12 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 			_ => return Vec::new(),
 		};
 
+		// Warm up the DB?
+		sp_io::benchmarking::commit_db();
+		sp_io::benchmarking::wipe_db();
+
 		// first one is set_identity.		
-		let components = <SelectedBenchmark as BenchmarkingSetup<T>>::components(&selected_benchmark);
+		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);		
 		// results go here
 		let mut results: Vec<BenchmarkResults> = Vec::new();
 		// Select the component we will be benchmarking. Each component will be benchmarked.
@@ -188,7 +183,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					sp_std::if_std!{
 						println!("STEP {:?} REPEAT {:?}", s, r);
 					}
-					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T>>::instance(&selected_benchmark, &c);
+					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c);
 					sp_io::benchmarking::commit_db();
 					let start = sp_io::benchmarking::current_time();
 					assert_eq!(call.dispatch(caller.into()), Ok(()));

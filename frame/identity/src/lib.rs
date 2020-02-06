@@ -70,7 +70,7 @@ use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug};
-use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput, Dispatchable};
+use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
