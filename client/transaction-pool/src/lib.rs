@@ -53,6 +53,7 @@ pub struct BasicPool<PoolApi, Block>
 	api: Arc<PoolApi>,
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
 	revalidation_queue: Arc<revalidation::RevalidationQueue<PoolApi>>,
+	background_task: Mutex<Option<Pin<Box<dyn Future<Output=()> + Send>>>>,
 }
 
 /// Type of revalidation.
@@ -94,13 +95,17 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	) -> Self {
 
 		let pool = Arc::new(sc_transaction_graph::Pool::new(options, pool_api.clone()));
-		let revalidation_queue = match revalidation_type {
-			RevalidationType::Light => revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()),
-			RevalidationType::Full => revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone()),
+		let (revalidation_queue, background_task) = match revalidation_type {
+			RevalidationType::Light => (revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()), None),
+			RevalidationType::Full => {
+				let (queue, background) = revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone());
+				(queue, Some(background))
+			},
 		};
 		BasicPool {
 			api: pool_api,
 			pool,
+			background_task: background_task.into(),
 			revalidation_queue: Arc::new(revalidation_queue),
 			revalidation_strategy: Arc::new(Mutex::new(
 				match revalidation_type {
@@ -109,12 +114,18 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 				}
 			)),
 		}
-
 	}
 
 	/// Gets shared reference to the underlying pool.
 	pub fn pool(&self) -> &Arc<sc_transaction_graph::Pool<PoolApi>> {
 		&self.pool
+	}
+
+	#[cfg(test)]
+	pub fn spawn_maintaince_local(&self) -> futures::executor::ThreadPool {
+		let thread_pool = futures::executor::ThreadPool::new().unwrap();
+		thread_pool.spawn_ok(self.background_task().expect("there should be a task for tests"));
+		thread_pool
 	}
 }
 
@@ -193,6 +204,10 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 
 	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>> {
 		self.pool.ready_transaction(hash)
+	}
+
+	fn background_task(&self) -> Option<Pin<Box<dyn Future<Output = ()> + Send>>> {
+		self.background_task.lock().take()
 	}
 }
 

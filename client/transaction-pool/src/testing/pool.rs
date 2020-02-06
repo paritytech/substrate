@@ -32,8 +32,10 @@ fn pool() -> Pool<TestApi> {
 	Pool::new(Default::default(), TestApi::with_alice_nonce(209).into())
 }
 
-fn maintained_pool() -> BasicPool<TestApi, Block> {
-	BasicPool::new(Default::default(), std::sync::Arc::new(TestApi::with_alice_nonce(209)))
+fn maintained_pool() -> (BasicPool<TestApi, Block>, futures::executor::ThreadPool) {
+	let pool = BasicPool::new(Default::default(), std::sync::Arc::new(TestApi::with_alice_nonce(209)));
+	let guard = pool.spawn_maintaince_local();
+	(pool, guard)
 }
 
 #[test]
@@ -152,7 +154,7 @@ fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 fn should_prune_old_during_maintenance() {
 	let xt = uxt(Alice, 209);
 
-	let pool = maintained_pool();
+	let (pool, _guard) = maintained_pool();
 
 	block_on(pool.submit_one(&BlockId::number(0), xt.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
@@ -168,7 +170,7 @@ fn should_revalidate_during_maintenance() {
 	let xt1 = uxt(Alice, 209);
 	let xt2 = uxt(Alice, 210);
 
-	let pool = maintained_pool();
+	let (pool, _guard) = maintained_pool();
 	block_on(pool.submit_one(&BlockId::number(0), xt1.clone())).expect("1. Imported");
 	block_on(pool.submit_one(&BlockId::number(0), xt2.clone())).expect("2. Imported");
 	assert_eq!(pool.status().ready, 2);
@@ -191,7 +193,7 @@ fn should_resubmit_from_retracted_during_maintaince() {
 	let xt = uxt(Alice, 209);
 	let retracted_hash = Hash::random();
 
-	let pool = maintained_pool();
+	let (pool, _guard) = maintained_pool();
 
 	block_on(pool.submit_one(&BlockId::number(0), xt.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
@@ -208,7 +210,7 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	let xt = uxt(Alice, 209);
 	let retracted_hash = Hash::random();
 
-	let pool = maintained_pool();
+	let (pool, _guard) = maintained_pool();
 
 	block_on(pool.submit_one(&BlockId::number(0), xt.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
@@ -232,7 +234,7 @@ fn should_push_watchers_during_maintaince() {
 	}
 
 	// given
-	let pool = maintained_pool();
+	let (pool, _guard) = maintained_pool();
 
 	let tx0 = alice_uxt(0);
 	let watcher0 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx0.clone())).unwrap();

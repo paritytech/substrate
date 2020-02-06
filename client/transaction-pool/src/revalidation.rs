@@ -16,7 +16,8 @@
 
 //! Pool periodic revalidation.
 
-use std::{sync::Arc, collections::{HashMap, HashSet, BTreeMap}};
+use std::{sync::Arc, pin::Pin, collections::{HashMap, HashSet, BTreeMap}};
+
 use sc_transaction_graph::{ChainApi, Pool, ExHash, NumberFor, ValidatedTransaction, Transaction};
 use sp_runtime::traits::{Zero, SaturatedConversion};
 use sp_runtime::generic::BlockId;
@@ -214,11 +215,6 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 	}
 }
 
-/// Background state for revalidation queue.
-struct BackgroundConfig<Api: ChainApi> {
-	to_worker: mpsc::UnboundedSender<WorkerPayload<Api>>,
-	_spawner: futures::executor::ThreadPool,
-}
 
 /// Revalidation queue.
 ///
@@ -227,7 +223,7 @@ struct BackgroundConfig<Api: ChainApi> {
 pub struct RevalidationQueue<Api: ChainApi> {
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
-	background: Option<BackgroundConfig<Api>>,
+	background: Option<mpsc::UnboundedSender<WorkerPayload<Api>>>,
 }
 
 impl<Api: ChainApi> RevalidationQueue<Api>
@@ -244,25 +240,21 @@ where
 	}
 
 	/// New revalidation queue with background worker.
-	pub fn new_background(api: Arc<Api>, pool: Arc<Pool<Api>>) -> Self {
-		let spawner = futures::executor::ThreadPool::builder()
-			.name_prefix("txpool-worker")
-			.pool_size(1)
-			.create()
-			.expect("Creating worker thread task failed");
-
+	pub fn new_background(api: Arc<Api>, pool: Arc<Pool<Api>>) ->
+		(Self, Pin<Box<dyn Future<Output=()> + Send>>)
+	{
 		let (to_worker, from_queue) = mpsc::unbounded();
 
 		let worker = RevalidationWorker::new(api.clone(), pool.clone());
-		spawner.spawn_ok(worker.run(from_queue));
 
-		Self {
-			api,
-			pool,
-			background: Some(
-				BackgroundConfig { _spawner: spawner, to_worker }
-			),
-		}
+		let slf =
+			Self {
+				api,
+				pool,
+				background: Some(to_worker),
+			};
+
+		(slf, worker.run(from_queue).boxed())
 	}
 
 	/// Queue some transaction for later revalidation.
@@ -271,8 +263,8 @@ where
 	/// If queue configured without background worker, this will resolve after
 	/// revalidation is actually done.
 	pub async fn revalidate_later(&self, at: NumberFor<Api>, transactions: Vec<ExHash<Api>>) {
-		if let Some(ref background) = self.background {
-			background.to_worker.unbounded_send(WorkerPayload { at, transactions })
+		if let Some(ref to_worker) = self.background {
+			to_worker.unbounded_send(WorkerPayload { at, transactions })
 				.expect("background task is never dropped");
 			return;
 		} else {

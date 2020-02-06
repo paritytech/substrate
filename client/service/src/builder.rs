@@ -816,6 +816,10 @@ ServiceBuilder<
 			executor: SpawnTaskHandle { sender: to_spawn_tx.clone(), on_exit: exit.clone() },
 		});
 
+		if let Some(background_task) = transaction_pool.background_task() {
+			let _ = to_spawn_tx.unbounded_send((background_task, "txpool-background".into()));
+		}
+
 		let protocol_id = {
 			let protocol_id_full = match chain_spec.protocol_id() {
 				Some(pid) => pid,
@@ -890,7 +894,7 @@ ServiceBuilder<
 						);
 						let _ = to_spawn_tx_.unbounded_send((
 							Box::pin(future),
-							From::from("txpool-maintain")
+							"txpool-maintain".into(),
 						));
 					}
 
@@ -903,7 +907,7 @@ ServiceBuilder<
 						);
 						let _ = to_spawn_tx_.unbounded_send((
 							Box::pin(future),
-							From::from("offchain-on-block")
+							"offchain-on-block".into(),
 						));
 					}
 
@@ -911,7 +915,7 @@ ServiceBuilder<
 				});
 			let _ = to_spawn_tx.unbounded_send((
 				Box::pin(select(events, exit.clone()).map(drop)),
-				From::from("txpool-and-offchain-notif")
+				"txpool-and-offchain-notif".into(),
 			));
 		}
 
@@ -934,7 +938,7 @@ ServiceBuilder<
 
 			let _ = to_spawn_tx.unbounded_send((
 				Box::pin(select(events, exit.clone()).map(drop)),
-				From::from("telemetry-on-block")
+				"telemetry-on-block".into(),
 			));
 		}
 
@@ -1001,7 +1005,7 @@ ServiceBuilder<
 		});
 		let _ = to_spawn_tx.unbounded_send((
 			Box::pin(select(tel_task, exit.clone()).map(drop)),
-			From::from("telemetry-periodic-send")
+			"telemetry-periodic-send".into(),
 		));
 
 		// Periodically send the network state to the telemetry.
@@ -1017,7 +1021,7 @@ ServiceBuilder<
 		});
 		let _ = to_spawn_tx.unbounded_send((
 			Box::pin(select(tel_task_2, exit.clone()).map(drop)),
-			From::from("telemetry-periodic-network-state")
+			"telemetry-periodic-network-state".into(),
 		));
 
 		// RPC
@@ -1103,7 +1107,7 @@ ServiceBuilder<
 				system_rpc_rx,
 				has_bootnodes,
 			), exit.clone()).map(drop)),
-			From::from("network-worker")
+			"network-worker".into(),
 		));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>> = Default::default();
@@ -1147,7 +1151,7 @@ ServiceBuilder<
 				});
 			let _ = to_spawn_tx.unbounded_send((Box::pin(select(
 				future, exit.clone()
-			).map(drop)), From::from("telemetry-worker")));
+			).map(drop)), "telemetry-worker".into()));
 			telemetry
 		});
 
@@ -1158,7 +1162,7 @@ ServiceBuilder<
 				exit.clone()
 			).map(drop);
 
-			let _ = to_spawn_tx.unbounded_send((Box::pin(future), From::from("grafana-server")));
+			let _ = to_spawn_tx.unbounded_send((Box::pin(future), "grafana-server".into()));
 		}
 
 		// Instrumentation
