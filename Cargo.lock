@@ -6214,6 +6214,7 @@ dependencies = [
  "log 0.4.8",
  "parity-multiaddr 0.5.0",
  "parity-scale-codec",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
  "sc-chain-spec",
  "sc-client",
