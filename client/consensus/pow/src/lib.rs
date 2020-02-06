@@ -63,8 +63,8 @@ pub enum Error<B: BlockT> {
 	HeaderUnsealed(B::Hash),
 	#[display(fmt = "PoW validation error: invalid seal")]
 	InvalidSeal,
-	#[display(fmt = "PoW validation error: invalid difficulty")]
-	InvalidDifficulty,
+	#[display(fmt = "PoW validation error: preliminary verification failed")]
+	FailedPreliminaryVerify,
 	#[display(fmt = "Rejecting block too far in future")]
 	TooFarInFuture,
 	#[display(fmt = "Fetching best header failed using select chain: {:?}", _0)]
@@ -154,18 +154,23 @@ pub trait PowAlgorithm<B: BlockT> {
 	/// This function will be called twice during the import process, so the implementation
 	/// should be properly cached.
 	fn difficulty(&self, parent: &BlockId<B>) -> Result<Self::Difficulty, Error<B>>;
-	/// Verify that the seal is valid against given pre hash.
-	fn verify_seal(
+	/// Verify that the seal is valid against given pre hash when parent block is not yet imported.
+	///
+	/// None means that preliminary verify is not available for this algorithm.
+	fn preliminary_verify(
 		&self,
+		_pre_hash: &B::Hash,
+		_seal: &Seal,
+	) -> Result<Option<bool>, Error<B>> {
+		Ok(None)
+	}
+	/// Verify that the difficulty is valid against given seal.
+	fn verify(
+		&self,
+		parent: &BlockId<B>,
 		pre_hash: &B::Hash,
 		seal: &Seal,
-	) -> Result<bool, Error<B>>;
-	/// Verify that the difficulty is valid against given seal.
-	fn verify_difficulty(
-		&self,
 		difficulty: Self::Difficulty,
-		parent: &BlockId<B>,
-		seal: &Seal,
 	) -> Result<bool, Error<B>>;
 	/// Mine a seal that satisfies the given difficulty.
 	fn mine(
@@ -322,12 +327,14 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 			None => self.algorithm.difficulty(&BlockId::hash(parent_hash))?,
 		};
 
-		if !self.algorithm.verify_difficulty(
-			difficulty,
+		let pre_hash = block.header.hash();
+		if !self.algorithm.verify(
 			&BlockId::hash(parent_hash),
+			&pre_hash,
 			&inner_seal,
+			difficulty,
 		)? {
-			return Err(Error::<B>::InvalidDifficulty.into())
+			return Err(Error::<B>::InvalidSeal.into())
 		}
 
 		aux.difficulty = difficulty;
@@ -379,11 +386,8 @@ impl<B: BlockT, Algorithm> PowVerifier<B, Algorithm> {
 
 		let pre_hash = header.hash();
 
-		if !self.algorithm.verify_seal(
-			&pre_hash,
-			&inner_seal,
-		)? {
-			return Err(Error::InvalidSeal);
+		if !self.algorithm.preliminary_verify(&pre_hash, &inner_seal)?.unwrap_or(true) {
+			return Err(Error::FailedPreliminaryVerify);
 		}
 
 		Ok((header, seal))
