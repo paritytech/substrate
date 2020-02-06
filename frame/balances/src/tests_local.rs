@@ -86,7 +86,7 @@ impl Trait for Test {
 	type DustRemoval = ();
 	type Event = ();
 	type ExistentialDeposit = ExistentialDeposit;
-type AccountStore = StorageMapShim<
+	type AccountStore = StorageMapShim<
 		super::Account<Test>,
 		system::CallOnCreatedAccount<Test>,
 		system::CallKillAccount<Test>,

@@ -86,7 +86,7 @@ impl Trait for Test {
 	type DustRemoval = ();
 	type Event = ();
 	type ExistentialDeposit = ExistentialDeposit;
-type AccountStore = system::Module<Test>;
+	type AccountStore = system::Module<Test>;
 }
 
 pub struct ExtBuilder {
