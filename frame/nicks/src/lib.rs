@@ -285,18 +285,20 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnReapAccount = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
-}
+	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-}
+		type AccountStore = System;
+	}
 	parameter_types! {
 		pub const ReservationFee: u64 = 2;
 		pub const MinLength: usize = 3;

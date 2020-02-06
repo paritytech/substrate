@@ -62,6 +62,9 @@ impl frame_system::Trait for Test {
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnReapAccount = ();
 }
 
 impl Trait for Test {
