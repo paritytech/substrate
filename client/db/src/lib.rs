@@ -685,11 +685,8 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 		if child_info.is_top_trie() {
 			self.db.get(columns::STATE, key)
 		} else {
-			let keyspace = child_info.keyspace();
-			let mut key_buffer = vec![0; keyspace.len() + key.len()];
-			key_buffer[..keyspace.len()].copy_from_slice(keyspace);
-			key_buffer[keyspace.len()..].copy_from_slice(key);
-			self.db.get(columns::STATE, &key_buffer[..])
+			let mut keyspace = Keyspaced::new(child_info.keyspace());
+			self.db.get(columns::STATE, keyspace.prefix_key(key))
 		}.map(|r| r.map(|v| v.to_vec()))
 	}
 }
@@ -1332,7 +1329,7 @@ impl<Block: BlockT> Backend<Block> {
 }
 
 fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::CommitSet<Vec<u8>>) {
-	let mut key_buffer = Vec::new();
+	let mut keyspace = Keyspaced::new(&[]);
 	for child_data in commit.data.into_iter() {
 		if child_data.0.is_top_trie() {
 			// empty prefix
@@ -1343,19 +1340,12 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::Comm
 				transaction.delete(columns::STATE, &key[..]);
 			}
 		} else {
-			let keyspace = child_data.0.keyspace();
-			let keyspace_len = keyspace.len();
-			key_buffer.resize(keyspace_len, 0);
-			key_buffer[..keyspace_len].copy_from_slice(keyspace);
+			keyspace.change_keyspace(child_data.0.keyspace());
 			for (key, val) in child_data.1.inserted.into_iter() {
-				key_buffer.resize(keyspace_len + key.len(), 0);
-				key_buffer[keyspace_len..].copy_from_slice(&key[..]);
-				transaction.put(columns::STATE, &key_buffer[..], &val);
+				transaction.put(columns::STATE, keyspace.prefix_key(key.as_slice()), &val);
 			}
 			for key in child_data.1.deleted.into_iter() {
-				key_buffer.resize(keyspace_len + key.len(), 0);
-				key_buffer[keyspace_len..].copy_from_slice(&key[..]);
-				transaction.delete(columns::STATE, &key_buffer[..]);
+				transaction.delete(columns::STATE, keyspace.prefix_key(key.as_slice()));
 			}
 		}
 	}
@@ -1681,6 +1671,33 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 }
 
 impl<Block: BlockT> sc_client_api::backend::LocalBackend<Block> for Backend<Block> {}
+
+/// Rules for storing a default child trie with unique id.
+struct Keyspaced {
+	keyspace_len: usize,
+	buffer: Vec<u8>,
+}
+
+impl Keyspaced {
+	fn new(keyspace: &[u8]) -> Self {
+		Keyspaced {
+			keyspace_len: keyspace.len(),
+			buffer: keyspace.to_vec(),
+		}
+	}
+
+	fn change_keyspace(&mut self, new_keyspace: &[u8]) {
+		self.keyspace_len = new_keyspace.len();
+		self.buffer.resize(new_keyspace.len(), 0);
+		self.buffer[..new_keyspace.len()].copy_from_slice(new_keyspace);
+	}
+
+	fn prefix_key(&mut self, key: &[u8]) -> &[u8] {
+		self.buffer.resize(self.keyspace_len + key.len(), 0);
+		self.buffer[self.keyspace_len..].copy_from_slice(key);
+		self.buffer.as_slice()
+	}
+}
 
 #[cfg(test)]
 pub(crate) mod tests {

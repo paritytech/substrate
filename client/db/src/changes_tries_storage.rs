@@ -530,7 +530,6 @@ mod tests {
 	};
 	use sp_blockchain::HeaderBackend as BlockchainHeaderBackend;
 	use sp_core::H256;
-	use sp_core::storage::ChildInfo;
 	use sp_runtime::testing::{Digest, Header};
 	use sp_runtime::traits::{Hash, BlakeTwo256};
 	use sp_state_machine::{ChangesTrieRootsStorage, ChangesTrieStorage};
