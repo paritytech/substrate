@@ -3391,6 +3391,7 @@ dependencies = [
  "sc-client-api",
  "sc-client-db",
  "sc-consensus-babe",
+ "sc-consensus-epochs",
  "sc-finality-grandpa",
  "sc-keystore",
  "sc-network",
