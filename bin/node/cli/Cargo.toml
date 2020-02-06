@@ -92,6 +92,7 @@ browser-utils = { path = "../../../utils/browser", optional = true }
 [dev-dependencies]
 sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
 sc-consensus-babe = { version = "0.8", features = ["test-helpers"], path = "../../../client/consensus/babe" }
+sc-consensus-epochs = { version = "0.8", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 futures = "0.3.1"
 tempfile = "3.1.0"

@@ -65,7 +65,10 @@ pub use sp_consensus_babe::{
 	digests::{PreDigest, CompatibleDigestItem, NextEpochDescriptor},
 };
 pub use sp_consensus::SyncOracle;
-use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration}};
+use std::{
+	collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration},
+	any::Any, borrow::Cow
+};
 use sp_consensus_babe;
 use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
@@ -103,7 +106,9 @@ use log::{warn, debug, info, trace};
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
 };
-use sc_consensus_epochs::{descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT};
+use sc_consensus_epochs::{
+	descendent_query, ViableEpoch, SharedEpochChanges, EpochChangesFor, Epoch as EpochT
+};
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	HeaderBackend, ProvideCache, HeaderMetadata
@@ -196,10 +201,6 @@ enum Error<B: BlockT> {
 	FetchParentHeader(sp_blockchain::Error),
 	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]
 	ExpectedEpochChange(B::Hash, u64),
-	#[display(fmt = "Could not look up epoch: {:?}", _0)]
-	CouldNotLookUpEpoch(Box<fork_tree::Error<sp_blockchain::Error>>),
-	#[display(fmt = "Block {} is not valid under any epoch.", _0)]
-	BlockNotValid(B::Hash),
 	#[display(fmt = "Unexpected epoch change")]
 	UnexpectedEpochChange,
 	#[display(fmt = "Parent block of {} has no associated weight", _0)]
@@ -230,6 +231,16 @@ macro_rules! babe_info {
 		}
 	};
 }
+
+
+/// Intermediate value passed to block importer.
+pub struct BabeIntermediate {
+	/// The epoch data, if available.
+	pub epoch: ViableEpoch<Epoch>,
+}
+
+/// Intermediate key for Babe engine.
+pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
@@ -394,7 +405,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
-	type EpochData = Epoch;
+	type EpochData = ViableEpoch<Epoch>;
 	type Claim = (PreDigest, AuthorityPair);
 	type SyncOracle = SO;
 	type CreateProposer = Pin<Box<
@@ -424,24 +435,23 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			|slot| self.config.genesis_epoch(slot)
 		)
 			.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
-			.map(|e| e.into_inner())
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 	}
 
 	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize {
-		epoch_data.authorities.len()
+		epoch_data.as_ref().authorities.len()
 	}
 
 	fn claim_slot(
 		&self,
 		_parent_header: &B::Header,
 		slot_number: SlotNumber,
-		epoch_data: &Epoch,
+		epoch_data: &ViableEpoch<Epoch>,
 	) -> Option<Self::Claim> {
 		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
 		let s = authorship::claim_slot(
 			slot_number,
-			epoch_data,
+			epoch_data.as_ref(),
 			&*self.config,
 			&self.keystore,
 		);
@@ -469,8 +479,9 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		Vec<B::Extrinsic>,
 		StorageChanges<I::Transaction, B>,
 		Self::Claim,
+		Self::EpochData,
 	) -> sp_consensus::BlockImportParams<B, I::Transaction> + Send> {
-		Box::new(|header, header_hash, body, storage_changes, (_, pair)| {
+		Box::new(|header, header_hash, body, storage_changes, (_, pair), epoch| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let signature = pair.sign(header_hash.as_ref());
@@ -485,7 +496,14 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 				storage_changes: Some(storage_changes),
 				finalized: false,
 				auxiliary: Vec::new(), // block-weight is written in block import.
-				intermediates: Default::default(),
+				intermediates: {
+					let mut intermediates = HashMap::new();
+					intermediates.insert(
+						Cow::from(INTERMEDIATE_KEY),
+						Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+					);
+					intermediates
+				},
 				fork_choice: None,
 				allow_missing_state: false,
 				import_existing: false,
@@ -634,6 +652,19 @@ pub struct BabeLink<Block: BlockT> {
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	config: Config,
 }
+
+impl<Block: BlockT> BabeLink<Block> {
+	/// Get the epoch changes of this link.
+	pub fn epoch_changes(&self) -> &SharedEpochChanges<Block, Epoch> {
+		&self.epoch_changes
+	}
+
+	/// Get the config of this link.
+	pub fn config(&self) -> &Config {
+		&self.config
+	}
+}
+
 /// A verifier for Babe blocks.
 pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA> {
 	client: Arc<Client<B, E, Block, RA>>,
@@ -830,6 +861,14 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 
+				let mut intermediates = HashMap::new();
+				intermediates.insert(
+					Cow::from(INTERMEDIATE_KEY),
+					Box::new(BabeIntermediate {
+						epoch,
+					}) as Box<dyn Any>,
+				);
+
 				let block_import_params = BlockImportParams {
 					origin,
 					header: pre_header,
@@ -839,7 +878,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
-					intermediates: Default::default(),
+					intermediates,
 					fork_choice: None,
 					allow_missing_state: false,
 					import_existing: false,
@@ -997,20 +1036,11 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 					))?
 			};
 
-			let epoch = epoch_changes.epoch_for_child_of(
-				descendent_query(&*self.client),
-				&parent_hash,
-				*parent_header.number(),
-				slot_number,
-				|slot| self.config.genesis_epoch(slot),
-			)
-				.map_err(|e: fork_tree::Error<sp_blockchain::Error>| ConsensusError::ChainLookup(
-					babe_err(Error::<Block>::CouldNotLookUpEpoch(Box::new(e))).into()
-				))?
-				.ok_or_else(|| ConsensusError::ClientImport(
-					babe_err(Error::<Block>::BlockNotValid(hash)).into()
-				))?;
+			let intermediate = block.take_intermediate::<BabeIntermediate>(
+				INTERMEDIATE_KEY
+			)?;
 
+			let epoch = intermediate.epoch;
 			let first_in_epoch = parent_slot < epoch.as_ref().start_slot;
 			(epoch, first_in_epoch, parent_weight)
 		};
