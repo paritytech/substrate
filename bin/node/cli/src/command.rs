@@ -57,6 +57,17 @@ where
 				_ => panic!("Factory is only supported for development and local testnet."),
 			}
 
+			// Log timings through tracing.
+			if let Some(tracing_targets) = cli_args.shared_params.tracing_targets.as_ref() {
+				let subscriber = sc_tracing::ProfilingSubscriber::new(
+					cli_args.shared_params.tracing_receiver.into(), tracing_targets
+				);
+				match tracing::subscriber::set_global_default(subscriber) {
+					Ok(_) => (),
+					Err(e) => panic!("Unable to set global default subscriber {}", e),
+				}
+			}
+
 			let factory_state = FactoryState::new(
 				cli_args.mode.clone(),
 				cli_args.num,
