@@ -75,8 +75,10 @@ thread_local! {
 
 pub struct TestSessionHandler;
 impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
-	// EVEN if no tests break, I must have broken something here... TODO
-	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[dummy_sr25519::AuthorityId::ID];
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[
+		<UintAuthorityId as RuntimeAppPublic>::ID,
+		dummy_sr25519::AuthorityId::ID,
+	];
 
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
 
@@ -248,7 +250,7 @@ impl sp_runtime::BoundToRuntimeAppPublic for Babe {
 // in here.
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
-		// pub foo: UintAuthorityId,
+		pub foo: UintAuthorityId,
 		pub babe: Babe,
 	}
 }
@@ -321,8 +323,8 @@ pub(crate) mod dummy_sr25519 {
 	use super::{LOCAL_KEY_ACCOUNT, AccountId};
 
 	mod app_sr25519 {
-		use sp_application_crypto::{app_crypto, key_types::DUMMY, sr25519};
-		app_crypto!(sr25519, DUMMY);
+		use sp_application_crypto::{app_crypto, KeyTypeId, sr25519};
+		app_crypto!(sr25519, KeyTypeId(*b"ebab"));
 	}
 
 	pub type AuthoritySignature = app_sr25519::Signature;
@@ -477,6 +479,7 @@ impl ExtBuilder {
 		LOCAL_KEY_ACCOUNT.with(|v| *v.borrow_mut() = self.local_key_account);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
+		env_logger::init();
 		self.set_associated_constants();
 		let mut storage = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
@@ -548,7 +551,7 @@ impl ExtBuilder {
 			keys: validators.iter().map(|x| (
 				*x,
 				SessionKeys {
-					// foo: UintAuthorityId(*x),
+					foo: UintAuthorityId(*x),
 					babe: dummy_sr25519::dummy_key_for(*x),
 				}
 			)).collect(),

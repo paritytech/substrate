@@ -617,7 +617,7 @@ pub trait SessionInterface<AccountId>: frame_system::Trait {
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Get the validators and their corresponding keys from session.
-	fn keys<KeyType: RuntimeAppPublic + Decode>() -> Vec<(AccountId, Option<KeyType>)>;
+	fn keys<KeyType: RuntimeAppPublic + Decode + sp_std::fmt::Debug>() -> Vec<(AccountId, Option<KeyType>)>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: SessionIndex);
 	/// Current session index.
@@ -642,7 +642,7 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 		<pallet_session::Module<T>>::validators()
 	}
 
-	fn keys<KeyT: RuntimeAppPublic + Decode>()
+	fn keys<KeyT: RuntimeAppPublic + Decode + sp_std::fmt::Debug>()
 		-> Vec<(<T as frame_system::Trait>::AccountId, Option<KeyT>)>
 	{
 		Self::validators().iter().map(|v| {
@@ -1839,7 +1839,6 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			// assert!(total_imbalance.peek() == total_payout)
 			let total_payout = total_imbalance.peek();
 
 			let rest = max_payout.saturating_sub(total_payout);

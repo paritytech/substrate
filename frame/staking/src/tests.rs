@@ -607,6 +607,7 @@ fn nominators_also_get_slashed() {
 		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_slash);
 		check_exposure_all();
 		check_nominator_all();
+
 		// Because slashing happened.
 		assert!(is_disabled(10));
 	});
@@ -2728,6 +2729,12 @@ mod offchain_phragmen {
 			&format!("{}/staking{}", mock::PHRASE, 11),
 			dummy_sr25519::dummy_key_for(11).as_ref(),
 		).unwrap();
+		frame_support::debug::native::debug!(
+			target: "staking",
+			"generated key for account {}: {:?}",
+			11,
+			dummy_sr25519::dummy_key_for(11),
+		);
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
 		ext.register_extension(KeystoreExt(keystore));
@@ -3348,6 +3355,11 @@ mod offchain_phragmen {
 				Error::<Test>::PhragmenBogusScore,
 			);
 		})
+	}
+
+	#[test]
+	fn session_keys_work() {
+		unimplemented!();
 	}
 }
 
