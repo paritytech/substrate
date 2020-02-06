@@ -192,6 +192,19 @@ pub struct PowBlockImport<B: BlockT, I, C, S, Algorithm> {
 	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
 }
 
+impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone> Clone for PowBlockImport<B, I, C, S, Algorithm> {
+	fn clone(&self) -> Self {
+		Self {
+			algorithm: self.algorithm.clone(),
+			inner: self.inner.clone(),
+			select_chain: self.select_chain.clone(),
+			client: self.client.clone(),
+			inherent_data_providers: self.inherent_data_providers.clone(),
+			check_inherents_after: self.check_inherents_after.clone(),
+		}
+	}
+}
+
 impl<B, I, C, S, Algorithm> PowBlockImport<B, I, C, S, Algorithm> where
 	B: BlockT,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
