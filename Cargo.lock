@@ -5805,6 +5805,7 @@ dependencies = [
  "sc-block-builder",
  "sc-client",
  "sc-client-api",
+ "sc-consensus-epochs",
  "sc-consensus-slots",
  "sc-consensus-uncles",
  "sc-executor",
@@ -5830,6 +5831,18 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.1.22",
+]
+
+[[package]]
+name = "sc-consensus-epochs"
+version = "0.8.0"
+dependencies = [
+ "fork-tree",
+ "parity-scale-codec",
+ "parking_lot 0.10.0",
+ "sc-client-api",
+ "sp-blockchain",
+ "sp-runtime",
 ]
 
 [[package]]
