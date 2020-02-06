@@ -248,14 +248,14 @@ where
 
 		let worker = RevalidationWorker::new(api.clone(), pool.clone());
 
-		let slf =
+		let queue =
 			Self {
 				api,
 				pool,
 				background: Some(to_worker),
 			};
 
-		(slf, worker.run(from_queue).boxed())
+		(queue, worker.run(from_queue).boxed())
 	}
 
 	/// Queue some transaction for later revalidation.
