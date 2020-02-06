@@ -454,20 +454,17 @@ pub fn register_pow_inherent_data_provider(
 pub type PowImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 
 /// Import queue for PoW engine.
-pub fn import_queue<B, C, S, Algorithm>(
-	block_import: BoxBlockImport<B, sp_api::TransactionFor<C, B>>,
+pub fn import_queue<B, Transaction, Algorithm>(
+	block_import: BoxBlockImport<B, Transaction>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<
-	PowImportQueue<B, sp_api::TransactionFor<C, B>>,
+	PowImportQueue<B, Transaction>,
 	sp_consensus::Error
 > where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
-	C: Send + Sync + AuxStore + 'static,
-	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
+	Transaction: Send + Sync + 'static,
 	Algorithm: PowAlgorithm<B> + Clone + Send + Sync + 'static,
-	S: SelectChain<B> + 'static,
 {
 	register_pow_inherent_data_provider(&inherent_data_providers)?;
 
