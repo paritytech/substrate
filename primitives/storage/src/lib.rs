@@ -113,7 +113,7 @@ pub mod well_known_keys {
 	///
 	/// `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
 	pub fn is_child_trie_key_valid(storage_key: &[u8]) -> bool {
-		let has_right_prefix = storage_key.starts_with(b":child_storage:default:");
+		let has_right_prefix = storage_key.starts_with(super::DEFAULT_CHILD_TYPE_PARENT_PREFIX);
 		if has_right_prefix {
 			// This is an attempt to catch a change of `is_child_storage_key`, which
 			// just checks if the key has prefix `:child_storage:` at the moment of writing.
@@ -212,6 +212,16 @@ impl<'a> ChildInfo<'a> {
 			}) => &data[..],
 		}
 	}
+
+	/// Return the location reserved for this child trie in their parent trie if there
+	/// is one.
+	pub fn parent_prefix(&self, _parent: Option<&'a ChildInfo>) -> &'a [u8] {
+		match self {
+			ChildInfo::ParentKeyId(..)
+			| ChildInfo::Default(..) => DEFAULT_CHILD_TYPE_PARENT_PREFIX,
+		}
+	}
+
 }
 
 /// Type of child.
@@ -290,4 +300,13 @@ impl OwnedChildTrie {
 			ChildInfo::ParentKeyId(other) => self.data[..] == other.data[..],
 		}
 	}
+}
+
+const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default:";
+
+#[test]
+fn assert_default_trie_in_child_trie() {
+	let child_info = ChildInfo::new_default(b"any key");
+	let prefix = child_info.parent_prefix(None);
+	assert!(prefix.starts_with(well_known_keys::CHILD_STORAGE_KEY_PREFIX));
 }
