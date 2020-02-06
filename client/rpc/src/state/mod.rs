@@ -63,6 +63,13 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
 
+	/// Returns the keys with prefix along with their values, leave empty to get all the pairs.
+	fn storage_pairs(
+		&self,
+		block: Option<Block::Hash>,
+		prefix: StorageKey,
+	) -> FutureResult<Vec<(StorageKey, StorageData)>>;
+
 	/// Returns the keys with prefix with pagination support.
 	fn storage_keys_paged(
 		&self,
@@ -253,6 +260,14 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageKey>> {
 		self.backend.storage_keys(block, key_prefix)
+	}
+
+	fn storage_pairs(
+		&self,
+		key_prefix: StorageKey,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
+		self.backend.storage_pairs(block, key_prefix)
 	}
 
 	fn storage_keys_paged(
