@@ -2507,7 +2507,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03080afe6f42cd996da9f568d6add5d7fb5ee2ea7fb7802d2d2cbd836958fd87"
 dependencies = [
  "parity-bytes",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "smallvec 1.2.0",
 ]
 
@@ -2518,7 +2518,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9355274e5a9e0a7e8ef43916950eae3949024de2a8dffe4d5a6c13974a37c8e"
 dependencies = [
  "kvdb",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
 ]
 
@@ -2534,7 +2534,7 @@ dependencies = [
  "log 0.4.8",
  "num_cpus",
  "owning_ref",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
  "regex",
  "rocksdb",
@@ -2552,7 +2552,7 @@ dependencies = [
  "kvdb",
  "kvdb-memorydb",
  "log 0.4.8",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "send_wrapper 0.3.0",
  "wasm-bindgen",
  "web-sys",
@@ -4563,9 +4563,9 @@ dependencies = [
 
 [[package]]
 name = "parity-util-mem"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5326ed0dad4159b71b802166f63c310d327dad105d90eb00093f49613aa9e5cb"
+checksum = "ef1476e40bf8f5c6776e9600983435821ca86eb9819d74a6207cca69d091406a"
 dependencies = [
  "cfg-if",
  "impl-trait-for-tuples",
@@ -5547,7 +5547,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.8",
  "names",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "regex",
  "rpassword",
  "sc-client-api",
@@ -5648,7 +5648,7 @@ dependencies = [
  "linked-hash-map",
  "log 0.4.8",
  "parity-scale-codec",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
  "quickcheck",
  "sc-client",
@@ -6328,7 +6328,7 @@ dependencies = [
  "futures 0.3.1",
  "log 0.4.8",
  "parity-scale-codec",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
  "serde",
  "sp-core",
@@ -6346,7 +6346,7 @@ dependencies = [
  "futures-diagnose",
  "log 0.4.8",
  "parity-scale-codec",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
  "sc-client-api",
  "sc-transaction-graph",
@@ -6909,7 +6909,7 @@ dependencies = [
  "log 0.4.8",
  "num-traits",
  "parity-scale-codec",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
  "pretty_assertions",
  "primitive-types",
@@ -7055,7 +7055,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "log 0.4.8",
  "parity-scale-codec",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "paste",
  "rand 0.7.3",
  "serde",
@@ -7200,7 +7200,7 @@ name = "sp-test-primitives"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "serde",
  "sp-application-crypto",
  "sp-core",
@@ -7482,7 +7482,7 @@ dependencies = [
  "pallet-babe",
  "pallet-timestamp",
  "parity-scale-codec",
- "parity-util-mem 0.5.0",
+ "parity-util-mem 0.5.1",
  "sc-client",
  "sc-executor",
  "serde",
