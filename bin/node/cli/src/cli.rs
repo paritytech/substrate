@@ -30,7 +30,6 @@ pub struct Cli {
 	pub subcommand: Option<Subcommand>,
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	#[allow(missing_docs)]
 	pub run: RunCmd,
 }
 
