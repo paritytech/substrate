@@ -63,6 +63,8 @@ const N: usize = 22;
 const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes
 const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 
+const EMPTY_MARKER: u32 = u32::max_value();
+
 // Each pointer is prefixed with 8 bytes, which identify the list index
 // to which it belongs.
 const PREFIX_SIZE: u32 = 8;
@@ -82,6 +84,67 @@ macro_rules! trace {
 		}
 	}
 }
+
+/// The exponent for the power of two sized block adjusted to the minimum size.
+///
+/// This way, if MIN_POSSIBLE_ALLOCATION == 8, we would get:
+///
+/// power_of_two_size | order
+/// 8                 | 0
+/// 16                | 1
+/// 32                | 2
+/// 64                | 3
+///
+/// and so on.
+#[derive(Copy, Clone)]
+struct Order(u32);
+
+impl Order {
+	/// Create `Order` object from a raw order.
+	///
+	/// Returns `Err` if it is greater than the maximum supported order.
+	fn from_raw(order: u32) -> Result<Self, Error> {
+		if order < N as u32 {
+			Ok(Self(order))
+		} else {
+			Err(error("invalid order"))
+		}
+	}
+
+	/// Compute the order by the given size
+	///
+	/// The size is clamped, so that the following holds:
+	//
+	// MIN_POSSIBLE_ALLOCATION <= size <= MAX_POSSIBLE_ALLOCATION
+	fn from_size(size: u32) -> Result<Self, Error> {
+		let clamped_size = if size > MAX_POSSIBLE_ALLOCATION {
+			return Err(Error::RequestedAllocationTooLarge);
+		} else if size < MIN_POSSIBLE_ALLOCATION {
+			MIN_POSSIBLE_ALLOCATION
+		} else {
+			size
+		};
+
+		// Round the clamped size to the next power of two.
+		//
+		// It returns the unchanged value if the value is already a power of two.
+		let power_of_two_size = clamped_size.next_power_of_two();
+
+		// Compute the number of trailing zeroes to get the order. We adjust it by the number of
+		// trailing zeroes in the minimum possible allocation.
+		let order = power_of_two_size.trailing_zeros() - MIN_POSSIBLE_ALLOCATION.trailing_zeros();
+
+		Ok(Self(order))
+	}
+
+	/// Returns the corresponding size for this order.
+	///
+	/// Note that it is always a power of two.
+	fn size(&self) -> u32 {
+		1 << MIN_POSSIBLE_ALLOCATION.trailing_zeros() << self.0
+	}
+}
+
 
 /// An implementation of freeing bump allocator.
 ///
@@ -106,7 +169,7 @@ impl FreeingBumpHeapAllocator {
 
 		FreeingBumpHeapAllocator {
 			bumper: 0,
-			heads: [u32::max_value(); N],
+			heads: [EMPTY_MARKER; N],
 			ptr_offset,
 			total_size: 0,
 		}
@@ -123,48 +186,32 @@ impl FreeingBumpHeapAllocator {
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `size` - size in bytes of the allocation request
 	pub fn allocate(&mut self, mem: &mut [u8], size: WordSize) -> Result<Pointer<u8>, Error> {
-		let mem_size = u32::try_from(mem.len())
-			.expect("size of Wasm linear memory is <2^32; qed");
+		let mem_size = u32::try_from(mem.len()).expect("size of Wasm linear memory is <2^32; qed");
 		let max_heap_size = mem_size - self.ptr_offset;
 
-		// Clamp the size, so that the following holds:
-		//
-		// MIN_POSSIBLE_ALLOCATION <= size <= MAX_POSSIBLE_ALLOCATION
-		let size = if size > MAX_POSSIBLE_ALLOCATION {
-			return Err(Error::RequestedAllocationTooLarge);
-		} else if size < MIN_POSSIBLE_ALLOCATION {
-			MIN_POSSIBLE_ALLOCATION
-		};
-
-		// Take the next power of two from the given requested size. It returns the same size if the
-		// size is already a power of two.
-		let item_size = size.next_power_of_two();
-		if item_size + PREFIX_SIZE + self.total_size > max_heap_size {
-			return Err(Error::AllocatorOutOfSpace);
-		}
-
-		let list_index = (item_size.trailing_zeros() - 3) as usize;
-		let ptr: u32 = if self.heads[list_index] != u32::max_value() {
+		let order = Order::from_size(size)?;
+		let ptr: u32 = if self.heads[order.0 as usize] != EMPTY_MARKER {
 			// Something from the free list
-			let ptr = self.heads[list_index];
+			let ptr = self.heads[order.0 as usize];
 			assert!(
-				ptr + item_size + PREFIX_SIZE <= max_heap_size,
+				ptr + order.size() + PREFIX_SIZE <= max_heap_size,
 				"Pointer is looked up in list of free entries, into which
 				only valid values are inserted; qed"
 			);
 
-			self.heads[list_index] = self.get_heap_u64(mem, ptr)?
+			self.heads[order.0 as usize] = self
+				.get_heap_u64(mem, ptr)?
 				.try_into()
 				.map_err(|_| error("read invalid free list pointer"))?;
 			ptr
 		} else {
 			// Nothing to be freed. Bump.
-			self.bump(item_size, max_heap_size)?
+			self.bump(order.size(), max_heap_size)?
 		};
 
-		self.set_heap_u64(mem, ptr, list_index as u64)?;
+		self.set_heap_u64(mem, ptr, order.0 as u64)?;
 
-		self.total_size = self.total_size + item_size + PREFIX_SIZE;
+		self.total_size = self.total_size + order.size() + PREFIX_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
 
 		Ok(Pointer::new(self.ptr_offset + ptr + PREFIX_SIZE))
@@ -178,21 +225,23 @@ impl FreeingBumpHeapAllocator {
 	/// - `ptr` - pointer to the allocated chunk
 	pub fn deallocate(&mut self, mem: &mut [u8], ptr: Pointer<u8>) -> Result<(), Error> {
 		let ptr = u32::from(ptr) - self.ptr_offset;
-		let ptr = ptr.checked_sub(PREFIX_SIZE).ok_or_else(||
-			error("Invalid pointer for deallocation")
+		let ptr = ptr
+			.checked_sub(PREFIX_SIZE)
+			.ok_or_else(|| error("Invalid pointer for deallocation"))?;
+
+		let order = Order::from_raw(
+			self.get_heap_u64(mem, ptr)?
+				.try_into()
+				.map_err(|_| error("read invalid list index"))?,
 		)?;
 
-		let list_index: usize = self.get_heap_u64(mem, ptr)?
-			.try_into()
-			.map_err(|_| error("read invalid list index"))?;
-		if list_index > self.heads.len() {
-			return Err(error("read invalid list index"));
-		}
-		self.set_heap_u64(mem, ptr, self.heads[list_index] as u64)?;
-		self.heads[list_index] = ptr;
+		self.set_heap_u64(mem, ptr, self.heads[order.0 as usize] as u64)?;
+		self.heads[order.0 as usize] = ptr;
 
-		let item_size = Self::get_item_size_from_index(list_index);
-		self.total_size = self.total_size.checked_sub(item_size as u32 + PREFIX_SIZE)
+		let item_size = order.size();
+		self.total_size = self
+			.total_size
+			.checked_sub(item_size as u32 + PREFIX_SIZE)
 			.ok_or_else(|| error("Unable to subtract from total heap size without overflow"))?;
 		trace!("Heap size is {} bytes after deallocation", self.total_size);
 
@@ -212,11 +261,6 @@ impl FreeingBumpHeapAllocator {
 		let res = self.bumper;
 		self.bumper += item_size + PREFIX_SIZE;
 		Ok(res)
-	}
-
-	fn get_item_size_from_index(index: usize) -> usize {
-		// we shift 1 by three places, since the first possible item size is 8
-		1 << 3 << index
 	}
 
 	// Read a u64 from the heap in LE form. Used to read heap allocation prefixes.
@@ -545,12 +589,12 @@ mod tests {
 	}
 
 	#[test]
-	fn should_get_item_size_from_index() {
+	fn should_get_item_size_from_order() {
 		// given
-		let index = 0;
+		let raw_order = 0;
 
 		// when
-		let item_size = FreeingBumpHeapAllocator::get_item_size_from_index(index);
+		let item_size = Order::from_raw(raw_order).unwrap().size();
 
 		// then
 		assert_eq!(item_size, 8);
@@ -559,10 +603,10 @@ mod tests {
 	#[test]
 	fn should_get_max_item_size_from_index() {
 		// given
-		let index = 21;
+		let raw_order = 21;
 
 		// when
-		let item_size = FreeingBumpHeapAllocator::get_item_size_from_index(index);
+		let item_size = Order::from_raw(raw_order).unwrap().size();
 
 		// then
 		assert_eq!(item_size as u32, MAX_POSSIBLE_ALLOCATION);
