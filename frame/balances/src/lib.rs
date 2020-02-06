@@ -1088,9 +1088,8 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		Self::try_mutate_account(who, |account| -> DispatchResult {
 			ensure!(!account.total().is_zero(), Error::<T, I>::DeadAccount);
 			account.free = account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
-			Ok(())
-		})?;
-		Ok(PositiveImbalance::new(value))
+			Ok(PositiveImbalance::new(value))
+		})
 	}
 
 	/// Deposit some `value` into the free balance of `who`, possibly creating a new account.

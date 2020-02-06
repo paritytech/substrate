@@ -95,6 +95,8 @@ sc-consensus-babe = { version = "0.8", features = ["test-helpers"], path = "../.
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 futures = "0.3.1"
 tempfile = "3.1.0"
+assert_cmd = "0.12"
+nix = "0.17"
 
 [build-dependencies]
 build-script-utils = { version = "2.0.0", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
