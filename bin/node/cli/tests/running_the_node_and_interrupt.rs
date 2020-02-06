@@ -35,6 +35,7 @@ fn running_the_node_works_and_can_be_interrupted() {
 		}
 		eprintln!("Took to long to exit. Killing...");
 		let _ = child.kill();
+		child.wait().unwrap();
 
 		None
 	}
