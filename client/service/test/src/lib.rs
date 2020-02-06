@@ -133,7 +133,7 @@ fn node_config<G, E: Clone> (
 	index: usize,
 	spec: &ChainSpec<G, E>,
 	role: Roles,
-	task_executor: Box<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>) + Send>,
+	task_executor: Arc<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>) + Send + Sync>,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
@@ -183,10 +183,10 @@ fn node_config<G, E: Clone> (
 			password: None
 		},
 		config_dir: Some(root.clone()),
-		database: DatabaseConfig::Path {
+		database: Some(DatabaseConfig::Path {
 			path: root.join("db"),
 			cache_size: None
-		},
+		}),
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
@@ -256,7 +256,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		for (key, authority) in authorities {
 			let task_executor = {
 				let executor = executor.clone();
-				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
+				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
 			};
 			let node_config = node_config(
 				self.nodes,
@@ -280,7 +280,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		for full in full {
 			let task_executor = {
 				let executor = executor.clone();
-				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
+				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
 			};
 			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, task_executor, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
@@ -296,7 +296,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		for light in light {
 			let task_executor = {
 				let executor = executor.clone();
-				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
+				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
 			};
 			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, task_executor, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();

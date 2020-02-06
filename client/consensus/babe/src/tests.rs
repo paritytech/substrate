@@ -59,7 +59,7 @@ type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
 #[derive(Clone)]
 struct DummyFactory {
 	client: Arc<TestClient>,
-	epoch_changes: crate::SharedEpochChanges<TestBlock>,
+	epoch_changes: SharedEpochChanges<TestBlock, Epoch>,
 	config: Config,
 	mutator: Mutator,
 }
@@ -105,7 +105,6 @@ impl DummyProposer {
 			>
 		>
 	{
-		use codec::Encode;
 		let block_builder = self.factory.client.new_block_at(
 			&BlockId::Hash(self.parent_hash),
 			pre_digests,
@@ -558,7 +557,7 @@ fn propose_and_import_block<Transaction>(
 	let pre_digest = sp_runtime::generic::Digest {
 		logs: vec![
 			Item::babe_pre_digest(
-				BabePreDigest::Secondary {
+				PreDigest::Secondary {
 					authority_index: 0,
 					slot_number,
 				},

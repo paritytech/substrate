@@ -373,8 +373,9 @@ pub fn new_light(config: NodeConfiguration)
 mod tests {
 	use std::{sync::Arc, collections::HashMap, borrow::Cow, any::Any};
 	use sc_consensus_babe::{
-		descendent_query, CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY
+		CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY
 	};
+	use sc_consensus_epochs::descendent_query;
 	use sp_consensus::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
 		RecordProof,

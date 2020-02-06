@@ -59,8 +59,10 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 pub use sp_consensus_babe::{
-	BabeApi, ConsensusLog, BABE_ENGINE_ID, BabePreDigest, SlotNumber, BabeConfiguration,
-	CompatibleDigestItem,
+	BabeApi, ConsensusLog, BABE_ENGINE_ID, SlotNumber, BabeConfiguration,
+	AuthorityId, AuthorityPair, AuthoritySignature,
+	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
+	digests::{PreDigest, CompatibleDigestItem, NextEpochDescriptor},
 };
 pub use sp_consensus::SyncOracle;
 use std::{
@@ -104,25 +106,60 @@ use log::{warn, debug, info, trace};
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
 };
-use epoch_changes::ViableEpoch;
+use sc_consensus_epochs::{
+	descendent_query, ViableEpoch, SharedEpochChanges, EpochChangesFor, Epoch as EpochT
+};
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	HeaderBackend, ProvideCache, HeaderMetadata
 };
 use schnorrkel::SignatureError;
-
+use codec::{Encode, Decode};
 use sp_api::ApiExt;
 
 mod aux_schema;
 mod verification;
-mod epoch_changes;
 mod authorship;
 #[cfg(test)]
 mod tests;
-pub use sp_consensus_babe::{
-	AuthorityId, AuthorityPair, AuthoritySignature, Epoch, NextEpochDescriptor,
-};
-pub use epoch_changes::{descendent_query, EpochChanges, EpochChangesFor, SharedEpochChanges};
+
+/// BABE epoch information
+#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, Debug)]
+pub struct Epoch {
+	/// The epoch index
+	pub epoch_index: u64,
+	/// The starting slot of the epoch,
+	pub start_slot: SlotNumber,
+	/// The duration of this epoch
+	pub duration: SlotNumber,
+	/// The authorities and their weights
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	/// Randomness for this epoch
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+}
+
+impl EpochT for Epoch {
+	type NextEpochDescriptor = NextEpochDescriptor;
+	type SlotNumber = SlotNumber;
+
+	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
+		Epoch {
+			epoch_index: self.epoch_index + 1,
+			start_slot: self.start_slot + self.duration,
+			duration: self.duration,
+			authorities: descriptor.authorities,
+			randomness: descriptor.randomness,
+		}
+	}
+
+	fn start_slot(&self) -> SlotNumber {
+		self.start_slot
+	}
+
+	fn end_slot(&self) -> SlotNumber {
+		self.start_slot + self.duration
+	}
+}
 
 #[derive(derive_more::Display, Debug)]
 enum Error<B: BlockT> {
@@ -199,7 +236,7 @@ macro_rules! babe_info {
 /// Intermediate value passed to block importer.
 pub struct BabeIntermediate {
 	/// The epoch data, if available.
-	pub epoch: ViableEpoch,
+	pub epoch: ViableEpoch<Epoch>,
 }
 
 /// Intermediate key for Babe engine.
@@ -351,7 +388,7 @@ struct BabeWorker<B: BlockT, C, E, I, SO> {
 	sync_oracle: SO,
 	force_authoring: bool,
 	keystore: KeyStorePtr,
-	epoch_changes: SharedEpochChanges<B>,
+	epoch_changes: SharedEpochChanges<B, Epoch>,
 	config: Config,
 }
 
@@ -368,8 +405,8 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
-	type EpochData = ViableEpoch;
-	type Claim = (BabePreDigest, AuthorityPair);
+	type EpochData = ViableEpoch<Epoch>;
+	type Claim = (PreDigest, AuthorityPair);
 	type SyncOracle = SO;
 	type CreateProposer = Pin<Box<
 		dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static
@@ -409,7 +446,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		&self,
 		_parent_header: &B::Header,
 		slot_number: SlotNumber,
-		epoch_data: &ViableEpoch,
+		epoch_data: &ViableEpoch<Epoch>,
 	) -> Option<Self::Claim> {
 		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
 		let s = authorship::claim_slot(
@@ -548,12 +585,12 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 
 /// Extract the BABE pre digest from the given header. Pre-runtime digests are
 /// mandatory, the function will return `Err` if none is found.
-fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<BabePreDigest, Error<B>>
+fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 {
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
-		return Ok(BabePreDigest::Secondary {
+		return Ok(PreDigest::Secondary {
 			slot_number: 0,
 			authority_index: 0,
 		});
@@ -612,13 +649,13 @@ impl SlotCompatible for TimeSource {
 #[derive(Clone)]
 pub struct BabeLink<Block: BlockT> {
 	time_source: TimeSource,
-	epoch_changes: SharedEpochChanges<Block>,
+	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	config: Config,
 }
 
 impl<Block: BlockT> BabeLink<Block> {
 	/// Get the epoch changes of this link.
-	pub fn epoch_changes(&self) -> &SharedEpochChanges<Block> {
+	pub fn epoch_changes(&self) -> &SharedEpochChanges<Block, Epoch> {
 		&self.epoch_changes
 	}
 
@@ -634,7 +671,7 @@ pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA> {
 	api: Arc<PRA>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	config: Config,
-	epoch_changes: SharedEpochChanges<Block>,
+	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	time_source: TimeSource,
 }
 
@@ -739,7 +776,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 		let mut inherent_data = self
 			.inherent_data_providers
 			.create_inherent_data()
-			.map_err( Error::<Block>::Runtime)?;
+			.map_err(Error::<Block>::Runtime)?;
 
 		let (_, slot_now, _) = self.time_source.extract_timestamp_and_slot(&inherent_data)
 			.map_err(Error::<Block>::Extraction)?;
@@ -891,7 +928,7 @@ pub struct BabeBlockImport<B, E, Block: BlockT, I, RA, PRA> {
 	inner: I,
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
-	epoch_changes: SharedEpochChanges<Block>,
+	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	config: Config,
 }
 
@@ -911,7 +948,7 @@ impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
 		api: Arc<PRA>,
-		epoch_changes: SharedEpochChanges<Block>,
+		epoch_changes: SharedEpochChanges<Block, Epoch>,
 		block_import: I,
 		config: Config,
 	) -> Self {
@@ -1141,7 +1178,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 /// Gets the best finalized block and its slot, and prunes the given epoch tree.
 fn prune_finalized<B, E, Block, RA>(
 	client: &Client<B, E, Block, RA>,
-	epoch_changes: &mut EpochChangesFor<Block>,
+	epoch_changes: &mut EpochChangesFor<Block, Epoch>,
 ) -> Result<(), ConsensusError> where
 	Block: BlockT,
 	E: CallExecutor<Block> + Send + Sync,
@@ -1188,7 +1225,7 @@ pub fn block_import<B, E, Block: BlockT, I, RA, PRA>(
 	RA: Send + Sync,
 	Client<B, E, Block, RA>: AuxStore,
 {
-	let epoch_changes = aux_schema::load_epoch_changes(&*client)?;
+	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client)?;
 	let link = BabeLink {
 		epoch_changes: epoch_changes.clone(),
 		time_source: Default::default(),
@@ -1272,7 +1309,7 @@ pub mod test_helpers {
 		client: &C,
 		keystore: &KeyStorePtr,
 		link: &BabeLink<B>,
-	) -> Option<BabePreDigest> where
+	) -> Option<PreDigest> where
 		B: BlockT,
 		C: ProvideRuntimeApi<B> +
 			ProvideCache<B> +
