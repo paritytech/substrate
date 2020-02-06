@@ -378,8 +378,13 @@ impl<B: ChainApi> Pool<B> {
 		let block_number = self.resolve_block_number(at)?;
 		let mut result = HashMap::new();
 
-		for xt in xts {
-			let (hash, validated_tx) = self.verify_one(at, block_number, xt, force).await;
+		for (hash, validated_tx) in
+			futures::future::join_all(
+				xts.into_iter()
+					.map(|xt| self.verify_one(at, block_number, xt, force))
+			)
+			.await
+		{
 			result.insert(hash, validated_tx);
 		}
 
