@@ -22,7 +22,7 @@
 use serde::{Serialize, Deserialize};
 use sp_debug_derive::RuntimeDebug;
 
-use sp_std::{vec::Vec, borrow::Cow};
+use sp_std::vec::Vec;
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -126,58 +126,10 @@ pub mod well_known_keys {
 	}
 }
 
-/// A wrapper around a child storage key.
-///
-/// This wrapper ensures that the child storage key is correct and properly used. It is
-/// impossible to create an instance of this struct without providing a correct `storage_key`.
-pub struct ChildStorageKey<'a> {
-	storage_key: Cow<'a, [u8]>,
-}
-
-impl<'a> ChildStorageKey<'a> {
-	/// Create new instance of `Self`.
-	fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
-		if well_known_keys::is_child_trie_key_valid(&storage_key) {
-			Some(ChildStorageKey { storage_key })
-		} else {
-			None
-		}
-	}
-
-	/// Create a new `ChildStorageKey` from a vector.
-	///
-	/// `storage_key` need to start with `:child_storage:default:`
-	/// See `is_child_trie_key_valid` for more details.
-	pub fn from_vec(key: Vec<u8>) -> Option<Self> {
-		Self::new(Cow::Owned(key))
-	}
-
-	/// Create a new `ChildStorageKey` from a slice.
-	///
-	/// `storage_key` need to start with `:child_storage:default:`
-	/// See `is_child_trie_key_valid` for more details.
-	pub fn from_slice(key: &'a [u8]) -> Option<Self> {
-		Self::new(Cow::Borrowed(key))
-	}
-
-	/// Get access to the byte representation of the storage key.
-	///
-	/// This key is guaranteed to be correct.
-	pub fn as_ref(&self) -> &[u8] {
-		&*self.storage_key
-	}
-
-	/// Destruct this instance into an owned vector that represents the storage key.
-	///
-	/// This key is guaranteed to be correct.
-	pub fn into_owned(self) -> Vec<u8> {
-		self.storage_key.into_owned()
-	}
-}
-
 #[derive(Clone, Copy)]
 /// Information related to a child state.
 pub enum ChildInfo<'a> {
+	ParentKeyId(ChildTrie<'a>),
 	Default(ChildTrie<'a>),
 }
 
@@ -186,10 +138,18 @@ pub enum ChildInfo<'a> {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub enum OwnedChildInfo {
+	ParentKeyId(OwnedChildTrie),
 	Default(OwnedChildTrie),
 }
 
 impl<'a> ChildInfo<'a> {
+	/// Instantiates information for a default child trie.
+	pub const fn new_uid_parent_key(storage_key: &'a[u8]) -> Self {
+		ChildInfo::ParentKeyId(ChildTrie {
+			data: storage_key,
+		})
+	}
+
 	/// Instantiates information for a default child trie.
 	pub const fn new_default(unique_id: &'a[u8]) -> Self {
 		ChildInfo::Default(ChildTrie {
@@ -204,12 +164,23 @@ impl<'a> ChildInfo<'a> {
 				=> OwnedChildInfo::Default(OwnedChildTrie {
 					data: data.to_vec(),
 				}),
+			ChildInfo::ParentKeyId(ChildTrie { data })
+				=> OwnedChildInfo::ParentKeyId(OwnedChildTrie {
+					data: data.to_vec(),
+				}),
 		}
 	}
 
 	/// Create child info from a linear byte packed value and a given type. 
-	pub fn resolve_child_info(child_type: u32, data: &'a[u8]) -> Option<Self> {
+	pub fn resolve_child_info(child_type: u32, data: &'a[u8], storage_key: &'a[u8]) -> Option<Self> {
 		match child_type {
+			x if x == ChildType::ParentKeyId as u32 => {
+				if !data.len() == 0 {
+					// do not allow anything for additional data.
+					return None;
+				}
+				Some(ChildInfo::new_uid_parent_key(storage_key))
+			},
 			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data)),
 			_ => None,
 		}
@@ -219,6 +190,9 @@ impl<'a> ChildInfo<'a> {
 	/// This can be use as input for `resolve_child_info`.
 	pub fn info(&self) -> (&[u8], u32) {
 		match self {
+			ChildInfo::ParentKeyId(ChildTrie {
+				data,
+			}) => (data, ChildType::ParentKeyId as u32),
 			ChildInfo::Default(ChildTrie {
 				data,
 			}) => (data, ChildType::CryptoUniqueId as u32),
@@ -230,6 +204,9 @@ impl<'a> ChildInfo<'a> {
 	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
+			ChildInfo::ParentKeyId(ChildTrie {
+				data,
+			}) => &data[..],
 			ChildInfo::Default(ChildTrie {
 				data,
 			}) => &data[..],
@@ -242,7 +219,11 @@ impl<'a> ChildInfo<'a> {
 /// be related to technical consideration or api variant.
 #[repr(u32)]
 pub enum ChildType {
-	/// Default, it uses a cryptographic strong unique id as input.
+	/// If runtime module ensures that the child key is a unique id that will
+	/// only be used once, this parent key is used as a child trie unique id.
+	ParentKeyId = 0,
+	/// Default, this uses a cryptographic strong unique id as input, this id
+	/// is used as a unique child trie identifier.
 	CryptoUniqueId = 1,
 }
 
@@ -259,6 +240,7 @@ impl OwnedChildInfo {
 	pub fn try_update(&mut self, other: ChildInfo) -> bool {
 		match self {
 			OwnedChildInfo::Default(owned_child_trie) => owned_child_trie.try_update(other),
+			OwnedChildInfo::ParentKeyId(owned_child_trie) => owned_child_trie.try_update(other),
 		}
 	}
 
@@ -269,6 +251,11 @@ impl OwnedChildInfo {
 				=> ChildInfo::Default(ChildTrie {
 					data: data.as_slice(),
 				}),
+			OwnedChildInfo::ParentKeyId(OwnedChildTrie { data })
+				=> ChildInfo::ParentKeyId(ChildTrie {
+					data: data.as_slice(),
+				}),
+
 		}
 	}
 }
@@ -300,6 +287,7 @@ impl OwnedChildTrie {
 	fn try_update(&mut self, other: ChildInfo) -> bool {
 		match other {
 			ChildInfo::Default(other) => self.data[..] == other.data[..],
+			ChildInfo::ParentKeyId(other) => self.data[..] == other.data[..],
 		}
 	}
 }
