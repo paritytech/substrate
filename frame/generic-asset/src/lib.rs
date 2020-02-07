@@ -166,7 +166,7 @@ use frame_support::{
 	decl_event, decl_module, decl_storage, ensure, decl_error,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
-		SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop,
+		SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop, BalanceStatus,
 	},
 	Parameter, StorageMap,
 };
@@ -714,8 +714,8 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Move up to `amount` from reserved balance of account `who` to free balance of account
-	/// `beneficiary`.
+	/// Move up to `amount` from reserved balance of account `who` to balance of account
+	/// `beneficiary`, either free or reserved depending on `status`.
 	///
 	/// As much funds up to `amount` will be moved as possible. If this is less than `amount`, then
 	/// the `remaining` would be returned, else `Zero::zero()`.
@@ -726,13 +726,23 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 		beneficiary: &T::AccountId,
 		amount: T::Balance,
+		status: BalanceStatus,
 	) -> T::Balance {
 		let b = Self::reserved_balance(asset_id, who);
 		let slash = sp_std::cmp::min(b, amount);
 
-		let original_free_balance = Self::free_balance(asset_id, beneficiary);
-		let new_free_balance = original_free_balance + slash;
-		Self::set_free_balance(asset_id, beneficiary, new_free_balance);
+		match status {
+			BalanceStatus::Free => {
+				let original_free_balance = Self::free_balance(asset_id, beneficiary);
+				let new_free_balance = original_free_balance + slash;
+				Self::set_free_balance(asset_id, beneficiary, new_free_balance);
+			}
+			BalanceStatus::Reserved => {
+				let original_reserved_balance = Self::reserved_balance(asset_id, beneficiary);
+				let new_reserved_balance = original_reserved_balance + slash;
+				Self::set_reserved_balance(asset_id, beneficiary, new_reserved_balance);
+			}
+		}
 
 		let new_reserve_balance = b - slash;
 		Self::set_reserved_balance(asset_id, who, new_reserve_balance);
@@ -1288,8 +1298,9 @@ where
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
+		status: BalanceStatus,
 	) -> result::Result<Self::Balance, DispatchError> {
-		Ok(<Module<T>>::repatriate_reserved(&U::asset_id(), slashed, beneficiary, value))
+		Ok(<Module<T>>::repatriate_reserved(&U::asset_id(), slashed, beneficiary, value, status))
 	}
 }
 

@@ -148,10 +148,16 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Mutate the value under a key.
 	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
 
-	/// Mutate the value under a key.
+	/// Mutate the item, only if an `Ok` value is returned.
+	fn try_mutate<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
+		key: KeyArg,
+		f: F,
+	) -> Result<R, E>;
+
+	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
 	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(key: KeyArg, f: F) -> R;
 
-	/// Mutate the item, only if an `Ok` value is returned.
+	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
 	fn try_mutate_exists<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
 		key: KeyArg,
 		f: F,

@@ -74,7 +74,7 @@ use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
-	weights::SimpleDispatchInfo,
+	weights::SimpleDispatchInfo, BalanceStatus,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -821,7 +821,7 @@ decl_module! {
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
 				Ok(position) => {
 					if let Judgement::FeePaid(fee) = id.judgements[position].1 {
-						let _ = T::Currency::repatriate_reserved(&target, &sender, fee);
+						let _ = T::Currency::repatriate_reserved(&target, &sender, fee, BalanceStatus::Free);
 					}
 					id.judgements[position] = item
 				}

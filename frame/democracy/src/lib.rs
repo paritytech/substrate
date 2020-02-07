@@ -30,7 +30,7 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
-		OnReapAccount, OnUnbalanced
+		OnReapAccount, OnUnbalanced, BalanceStatus
 	}
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -802,7 +802,7 @@ decl_module! {
 			let queue = <DispatchQueue<T>>::get();
 			ensure!(!queue.iter().any(|item| &item.1 == &proposal_hash), Error::<T>::Imminent);
 
-			let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
+			let _ = T::Currency::repatriate_reserved(&old, &who, deposit, BalanceStatus::Free);
 			<Preimages<T>>::remove(&proposal_hash);
 			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
 		}

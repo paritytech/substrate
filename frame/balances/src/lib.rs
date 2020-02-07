@@ -165,7 +165,7 @@ use frame_support::{
 		Currency, OnReapAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		ExistenceRequirement::AllowDeath, IsDeadAccount
+		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status
 	}
 };
 use sp_runtime::{
@@ -1082,10 +1082,10 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	fn deposit_into_existing(
 		who: &T::AccountId,
 		value: Self::Balance
-	) -> result::Result<Self::PositiveImbalance, DispatchError> {
+	) -> Result<Self::PositiveImbalance, DispatchError> {
 		if value.is_zero() { return Ok(PositiveImbalance::zero()) }
 
-		Self::try_mutate_account(who, |account| -> DispatchResult {
+		Self::try_mutate_account(who, |account| -> Result<Self::PositiveImbalance, DispatchError> {
 			ensure!(!account.total().is_zero(), Error::<T, I>::DeadAccount);
 			account.free = account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 			Ok(PositiveImbalance::new(value))
@@ -1241,13 +1241,14 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 		})
 	}
 
-	/// Move the reserved balance of one account into the free balance of another.
+	/// Move the reserved balance of one account into the balance of another, according to `status`.
 	///
 	/// Is a no-op if the value to be moved is zero.
 	fn repatriate_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
+		status: Status,
 	) -> Result<Self::Balance, DispatchError> {
 		if value.is_zero() { return Ok (Zero::zero()) }
 
@@ -1259,7 +1260,10 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 			ensure!(!to_account.total().is_zero(), Error::<T, I>::DeadAccount);
 			Self::try_mutate_account(slashed, |from_account| -> Result<Self::Balance, DispatchError> {
 				let actual = cmp::min(from_account.reserved, value);
-				to_account.free = to_account.free.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?;
+				match status {
+					Status::Free => to_account.free = to_account.free.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
+					Status::Reserved => to_account.reserved = to_account.reserved.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
+				}
 				from_account.reserved -= actual;
 				Ok(value - actual)
 			})

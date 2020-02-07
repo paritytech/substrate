@@ -88,7 +88,7 @@ use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error, weights::SimpleDispatchInfo,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
-		ChangeMembers, OnUnbalanced, WithdrawReason, Contains
+		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus
 	}
 };
 use sp_phragmen::ExtendedBalance;
@@ -311,7 +311,7 @@ decl_module! {
 			let valid = Self::is_defunct_voter(&target);
 			if valid {
 				// reporter will get the voting bond of the target
-				T::Currency::repatriate_reserved(&target, &reporter, T::VotingBond::get())?;
+				T::Currency::repatriate_reserved(&target, &reporter, T::VotingBond::get(), BalanceStatus::Free)?;
 				// remove the target. They are defunct.
 				Self::do_remove_voter(&target, false);
 			} else {

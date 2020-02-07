@@ -611,6 +611,14 @@ pub trait Currency<AccountId> {
 	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance>;
 }
 
+/// Status of funds.
+pub enum BalanceStatus {
+	/// Funds are free, as corresponding to `free` item in Balances.
+	Free,
+	/// Funds are reserved, as corresponding to `reserved` item in Balances.
+	Reserved,
+}
+
 /// A currency where funds can be reserved from the user.
 pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	/// Same result as `reserve(who, value)` (but without the side-effects) assuming there
@@ -639,7 +647,6 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 	fn reserved_balance(who: &AccountId) -> Self::Balance;
 
-
 	/// Moves `value` from balance to reserved balance.
 	///
 	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
@@ -658,16 +665,18 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	/// invoke `on_reserved_too_low` and could reap the account.
 	fn unreserve(who: &AccountId, value: Self::Balance) -> Self::Balance;
 
-	/// Moves up to `value` from reserved balance of account `slashed` to free balance of account
+	/// Moves up to `value` from reserved balance of account `slashed` to balance of account
 	/// `beneficiary`. `beneficiary` must exist for this to succeed. If it does not, `Err` will be
-	/// returned.
+	/// returned. Funds will be placed in either the `free` balance or the `reserved` balance,
+	/// depending on the `status`.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then `Ok(non_zero)` will be returned.
 	fn repatriate_reserved(
 		slashed: &AccountId,
 		beneficiary: &AccountId,
-		value: Self::Balance
+		value: Self::Balance,
+		status: BalanceStatus,
 	) -> result::Result<Self::Balance, DispatchError>;
 }
 
