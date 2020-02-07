@@ -77,8 +77,36 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+struct AddMemberListAppend;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for AddMemberListAppend {
+
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Registrar Count
+			(BenchmarkParameter::M, 1, 1000),
+		]
+	}
+
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> (crate::Call<T>, RawOrigin<T::AccountId>)
+	{
+		// Add r registrars
+		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::M).unwrap();
+		for i in 0..r.1 {
+			let _ = Benchmark::<T>::add_member_list_append(RawOrigin::Signed(account::<T>(i)).into());
+		}
+
+		sp_std::if_std!{
+			println!("# Users {:?}", MyList::<T>::get().len());
+		}
+
+		// Return the `add_registrar` r + 1 call
+		(crate::Call::<T>::add_member_list_append(), RawOrigin::Signed(account::<T>(r.1 + 1)))
+	}
+}
+
 enum SelectedBenchmark {
 	AddMemberList,
+	AddMemberListAppend,
 }
 
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
@@ -86,6 +114,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		match self {
 			Self::AddMemberList => <AddMemberList as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&AddMemberList),
+			Self::AddMemberListAppend => <AddMemberListAppend as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&AddMemberListAppend),
 		}
 	}
 
@@ -93,6 +122,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		match self {
 			Self::AddMemberList => <AddMemberList as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&AddMemberList, components),
+			Self::AddMemberListAppend => <AddMemberListAppend as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&AddMemberListAppend, components),
 		}
 	}
 }
@@ -103,6 +133,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		let selected_benchmark = match extrinsic.as_slice() {
 			b"time_host" => return benchmarking::time_host(steps, repeat),
 			b"add_member_list" => SelectedBenchmark::AddMemberList,
+			b"add_member_list_append" => SelectedBenchmark::AddMemberListAppend,
 			_ => return Vec::new(),
 		};
 

@@ -68,9 +68,15 @@ decl_module! {
 		pub fn add_member_list(origin) {
 			// Check it was signed and get the signer.
 			let who = ensure_signed(origin)?;
-
-			// Add user to the list.
+			// Push user to the list.
 			MyList::<T>::mutate(|x| x.push(who));
+		}
+
+		pub fn add_member_list_append(origin) {
+			// Check it was signed and get the signer.
+			let who = ensure_signed(origin)?;
+			// Append user to the list.
+			MyList::<T>::append(&[who])?;
 		}
 
 		pub fn check_member_list(origin) {
