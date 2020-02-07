@@ -58,7 +58,6 @@ where
 			}
 
 			let factory_state = FactoryState::new(
-				cli_args.mode.clone(),
 				cli_args.num,
 				cli_args.rounds,
 			);

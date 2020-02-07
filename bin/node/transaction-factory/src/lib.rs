@@ -39,11 +39,6 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, SimpleArithmetic, One, Zero,
 };
-pub use crate::modes::Mode;
-
-pub mod modes;
-mod complex_mode;
-mod simple_modes;
 
 pub trait RuntimeAdapter {
 	type AccountId: Display;
@@ -54,11 +49,10 @@ pub trait RuntimeAdapter {
 	type Phase: Copy;
 	type Secret;
 
-	fn new(mode: Mode, rounds: u64, start_number: u64) -> Self;
+	fn new(rounds: u64, start_number: u64) -> Self;
 
 	fn block_no(&self) -> Self::Number;
 	fn block_in_round(&self) -> Self::Number;
-	fn mode(&self) -> &Mode;
 	fn num(&self) -> Self::Number;
 	fn rounds(&self) -> Self::Number;
 	fn round(&self) -> Self::Number;
@@ -90,8 +84,7 @@ pub trait RuntimeAdapter {
 	fn gen_random_account_secret(seed: &Self::Number) -> Self::Secret;
 }
 
-/// Manufactures transactions. The exact amount depends on
-/// `mode`, `num` and `rounds`.
+/// Manufactures transactions. The exact amount depends on `num` and `rounds`.
 pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
 	mut factory_state: RA,
 	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
@@ -110,11 +103,6 @@ where
 	RA: RuntimeAdapter<Block = Block>,
 	Block::Hash: From<sp_core::H256>,
 {
-	if *factory_state.mode() != Mode::MasterToNToM && factory_state.rounds() > RA::Number::one() {
-		let msg = "The factory can only be used with rounds set to 1 in this mode.".into();
-		return Err(sc_cli::error::Error::Input(msg));
-	}
-
 	let best_header: Result<<Block as BlockT>::Header, sc_cli::error::Error> =
 		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
 	let mut best_hash = best_header?.hash();
@@ -123,24 +111,14 @@ where
 	let genesis_hash = client.block_hash(Zero::zero())?
 		.expect("Genesis block always exists; qed").into();
 
-	while let Some(block) = match factory_state.mode() {
-		Mode::MasterToNToM => complex_mode::next::<RA, _, _, _, _>(
+	while let Some(block) = next::<RA, _, _, _, _>(
 			&mut factory_state,
 			&client,
 			version,
 			genesis_hash,
 			best_hash.into(),
 			best_block_id,
-		),
-		_ => simple_modes::next::<RA, _, _, _, _>(
-			&mut factory_state,
-			&client,
-			version,
-			genesis_hash,
-			best_hash.into(),
-			best_block_id,
-		),
-	} {
+		) {
 		best_hash = block.header().hash();
 		best_block_id = BlockId::<Block>::hash(best_hash);
 		import_block(client.clone(), block);
@@ -208,4 +186,64 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		import_existing: false,
 	};
 	client.import_block(import, HashMap::new()).expect("Failed to import block");
+}
+
+fn next<RA, Backend, Exec, Block, RtApi>(
+	factory_state: &mut RA,
+	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
+	version: u32,
+	genesis_hash: <RA::Block as BlockT>::Hash,
+	prior_block_hash: <RA::Block as BlockT>::Hash,
+	prior_block_id: BlockId<Block>,
+) -> Option<Block>
+where
+	Block: BlockT,
+	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
+	Backend: sc_client_api::backend::Backend<Block> + Send,
+	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
+		BlockBuilder<Block, Error = sp_blockchain::Error> +
+		sp_api::ApiExt<Block, StateBackend = Backend::State>,
+	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
+	RA: RuntimeAdapter,
+{
+	if factory_state.block_no() >= factory_state.num() {
+		return None;
+	}
+
+	let from = (RA::master_account_id(), RA::master_account_secret());
+
+	let seed = factory_state.start_number();
+	let to = RA::gen_random_account_id(&seed);
+
+	let amount = RA::minimum_balance();
+
+	let transfer = factory_state.transfer_extrinsic(
+		&from.0,
+		&from.1,
+		&to,
+		&amount,
+		version,
+		&genesis_hash,
+		&prior_block_hash,
+	);
+
+	let inherents = RA::inherent_extrinsics(&factory_state);
+	let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
+		.expect("Failed to create inherent extrinsics");
+
+	let block = create_block::<RA, _, _, _, _>(&client, transfer, inherents);
+
+	factory_state.set_block_no(factory_state.block_no() + RA::Number::one());
+
+	info!(
+		"Created block {} with hash {}. Transferring {} from {} to {}.",
+		factory_state.block_no(),
+		prior_block_hash,
+		amount,
+		from.0,
+		to
+	);
+
+	Some(block)
 }

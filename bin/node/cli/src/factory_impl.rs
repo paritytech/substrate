@@ -33,7 +33,6 @@ use sp_runtime::{
 	generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount}
 };
 use node_transaction_factory::RuntimeAdapter;
-use node_transaction_factory::modes::Mode;
 use sp_inherents::InherentData;
 use sp_timestamp;
 use sp_finality_tracker;
@@ -42,8 +41,6 @@ type AccountPublic = <Signature as Verify>::Signer;
 
 pub struct FactoryState<N> {
 	block_no: N,
-
-	mode: Mode,
 	start_number: u32,
 	rounds: u32,
 	round: u32,
@@ -78,12 +75,10 @@ impl RuntimeAdapter for FactoryState<Number> {
 	type Number = Number;
 
 	fn new(
-		mode: Mode,
 		num: u64,
 		rounds: u64,
 	) -> FactoryState<Self::Number> {
 		FactoryState {
-			mode,
 			num: num as u32,
 			round: 0,
 			rounds: rounds as u32,
@@ -115,10 +110,6 @@ impl RuntimeAdapter for FactoryState<Number> {
 
 	fn start_number(&self) -> Self::Number {
 		self.start_number
-	}
-
-	fn mode(&self) -> &Mode {
-		&self.mode
 	}
 
 	fn set_block_no(&mut self, val: Self::Number) {
@@ -199,19 +190,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 		// TODO get correct index for account via api. See #2587.
 		// This currently prevents the factory from being used
 		// without a preceding purge of the database.
-		if self.mode == Mode::MasterToN || self.mode == Mode::MasterTo1 {
-			self.block_no() as Self::Index
-		} else {
-			match self.round() {
-				0 =>
-					// if round is 0 all transactions will be done with master as a sender
-					self.block_no() as Self::Index,
-				_ =>
-					// if round is e.g. 1 every sender account will be new and not yet have
-					// any transactions done
-					0
-			}
-		}
+		self.block_no() as Self::Index
 	}
 
 	fn extract_phase(
