@@ -208,7 +208,7 @@ enum Header {
 }
 
 impl Header {
-	fn read_from<M: Memory>(memory: &M, header_ptr: u32) -> Result<Self, Error> {
+	fn read_from<M: Memory + ?Sized>(memory: &M, header_ptr: u32) -> Result<Self, Error> {
 		let raw_header = memory.read_le_u64(header_ptr)?;
 
 		// Check if the header represents an occupied or free allocation and extract the header data
@@ -224,7 +224,7 @@ impl Header {
 	}
 
 	/// Write out this header to memory.
-	fn write_into<M: Memory>(&self, memory: &mut M, header_ptr: u32) -> Result<(), Error> {
+	fn write_into<M: Memory + ?Sized>(&self, memory: &mut M, header_ptr: u32) -> Result<(), Error> {
 		let (header_data, occupied_mask) = match *self {
 			Self::Occupied(order) => (order.into_raw(), 0x00000001_00000000),
 			Self::Free(link) => (link.into_raw(), 0x00000000_00000000),
@@ -321,9 +321,9 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `size` - size in bytes of the allocation request
-	pub fn allocate<M: Memory>(
+	pub fn allocate<M: Memory + ?Sized>(
 		&mut self,
-		mut mem: M,
+		mem: &mut M,
 		size: WordSize,
 	) -> Result<Pointer<u8>, Error> {
 		let order = Order::from_size(size)?;
@@ -337,7 +337,7 @@ impl FreeingBumpHeapAllocator {
 				);
 
 				// Remove this header from the free list.
-				let next_free = Header::read_from(&mem, header_ptr)?
+				let next_free = Header::read_from(mem, header_ptr)?
 					.into_free()
 					.ok_or_else(|| error("free list points to a occupied header"))?;
 				self.free_lists[order] = next_free;
@@ -351,7 +351,7 @@ impl FreeingBumpHeapAllocator {
 		};
 
 		// Write the order in the occupied header.
-		Header::Occupied(order).write_into(&mut mem, header_ptr)?;
+		Header::Occupied(order).write_into(mem, header_ptr)?;
 
 		self.total_size += order.size() + HEADER_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
@@ -365,18 +365,18 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator oper®®ates.
 	/// - `ptr` - pointer to the allocated chunk
-	pub fn deallocate<M: Memory>(&mut self, mut mem: M, ptr: Pointer<u8>) -> Result<(), Error> {
+	pub fn deallocate<M: Memory + ?Sized>(&mut self, mem: &mut M, ptr: Pointer<u8>) -> Result<(), Error> {
 		let header_ptr = u32::from(ptr)
 			.checked_sub(HEADER_SIZE)
 			.ok_or_else(|| error("Invalid pointer for deallocation"))?;
 
-		let order = Header::read_from(&mem, header_ptr)?
+		let order = Header::read_from(mem, header_ptr)?
 			.into_occupied()
 			.ok_or_else(|| error("the allocation points to an empty header"))?;
 
 		// Update the just freed header and knit it back to the free list.
 		let prev_head = self.free_lists.replace(order, Link::Ptr(header_ptr));
-		Header::Free(prev_head).write_into(&mut mem, header_ptr)?;
+		Header::Free(prev_head).write_into(mem, header_ptr)?;
 
 		// Do the total_size book keeping.
 		self.total_size = self
@@ -414,7 +414,7 @@ pub trait Memory {
 	fn size(&self) -> u32;
 }
 
-impl Memory for &mut [u8] {
+impl Memory for [u8] {
 	fn read_le_u64(&self, ptr: u32) -> Result<u64, Error> {
 		let range =
 			heap_range(ptr, 8, self.len()).ok_or_else(|| error("read out of heap bounds"))?;
@@ -728,10 +728,10 @@ mod tests {
 		let mut mem = [0u8; PAGE_SIZE as usize];
 
 		// when
-		Memory::write_le_u64(&mut mem.as_mut(), 40, 4480113).unwrap();
+		Memory::write_le_u64(mem.as_mut(), 40, 4480113).unwrap();
 
 		// then
-		let value = Memory::read_le_u64(&mut mem.as_mut(), 40).unwrap();
+		let value = Memory::read_le_u64(mem.as_mut(), 40).unwrap();
 		assert_eq!(value, 4480113);
 	}
 
@@ -776,9 +776,9 @@ mod tests {
 	fn header_read_write() {
 		let roundtrip = |header: Header| {
 			let mut memory = [0u8; 32];
-			header.write_into(&mut memory.as_mut(), 0).unwrap();
+			header.write_into(memory.as_mut(), 0).unwrap();
 
-			let read_header = Header::read_from(&mut memory.as_mut(), 0).unwrap();
+			let read_header = Header::read_from(memory.as_mut(), 0).unwrap();
 			assert_eq!(header, read_header);
 		};
 
