@@ -29,7 +29,7 @@ mod runtime;
 mod node_key;
 
 use sc_service::{
-	config::{Configuration, KeystoreConfig},
+	config::Configuration,
 	ServiceBuilderCommand,
 	RuntimeGenesis, ChainSpecExtension, ChainSpec,
 	AbstractService, Roles as ServiceRoles,
@@ -59,9 +59,6 @@ use lazy_static::lazy_static;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
 use chrono::prelude::*;
-
-/// default sub directory for the key store
-const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
 
 /// The maximum number of characters for a node name.
 const NODE_NAME_MAX_LENGTH: usize = 32;
@@ -260,44 +257,6 @@ fn fill_transaction_pool_configuration<G, E>(
 	let factor = 10;
 	options.transaction_pool.future.count = params.pool_limit / factor;
 	options.transaction_pool.future.total_bytes = params.pool_kbytes * 1024 / factor;
-
-	Ok(())
-}
-
-#[cfg(not(target_os = "unknown"))]
-fn input_keystore_password() -> Result<String, String> {
-	rpassword::read_password_from_tty(Some("Keystore password: "))
-		.map_err(|e| format!("{:?}", e))
-}
-
-/// Fill the password field of the given config instance.
-fn fill_config_keystore_password_and_path<G, E>(
-	config: &mut sc_service::Configuration<G, E>,
-	cli: &RunCmd,
-) -> Result<(), String> {
-	let password = if cli.password_interactive {
-		#[cfg(not(target_os = "unknown"))]
-		{
-			Some(input_keystore_password()?.into())
-		}
-		#[cfg(target_os = "unknown")]
-		None
-	} else if let Some(ref file) = cli.password_filename {
-		Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
-	} else if let Some(ref password) = cli.password {
-		Some(password.clone().into())
-	} else {
-		None
-	};
-
-	let path = cli.keystore_path.clone().or(
-		config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH)
-	);
-
-	config.keystore = KeystoreConfig::Path {
-		path: path.ok_or_else(|| "No `base_path` provided to create keystore path!")?,
-		password,
-	};
 
 	Ok(())
 }

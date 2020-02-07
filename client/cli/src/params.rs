@@ -18,7 +18,7 @@ use std::{str::FromStr, path::PathBuf};
 use structopt::{StructOpt, clap::arg_enum};
 use sc_service::{
 	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	config::DatabaseConfig, ChainSpec, PruningMode,
+	config::{DatabaseConfig, KeystoreConfig}, ChainSpec, PruningMode,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use crate::VersionInfo;
@@ -48,6 +48,9 @@ pub use crate::execution_strategy::ExecutionStrategy;
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
+/// default sub directory for the key store
+const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
+
 const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
@@ -889,7 +892,29 @@ impl RunCmd {
 	where
 		G: RuntimeGenesis,
 	{
-		crate::fill_config_keystore_password_and_path(&mut config, &self)?;
+		let password = if self.password_interactive {
+			#[cfg(not(target_os = "unknown"))]
+			{
+				Some(input_keystore_password()?.into())
+			}
+			#[cfg(target_os = "unknown")]
+			None
+		} else if let Some(ref file) = self.password_filename {
+			Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
+		} else if let Some(ref password) = self.password {
+			Some(password.clone().into())
+		} else {
+			None
+		};
+
+		let path = self.keystore_path.clone().or(
+			config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH)
+		);
+
+		config.keystore = KeystoreConfig::Path {
+			path: path.ok_or_else(|| "No `base_path` provided to create keystore path!".to_string())?,
+			password,
+		};
 
 		let keyring = self.get_keyring();
 		let is_dev = self.shared_params.dev;
@@ -1004,6 +1029,12 @@ impl RunCmd {
 
 		Ok(())
 	}
+}
+
+#[cfg(not(target_os = "unknown"))]
+fn input_keystore_password() -> Result<String, String> {
+	rpassword::read_password_from_tty(Some("Keystore password: "))
+		.map_err(|e| format!("{:?}", e))
 }
 
 fn generate_node_name() -> String {
