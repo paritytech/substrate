@@ -933,11 +933,7 @@ impl RunCmd {
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-		crate::update_config_for_running_node(
-			&mut config,
-			self,
-			&version,
-		)?;
+		crate::update_config_for_running_node(&mut config, self)?;
 
 		crate::run_node(config, new_light, new_full, &version)
 	}
