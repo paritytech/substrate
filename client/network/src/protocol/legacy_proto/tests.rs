@@ -18,13 +18,13 @@
 
 use futures::{prelude::*, ready};
 use codec::{Encode, Decode};
-use libp2p::core::nodes::Substream;
+use libp2p::core::nodes::{Substream, listeners::ListenerId};
 use libp2p::core::{ConnectedPoint, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::{Swarm, ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{PollParameters, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::{PeerId, Multiaddr, Transport};
 use rand::seq::SliceRandom;
-use std::{io, task::Context, task::Poll, time::Duration};
+use std::{error, io, task::Context, task::Poll, time::Duration};
 use crate::message::Message;
 use crate::protocol::legacy_proto::{LegacyProto, LegacyProtoOut};
 use sp_test_primitives::Block;
@@ -203,6 +203,14 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.inner.inject_new_external_addr(addr)
+	}
+
+	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn error::Error + 'static)) {
+		self.inner.inject_listener_error(id, err);
+	}
+
+	fn inject_listener_closed(&mut self, id: ListenerId) {
+		self.inner.inject_listener_closed(id);
 	}
 }
 

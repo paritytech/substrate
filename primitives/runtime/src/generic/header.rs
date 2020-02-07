@@ -22,6 +22,7 @@ use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef
 use crate::traits::{
 	self, Member, SimpleArithmetic, SimpleBitOps, Hash as HashT,
 	MaybeSerializeDeserialize, MaybeSerialize, MaybeDisplay,
+	MaybeMallocSizeOf,
 };
 use crate::generic::Digest;
 use sp_core::U256;
@@ -49,6 +50,22 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	pub extrinsics_root: Hash::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
 	pub digest: Digest<Hash::Output>,
+}
+
+#[cfg(feature = "std")]
+impl<Number, Hash> parity_util_mem::MallocSizeOf for Header<Number, Hash>
+where
+	Number: Copy + Into<U256> + TryFrom<U256> + parity_util_mem::MallocSizeOf,
+	Hash: HashT,
+	Hash::Output: parity_util_mem::MallocSizeOf,
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.parent_hash.size_of(ops) +
+			self.number.size_of(ops) +
+			self.state_root.size_of(ops) +
+			self.extrinsics_root.size_of(ops) +
+			self.digest.size_of(ops)
+	}
 }
 
 #[cfg(feature = "std")]
@@ -105,10 +122,11 @@ impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
 
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
 	Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + MaybeDisplay +
-		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256> + sp_std::str::FromStr,
+		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256> + sp_std::str::FromStr +
+		MaybeMallocSizeOf,
 	Hash: HashT,
 	Hash::Output: Default + sp_std::hash::Hash + Copy + Member + Ord +
-		MaybeSerialize + Debug + MaybeDisplay + SimpleBitOps + Codec,
+		MaybeSerialize + Debug + MaybeDisplay + SimpleBitOps + Codec + MaybeMallocSizeOf,
 {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;

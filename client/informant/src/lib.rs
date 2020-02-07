@@ -35,6 +35,7 @@ pub enum OutputFormat {
 /// Creates an informant in the form of a `Future` that must be polled regularly.
 pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futures::Future<Output = ()> {
 	let client = service.client();
+	let pool = service.transaction_pool();
 
 	let mut display = display::InformantDisplay::new(format);
 
@@ -47,6 +48,11 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			} else {
 				trace!(target: "usage", "Usage statistics not displayed as backend does not provide it")
 			}
+			trace!(
+				target: "usage",
+				"Subsystems memory [txpool: {} kB]",
+				parity_util_mem::malloc_size(&*pool) / 1024,
+			);
 			display.display(&info, net_status);
 			future::ready(())
 		});

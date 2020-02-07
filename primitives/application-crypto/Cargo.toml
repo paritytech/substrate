@@ -21,5 +21,9 @@ std = [ "full_crypto", "sp-core/std", "codec/std", "serde", "sp-std/std", "sp-io
 # or Intel SGX.
 # For the regular wasm runtime builds this should not be used.
 full_crypto = [
-    "sp-core/full_crypto"
+    "sp-core/full_crypto",
+	# Don't add `panic_handler` and `alloc_error_handler` since they are expected to be provided
+	# by the user anyway.
+	"sp-io/disable_panic_handler",
+	"sp-io/disable_oom",
 ]

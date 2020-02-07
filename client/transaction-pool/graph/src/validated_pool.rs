@@ -74,6 +74,17 @@ pub(crate) struct ValidatedPool<B: ChainApi> {
 	rotator: PoolRotator<ExHash<B>>,
 }
 
+impl<B: ChainApi> parity_util_mem::MallocSizeOf for ValidatedPool<B>
+where
+	B::Hash: parity_util_mem::MallocSizeOf,
+	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		// other entries insignificant or non-primary references
+		self.pool.size_of(ops)
+	}
+}
+
 impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, api: Arc<B>) -> Self {
