@@ -27,6 +27,7 @@ pub mod error;
 pub mod informant;
 mod runtime;
 mod node_key;
+mod commands;
 
 use sc_service::{
 	config::Configuration,
