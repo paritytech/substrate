@@ -21,8 +21,7 @@ use crate::chain_spec;
 use crate::cli::Cli;
 
 /// Parse and run command line arguments
-pub fn run(version: VersionInfo) -> error::Result<()>
-{
+pub fn run(version: VersionInfo) -> error::Result<()> {
 	let opt = sc_cli::from_args::<Cli>(&version);
 
 	let config = sc_service::Configuration::new(&version);
