@@ -2527,31 +2527,31 @@ dependencies = [
 
 [[package]]
 name = "kvdb"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8396be0e5561ccd1bf7ff0b2007487cdd7a87a056873fe6ea906b35d4dbf7ed8"
+checksum = "03080afe6f42cd996da9f568d6add5d7fb5ee2ea7fb7802d2d2cbd836958fd87"
 dependencies = [
  "parity-bytes",
- "parity-util-mem 0.4.1",
+ "parity-util-mem 0.5.1",
  "smallvec 1.2.0",
 ]
 
 [[package]]
 name = "kvdb-memorydb"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d25ef14155e418515c4839e9144c839de3506e68946f255a32b7f166095493d"
+checksum = "b9355274e5a9e0a7e8ef43916950eae3949024de2a8dffe4d5a6c13974a37c8e"
 dependencies = [
  "kvdb",
- "parity-util-mem 0.4.1",
- "parking_lot 0.9.0",
+ "parity-util-mem 0.5.1",
+ "parking_lot 0.10.0",
 ]
 
 [[package]]
 name = "kvdb-rocksdb"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af488cc16c3801705c8d681c3a32c8faa8fafc7fb5309dee0f573f3c6a19d395"
+checksum = "af36fd66ccd99f3f771ae39b75aaba28b952372b6debfb971134bf1f03466ab2"
 dependencies = [
  "fs-swap",
  "interleaved-ordered",
@@ -2559,8 +2559,8 @@ dependencies = [
  "log 0.4.8",
  "num_cpus",
  "owning_ref",
- "parity-util-mem 0.4.1",
- "parking_lot 0.9.0",
+ "parity-util-mem 0.5.1",
+ "parking_lot 0.10.0",
  "regex",
  "rocksdb",
  "smallvec 1.2.0",
@@ -2568,16 +2568,16 @@ dependencies = [
 
 [[package]]
 name = "kvdb-web"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37a0e36637fb86454de401e7cb88f40eb0ad1b9bcee837d46785e7c451f1ebf4"
+checksum = "7a985c47b4c46429e96033ebf6eaed784a81ceccb4e5df13d63f3b9078a4df81"
 dependencies = [
  "futures 0.3.1",
  "js-sys",
  "kvdb",
  "kvdb-memorydb",
  "log 0.4.8",
- "parity-util-mem 0.4.1",
+ "parity-util-mem 0.5.1",
  "send_wrapper 0.3.0",
  "wasm-bindgen",
  "web-sys",
@@ -4620,14 +4620,15 @@ dependencies = [
 
 [[package]]
 name = "parity-util-mem"
-version = "0.4.1"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "900dd84654b048e5bad420bb341658fc2c4d7fea628c22bcf4621733e54859b4"
+checksum = "ef1476e40bf8f5c6776e9600983435821ca86eb9819d74a6207cca69d091406a"
 dependencies = [
  "cfg-if",
  "impl-trait-for-tuples",
  "parity-util-mem-derive",
- "parking_lot 0.9.0",
+ "parking_lot 0.10.0",
+ "primitive-types",
  "smallvec 1.2.0",
  "winapi 0.3.8",
 ]
@@ -5629,6 +5630,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.8",
  "names",
+ "parity-util-mem 0.5.1",
  "regex",
  "rpassword",
  "sc-client-api",
@@ -5729,7 +5731,7 @@ dependencies = [
  "linked-hash-map",
  "log 0.4.8",
  "parity-scale-codec",
- "parity-util-mem 0.4.1",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
  "quickcheck",
  "sc-client",
@@ -6308,6 +6310,7 @@ dependencies = [
  "log 0.4.8",
  "parity-multiaddr 0.5.0",
  "parity-scale-codec",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
  "sc-chain-spec",
  "sc-client",
@@ -6422,6 +6425,7 @@ dependencies = [
  "futures 0.3.1",
  "log 0.4.8",
  "parity-scale-codec",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
  "serde",
  "sp-core",
@@ -6439,6 +6443,7 @@ dependencies = [
  "futures-diagnose",
  "log 0.4.8",
  "parity-scale-codec",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
  "sc-client-api",
  "sc-transaction-graph",
@@ -7001,6 +7006,7 @@ dependencies = [
  "log 0.4.8",
  "num-traits",
  "parity-scale-codec",
+ "parity-util-mem 0.5.1",
  "parking_lot 0.10.0",
  "pretty_assertions",
  "primitive-types",
@@ -7146,6 +7152,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "log 0.4.8",
  "parity-scale-codec",
+ "parity-util-mem 0.5.1",
  "paste",
  "rand 0.7.3",
  "serde",
@@ -7290,6 +7297,7 @@ name = "sp-test-primitives"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec",
+ "parity-util-mem 0.5.1",
  "serde",
  "sp-application-crypto",
  "sp-core",
@@ -7571,6 +7579,7 @@ dependencies = [
  "pallet-babe",
  "pallet-timestamp",
  "parity-scale-codec",
+ "parity-util-mem 0.5.1",
  "sc-client",
  "sc-executor",
  "serde",
