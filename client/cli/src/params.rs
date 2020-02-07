@@ -273,31 +273,6 @@ impl Subcommand {
 	}
 }
 
-impl RunCmd {
-	/// Run the command that runs the node
-	pub fn run<G, E, FNL, FNF, SL, SF>(
-		self,
-		mut config: Configuration<G, E>,
-		new_light: FNL,
-		new_full: FNF,
-		version: &VersionInfo,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
-		FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
-		SL: AbstractService + Unpin,
-		SF: AbstractService + Unpin,
-	{
-		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
-
-		self.update_config(&mut config)?;
-
-		crate::run_node(config, new_light, new_full, &version)
-	}
-}
-
 impl BuildSpecCmd {
 	/// Run the build-spec command
 	pub fn run<G, E>(
