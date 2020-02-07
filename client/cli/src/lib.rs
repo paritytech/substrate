@@ -239,8 +239,7 @@ where
 /// 1.  set the panic handler
 /// 2.  raise the FD limit
 /// 3.  initialize the logger
-pub fn init(shared_params: &SharedParams, version: &VersionInfo) -> error::Result<()>
-{
+pub fn init(shared_params: &SharedParams, version: &VersionInfo) -> error::Result<()> {
 	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
 		version.commit
@@ -535,8 +534,8 @@ where
 		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
 
-	config.tracing_targets = cli.tracing_targets.into();
-	config.tracing_receiver = cli.tracing_receiver.into();
+	config.tracing_targets = cli.import_params.tracing_targets.into();
+	config.tracing_receiver = cli.import_params.tracing_receiver.into();
 
 	// Imply forced authoring on --dev
 	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
