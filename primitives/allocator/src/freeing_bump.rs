@@ -94,7 +94,7 @@ macro_rules! trace {
 /// 64                | 3
 ///
 /// and so on.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 struct Order(u32);
 
 impl Order {
@@ -141,6 +141,11 @@ impl Order {
 	fn size(&self) -> u32 {
 		1 << MIN_POSSIBLE_ALLOCATION.trailing_zeros() << self.0
 	}
+
+	/// Extract the order as `u32`.
+	fn into_raw(self) -> u32 {
+		self.0
+	}
 }
 
 /// A marker for denoting the end of the linked list.
@@ -157,20 +162,93 @@ enum Link {
 
 impl Link {
 	/// Creates a link from raw value.
-	fn from_raw(raw: u64) -> Self {
-		debug_assert_eq!(raw as u32 as u64, raw);
-		if raw as u32 != EMPTY_MARKER {
+	fn from_raw(raw: u32) -> Self {
+		if raw != EMPTY_MARKER {
 			Self::Ptr(raw as u32)
 		} else {
 			Self::Null
 		}
 	}
 
-	/// Converts this link into a raw u64.
-	fn into_raw(self) -> u64 {
+	/// Converts this link into a raw u32.
+	fn into_raw(self) -> u32 {
 		match self {
-			Self::Null => EMPTY_MARKER as u64,
-			Self::Ptr(ptr) => ptr as u64,
+			Self::Null => EMPTY_MARKER,
+			Self::Ptr(ptr) => ptr,
+		}
+	}
+}
+
+/// A header of an allocation.
+///
+/// The header is encoded in memory as follows.
+///
+/// ## Free header
+///
+/// ```ignore
+/// 64             32                  0
+//  +--------------+-------------------+
+/// |            0 | next element link |
+/// +--------------+-------------------+
+/// ```
+///
+/// ## Occupied header
+///
+/// ```ignore
+/// 64             32                  0
+//  +--------------+-------------------+
+/// |            1 |             order |
+/// +--------------+-------------------+
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Header {
+	/// A free header contains a link to the next element to form a free linked list.
+	Free(Link),
+	/// An occupied header has attached order to know in which free list we should put the
+	/// allocation upon deallocation.
+	Occupied(Order),
+}
+
+impl Header {
+	fn read_from<M: Memory>(memory: &M, header_ptr: u32) -> Result<Self, Error> {
+		let raw_header = memory.read_le_u64(header_ptr)?;
+
+		// Check if the header represents an occupied or free allocation and extract the header data
+		// by trimming (and discarding) the high bits.
+		let occupied = raw_header & 0x00000001_00000000 != 0;
+		let header_data = raw_header as u32;
+
+		Ok(if occupied {
+			Self::Occupied(Order::from_raw(header_data)?)
+		} else {
+			Self::Free(Link::from_raw(header_data))
+		})
+	}
+
+	/// Write out this header to memory.
+	fn write_into<M: Memory>(&self, memory: &mut M, header_ptr: u32) -> Result<(), Error> {
+		let (header_data, occupied_mask) = match *self {
+			Self::Occupied(order) => (order.into_raw(), 0x00000001_00000000),
+			Self::Free(link) => (link.into_raw(), 0x00000000_00000000),
+		};
+		let raw_header = header_data as u64 | occupied_mask;
+		memory.write_le_u64(header_ptr, raw_header)?;
+		Ok(())
+	}
+
+	/// Returns the order of the allocation if this is an occupied header.
+	fn into_occupied(self) -> Option<Order> {
+		match self {
+			Self::Occupied(order) => Some(order),
+			_ => None,
+		}
+	}
+
+	/// Returns the link to the next element in the free list if this is a free header.
+	fn into_free(self) -> Option<Link> {
+		match self {
+			Self::Free(link) => Some(link),
+			_ => None,
 		}
 	}
 }
@@ -224,15 +302,19 @@ impl FreeingBumpHeapAllocator {
 				"Pointer is looked up in list of free entries, into which
 				only valid values are inserted; qed"
 			);
-			self.heads[order.0 as usize] = Link::from_raw(mem.read_le_u64(header_ptr)?);
+			let free_link = Header::read_from(&mem, header_ptr)?
+				.into_free()
+				.ok_or_else(|| error("free list points to a occupied header"))?;
+
+			self.heads[order.0 as usize] = free_link;
 			header_ptr
 		} else {
-			// Nothing to be freed. Bump.
+			// Corresponding free list is empty. Allocate a new item.
 			self.bump(order.size(), mem.size())?
 		};
 
 		// Write the order in the occupied header.
-		mem.write_le_u64(header_ptr, order.0 as u64)?;
+		Header::Occupied(order).write_into(&mut mem, header_ptr)?;
 
 		self.total_size = self.total_size + order.size() + HEADER_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
@@ -244,23 +326,20 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// # Arguments
 	///
-	/// - `mem` - a slice representing the linear memory on which this allocator operates.
+	/// - `mem` - a slice representing the linear memory on which this allocator oper®®ates.
 	/// - `ptr` - pointer to the allocated chunk
 	pub fn deallocate<M: Memory>(&mut self, mut mem: M, ptr: Pointer<u8>) -> Result<(), Error> {
 		let header_ptr = u32::from(ptr)
 			.checked_sub(HEADER_SIZE)
 			.ok_or_else(|| error("Invalid pointer for deallocation"))?;
 
-		// Read the order from the occupied header.
-		let order = Order::from_raw(
-			mem.read_le_u64(header_ptr)?
-				.try_into()
-				.map_err(|_| error("read invalid list index"))?,
-		)?;
+		let order = Header::read_from(&mem, header_ptr)?
+			.into_occupied()
+			.ok_or_else(|| error("the allocation points to an empty header"))?;
 
-		// Insert the just freed header into the free list.
-		let prev_head = self.heads[order.0 as usize].into_raw();
-		mem.write_le_u64(header_ptr, prev_head)?;
+		// Update the just freed header and knit it back to the free list.
+		let prev_head = self.heads[order.0 as usize];
+		Header::Free(prev_head).write_into(&mut mem, header_ptr)?;
 		self.heads[order.0 as usize] = Link::Ptr(header_ptr);
 
 		// Do the total_size book keeping.
@@ -656,5 +735,22 @@ mod tests {
 
 		// Second time we should be able to allocate all of them again.
 		let _ = (0..4).map(|_| heap.allocate(&mut mem[..], 8).unwrap()).collect::<Vec<_>>();
+	}
+
+	#[test]
+	fn header_read_write() {
+		let roundtrip = |header: Header| {
+			let mut memory = [0u8; 32];
+			header.write_into(&mut memory.as_mut(), 0).unwrap();
+
+			let read_header = Header::read_from(&mut memory.as_mut(), 0).unwrap();
+			assert_eq!(header, read_header);
+		};
+
+		roundtrip(Header::Occupied(Order(0)));
+		roundtrip(Header::Occupied(Order(1)));
+		roundtrip(Header::Free(Link::Null));
+		roundtrip(Header::Free(Link::Ptr(0)));
+		roundtrip(Header::Free(Link::Ptr(4)));
 	}
 }
