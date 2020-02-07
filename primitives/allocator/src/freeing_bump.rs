@@ -316,7 +316,7 @@ impl FreeingBumpHeapAllocator {
 		// Write the order in the occupied header.
 		Header::Occupied(order).write_into(&mut mem, header_ptr)?;
 
-		self.total_size = self.total_size + order.size() + HEADER_SIZE;
+		self.total_size += order.size() + HEADER_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
 
 		Ok(Pointer::new(header_ptr + HEADER_SIZE))
@@ -343,10 +343,9 @@ impl FreeingBumpHeapAllocator {
 		self.heads[order.0 as usize] = Link::Ptr(header_ptr);
 
 		// Do the total_size book keeping.
-		let item_size = order.size();
 		self.total_size = self
 			.total_size
-			.checked_sub(item_size as u32 + HEADER_SIZE)
+			.checked_sub(order.size() + HEADER_SIZE)
 			.ok_or_else(|| error("Unable to subtract from total heap size without overflow"))?;
 		trace!("Heap size is {} bytes after deallocation", self.total_size);
 
