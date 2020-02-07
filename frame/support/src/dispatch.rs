@@ -1429,6 +1429,19 @@ macro_rules! decl_module {
 				}
 			}
 		}
+
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::benchmarking::Call
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn all_calls() -> &'static [&'static str] {
+				&[
+					$(
+						stringify!($fn_name),
+					)*
+				]
+			}
+		}
+
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Callable<$trait_instance>
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
@@ -1534,6 +1547,24 @@ macro_rules! impl_outer_dispatch {
 					{}
 					0;
 					$( $camelcase ),*
+				}
+			}
+		}
+		impl $crate::benchmarking::Module for $call_type {
+			fn all_modules() -> &'static [&'static str] {
+				&[$(
+					stringify!($camelcase),
+				)*]
+			}
+
+			fn all_calls(module: &str) -> &'static [&'static str] {
+				match module {
+					$(
+						stringify!($camelcase) =>
+							<<$camelcase as $crate::dispatch::Callable<$runtime>>::Call
+								as $crate::benchmarking::Call>::all_calls(),
+					)*
+					_ => unreachable!(),
 				}
 			}
 		}
