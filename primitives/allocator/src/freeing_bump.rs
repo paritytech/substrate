@@ -310,7 +310,7 @@ impl FreeingBumpHeapAllocator {
 			header_ptr
 		} else {
 			// Corresponding free list is empty. Allocate a new item.
-			self.bump(order.size(), mem.size())?
+			self.bump(order.size() + HEADER_SIZE, mem.size())?
 		};
 
 		// Write the order in the occupied header.
@@ -353,18 +353,18 @@ impl FreeingBumpHeapAllocator {
 		Ok(())
 	}
 
-	/// Increases the `bumper` by `item_size + HEADER_SIZE`.
+	/// Increases the `bumper` by `size`.
 	///
 	/// Returns the `bumper` from before the increase.
 	/// Returns an `Error::AllocatorOutOfSpace` if the operation
 	/// would exhaust the heap.
-	fn bump(&mut self, item_size: u32, heap_end: u32) -> Result<u32, Error> {
-		if self.bumper + HEADER_SIZE + item_size > heap_end {
+	fn bump(&mut self, size: u32, heap_end: u32) -> Result<u32, Error> {
+		if self.bumper + size > heap_end {
 			return Err(Error::AllocatorOutOfSpace);
 		}
 
 		let res = self.bumper;
-		self.bumper += item_size + HEADER_SIZE;
+		self.bumper += size;
 		Ok(res)
 	}
 }
