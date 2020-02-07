@@ -196,7 +196,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 			state_cache_child_ratio:
 			config.state_cache_child_ratio.map(|v| (v, 100)),
 			pruning: config.pruning.clone(),
-			source: match &config.database {
+			source: match config.expect_database() {
 				DatabaseConfig::Path { path, cache_size } =>
 					sc_client_db::DatabaseSettingsSrc::Path {
 						path: path.clone(),
@@ -307,7 +307,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 				state_cache_child_ratio:
 					config.state_cache_child_ratio.map(|v| (v, 100)),
 				pruning: config.pruning.clone(),
-				source: match &config.database {
+				source: match config.expect_database() {
 					DatabaseConfig::Path { path, cache_size } =>
 						sc_client_db::DatabaseSettingsSrc::Path {
 							path: path.clone(),
@@ -1189,7 +1189,7 @@ ServiceBuilder<
 			task_executor: if let Some(exec) = config.task_executor {
 				exec
 			} else {
-				return Err(Error::TasksExecutorRequired);
+				return Err(Error::TaskExecutorRequired);
 			},
 			rpc_handlers,
 			_rpc: rpc,
