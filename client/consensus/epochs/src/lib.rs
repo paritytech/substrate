@@ -71,7 +71,7 @@ pub trait Epoch {
 	/// Descriptor for the next epoch.
 	type NextEpochDescriptor;
 	/// Type of the slot number.
-	type SlotNumber: Ord;
+	type SlotNumber: Ord + Copy;
 
 	/// Increment the epoch data, using the next epoch descriptor.
 	fn increment(&self, descriptor: Self::NextEpochDescriptor) -> Self;
@@ -165,6 +165,15 @@ impl<Epoch> AsRef<Epoch> for IncrementedEpoch<Epoch> {
 	}
 }
 
+impl<Epoch> AsMut<Epoch> for IncrementedEpoch<Epoch> {
+	fn as_mut(&mut self) -> &mut Epoch {
+		match self.0 {
+			PersistedEpoch::Genesis(_, ref mut epoch_1) => epoch_1,
+			PersistedEpoch::Regular(ref mut epoch_n) => epoch_n,
+		}
+	}
+}
+
 /// Tree of all epoch changes across all *seen* forks. Data stored in tree is
 /// the hash and block number of the block signaling the epoch change, and the
 /// epoch that was signalled at that block.
@@ -192,6 +201,22 @@ fn fake_head_hash<H: AsRef<[u8]> + AsMut<[u8]> + Clone>(parent_hash: &H) -> H {
 	// which has not been in the chain before (assuming a strong hash function).
 	h.as_mut()[0] ^= 0b10000000;
 	h
+}
+
+fn epoch_predicate<Epoch: crate::Epoch>(
+	slot_number: Epoch::SlotNumber,
+) -> impl Fn(&PersistedEpoch<Epoch>) -> bool {
+	// We want to find the deepest node in the tree which is an ancestor
+	// of our block and where the start slot of the epoch was before the
+	// slot of our block. The genesis special-case doesn't need to look
+	// at epoch_1 -- all we're doing here is figuring out which node
+	// we need.
+	move |epoch: &PersistedEpoch<Epoch>| match *epoch {
+		PersistedEpoch::Genesis(ref epoch_0, _) =>
+			epoch_0.start_slot() <= slot_number,
+		PersistedEpoch::Regular(ref epoch_n) =>
+			epoch_n.start_slot() <= slot_number,
+	}
 }
 
 impl<Hash, Number, Epoch> Default for EpochChanges<Hash, Number, Epoch> where
@@ -281,17 +306,7 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 			return Ok(Some(ViableEpoch::Genesis(UnimportedGenesisEpoch(genesis_epoch))));
 		}
 
-		// We want to find the deepest node in the tree which is an ancestor
-		// of our block and where the start slot of the epoch was before the
-		// slot of our block. The genesis special-case doesn't need to look
-		// at epoch_1 -- all we're doing here is figuring out which node
-		// we need.
-		let predicate = |epoch: &PersistedEpoch<Epoch>| match *epoch {
-			PersistedEpoch::Genesis(ref epoch_0, _) =>
-				epoch_0.start_slot() <= slot_number,
-			PersistedEpoch::Regular(ref epoch_n) =>
-				epoch_n.start_slot() <= slot_number,
-		};
+		let predicate = epoch_predicate::<Epoch>(slot_number);
 
 		self.inner.find_node_where(
 			&fake_head_hash,
@@ -310,6 +325,104 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 						epoch_0.clone()
 					},
 				PersistedEpoch::Regular(ref epoch_n) => epoch_n.clone(),
+			})))
+	}
+
+	/// Finds the epoch for a child of the given block, assuming the given slot number.
+	/// Returns a reference.
+	pub fn epoch_for_child_of_ref<'a, D: IsDescendentOfBuilder<Hash>, G>(
+		&'a self,
+		descendent_of_builder: D,
+		parent_hash: &Hash,
+		parent_number: Number,
+		slot_number: Epoch::SlotNumber,
+		make_genesis: G,
+	) -> Result<Option<ViableEpoch<&'a Epoch>>, fork_tree::Error<D::Error>>
+		where G: FnOnce(Epoch::SlotNumber) -> &'a Epoch
+	{
+		// find_node_where will give you the node in the fork-tree which is an ancestor
+		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
+		// then it won't be returned. we need to create a new fake chain head hash which
+		// "descends" from our parent-hash.
+		let fake_head_hash = fake_head_hash(parent_hash);
+
+		let is_descendent_of = descendent_of_builder
+			.build_is_descendent_of(Some((fake_head_hash, *parent_hash)));
+
+		if parent_number == Zero::zero() {
+			// need to insert the genesis epoch.
+			let genesis_epoch = make_genesis(slot_number);
+			return Ok(Some(ViableEpoch::Genesis(UnimportedGenesisEpoch(genesis_epoch))));
+		}
+
+		let predicate = epoch_predicate::<Epoch>(slot_number);
+
+		self.inner.find_node_where(
+			&fake_head_hash,
+			&(parent_number + One::one()),
+			&is_descendent_of,
+			&predicate,
+		)
+			.map(|n| n.map(|node| ViableEpoch::Regular(match node.data {
+				// Ok, we found our node.
+				// and here we figure out which of the internal epochs
+				// of a genesis node to use based on their start slot.
+				PersistedEpoch::Genesis(ref epoch_0, ref epoch_1) =>
+					if epoch_1.start_slot() <= slot_number {
+						epoch_1
+					} else {
+						epoch_0
+					},
+				PersistedEpoch::Regular(ref epoch_n) => epoch_n,
+			})))
+	}
+
+	/// Finds the epoch for a child of the given block, assuming the given slot number.
+	/// Returns a mutable reference.
+	pub fn epoch_for_child_of_mut<'a, D: IsDescendentOfBuilder<Hash>, G>(
+		&'a mut self,
+		descendent_of_builder: D,
+		parent_hash: &Hash,
+		parent_number: Number,
+		slot_number: Epoch::SlotNumber,
+		make_genesis: G,
+	) -> Result<Option<ViableEpoch<&'a mut Epoch>>, fork_tree::Error<D::Error>>
+		where G: FnOnce(Epoch::SlotNumber) -> &'a mut Epoch
+	{
+		// find_node_where will give you the node in the fork-tree which is an ancestor
+		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
+		// then it won't be returned. we need to create a new fake chain head hash which
+		// "descends" from our parent-hash.
+		let fake_head_hash = fake_head_hash(parent_hash);
+
+		let is_descendent_of = descendent_of_builder
+			.build_is_descendent_of(Some((fake_head_hash, *parent_hash)));
+
+		if parent_number == Zero::zero() {
+			// need to insert the genesis epoch.
+			let genesis_epoch = make_genesis(slot_number);
+			return Ok(Some(ViableEpoch::Genesis(UnimportedGenesisEpoch(genesis_epoch))));
+		}
+
+		let predicate = epoch_predicate::<Epoch>(slot_number);
+
+		self.inner.find_node_where_mut(
+			&fake_head_hash,
+			&(parent_number + One::one()),
+			&is_descendent_of,
+			&predicate,
+		)
+			.map(|n| n.map(|node| ViableEpoch::Regular(match node.data {
+				// Ok, we found our node.
+				// and here we figure out which of the internal epochs
+				// of a genesis node to use based on their start slot.
+				PersistedEpoch::Genesis(ref mut epoch_0, ref mut epoch_1) =>
+					if epoch_1.start_slot() <= slot_number {
+						epoch_1
+					} else {
+						epoch_0
+					},
+				PersistedEpoch::Regular(ref mut epoch_n) => epoch_n,
 			})))
 	}
 
