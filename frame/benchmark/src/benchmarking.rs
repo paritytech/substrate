@@ -33,7 +33,7 @@ fn account<T: Trait>(index: u32) -> T::AccountId {
 }
 
 // Custom implementation to handle benchmarking of calling a host function.
-fn time_host(steps: u32, repeat: u32) -> Vec<BenchmarkResults> {
+fn time_host(steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
 	let mut results: Vec<BenchmarkResults> = Vec::new();
 
 	for _ in 0..steps {
@@ -47,7 +47,7 @@ fn time_host(steps: u32, repeat: u32) -> Vec<BenchmarkResults> {
 		results.push((vec![(BenchmarkParameter::L, repeat)], elapsed));
 	}
 
-	return results;
+	return Ok(results);
 }
 
 struct AddMemberList;
@@ -60,7 +60,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> (crate::Call<T>, RawOrigin<T::AccountId>)
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::M).unwrap();
@@ -73,7 +73,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		}
 
 		// Return the `add_registrar` r + 1 call
-		(crate::Call::<T>::add_member_list(), RawOrigin::Signed(account::<T>(r.1 + 1)))
+		Ok((crate::Call::<T>::add_member_list(), RawOrigin::Signed(account::<T>(r.1 + 1))))
 	}
 }
 
@@ -87,7 +87,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> (crate::Call<T>, RawOrigin<T::AccountId>)
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::M).unwrap();
@@ -100,7 +100,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		}
 
 		// Return the `add_registrar` r + 1 call
-		(crate::Call::<T>::add_member_list_append(), RawOrigin::Signed(account::<T>(r.1 + 1)))
+		Ok((crate::Call::<T>::add_member_list_append(), RawOrigin::Signed(account::<T>(r.1 + 1))))
 	}
 }
 
@@ -118,7 +118,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		}
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> (crate::Call<T>, RawOrigin<T::AccountId>)
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
 		match self {
 			Self::AddMemberList => <AddMemberList as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&AddMemberList, components),
@@ -128,13 +128,13 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 }
 
 impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
-	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Vec<BenchmarkResults> {
+	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
 
 		let selected_benchmark = match extrinsic.as_slice() {
 			b"time_host" => return benchmarking::time_host(steps, repeat),
 			b"add_member_list" => SelectedBenchmark::AddMemberList,
 			b"add_member_list_append" => SelectedBenchmark::AddMemberListAppend,
-			_ => return Vec::new(),
+			_ => return Err("Extrinsic not found."),
 		};
 
 		// Warm up the DB?
@@ -164,7 +164,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					sp_std::if_std!{
 						println!("STEP {:?} REPEAT {:?}", s, r);
 					}
-					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c);
+					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
 					sp_io::benchmarking::commit_db();
 					let start = sp_io::benchmarking::current_time();
 					assert_eq!(call.dispatch(caller.into()), Ok(()));
@@ -175,6 +175,6 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 				}
 			}
 		}
-		return results;
+		return Ok(results);
 	}
 }

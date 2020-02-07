@@ -1322,7 +1322,7 @@ pub trait BlockIdTo<Block: self::Block> {
 /// The module benchmarking trait.
 pub trait Benchmarking<T> {
 	/// Run the benchmarks for this module.
-	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Vec<T>;
+	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<T>, &'static str>;
 }
 
 /// The required setup for creating a benchmark.
@@ -1331,7 +1331,7 @@ pub trait BenchmarkingSetup<T, Call, RawOrigin> {
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
 	/// Set up the storage, and prepare a call and caller to test in a single run of the benchmark.
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> (Call, RawOrigin);
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(Call, RawOrigin), &'static str>;
 }
 
 #[cfg(test)]

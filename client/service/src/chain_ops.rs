@@ -79,10 +79,8 @@ pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 		&(&pallet, &extrinsic, steps, repeat).encode(),
 		Default::default(),
 	).execute(strategy).map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
-	let results = <Vec<BenchmarkResults> as Decode>::decode(&mut &result[..]).unwrap();
-	if results.len() == 0 {
-		info!("No Results.");
-	} else {
+	let results = <Option<Vec<BenchmarkResults>> as Decode>::decode(&mut &result[..]).unwrap_or(None);
+	if let Some(results) = results {
 		// Print benchmark metadata
 		println!("Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}", pallet, extrinsic, steps, repeat);
 		// Print the table header
@@ -95,6 +93,8 @@ pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 			print!("{:?},\n", result.1);
 		});
 		info!("Done.");
+	} else {
+		info!("No Results.");
 	}
 	Ok(())
 }
