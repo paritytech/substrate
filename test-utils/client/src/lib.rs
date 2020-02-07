@@ -40,7 +40,7 @@ pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use sp_core::storage::{well_known_keys, ChildInfo};
+use sp_core::storage::ChildInfo;
 use sp_runtime::traits::Block as BlockT;
 use sc_client::LocalCallExecutor;
 

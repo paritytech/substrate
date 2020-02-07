@@ -21,7 +21,7 @@ use self::error::Error;
 use std::sync::Arc;
 use assert_matches::assert_matches;
 use futures01::stream::Stream;
-use sp_core::{storage::{well_known_keys, ChildInfo}, ChangesTrieConfiguration};
+use sp_core::{storage::ChildInfo, ChangesTrieConfiguration};
 use sp_core::hash::H256;
 use sp_io::hashing::blake2_256;
 use substrate_test_runtime_client::{

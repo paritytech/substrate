@@ -1040,7 +1040,7 @@ pub mod tests {
 		light_dispatch.add_request(&mut network_interface, RequestData::RemoteReadChild(RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b":child_storage:sub".to_vec(),
+			storage_key: b"sub".to_vec(),
 			child_info: child_info.to_vec(),
 			child_type,
 			keys: vec![b":key".to_vec()],

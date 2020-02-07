@@ -127,7 +127,6 @@ use frame_support::{
 };
 use frame_support::traits::{OnReapAccount, OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
-use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use pallet_contracts_primitives::{RentProjection, ContractAccessError};
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
@@ -233,8 +232,9 @@ impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, Blo
 
 /// Associated child trie unique id is built from the hash part of the trie id.
 pub(crate) fn trie_unique_id(trie_id: &[u8]) -> child::ChildInfo {
-	let start = CHILD_STORAGE_KEY_PREFIX.len() + b"default:".len();
-	child::ChildInfo::new_default(&trie_id[start ..])
+	// Every new contract uses a new trie id and trie id results from
+	// hashing, so we can use child storage key (trie id) for child info.
+	child::ChildInfo::new_uid_parent_key(trie_id)
 }
 
 pub type TombstoneContractInfo<T> =
@@ -267,10 +267,6 @@ pub trait TrieIdGenerator<AccountId> {
 	///
 	/// The implementation must ensure every new trie id is unique: two consecutive calls with the
 	/// same parameter needs to return different trie id values.
-	///
-	/// Also, the implementation is responsible for ensuring that `TrieId` starts with
-	/// `:child_storage:`.
-	/// TODO: We want to change this, see https://github.com/paritytech/substrate/issues/2325
 	fn trie_id(account_id: &AccountId) -> TrieId;
 }
 
@@ -295,12 +291,7 @@ where
 		buf.extend_from_slice(account_id.as_ref());
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
 
-		// TODO: see https://github.com/paritytech/substrate/issues/2325
-		CHILD_STORAGE_KEY_PREFIX.iter()
-			.chain(b"default:")
-			.chain(T::Hashing::hash(&buf[..]).as_ref().iter())
-			.cloned()
-			.collect()
+		T::Hashing::hash(&buf[..]).as_ref().to_vec()
 	}
 }
 
