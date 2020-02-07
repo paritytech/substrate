@@ -57,9 +57,9 @@ where
 			}
 
 			// Setup tracing.
-			if let Some(tracing_targets) = cli_args.shared_params.tracing_targets.as_ref() {
+			if let Some(tracing_targets) = cli_args.import_params.tracing_targets.as_ref() {
 				let subscriber = sc_tracing::ProfilingSubscriber::new(
-					cli_args.shared_params.tracing_receiver.into(), tracing_targets
+					cli_args.import_params.tracing_receiver.into(), tracing_targets
 				);
 				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
 					panic!("Unable to set global default subscriber {}", e);

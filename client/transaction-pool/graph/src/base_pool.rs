@@ -84,7 +84,7 @@ pub struct PruneStatus<Hash, Ex> {
 
 /// Immutable transaction
 #[cfg_attr(test, derive(Clone))]
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, parity_util_mem::MallocSizeOf)]
 pub struct Transaction<Hash, Extrinsic> {
 	/// Raw extrinsic representing that transaction.
 	pub data: Extrinsic,
@@ -209,7 +209,7 @@ const RECENTLY_PRUNED_TAGS: usize = 2;
 /// as-is for the second time will fail or produce unwanted results.
 /// Most likely it is required to revalidate them and recompute set of
 /// required tags.
-#[derive(Debug)]
+#[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 	reject_future_transactions: bool,
 	future: FutureTransactions<Hash, Ex>,
@@ -844,6 +844,33 @@ mod tests {
 		} else {
 			assert!(false, "Invalid error kind: {:?}", err);
 		}
+	}
+
+	#[test]
+	fn can_track_heap_size() {
+		let mut pool = pool();
+		pool.import(Transaction {
+			data: vec![5u8; 1024],
+			bytes: 1,
+			hash: 5,
+			priority: 5u64,
+			valid_till: 64u64,
+			requires: vec![],
+			provides: vec![vec![0], vec![4]],
+			propagate: true,
+		}).expect("import 1 should be ok");
+		pool.import(Transaction {
+			data: vec![3u8; 1024],
+			bytes: 1,
+			hash: 7,
+			priority: 5u64,
+			valid_till: 64u64,
+			requires: vec![],
+			provides: vec![vec![2], vec![7]],
+			propagate: true,
+		}).expect("import 2 should be ok");
+
+		assert!(parity_util_mem::malloc_size(&pool) > 5000);
 	}
 
 	#[test]

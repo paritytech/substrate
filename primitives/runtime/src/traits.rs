@@ -470,6 +470,9 @@ sp_core::impl_maybe_marker!(
 
 	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
 	trait MaybeSerializeDeserialize: DeserializeOwned, Serialize;
+
+	/// A type that implements MallocSizeOf.
+	trait MaybeMallocSizeOf: parity_util_mem::MallocSizeOf;
 );
 
 /// A type that provides a randomness beacon.
@@ -503,13 +506,18 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Header:
+	Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug +
+	MaybeMallocSizeOf + 'static
+{
 	/// Header number.
 	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr;
+		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr
+		+ MaybeMallocSizeOf;
 	/// Header hash type
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
-		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>
+		+ AsMut<[u8]> + MaybeMallocSizeOf;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -557,14 +565,15 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 /// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + MaybeMallocSizeOf + 'static {
 	/// Type for extrinsics.
-	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
+	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize + MaybeMallocSizeOf;
 	/// Header type.
-	type Header: Header<Hash=Self::Hash>;
+	type Header: Header<Hash=Self::Hash> + MaybeMallocSizeOf;
 	/// Block hash type.
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
-		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>
+		+ MaybeMallocSizeOf;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
@@ -583,8 +592,9 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8>;
 }
 
+
 /// Something that acts like an `Extrinsic`.
-pub trait Extrinsic: Sized {
+pub trait Extrinsic: Sized + MaybeMallocSizeOf {
 	/// The function call.
 	type Call;
 
