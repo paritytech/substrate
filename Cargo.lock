@@ -3372,6 +3372,7 @@ dependencies = [
  "sc-client-api",
  "sc-client-db",
  "sc-consensus-babe",
+ "sc-consensus-epochs",
  "sc-finality-grandpa",
  "sc-keystore",
  "sc-network",
@@ -3380,6 +3381,7 @@ dependencies = [
  "sc-service",
  "sc-service-test",
  "sc-telemetry",
+ "sc-tracing",
  "sc-transaction-pool",
  "serde",
  "sp-authority-discovery",
@@ -3397,6 +3399,7 @@ dependencies = [
  "structopt",
  "substrate-build-script-utils",
  "tempfile",
+ "tracing",
  "vergen",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -5786,6 +5789,7 @@ dependencies = [
  "sc-block-builder",
  "sc-client",
  "sc-client-api",
+ "sc-consensus-epochs",
  "sc-consensus-slots",
  "sc-consensus-uncles",
  "sc-executor",
@@ -5811,6 +5815,18 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.1.22",
+]
+
+[[package]]
+name = "sc-consensus-epochs"
+version = "0.8.0"
+dependencies = [
+ "fork-tree",
+ "parity-scale-codec",
+ "parking_lot 0.10.0",
+ "sc-client-api",
+ "sp-blockchain",
+ "sp-runtime",
 ]
 
 [[package]]

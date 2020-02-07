@@ -106,7 +106,7 @@ impl FreeingBumpHeapAllocator {
 
 		FreeingBumpHeapAllocator {
 			bumper: 0,
-			heads: [0; N],
+			heads: [u32::max_value(); N],
 			ptr_offset,
 			total_size: 0,
 		}
@@ -138,31 +138,30 @@ impl FreeingBumpHeapAllocator {
 		}
 
 		let list_index = (item_size.trailing_zeros() - 3) as usize;
-		let ptr: u32 = if self.heads[list_index] != 0 {
+		let ptr: u32 = if self.heads[list_index] != u32::max_value() {
 			// Something from the free list
-			let item = self.heads[list_index];
-			let ptr = item + PREFIX_SIZE;
+			let ptr = self.heads[list_index];
 			assert!(
-				ptr + item_size <= max_heap_size,
+				ptr + item_size + PREFIX_SIZE <= max_heap_size,
 				"Pointer is looked up in list of free entries, into which
 				only valid values are inserted; qed"
 			);
 
-			self.heads[list_index] = self.get_heap_u64(mem, item)?
+			self.heads[list_index] = self.get_heap_u64(mem, ptr)?
 				.try_into()
 				.map_err(|_| error("read invalid free list pointer"))?;
 			ptr
 		} else {
 			// Nothing to be freed. Bump.
-			self.bump(item_size, max_heap_size)? + PREFIX_SIZE
+			self.bump(item_size, max_heap_size)?
 		};
 
-		self.set_heap_u64(mem, ptr - PREFIX_SIZE, list_index as u64)?;
+		self.set_heap_u64(mem, ptr, list_index as u64)?;
 
 		self.total_size = self.total_size + item_size + PREFIX_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
 
-		Ok(Pointer::new(self.ptr_offset + ptr))
+		Ok(Pointer::new(self.ptr_offset + ptr + PREFIX_SIZE))
 	}
 
 	/// Deallocates the space which was allocated for a pointer.
@@ -173,18 +172,18 @@ impl FreeingBumpHeapAllocator {
 	/// - `ptr` - pointer to the allocated chunk
 	pub fn deallocate(&mut self, mem: &mut [u8], ptr: Pointer<u8>) -> Result<(), Error> {
 		let ptr = u32::from(ptr) - self.ptr_offset;
-		if ptr < PREFIX_SIZE {
-			return Err(error("Invalid pointer for deallocation"));
-		}
+		let ptr = ptr.checked_sub(PREFIX_SIZE).ok_or_else(||
+			error("Invalid pointer for deallocation")
+		)?;
 
-		let list_index: usize = self.get_heap_u64(mem, ptr - PREFIX_SIZE)?
+		let list_index: usize = self.get_heap_u64(mem, ptr)?
 			.try_into()
 			.map_err(|_| error("read invalid list index"))?;
 		if list_index > self.heads.len() {
 			return Err(error("read invalid list index"));
 		}
-		self.set_heap_u64(mem, ptr - PREFIX_SIZE, self.heads[list_index] as u64)?;
-		self.heads[list_index] = ptr - PREFIX_SIZE;
+		self.set_heap_u64(mem, ptr, self.heads[list_index] as u64)?;
+		self.heads[list_index] = ptr;
 
 		let item_size = Self::get_item_size_from_index(list_index);
 		self.total_size = self.total_size.checked_sub(item_size as u32 + PREFIX_SIZE)
@@ -357,7 +356,7 @@ mod tests {
 		// then
 		// should have re-allocated
 		assert_eq!(ptr3, to_pointer(padded_offset + 16 + PREFIX_SIZE));
-		assert_eq!(heap.heads, [0; N]);
+		assert_eq!(heap.heads, [u32::max_value(); N]);
 	}
 
 	#[test]
@@ -563,4 +562,16 @@ mod tests {
 		assert_eq!(item_size as u32, MAX_POSSIBLE_ALLOCATION);
 	}
 
+	#[test]
+	fn deallocate_needs_to_maintain_linked_list() {
+		let mut mem = [0u8; 8 * 2 * 4 + ALIGNMENT as usize];
+		let mut heap = FreeingBumpHeapAllocator::new(0);
+
+		// Allocate and free some pointers
+		let ptrs = (0..4).map(|_| heap.allocate(&mut mem, 8).unwrap()).collect::<Vec<_>>();
+		ptrs.into_iter().for_each(|ptr| heap.deallocate(&mut mem, ptr).unwrap());
+
+		// Second time we should be able to allocate all of them again.
+		let _ = (0..4).map(|_| heap.allocate(&mut mem, 8).unwrap()).collect::<Vec<_>>();
+	}
 }
