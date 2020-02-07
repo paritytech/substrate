@@ -936,7 +936,7 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 	}
-parameter_types! {
+	parameter_types! {
 		pub const BasicDeposit: u64 = 10;
 		pub const FieldDeposit: u64 = 10;
 		pub const SubAccountDeposit: u64 = 10;
