@@ -270,7 +270,9 @@ pub mod tests {
 			let mut sub_root = Vec::new();
 			root.encode_to(&mut sub_root);
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			trie.insert(CHILD_KEY_1, &sub_root[..]).expect("insert failed");
+			let mut prefixed_storage_key = CHILD_KEY_1.to_vec();
+			CHILD_INFO_1.do_prefix_key(&mut prefixed_storage_key, None);
+			trie.insert(prefixed_storage_key.as_slice(), &sub_root[..]).expect("insert failed");
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");

@@ -85,9 +85,7 @@ fn should_return_child_storage() {
 		.build());
 	let genesis_hash = client.genesis_hash();
 	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
-	let child_key = StorageKey(
-		well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect()
-	);
+	let child_key = StorageKey(b"test".to_vec());
 	let key = StorageKey(b"key".to_vec());
 
 

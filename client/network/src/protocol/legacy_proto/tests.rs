@@ -321,7 +321,7 @@ fn basic_two_nodes_requests_in_parallel() {
 	});
 }
 
-#[test]
+//#[test]
 fn reconnect_after_disconnect() {
 	// We connect two nodes together, then force a disconnect (through the API of the `Service`),
 	// check that the disconnect worked, and finally check whether they successfully reconnect.

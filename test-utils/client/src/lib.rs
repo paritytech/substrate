@@ -190,7 +190,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			// Add some child storage keys.
 			for (key, child_content) in self.child_storage_extension {
 				storage.children.insert(
-					well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().cloned().chain(key).collect(),
+					key,
 					StorageChild {
 						data: child_content.data.into_iter().collect(),
 						child_info: child_content.child_info,

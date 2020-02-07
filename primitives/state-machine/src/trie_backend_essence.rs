@@ -472,7 +472,10 @@ mod test {
 		}
 		{
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root_2);
-			trie.insert(b"MyChild", root_1.as_ref()).expect("insert failed");
+			let mut prefixed_storage_key = b"MyChild".to_vec();
+			child_info.do_prefix_key(&mut prefixed_storage_key, None);
+			trie.insert(prefixed_storage_key.as_slice(), root_1.as_ref())
+				.expect("insert failed");
 		};
 
 		let essence_1 = TrieBackendEssence::new(mdb, root_1);

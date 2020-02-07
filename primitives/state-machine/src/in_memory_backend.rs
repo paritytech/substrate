@@ -336,11 +336,13 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		let mut new_child_roots = Vec::new();
 		let mut root_map = None;
 		for (child_info, map) in &self.inner {
-			if let Some((storage_key, _child_info)) = child_info.as_ref() {
+			if let Some((storage_key, child_info)) = child_info.as_ref() {
+				let mut prefix_storage_key = storage_key.to_vec();
+				child_info.as_ref().do_prefix_key(&mut prefix_storage_key, None);
 				// no need to use child_info at this point because we use a MemoryDB for
 				// proof (with PrefixedMemoryDB it would be needed).
 				let ch = insert_into_memory_db::<H, _>(&mut mdb, map.clone().into_iter())?;
-				new_child_roots.push((storage_key.clone(), ch.as_ref().into()));
+				new_child_roots.push((prefix_storage_key, ch.as_ref().into()));
 			} else {
 				root_map = Some(map);
 			}
@@ -378,6 +380,8 @@ mod tests {
 		let trie_backend = storage.as_trie_backend().unwrap();
 		assert_eq!(trie_backend.child_storage(b"1", child_info.as_ref(), b"2").unwrap(),
 			Some(b"3".to_vec()));
-		assert!(trie_backend.storage(b"1").unwrap().is_some());
+		let mut prefixed_storage_key = b"1".to_vec();
+		child_info.as_ref().do_prefix_key(&mut prefixed_storage_key, None);
+		assert!(trie_backend.storage(prefixed_storage_key.as_slice()).unwrap().is_some());
 	}
 }

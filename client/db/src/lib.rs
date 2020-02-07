@@ -582,12 +582,6 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 			return Err(sp_blockchain::Error::GenesisInvalid.into());
 		}
 
-		for child_key in storage.children.keys() {
-			if !well_known_keys::is_child_storage_key(&child_key) {
-				return Err(sp_blockchain::Error::GenesisInvalid.into());
-			}
-		}
-
 		let child_delta = storage.children.into_iter().map(|(storage_key, child_content)|	(
 			storage_key,
 			child_content.data.into_iter().map(|(k, v)| (k, Some(v))), child_content.child_info),
