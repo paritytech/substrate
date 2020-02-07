@@ -28,22 +28,54 @@ use crate::Module as Identity;
 const MAX_REGISTRARS: u32 = 16;
 
 // Support Functions
-fn account<T: Trait>(index: u32) -> T::AccountId {
-	let entropy = (b"benchmark", index).using_encoded(blake2_256);
+fn account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
+	let entropy = (name, index).using_encoded(blake2_256);
 	T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 }
 
-fn add_n_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
+fn add_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
 	for i in 0..r {
-		let _ = T::Currency::make_free_balance_be(&account::<T>(i), BalanceOf::<T>::max_value());
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), account::<T>(i))?;
-		Identity::<T>::set_fee(RawOrigin::Signed(account::<T>(i)).into(), i.into(), 10.into())?;
+		let _ = T::Currency::make_free_balance_be(&account::<T>("registrar", i), BalanceOf::<T>::max_value());
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), account::<T>("registrar", i))?;
+		Identity::<T>::set_fee(RawOrigin::Signed(account::<T>("registrar", i)).into(), i.into(), 10.into())?;
 		let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
-		Identity::<T>::set_fields(RawOrigin::Signed(account::<T>(i)).into(), i.into(), fields)?;
+		Identity::<T>::set_fields(RawOrigin::Signed(account::<T>("registrar", i)).into(), i.into(), fields)?;
 	}
 
 	assert_eq!(Registrars::<T>::get().len(), r as usize);
 	Ok(())
+}
+
+fn add_sub_accounts<T: Trait>(who: T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
+	let mut subs = Vec::new();
+	let who_origin = RawOrigin::Signed(who.clone());
+	let data = Data::Raw(vec![0; 32]);
+
+	for i in 0..s {
+		let sub_account = account::<T>("sub", i);
+		subs.push((sub_account, data.clone()));
+	}
+	Identity::<T>::set_subs(who_origin.into(), subs.clone())?;
+
+	return Ok(subs)
+}
+
+fn create_identity_info<T: Trait>(num_fields: u32) -> IdentityInfo {
+	let data = Data::Raw(vec![0; 32]);
+
+	let info = IdentityInfo {
+		additional: vec![(data.clone(), data.clone()); num_fields as usize],
+		display: data.clone(),
+		legal: data.clone(),
+		web: data.clone(),
+		riot: data.clone(),
+		email: data.clone(),
+		pgp_fingerprint: Some([0; 20]),
+		image: data.clone(),
+		twitter: data.clone(),
+	};
+
+	return info
 }
 
 struct AddRegistrar;
@@ -60,17 +92,10 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap().1;
-		for i in 0..r {
-			let _ = T::Currency::make_free_balance_be(&account::<T>(i), BalanceOf::<T>::max_value());
-			Identity::<T>::add_registrar(RawOrigin::Root.into(), account::<T>(i))?;
-		}
-
-		sp_std::if_std!{
-			println!("# Registrars {:?}", Registrars::<T>::get().len());
-		}
+		benchmarking::add_registrars::<T>(r)?;
 
 		// Return the `add_registrar` r + 1 call
-		Ok((crate::Call::<T>::add_registrar(account::<T>(r + 1)), RawOrigin::Root))
+		Ok((crate::Call::<T>::add_registrar(account::<T>("registrar", r + 1)), RawOrigin::Root))
 	}
 }
 
@@ -90,39 +115,25 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap().1;
-		benchmarking::add_n_registrars::<T>(r)?;
-
-		// Generic data to be used.
-		let data = Data::Raw(vec![0; 32]);
+		benchmarking::add_registrars::<T>(r)?;
 
 		// The target user
-		let caller = account::<T>(r + 1);
+		let caller = account::<T>("caller", r);
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
 		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
 
-		// Give them some monnnayy
+		// Give them some money
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		// Add an initial identity
-		let initial_info = IdentityInfo {
-			additional: vec![(data.clone(), data.clone())],
-			display: data.clone(),
-			legal: data.clone(),
-			web: data.clone(),
-			riot: data.clone(),
-			email: data.clone(),
-			pgp_fingerprint: Some([0; 20]),
-			image: data.clone(),
-			twitter: data.clone(),
-		};
-
+		let initial_info = benchmarking::create_identity_info::<T>(1);
 		Identity::<T>::set_identity(caller_origin.clone(), initial_info)?;
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
 			Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into())?;
 			Identity::<T>::provide_judgement(
-				RawOrigin::Signed(account::<T>(i)).into(),
+				RawOrigin::Signed(account::<T>("registrar", i)).into(),
 				i,
 				caller_lookup.clone(),
 				Judgement::Reasonable
@@ -132,17 +143,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		// Create identity info with x additional fields
 		let x = components.iter().find(|&c| c.0 == BenchmarkParameter::X).unwrap().1;
 		// 32 byte data that we reuse below
-		let info = IdentityInfo {
-			additional: vec![(data.clone(), data.clone()); x as usize],
-			display: data.clone(),
-			legal: data.clone(),
-			web: data.clone(),
-			riot: data.clone(),
-			email: data.clone(),
-			pgp_fingerprint: Some([0; 20]),
-			image: data.clone(),
-			twitter: data.clone(),
-		};
+		let info = benchmarking::create_identity_info::<T>(x);
 
 		// Return the `set_identity` call
 		Ok((crate::Call::<T>::set_identity(info), RawOrigin::Signed(caller)))
@@ -165,38 +166,22 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		let data = Data::Raw(vec![0; 32]);
 
 		// The target user
-		let caller = account::<T>(0);
+		let caller = account::<T>("caller", 0);
 		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
 
-		// Give them some monnnayy
+		// Give them some money
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let info = IdentityInfo {
-			additional: vec![(data.clone(), data.clone())],
-			display: data.clone(),
-			legal: data.clone(),
-			web: data.clone(),
-			riot: data.clone(),
-			email: data.clone(),
-			pgp_fingerprint: Some([0; 20]),
-			image: data.clone(),
-			twitter: data.clone(),
-		};
-
 		// Create their main identity
+		let info = benchmarking::create_identity_info::<T>(1);
 		Identity::<T>::set_identity(caller_origin.clone(), info)?;
 
 		// Give them s many sub accounts
 		let s = components.iter().find(|&c| c.0 == BenchmarkParameter::S).unwrap().1;
-		let mut subs = Vec::new();
-		for i in 0..s {
-			let sub_account = account::<T>(i);
-			subs.push((sub_account, data.clone()));
-		}
-		Identity::<T>::set_subs(caller_origin.clone(), subs.clone())?;
+		let mut subs = add_sub_accounts::<T>(caller.clone(), s)?;
 
 		// Create an s+1 sub account to add
-		subs.push((account::<T>(s), data));
+		subs.push((account::<T>("sub", s+1), data));
 
 		// Return the `set_subs` call
 		Ok((crate::Call::<T>::set_subs(subs), RawOrigin::Signed(caller)))
@@ -219,45 +204,28 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{	
-		// Generic data to be used.
-		let data = Data::Raw(vec![0; 32]);
-
 		// The target user
-		let caller = account::<T>(0);
+		let caller = account::<T>("caller", 0);
 		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
 
-		// Give them some monnnayy
+		// Register r registrars
+		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap().1;
+		benchmarking::add_registrars::<T>(r)?;
+
+		// Give them some money
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let info = IdentityInfo {
-			additional: vec![(data.clone(), data.clone())],
-			display: data.clone(),
-			legal: data.clone(),
-			web: data.clone(),
-			riot: data.clone(),
-			email: data.clone(),
-			pgp_fingerprint: Some([0; 20]),
-			image: data.clone(),
-			twitter: data.clone(),
-		};
-
-		// Create their main identity
+		// Create their main identity with x additional fields
+		let x = components.iter().find(|&c| c.0 == BenchmarkParameter::X).unwrap().1;
+		let info = benchmarking::create_identity_info::<T>(x);
 		Identity::<T>::set_identity(caller_origin.clone(), info)?;
 
 		// Give them s many sub accounts
 		let s = components.iter().find(|&c| c.0 == BenchmarkParameter::S).unwrap().1;
-		let mut subs = Vec::new();
-		for i in 0..s {
-			let sub_account = account::<T>(i);
-			subs.push((sub_account, data.clone()));
-		}
-		Identity::<T>::set_subs(caller_origin.clone(), subs.clone())?;
+		let _ = benchmarking::add_sub_accounts::<T>(caller.clone(), s)?;
 
-		// Create an s+1 sub account to add
-		subs.push((account::<T>(s), data));
-
-		// Return the `set_subs` call
-		Ok((crate::Call::<T>::set_subs(subs), RawOrigin::Signed(caller)))
+		// Return the `clear_identity` call
+		Ok((crate::Call::<T>::clear_identity(), RawOrigin::Signed(caller)))
 	}
 }
 
@@ -329,7 +297,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 						println!("STEP {:?} REPEAT {:?}", s, r);
 					}
 					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
-					sp_io::benchmarking::commit_db();
+					//sp_io::benchmarking::commit_db();
 					let start = sp_io::benchmarking::current_time();
 					call.dispatch(caller.into())?;
 					let finish = sp_io::benchmarking::current_time();
