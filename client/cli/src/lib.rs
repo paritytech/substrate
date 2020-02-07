@@ -44,10 +44,7 @@ use sc_network::{
 	},
 };
 
-use std::{
-	io::Write, iter, fmt::Debug, fs,
-	net::{Ipv4Addr, SocketAddr}, path::PathBuf,
-};
+use std::{io::Write, iter, fmt::Debug, fs, net::Ipv4Addr, path::PathBuf};
 
 use regex::Regex;
 use structopt::{StructOpt, clap};
@@ -60,51 +57,19 @@ pub use params::{
 	ExportBlocksCmd, ImportBlocksCmd, CheckBlockCmd, PurgeChainCmd, RevertCmd,
 };
 pub use traits::GetSharedParams;
-use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
 use sc_telemetry::TelemetryEndpoints;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
 use execution_strategy::*;
-use names::{Generator, Name};
 use chrono::prelude::*;
 
-/// default sub directory to store network config
-const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
-/// default sub directory to store database
-const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
 
 /// The maximum number of characters for a node name.
 const NODE_NAME_MAX_LENGTH: usize = 32;
-
-fn generate_node_name() -> String {
-	let result = loop {
-		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
-		let count = node_name.chars().count();
-
-		if count < NODE_NAME_MAX_LENGTH {
-			break node_name
-		}
-	};
-
-	result
-}
-
-fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
-	cli.base_path.clone()
-		.unwrap_or_else(||
-			app_dirs::get_app_root(
-				AppDataType::UserData,
-				&AppInfo {
-					name: version.executable_name,
-					author: version.author
-				}
-			).expect("app directories exist on all supported platforms; qed")
-		)
-}
 
 /// Helper function used to parse the command line arguments. This is the equivalent of
 /// `structopt`'s `from_args()` except that it takes a `VersionInfo` argument to provide the name of
@@ -203,7 +168,7 @@ where
 	SF: AbstractService + Unpin,
 {
 	init(&run_cmd.shared_params, version)?;
-	run_cmd.shared_params.update_config(&mut config, spec_factory)?;
+	run_cmd.shared_params.update_config(&mut config, spec_factory, version)?;
 	run_cmd.run(config, new_light, new_full, version)
 }
 
@@ -227,7 +192,7 @@ where
 {
 	let shared_params = subcommand.get_shared_params();
 	init(shared_params, version)?;
-	shared_params.update_config(&mut config, spec_factory)?;
+	shared_params.update_config(&mut config, spec_factory, version)?;
 	subcommand.run(config, builder)
 }
 
@@ -404,161 +369,6 @@ fn fill_config_keystore_password_and_path<G, E>(
 	};
 
 	Ok(())
-}
-
-/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`
-pub fn update_config_for_running_node<G, E>(
-	mut config: &mut Configuration<G, E>,
-	cli: RunCmd,
-) -> error::Result<()>
-where
-	G: RuntimeGenesis,
-{
-	fill_config_keystore_password_and_path(&mut config, &cli)?;
-
-	let keyring = cli.get_keyring();
-	let is_dev = cli.shared_params.dev;
-	let is_light = cli.light;
-	let is_authority = (cli.validator || cli.sentry || is_dev || keyring.is_some())
-		&& !is_light;
-	let role =
-		if is_light {
-			sc_service::Roles::LIGHT
-		} else if is_authority {
-			sc_service::Roles::AUTHORITY
-		} else {
-			sc_service::Roles::FULL
-		};
-
-	cli.import_params.update_config(&mut config, role, is_dev)?;
-
-	config.name = match (cli.name.as_ref(), keyring) {
-		(Some(name), _) => name.to_string(),
-		(_, Some(keyring)) => keyring.to_string(),
-		(None, None) => generate_node_name(),
-	};
-	if let Err(msg) = node_key::is_node_name_valid(&config.name) {
-		return Err(error::Error::Input(
-			format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
-				config.name,
-				msg,
-			)
-		));
-	}
-
-	// set sentry mode (i.e. act as an authority but **never** actively participate)
-	config.sentry_mode = cli.sentry;
-
-	config.offchain_worker = match (cli.offchain_worker, role) {
-		(params::OffchainWorkerEnabled::WhenValidating, sc_service::Roles::AUTHORITY) => true,
-		(params::OffchainWorkerEnabled::Always, _) => true,
-		(params::OffchainWorkerEnabled::Never, _) => false,
-		(params::OffchainWorkerEnabled::WhenValidating, _) => false,
-	};
-
-	config.roles = role;
-	config.disable_grandpa = cli.no_grandpa;
-
-	let client_id = config.client_id();
-	fill_network_configuration(
-		cli.network_config,
-		config.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a basepath"),
-		&mut config.network,
-		client_id,
-		is_dev,
-	)?;
-
-	fill_transaction_pool_configuration(&mut config, cli.pool_config)?;
-
-	config.dev_key_seed = keyring
-		.map(|a| format!("//{}", a)).or_else(|| {
-			if is_dev && !is_light {
-				Some("//Alice".into())
-			} else {
-				None
-			}
-		});
-
-	if config.rpc_http.is_none() || cli.rpc_port.is_some() {
-		let rpc_interface: &str = interface_str(cli.rpc_external, cli.unsafe_rpc_external, cli.validator)?;
-		config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
-	}
-	if config.rpc_ws.is_none() || cli.ws_port.is_some() {
-		let ws_interface: &str = interface_str(cli.ws_external, cli.unsafe_ws_external, cli.validator)?;
-		config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
-	}
-
-	if config.grafana_port.is_none() || cli.grafana_port.is_some() {
-		let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
-		config.grafana_port = Some(
-			parse_address(&format!("{}:{}", grafana_interface, 9955), cli.grafana_port)?
-		);
-	}
-
-	config.rpc_ws_max_connections = cli.ws_max_connections;
-	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
-		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
-		Cors::All
-	} else {
-		Cors::List(vec![
-			"http://localhost:*".into(),
-			"http://127.0.0.1:*".into(),
-			"https://localhost:*".into(),
-			"https://127.0.0.1:*".into(),
-			"https://polkadot.js.org".into(),
-			"https://substrate-ui.parity.io".into(),
-		])
-	}).into();
-
-	// Override telemetry
-	if cli.no_telemetry {
-		config.telemetry_endpoints = None;
-	} else if !cli.telemetry_endpoints.is_empty() {
-		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
-	}
-
-	config.tracing_targets = cli.import_params.tracing_targets.into();
-	config.tracing_receiver = cli.import_params.tracing_receiver.into();
-
-	// Imply forced authoring on --dev
-	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
-
-	Ok(())
-}
-
-fn interface_str(
-	is_external: bool,
-	is_unsafe_external: bool,
-	is_validator: bool,
-) -> Result<&'static str, error::Error> {
-	if is_external && is_validator {
-		return Err(error::Error::Input("--rpc-external and --ws-external options shouldn't be \
-		used if the node is running as a validator. Use `--unsafe-rpc-external` if you understand \
-		the risks. See the options description for more information.".to_owned()));
-	}
-
-	if is_external || is_unsafe_external {
-		log::warn!("It isn't safe to expose RPC publicly without a proxy server that filters \
-		available set of RPC methods.");
-
-		Ok("0.0.0.0")
-	} else {
-		Ok("127.0.0.1")
-	}
-}
-
-fn parse_address(
-	address: &str,
-	port: Option<u16>,
-) -> Result<SocketAddr, String> {
-	let mut address: SocketAddr = address.parse().map_err(
-		|_| format!("Invalid address: {}", address)
-	)?;
-	if let Some(port) = port {
-		address.set_port(port);
-	}
-
-	Ok(address)
 }
 
 /// Initialize the logger

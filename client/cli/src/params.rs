@@ -29,12 +29,22 @@ use sc_network::config::build_multiaddr;
 use std::io;
 use std::fs;
 use std::io::{Read, Write, Seek};
+use std::net::SocketAddr;
+use app_dirs::{AppInfo, AppDataType};
 use sp_runtime::generic::BlockId;
+use sc_telemetry::TelemetryEndpoints;
+use names::{Generator, Name};
 use crate::runtime::run_until_exit;
 use crate::node_key::node_key_config;
 use crate::execution_strategy::*;
+use crate::node_key::is_node_name_valid;
 
 pub use crate::execution_strategy::ExecutionStrategy;
+
+/// default sub directory to store network config
+const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
+/// default sub directory to store database
+const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
 
 impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
 	fn into(self) -> sc_client_api::ExecutionStrategy {
@@ -121,6 +131,7 @@ impl SharedParams {
 		&self,
 		mut config: &'a mut Configuration<G, E>,
 		spec_factory: F,
+		version: &VersionInfo,
 	) -> error::Result<&'a ChainSpec<G, E>> where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -140,8 +151,34 @@ impl SharedParams {
 
 		config.chain_spec = Some(spec);
 
+		if config.config_dir.is_none() {
+			config.config_dir = Some(base_path(self, version));
+		}
+
+		if config.database.is_none() {
+			config.database = Some(DatabaseConfig::Path {
+				path: config
+					.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
+					.expect("We provided a base_path/config_dir."),
+				cache_size: None,
+			});
+		}
+
 		Ok(config.chain_spec.as_ref().unwrap())
 	}
+}
+
+fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
+	cli.base_path.clone()
+		.unwrap_or_else(||
+			app_dirs::get_app_root(
+				AppDataType::UserData,
+				&AppInfo {
+					name: version.executable_name,
+					author: version.author
+				}
+			).expect("app directories exist on all supported platforms; qed")
+		)
 }
 
 /// Parameters for block import.
@@ -203,7 +240,7 @@ pub struct ImportParams {
 impl ImportParams {
 	/// Put block import CLI params into `config` object.
 	pub fn update_config<G, E>(
-		self,
+		&self,
 		config: &mut Configuration<G, E>,
 		role: sc_service::Roles,
 		is_dev: bool,
@@ -730,6 +767,176 @@ impl RunCmd {
 		else if self.two { Some(Two) }
 		else { None }
 	}
+
+	/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`
+	pub fn update_config<G, E>(
+		&self,
+		mut config: &mut Configuration<G, E>,
+	) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+	{
+		crate::fill_config_keystore_password_and_path(&mut config, &self)?;
+
+		let keyring = self.get_keyring();
+		let is_dev = self.shared_params.dev;
+		let is_light = self.light;
+		let is_authority = (self.validator || self.sentry || is_dev || keyring.is_some())
+			&& !is_light;
+		let role =
+			if is_light {
+				sc_service::Roles::LIGHT
+			} else if is_authority {
+				sc_service::Roles::AUTHORITY
+			} else {
+				sc_service::Roles::FULL
+			};
+
+		self.import_params.update_config(&mut config, role, is_dev)?;
+
+		config.name = match (self.name.as_ref(), keyring) {
+			(Some(name), _) => name.to_string(),
+			(_, Some(keyring)) => keyring.to_string(),
+			(None, None) => generate_node_name(),
+		};
+		if let Err(msg) = is_node_name_valid(&config.name) {
+			return Err(error::Error::Input(
+				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
+					config.name,
+					msg,
+				)
+			));
+		}
+
+		// set sentry mode (i.e. act as an authority but **never** actively participate)
+		config.sentry_mode = self.sentry;
+
+		config.offchain_worker = match (&self.offchain_worker, role) {
+			(OffchainWorkerEnabled::WhenValidating, sc_service::Roles::AUTHORITY) => true,
+			(OffchainWorkerEnabled::Always, _) => true,
+			(OffchainWorkerEnabled::Never, _) => false,
+			(OffchainWorkerEnabled::WhenValidating, _) => false,
+		};
+
+		config.roles = role;
+		config.disable_grandpa = self.no_grandpa;
+
+		let client_id = config.client_id();
+		crate::fill_network_configuration(
+			self.network_config.clone(),
+			config.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a basepath"),
+			&mut config.network,
+			client_id,
+			is_dev,
+		)?;
+
+		crate::fill_transaction_pool_configuration(&mut config, self.pool_config.clone())?;
+
+		config.dev_key_seed = keyring
+			.map(|a| format!("//{}", a)).or_else(|| {
+				if is_dev && !is_light {
+					Some("//Alice".into())
+				} else {
+					None
+				}
+			});
+
+		if config.rpc_http.is_none() || self.rpc_port.is_some() {
+			let rpc_interface: &str = interface_str(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
+			config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), self.rpc_port)?);
+		}
+		if config.rpc_ws.is_none() || self.ws_port.is_some() {
+			let ws_interface: &str = interface_str(self.ws_external, self.unsafe_ws_external, self.validator)?;
+			config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), self.ws_port)?);
+		}
+
+		if config.grafana_port.is_none() || self.grafana_port.is_some() {
+			let grafana_interface: &str = if self.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
+			config.grafana_port = Some(
+				parse_address(&format!("{}:{}", grafana_interface, 9955), self.grafana_port)?
+			);
+		}
+
+		config.rpc_ws_max_connections = self.ws_max_connections;
+		config.rpc_cors = self.rpc_cors.clone().unwrap_or_else(|| if is_dev {
+			log::warn!("Running in --dev mode, RPC CORS has been disabled.");
+			Cors::All
+		} else {
+			Cors::List(vec![
+				"http://localhost:*".into(),
+				"http://127.0.0.1:*".into(),
+				"https://localhost:*".into(),
+				"https://127.0.0.1:*".into(),
+				"https://polkadot.js.org".into(),
+				"https://substrate-ui.parity.io".into(),
+			])
+		}).into();
+
+		// Override telemetry
+		if self.no_telemetry {
+			config.telemetry_endpoints = None;
+		} else if !self.telemetry_endpoints.is_empty() {
+			config.telemetry_endpoints = Some(
+				TelemetryEndpoints::new(self.telemetry_endpoints.clone())
+			);
+		}
+
+		config.tracing_targets = self.import_params.tracing_targets.clone().into();
+		config.tracing_receiver = self.import_params.tracing_receiver.clone().into();
+
+		// Imply forced authoring on --dev
+		config.force_authoring = self.shared_params.dev || self.force_authoring;
+
+		Ok(())
+	}
+}
+
+fn generate_node_name() -> String {
+	let result = loop {
+		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
+		let count = node_name.chars().count();
+
+		if count < crate::NODE_NAME_MAX_LENGTH {
+			break node_name
+		}
+	};
+
+	result
+}
+
+fn parse_address(
+	address: &str,
+	port: Option<u16>,
+) -> Result<SocketAddr, String> {
+	let mut address: SocketAddr = address.parse().map_err(
+		|_| format!("Invalid address: {}", address)
+	)?;
+	if let Some(port) = port {
+		address.set_port(port);
+	}
+
+	Ok(address)
+}
+
+fn interface_str(
+	is_external: bool,
+	is_unsafe_external: bool,
+	is_validator: bool,
+) -> Result<&'static str, error::Error> {
+	if is_external && is_validator {
+		return Err(error::Error::Input("--rpc-external and --ws-external options shouldn't be \
+		used if the node is running as a validator. Use `--unsafe-rpc-external` if you understand \
+		the risks. See the options description for more information.".to_owned()));
+	}
+
+	if is_external || is_unsafe_external {
+		log::warn!("It isn't safe to expose RPC publicly without a proxy server that filters \
+		available set of RPC methods.");
+
+		Ok("0.0.0.0")
+	} else {
+		Ok("127.0.0.1")
+	}
 }
 
 /// Default to verbosity level 0, if none is provided.
@@ -1027,7 +1234,7 @@ impl RunCmd {
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-		crate::update_config_for_running_node(&mut config, self)?;
+		self.update_config(&mut config)?;
 
 		crate::run_node(config, new_light, new_full, &version)
 	}
@@ -1053,7 +1260,7 @@ impl BuildSpecCmd {
 			let node_key = node_key_config(
 				self.node_key_params.clone(),
 				&Some(config
-					.in_chain_config_dir(crate::DEFAULT_NETWORK_CONFIG_PATH)
+					.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH)
 					.expect("We provided a base_path")),
 			)?;
 			let keys = node_key.into_keypair()?;
