@@ -233,8 +233,7 @@ where
 	SL: AbstractService + Unpin,
 	SF: AbstractService + Unpin,
 {
-	init(&run_cmd.shared_params, version)?;
-	load_spec(&mut config, &run_cmd.shared_params, spec_factory)?;
+	init(&mut config, &run_cmd.shared_params, version, spec_factory)?;
 	run_cmd.run(config, new_light, new_full, version)
 }
 
@@ -257,9 +256,7 @@ where
 	<BB as BlockT>::Hash: std::str::FromStr,
 {
 	let shared_params = subcommand.get_shared_params();
-
-	init(shared_params, version)?;
-	load_spec(&mut config, shared_params, spec_factory)?;
+	init(&mut config, shared_params, version, spec_factory)?;
 	subcommand.run(config, builder)
 }
 
@@ -267,10 +264,20 @@ where
 ///
 /// This method:
 ///
-/// 1.  set the panic handler
-/// 2.  raise the FD limit
-/// 3.  initialize the logger
-pub fn init(shared_params: &SharedParams, version: &VersionInfo) -> error::Result<()>
+/// 1. Set the panic handler
+/// 2. Raise the FD limit
+/// 3. Initialize the logger
+/// 4. Loads the chain spec.
+/// 5. Initializes the config dir and database dir.
+pub fn init<G, E, F>(
+	config: &mut Configuration<G, E>,
+	shared_params: &SharedParams,
+	version: &VersionInfo,
+	spec_factory: F,
+) -> error::Result<()> where
+	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
 {
 	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
@@ -280,6 +287,21 @@ pub fn init(shared_params: &SharedParams, version: &VersionInfo) -> error::Resul
 
 	fdlimit::raise_fd_limit();
 	init_logger(shared_params.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
+
+	load_spec(config, shared_params, spec_factory)?;
+
+	if config.config_dir.is_none() {
+		config.config_dir = Some(base_path(&shared_params, version));
+	}
+
+	if config.database.is_none() {
+		config.database = Some(DatabaseConfig::Path {
+			path: config
+				.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
+				.expect("We provided a base_path/config_dir."),
+			cache_size: None,
+		});
+	}
 
 	Ok(())
 }
@@ -515,26 +537,10 @@ where
 pub fn update_config_for_running_node<G, E>(
 	mut config: &mut Configuration<G, E>,
 	cli: RunCmd,
-	version: &VersionInfo,
 ) -> error::Result<()>
 where
 	G: RuntimeGenesis,
 {
-	if config.config_dir.is_none() {
-		config.config_dir = Some(base_path(&cli.shared_params, version));
-	}
-
-	if config.database.is_none() {
-		// NOTE: the loading of the DatabaseConfig is voluntarily delayed to here
-		//       in case config.config_dir has been customized
-		config.database = Some(DatabaseConfig::Path {
-			path: config
-				.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
-				.expect("We provided a base_path/config_dir."),
-			cache_size: None,
-		});
-	}
-
 	fill_config_keystore_password_and_path(&mut config, &cli)?;
 
 	let keyring = cli.get_keyring();
@@ -791,7 +797,6 @@ mod tests {
 			update_config_for_running_node(
 				&mut node_config,
 				run_cmds.clone(),
-				TEST_VERSION_INFO,
 			).unwrap();
 
 			let expected_path = match keystore_path {
@@ -844,8 +849,13 @@ mod tests {
 		let cli = RunCmd::from_iter(args);
 
 		let mut config = Configuration::new(TEST_VERSION_INFO);
-		config.chain_spec = Some(chain_spec);
-		update_config_for_running_node(&mut config, cli, TEST_VERSION_INFO).unwrap();
+		init(
+			&mut config,
+			&cli.shared_params,
+			&TEST_VERSION_INFO,
+			|_| Ok(Some(chain_spec)),
+		).unwrap();
+		update_config_for_running_node(&mut config, cli).unwrap();
 
 		assert!(config.config_dir.is_some());
 		assert!(config.database.is_some());

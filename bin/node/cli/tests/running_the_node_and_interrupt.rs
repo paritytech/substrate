@@ -15,10 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use assert_cmd::cargo::cargo_bin;
-use std::convert::TryInto;
-use std::process::{Child, Command, ExitStatus};
-use std::thread::sleep;
-use std::time::Duration;
+use std::{convert::TryInto, process::Command, thread, time::Duration, fs};
+
+mod common;
 
 #[test]
 #[cfg(unix)]
@@ -26,27 +25,18 @@ fn running_the_node_works_and_can_be_interrupted() {
 	use nix::sys::signal::{kill, Signal::{self, SIGINT, SIGTERM}};
 	use nix::unistd::Pid;
 
-	fn wait_for(child: &mut Child, secs: usize) -> Option<ExitStatus> {
-		for _ in 0..secs {
-			match child.try_wait().unwrap() {
-				Some(status) => return Some(status),
-				None => sleep(Duration::from_secs(1)),
-			}
-		}
-		eprintln!("Took to long to exit. Killing...");
-		let _ = child.kill();
-		child.wait().unwrap();
-
-		None
-	}
-
 	fn run_command_and_kill(signal: Signal) {
-		let mut cmd = Command::new(cargo_bin("substrate")).spawn().unwrap();
-		sleep(Duration::from_secs(30));
+		let _ = fs::remove_dir_all("interrupt_test");
+		let mut cmd = Command::new(cargo_bin("substrate"))
+			.args(&["--dev", "-d", "interrupt_test"])
+			.spawn()
+			.unwrap();
+
+		thread::sleep(Duration::from_secs(30));
 		assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
 		kill(Pid::from_raw(cmd.id().try_into().unwrap()), signal).unwrap();
 		assert_eq!(
-			wait_for(&mut cmd, 30).map(|x| x.success()),
+			common::wait_for(&mut cmd, 30).map(|x| x.success()),
 			Some(true),
 			"the pocess must exit gracefully after signal {}",
 			signal,
