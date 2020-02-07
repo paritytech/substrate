@@ -20,7 +20,7 @@ use crate::utils::interval;
 use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use libp2p::{Multiaddr, PeerId};
-use libp2p::core::{ConnectedPoint, nodes::Substream, muxing::StreamMuxerBox};
+use libp2p::core::{ConnectedPoint, nodes::{listeners::ListenerId, Substream}, muxing::StreamMuxerBox};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use sp_core::storage::{StorageKey, ChildInfo};
@@ -2003,6 +2003,14 @@ Protocol<B, S, H> {
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.behaviour.inject_new_external_addr(addr)
+	}
+
+	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
+		self.behaviour.inject_listener_error(id, err);
+	}
+
+	fn inject_listener_closed(&mut self, id: ListenerId) {
+		self.behaviour.inject_listener_closed(id);
 	}
 }
 

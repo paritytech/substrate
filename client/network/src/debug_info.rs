@@ -17,12 +17,14 @@
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::Multiaddr;
+use libp2p::core::nodes::listeners::ListenerId;
 use libp2p::core::{ConnectedPoint, either::EitherOutput, PeerId, PublicKey};
 use libp2p::swarm::{IntoProtocolsHandler, IntoProtocolsHandlerSelect, ProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
 use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
 use log::{debug, trace, error};
+use std::error;
 use std::collections::hash_map::Entry;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -249,6 +251,16 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.ping.inject_new_external_addr(addr);
 		self.identify.inject_new_external_addr(addr);
+	}
+
+	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn error::Error + 'static)) {
+		self.ping.inject_listener_error(id, err);
+		self.identify.inject_listener_error(id, err);
+	}
+
+	fn inject_listener_closed(&mut self, id: ListenerId) {
+		self.ping.inject_listener_closed(id);
+		self.identify.inject_listener_closed(id);
 	}
 
 	fn poll(

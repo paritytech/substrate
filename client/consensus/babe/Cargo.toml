@@ -22,6 +22,7 @@ sc-telemetry = { version = "2.0.0", path = "../../telemetry" }
 sc-keystore = { version = "2.0.0", path = "../../keystore" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
 sc-client = { version = "0.8", path = "../../" }
+sc-consensus-epochs = { version = "0.8", path = "../epochs" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
@@ -32,7 +33,7 @@ sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 fork-tree = { version = "2.0.0", path = "../../../utils/fork-tree" }
 futures = "0.3.1"
 futures-timer = "0.4.0"
-parking_lot = "0.9.0"
+parking_lot = "0.10.0"
 log = "0.4.8"
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"] }
 rand = "0.7.2"

@@ -13,7 +13,7 @@ jsonrpc-core = "14.0.5"
 jsonrpc-core-client = "14.0.5"
 jsonrpc-derive = "14.0.5"
 log = "0.4.8"
-parking_lot = "0.10"
+parking_lot = "0.10.0"
 serde = { version = "1.0", features=["derive"] }
 
 sc-client = { path = "../../../client" }

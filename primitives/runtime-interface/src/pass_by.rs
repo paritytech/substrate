@@ -32,7 +32,7 @@ use sp_wasm_interface::{FunctionContext, Pointer, Result};
 use sp_std::{marker::PhantomData, convert::TryFrom};
 
 #[cfg(not(feature = "std"))]
-use sp_std::{slice, vec::Vec};
+use sp_std::vec::Vec;
 
 /// Derive macro for implementing [`PassBy`] with the [`Codec`] strategy.
 ///
@@ -255,8 +255,13 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 		let (ptr, len) = unpack_ptr_and_len(arg);
 		let len = len as usize;
 
-		let slice = unsafe { slice::from_raw_parts(ptr as *const u8, len) };
-		T::decode(&mut &slice[..]).expect("Host to wasm values are encoded correctly; qed")
+		let encoded = if len == 0 {
+			Vec::new()
+		} else {
+			unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) }
+		};
+
+		T::decode(&mut &encoded[..]).expect("Host to wasm values are encoded correctly; qed")
 	}
 }
 

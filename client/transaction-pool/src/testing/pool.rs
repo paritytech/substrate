@@ -291,3 +291,13 @@ fn should_push_watchers_during_maintaince() {
 		vec![TransactionStatus::Ready, TransactionStatus::InBlock(Hash::zero())],
 	);
 }
+
+fn can_track_heap_size() {
+	let (pool, _guard) = maintained_pool();
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 209))).expect("1. Imported");
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 210))).expect("1. Imported");
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 211))).expect("1. Imported");
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 212))).expect("1. Imported");
+
+	assert!(parity_util_mem::malloc_size(&pool) > 3000);
+}

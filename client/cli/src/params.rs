@@ -113,6 +113,20 @@ pub struct SharedParams {
 	/// Sets a custom logging filter.
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
 	pub log: Option<String>,
+
+	/// Comma separated list of targets for tracing
+	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
+	pub tracing_targets: Option<String>,
+
+	/// Receiver to process tracing messages
+	#[structopt(
+		long = "tracing-receiver",
+		value_name = "RECEIVER",
+		possible_values = &TracingReceiver::variants(),
+		case_insensitive = true,
+		default_value = "Log"
+	)]
+	pub tracing_receiver: TracingReceiver,
 }
 
 /// Parameters for block import.
@@ -579,20 +593,6 @@ pub struct RunCmd {
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 
-	/// Comma separated list of targets for tracing
-	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
-	pub tracing_targets: Option<String>,
-
-	/// Receiver to process tracing messages
-	#[structopt(
-		long = "tracing-receiver",
-		value_name = "RECEIVER",
-		possible_values = &TracingReceiver::variants(),
-		case_insensitive = true,
-		default_value = "Log"
-	)]
-	pub tracing_receiver: TracingReceiver,
-
 	/// Specify custom keystore path.
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
@@ -936,6 +936,7 @@ impl RunCmd {
 		crate::update_config_for_running_node(
 			&mut config,
 			self,
+			&version,
 		)?;
 
 		crate::run_node(config, new_light, new_full, &version)
@@ -1003,7 +1004,7 @@ impl ExportBlocksCmd {
 
 		crate::fill_config_keystore_in_memory(&mut config)?;
 
-		if let DatabaseConfig::Path { ref path, .. } = &config.database {
+		if let DatabaseConfig::Path { ref path, .. } = config.expect_database() {
 			info!("DB path: {}", path.display());
 		}
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
@@ -1124,7 +1125,7 @@ impl PurgeChainCmd {
 
 		crate::fill_config_keystore_in_memory(&mut config)?;
 
-		let db_path = match config.database {
+		let db_path = match config.expect_database() {
 			DatabaseConfig::Path { path, .. } => path,
 			_ => {
 				eprintln!("Cannot purge custom database implementation");

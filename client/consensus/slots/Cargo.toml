@@ -20,7 +20,7 @@ sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" 
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 futures = "0.3.1"
 futures-timer = "2.0"
-parking_lot = "0.9.0"
+parking_lot = "0.10.0"
 log = "0.4.8"
 
 [dev-dependencies]
