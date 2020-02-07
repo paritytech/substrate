@@ -313,6 +313,67 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 			})))
 	}
 
+	/// Finds the epoch for a child of the given block, assuming the given slot number.
+	///
+	/// If the returned epoch is an `UnimportedGenesis` epoch, it should be imported into the
+	/// tree.
+	pub fn epoch_for_child_of_mut<D: IsDescendentOfBuilder<Hash>, G>(
+		&mut self,
+		descendent_of_builder: D,
+		parent_hash: &Hash,
+		parent_number: Number,
+		slot_number: Epoch::SlotNumber,
+		make_genesis: G,
+	) -> Result<Option<ViableEpoch<Epoch>>, fork_tree::Error<D::Error>>
+		where G: FnOnce(Epoch::SlotNumber) -> Epoch
+	{
+		// find_node_where will give you the node in the fork-tree which is an ancestor
+		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
+		// then it won't be returned. we need to create a new fake chain head hash which
+		// "descends" from our parent-hash.
+		let fake_head_hash = fake_head_hash(parent_hash);
+
+		let is_descendent_of = descendent_of_builder
+			.build_is_descendent_of(Some((fake_head_hash, *parent_hash)));
+
+		if parent_number == Zero::zero() {
+			// need to insert the genesis epoch.
+			let genesis_epoch = make_genesis(slot_number);
+			return Ok(Some(ViableEpoch::Genesis(UnimportedGenesisEpoch(genesis_epoch))));
+		}
+
+		// We want to find the deepest node in the tree which is an ancestor
+		// of our block and where the start slot of the epoch was before the
+		// slot of our block. The genesis special-case doesn't need to look
+		// at epoch_1 -- all we're doing here is figuring out which node
+		// we need.
+		let predicate = |epoch: &PersistedEpoch<Epoch>| match *epoch {
+			PersistedEpoch::Genesis(ref epoch_0, _) =>
+				epoch_0.start_slot() <= slot_number,
+			PersistedEpoch::Regular(ref epoch_n) =>
+				epoch_n.start_slot() <= slot_number,
+		};
+
+		self.inner.find_node_where_mut(
+			&fake_head_hash,
+			&(parent_number + One::one()),
+			&is_descendent_of,
+			&predicate,
+		)
+			.map(|n| n.map(|node| ViableEpoch::Regular(match node.data {
+				// Ok, we found our node.
+				// and here we figure out which of the internal epochs
+				// of a genesis node to use based on their start slot.
+				PersistedEpoch::Genesis(ref epoch_0, ref epoch_1) =>
+					if epoch_1.start_slot() <= slot_number {
+						epoch_1.clone()
+					} else {
+						epoch_0.clone()
+					},
+				PersistedEpoch::Regular(ref epoch_n) => epoch_n.clone(),
+			})))
+	}
+
 	/// Import a new epoch-change, signalled at the given block.
 	///
 	/// This assumes that the given block is prospective (i.e. has not been

@@ -18,7 +18,7 @@ use sp_consensus::{
 use sp_consensus::import_queue::{Verifier, CacheKeyId, BasicQueue};
 use sp_consensus_sassafras::{
 	SASSAFRAS_ENGINE_ID, AuthorityPair, AuthorityId, Randomness, VRFProof,
-	SassafrasAuthorityWeight,
+	SassafrasAuthorityWeight, SlotNumber,
 };
 use sp_consensus_sassafras::digest::{
 	NextEpochDescriptor, PostBlockDescriptor, PreDigest, CompatibleDigestItem
@@ -26,11 +26,11 @@ use sp_consensus_sassafras::digest::{
 use sp_consensus_sassafras::inherents::SassafrasInherentData;
 use sp_runtime::{generic::BlockId, Justification};
 use sp_runtime::traits::{Block as BlockT, Header};
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sc_client::{Client, CallExecutor};
 use sc_client_api::backend::{AuxStore, Backend};
-use sc_consensus_epochs::{SlotNumber, Epoch as EpochT};
+use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
 use sc_consensus_slots::SlotCompatible;
 use crate::aux_schema::{load_epoch_changes, write_epoch_changes};
 
@@ -60,6 +60,7 @@ pub struct Epoch {
 }
 
 impl EpochT for Epoch {
+	type SlotNumber = SlotNumber;
 	type NextEpochDescriptor = NextEpochDescriptor;
 
 	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
@@ -121,6 +122,7 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 pub struct SassafrasVerifier<B, E, Block: BlockT, RA, PRA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
+	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	time_source: TimeSource,
 }
@@ -139,7 +141,7 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 		mut header: Block::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<Block::Extrinsic>>,
-	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), Error<Block>> {
+	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), Error<Block>> {
 		trace!(
 			target: "sassafras",
 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
@@ -170,8 +172,19 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 			return Err(Error::SlotInFuture.into())
 		}
 
+		let epoch_changes = self.epoch_changes.lock();
+		let epoch = {
+			epoch_changes.epoch_for_child_of_mut(
+				descendent_query(&*self.client),
+				&parent_hash,
+				parent_header_metadata.number,
+				unimplemented!(), // TODO
+				|slot| unimplemented!() // TODO
+			)
+		};
+
 		// Check the signature.
-		let (author, block_weight) = auxiliary.validating.authorities
+		let (author, block_weight) = epoch.validating.authorities
 			.get(pre_digest.authority_index as usize)
 			.cloned()
 			.ok_or(Error::InvalidAuthorityId)?;
@@ -184,16 +197,16 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 		}
 
 		// Check that the ticket VRF is of a valid index in auxiliary.validating.
-		let ticket_vrf_proof = auxiliary.validating.proofs
+		let ticket_vrf_proof = epoch.validating.proofs
 			.get(pre_digest.ticket_vrf_index as usize)
 			.cloned()
 			.ok_or(Error::InvalidTicketVRFIndex)?;
 
 		// Check that the ticket VRF is valid.
 		let ticket_transcript = make_ticket_transcript(
-			&auxiliary.validating.randomness,
+			&epoch.validating.randomness,
 			pre_digest.slot,
-			auxiliary.validating.epoch,
+			epoch.validating.epoch,
 		);
 		schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 			p.vrf_verify(ticket_transcript, &pre_digest.ticket_vrf_output, &ticket_vrf_proof)
@@ -201,9 +214,9 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 
 		// Check that the post-block VRF is valid.
 		let post_transcript = make_post_transcript(
-			&auxiliary.validating.randomness,
+			&epoch.validating.randomness,
 			pre_digest.slot,
-			auxiliary.validating.epoch,
+			epoch.validating.epoch,
 		);
 		schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 			p.vrf_verify(post_transcript, &pre_digest.post_vrf_output, &pre_digest.post_vrf_proof)
@@ -213,36 +226,43 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 		if let Some(post_block_desc) = find_post_block_descriptor::<Block>(&header)? {
 			// TODO: verify that proofs are below threshold.
 
-			auxiliary.publishing.proofs.append(&mut post_block_desc.commitments.clone());
+			epoch.publishing.proofs.append(&mut post_block_desc.commitments.clone());
 		}
 
 		// Finally, if we are switching epoch, move publishing to validating, and sort the proofs.
 		if let Some(next_epoch_desc) = find_next_epoch_descriptor::<Block>(&header)? {
 			// TODO: check descriptor validity.
 
-			std::mem::swap(&mut auxiliary.publishing, &mut auxiliary.validating);
-			auxiliary.publishing = PoolAuxiliary {
+			std::mem::swap(&mut epoch.publishing, &mut epoch.validating);
+			epoch.publishing = ValidatorSet {
 				proofs: Vec::new(),
 				authorities: next_epoch_desc.authorities,
 				randomness: next_epoch_desc.randomness,
-				epoch: auxiliary.validating.epoch + 1,
+				epoch: epoch.validating.epoch + 1,
 			};
 
 			// TODO: sort the validating proofs in "outside-in" order.
 		}
 
-		let block_import_params = BlockImportParams {
+		let mut block_import_params = BlockImportParams {
 			origin,
 			header,
 			post_digests: vec![seal],
 			body,
 			finalized: false,
 			justification,
-			auxiliary: vec![(AUXILIARY_KEY.to_vec(), Some(auxiliary.encode()))],
+			auxiliary: vec![],
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
 			import_existing: false,
 		};
+
+		crate::aux_schema::write_epoch_changes::<Block, _, _>(
+			&*epoch_changes,
+			|insert| block_import_params.auxiliary.extend(
+				insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+			)
+		);
 
 		Ok((block_import_params, Default::default()))
 	}
@@ -262,7 +282,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 		mut header: Block::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<Block::Extrinsic>>,
-	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		self.verify(origin, header, justification, body).map_err(Into::into)
 	}
 }
@@ -381,10 +401,10 @@ fn make_ticket_transcript(
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
-	transcript.commit_bytes(b"type", b"ticket");
-	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
-	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
-	transcript.commit_bytes(b"chain randomness", randomness);
+	transcript.append_message(b"type", b"ticket");
+	transcript.append_message(b"slot number", &slot_number.to_le_bytes());
+	transcript.append_message(b"current epoch", &epoch.to_le_bytes());
+	transcript.append_message(b"chain randomness", randomness);
 	transcript
 }
 
@@ -394,9 +414,9 @@ fn make_post_transcript(
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
-	transcript.commit_bytes(b"type", b"post");
-	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
-	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
-	transcript.commit_bytes(b"chain randomness", randomness);
+	transcript.append_message(b"type", b"post");
+	transcript.append_message(b"slot number", &slot_number.to_le_bytes());
+	transcript.append_message(b"current epoch", &epoch.to_le_bytes());
+	transcript.append_message(b"chain randomness", randomness);
 	transcript
 }

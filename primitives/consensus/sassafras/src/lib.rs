@@ -42,6 +42,10 @@ pub const SASSAFRAS_TICKET_VRF_PREFIX: &[u8] = b"substrate-sassafras-ticket-vrf"
 /// The prefix used by Sassafras for its post-block VRF keys.
 pub const SASSAFRAS_POST_VRF_PREFIX: &[u8] = b"substrate-sassafras-post-vrf";
 
+/// A slot number.
+pub type SlotNumber = u64;
+
+/// An epoch number.
 pub type EpochNumber = u64;
 
 /// A Sassafras authority keypair, used by both ticket VRF and post-block VRF.
@@ -62,9 +66,6 @@ pub type VRFIndex = u32;
 
 /// The index of an authority.
 pub type AuthorityIndex = u32;
-
-/// A slot number.
-pub type SlotNumber = u64;
 
 /// The weight of an authority.
 // NOTE: we use a unique name for the weight to avoid conflicts with other
