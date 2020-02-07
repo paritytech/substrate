@@ -261,6 +261,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		H::Out: Ord
 	{
 		let storage_key = storage_key.to_vec();
+		let parent_prefix = child_info.parent_prefix(None);
 		let child_info = Some((storage_key.clone(), child_info.to_owned()));
 
 		let existing_pairs = self.inner.get(&child_info)
@@ -278,7 +279,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 
 		let full_transaction = transaction.into_iter().collect();
 
-		let is_default = root == default_child_trie_root::<Layout<H>>(&storage_key);
+		let is_default = root == default_child_trie_root::<Layout<H>>(parent_prefix);
 
 		(root, is_default, vec![(child_info, full_transaction)])
 	}

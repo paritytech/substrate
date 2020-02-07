@@ -498,7 +498,7 @@ where
 				.storage(storage_key.as_ref())
 				.and_then(|k| Decode::decode(&mut &k[..]).ok())
 				.unwrap_or(
-					default_child_trie_root::<Layout<H>>(storage_key.as_ref())
+					default_child_trie_root::<Layout<H>>(&[])
 				);
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) (cached) {}",
 				self.id,
@@ -547,7 +547,7 @@ where
 					.storage(storage_key.as_ref())
 					.and_then(|k| Decode::decode(&mut &k[..]).ok())
 					.unwrap_or(
-						default_child_trie_root::<Layout<H>>(storage_key.as_ref())
+						default_child_trie_root::<Layout<H>>(&[])
 					);
 				trace!(target: "state-trace", "{:04x}: ChildRoot({}) (no change) {}",
 					self.id,

@@ -189,9 +189,10 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
-		for (storage_key, child_delta, child_info) in child_deltas {
+		for (mut storage_key, child_delta, child_info) in child_deltas {
 			let (child_root, empty, child_txs) =
 				self.child_storage_root(&storage_key[..], child_info.as_ref(), child_delta);
+			child_info.as_ref().do_prefix_key(&mut storage_key, None);
 			txs.consolidate(child_txs);
 			if empty {
 				child_roots.push((storage_key, None));

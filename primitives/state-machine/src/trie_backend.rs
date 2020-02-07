@@ -202,10 +202,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		H::Out: Ord,
 	{
-		let default_root = default_child_trie_root::<Layout<H>>(storage_key);
+		let default_root = default_child_trie_root::<Layout<H>>(child_info.parent_prefix(None));
 
 		let mut write_overlay = S::Overlay::default();
-		let mut root = match self.storage(storage_key) {
+		let mut prefixed_storage_key = storage_key.to_vec();
+		child_info.do_prefix_key(&mut prefixed_storage_key, None);
+		let mut root = match self.storage(prefixed_storage_key.as_slice()) {
 			Ok(value) =>
 				value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or(default_root.clone()),
 			Err(e) => {

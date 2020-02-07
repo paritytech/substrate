@@ -147,9 +147,11 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 		child_info: ChildInfo,
 		key: &[u8]
 	) -> Result<Option<Vec<u8>>, String> {
-		let root = self.storage(storage_key)?
+		let mut prefixed_storage_key = storage_key.to_vec();
+		child_info.do_prefix_key(&mut prefixed_storage_key, None);
+		let root = self.storage(prefixed_storage_key.as_slice())?
 			.and_then(|r| Decode::decode(&mut &r[..]).ok())
-			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
+			.unwrap_or(default_child_trie_root::<Layout<H>>(&[]));
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(

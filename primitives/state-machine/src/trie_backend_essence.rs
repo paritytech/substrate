@@ -71,6 +71,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		self.next_storage_key_from_root(&self.root, None, key)
 	}
 
+	/// Access the root of the child storage in its parent trie
+	fn child_root(&self, storage_key: &[u8], child_info: ChildInfo) -> Result<Option<StorageValue>, String> {
+		let mut prefixed_storage_key = storage_key.to_vec();
+		child_info.do_prefix_key(&mut prefixed_storage_key, None);
+		self.storage(prefixed_storage_key.as_slice())
+	}
+
 	/// Return the next key in the child trie i.e. the minimum key that is strictly superior to
 	/// `key` in lexicographic order.
 	pub fn next_child_storage_key(
@@ -79,7 +86,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, String> {
-		let child_root = match self.storage(storage_key)? {
+		let child_root = match self.child_root(storage_key, child_info)? {
 			Some(child_root) => child_root,
 			None => return Ok(None),
 		};
@@ -165,8 +172,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, String> {
-		let root = self.storage(storage_key)?
-			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode());
+		let root = self.child_root(storage_key, child_info)?
+			.unwrap_or(default_child_trie_root::<Layout<H>>(child_info.parent_prefix(None)).encode());
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
@@ -187,8 +194,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: ChildInfo,
 		f: F,
 	) {
-		let root = match self.storage(storage_key) {
-			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode()),
+		let root = match self.child_root(storage_key, child_info) {
+			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(child_info.parent_prefix(None)).encode()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return;
@@ -220,8 +227,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		prefix: &[u8],
 		mut f: F,
 	) {
-		let root_vec = match self.storage(storage_key) {
-			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode()),
+		let root_vec = match self.child_root(storage_key, child_info) {
+			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(child_info.parent_prefix(None)).encode()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return;

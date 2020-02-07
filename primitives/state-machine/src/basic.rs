@@ -261,17 +261,21 @@ impl Externalities for BasicExternalities {
 
 	fn storage_root(&mut self) -> Vec<u8> {
 		let mut top = self.inner.top.clone();
-		let keys: Vec<_> = self.inner.children.keys().map(|k| k.to_vec()).collect();
+		let keys: Vec<_> = self.inner.children.iter().map(|(k, v)| {
+			let mut prefixed = k.to_vec();
+			v.child_info.as_ref().do_prefix_key(&mut prefixed, None);
+			(k.to_vec(), prefixed)
+		}).collect();
 		// Single child trie implementation currently allows using the same child
 		// empty root for all child trie. Using null storage key until multiple
 		// type of child trie support.
 		let empty_hash = default_child_trie_root::<Layout<Blake2Hasher>>(&[]);
-		for storage_key in keys {
+		for (storage_key, prefixed_storage_key) in keys {
 			let child_root = self.child_storage_root(storage_key.as_slice());
 			if &empty_hash[..] == &child_root[..] {
-				top.remove(storage_key.as_slice());
+				top.remove(prefixed_storage_key.as_slice());
 			} else {
-				top.insert(storage_key, child_root);
+				top.insert(prefixed_storage_key, child_root);
 			}
 		}
 
@@ -288,7 +292,7 @@ impl Externalities for BasicExternalities {
 			InMemoryBackend::<Blake2Hasher>::default()
 				.child_storage_root(storage_key.as_ref(), child.child_info.as_ref(), delta).0
 		} else {
-			default_child_trie_root::<Layout<Blake2Hasher>>(storage_key.as_ref())
+			default_child_trie_root::<Layout<Blake2Hasher>>(&[])
 		}.encode()
 	}
 

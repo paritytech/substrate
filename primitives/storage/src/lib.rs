@@ -225,6 +225,16 @@ impl<'a> ChildInfo<'a> {
 		}
 	}
 
+	/// Change a key to get prefixed with the parent prefix.
+	pub fn do_prefix_key(&self, key: &mut Vec<u8>, parent: Option<&ChildInfo>) {
+		let parent_prefix = self.parent_prefix(parent);
+		let key_len = key.len();
+		if parent_prefix.len() > 0 {
+			key.resize(key_len + parent_prefix.len(), 0);
+			key.copy_within(..key_len, parent_prefix.len());
+			key[..parent_prefix.len()].copy_from_slice(parent_prefix);
+		}
+	}
 }
 
 /// Type of child.
@@ -312,4 +322,14 @@ fn assert_default_trie_in_child_trie() {
 	let child_info = ChildInfo::new_default(b"any key");
 	let prefix = child_info.parent_prefix(None);
 	assert!(prefix.starts_with(well_known_keys::CHILD_STORAGE_KEY_PREFIX));
+}
+
+#[test]
+fn test_do_prefix() {
+	let child_info = ChildInfo::new_default(b"any key");
+	let mut prefixed_1 = b"key".to_vec();
+	child_info.do_prefix_key(&mut prefixed_1, None);
+	let mut prefixed_2 = DEFAULT_CHILD_TYPE_PARENT_PREFIX.to_vec();
+	prefixed_2.extend_from_slice(b"key");
+	assert_eq!(prefixed_1, prefixed_2);
 }
