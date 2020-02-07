@@ -53,44 +53,6 @@ pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-/// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
-/// of an optional network config storage directory.
-pub fn node_key_config<P>(params: NodeKeyParams, net_config_dir: &Option<P>)
-	-> error::Result<NodeKeyConfig>
-where
-	P: AsRef<Path>
-{
-	match params.node_key_type {
-		NodeKeyType::Ed25519 =>
-			params.node_key.as_ref().map(parse_ed25519_secret).unwrap_or_else(||
-				Ok(params.node_key_file
-					.or_else(|| net_config_file(net_config_dir, NODE_KEY_ED25519_FILE))
-					.map(sc_network::config::Secret::File)
-					.unwrap_or(sc_network::config::Secret::New)))
-				.map(NodeKeyConfig::Ed25519)
-	}
-}
-
-/// Create an error caused by an invalid node key argument.
-fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
-	error::Error::Input(format!("Invalid node key: {}", e))
-}
-
-/// Parse a Ed25519 secret key from a hex string into a `sc_network::Secret`.
-fn parse_ed25519_secret(hex: &String) -> error::Result<sc_network::config::Ed25519Secret> {
-	H256::from_str(&hex).map_err(invalid_node_key).and_then(|bytes|
-		sc_network::config::identity::ed25519::SecretKey::from_bytes(bytes)
-			.map(sc_network::config::Secret::Input)
-			.map_err(invalid_node_key))
-}
-
-fn net_config_file<P>(net_config_dir: &Option<P>, name: &str) -> Option<PathBuf>
-where
-	P: AsRef<Path>
-{
-	net_config_dir.as_ref().map(|d| d.as_ref().join(name))
-}
-
 #[cfg(test)]
 mod tests {
 	use sc_network::config::identity::ed25519;

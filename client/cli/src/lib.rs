@@ -28,11 +28,10 @@ pub mod informant;
 mod runtime;
 mod node_key;
 
-use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
-	config::{Configuration, DatabaseConfig, KeystoreConfig},
+	config::{Configuration, KeystoreConfig},
 	ServiceBuilderCommand,
-	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
+	RuntimeGenesis, ChainSpecExtension, ChainSpec,
 	AbstractService, Roles as ServiceRoles,
 };
 pub use sc_service::config::VersionInfo;
@@ -49,9 +48,7 @@ use std::{io::Write, iter, fmt::Debug, fs, net::Ipv4Addr, path::PathBuf};
 use regex::Regex;
 use structopt::{StructOpt, clap};
 pub use structopt;
-use params::{
-	NetworkConfigurationParams, TransactionPoolParams, Cors,
-};
+use params::{NetworkConfigurationParams, TransactionPoolParams};
 pub use params::{
 	SharedParams, ImportParams, ExecutionStrategy, Subcommand, RunCmd, BuildSpecCmd,
 	ExportBlocksCmd, ImportBlocksCmd, CheckBlockCmd, PurgeChainCmd, RevertCmd,
@@ -59,10 +56,8 @@ pub use params::{
 pub use traits::GetSharedParams;
 use log::info;
 use lazy_static::lazy_static;
-use sc_telemetry::TelemetryEndpoints;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
-use execution_strategy::*;
 use chrono::prelude::*;
 
 /// default sub directory for the key store
@@ -269,74 +264,10 @@ fn fill_transaction_pool_configuration<G, E>(
 	Ok(())
 }
 
-/// Fill the given `NetworkConfiguration` by looking at the cli parameters.
-fn fill_network_configuration(
-	cli: NetworkConfigurationParams,
-	config_path: PathBuf,
-	config: &mut NetworkConfiguration,
-	client_id: String,
-	is_dev: bool,
-) -> error::Result<()> {
-	config.boot_nodes.extend(cli.bootnodes.into_iter());
-	config.config_path = Some(config_path.to_string_lossy().into());
-	config.net_config_path = config.config_path.clone();
-
-	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
-	if cli.reserved_only {
-		config.non_reserved_mode = NonReservedPeerMode::Deny;
-	}
-
-	config.sentry_nodes.extend(cli.sentry_nodes.into_iter());
-
-	for addr in cli.listen_addr.iter() {
-		let addr = addr.parse().ok().ok_or(error::Error::InvalidListenMultiaddress)?;
-		config.listen_addresses.push(addr);
-	}
-
-	if config.listen_addresses.is_empty() {
-		let port = match cli.port {
-			Some(port) => port,
-			None => 30333,
-		};
-
-		config.listen_addresses = vec![
-			iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
-				.chain(iter::once(Protocol::Tcp(port)))
-				.collect()
-		];
-	}
-
-	config.client_version = client_id;
-	config.node_key = node_key::node_key_config(cli.node_key_params, &config.net_config_path)?;
-
-	config.in_peers = cli.in_peers;
-	config.out_peers = cli.out_peers;
-
-	config.transport = TransportConfig::Normal {
-		enable_mdns: !is_dev && !cli.no_mdns,
-		allow_private_ipv4: !cli.no_private_ipv4,
-		wasm_external_transport: None,
-	};
-
-	config.max_parallel_downloads = cli.max_parallel_downloads;
-
-	Ok(())
-}
-
 #[cfg(not(target_os = "unknown"))]
 fn input_keystore_password() -> Result<String, String> {
 	rpassword::read_password_from_tty(Some("Keystore password: "))
 		.map_err(|e| format!("{:?}", e))
-}
-
-/// Use in memory keystore config when it is not required at all.
-pub fn fill_config_keystore_in_memory<G, E>(config: &mut sc_service::Configuration<G, E>)
-	-> Result<(), String>
-{
-	match &mut config.keystore {
-		cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
-		_ => Err("Keystore config specified when it should not be!".into()),
-	}
 }
 
 /// Fill the password field of the given config instance.

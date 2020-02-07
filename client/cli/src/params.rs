@@ -25,17 +25,20 @@ use crate::VersionInfo;
 use crate::error;
 use std::fmt::Debug;
 use log::info;
-use sc_network::config::build_multiaddr;
+use sc_network::{
+	config::{build_multiaddr, NonReservedPeerMode, TransportConfig, NodeKeyConfig},
+	multiaddr::Protocol,
+};
 use std::io;
 use std::fs;
+use std::iter;
 use std::io::{Read, Write, Seek};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, Ipv4Addr};
 use app_dirs::{AppInfo, AppDataType};
 use sp_runtime::generic::BlockId;
 use sc_telemetry::TelemetryEndpoints;
 use names::{Generator, Name};
 use crate::runtime::run_until_exit;
-use crate::node_key::node_key_config;
 use crate::execution_strategy::*;
 use crate::node_key::is_node_name_valid;
 
@@ -45,6 +48,7 @@ pub use crate::execution_strategy::ExecutionStrategy;
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
+const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
 	fn into(self) -> sc_client_api::ExecutionStrategy {
@@ -371,6 +375,66 @@ pub struct NetworkConfigurationParams {
 	pub node_key_params: NodeKeyParams,
 }
 
+impl NetworkConfigurationParams {
+	/// Fill the given `NetworkConfiguration` by looking at the cli parameters.
+	fn update_config<G, E>(
+		&self,
+		mut config: &mut Configuration<G, E>,
+		config_path: PathBuf,
+		client_id: String,
+		is_dev: bool,
+	) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+	{
+		config.network.boot_nodes.extend(self.bootnodes.clone());
+		config.network.config_path = Some(config_path);
+		config.network.net_config_path = config.network.config_path.clone();
+
+		config.network.reserved_nodes.extend(self.reserved_nodes.clone());
+		if self.reserved_only {
+			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
+		}
+
+		config.network.sentry_nodes.extend(self.sentry_nodes.clone());
+
+		for addr in self.listen_addr.iter() {
+			let addr = addr.parse().ok().ok_or(error::Error::InvalidListenMultiaddress)?;
+			config.network.listen_addresses.push(addr);
+		}
+
+		if config.network.listen_addresses.is_empty() {
+			let port = match self.port {
+				Some(port) => port,
+				None => 30333,
+			};
+
+			config.network.listen_addresses = vec![
+				iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
+					.chain(iter::once(Protocol::Tcp(port)))
+					.collect()
+			];
+		}
+
+		config.network.client_version = client_id;
+		// TODO
+		self.node_key_params.update_config(&mut config)?;
+
+		config.network.in_peers = self.in_peers;
+		config.network.out_peers = self.out_peers;
+
+		config.network.transport = TransportConfig::Normal {
+			enable_mdns: !is_dev && !self.no_mdns,
+			allow_private_ipv4: !self.no_private_ipv4,
+			wasm_external_transport: None,
+		};
+
+		config.network.max_parallel_downloads = self.max_parallel_downloads;
+
+		Ok(())
+	}
+}
+
 arg_enum! {
 	#[allow(missing_docs)]
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -439,6 +503,55 @@ pub struct NodeKeyParams {
 	/// the chosen type.
 	#[structopt(long = "node-key-file", value_name = "FILE")]
 	pub node_key_file: Option<PathBuf>,
+}
+
+impl NodeKeyParams {
+	/// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
+	/// of an optional network config storage directory.
+	pub fn update_config<G, E>(
+		&self,
+		mut config: &mut Configuration<G, E>,
+	) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+	{
+		config.network.node_key = match self.node_key_type {
+			NodeKeyType::Ed25519 => {
+				let secret = if let Some(node_key) = self.node_key.as_ref() {
+					parse_ed25519_secret(node_key)?
+				} else {
+					let path = self.node_key_file.clone()
+						.or_else(|| config.network.net_config_path.as_ref()
+							.map(|d| d.join(NODE_KEY_ED25519_FILE)));
+
+					if let Some(path) = path {
+						sc_network::config::Secret::File(path)
+					} else {
+						sc_network::config::Secret::New
+					}
+				};
+
+				NodeKeyConfig::Ed25519(secret)
+			}
+		};
+
+		Ok(())
+	}
+}
+
+/// Create an error caused by an invalid node key argument.
+fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
+	error::Error::Input(format!("Invalid node key: {}", e))
+}
+
+use sp_core::H256;
+
+/// Parse a Ed25519 secret key from a hex string into a `sc_network::Secret`.
+fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network::config::Ed25519Secret> {
+	H256::from_str(&hex).map_err(invalid_node_key).and_then(|bytes|
+		sc_network::config::identity::ed25519::SecretKey::from_bytes(bytes)
+			.map(sc_network::config::Secret::Input)
+			.map_err(invalid_node_key))
 }
 
 /// Parameters used to create the pool configuration.
@@ -822,10 +935,12 @@ impl RunCmd {
 		config.disable_grandpa = self.no_grandpa;
 
 		let client_id = config.client_id();
-		crate::fill_network_configuration(
-			self.network_config.clone(),
-			config.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a basepath"),
-			&mut config.network,
+		let network_path = config
+			.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH)
+			.expect("We provided a basepath");
+		self.network_config.update_config(
+			&mut config,
+			network_path,
 			client_id,
 			is_dev,
 		)?;
@@ -1244,7 +1359,7 @@ impl BuildSpecCmd {
 	/// Run the build-spec command
 	pub fn run<G, E>(
 		self,
-		config: Configuration<G, E>,
+		mut config: Configuration<G, E>,
 	) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
@@ -1257,12 +1372,18 @@ impl BuildSpecCmd {
 		let raw_output = self.raw;
 
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
+			self.node_key_params.update_config(&mut config);
+
+			let node_key = config.network.node_key;
+			/*
 			let node_key = node_key_config(
 				self.node_key_params.clone(),
 				&Some(config
 					.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH)
 					.expect("We provided a base_path")),
 			)?;
+			*/
+
 			let keys = node_key.into_keypair()?;
 			let peer_id = keys.public().into_peer_id();
 			let addr = build_multiaddr![
@@ -1299,7 +1420,7 @@ impl ExportBlocksCmd {
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-		crate::fill_config_keystore_in_memory(&mut config)?;
+		config.use_in_memory_keystore()?;
 
 		if let DatabaseConfig::Path { ref path, .. } = config.expect_database() {
 			info!("DB path: {}", path.display());
@@ -1385,7 +1506,7 @@ impl CheckBlockCmd {
 			sc_service::Roles::FULL,
 			self.shared_params.dev,
 		)?;
-		crate::fill_config_keystore_in_memory(&mut config)?;
+		config.use_in_memory_keystore()?;
 
 		let input = if self.input.starts_with("0x") { &self.input[2..] } else { &self.input[..] };
 		let block_id = match FromStr::from_str(input) {
@@ -1418,7 +1539,7 @@ impl PurgeChainCmd {
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-		crate::fill_config_keystore_in_memory(&mut config)?;
+		config.use_in_memory_keystore()?;
 
 		let db_path = match config.expect_database() {
 			DatabaseConfig::Path { path, .. } => path,
@@ -1477,7 +1598,7 @@ impl RevertCmd {
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-		crate::fill_config_keystore_in_memory(&mut config)?;
+		config.use_in_memory_keystore()?;
 
 		let blocks = self.num.parse()?;
 		builder(config)?.revert_chain(blocks)?;

@@ -265,6 +265,18 @@ impl<G, E> Configuration<G, E> {
 			self.roles.to_string()
 		}
 	}
+
+	/// Use in memory keystore config when it is not required at all.
+	///
+	/// This function returns an error if the keystore is already set to something different than
+	/// `KeystoreConfig::None`.
+	pub fn use_in_memory_keystore(&mut self) -> Result<(), String>
+	{
+		match &mut self.keystore {
+			cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
+			_ => Err("Keystore config specified when it should not be!".into()),
+		}
+	}
 }
 
 /// Returns platform info
