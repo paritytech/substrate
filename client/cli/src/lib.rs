@@ -35,6 +35,7 @@ use sc_service::{
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 	AbstractService, Roles as ServiceRoles,
 };
+pub use sc_service::config::VersionInfo;
 use sc_network::{
 	self,
 	multiaddr::Protocol,
@@ -74,31 +75,10 @@ const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
 /// default sub directory for the key store
-const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str =  "keystore";
+const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
 
 /// The maximum number of characters for a node name.
 const NODE_NAME_MAX_LENGTH: usize = 32;
-
-/// Executable version. Used to pass version information from the root crate.
-#[derive(Clone)]
-pub struct VersionInfo {
-	/// Implementaiton name.
-	pub name: &'static str,
-	/// Implementation version.
-	pub version: &'static str,
-	/// SCM Commit hash.
-	pub commit: &'static str,
-	/// Executable file name.
-	pub executable_name: &'static str,
-	/// Executable file description.
-	pub description: &'static str,
-	/// Executable file author.
-	pub author: &'static str,
-	/// Support URL.
-	pub support_url: &'static str,
-	/// Copyright starting year (x-current year)
-	pub copyright_start_year: i32,
-}
 
 fn get_chain_key(cli: &SharedParams) -> String {
 	match cli.chain {
@@ -120,8 +100,12 @@ fn generate_node_name() -> String {
 	result
 }
 
-/// Load spec give shared params and spec factory.
-pub fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G, E>> where
+/// Load spec to `Configuration` from shared params and spec factory.
+pub fn load_spec<'a, G, E, F>(
+	mut config: &'a mut Configuration<G, E>,
+	cli: &SharedParams,
+	factory: F,
+) -> error::Result<&'a ChainSpec<G, E>> where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
@@ -131,7 +115,13 @@ pub fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<Chain
 		Some(spec) => spec,
 		None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
 	};
-	Ok(spec)
+
+	config.network.boot_nodes = spec.boot_nodes().to_vec();
+	config.telemetry_endpoints = spec.telemetry_endpoints().clone();
+
+	config.chain_spec = Some(spec);
+
+	Ok(config.chain_spec.as_ref().unwrap())
 }
 
 fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
@@ -243,8 +233,8 @@ where
 	SL: AbstractService + Unpin,
 	SF: AbstractService + Unpin,
 {
-	init(&mut config, spec_factory, &run_cmd.shared_params, version)?;
-
+	init(&run_cmd.shared_params, version)?;
+	init_config(&mut config, &run_cmd.shared_params, version, spec_factory)?;
 	run_cmd.run(config, new_light, new_full, version)
 }
 
@@ -266,31 +256,20 @@ where
 	<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 	<BB as BlockT>::Hash: std::str::FromStr,
 {
-	init(&mut config, spec_factory, &subcommand.get_shared_params(), version)?;
-
+	let shared_params = subcommand.get_shared_params();
+	init(shared_params, version)?;
+	init_config(&mut config, shared_params, version, spec_factory)?;
 	subcommand.run(config, builder)
 }
 
-/// Initialize substrate and its configuration
+/// Initialize substrate. This must be done only once.
 ///
 /// This method:
 ///
-/// 1.  set the panic handler
-/// 2.  raise the FD limit
-/// 3.  initialize the logger
-/// 4.  update the configuration provided with the chain specification, config directory,
-///     information (version, commit), database's path, boot nodes and telemetry endpoints
-pub fn init<G, E, F>(
-	mut config: &mut Configuration<G, E>,
-	spec_factory: F,
-	shared_params: &SharedParams,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-{
+/// 1. Set the panic handler
+/// 2. Raise the FD limit
+/// 3. Initialize the logger
+pub fn init(shared_params: &SharedParams, version: &VersionInfo) -> error::Result<()> {
 	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
 		version.commit
@@ -300,20 +279,36 @@ where
 	fdlimit::raise_fd_limit();
 	init_logger(shared_params.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
 
-	config.chain_spec = Some(load_spec(shared_params, spec_factory)?);
-	config.config_dir = Some(base_path(shared_params, version));
-	config.impl_commit = version.commit;
-	config.impl_version = version.version;
+	Ok(())
+}
 
-	config.database = DatabaseConfig::Path {
-		path: config
-			.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
-			.expect("We provided a base_path/config_dir."),
-		cache_size: None,
-	};
+/// Initialize the given `config`.
+///
+/// This will load the chain spec, set the `config_dir` and the `database_dir`.
+pub fn init_config<G, E, F>(
+	config: &mut Configuration<G, E>,
+	shared_params: &SharedParams,
+	version: &VersionInfo,
+	spec_factory: F,
+) -> error::Result<()> where
+	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+{
+	load_spec(config, shared_params, spec_factory)?;
 
-	config.network.boot_nodes = config.expect_chain_spec().boot_nodes().to_vec();
-	config.telemetry_endpoints = config.expect_chain_spec().telemetry_endpoints().clone();
+	if config.config_dir.is_none() {
+		config.config_dir = Some(base_path(&shared_params, version));
+	}
+
+	if config.database.is_none() {
+		config.database = Some(DatabaseConfig::Path {
+			path: config
+				.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
+				.expect("We provided a base_path/config_dir."),
+			cache_size: None,
+		});
+	}
 
 	Ok(())
 }
@@ -419,8 +414,6 @@ fn fill_network_configuration(
 		];
 	}
 
-	config.public_addresses = Vec::new();
-
 	config.client_version = client_id;
 	config.node_key = node_key::node_key_config(cli.node_key_params, &config.net_config_path)?;
 
@@ -445,7 +438,7 @@ fn input_keystore_password() -> Result<String, String> {
 }
 
 /// Use in memory keystore config when it is not required at all.
-fn fill_config_keystore_in_memory<G, E>(config: &mut sc_service::Configuration<G, E>)
+pub fn fill_config_keystore_in_memory<G, E>(config: &mut sc_service::Configuration<G, E>)
 	-> Result<(), String>
 {
 	match &mut config.keystore {
@@ -496,10 +489,8 @@ pub fn fill_import_params<G, E>(
 where
 	G: RuntimeGenesis,
 {
-	match config.database {
-		DatabaseConfig::Path { ref mut cache_size, .. } =>
-			*cache_size = Some(cli.database_cache_size),
-		DatabaseConfig::Custom(_) => {},
+	if let Some(DatabaseConfig::Path { ref mut cache_size, .. }) = config.database {
+		*cache_size = Some(cli.database_cache_size);
 	}
 
 	config.state_cache_size = cli.state_cache_size;
@@ -549,7 +540,7 @@ where
 	Ok(())
 }
 
-/// Update and prepare a `Configuration` with command line parameters of `RunCmd`
+/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`
 pub fn update_config_for_running_node<G, E>(
 	mut config: &mut Configuration<G, E>,
 	cli: RunCmd,
@@ -580,16 +571,13 @@ where
 		(_, Some(keyring)) => keyring.to_string(),
 		(None, None) => generate_node_name(),
 	};
-	match node_key::is_node_name_valid(&config.name) {
-		Ok(_) => (),
-		Err(msg) => Err(
-			error::Error::Input(
-				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
-					config.name,
-					msg
-				)
+	if let Err(msg) = node_key::is_node_name_valid(&config.name) {
+		return Err(error::Error::Input(
+			format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
+				config.name,
+				msg,
 			)
-		)?
+		));
 	}
 
 	// set sentry mode (i.e. act as an authority but **never** actively participate)
@@ -625,16 +613,16 @@ where
 			}
 		});
 
-	if config.rpc_http.is_none() {
+	if config.rpc_http.is_none() || cli.rpc_port.is_some() {
 		let rpc_interface: &str = interface_str(cli.rpc_external, cli.unsafe_rpc_external, cli.validator)?;
 		config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
 	}
-	if config.rpc_ws.is_none() {
+	if config.rpc_ws.is_none() || cli.ws_port.is_some() {
 		let ws_interface: &str = interface_str(cli.ws_external, cli.unsafe_ws_external, cli.validator)?;
 		config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
 	}
 
-	if config.grafana_port.is_none() {
+	if config.grafana_port.is_none() || cli.grafana_port.is_some() {
 		let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
 		config.grafana_port = Some(
 			parse_address(&format!("{}:{}", grafana_interface, 9955), cli.grafana_port)?
@@ -663,8 +651,8 @@ where
 		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
 
-	config.tracing_targets = cli.tracing_targets.into();
-	config.tracing_receiver = cli.tracing_receiver.into();
+	config.tracing_targets = cli.import_params.tracing_targets.into();
+	config.tracing_receiver = cli.import_params.tracing_receiver.into();
 
 	// Imply forced authoring on --dev
 	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
@@ -781,6 +769,17 @@ fn kill_color(s: &str) -> String {
 mod tests {
 	use super::*;
 
+	const TEST_VERSION_INFO: &'static VersionInfo = &VersionInfo {
+		name: "node-test",
+		version: "0.1.0",
+		commit: "some_commit",
+		executable_name: "node-test",
+		description: "description",
+		author: "author",
+		support_url: "http://example.org",
+		copyright_start_year: 2020,
+	};
+
 	#[test]
 	fn keystore_path_is_generated_correctly() {
 		let chain_spec = ChainSpec::from_genesis(
@@ -814,5 +813,67 @@ mod tests {
 
 			assert_eq!(expected_path, node_config.keystore.path().unwrap().to_owned());
 		}
+	}
+
+	#[test]
+	fn ensure_load_spec_provide_defaults() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			vec!["boo".to_string()],
+			Some(TelemetryEndpoints::new(vec![("foo".to_string(), 42)])),
+			None,
+			None,
+			None::<()>,
+		);
+
+		let args: Vec<&str> = vec![];
+		let cli = RunCmd::from_iter(args);
+
+		let mut config = Configuration::new(TEST_VERSION_INFO);
+		load_spec(&mut config, &cli.shared_params, |_| Ok(Some(chain_spec))).unwrap();
+
+		assert!(config.chain_spec.is_some());
+		assert!(!config.network.boot_nodes.is_empty());
+		assert!(config.telemetry_endpoints.is_some());
+	}
+
+	#[test]
+	fn ensure_update_config_for_running_node_provides_defaults() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			vec![],
+			None,
+			None,
+			None,
+			None::<()>,
+		);
+
+		let args: Vec<&str> = vec![];
+		let cli = RunCmd::from_iter(args);
+
+		let mut config = Configuration::new(TEST_VERSION_INFO);
+		init(&cli.shared_params, &TEST_VERSION_INFO).unwrap();
+		init_config(
+			&mut config,
+			&cli.shared_params,
+			&TEST_VERSION_INFO,
+			|_| Ok(Some(chain_spec)),
+		).unwrap();
+		update_config_for_running_node(&mut config, cli).unwrap();
+
+		assert!(config.config_dir.is_some());
+		assert!(config.database.is_some());
+		if let Some(DatabaseConfig::Path { ref cache_size, .. }) = config.database {
+			assert!(cache_size.is_some());
+		} else {
+			panic!("invalid config.database variant");
+		}
+		assert!(!config.name.is_empty());
+		assert!(config.network.config_path.is_some());
+		assert!(!config.network.listen_addresses.is_empty());
 	}
 }

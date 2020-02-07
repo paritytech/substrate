@@ -35,6 +35,7 @@ names = "0.11.0"
 structopt = "0.3.8"
 sc-tracing = { version = "2.0.0", path = "../tracing" }
 chrono = "0.4.10"
+parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "4.0.1"

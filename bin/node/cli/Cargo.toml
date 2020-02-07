@@ -32,6 +32,7 @@ jsonrpc-core = "14.0.3"
 log = "0.4.8"
 rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
+tracing = "0.1.10"
 
 # primitives
 sp-authority-discovery = { version = "2.0.0",  path = "../../../primitives/authority-discovery" }
@@ -60,6 +61,7 @@ sc-offchain = { version = "2.0.0", path = "../../../client/offchain" }
 sc-rpc = { version = "2.0.0", path = "../../../client/rpc" }
 sc-basic-authorship = { version = "0.8", path = "../../../client/basic-authorship" }
 sc-service = { version = "0.8", default-features = false, path = "../../../client/service" }
+sc-tracing = { version = "2.0.0", path = "../../../client/tracing" }
 sc-telemetry = { version = "2.0.0", path = "../../../client/telemetry" }
 sc-authority-discovery = { version = "0.8",  path = "../../../client/authority-discovery" }
 
@@ -92,9 +94,12 @@ browser-utils = { path = "../../../utils/browser", optional = true }
 [dev-dependencies]
 sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
 sc-consensus-babe = { version = "0.8", features = ["test-helpers"], path = "../../../client/consensus/babe" }
+sc-consensus-epochs = { version = "0.8", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 futures = "0.3.1"
 tempfile = "3.1.0"
+assert_cmd = "0.12"
+nix = "0.17"
 
 [build-dependencies]
 build-script-utils = { version = "2.0.0", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }

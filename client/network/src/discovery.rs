@@ -59,7 +59,7 @@ use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace, warn, error};
 use std::{cmp, collections::VecDeque, time::Duration};
 use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
@@ -304,10 +304,12 @@ where
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
+		error!(target: "sub-libp2p", "Error on libp2p listener {:?}: {}", id, err);
 		NetworkBehaviour::inject_listener_error(&mut self.kademlia, id, err);
 	}
 
 	fn inject_listener_closed(&mut self, id: ListenerId) {
+		error!(target: "sub-libp2p", "Libp2p listener {:?} closed", id);
 		NetworkBehaviour::inject_listener_closed(&mut self.kademlia, id);
 	}
 

@@ -405,13 +405,13 @@ impl From<&'static str> for DispatchError {
 	}
 }
 
-impl Into<&'static str> for DispatchError {
-	fn into(self) -> &'static str {
-		match self {
-			Self::Other(msg) => msg,
-			Self::CannotLookup => "Can not lookup",
-			Self::BadOrigin => "Bad origin",
-			Self::Module { message, .. } => message.unwrap_or("Unknown module error"),
+impl From<DispatchError> for &'static str {
+	fn from(err: DispatchError) -> &'static str {
+		match err {
+			DispatchError::Other(msg) => msg,
+			DispatchError::CannotLookup => "Can not lookup",
+			DispatchError::BadOrigin => "Bad origin",
+			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
 		}
 	}
 }
@@ -638,6 +638,13 @@ macro_rules! assert_eq_error_rate {
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
+
+#[cfg(feature = "std")]
+impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.0.size_of(ops)
+	}
+}
 
 impl sp_std::fmt::Debug for OpaqueExtrinsic {
 	#[cfg(feature = "std")]
