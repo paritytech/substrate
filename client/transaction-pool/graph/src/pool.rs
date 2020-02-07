@@ -122,6 +122,16 @@ pub struct Pool<B: ChainApi> {
 	validated_pool: Arc<ValidatedPool<B>>,
 }
 
+impl<B: ChainApi> parity_util_mem::MallocSizeOf for Pool<B>
+where
+	B::Hash: parity_util_mem::MallocSizeOf,
+	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.validated_pool.size_of(ops)
+	}
+}
+
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, api: Arc<B>) -> Self {
@@ -378,8 +388,13 @@ impl<B: ChainApi> Pool<B> {
 		let block_number = self.resolve_block_number(at)?;
 		let mut result = HashMap::new();
 
-		for xt in xts {
-			let (hash, validated_tx) = self.verify_one(at, block_number, xt, force).await;
+		for (hash, validated_tx) in
+			futures::future::join_all(
+				xts.into_iter()
+					.map(|xt| self.verify_one(at, block_number, xt, force))
+			)
+			.await
+		{
 			result.insert(hash, validated_tx);
 		}
 

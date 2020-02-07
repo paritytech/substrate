@@ -20,7 +20,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
-#![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 
 #![cfg_attr(feature = "std",
    doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
@@ -892,7 +891,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 	unsafe {
 		let message = sp_std::alloc::format!("{}", info);
 		logging::log(LogLevel::Error, "runtime", message.as_bytes());
-		core::intrinsics::abort()
+		core::arch::wasm32::unreachable();
 	}
 }
 
@@ -902,7 +901,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 pub fn oom(_: core::alloc::Layout) -> ! {
 	unsafe {
 		logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
-		core::intrinsics::abort();
+		core::arch::wasm32::unreachable();
 	}
 }
 
