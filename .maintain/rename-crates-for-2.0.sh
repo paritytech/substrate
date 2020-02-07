@@ -34,8 +34,21 @@ function rename() {
 TO_RENAME=(
     # OLD-CRATE-NAME NEW-CRATE-NAME
 
+    # post initial rename fixes
+    "sc-application-crypto sp-application-crypto"
+    "sp-transaction-pool-api sp-transaction-pool"
+    "sp-transaction-pool-runtime-api sp-transaction-pool"
+    "sp-core-storage sp-storage"
+    "transaction-factory node-transaction-factory"
+    "sp-finality-granpda sp-finality-grandpa"
+    "sp-sesssion sp-session"
+    "sp-tracing-pool sp-transaction-pool"
+    "sc-basic-authority sc-basic-authorship"
+    "sc-api sc-client-api"
+    "sc-database sc-client-db"
+
     # PRIMITIVES
-    "substrate-application-crypto sc-application-crypto"
+    "substrate-application-crypto sp-application-crypto"
     "substrate-authority-discovery-primitives sp-authority-discovery"
     "substrate-block-builder-runtime-api sp-block-builder"
     "substrate-consensus-aura-primitives sp-consensus-aura"
@@ -46,7 +59,7 @@ TO_RENAME=(
     "substrate-debug-derive sp-debug-derive"
     "substrate-primitives-storage sp-storage"
     "substrate-externalities sp-externalities"
-    "substrate-finality-grandpa-primitives sp-finality-granpda"
+    "substrate-finality-grandpa-primitives sp-finality-grandpa"
     "substrate-inherents sp-inherents"
     "substrate-keyring sp-keyring"
     "substrate-offchain-primitives sp-offchain"
@@ -76,9 +89,9 @@ TO_RENAME=(
 
     # # CLIENT
     "substrate-client sc-client"
-    "substrate-client-api sc-api"
+    "substrate-client-api sc-client-api"
     "substrate-authority-discovery sc-authority-discovery"
-    "substrate-basic-authorship sc-basic-authority"
+    "substrate-basic-authorship sc-basic-authorship"
     "substrate-block-builder sc-block-builder"
     "substrate-chain-spec sc-chain-spec"
     "substrate-chain-spec-derive sc-chain-spec-derive"
@@ -88,7 +101,7 @@ TO_RENAME=(
     "substrate-consensus-pow sc-consensus-pow"
     "substrate-consensus-slots sc-consensus-slots"
     "substrate-consensus-uncles sc-consensus-uncles"
-    "substrate-client-db sc-database"
+    "substrate-client-db sc-client-db"
     "substrate-executor sc-executor"
     "substrate-runtime-test sc-runtime-test"
     "substrate-finality-grandpa sc-finality-grandpa"
@@ -102,6 +115,7 @@ TO_RENAME=(
     "substrate-service-test sc-service-test"
     "substrate-state-db sc-state-db"
     "substrate-telemetry sc-telemetry"
+    "substrate-test-primitives sp-test-primitives"
     "substrate-tracing sc-tracing"
 
 );

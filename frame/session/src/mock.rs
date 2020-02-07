@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,8 +18,8 @@
 
 use super::*;
 use std::cell::RefCell;
-use support::{impl_outer_origin, parameter_types, weights::Weight};
-use primitives::{crypto::key_types::DUMMY, H256};
+use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
 	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
 	testing::{Header, UintAuthorityId}
@@ -39,7 +39,7 @@ impl From<UintAuthorityId> for MockSessionKeys {
 }
 
 impl_outer_origin! {
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 thread_local! {
@@ -88,9 +88,10 @@ impl SessionHandler<u64> for TestSessionHandler {
 	}
 }
 
-pub struct TestOnSessionEnding;
-impl OnSessionEnding<u64> for TestOnSessionEnding {
-	fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<u64>> {
+pub struct TestSessionManager;
+impl SessionManager<u64> for TestSessionManager {
+	fn end_session(_: SessionIndex) {}
+	fn new_session(_: SessionIndex) -> Option<Vec<u64>> {
 		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
 			VALIDATORS.with(|v| {
 				let mut v = v.borrow_mut();
@@ -108,14 +109,13 @@ impl OnSessionEnding<u64> for TestOnSessionEnding {
 }
 
 #[cfg(feature = "historical")]
-impl crate::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
-	fn on_session_ending(ending_index: SessionIndex, will_apply_at: SessionIndex)
-		-> Option<(Vec<u64>, Vec<(u64, u64)>)>
+impl crate::historical::SessionManager<u64, u64> for TestSessionManager {
+	fn end_session(_: SessionIndex) {}
+	fn new_session(new_index: SessionIndex)
+		-> Option<Vec<(u64, u64)>>
 	{
-		let pair_with_ids = |vals: &[u64]| vals.iter().map(|&v| (v, v)).collect::<Vec<_>>();
-		<Self as OnSessionEnding<_>>::on_session_ending(ending_index, will_apply_at)
-			.map(|vals| (pair_with_ids(&vals), vals))
-			.map(|(ids, vals)| (vals, ids))
+		<Self as SessionManager<_>>::new_session(new_index)
+			.map(|vals| vals.into_iter().map(|val| (val, val)).collect())
 	}
 }
 
@@ -158,7 +158,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -174,9 +174,10 @@ impl system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 
-impl timestamp::Trait for Test {
+impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -189,15 +190,14 @@ parameter_types! {
 impl Trait for Test {
 	type ShouldEndSession = TestShouldEndSession;
 	#[cfg(feature = "historical")]
-	type OnSessionEnding = crate::historical::NoteHistoricalRoot<Test, TestOnSessionEnding>;
+	type SessionManager = crate::historical::NoteHistoricalRoot<Test, TestSessionManager>;
 	#[cfg(not(feature = "historical"))]
-	type OnSessionEnding = TestOnSessionEnding;
+	type SessionManager = TestSessionManager;
 	type SessionHandler = TestSessionHandler;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
 	type Event = ();
-	type SelectInitialValidators = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
@@ -207,5 +207,5 @@ impl crate::historical::Trait for Test {
 	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
 }
 
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 pub type Session = Module<Test>;

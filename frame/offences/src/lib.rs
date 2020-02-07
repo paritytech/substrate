@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,8 +24,8 @@
 mod mock;
 mod tests;
 
-use rstd::vec::Vec;
-use support::{
+use sp_std::vec::Vec;
+use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter,
 };
 use sp_runtime::traits::Hash;
@@ -33,17 +33,18 @@ use sp_staking::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails},
 };
 use codec::{Encode, Decode};
+use frame_system as system;
 
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
 type OpaqueTimeSlot = Vec<u8>;
 
 /// A type alias for a report identifier.
-type ReportIdOf<T> = <T as system::Trait>::Hash;
+type ReportIdOf<T> = <T as frame_system::Trait>::Hash;
 
 /// Offences trait
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 	/// Full identification of the validator.
 	type IdentificationTuple: Parameter + Ord;
 	/// A handler called for every offence report.
@@ -53,10 +54,12 @@ pub trait Trait: system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
 		/// The primary structure that holds all offence records keyed by report identifiers.
-		Reports get(fn reports): map ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
+		Reports get(fn reports): map hasher(blake2_256) ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
 
 		/// A vector of reports of the same kind that happened at the same time slot.
-		ConcurrentReportsIndex: double_map Kind, blake2_256(OpaqueTimeSlot) => Vec<ReportIdOf<T>>;
+		ConcurrentReportsIndex:
+			double_map hasher(blake2_256) Kind, hasher(blake2_256) OpaqueTimeSlot
+			=> Vec<ReportIdOf<T>>;
 
 		/// Enumerates all reports of a kind along with the time they happened.
 		///
@@ -64,7 +67,7 @@ decl_storage! {
 		///
 		/// Note that the actual type of this mapping is `Vec<u8>`, this is because values of
 		/// different types are not supported at the moment so we are doing the manual serialization.
-		ReportsByKindIndex: map Kind => Vec<u8>; // (O::TimeSlot, ReportIdOf<T>)
+		ReportsByKindIndex: map hasher(blake2_256) Kind => Vec<u8>; // (O::TimeSlot, ReportIdOf<T>)
 	}
 }
 

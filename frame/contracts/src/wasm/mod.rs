@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,9 +22,9 @@ use crate::wasm::env_def::FunctionImplProvider;
 use crate::exec::{Ext, ExecResult};
 use crate::gas::GasMeter;
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sandbox;
+use sp_sandbox;
 
 #[macro_use]
 mod env_def;
@@ -114,7 +114,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 		gas_meter: &mut GasMeter<E::T>,
 	) -> ExecResult {
 		let memory =
-			sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
+			sp_sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
 				.unwrap_or_else(|_| {
 				// unlike `.expect`, explicit panic preserves the source location.
 				// Needed as we can't use `RUST_BACKTRACE` in here.
@@ -125,7 +125,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 					)
 				});
 
-		let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
+		let mut imports = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		imports.add_memory("env", "memory", memory.clone());
 		runtime::Env::impls(&mut |name, func_ptr| {
 			imports.add_host_func("env", name, func_ptr);
@@ -141,7 +141,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 
 		// Instantiate the instance from the instrumented module code and invoke the contract
 		// entrypoint.
-		let result = sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime)
+		let result = sp_sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime)
 			.and_then(|mut instance| instance.invoke(exec.entrypoint_name, &[], &mut runtime));
 		to_execution_result(runtime, result)
 	}
@@ -152,7 +152,7 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use std::cell::RefCell;
-	use primitives::H256;
+	use sp_core::H256;
 	use crate::exec::{Ext, StorageKey, ExecError, ExecReturnValue, STATUS_SUCCESS};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
@@ -161,6 +161,7 @@ mod tests {
 	use wabt;
 	use hex_literal::hex;
 	use assert_matches::assert_matches;
+	use sp_runtime::DispatchError;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct DispatchEntry(Call);
@@ -298,6 +299,10 @@ mod tests {
 			666
 		}
 
+		fn tombstone_deposit(&self) -> u64 {
+			16
+		}
+
 		fn random(&self, subject: &[u8]) -> H256 {
 			H256::from_slice(subject)
 		}
@@ -395,6 +400,9 @@ mod tests {
 		}
 		fn minimum_balance(&self) -> u64 {
 			(**self).minimum_balance()
+		}
+		fn tombstone_deposit(&self) -> u64 {
+			(**self).tombstone_deposit()
 		}
 		fn random(&self, subject: &[u8]) -> H256 {
 			(**self).random(subject)
@@ -1111,7 +1119,7 @@ mod tests {
 		assert_eq!(
 			&mock_ext.dispatches,
 			&[DispatchEntry(
-				Call::Balances(balances::Call::set_balance(42, 1337, 0)),
+				Call::Balances(pallet_balances::Call::set_balance(42, 1337, 0)),
 			)]
 		);
 	}
@@ -1264,6 +1272,65 @@ mod tests {
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 		let _ = execute(
 			CODE_MINIMUM_BALANCE,
+			vec![],
+			MockExt::default(),
+			&mut gas_meter,
+		).unwrap();
+	}
+
+	const CODE_TOMBSTONE_DEPOSIT: &str = r#"
+(module
+	(import "env" "ext_tombstone_deposit" (func $ext_tombstone_deposit))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		(call $ext_tombstone_deposit)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_read
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 16.
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 16)
+			)
+		)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn tombstone_deposit() {
+		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let _ = execute(
+			CODE_TOMBSTONE_DEPOSIT,
 			vec![],
 			MockExt::default(),
 			&mut gas_meter,
@@ -1429,7 +1496,9 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: "during execution", buffer: _ })
+			Err(ExecError {
+				reason: DispatchError::Other("contract trapped during execution"), buffer: _
+			})
 		);
 	}
 
@@ -1471,7 +1540,7 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: "during execution", buffer: _ })
+			Err(ExecError { reason: DispatchError::Other("contract trapped during execution"), buffer: _ })
 		);
 	}
 

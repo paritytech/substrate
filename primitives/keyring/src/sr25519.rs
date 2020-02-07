@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,8 +19,8 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use lazy_static::lazy_static;
-use primitives::{sr25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
-pub use primitives::sr25519;
+use sp_core::{sr25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
+pub use sp_core::sr25519;
 use sp_runtime::AccountId32;
 
 /// Set of test accounts.
@@ -113,6 +113,33 @@ impl From<Keyring> for sp_runtime::MultiSigner {
 	}
 }
 
+#[derive(Debug)]
+pub struct ParseKeyringError;
+
+impl std::fmt::Display for ParseKeyringError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "ParseKeyringError")
+	}
+}
+
+impl std::str::FromStr for Keyring {
+	type Err = ParseKeyringError;
+
+	fn from_str(s: &str) -> Result<Self, <Self as std::str::FromStr>::Err> {
+		match s {
+			"alice" => Ok(Keyring::Alice),
+			"bob" => Ok(Keyring::Bob),
+			"charlie" => Ok(Keyring::Charlie),
+			"dave" => Ok(Keyring::Dave),
+			"eve" => Ok(Keyring::Eve),
+			"ferdie" => Ok(Keyring::Ferdie),
+			"one" => Ok(Keyring::One),
+			"two" => Ok(Keyring::Two),
+			_ => Err(ParseKeyringError)
+		}
+	}
+}
+
 lazy_static! {
 	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> = {
 		Keyring::iter().map(|i| (i, i.pair())).collect()
@@ -181,7 +208,7 @@ impl Deref for Keyring {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{sr25519::Pair, Pair as PairT};
+	use sp_core::{sr25519::Pair, Pair as PairT};
 
 	#[test]
 	fn should_work() {

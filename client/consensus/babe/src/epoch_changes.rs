@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,14 +20,13 @@
 //! persistent DAG superimposed over the forks of the blockchain.
 
 use std::sync::Arc;
-use babe_primitives::{Epoch, SlotNumber, NextEpochDescriptor};
+use sp_consensus_babe::{Epoch, SlotNumber, NextEpochDescriptor};
 use fork_tree::ForkTree;
 use parking_lot::{Mutex, MutexGuard};
 use sp_runtime::traits::{Block as BlockT, NumberFor, One, Zero};
 use codec::{Encode, Decode};
-use client_api::utils::is_descendent_of;
+use sc_client_api::utils::is_descendent_of;
 use sp_blockchain::{HeaderMetadata, HeaderBackend, Error as ClientError};
-use primitives::H256;
 use std::ops::Add;
 
 /// A builder for `is_descendent_of` functions.
@@ -57,17 +56,15 @@ pub(crate) fn descendent_query<H, Block>(client: &H) -> HeaderBackendDescendentB
 /// `IsDescendentOfBuilder` for header backends.
 pub(crate) struct HeaderBackendDescendentBuilder<H, Block>(H, std::marker::PhantomData<Block>);
 
-// TODO: relying on Hash = H256 is awful.
-// https://github.com/paritytech/substrate/issues/3624
-impl<'a, H, Block> IsDescendentOfBuilder<H256>
+impl<'a, H, Block> IsDescendentOfBuilder<Block::Hash>
 	for HeaderBackendDescendentBuilder<&'a H, Block> where
 	H: HeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError>,
-	Block: BlockT<Hash = H256>,
+	Block: BlockT,
 {
 	type Error = ClientError;
-	type IsDescendentOf = Box<dyn Fn(&H256, &H256) -> Result<bool, ClientError> + 'a>;
+	type IsDescendentOf = Box<dyn Fn(&Block::Hash, &Block::Hash) -> Result<bool, ClientError> + 'a>;
 
-	fn build_is_descendent_of(&self, current: Option<(H256, H256)>)
+	fn build_is_descendent_of(&self, current: Option<(Block::Hash, Block::Hash)>)
 		-> Self::IsDescendentOf
 	{
 		Box::new(is_descendent_of(self.0, current))
@@ -186,6 +183,12 @@ impl<Hash, Number> EpochChanges<Hash, Number> where
 	/// Create a new epoch-change tracker.
 	fn new() -> Self {
 		EpochChanges { inner: ForkTree::new() }
+	}
+
+	/// Rebalances the tree of epoch changes so that it is sorted by length of
+	/// fork (longest fork first).
+	pub fn rebalance(&mut self) {
+		self.inner.rebalance()
 	}
 
 	/// Prune out finalized epochs, except for the ancestor of the finalized

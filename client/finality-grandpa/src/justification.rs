@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,16 +16,15 @@
 
 use std::collections::{HashMap, HashSet};
 
-use client::Client;
-use client_api::{CallExecutor, backend::Backend};
+use sc_client::Client;
+use sc_client_api::{CallExecutor, backend::Backend};
 use sp_blockchain::Error as ClientError;
-use codec::{Encode, Decode};
-use grandpa::voter_set::VoterSet;
-use grandpa::{Error as GrandpaError};
+use parity_scale_codec::{Encode, Decode};
+use finality_grandpa::voter_set::VoterSet;
+use finality_grandpa::{Error as GrandpaError};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use primitives::{H256, Blake2Hasher};
-use fg_primitives::AuthorityId;
+use sp_finality_grandpa::AuthorityId;
 
 use crate::{Commit, Error};
 use crate::communication;
@@ -45,7 +44,7 @@ pub struct GrandpaJustification<Block: BlockT> {
 	votes_ancestries: Vec<Block::Header>,
 }
 
-impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
+impl<Block: BlockT> GrandpaJustification<Block> {
 	/// Create a GRANDPA justification from the given commit. This method
 	/// assumes the commit is valid and well-formed.
 	pub(crate) fn from_commit<B, E, RA>(
@@ -53,8 +52,8 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		round: u64,
 		commit: Commit<Block>,
 	) -> Result<GrandpaJustification<Block>, Error> where
-		B: Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+		B: Backend<Block>,
+		E: CallExecutor<Block> + Send + Sync,
 		RA: Send + Sync,
 	{
 		let mut votes_ancestries_hashes = HashSet::new();
@@ -98,7 +97,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		set_id: u64,
 		voters: &VoterSet<AuthorityId>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
-		NumberFor<Block>: grandpa::BlockNumberOps,
+		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	{
 
 		let justification = GrandpaJustification::<Block>::decode(&mut &*encoded)
@@ -115,13 +114,13 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	/// Validate the commit and the votes' ancestry proofs.
 	pub(crate) fn verify(&self, set_id: u64, voters: &VoterSet<AuthorityId>) -> Result<(), ClientError>
 	where
-		NumberFor<Block>: grandpa::BlockNumberOps,
+		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	{
-		use grandpa::Chain;
+		use finality_grandpa::Chain;
 
 		let ancestry_chain = AncestryChain::<Block>::new(&self.votes_ancestries);
 
-		match grandpa::validate_commit(
+		match finality_grandpa::validate_commit(
 			&self.commit,
 			voters,
 			&ancestry_chain,
@@ -133,14 +132,16 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			}
 		}
 
+		let mut buf = Vec::new();
 		let mut visited_hashes = HashSet::new();
 		for signed in self.commit.precommits.iter() {
-			if let Err(_) = communication::check_message_sig::<Block>(
-				&grandpa::Message::Precommit(signed.precommit.clone()),
+			if let Err(_) = communication::check_message_sig_with_buffer::<Block>(
+				&finality_grandpa::Message::Precommit(signed.precommit.clone()),
 				&signed.id,
 				&signed.signature,
 				self.round,
 				set_id,
+				&mut buf,
 			) {
 				return Err(ClientError::BadJustification(
 					"invalid signature for precommit in grandpa justification".to_string()).into());
@@ -179,7 +180,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	}
 }
 
-/// A utility trait implementing `grandpa::Chain` using a given set of headers.
+/// A utility trait implementing `finality_grandpa::Chain` using a given set of headers.
 /// This is useful when validating commits, using the given set of headers to
 /// verify a valid ancestry route to the target commit block.
 struct AncestryChain<Block: BlockT> {
@@ -198,8 +199,8 @@ impl<Block: BlockT> AncestryChain<Block> {
 	}
 }
 
-impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block> where
-	NumberFor<Block>: grandpa::BlockNumberOps
+impl<Block: BlockT> finality_grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block> where
+	NumberFor<Block>: finality_grandpa::BlockNumberOps
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		let mut route = Vec::new();

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@
 
 use std::sync::{Weak, Arc};
 use codec::Decode;
-use primitives::{
+use sp_core::{
 	ExecutionContext,
 	offchain::{self, OffchainExt, TransactionPoolExt},
 	traits::{BareCryptoStorePtr, KeystoreExt},
@@ -31,8 +31,8 @@ use sp_runtime::{
 	generic::BlockId,
 	traits,
 };
-use state_machine::{ExecutionStrategy, ExecutionManager, DefaultHandler};
-use externalities::Extensions;
+use sp_state_machine::{ExecutionStrategy, ExecutionManager, DefaultHandler};
+use sp_externalities::Extensions;
 use parking_lot::RwLock;
 
 /// Execution strategies settings.
@@ -62,6 +62,18 @@ impl Default for ExecutionStrategies {
 	}
 }
 
+/// Generate the starting set of ExternalitiesExtensions based upon the given capabilities
+pub trait ExtensionsFactory: Send + Sync {
+	/// Make `Extensions` for given Capapbilities
+	fn extensions_for(&self, capabilities: offchain::Capabilities) -> Extensions;
+}
+
+impl ExtensionsFactory for () {
+	fn extensions_for(&self, _capabilities: offchain::Capabilities) -> Extensions {
+		Extensions::new()
+	}
+}
+
 /// A producer of execution extensions for offchain calls.
 ///
 /// This crate aggregates extensions available for the offchain calls
@@ -70,7 +82,10 @@ impl Default for ExecutionStrategies {
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
 	keystore: Option<BareCryptoStorePtr>,
-	transaction_pool: RwLock<Option<Weak<dyn txpool_api::OffchainSubmitTransaction<Block>>>>,
+	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
+	//        remove when fixed.
+	transaction_pool: RwLock<Option<Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>>>,
+	extensions_factory: RwLock<Box<dyn ExtensionsFactory>>,
 }
 
 impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
@@ -79,6 +94,7 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 			strategies: Default::default(),
 			keystore: None,
 			transaction_pool: RwLock::new(None),
+			extensions_factory: RwLock::new(Box::new(())),
 		}
 	}
 }
@@ -90,12 +106,18 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		keystore: Option<BareCryptoStorePtr>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
-		Self { strategies, keystore, transaction_pool }
+		let extensions_factory = Box::new(());
+		Self { strategies, keystore, extensions_factory: RwLock::new(extensions_factory), transaction_pool }
 	}
 
 	/// Get a reference to the execution strategies.
 	pub fn strategies(&self) -> &ExecutionStrategies {
 		&self.strategies
+	}
+
+	/// Set the new extensions_factory
+	pub fn set_extensions_factory(&self, maker: Box<dyn ExtensionsFactory>) {
+		*self.extensions_factory.write() = maker;
 	}
 
 	/// Register transaction pool extension.
@@ -104,7 +126,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	/// extension to be a `Weak` reference.
 	/// That's also the reason why it's being registered lazily instead of
 	/// during initialisation.
-	pub fn register_transaction_pool(&self, pool: Weak<dyn txpool_api::OffchainSubmitTransaction<Block>>) {
+	pub fn register_transaction_pool(&self, pool: Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>) {
 		*self.transaction_pool.write() = Some(pool);
 	}
 
@@ -135,7 +157,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 		let capabilities = context.capabilities();
 
-		let mut extensions = Extensions::new();
+		let mut extensions = self.extensions_factory.read().extensions_for(capabilities);
 
 		if capabilities.has(offchain::Capability::Keystore) {
 			if let Some(keystore) = self.keystore.as_ref() {
@@ -165,7 +187,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 /// A wrapper type to pass `BlockId` to the actual transaction pool.
 struct TransactionPoolAdapter<Block: traits::Block> {
 	at: BlockId<Block>,
-	pool: Arc<dyn txpool_api::OffchainSubmitTransaction<Block>>,
+	pool: Arc<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>,
 }
 
 impl<Block: traits::Block> offchain::TransactionPool for TransactionPoolAdapter<Block> {

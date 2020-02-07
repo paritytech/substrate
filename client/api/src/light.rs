@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,18 +21,19 @@ use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 
 use sp_runtime::{
-    traits::{
-        Block as BlockT, Header as HeaderT, NumberFor,
-    },
-    generic::BlockId
+	traits::{
+		Block as BlockT, Header as HeaderT, NumberFor,
+	},
+	generic::BlockId
 };
-use primitives::{ChangesTrieConfiguration};
-use state_machine::StorageProof;
+use sp_core::ChangesTrieConfigurationRange;
+use sp_state_machine::StorageProof;
 use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
 	Error as ClientError, Result as ClientResult,
 };
-use crate::backend::{ AuxStore, NewBlockState };
+use crate::{backend::{AuxStore, NewBlockState}, UsageInfo};
+
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RemoteCallRequest<Header: HeaderT> {
@@ -81,6 +82,11 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 	pub header: Header,
 	/// Storage key for child.
 	pub storage_key: Vec<u8>,
+	/// Child trie source information.
+	pub child_info: Vec<u8>,
+	/// Child type, its required to resolve `child_info`
+	/// content and choose child implementation.
+	pub child_type: u32,
 	/// Child storage key to read.
 	pub keys: Vec<Vec<u8>>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
@@ -90,8 +96,8 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 /// Remote key changes read request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoteChangesRequest<Header: HeaderT> {
-	/// Changes trie configuration.
-	pub changes_trie_config: ChangesTrieConfiguration,
+	/// All changes trie configurations that are valid within [first_block; last_block].
+	pub changes_trie_configs: Vec<ChangesTrieConfigurationRange<Header::Number, Header::Hash>>,
 	/// Query changes from range of blocks, starting (and including) with this hash...
 	pub first_block: (Header::Number, Header::Hash),
 	/// ...ending (and including) with this hash. Should come after first_block and
@@ -253,22 +259,25 @@ pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetada
 	/// Get last finalized header.
 	fn last_finalized(&self) -> ClientResult<Block::Hash>;
 
-	/// Get headers CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
+	/// Get headers CHT root for given block. Returns None if the block is not pruned (not a part of any CHT).
 	fn header_cht_root(
 		&self,
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> ClientResult<Block::Hash>;
+	) -> ClientResult<Option<Block::Hash>>;
 
-	/// Get changes trie CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
+	/// Get changes trie CHT root for given block. Returns None if the block is not pruned (not a part of any CHT).
 	fn changes_trie_cht_root(
 		&self,
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> ClientResult<Block::Hash>;
+	) -> ClientResult<Option<Block::Hash>>;
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>>;
+
+	/// Get storage usage statistics.
+	fn usage_info(&self) -> Option<UsageInfo>;
 }
 
 /// Remote header.
@@ -298,8 +307,8 @@ pub trait RemoteBlockchain<Block: BlockT>: Send + Sync {
 pub mod tests {
 	use futures::future::Ready;
 	use parking_lot::Mutex;
-    use sp_blockchain::Error as ClientError;
-    use test_primitives::{Block, Header, Extrinsic};
+	use sp_blockchain::Error as ClientError;
+	use sp_test_primitives::{Block, Header, Extrinsic};
 	use super::*;
 
 	pub type OkCallFetcher = Mutex<Vec<u8>>;

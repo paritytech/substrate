@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -180,8 +180,8 @@ impl Parse for ModuleDeclaration {
 			let has_default = parts.into_iter().any(|m| m.is_default());
 			for entry in parts {
 				match entry {
-					ModuleEntry::Part(part) if has_default => {
-						if part.is_included_in_default() {
+					ModuleEntry::Part(part) => {
+						if has_default && part.is_included_in_default() {
 							let msg = format!(
 									"`{}` is already included in `default`. Either remove `default` or remove `{}`",
 									part.name,
@@ -189,8 +189,7 @@ impl Parse for ModuleDeclaration {
 								);
 							return Err(Error::new(part.name.span(), msg));
 						}
-					}
-					ModuleEntry::Part(part) => {
+
 						if !resolved.insert(part.name.clone()) {
 							let msg = format!(
 								"`{}` was already declared before. Please remove the duplicate declaration",
@@ -238,12 +237,12 @@ impl ModuleDeclaration {
 
 	fn default_modules(span: Span) -> Vec<ModulePart> {
 		let mut res: Vec<_> = ["Module", "Call", "Storage"]
-			.into_iter()
+			.iter()
 			.map(|name| ModulePart::with_name(name, span))
 			.collect();
 		res.extend(
 			["Event", "Config"]
-				.into_iter()
+				.iter()
 				.map(|name| ModulePart::with_generics(name, span)),
 		);
 		res
@@ -287,7 +286,18 @@ pub struct ModulePart {
 
 impl Parse for ModulePart {
 	fn parse(input: ParseStream) -> Result<Self> {
-		let name = input.parse()?;
+		let name: Ident = input.parse()?;
+
+		if !ModulePart::all_allowed().iter().any(|n| name == n) {
+			return Err(syn::Error::new(
+				name.span(),
+				format!(
+					"Only the following modules are allowed: {}",
+					ModulePart::format_names(ModulePart::all_allowed()),
+				),
+			))
+		}
+
 		let generics: syn::Generics = input.parse()?;
 		if !generics.params.is_empty() && !Self::is_allowed_generic(&name) {
 			let valid_generics = ModulePart::format_names(ModulePart::allowed_generics());
@@ -313,6 +323,7 @@ impl Parse for ModulePart {
 		} else {
 			None
 		};
+
 		Ok(Self {
 			name,
 			generics,
@@ -330,22 +341,27 @@ impl ModulePart {
 		Self::allowed_args().into_iter().any(|n| ident == n)
 	}
 
-	pub fn allowed_generics() -> Vec<&'static str> {
-		vec!["Event", "Origin", "Config"]
+	pub fn allowed_generics() -> &'static [&'static str] {
+		&["Event", "Origin", "Config"]
 	}
 
-	pub fn allowed_args() -> Vec<&'static str> {
-		vec!["Inherent"]
+	pub fn allowed_args() -> &'static [&'static str] {
+		&["Inherent"]
 	}
 
-	pub fn format_names(names: Vec<&'static str>) -> String {
+	/// Returns all allowed names for module parts.
+	pub fn all_allowed() -> &'static [&'static str] {
+		&["Module", "Call", "Storage", "Event", "Config", "Origin", "Inherent", "ValidateUnsigned"]
+	}
+
+	pub fn format_names(names: &[&'static str]) -> String {
 		let res: Vec<_> = names.into_iter().map(|s| format!("`{}`", s)).collect();
 		res.join(", ")
 	}
 
 	pub fn is_included_in_default(&self) -> bool {
 		["Module", "Call", "Storage", "Event", "Config"]
-			.into_iter()
+			.iter()
 			.any(|name| self.name == name)
 	}
 

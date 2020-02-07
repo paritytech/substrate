@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
 use sp_runtime::traits::{Zero, IntegerSquareRoot};
-use rstd::ops::{Add, Mul, Div, Rem};
+use sp_std::ops::{Add, Mul, Div, Rem};
 
 /// A means of determining if a vote is past pass threshold.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]

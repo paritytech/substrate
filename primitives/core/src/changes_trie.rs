@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -38,6 +38,17 @@ pub struct ChangesTrieConfiguration {
 	pub digest_levels: u32,
 }
 
+/// Substrate changes trie configuration range.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangesTrieConfigurationRange<Number, Hash> {
+	/// Zero block of configuration.
+	pub zero: (Number, Hash),
+	/// Last block of configuration (if configuration has been deactivated at some point).
+	pub end: Option<(Number, Hash)>,
+	/// The configuration itself. None if changes tries were disabled in this range.
+	pub config: Option<ChangesTrieConfiguration>,
+}
+
 impl ChangesTrieConfiguration {
 	/// Create new configuration given digest interval and levels.
 	pub fn new(digest_interval: u32, digest_levels: u32) -> Self {
@@ -57,8 +68,8 @@ impl ChangesTrieConfiguration {
 	) -> bool
 		where
 			Number: From<u32> + PartialEq +
-			::rstd::ops::Rem<Output=Number> + ::rstd::ops::Sub<Output=Number> +
-			::rstd::cmp::PartialOrd + Zero,
+			::sp_std::ops::Rem<Output=Number> + ::sp_std::ops::Sub<Output=Number> +
+			::sp_std::cmp::PartialOrd + Zero,
 	{
 		block > zero
 			&& self.is_digest_build_enabled()
@@ -92,8 +103,8 @@ impl ChangesTrieConfiguration {
 	) -> Option<Number>
 		where
 			Number: Clone + From<u32> + PartialOrd + PartialEq +
-			::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> +
-			::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number> + Zero,
+			::sp_std::ops::Add<Output=Number> + ::sp_std::ops::Sub<Output=Number> +
+			::sp_std::ops::Div<Output=Number> + ::sp_std::ops::Mul<Output=Number> + Zero,
 	{
 		if block <= zero {
 			return None;
@@ -126,8 +137,8 @@ impl ChangesTrieConfiguration {
 	) -> Option<(Number, Number)>
 		where
 			Number: Clone + From<u32> + PartialOrd + PartialEq +
-			::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> +
-			::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number>,
+			::sp_std::ops::Add<Output=Number> + ::sp_std::ops::Sub<Output=Number> +
+			::sp_std::ops::Div<Output=Number> + ::sp_std::ops::Mul<Output=Number>,
 	{
 		if !self.is_digest_build_enabled() {
 			return None;
@@ -160,8 +171,8 @@ impl ChangesTrieConfiguration {
 	pub fn digest_level_at_block<Number>(&self, zero: Number, block: Number) -> Option<(u32, u32, u32)>
 		where
 			Number: Clone + From<u32> + PartialEq +
-			::rstd::ops::Rem<Output=Number> + ::rstd::ops::Sub<Output=Number> +
-			::rstd::cmp::PartialOrd + Zero,
+			::sp_std::ops::Rem<Output=Number> + ::sp_std::ops::Sub<Output=Number> +
+			::sp_std::cmp::PartialOrd + Zero,
 	{
 		if !self.is_digest_build_required_at_block(zero.clone(), block.clone()) {
 			return None;

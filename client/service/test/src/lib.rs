@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,24 +19,26 @@
 use std::iter;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::net::Ipv4Addr;
+use std::pin::Pin;
 use std::time::Duration;
 use log::info;
-use futures::{Future, Stream, Poll};
+use futures01::{Future, Stream, Poll};
+use futures::{FutureExt as _, TryFutureExt as _};
 use tempfile::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
-use service::{
+use sc_service::{
 	AbstractService,
 	ChainSpec,
 	Configuration,
-	config::DatabaseConfig,
+	config::{DatabaseConfig, KeystoreConfig},
 	Roles,
 	Error,
 };
-use network::{multiaddr, Multiaddr};
-use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
+use sc_network::{multiaddr, Multiaddr, NetworkStateInfo};
+use sc_network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-use txpool_api::TransactionPool;
+use sp_transaction_pool::TransactionPool;
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
@@ -72,12 +74,13 @@ impl<T> From<T> for SyncService<T> {
 	}
 }
 
-impl<T: Future<Item=(), Error=service::Error>> Future for SyncService<T> {
+impl<T: futures::Future<Output=Result<(), sc_service::Error>> + Unpin> Future for SyncService<T> {
 	type Item = ();
-	type Error = service::Error;
+	type Error = sc_service::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		self.0.lock().unwrap().poll()
+		let mut f = self.0.lock().unwrap();
+		futures::compat::Compat::new(&mut *f).poll()
 	}
 }
 
@@ -130,10 +133,11 @@ fn node_config<G, E: Clone> (
 	index: usize,
 	spec: &ChainSpec<G, E>,
 	role: Roles,
+	task_executor: Box<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>) + Send>,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
-) -> Configuration<(), G, E>
+) -> Configuration<G, E>
 {
 	let root = root.path().join(format!("node-{}", index));
 
@@ -155,6 +159,7 @@ fn node_config<G, E: Clone> (
 		out_peers: 450,
 		reserved_nodes: vec![],
 		non_reserved_mode: NonReservedPeerMode::Accept,
+		sentry_nodes: vec![],
 		client_version: "network/test/0.1".to_owned(),
 		node_name: "unknown".to_owned(),
 		transport: TransportConfig::Normal {
@@ -170,10 +175,13 @@ fn node_config<G, E: Clone> (
 		impl_version: "0.1",
 		impl_commit: "",
 		roles: role,
+		task_executor: Some(task_executor),
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_path: Some(root.join("key")),
-		keystore_password: None,
+		keystore: KeystoreConfig::Path {
+			path: root.join("key"),
+			password: None
+		},
 		config_dir: Some(root.clone()),
 		database: DatabaseConfig::Path {
 			path: root.join("db"),
@@ -182,10 +190,9 @@ fn node_config<G, E: Clone> (
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
-		chain_spec: (*spec).clone(),
-		custom: Default::default(),
+		chain_spec: Some((*spec).clone()),
 		name: format!("Node {}", index),
-		wasm_method: service::config::WasmExecutionMethod::Interpreted,
+		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
@@ -213,11 +220,11 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	fn new(
 		temp: &TempDir,
 		spec: ChainSpec<G, E>,
-		full: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>>,
-		light: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<L, Error>>,
+		full: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<L, Error>>,
 		authorities: impl Iterator<Item = (
 			String,
-			impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>
+			impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>
 		)>,
 		base_port: u16
 	) -> TestNet<G, E, F, L, U> {
@@ -240,17 +247,22 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	fn insert_nodes(
 		&mut self,
 		temp: &TempDir,
-		full: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>>,
-		light: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<L, Error>>,
-		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>)>
+		full: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<L, Error>>,
+		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>)>
 	) {
 		let executor = self.runtime.executor();
 
 		for (key, authority) in authorities {
+			let task_executor = {
+				let executor = executor.clone();
+				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
+			};
 			let node_config = node_config(
 				self.nodes,
 				&self.chain_spec,
 				Roles::AUTHORITY,
+				task_executor,
 				Some(key),
 				self.base_port,
 				&temp,
@@ -266,7 +278,11 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		}
 
 		for full in full {
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, None, self.base_port, &temp);
+			let task_executor = {
+				let executor = executor.clone();
+				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
+			};
+			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, task_executor, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
@@ -278,7 +294,11 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		}
 
 		for light in light {
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, None, self.base_port, &temp);
+			let task_executor = {
+				let executor = executor.clone();
+				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
+			};
+			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, task_executor, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
 
@@ -298,24 +318,18 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	spec: ChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
-	light_node_interconnectivity: bool, // should normally be false, unless the light nodes
-	// aren't actually light.
 ) where
 	E: Clone,
-	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
+	Fb: Fn(Configuration<G, E>) -> Result<F, Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
 	L: AbstractService,
 {
 	const NUM_FULL_NODES: usize = 5;
 	const NUM_LIGHT_NODES: usize = 5;
 
 	let expected_full_connections = NUM_FULL_NODES - 1 + NUM_LIGHT_NODES;
-	let expected_light_connections = if light_node_interconnectivity {
-		expected_full_connections
-	} else {
-		NUM_FULL_NODES
-	};
+	let expected_light_connections = NUM_FULL_NODES;
 
 	{
 		let temp = tempdir_with_prefix("substrate-connectivity-test");
@@ -405,9 +419,9 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	mut make_block_and_import: B,
 	mut extrinsic_factory: ExF
 ) where
-	Fb: Fn(Configuration<(), G, E>) -> Result<(F, U), Error>,
+	Fb: Fn(Configuration<G, E>) -> Result<(F, U), Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
 	L: AbstractService,
 	B: FnMut(&F, &mut U),
 	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
@@ -451,17 +465,17 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().info().chain.best_number == (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().info().chain.best_number == (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
 	);
 
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
 	let first_user_data = &network.full_nodes[0].2;
-	let best_block = BlockId::number(first_service.get().client().info().chain.best_number);
+	let best_block = BlockId::number(first_service.get().client().chain_info().best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
-	futures03::executor::block_on(first_service.get().transaction_pool().submit_one(&best_block, extrinsic)).unwrap();
+	futures::executor::block_on(first_service.get().transaction_pool().submit_one(&best_block, extrinsic)).unwrap();
 	network.run_until_all_full(
 		|_index, service| service.get().transaction_pool().ready().count() == 1,
 		|_index, _service| true,
@@ -474,9 +488,9 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	light_builder: Lb,
 	authorities: impl IntoIterator<Item = String>
 ) where
-	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
+	Fb: Fn(Configuration<G, E>) -> Result<F, Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
 	L: AbstractService,
 	E: Clone,
 {
@@ -506,9 +520,9 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().info().chain.finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
 		|_index, service|
-			service.get().client().info().chain.best_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32 / 2).into(),
 	);
 
 	info!("Adding more peers");
@@ -528,8 +542,8 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().info().chain.finalized_number >= (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().info().chain.best_number >= (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32).into(),
 	);
 }

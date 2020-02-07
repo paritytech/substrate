@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 use codec::{FullCodec, Encode, Decode, EncodeLike, Ref};
 use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
-use rstd::{prelude::*, marker::PhantomData};
+use sp_std::{prelude::*, marker::PhantomData};
 
 /// Generator for `StorageLinkedMap` used by `decl_storage`.
 ///
@@ -433,6 +433,8 @@ where
 		}
 	}
 
+	/// The translation happens in-place, new keys are inserted at the same time as old keys are
+	/// removed, thus new keys must not collide with still remaining old keys.
 	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), Option<K2>>
 		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> K, TV: Fn(V2) -> V
 	{

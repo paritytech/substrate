@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -253,12 +253,12 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::marker::PhantomData;
-use support::{
-	dispatch::Result, decl_module, decl_storage, decl_event,
+use sp_std::marker::PhantomData;
+use frame_support::{
+	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
 };
-use system::{ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
@@ -281,9 +281,9 @@ use sp_runtime::{
 // - The final weight of each dispatch is calculated as the argument of the call multiplied by the
 //   parameter given to the `WeightForSetDummy`'s constructor.
 // - assigns a dispatch class `operational` if the argument of the call is more than 1000.
-struct WeightForSetDummy<T: balances::Trait>(BalanceOf<T>);
+struct WeightForSetDummy<T: pallet_balances::Trait>(BalanceOf<T>);
 
-impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
+impl<T: pallet_balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
 {
 	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
 		let multiplier = self.0;
@@ -291,7 +291,7 @@ impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
 	}
 }
 
-impl<T: balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
+impl<T: pallet_balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
 	fn classify_dispatch(&self, target: (&BalanceOf<T>,)) -> DispatchClass {
 		if *target.0 > <BalanceOf<T>>::from(1000u32) {
 			DispatchClass::Operational
@@ -301,23 +301,23 @@ impl<T: balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDumm
 	}
 }
 
-impl<T: balances::Trait> PaysFee for WeightForSetDummy<T> {
-	fn pays_fee(&self) -> bool {
+impl<T: pallet_balances::Trait> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
+	fn pays_fee(&self, _target: (&BalanceOf<T>,)) -> bool {
 		true
 	}
 }
 
 /// A type alias for the balance type from this module's point of view.
-type BalanceOf<T> = <T as balances::Trait>::Balance;
+type BalanceOf<T> = <T as pallet_balances::Trait>::Balance;
 
 /// Our module's configuration trait. All our types and constants go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
 ///
-/// `system::Trait` should always be included in our implied traits.
-pub trait Trait: balances::Trait {
+/// `frame_system::Trait` should always be included in our implied traits.
+pub trait Trait: pallet_balances::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
 decl_storage! {
@@ -329,7 +329,7 @@ decl_storage! {
 		//   `pub? Name get(fn getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
 		// where `<type>` is either:
 		//   - `Type` (a basic value item); or
-		//   - `map KeyType => ValueType` (a map item).
+		//   - `map hasher(HasherKind) KeyType => ValueType` (a map item).
 		//
 		// Note that there are two optional modifiers for the storage type declaration.
 		// - `Foo: Option<u32>`:
@@ -339,11 +339,11 @@ decl_storage! {
 		//   - `Foo::put(1); Foo::get()` returns `1`;
 		//   - `Foo::kill(); Foo::get()` returns `0` (u32::default()).
 		// e.g. Foo: u32;
-		// e.g. pub Bar get(fn bar): map T::AccountId => Vec<(T::Balance, u64)>;
+		// e.g. pub Bar get(fn bar): map hasher(blake2_256) T::AccountId => Vec<(T::Balance, u64)>;
 		//
 		// For basic value items, you'll get a type which implements
-		// `support::StorageValue`. For map items, you'll get a type which
-		// implements `support::StorageMap`.
+		// `frame_support::StorageValue`. For map items, you'll get a type which
+		// implements `frame_support::StorageMap`.
 		//
 		// If they have a getter (`get(getter_name)`), then your module will come
 		// equipped with `fn getter_name() -> Type` for basic value items or
@@ -351,7 +351,7 @@ decl_storage! {
 		Dummy get(fn dummy) config(): Option<T::Balance>;
 
 		// A map that has enumerable entries.
-		Bar get(fn bar) config(): linked_map T::AccountId => T::Balance;
+		Bar get(fn bar) config(): linked_map hasher(blake2_256) T::AccountId => T::Balance;
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(fn foo) config(): T::Balance;
@@ -362,7 +362,7 @@ decl_event!(
 	/// Events are a simple means of reporting specific conditions and
 	/// circumstances that have happened that users, Dapps and/or chain explorers would find
 	/// interesting and otherwise difficult to detect.
-	pub enum Event<T> where B = <T as balances::Trait>::Balance {
+	pub enum Event<T> where B = <T as pallet_balances::Trait>::Balance {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(B),
@@ -398,7 +398,7 @@ decl_event!(
 //
 // `fn foo(origin: T::Origin, bar: Bar, baz: Baz) { ... }`
 //
-// There are three entries in the `system::Origin` enum that correspond
+// There are three entries in the `frame_system::Origin` enum that correspond
 // to the above bullets: `::Signed(AccountId)`, `::Root` and `::None`. You should always match
 // against them as the first thing you do in your function. There are three convenience calls
 // in system that do the matching for you and return a convenient result: `ensure_signed`,
@@ -460,7 +460,7 @@ decl_module! {
 		// transaction and the latter demonstrates the [`DispatchClass`] of the call. A higher
 		// weight means a larger transaction (less of which can be placed in a single block).
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
+		fn accumulate_dummy(origin, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
 
@@ -530,7 +530,7 @@ decl_module! {
 		fn offchain_worker(_n: T::BlockNumber) {
 			// We don't do anything here.
 			// but we could dispatch extrinsic (transaction/unsigned/inherent) using
-			// runtime_io::submit_extrinsic
+			// sp_io::submit_extrinsic
 		}
 	}
 }
@@ -543,7 +543,7 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	// Add public immutables and private mutables.
 	#[allow(dead_code)]
-	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> Result {
+	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> DispatchResult {
 		let _sender = ensure_signed(origin)?;
 
 		let prev = <Foo<T>>::get();
@@ -596,16 +596,17 @@ impl<T: Trait> Module<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct WatchDummy<T: Trait + Send + Sync>(PhantomData<T>);
 
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for WatchDummy<T> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "WatchDummy")
 	}
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
+	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
 	// Note that this could also be assigned to the top-level call enum. It is passed into the
-	// balances module directly and since `Trait: balances::Trait`, you could also use `T::Call`.
+	// balances module directly and since `Trait: pallet_balances::Trait`, you could also use `T::Call`.
 	// In that case, you would have had access to all call variants and could match on variants from
 	// other modules.
 	type Call = Call<T>;
@@ -613,7 +614,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
-	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
 		&self,
@@ -645,8 +646,8 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 mod tests {
 	use super::*;
 
-	use support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
-	use primitives::H256;
+	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
+	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
@@ -655,7 +656,7 @@ mod tests {
 	};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -669,7 +670,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -685,34 +686,34 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
-	impl balances::Trait for Test {
+	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 	impl Trait for Test {
 		type Event = ();
 	}
+	type System = frame_system::Module<Test>;
 	type Example = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	fn new_test_ext() -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
+		pallet_balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
 		GenesisConfig::<Test>{
 			dummy: 42,
 			// we configure the map with (key, value) pairs.

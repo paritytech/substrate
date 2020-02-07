@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ use sp_blockchain::{
 	HeaderMetadata, CachedHeaderMetadata,
 	Error as ClientError, Result as ClientResult,
 };
-pub use client_api::{
+pub use sc_client_api::{
 	backend::{
 		AuxStore, NewBlockState
 	},
@@ -164,7 +164,10 @@ impl<S, Block: BlockT> RemoteBlockchain<Block> for Blockchain<S>
 		}
 
 		Ok(LocalOrRemote::Remote(RemoteHeaderRequest {
-			cht_root: self.storage.header_cht_root(cht::size(), number)?,
+			cht_root: match self.storage.header_cht_root(cht::size(), number)? {
+				Some(cht_root) => cht_root,
+				None => return Ok(LocalOrRemote::Unknown),
+			},
 			block: number,
 			retry_count: None,
 		}))
@@ -195,8 +198,8 @@ pub fn future_header<Block: BlockT, F: Fetcher<Block>>(
 pub mod tests {
 	use std::collections::HashMap;
 	use parking_lot::Mutex;
-	use test_client::runtime::{Hash, Block, Header};
-	use client_api::blockchain::Info;
+	use substrate_test_runtime_client::runtime::{Hash, Block, Header};
+	use sc_client_api::blockchain::Info;
 	use super::*;
 
 	pub type DummyBlockchain = Blockchain<DummyStorage>;
@@ -298,20 +301,25 @@ pub mod tests {
 			Err(ClientError::Backend("Test error".into()))
 		}
 
-		fn header_cht_root(&self, _cht_size: u64, _block: u64) -> ClientResult<Hash> {
+		fn header_cht_root(&self, _cht_size: u64, _block: u64) -> ClientResult<Option<Hash>> {
 			Err(ClientError::Backend("Test error".into()))
 		}
 
-		fn changes_trie_cht_root(&self, cht_size: u64, block: u64) -> ClientResult<Hash> {
+		fn changes_trie_cht_root(&self, cht_size: u64, block: u64) -> ClientResult<Option<Hash>> {
 			cht::block_to_cht_number(cht_size, block)
 				.and_then(|cht_num| self.changes_tries_cht_roots.get(&cht_num))
 				.cloned()
 				.ok_or_else(|| ClientError::Backend(
 					format!("Test error: CHT for block #{} not found", block)
 				).into())
+				.map(Some)
 		}
 
 		fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {
+			None
+		}
+
+		fn usage_info(&self) -> Option<sc_client_api::UsageInfo> {
 			None
 		}
 	}

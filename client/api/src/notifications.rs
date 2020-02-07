@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use std::{
 
 use fnv::{FnvHashSet, FnvHashMap};
 use futures::channel::mpsc;
-use primitives::storage::{StorageKey, StorageData};
+use sp_core::storage::{StorageKey, StorageData};
 use sp_runtime::traits::Block as BlockT;
 
 /// Storage change set
@@ -323,7 +323,7 @@ mod tests {
 			let child_filters = Some([
 				(StorageKey(vec![4]), None),
 				(StorageKey(vec![5]), None),
-			].into_iter().cloned().collect());
+			].iter().cloned().collect());
 			StorageChangeSet {
 				changes: Arc::new(changes.0),
 				child_changes: Arc::new(changes.1),

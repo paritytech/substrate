@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use support::sp_runtime::generic;
-use support::sp_runtime::traits::{BlakeTwo256, Block as _, Verify};
-use support::codec::{Encode, Decode};
-use primitives::{H256, sr25519};
+use frame_support::sp_runtime::generic;
+use frame_support::sp_runtime::traits::{BlakeTwo256, Block as _, Verify};
+use frame_support::codec::{Encode, Decode};
+use sp_core::{H256, sr25519};
 use serde::{Serialize, Deserialize};
 
 mod system;
@@ -82,7 +82,7 @@ mod module {
 
 	pub trait Trait: system::Trait {}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -99,7 +99,7 @@ mod module {
 		}
 	}
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as Actors {
 			/// requirements to enter and maintain status in roles
 			pub Parameters get(fn parameters) build(|config: &GenesisConfig| {
@@ -109,7 +109,7 @@ mod module {
 				} else {
 					vec![]
 				}
-			}): map Role => Option<RoleParameters<T>>;
+			}): map hasher(blake2_256) Role => Option<RoleParameters<T>>;
 
 			/// the roles members can enter into
 			pub AvailableRoles get(fn available_roles) build(|config: &GenesisConfig| {
@@ -124,10 +124,12 @@ mod module {
 			pub ActorAccountIds get(fn actor_account_ids) : Vec<T::AccountId>;
 
 			/// actor accounts associated with a role
-			pub AccountIdsByRole get(fn account_ids_by_role) : map Role => Vec<T::AccountId>;
+			pub AccountIdsByRole get(fn account_ids_by_role):
+				map hasher(blake2_256) Role => Vec<T::AccountId>;
 
 			/// tokens locked until given block number
-			pub Bondage get(fn bondage) : map T::AccountId => T::BlockNumber;
+			pub Bondage get(fn bondage):
+				map hasher(blake2_256) T::AccountId => T::BlockNumber;
 
 			/// First step before enter a role is registering intent with a new account/key.
 			/// This is done by sending a role_entry_request() from the new account.
@@ -160,11 +162,12 @@ impl system::Trait for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
+	type ModuleToIndex = ();
 }
 
 impl module::Trait for Runtime {}
 
-support::construct_runtime!(
+frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,

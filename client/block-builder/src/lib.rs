@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -29,32 +29,56 @@ use codec::Encode;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{
-		Header as HeaderT, Hash, Block as BlockT, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
-		NumberFor, One,
-	}
+		Header as HeaderT, Hash, Block as BlockT, HashFor, DigestFor, NumberFor, One, HasherFor,
+	},
 };
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
-use primitives::ExecutionContext;
-use state_machine::StorageProof;
-use sp_api::{Core, ApiExt, ApiErrorFor};
+use sp_core::ExecutionContext;
+use sp_api::{Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof};
+use sp_consensus::RecordProof;
 
-pub use runtime_api::BlockBuilder as BlockBuilderApi;
+pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
+use sc_client_api::backend;
+
+/// A block that was build by [`BlockBuilder`] plus some additional data.
+///
+/// This additional data includes the `storage_changes`, these changes can be applied to the
+/// backend to get the state of the block. Furthermore an optional `proof` is included which
+/// can be used to proof that the build block contains the expected data. The `proof` will
+/// only be set when proof recording was activated.
+pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HasherFor<Block>>> {
+	/// The actual block that was build.
+	pub block: Block,
+	/// The changes that need to be applied to the backend to get the state of the build block.
+	pub storage_changes: StorageChanges<StateBackend, Block>,
+	/// An optional proof that was recorded while building the block.
+	pub proof: Option<StorageProof>,
+}
+
+impl<Block: BlockT, StateBackend: backend::StateBackend<HasherFor<Block>>> BuiltBlock<Block, StateBackend> {
+	/// Convert into the inner values.
+	pub fn into_inner(self) -> (Block, StorageChanges<StateBackend, Block>, Option<StorageProof>) {
+		(self.block, self.storage_changes, self.proof)
+	}
+}
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi> {
-	header: Block::Header,
+pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	extrinsics: Vec<Block::Extrinsic>,
 	api: ApiRef<'a, A::Api>,
 	block_id: BlockId<Block>,
+	parent_hash: Block::Hash,
+	backend: &'a B,
 }
 
-impl<'a, Block, A> BlockBuilder<'a, Block, A>
+impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
 where
 	Block: BlockT,
-	A: ProvideRuntimeApi + 'a,
-	A::Api: BlockBuilderApi<Block>,
-	ApiErrorFor<A, Block>: From<Error>,
+	A: ProvideRuntimeApi<Block> + 'a,
+	A::Api: BlockBuilderApi<Block, Error = Error> +
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+	B: backend::Backend<Block>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
 	///
@@ -65,8 +89,9 @@ where
 		api: &'a A,
 		parent_hash: Block::Hash,
 		parent_number: NumberFor<Block>,
-		proof_recording: bool,
+		record_proof: RecordProof,
 		inherent_digests: DigestFor<Block>,
+		backend: &'a B,
 	) -> Result<Self, ApiErrorFor<A, Block>> {
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			parent_number + One::one(),
@@ -78,7 +103,7 @@ where
 
 		let mut api = api.runtime_api();
 
-		if proof_recording {
+		if record_proof.yes() {
 			api.record_proof();
 		}
 
@@ -89,10 +114,11 @@ where
 		)?;
 
 		Ok(Self {
-			header,
+			parent_hash,
 			extrinsics: Vec::new(),
 			api,
 			block_id,
+			backend,
 		})
 	}
 
@@ -122,7 +148,7 @@ where
 						extrinsics.push(xt);
 						Ok(())
 					}
-					Err(e) => Err(ApplyExtrinsicFailed::from(e).into())?,
+					Err(e) => Err(ApplyExtrinsicFailed::from(e).into()),
 				}
 			})
 		} else {
@@ -136,44 +162,57 @@ where
 						extrinsics.push(xt);
 						Ok(())
 					}
-					Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into())?,
+					Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
 				}
 			})
 		}
 	}
 
-	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
-	pub fn bake(mut self) -> Result<Block, ApiErrorFor<A, Block>> {
-		self.bake_impl()?;
-		Ok(<Block as BlockT>::new(self.header, self.extrinsics))
-	}
-
-	fn bake_impl(&mut self) -> Result<(), ApiErrorFor<A, Block>> {
-		self.header = self.api.finalize_block_with_context(
+	/// Consume the builder to build a valid `Block` containing all pushed extrinsics.
+	///
+	/// Returns the build `Block`, the changes to the storage and an optional `StorageProof`
+	/// supplied by `self.api`, combined as [`BuiltBlock`].
+	/// The storage proof will be `Some(_)` when proof recording was enabled.
+	pub fn build(mut self) -> Result<
+		BuiltBlock<Block, backend::StateBackendFor<B, Block>>,
+		ApiErrorFor<A, Block>
+	> {
+		let header = self.api.finalize_block_with_context(
 			&self.block_id, ExecutionContext::BlockConstruction
 		)?;
 
 		debug_assert_eq!(
-			self.header.extrinsics_root().clone(),
+			header.extrinsics_root().clone(),
 			HashFor::<Block>::ordered_trie_root(
 				self.extrinsics.iter().map(Encode::encode).collect(),
 			),
 		);
 
-		Ok(())
-	}
-
-	/// Consume the builder to return a valid `Block` containing all pushed extrinsics
-	/// and the generated proof.
-	///
-	/// The proof will be `Some(_)`, if proof recording was enabled while creating
-	/// the block builder.
-	pub fn bake_and_extract_proof(mut self)
-		-> Result<(Block, Option<StorageProof>), ApiErrorFor<A, Block>>
-	{
-		self.bake_impl()?;
-
 		let proof = self.api.extract_proof();
-		Ok((<Block as BlockT>::new(self.header, self.extrinsics), proof))
+
+		let state = self.backend.state_at(self.block_id)?;
+		let changes_trie_state = backend::changes_tries_state_at_block(
+			&self.block_id,
+			self.backend.changes_trie_storage(),
+		)?;
+		let parent_hash = self.parent_hash;
+
+		let storage_changes = self.api.into_storage_changes(
+			&state,
+			changes_trie_state.as_ref(),
+			parent_hash,
+		);
+
+		// We need to destroy the state, before we check if `storage_changes` is `Ok(_)`
+		{
+			let _lock = self.backend.get_import_lock().read();
+			self.backend.destroy_state(state)?;
+		}
+
+		Ok(BuiltBlock {
+			block: <Block as BlockT>::new(header, self.extrinsics),
+			storage_changes: storage_changes?,
+			proof,
+		})
 	}
 }

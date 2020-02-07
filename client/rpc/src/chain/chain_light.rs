@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,15 +20,10 @@ use std::sync::Arc;
 use futures::{future::ready, FutureExt, TryFutureExt};
 use rpc::futures::future::{result, Future, Either};
 
-use api::Subscriptions;
-use client::{
-	self, Client,
-	light::{
-		fetcher::{Fetcher, RemoteBodyRequest},
-		blockchain::RemoteBlockchain,
-	},
+use sc_rpc_api::Subscriptions;
+use sc_client::{
+	Client, light::{fetcher::{Fetcher, RemoteBodyRequest}, blockchain::RemoteBlockchain},
 };
-use primitives::{H256, Blake2Hasher};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT},
@@ -67,9 +62,9 @@ impl<B, E, Block: BlockT, RA, F: Fetcher<Block>> LightChain<B, E, Block, RA, F> 
 }
 
 impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Block, RA, F> where
-	Block: BlockT<Hash=H256> + 'static,
-	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	Block: BlockT + 'static,
+	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
+	E: sc_client::CallExecutor<Block> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	F: Fetcher<Block> + Send + Sync + 'static,
 {
@@ -85,7 +80,7 @@ impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Bloc
 		let hash = self.unwrap_or_best(hash);
 
 		let fetcher = self.fetcher.clone();
-		let maybe_header = client::light::blockchain::future_header(
+		let maybe_header = sc_client::light::blockchain::future_header(
 			&*self.remote_blockchain,
 			&*fetcher,
 			BlockId::Hash(hash),

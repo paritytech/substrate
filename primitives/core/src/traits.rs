@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ use std::{
 	sync::Arc,
 };
 
-pub use externalities::{Externalities, ExternalitiesExt};
+pub use sp_externalities::{Externalities, ExternalitiesExt};
 
 /// Something that generates, stores and provides access to keys.
 pub trait BareCryptoStore: Send + Sync {
@@ -69,18 +69,23 @@ pub trait BareCryptoStore: Send + Sync {
 
 	/// Get the password for this store.
 	fn password(&self) -> Option<&str>;
+
+	/// Checks if the private keys for the given public key and key type combinations exist.
+	///
+	/// Returns `true` iff all private keys could be found.
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
 }
 
 /// A pointer to the key store.
 pub type BareCryptoStorePtr = Arc<parking_lot::RwLock<dyn BareCryptoStore>>;
 
-externalities::decl_extension! {
+sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
 	pub struct KeystoreExt(BareCryptoStorePtr);
 }
 
 /// Code execution engine.
-pub trait CodeExecutor: Sized + Send + Sync {
+pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	/// Externalities error type.
 	type Error: Display + Debug + Send + 'static;
 
@@ -98,4 +103,31 @@ pub trait CodeExecutor: Sized + Send + Sync {
 		use_native: bool,
 		native_call: Option<NC>,
 	) -> (Result<crate::NativeOrEncoded<R>, Self::Error>, bool);
+}
+
+/// Something that can call a method in a WASM blob.
+pub trait CallInWasm: Send + Sync {
+	/// Call the given `method` in the given `wasm_blob` using `call_data` (SCALE encoded arguments)
+	/// to decode the arguments for the method.
+	///
+	/// Returns the SCALE encoded return value of the method.
+	fn call_in_wasm(
+		&self,
+		wasm_blob: &[u8],
+		method: &str,
+		call_data: &[u8],
+		ext: &mut dyn Externalities,
+	) -> Result<Vec<u8>, String>;
+}
+
+sp_externalities::decl_extension! {
+	/// The call-in-wasm extension to register/retrieve from the externalities.
+	pub struct CallInWasmExt(Box<dyn CallInWasm>);
+}
+
+impl CallInWasmExt {
+	/// Creates a new instance of `Self`.
+	pub fn new<T: CallInWasm + 'static>(inner: T) -> Self {
+		Self(Box::new(inner))
+	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,13 +17,14 @@
 //! Hash utilities.
 
 use codec::Codec;
-use rstd::prelude::Vec;
-use runtime_io::hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
+use sp_std::prelude::Vec;
+use sp_io::hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
 
 // This trait must be kept coherent with frame-support-procedural HasherKind usage
 pub trait Hashable: Sized {
 	fn blake2_128(&self) -> [u8; 16];
 	fn blake2_256(&self) -> [u8; 32];
+	fn blake2_128_concat(&self) -> Vec<u8>;
 	fn twox_128(&self) -> [u8; 16];
 	fn twox_256(&self) -> [u8; 32];
 	fn twox_64_concat(&self) -> Vec<u8>;
@@ -35,6 +36,9 @@ impl<T: Codec> Hashable for T {
 	}
 	fn blake2_256(&self) -> [u8; 32] {
 		self.using_encoded(blake2_256)
+	}
+	fn blake2_128_concat(&self) -> Vec<u8> {
+		self.using_encoded(Blake2_128Concat::hash)
 	}
 	fn twox_128(&self) -> [u8; 16] {
 		self.using_encoded(twox_128)
@@ -59,6 +63,19 @@ impl StorageHasher for Twox64Concat {
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
 		twox_64(x)
+			.iter()
+			.chain(x.into_iter())
+			.cloned()
+			.collect::<Vec<_>>()
+	}
+}
+
+/// Hash storage keys with `concat(blake2_128(key), key)`
+pub struct Blake2_128Concat;
+impl StorageHasher for Blake2_128Concat {
+	type Output = Vec<u8>;
+	fn hash(x: &[u8]) -> Vec<u8> {
+		blake2_128(x)
 			.iter()
 			.chain(x.into_iter())
 			.cloned()
@@ -110,5 +127,11 @@ mod tests {
 	fn test_twox_64_concat() {
 		let r = Twox64Concat::hash(b"foo");
 		assert_eq!(r.split_at(8), (&twox_128(b"foo")[..8], &b"foo"[..]))
+	}
+
+	#[test]
+	fn test_blake2_128_concat() {
+		let r = Blake2_128Concat::hash(b"foo");
+		assert_eq!(r.split_at(16), (&blake2_128(b"foo")[..], &b"foo"[..]))
 	}
 }

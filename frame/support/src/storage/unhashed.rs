@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,12 +16,12 @@
 
 //! Operation on unhashed runtime storage.
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use codec::{Encode, Decode};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
-	runtime_io::storage::get(key).and_then(|val| {
+	sp_io::storage::get(key).and_then(|val| {
 		Decode::decode(&mut &val[..]).map(Some).unwrap_or_else(|_| {
 			// TODO #3700: error should be handleable.
 			runtime_print!("ERROR: Corrupted state at {:?}", key);
@@ -50,7 +50,7 @@ pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_valu
 
 /// Put `value` in storage under `key`.
 pub fn put<T: Encode + ?Sized>(key: &[u8], value: &T) {
-	value.using_encoded(|slice| runtime_io::storage::set(key, slice));
+	value.using_encoded(|slice| sp_io::storage::set(key, slice));
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -82,25 +82,25 @@ pub fn take_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_val
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(key: &[u8]) -> bool {
-	runtime_io::storage::read(key, &mut [0;0][..], 0).is_some()
+	sp_io::storage::read(key, &mut [0;0][..], 0).is_some()
 }
 
 /// Ensure `key` has no explicit entry in storage.
 pub fn kill(key: &[u8]) {
-	runtime_io::storage::clear(key);
+	sp_io::storage::clear(key);
 }
 
 /// Ensure keys with the given `prefix` have no entries in storage.
 pub fn kill_prefix(prefix: &[u8]) {
-	runtime_io::storage::clear_prefix(prefix);
+	sp_io::storage::clear_prefix(prefix);
 }
 
 /// Get a Vec of bytes from storage.
 pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
-	runtime_io::storage::get(key)
+	sp_io::storage::get(key)
 }
 
 /// Put a raw byte slice into storage.
 pub fn put_raw(key: &[u8], value: &[u8]) {
-	runtime_io::storage::set(key, value)
+	sp_io::storage::set(key, value)
 }

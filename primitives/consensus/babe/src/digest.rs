@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ use schnorrkel::{
 	SignatureError, errors::MultiSignatureStage,
 	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 };
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 
 /// A BABE pre-runtime digest. This contains all data required to validate a

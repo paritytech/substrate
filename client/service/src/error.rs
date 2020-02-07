@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,9 +16,9 @@
 
 //! Errors that can occur during the service operation.
 
-use network;
-use keystore;
-use consensus_common;
+use sc_network;
+use sc_keystore;
+use sp_consensus;
 use sp_blockchain;
 
 /// Service Result typedef.
@@ -32,14 +32,17 @@ pub enum Error {
 	/// IO error.
 	Io(std::io::Error),
 	/// Consensus error.
-	Consensus(consensus_common::Error),
+	Consensus(sp_consensus::Error),
 	/// Network error.
-	Network(network::error::Error),
+	Network(sc_network::error::Error),
 	/// Keystore error.
-	Keystore(keystore::Error),
+	Keystore(sc_keystore::Error),
 	/// Best chain selection strategy is missing.
 	#[display(fmt="Best chain selection strategy (SelectChain) is not provided.")]
 	SelectChainRequired,
+	/// Tasks executor is missing.
+	#[display(fmt="Tasks executor hasn't been provided.")]
+	TasksExecutorRequired,
 	/// Other error.
 	Other(String),
 }

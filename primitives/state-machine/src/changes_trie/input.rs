@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,10 @@
 //! Different types of changes trie input pairs.
 
 use codec::{Decode, Encode, Input, Output, Error};
-use crate::changes_trie::BlockNumber;
+use crate::{
+	StorageKey, StorageValue,
+	changes_trie::BlockNumber
+};
 
 /// Key of { changed key => set of extrinsic indices } mapping.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,7 +28,7 @@ pub struct ExtrinsicIndex<Number: BlockNumber> {
 	/// Block at which this key has been inserted in the trie.
 	pub block: Number,
 	/// Storage key this node is responsible for.
-	pub key: Vec<u8>,
+	pub key: StorageKey,
 }
 
 /// Value of { changed key => set of extrinsic indices } mapping.
@@ -37,7 +40,7 @@ pub struct DigestIndex<Number: BlockNumber> {
 	/// Block at which this key has been inserted in the trie.
 	pub block: Number,
 	/// Storage key this node is responsible for.
-	pub key: Vec<u8>,
+	pub key: StorageKey,
 }
 
 /// Key of { childtrie key => Childchange trie } mapping.
@@ -46,7 +49,7 @@ pub struct ChildIndex<Number: BlockNumber> {
 	/// Block at which this key has been inserted in the trie.
 	pub block: Number,
 	/// Storage key this node is responsible for.
-	pub storage_key: Vec<u8>,
+	pub storage_key: StorageKey,
 }
 
 /// Value of { changed key => block/digest block numbers } mapping.
@@ -89,8 +92,8 @@ impl<Number: BlockNumber> InputPair<Number> {
 	}
 }
 
-impl<Number: BlockNumber> Into<(Vec<u8>, Vec<u8>)> for InputPair<Number> {
-	fn into(self) -> (Vec<u8>, Vec<u8>) {
+impl<Number: BlockNumber> Into<(StorageKey, StorageValue)> for InputPair<Number> {
+	fn into(self) -> (StorageKey, StorageValue) {
 		match self {
 			InputPair::ExtrinsicIndex(key, value) => (key.encode(), value.encode()),
 			InputPair::DigestIndex(key, value) => (key.encode(), value.encode()),

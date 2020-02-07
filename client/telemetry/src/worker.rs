@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,8 +27,8 @@
 //!
 
 use bytes::BytesMut;
-use futures::compat::Compat01As03Sink;
-use libp2p::{core::transport::OptionalTransport, core::ConnectedPoint, Multiaddr, Transport, wasm_ext};
+use futures::{prelude::*, ready};
+use libp2p::{core::transport::OptionalTransport, Multiaddr, Transport, wasm_ext};
 use log::{trace, warn, error};
 use slog::Drain;
 use std::{io, pin::Pin, task::Context, task::Poll, time};
@@ -54,33 +54,16 @@ pub struct TelemetryWorker {
 	nodes: Vec<(node::Node<WsTrans>, u8)>,
 }
 
-/// The pile of libp2p transports.
-#[cfg(not(target_os = "unknown"))]
-type WsTrans = libp2p::core::transport::timeout::TransportTimeout<
-	libp2p::core::transport::map::Map<
-		libp2p::core::transport::OrTransport<
-			libp2p::core::transport::map::Map<
-				OptionalTransport<wasm_ext::ExtTransport>,
-				fn(wasm_ext::Connection, ConnectedPoint) -> StreamSink<wasm_ext::Connection>
-			>,
-			libp2p::websocket::framed::WsConfig<libp2p::dns::DnsConfig<libp2p::tcp::TcpConfig>>
-		>,
-		fn(libp2p::core::either::EitherOutput<StreamSink<wasm_ext::Connection>,
-			libp2p::websocket::framed::BytesConnection<libp2p::tcp::TcpTransStream>>, ConnectedPoint)
-			-> Compat01As03Sink<libp2p::core::either::EitherOutput<StreamSink<wasm_ext::Connection>,
-			libp2p::websocket::framed::BytesConnection<libp2p::tcp::TcpTransStream>>, BytesMut>
-	>
->;
-#[cfg(target_os = "unknown")]
-type WsTrans = libp2p::core::transport::timeout::TransportTimeout<
-	libp2p::core::transport::map::Map<
-		libp2p::core::transport::map::Map<
-			OptionalTransport<wasm_ext::ExtTransport>,
-			fn(wasm_ext::Connection, ConnectedPoint) -> StreamSink<wasm_ext::Connection>
-		>,
-		fn(StreamSink<wasm_ext::Connection>, ConnectedPoint)
-			-> Compat01As03Sink<StreamSink<wasm_ext::Connection>, BytesMut>
-	>
+trait StreamAndSink<I>: Stream + Sink<I> {}
+impl<T: ?Sized + Stream + Sink<I>, I> StreamAndSink<I> for T {}
+
+type WsTrans = libp2p::core::transport::boxed::Boxed<
+	Pin<Box<dyn StreamAndSink<
+		BytesMut,
+		Item = Result<BytesMut, io::Error>,
+		Error = io::Error
+	> + Send>>,
+	io::Error
 >;
 
 impl TelemetryWorker {
@@ -92,31 +75,48 @@ impl TelemetryWorker {
 	pub fn new(
 		endpoints: impl IntoIterator<Item = (Multiaddr, u8)>,
 		wasm_external_transport: impl Into<Option<wasm_ext::ExtTransport>>
-	) -> Self {
+	) -> Result<Self, io::Error> {
 		let transport = match wasm_external_transport.into() {
 			Some(t) => OptionalTransport::some(t),
 			None => OptionalTransport::none()
-		}.map((|inner, _| StreamSink(inner)) as fn(_, _) -> _);
+		}.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
 
 		// The main transport is the `wasm_external_transport`, but if we're on desktop we add
 		// support for TCP+WebSocket+DNS as a fallback. In practice, you're not expected to pass
 		// an external transport on desktop and the fallback is used all the time.
 		#[cfg(not(target_os = "unknown"))]
 		let transport = transport.or_transport({
-			let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new());
+			let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new())?;
 			libp2p::websocket::framed::WsConfig::new(inner)
+				.and_then(|connec, _| {
+					let connec = connec
+						.with(|item: BytesMut| {
+							let item = libp2p::websocket::framed::OutgoingData::Binary(item);
+							future::ready(Ok::<_, io::Error>(item))
+						})
+						.try_filter(|item| future::ready(item.is_data()))
+						.map_ok(|data| BytesMut::from(data.as_ref()));
+					future::ready(Ok::<_, io::Error>(connec))
+				})
 		});
 
 		let transport = transport
-			.map((|inner, _| Compat01As03Sink::new(inner)) as fn(_, _) -> _)
-			.timeout(CONNECT_TIMEOUT);
+			.timeout(CONNECT_TIMEOUT)
+			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+			.map(|out, _| {
+				let out = out
+					.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+					.sink_map_err(|err| io::Error::new(io::ErrorKind::Other, err));
+				Box::pin(out) as Pin<Box<_>>
+			})
+			.boxed();
 
-		TelemetryWorker {
+		Ok(TelemetryWorker {
 			nodes: endpoints.into_iter().map(|(addr, verbosity)| {
 				let node = node::Node::new(transport.clone(), addr);
 				(node, verbosity)
 			}).collect()
-		}
+		})
 	}
 
 	/// Polls the worker for events that happened.
@@ -174,7 +174,7 @@ impl TelemetryWorker {
 			}
 
 			// `send_message` returns an error if we're not connected, which we silently ignore.
-			let _ = node.send_message(serialized.clone());
+			let _ = node.send_message(&serialized.clone()[..]);
 		}
 
 		Ok(())
@@ -186,50 +186,74 @@ impl TelemetryWorker {
 ///
 /// For some context, we put this object around the `wasm_ext::ExtTransport` in order to make sure
 /// that each telemetry message maps to one single call to `write` in the WASM FFI.
-struct StreamSink<T>(T);
+#[pin_project::pin_project]
+struct StreamSink<T>(#[pin] T, Option<BytesMut>);
 
-impl<T: tokio_io::AsyncRead> futures01::Stream for StreamSink<T> {
-	type Item = BytesMut;
-	type Error = io::Error;
-
-	fn poll(&mut self) -> futures01::Poll<Option<Self::Item>, Self::Error> {
-		let mut buf = [0; 128];
-		Ok(self.0.poll_read(&mut buf)?
-			.map(|n|
-				if n == 0 {
-					None
-				} else {
-					let buf: BytesMut = buf[..n].into();
-					Some(buf)
-				}
-			))
+impl<T> From<T> for StreamSink<T> {
+	fn from(inner: T) -> StreamSink<T> {
+		StreamSink(inner, None)
 	}
 }
 
-impl<T: tokio_io::AsyncWrite> futures01::Sink for StreamSink<T> {
-	type SinkItem = BytesMut;
-	type SinkError = io::Error;
+impl<T: AsyncRead> Stream for StreamSink<T> {
+	type Item = Result<BytesMut, io::Error>;
 
-	fn start_send(&mut self, item: Self::SinkItem)
-		-> Result<futures01::AsyncSink<Self::SinkItem>, io::Error> {
-		match self.0.write(&item[..]) {
-			Ok(n) if n == item.len() => Ok(futures01::AsyncSink::Ready),
-			Ok(_) => {
-				error!(target: "telemetry",
-					"Detected some internal buffering happening in the telemetry");
-				Err(io::Error::new(io::ErrorKind::Other, "Internal buffering detected"))
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		let this = self.project();
+		let mut buf = [0; 128];
+		match ready!(AsyncRead::poll_read(this.0, cx, &mut buf)) {
+			Ok(0) => Poll::Ready(None),
+			Ok(n) => {
+				let buf: BytesMut = buf[..n].into();
+				Poll::Ready(Some(Ok(buf)))
 			},
-			Err(ref err) if err.kind() == io::ErrorKind::WouldBlock =>
-				Ok(futures01::AsyncSink::NotReady(item)),
-			Err(err) => Err(err),
+			Err(err) => Poll::Ready(Some(Err(err))),
 		}
 	}
+}
 
-	fn poll_complete(&mut self) -> futures01::Poll<(), io::Error> {
-		match self.0.flush() {
-			Ok(()) => Ok(futures01::Async::Ready(())),
-			Err(ref err) if err.kind() == io::ErrorKind::WouldBlock => Ok(futures01::Async::NotReady),
-			Err(err) => Err(err),
+impl<T: AsyncWrite> StreamSink<T> {
+	fn poll_flush_buffer(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), io::Error>> {
+		let this = self.project();
+
+		if let Some(buffer) = this.1 {
+			if ready!(this.0.poll_write(cx, &buffer[..]))? != buffer.len() {
+				error!(target: "telemetry",
+					"Detected some internal buffering happening in the telemetry");
+				let err = io::Error::new(io::ErrorKind::Other, "Internal buffering detected");
+				return Poll::Ready(Err(err));
+			}
 		}
+
+		*this.1 = None;
+		Poll::Ready(Ok(()))
+	}
+}
+
+impl<T: AsyncWrite> Sink<BytesMut> for StreamSink<T> {
+	type Error = io::Error;
+
+	fn poll_ready(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		ready!(StreamSink::poll_flush_buffer(self, cx))?;
+		Poll::Ready(Ok(()))
+	}
+
+	fn start_send(self: Pin<&mut Self>, item: BytesMut) -> Result<(), Self::Error> {
+		let this = self.project();
+		debug_assert!(this.1.is_none());
+		*this.1 = Some(item);
+		Ok(())
+	}
+
+	fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		ready!(self.as_mut().poll_flush_buffer(cx))?;
+		let this = self.project();
+		AsyncWrite::poll_flush(this.0, cx)
+	}
+
+	fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		ready!(self.as_mut().poll_flush_buffer(cx))?;
+		let this = self.project();
+		AsyncWrite::poll_close(this.0, cx)
 	}
 }

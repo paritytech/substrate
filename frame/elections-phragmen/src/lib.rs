@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -76,36 +76,36 @@
 //!
 //! ### Module Information
 //!
-//! - [`election_phragmen::Trait`](./trait.Trait.html)
+//! - [`election_sp_phragmen::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use sp_runtime::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
-use support::{
-	decl_storage, decl_event, ensure, decl_module, dispatch, weights::SimpleDispatchInfo,
+use sp_std::prelude::*;
+use sp_runtime::{print, DispatchResult, DispatchError, traits::{Zero, StaticLookup, Convert}};
+use frame_support::{
+	decl_storage, decl_event, ensure, decl_module, decl_error, weights::SimpleDispatchInfo,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
-		ChangeMembers, OnUnbalanced, WithdrawReason
+		ChangeMembers, OnUnbalanced, WithdrawReason, Contains
 	}
 };
-use phragmen::ExtendedBalance;
-use system::{self, ensure_signed, ensure_root};
+use sp_phragmen::ExtendedBalance;
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 const MODULE_ID: LockIdentifier = *b"phrelect";
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.c
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The currency that people are electing with.
 	type Currency:
@@ -157,18 +157,54 @@ decl_storage! {
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
 		/// Votes of a particular voter, with the round index of the votes.
-		pub VotesOf get(fn votes_of): linked_map T::AccountId => Vec<T::AccountId>;
+		pub VotesOf get(fn votes_of): linked_map hasher(blake2_256) T::AccountId => Vec<T::AccountId>;
 		/// Locked stake of a voter.
-		pub StakeOf get(fn stake_of): map T::AccountId => BalanceOf<T>;
+		pub StakeOf get(fn stake_of): map hasher(blake2_256) T::AccountId => BalanceOf<T>;
 
-		/// The present candidate list. Sorted based on account id. A current member can never enter
-		/// this vector and is always implicitly assumed to be a candidate.
+		/// The present candidate list. Sorted based on account-id. A current member or a runner can
+		/// never enter this vector and is always implicitly assumed to be a candidate.
 		pub Candidates get(fn candidates): Vec<T::AccountId>;
+	}
+}
+
+decl_error! {
+	/// Error for the elections-phragmen module.
+	pub enum Error for Module<T: Trait> {
+		/// Cannot vote when no candidates or members exist.
+		UnableToVote,
+		/// Must vote for at least one candidate.
+		NoVotes,
+		/// Cannot vote more than candidates.
+		TooManyVotes,
+		/// Cannot vote more than maximum allowed.
+		MaximumVotesExceeded,
+		/// Cannot vote with stake less than minimum balance.
+		LowBalance,
+		/// Voter can not pay voting bond.
+		UnableToPayBond,
+		/// Must be a voter.
+		MustBeVoter,
+		/// Cannot report self.
+		ReportSelf,
+		/// Duplicated candidate submission.
+		DuplicatedCandidate,
+		/// Member cannot re-submit candidacy.
+		MemberSubmit,
+		/// Runner cannot re-submit candidacy.
+		RunnerSubmit,
+		/// Candidate does not have enough funds.
+		InsufficientCandidateFunds,
+		/// Origin is not a candidate, member or a runner up.
+		InvalidOrigin,
+		/// Not a member.
+		NotMember,
 	}
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn deposit_event() = default;
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
@@ -201,20 +237,20 @@ decl_module! {
 			// addition is valid: candidates and members never overlap.
 			let allowed_votes = candidates_count + members_count;
 
-			ensure!(!allowed_votes.is_zero(), "cannot vote when no candidates or members exist");
-			ensure!(votes.len() <= allowed_votes, "cannot vote more than candidates");
-			ensure!(votes.len() <= MAXIMUM_VOTE, "cannot vote more than maximum allowed");
-			ensure!(!votes.is_empty(), "must vote for at least one candidate.");
+			ensure!(!allowed_votes.is_zero(), Error::<T>::UnableToVote);
+			ensure!(votes.len() <= allowed_votes, Error::<T>::TooManyVotes);
+			ensure!(votes.len() <= MAXIMUM_VOTE, Error::<T>::MaximumVotesExceeded);
+			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
 
 			ensure!(
 				value > T::Currency::minimum_balance(),
-				"cannot vote with stake less than minimum balance"
+				Error::<T>::LowBalance,
 			);
 
 			if !Self::is_voter(&who) {
 				// first time voter. Reserve bond.
 				T::Currency::reserve(&who, T::VotingBond::get())
-					.map_err(|_| "voter can not pay voting bond")?;
+					.map_err(|_| Error::<T>::UnableToPayBond)?;
 			}
 			// Amount to be locked up.
 			let locked_balance = value.min(T::Currency::total_balance(&who));
@@ -224,7 +260,6 @@ decl_module! {
 				MODULE_ID,
 				&who,
 				locked_balance,
-				T::BlockNumber::max_value(),
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
 			);
 			<StakeOf<T>>::insert(&who, locked_balance);
@@ -242,7 +277,7 @@ decl_module! {
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
 
-			ensure!(Self::is_voter(&who), "must be a voter");
+			ensure!(Self::is_voter(&who), Error::<T>::MustBeVoter);
 
 			Self::do_remove_voter(&who, true);
 		}
@@ -265,8 +300,8 @@ decl_module! {
 			let reporter = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
 
-			ensure!(reporter != target, "cannot report self");
-			ensure!(Self::is_voter(&reporter), "reporter must be a voter");
+			ensure!(reporter != target, Error::<T>::ReportSelf);
+			ensure!(Self::is_voter(&reporter), Error::<T>::MustBeVoter);
 
 			// Checking if someone is a candidate and a member here is O(LogN), making the whole
 			// function O(MLonN) with N candidates in total and M of them being voted by `target`.
@@ -308,15 +343,15 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			let is_candidate = Self::is_candidate(&who);
-			ensure!(is_candidate.is_err(), "duplicate candidate submission");
+			ensure!(is_candidate.is_err(), Error::<T>::DuplicatedCandidate);
 			// assured to be an error, error always contains the index.
 			let index = is_candidate.unwrap_err();
 
-			ensure!(!Self::is_member(&who), "member cannot re-submit candidacy");
-			ensure!(!Self::is_runner(&who), "runner cannot re-submit candidacy");
+			ensure!(!Self::is_member(&who), Error::<T>::MemberSubmit);
+			ensure!(!Self::is_runner(&who), Error::<T>::RunnerSubmit);
 
 			T::Currency::reserve(&who, T::CandidacyBond::get())
-				.map_err(|_| "candidate does not have enough funds")?;
+				.map_err(|_| Error::<T>::InsufficientCandidateFunds)?;
 
 			<Candidates<T>>::mutate(|c| c.insert(index, who));
 		}
@@ -349,15 +384,15 @@ decl_module! {
 				return Ok(());
 			}
 
-			let mut runners_with_stake = Self::runners_up();
-			if let Ok(index) = runners_with_stake
-				.binary_search_by(|(ref r, ref _s)| r.cmp(&who))
+			let mut runners_up_with_stake = Self::runners_up();
+			if let Some(index) = runners_up_with_stake.iter()
+				.position(|(ref r, ref _s)| r == &who)
 			{
-				runners_with_stake.remove(index);
+				runners_up_with_stake.remove(index);
 				// unreserve the bond
 				T::Currency::unreserve(&who, T::CandidacyBond::get());
 				// update storage.
-				<RunnersUp<T>>::put(runners_with_stake);
+				<RunnersUp<T>>::put(runners_up_with_stake);
 				// safety guard to make sure we do only one arm. Better to read runners later.
 				return Ok(());
 			}
@@ -373,7 +408,7 @@ decl_module! {
 				return Ok(());
 			}
 
-			return Err("origin is not a candidate, member or a runner.");
+			Err(Error::<T>::InvalidOrigin)?
 		}
 
 		/// Remove a particular member from the set. This is effective immediately and the bond of
@@ -390,7 +425,7 @@ decl_module! {
 		/// Writes: O(do_phragmen)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000)]
-		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) -> dispatch::Result {
+		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
@@ -418,7 +453,7 @@ decl_module! {
 decl_event!(
 	pub enum Event<T> where
 		Balance = BalanceOf<T>,
-		<T as system::Trait>::AccountId,
+		<T as frame_system::Trait>::AccountId,
 	{
 		/// A new term with new members. This indicates that enough candidates existed, not that
 		/// enough have has been elected. The inner value must be examined for this purpose.
@@ -444,7 +479,7 @@ impl<T: Trait> Module<T> {
 	/// accordingly. Furthermore, the membership change is reported.
 	///
 	/// O(phragmen) in the worse case.
-	fn remove_and_replace_member(who: &T::AccountId) -> Result<bool, &'static str> {
+	fn remove_and_replace_member(who: &T::AccountId) -> Result<bool, DispatchError> {
 		let mut members_with_stake = Self::members();
 		if let Ok(index) = members_with_stake.binary_search_by(|(ref m, ref _s)| m.cmp(who)) {
 			members_with_stake.remove(index);
@@ -469,7 +504,7 @@ impl<T: Trait> Module<T> {
 			}
 			result
 		} else {
-			Err("not a member")
+			Err(Error::<T>::NotMember)?
 		}
 	}
 
@@ -492,14 +527,14 @@ impl<T: Trait> Module<T> {
 	///
 	/// Limited number of members. Binary search. Constant time factor. O(1)
 	fn is_member(who: &T::AccountId) -> bool {
-		Self::members_ids().binary_search(who).is_ok()
+		Self::members().binary_search_by(|(a, _b)| a.cmp(who)).is_ok()
 	}
 
 	/// Check if `who` is currently an active runner.
 	///
 	/// Limited number of runners-up. Binary search. Constant time factor. O(1)
 	fn is_runner(who: &T::AccountId) -> bool {
-		Self::runners_up_ids().binary_search(who).is_ok()
+		Self::runners_up().iter().position(|(a, _b)| a == who).is_some()
 	}
 
 	/// Returns number of desired members.
@@ -536,7 +571,7 @@ impl<T: Trait> Module<T> {
 		if Self::is_voter(who) {
 			Self::votes_of(who)
 				.iter()
-				.all(|v| !Self::is_member(v) && !Self::is_candidate(v).is_ok())
+				.all(|v| !Self::is_member(v) && !Self::is_runner(v) && !Self::is_candidate(v).is_ok())
 		} else {
 			false
 		}
@@ -566,7 +601,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Runs phragmen election and cleans all the previous candidate state. The voter state is NOT
 	/// cleaned and voters must themselves submit a transaction to retract.
-	fn end_block(block_number: T::BlockNumber) -> dispatch::Result {
+	fn end_block(block_number: T::BlockNumber) -> DispatchResult {
 		if !Self::term_duration().is_zero() {
 			if (block_number % Self::term_duration()).is_zero() {
 				Self::do_phragmen();
@@ -602,7 +637,7 @@ impl<T: Trait> Module<T> {
 		let voters_and_votes = <VotesOf<T>>::enumerate()
 			.map(|(v, i)| (v, i))
 			.collect::<Vec<(T::AccountId, Vec<T::AccountId>)>>();
-		let maybe_phragmen_result = phragmen::elect::<_, _, _, T::CurrencyToVote>(
+		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote>(
 			num_to_elect,
 			0,
 			candidates,
@@ -629,7 +664,7 @@ impl<T: Trait> Module<T> {
 				.filter_map(|(m, a)| if a.is_zero() { None } else { Some(m) } )
 				.collect::<Vec<T::AccountId>>();
 
-			let support_map = phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
+			let support_map = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
 				&new_set,
 				&phragmen_result.assignments,
 				Self::locked_stake_of,
@@ -731,18 +766,26 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+impl<T: Trait> Contains<T::AccountId> for Module<T> {
+	fn contains(who: &T::AccountId) -> bool {
+		Self::is_member(who)
+	}
+	fn sorted_members() -> Vec<T::AccountId> { Self::members_ids() }
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use std::cell::RefCell;
-	use support::{assert_ok, assert_noop, parameter_types, weights::Weight};
+	use frame_support::{assert_ok, assert_noop, parameter_types, weights::Weight};
 	use substrate_test_utils::assert_eq_uvec;
-	use primitives::H256;
+	use sp_core::H256;
 	use sp_runtime::{
 		Perbill, testing::Header, BuildStorage,
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections;
+	use frame_system as system;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -751,7 +794,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -767,23 +810,22 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
 
-	impl balances::Trait for Test {
+	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnNewAccount = ();
-		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type Event = Event;
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 
@@ -886,14 +928,14 @@ mod tests {
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-	support::construct_runtime!(
+	frame_support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
 			System: system::{Module, Call, Event},
-			Balances: balances::{Module, Call, Event<T>, Config<T>},
+			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 			Elections: elections::{Module, Call, Event<T>},
 		}
 	);
@@ -929,12 +971,12 @@ mod tests {
 			self.term_duration = duration;
 			self
 		}
-		pub fn build(self) -> runtime_io::TestExternalities {
+		pub fn build(self) -> sp_io::TestExternalities {
 			VOTING_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			TERM_DURATION.with(|v| *v.borrow_mut() = self.term_duration);
 			DESIRED_RUNNERS_UP.with(|v| *v.borrow_mut() = self.desired_runners_up);
 			GenesisConfig {
-				balances: Some(balances::GenesisConfig::<Test>{
+				pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
 					balances: vec![
 						(1, 10 * self.balance_factor),
 						(2, 20 * self.balance_factor),
@@ -943,7 +985,6 @@ mod tests {
 						(5, 50 * self.balance_factor),
 						(6, 60 * self.balance_factor)
 					],
-					vesting: vec![],
 				}),
 			}.build_storage().unwrap().into()
 		}
@@ -1070,7 +1111,7 @@ mod tests {
 			assert_eq!(Elections::candidates(), vec![1]);
 			assert_noop!(
 				Elections::submit_candidacy(Origin::signed(1)),
-				"duplicate candidate submission"
+				Error::<Test>::DuplicatedCandidate,
 			);
 		});
 	}
@@ -1091,7 +1132,7 @@ mod tests {
 
 			assert_noop!(
 				Elections::submit_candidacy(Origin::signed(5)),
-				"member cannot re-submit candidacy"
+				Error::<Test>::MemberSubmit,
 			);
 		});
 	}
@@ -1114,7 +1155,7 @@ mod tests {
 
 			assert_noop!(
 				Elections::submit_candidacy(Origin::signed(3)),
-				"runner cannot re-submit candidacy",
+				Error::<Test>::RunnerSubmit,
 			);
 		});
 	}
@@ -1125,7 +1166,7 @@ mod tests {
 			assert_eq!(Elections::candidates(), Vec::<u64>::new());
 			assert_noop!(
 				Elections::submit_candidacy(Origin::signed(7)),
-				"candidate does not have enough funds",
+				Error::<Test>::InsufficientCandidateFunds,
 			);
 		});
 	}
@@ -1184,7 +1225,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_noop!(
 				Elections::vote(Origin::signed(2), vec![], 20),
-				"cannot vote when no candidates or members exist"
+				Error::<Test>::UnableToVote,
 			);
 		});
 	}
@@ -1215,7 +1256,7 @@ mod tests {
 
 			assert_noop!(
 				Elections::vote(Origin::signed(2), vec![10, 20, 30], 20),
-				"cannot vote more than candidates",
+				Error::<Test>::TooManyVotes,
 			);
 		});
 	}
@@ -1228,7 +1269,7 @@ mod tests {
 
 			assert_noop!(
 				Elections::vote(Origin::signed(2), vec![4], 1),
-				"cannot vote with stake less than minimum balance",
+				Error::<Test>::LowBalance,
 			);
 		})
 	}
@@ -1274,7 +1315,7 @@ mod tests {
 	#[test]
 	fn non_voter_remove_should_not_work() {
 		ExtBuilder::default().build().execute_with(|| {
-			assert_noop!(Elections::remove_voter(Origin::signed(3)), "must be a voter");
+			assert_noop!(Elections::remove_voter(Origin::signed(3)), Error::<Test>::MustBeVoter);
 		});
 	}
 
@@ -1287,7 +1328,7 @@ mod tests {
 			assert_ok!(Elections::remove_voter(Origin::signed(2)));
 			assert_eq!(all_voters(), vec![]);
 
-			assert_noop!(Elections::remove_voter(Origin::signed(2)), "must be a voter");
+			assert_noop!(Elections::remove_voter(Origin::signed(2)), Error::<Test>::MustBeVoter);
 		});
 	}
 
@@ -1316,20 +1357,22 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_noop!(
 				Elections::report_defunct_voter(Origin::signed(1), 2),
-				"reporter must be a voter",
+				Error::<Test>::MustBeVoter,
 			);
 		});
 	}
 
 	#[test]
 	fn can_detect_defunct_voter() {
-		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(6)));
 
 			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
 			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
 			assert_ok!(Elections::vote(Origin::signed(2), vec![4, 5], 20));
+			assert_ok!(Elections::vote(Origin::signed(6), vec![6], 30));
 			// will be soon a defunct voter.
 			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
 
@@ -1337,12 +1380,14 @@ mod tests {
 			assert_ok!(Elections::end_block(System::block_number()));
 
 			assert_eq!(Elections::members_ids(), vec![4, 5]);
+			assert_eq!(Elections::runners_up_ids(), vec![6]);
 			assert_eq!(Elections::candidates(), vec![]);
 
-			// all of them have a member that they voted for.
+			// all of them have a member or runner-up that they voted for.
 			assert_eq!(Elections::is_defunct_voter(&5), false);
 			assert_eq!(Elections::is_defunct_voter(&4), false);
 			assert_eq!(Elections::is_defunct_voter(&2), false);
+			assert_eq!(Elections::is_defunct_voter(&6), false);
 
 			// defunct
 			assert_eq!(Elections::is_defunct_voter(&3), true);
@@ -1902,6 +1947,27 @@ mod tests {
 	}
 
 	#[test]
+	fn runner_up_replacement_works_when_out_of_order() {
+		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
+
+			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 20));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(5), vec![2], 50));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![2, 4]);
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(3)));
+		});
+	}
+
+	#[test]
 	fn can_renounce_candidacy_member_with_runners_bond_is_refunded() {
 		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
@@ -2005,8 +2071,27 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_noop!(
 				Elections::renounce_candidacy(Origin::signed(5)),
-				"origin is not a candidate, member or a runner.",
+				Error::<Test>::InvalidOrigin,
 			);
+		})
+	}
+
+	#[test]
+	fn behavior_with_dupe_candidate() {
+		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
+			<Candidates<Test>>::put(vec![1, 1, 2, 3, 4]);
+
+			assert_ok!(Elections::vote(Origin::signed(5), vec![1], 50));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![2], 20));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![1, 4]);
+			assert_eq!(Elections::runners_up_ids(), vec![2, 3]);
+			assert_eq!(Elections::candidates(), vec![]);
 		})
 	}
 }

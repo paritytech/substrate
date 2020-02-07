@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 //! Contains the same API as the `http` module, except that everything returns an error.
 
-use primitives::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
+use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
 use std::{future::Future, pin::Pin, task::Context, task::Poll};
 
 /// Creates a pair of [`HttpApi`] and [`HttpWorker`].

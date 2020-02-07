@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -83,15 +83,14 @@
 //! We only send polite messages to peers,
 
 use sp_runtime::traits::{NumberFor, Block as BlockT, Zero};
-use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
-use network::{config::Roles, PeerId, ReputationChange};
-use codec::{Encode, Decode};
-use fg_primitives::AuthorityId;
+use sc_network_gossip::{MessageIntent, ValidatorContext};
+use sc_network::{config::Roles, PeerId, ReputationChange};
+use parity_scale_codec::{Encode, Decode};
+use sp_finality_grandpa::AuthorityId;
 
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
-use log::{trace, debug, warn};
-use futures::prelude::*;
-use futures::sync::mpsc;
+use log::{trace, debug};
+use futures::channel::mpsc;
 use rand::seq::SliceRandom;
 
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
@@ -908,15 +907,15 @@ impl<Block: BlockT> Inner<Block> {
 		// too many equivocations (we exceed the fault-tolerance bound).
 		for vote in last_completed_round.votes {
 			match vote.message {
-				grandpa::Message::Prevote(prevote) => {
-					prevotes.push(grandpa::SignedPrevote {
+				finality_grandpa::Message::Prevote(prevote) => {
+					prevotes.push(finality_grandpa::SignedPrevote {
 						prevote,
 						signature: vote.signature,
 						id: vote.id,
 					});
 				},
-				grandpa::Message::Precommit(precommit) => {
-					precommits.push(grandpa::SignedPrecommit {
+				finality_grandpa::Message::Precommit(precommit) => {
+					precommits.push(finality_grandpa::SignedPrecommit {
 						precommit,
 						signature: vote.signature,
 						id: vote.id,
@@ -1178,7 +1177,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	pub(super) fn new(
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
-	) -> (GossipValidator<Block>, ReportStream)	{
+	) -> (GossipValidator<Block>, mpsc::UnboundedReceiver<PeerReport>)	{
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
@@ -1186,7 +1185,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			report_sender: tx,
 		};
 
-		(val, ReportStream { reports: rx })
+		(val, rx)
 	}
 
 	/// Note a round in the current set has started.
@@ -1280,7 +1279,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 }
 
-impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
+impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Block> {
 	fn new_peer(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, roles: Roles) {
 		let packet = {
 			let mut inner = self.inner.write();
@@ -1306,7 +1305,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 
 	fn validate(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, data: &[u8])
-		-> network_gossip::ValidationResult<Block::Hash>
+		-> sc_network_gossip::ValidationResult<Block::Hash>
 	{
 		let (action, broadcast_topics, peer_reply) = self.do_validate(who, data);
 
@@ -1323,15 +1322,15 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			Action::Keep(topic, cb) => {
 				self.report(who.clone(), cb);
 				context.broadcast_message(topic, data.to_vec(), false);
-				network_gossip::ValidationResult::ProcessAndKeep(topic)
+				sc_network_gossip::ValidationResult::ProcessAndKeep(topic)
 			}
 			Action::ProcessAndDiscard(topic, cb) => {
 				self.report(who.clone(), cb);
-				network_gossip::ValidationResult::ProcessAndDiscard(topic)
+				sc_network_gossip::ValidationResult::ProcessAndDiscard(topic)
 			}
 			Action::Discard(cb) => {
 				self.report(who.clone(), cb);
-				network_gossip::ValidationResult::Discard
+				sc_network_gossip::ValidationResult::Discard
 			}
 		}
 	}
@@ -1445,69 +1444,19 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 }
 
-struct PeerReport {
-	who: PeerId,
-	cost_benefit: ReputationChange,
-}
-
-// wrapper around a stream of reports.
-#[must_use = "The report stream must be consumed"]
-pub(super) struct ReportStream {
-	reports: mpsc::UnboundedReceiver<PeerReport>,
-}
-
-impl ReportStream {
-	/// Consume the report stream, converting it into a future that
-	/// handles all reports.
-	pub(super) fn consume<B, N>(self, net: N)
-		-> impl Future<Item=(),Error=()> + Send + 'static
-	where
-		B: BlockT,
-		N: super::Network<B> + Send + 'static,
-	{
-		ReportingTask {
-			reports: self.reports,
-			net,
-			_marker: Default::default(),
-		}
-	}
-}
-
-/// A future for reporting peers.
-#[must_use = "Futures do nothing unless polled"]
-struct ReportingTask<B, N> {
-	reports: mpsc::UnboundedReceiver<PeerReport>,
-	net: N,
-	_marker: std::marker::PhantomData<B>,
-}
-
-impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
-	type Item = ();
-	type Error = ();
-
-	fn poll(&mut self) -> Poll<(), ()> {
-		loop {
-			match self.reports.poll() {
-				Err(_) => {
-					warn!(target: "afg", "Report stream terminated unexpectedly");
-					return Ok(Async::Ready(()))
-				}
-				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
-				Ok(Async::Ready(Some(PeerReport { who, cost_benefit }))) =>
-					self.net.report(who, cost_benefit),
-				Ok(Async::NotReady) => return Ok(Async::NotReady),
-			}
-		}
-	}
+/// Report specifying a reputation change for a given peer.
+pub(super) struct PeerReport {
+	pub who: PeerId,
+	pub cost_benefit: ReputationChange,
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use super::environment::SharedVoterSetState;
-	use network_gossip::Validator as GossipValidatorT;
-	use network::test::Block;
-	use primitives::{crypto::Public, H256};
+	use sc_network_gossip::Validator as GossipValidatorT;
+	use sc_network_test::Block;
+	use sp_core::{crypto::Public, H256};
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {
@@ -1729,7 +1678,7 @@ mod tests {
 			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
-				message: grandpa::Message::Prevote(grandpa::Prevote {
+				message: finality_grandpa::Message::Prevote(finality_grandpa::Prevote {
 					target_hash: Default::default(),
 					target_number: 10,
 				}),
@@ -1742,7 +1691,7 @@ mod tests {
 			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
-				message: grandpa::Message::Prevote(grandpa::Prevote {
+				message: finality_grandpa::Message::Prevote(finality_grandpa::Prevote {
 					target_hash: Default::default(),
 					target_number: 10,
 				}),
@@ -1773,7 +1722,7 @@ mod tests {
 			let mut inner = val.inner.write();
 			inner.validate_catch_up_message(&peer, &FullCatchUpMessage {
 				set_id: SetId(set_id),
-				message: grandpa::CatchUp {
+				message: finality_grandpa::CatchUp {
 					round_number: 10,
 					prevotes: Default::default(),
 					precommits: Default::default(),
@@ -1809,7 +1758,7 @@ mod tests {
 
 			completed_rounds.push(environment::CompletedRound {
 				number: 2,
-				state: grandpa::round::State::genesis(Default::default()),
+				state: finality_grandpa::round::State::genesis(Default::default()),
 				base: Default::default(),
 				votes: Default::default(),
 			});

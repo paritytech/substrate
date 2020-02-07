@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,16 +19,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-use sp_runtime::traits::NumberFor;
-
 /// Local Storage Prefix used by the Offchain Worker API to
 pub const STORAGE_PREFIX: &[u8] = b"storage";
 
 sp_api::decl_runtime_apis! {
 	/// The offchain worker api.
+	#[api_version(2)]
 	pub trait OffchainWorkerApi {
 		/// Starts the off-chain task for given block number.
 		#[skip_initialize_block]
-		fn offchain_worker(number: NumberFor<Block>);
+		#[changed_in(2)]
+		fn offchain_worker(number: sp_runtime::traits::NumberFor<Block>);
+
+		/// Starts the off-chain task for given block header.
+		#[skip_initialize_block]
+		fn offchain_worker(header: &Block::Header);
 	}
 }

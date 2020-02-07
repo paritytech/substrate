@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,13 +18,29 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{result::Result, prelude::*};
+use sp_std::{result::Result, prelude::*};
 
 use codec::{Encode, Decode};
-use sp_inherents::{Error, InherentIdentifier, InherentData};
+use sp_inherents::{Error, InherentIdentifier, InherentData, IsFatalError};
+use sp_runtime::RuntimeString;
 
 /// The identifier for the `uncles` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"uncles00";
+
+/// Errors that can occur while checking the authorship inherent.
+#[derive(Encode, sp_runtime::RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Decode))]
+pub enum InherentError {
+	Uncles(RuntimeString),
+}
+
+impl IsFatalError for InherentError {
+	fn is_fatal_error(&self) -> bool {
+		match self {
+			InherentError::Uncles(_) => true,
+		}
+	}
+}
 
 /// Auxiliary trait to extract uncles inherent data.
 pub trait UnclesInherentData<H: Decode> {

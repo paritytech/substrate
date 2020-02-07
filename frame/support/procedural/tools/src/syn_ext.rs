@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -160,39 +160,6 @@ impl ToTokens for OuterAttributes {
 	fn to_tokens(&self, tokens: &mut TokenStream) {
 		for att in self.inner.iter() {
 			att.to_tokens(tokens);
-		}
-	}
-}
-
-#[derive(Debug)]
-pub struct Opt<P> {
-	pub inner: Option<P>,
-}
-
-impl<P: Parse> Parse for Opt<P> {
-	// Note that it cost a double parsing (same as enum derive)
-	fn parse(input: ParseStream) -> Result<Self> {
-		let inner = match input.fork().parse::<P>() {
-			Ok(_item) => Some(input.parse().expect("Same parsing ran before")),
-			Err(_e) => None,
-		};
-
-		Ok(Opt { inner })
-	}
-}
-
-impl<P: ToTokens> ToTokens for Opt<P> {
-	fn to_tokens(&self, tokens: &mut TokenStream) {
-		if let Some(ref p) = self.inner {
-			p.to_tokens(tokens);
-		}
-	}
-}
-
-impl <P: Clone> Clone for Opt<P> {
-	fn clone(&self) -> Self {
-		Self {
-			inner: self.inner.clone()
 		}
 	}
 }

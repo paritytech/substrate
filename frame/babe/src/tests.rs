@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 use super::*;
 use mock::{new_test_ext, Babe, Test};
 use sp_runtime::{traits::OnFinalize, testing::{Digest, DigestItem}};
-use session::ShouldEndSession;
+use pallet_session::ShouldEndSession;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
 	74, 25, 49, 128, 53, 97, 244, 49,
@@ -29,18 +29,18 @@ const EMPTY_RANDOMNESS: [u8; 32] = [
 ];
 
 fn make_pre_digest(
-	authority_index: babe_primitives::AuthorityIndex,
-	slot_number: babe_primitives::SlotNumber,
-	vrf_output: [u8; babe_primitives::VRF_OUTPUT_LENGTH],
-	vrf_proof: [u8; babe_primitives::VRF_PROOF_LENGTH],
+	authority_index: sp_consensus_babe::AuthorityIndex,
+	slot_number: sp_consensus_babe::SlotNumber,
+	vrf_output: [u8; sp_consensus_babe::VRF_OUTPUT_LENGTH],
+	vrf_proof: [u8; sp_consensus_babe::VRF_PROOF_LENGTH],
 ) -> Digest {
-	let digest_data = babe_primitives::RawBabePreDigest::Primary {
+	let digest_data = sp_consensus_babe::RawBabePreDigest::Primary {
 		authority_index,
 		slot_number,
 		vrf_output,
 		vrf_proof,
 	};
-	let log = DigestItem::PreRuntime(babe_primitives::BABE_ENGINE_ID, digest_data.encode());
+	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
 }
 
@@ -66,7 +66,7 @@ fn check_module() {
 	})
 }
 
-type System = system::Module<Test>;
+type System = frame_system::Module<Test>;
 
 #[test]
 fn first_block_epoch_zero_start() {
@@ -81,7 +81,13 @@ fn first_block_epoch_zero_start() {
 		);
 
 		assert_eq!(Babe::genesis_slot(), 0);
-		System::initialize(&1, &Default::default(), &Default::default(), &pre_digest);
+		System::initialize(
+			&1,
+			&Default::default(),
+			&Default::default(),
+			&pre_digest,
+			Default::default(),
+		);
 
 		// see implementation of the function for details why: we issue an
 		// epoch-change digest but don't do it via the normal session mechanism.
@@ -103,8 +109,8 @@ fn first_block_epoch_zero_start() {
 		assert_eq!(header.digest.logs[0], pre_digest.logs[0]);
 
 		let authorities = Babe::authorities();
-		let consensus_log = babe_primitives::ConsensusLog::NextEpochData(
-			babe_primitives::NextEpochDescriptor {
+		let consensus_log = sp_consensus_babe::ConsensusLog::NextEpochData(
+			sp_consensus_babe::NextEpochDescriptor {
 				authorities,
 				randomness: Babe::randomness(),
 			}

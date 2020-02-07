@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@
 
 use std::sync::Arc;
 
-use client_api::blockchain::HeaderBackend;
+use sc_client_api::blockchain::HeaderBackend;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One, Zero};
 
@@ -70,30 +70,38 @@ impl<Block, B> VotingRule<Block, B> for () where
 /// A custom voting rule that guarantees that our vote is always behind the best
 /// block, in the best case exactly one block behind it.
 #[derive(Clone)]
-pub struct BeforeBestBlock;
-impl<Block, B> VotingRule<Block, B> for BeforeBestBlock where
+pub struct BeforeBestBlockBy<N>(N);
+impl<Block, B> VotingRule<Block, B> for BeforeBestBlockBy<NumberFor<Block>> where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {
 	fn restrict_vote(
 		&self,
-		_backend: &B,
+		backend: &B,
 		_base: &Block::Header,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
+		use sp_arithmetic::traits::Saturating;
+
 		if current_target.number().is_zero() {
 			return None;
 		}
 
-		if current_target.number() == best_target.number() {
-			return Some((
-				current_target.parent_hash().clone(),
-				*current_target.number() - One::one(),
-			));
+		// find the target number restricted by this rule
+		let target_number = best_target.number().saturating_sub(self.0);
+
+		// our current target is already lower than this rule would restrict
+		if target_number >= *current_target.number() {
+			return None;
 		}
 
-		None
+		// find the block at the given target height
+		find_target(
+			backend,
+			target_number,
+			current_target,
+		)
 	}
 }
 
@@ -130,26 +138,43 @@ impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain where
 			return None;
 		}
 
-		let mut target_header = current_target.clone();
-		let mut target_hash = current_target.hash();
+		// find the block at the given target height
+		find_target(
+			backend,
+			target_number,
+			current_target,
+		)
+	}
+}
 
-		// walk backwards until we find the target block
-		loop {
-			if *target_header.number() < target_number {
-				unreachable!(
-					"we are traversing backwards from a known block; \
-					 blocks are stored contiguously; \
-					 qed"
-				);
-			}
-			if *target_header.number() == target_number {
-				return Some((target_hash, target_number));
-			}
+// walk backwards until we find the target block
+fn find_target<Block, B>(
+	backend: &B,
+	target_number: NumberFor<Block>,
+	current_header: &Block::Header,
+) -> Option<(Block::Hash, NumberFor<Block>)> where
+	Block: BlockT,
+	B: HeaderBackend<Block>,
+{
+	let mut target_hash = current_header.hash();
+	let mut target_header = current_header.clone();
 
-			target_hash = *target_header.parent_hash();
-			target_header = backend.header(BlockId::Hash(target_hash)).ok()?
-				.expect("Header known to exist due to the existence of one of its descendents; qed");
+	loop {
+		if *target_header.number() < target_number {
+			unreachable!(
+				"we are traversing backwards from a known block; \
+				 blocks are stored contiguously; \
+				 qed"
+			);
 		}
+
+		if *target_header.number() == target_number {
+			return Some((target_hash, target_number));
+		}
+
+		target_hash = *target_header.parent_hash();
+		target_header = backend.header(BlockId::Hash(target_hash)).ok()?
+			.expect("Header known to exist due to the existence of one of its descendents; qed");
 	}
 }
 
@@ -213,7 +238,7 @@ impl<Block, B> Default for VotingRulesBuilder<Block, B> where
 {
 	fn default() -> Self {
 		VotingRulesBuilder::new()
-			.add(BeforeBestBlock)
+			.add(BeforeBestBlockBy(2.into()))
 			.add(ThreeQuartersOfTheUnfinalizedChain)
 	}
 }

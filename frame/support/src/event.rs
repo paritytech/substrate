@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -280,7 +280,7 @@ macro_rules! __decl_generic_event {
 			$(
 				#[doc(hidden)]
 				#[codec(skip)]
-				PhantomData($crate::rstd::marker::PhantomData<$instance>),
+				PhantomData($crate::sp_std::marker::PhantomData<$instance>),
 			)?
 		}
 		impl<$( $generic_param ),* $(, $instance)? > From<RawEvent<$( $generic_param ),* $(, $instance)?>> for () {
@@ -304,7 +304,7 @@ macro_rules! __events_to_metadata {
 	(
 		$( $metadata:expr ),*;
 		$( #[doc = $doc_attr:tt] )*
-		$event:ident $( ( $( $param:path ),* ) )*,
+		$event:ident $( ( $( $param:path ),* $(,)? ) )*,
 		$( $rest:tt )*
 	) => {
 		$crate::__events_to_metadata!(
@@ -486,12 +486,12 @@ macro_rules! impl_outer_event {
 						$name::[< $module_name $(_ $generic_instance )? >](x)
 					}
 				}
-				impl $crate::rstd::convert::TryInto<
+				impl $crate::sp_std::convert::TryInto<
 					$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >
 				> for $name {
 					type Error = ();
 
-					fn try_into(self) -> $crate::rstd::result::Result<
+					fn try_into(self) -> $crate::sp_std::result::Result<
 						$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >, Self::Error
 					> {
 						match self {
@@ -530,7 +530,7 @@ macro_rules! __impl_outer_event_json_metadata {
 				$crate::event::OuterEventMetadata {
 					name: $crate::event::DecodeDifferent::Encode(stringify!($event_name)),
 					events: $crate::event::DecodeDifferent::Encode(&[
-						("system", $crate::event::FnEncode(system::Event::metadata))
+						("system", $crate::event::FnEncode($system::Event::metadata))
 						$(
 							, (
 								stringify!($module_name),
@@ -542,21 +542,29 @@ macro_rules! __impl_outer_event_json_metadata {
 					])
 				}
 			}
-			#[allow(dead_code)]
-			pub fn __module_events_system() -> &'static [$crate::event::EventMetadata] {
-				system::Event::metadata()
-			}
 
-			$crate::paste::item! {
-				$(
-					#[allow(dead_code)]
-					pub fn [< __module_events_ $module_name $( _ $instance )? >] () ->
-						&'static [$crate::event::EventMetadata]
-					{
-						$module_name::Event ::< $( $generic_params ),* > ::metadata()
-					}
-				)*
+			$crate::__impl_outer_event_json_metadata! {
+				@DECL_MODULE_EVENT_FNS
+				$system <> ;
+				$( $module_name < $( $generic_params ),* > $( $instance )? ; )*
 			}
+		}
+	};
+
+	(@DECL_MODULE_EVENT_FNS
+		$(
+			$module_name:ident < $( $generic_params:path ),* > $( $instance:ident )? ;
+		)*
+	) => {
+		$crate::paste::item! {
+			$(
+				#[allow(dead_code)]
+				pub fn [< __module_events_ $module_name $( _ $instance )? >] () ->
+					&'static [$crate::event::EventMetadata]
+				{
+					$module_name::Event ::< $( $generic_params ),* > ::metadata()
+				}
+			)*
 		}
 	}
 }
@@ -696,6 +704,10 @@ mod tests {
 				OriginRenamed = <T as Trait>::Origin,
 			{
 				TestEvent(BalanceRenamed, OriginRenamed),
+				TrailingCommaInArgs(
+					u32,
+					u32,
+				),
 			}
 		);
 	}

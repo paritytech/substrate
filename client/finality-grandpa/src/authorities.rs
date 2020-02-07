@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,11 +18,11 @@
 
 use fork_tree::ForkTree;
 use parking_lot::RwLock;
-use grandpa::voter_set::VoterSet;
-use codec::{Encode, Decode};
+use finality_grandpa::voter_set::VoterSet;
+use parity_scale_codec::{Encode, Decode};
 use log::{debug, info};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
-use fg_primitives::{AuthorityId, AuthorityList};
+use sp_finality_grandpa::{AuthorityId, AuthorityList};
 
 use std::cmp::Ord;
 use std::fmt::Debug;
@@ -51,9 +51,10 @@ impl<H: Eq, N> SharedAuthoritySet<H, N>
 where N: Add<Output=N> + Ord + Clone + Debug,
 	  H: Clone + Debug
 {
-	/// Get the earliest limit-block number, if any.
-	pub(crate) fn current_limit(&self) -> Option<N> {
-		self.inner.read().current_limit()
+	/// Get the earliest limit-block number that's higher or equal to the given
+	/// min number, if any.
+	pub(crate) fn current_limit(&self, min: N) -> Option<N> {
+		self.inner.read().current_limit(min)
 	}
 
 	/// Get the current set ID. This is incremented every time the set changes.
@@ -224,10 +225,13 @@ where
 
 	/// Get the earliest limit-block number, if any. If there are pending changes across
 	/// different forks, this method will return the earliest effective number (across the
-	/// different branches). Only standard changes are taken into account for the current
+	/// different branches) that is higher or equal to the given min number.
+	///
+	/// Only standard changes are taken into account for the current
 	/// limit, since any existing forced change should preclude the voter from voting.
-	pub(crate) fn current_limit(&self) -> Option<N> {
+	pub(crate) fn current_limit(&self, min: N) -> Option<N> {
 		self.pending_standard_changes.roots()
+			.filter(|&(_, _, c)| c.effective_number() >= min)
 			.min_by_key(|&(_, _, c)| c.effective_number())
 			.map(|(_, _, c)| c.effective_number())
 	}
@@ -258,7 +262,7 @@ where
 			// check if the given best block is in the same branch as the block that signaled the change.
 			if is_descendent_of(&change.canon_hash, &best_hash)? {
 				// apply this change: make the set canonical
-				info!(target: "finality", "Applying authority set change forced at block #{:?}",
+				info!(target: "afg", "Applying authority set change forced at block #{:?}",
 					  change.canon_height);
 				telemetry!(CONSENSUS_INFO; "afg.applying_forced_authority_set_change";
 					"block" => ?change.canon_height
@@ -324,7 +328,7 @@ where
 				self.pending_forced_changes.clear();
 
 				if let Some(change) = change {
-					info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
+					info!(target: "afg", "Applying authority set change scheduled at block #{:?}",
 						  change.canon_height);
 					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
 						"block" => ?change.canon_height
@@ -403,7 +407,7 @@ pub(crate) struct PendingChange<H, N> {
 }
 
 impl<H: Decode, N: Decode> Decode for PendingChange<H, N> {
-	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+	fn decode<I: parity_scale_codec::Input>(value: &mut I) -> Result<Self, parity_scale_codec::Error> {
 		let next_authorities = Decode::decode(value)?;
 		let delay = Decode::decode(value)?;
 		let canon_height = Decode::decode(value)?;
@@ -431,7 +435,7 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::crypto::Public;
+	use sp_core::crypto::Public;
 
 	fn static_is_descendent_of<A>(value: bool)
 		-> impl Fn(&A, &A) -> Result<bool, std::io::Error>
@@ -443,6 +447,51 @@ mod tests {
 		where F: Fn(&A, &A) -> bool
 	{
 		move |base, hash| Ok(f(base, hash))
+	}
+
+	#[test]
+	fn current_limit_filters_min() {
+		let mut authorities = AuthoritySet {
+			current_authorities: Vec::new(),
+			set_id: 0,
+			pending_standard_changes: ForkTree::new(),
+			pending_forced_changes: Vec::new(),
+		};
+
+		let change = |height| {
+			PendingChange {
+				next_authorities: Vec::new(),
+				delay: 0,
+				canon_height: height,
+				canon_hash: height.to_string(),
+				delay_kind: DelayKind::Finalized,
+			}
+		};
+
+		let is_descendent_of = static_is_descendent_of(false);
+
+		authorities.add_pending_change(change(1), &is_descendent_of).unwrap();
+		authorities.add_pending_change(change(2), &is_descendent_of).unwrap();
+
+		assert_eq!(
+			authorities.current_limit(0),
+			Some(1),
+		);
+
+		assert_eq!(
+			authorities.current_limit(1),
+			Some(1),
+		);
+
+		assert_eq!(
+			authorities.current_limit(2),
+			Some(2),
+		);
+
+		assert_eq!(
+			authorities.current_limit(3),
+			None,
+		);
 	}
 
 	#[test]

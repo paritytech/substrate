@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,20 +22,18 @@
 use super::*;
 use authorship::claim_slot;
 
-use babe_primitives::{AuthorityPair, SlotNumber};
-use block_builder::BlockBuilder;
-use consensus_common::NoNetwork as DummyOracle;
-use consensus_common::import_queue::{
-	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
+use sp_consensus_babe::{AuthorityPair, SlotNumber};
+use sc_block_builder::BlockBuilder;
+use sp_consensus::{
+	NoNetwork as DummyOracle, Proposal, RecordProof,
+	import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport},
 };
-use network::test::*;
-use network::test::{Block as TestBlock, PeersClient};
-use network::config::BoxFinalityProofRequestBuilder;
+use sc_network_test::*;
+use sc_network_test::{Block as TestBlock, PeersClient};
+use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
-use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
-use client_api::BlockchainEvents;
-use test_client;
+use sc_client_api::{BlockchainEvents, backend::TransactionFor};
 use log::debug;
 use std::{time::Duration, cell::RefCell};
 
@@ -43,11 +41,11 @@ type Item = DigestItem<Hash>;
 
 type Error = sp_blockchain::Error;
 
-type TestClient = client::Client<
-	test_client::Backend,
-	test_client::Executor,
+type TestClient = sc_client::Client<
+	substrate_test_runtime_client::Backend,
+	substrate_test_runtime_client::Executor,
 	TestBlock,
-	test_client::runtime::RuntimeApi,
+	substrate_test_runtime_client::runtime::RuntimeApi,
 >;
 
 #[derive(Copy, Clone, PartialEq)]
@@ -74,38 +72,48 @@ struct DummyProposer {
 }
 
 impl Environment<TestBlock> for DummyFactory {
+	type CreateProposer = future::Ready<Result<DummyProposer, Error>>;
 	type Proposer = DummyProposer;
 	type Error = Error;
 
 	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
-		-> Result<DummyProposer, Error>
+		-> Self::CreateProposer
 	{
 
 		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
 			.expect("parent header has a pre-digest")
 			.slot_number();
 
-		Ok(DummyProposer {
+		future::ready(Ok(DummyProposer {
 			factory: self.clone(),
 			parent_hash: parent_header.hash(),
 			parent_number: *parent_header.number(),
 			parent_slot,
-		})
+		}))
 	}
 }
 
 impl DummyProposer {
 	fn propose_with(&mut self, pre_digests: DigestFor<TestBlock>)
-		-> future::Ready<Result<TestBlock, Error>>
+		-> future::Ready<
+			Result<
+				Proposal<
+					TestBlock,
+					sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>
+				>,
+				Error
+			>
+		>
 	{
 		use codec::Encode;
 		let block_builder = self.factory.client.new_block_at(
 			&BlockId::Hash(self.parent_hash),
 			pre_digests,
+			false,
 		).unwrap();
 
-		let mut block = match block_builder.bake().map_err(|e| e.into()) {
-			Ok(b) => b,
+		let mut block = match block_builder.build().map_err(|e| e.into()) {
+			Ok(b) => b.block,
 			Err(e) => return future::ready(Err(e)),
 		};
 
@@ -144,20 +152,22 @@ impl DummyProposer {
 		// mutate the block header according to the mutator.
 		(self.factory.mutator)(&mut block.header, Stage::PreSeal);
 
-		future::ready(Ok(block))
+		future::ready(Ok(Proposal { block, proof: None, storage_changes: Default::default() }))
 	}
 }
 
 impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
-	type Create = future::Ready<Result<TestBlock, Error>>;
+	type Transaction = sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>;
+	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
 
 	fn propose(
 		&mut self,
 		_: InherentData,
 		pre_digests: DigestFor<TestBlock>,
 		_: Duration,
-	) -> Self::Create {
+		_: RecordProof,
+	) -> Self::Proposal {
 		self.propose_with(pre_digests)
 	}
 }
@@ -171,10 +181,11 @@ struct PanickingBlockImport<B>(B);
 
 impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<B> {
 	type Error = B::Error;
+	type Transaction = B::Transaction;
 
 	fn import_block(
 		&mut self,
-		block: BlockImportParams<TestBlock>,
+		block: BlockImportParams<TestBlock, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		Ok(self.0.import_block(block, new_cache).expect("importing block failed"))
@@ -197,10 +208,10 @@ type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
 	inner: BabeVerifier<
-		test_client::Backend,
-		test_client::Executor,
+		substrate_test_runtime_client::Backend,
+		substrate_test_runtime_client::Executor,
 		TestBlock,
-		test_client::runtime::RuntimeApi,
+		substrate_test_runtime_client::runtime::RuntimeApi,
 		PeersFullClient,
 	>,
 	mutator: Mutator,
@@ -216,7 +227,7 @@ impl Verifier<TestBlock> for TestVerifier {
 		mut header: TestHeader,
 		justification: Option<Justification>,
 		body: Option<Vec<TestExtrinsic>>,
-	) -> Result<(BlockImportParams<TestBlock>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut header, Stage::PostSeal);
 		Ok(self.inner.verify(origin, header, justification, body).expect("verification failed!"))
@@ -226,7 +237,9 @@ impl Verifier<TestBlock> for TestVerifier {
 pub struct PeerData {
 	link: BabeLink<TestBlock>,
 	inherent_data_providers: InherentDataProviders,
-	block_import: Mutex<Option<BoxBlockImport<TestBlock>>>,
+	block_import: Mutex<
+		Option<BoxBlockImport<TestBlock, TransactionFor<substrate_test_runtime_client::Backend, TestBlock>>>
+	>,
 }
 
 impl TestNetFactory for BabeTestNet {
@@ -242,9 +255,9 @@ impl TestNetFactory for BabeTestNet {
 		}
 	}
 
-	fn make_block_import(&self, client: PeersClient)
+	fn make_block_import<Transaction>(&self, client: PeersClient)
 		-> (
-			BoxBlockImport<Block>,
+			BlockImportAdapter<Transaction>,
 			Option<BoxJustificationImport<Block>>,
 			Option<BoxFinalityProofImport<Block>>,
 			Option<BoxFinalityProofRequestBuilder<Block>>,
@@ -264,9 +277,11 @@ impl TestNetFactory for BabeTestNet {
 
 		let block_import = PanickingBlockImport(block_import);
 
-		let data_block_import = Mutex::new(Some(Box::new(block_import.clone()) as BoxBlockImport<_>));
+		let data_block_import = Mutex::new(
+			Some(Box::new(block_import.clone()) as BoxBlockImport<_, _>)
+		);
 		(
-			Box::new(block_import),
+			BlockImportAdapter::new_full(block_import),
 			None,
 			None,
 			None,
@@ -324,8 +339,8 @@ impl TestNetFactory for BabeTestNet {
 fn rejects_empty_block() {
 	env_logger::try_init().unwrap();
 	let mut net = BabeTestNet::new(3);
-	let block_builder = |builder: BlockBuilder<_, _>| {
-		builder.bake().unwrap()
+	let block_builder = |builder: BlockBuilder<_, _, _>| {
+		builder.build().unwrap().block
 	};
 	net.mut_peers(|peer| {
 		peer[0].generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder);
@@ -359,7 +374,7 @@ fn run_one_test(
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+		let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
 		keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
@@ -404,8 +419,8 @@ fn run_one_test(
 			force_authoring: false,
 			babe_link: data.link.clone(),
 			keystore,
-			can_author_with: consensus_common::AlwaysCanAuthor,
-		}).expect("Starts babe"));
+			can_author_with: sp_consensus::AlwaysCanAuthor,
+		}).expect("Starts babe").unit_error().compat());
 	}
 
 	runtime.spawn(futures01::future::poll_fn(move || {
@@ -414,7 +429,7 @@ fn run_one_test(
 	}));
 
 	runtime.block_on(future::join_all(import_notifications)
-		.map(|_| Ok::<(), ()>(())).compat()).unwrap();
+		.unit_error().compat()).unwrap();
 }
 
 #[test]
@@ -484,7 +499,7 @@ fn sig_is_not_pre_digest() {
 fn can_author_block() {
 	let _ = env_logger::try_init();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
 	let pair = keystore.write().insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
 		.expect("Generates authority pair");
 
@@ -527,13 +542,13 @@ fn can_author_block() {
 }
 
 // Propose and import a new BABE block on top of the given parent.
-fn propose_and_import_block(
+fn propose_and_import_block<Transaction>(
 	parent: &TestHeader,
 	slot_number: Option<SlotNumber>,
 	proposer_factory: &mut DummyFactory,
-	block_import: &mut BoxBlockImport<TestBlock>,
-) -> H256 {
-	let mut proposer = proposer_factory.init(parent).unwrap();
+	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
+) -> sp_core::H256 {
+	let mut proposer = futures::executor::block_on(proposer_factory.init(parent)).unwrap();
 
 	let slot_number = slot_number.unwrap_or_else(|| {
 		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
@@ -551,7 +566,7 @@ fn propose_and_import_block(
 		],
 	};
 
-	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap();
+	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap().block;
 
 	let seal = {
 		// sign the pre-sealed hash of the block and then
@@ -576,9 +591,11 @@ fn propose_and_import_block(
 			justification: None,
 			post_digests: vec![seal],
 			body: Some(block.extrinsics),
+			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		},
@@ -635,7 +652,7 @@ fn importing_block_one_sets_genesis_epoch() {
 
 #[test]
 fn importing_epoch_change_block_prunes_tree() {
-	use client_api::Finalizer;
+	use sc_client_api::Finalizer;
 
 	let mut net = BabeTestNet::new(1);
 
@@ -709,7 +726,7 @@ fn importing_epoch_change_block_prunes_tree() {
 	// We finalize block #13 from the canon chain, so on the next epoch
 	// change the tree should be pruned, to not contain F (#7).
 	client.finalize_block(BlockId::Hash(canon_hashes[12]), None, false).unwrap();
-	propose_and_import_blocks(BlockId::Hash(client.info().chain.best_hash), 7);
+	propose_and_import_blocks(BlockId::Hash(client.chain_info().best_hash), 7);
 
 	// at this point no hashes from the first fork must exist on the tree
 	assert!(
@@ -727,7 +744,7 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	// finalizing block #25 from the canon chain should prune out the second fork
 	client.finalize_block(BlockId::Hash(canon_hashes[24]), None, false).unwrap();
-	propose_and_import_blocks(BlockId::Hash(client.info().chain.best_hash), 8);
+	propose_and_import_blocks(BlockId::Hash(client.chain_info().best_hash), 8);
 
 	// at this point no hashes from the second fork must exist on the tree
 	assert!(

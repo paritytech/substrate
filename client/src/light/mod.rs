@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,15 +23,15 @@ pub mod fetcher;
 
 use std::sync::Arc;
 
-use executor::RuntimeInfo;
-use primitives::{H256, Blake2Hasher, traits::CodeExecutor};
+use sc_executor::RuntimeInfo;
+use sp_core::traits::CodeExecutor;
 use sp_runtime::BuildStorage;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, HasherFor};
 use sp_blockchain::Result as ClientResult;
 
 use crate::call_executor::LocalCallExecutor;
 use crate::client::Client;
-use client_api::{
+use sc_client_api::{
 	light::Storage as BlockchainStorage,
 };
 use crate::light::backend::Backend;
@@ -45,7 +45,7 @@ pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: S) -> A
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S, Blake2Hasher>>
+pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S, HasherFor<B>>>
 	where
 		B: BlockT,
 		S: BlockchainStorage<B>,
@@ -55,29 +55,43 @@ pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S,
 
 /// Create an instance of light client.
 pub fn new_light<B, S, GS, RA, E>(
-	backend: Arc<Backend<S, Blake2Hasher>>,
-	genesis_storage: GS,
+	backend: Arc<Backend<S, HasherFor<B>>>,
+	genesis_storage: &GS,
 	code_executor: E,
-) -> ClientResult<Client<Backend<S, Blake2Hasher>, GenesisCallExecutor<
-	Backend<S, Blake2Hasher>,
-	LocalCallExecutor<Backend<S, Blake2Hasher>, E>
->, B, RA>>
+) -> ClientResult<
+		Client<
+			Backend<S, HasherFor<B>>,
+			GenesisCallExecutor<
+				Backend<S, HasherFor<B>>,
+				LocalCallExecutor<Backend<S, HasherFor<B>>, E>
+			>,
+			B,
+			RA
+		>
+	>
 	where
-		B: BlockT<Hash=H256>,
+		B: BlockT,
 		S: BlockchainStorage<B> + 'static,
 		GS: BuildStorage,
-		E: CodeExecutor + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo + Clone + 'static,
 {
 	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor);
 	let executor = GenesisCallExecutor::new(backend.clone(), local_executor);
-	Client::new(backend, executor, genesis_storage, Default::default(), Default::default())
+	Client::new(
+		backend,
+		executor,
+		genesis_storage,
+		Default::default(),
+		Default::default(),
+		Default::default(),
+	)
 }
 
 /// Create an instance of fetch data checker.
 pub fn new_fetch_checker<E, B: BlockT, S: BlockchainStorage<B>>(
 	blockchain: Arc<Blockchain<S>>,
 	executor: E,
-) -> LightDataChecker<E, Blake2Hasher, B, S>
+) -> LightDataChecker<E, HasherFor<B>, B, S>
 	where
 		E: CodeExecutor,
 {

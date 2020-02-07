@@ -1,4 +1,4 @@
-// Copyright 2015-2019 Parity Technologies (UK) Ltd.
+// Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -18,11 +18,11 @@
 
 use crate::trie_constants;
 use codec::{Encode, Decode, Input, Output};
-use rstd::iter::once;
+use sp_std::iter::once;
 
 /// A node header
 #[derive(Copy, Clone, PartialEq, Eq)]
-#[derive(primitives::RuntimeDebug)]
+#[derive(sp_core::RuntimeDebug)]
 pub(crate) enum NodeHeader {
 	Null,
 	Branch(bool, usize),
@@ -72,9 +72,9 @@ impl Decode for NodeHeader {
 /// Size encoding allows unlimited, length unefficient, representation, but
 /// is bounded to 16 bit maximum value to avoid possible DOS.
 pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8) -> impl Iterator<Item = u8> {
-	let size = rstd::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
+	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
 
-	let l1 = rstd::cmp::min(62, size);
+	let l1 = sp_std::cmp::min(62, size);
 	let (first_byte, mut rem) = if size == l1 {
 		(once(prefix + l1 as u8), 0)
 	} else {
@@ -94,7 +94,7 @@ pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8) -> impl Iterator
 			None
 		}
 	};
-	first_byte.chain(rstd::iter::from_fn(next_bytes))
+	first_byte.chain(sp_std::iter::from_fn(next_bytes))
 }
 
 /// Encodes size and prefix to a stream output.

@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ use crate::Schedule;
 use parity_wasm::elements::{self, Internal, External, MemoryType, Type, ValueType};
 use pwasm_utils;
 use pwasm_utils::rules;
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use sp_runtime::traits::{SaturatedConversion};
 
 struct ContractModule<'a> {
@@ -76,7 +76,7 @@ impl<'a> ContractModule<'a> {
 
 	/// Ensures that tables declared in the module are not too big.
 	fn ensure_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
-        if let Some(table_section) = self.module.table_section() {
+		if let Some(table_section) = self.module.table_section() {
 			// In Wasm MVP spec, there may be at most one table declared. Double check this
 			// explicitly just in case the Wasm version changes.
 			if table_section.entries().len() > 1 {

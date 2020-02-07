@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ use crate::mock::{
 	offence_reports,
 };
 use sp_runtime::Perbill;
-use system::{EventRecord, Phase};
+use frame_system::{EventRecord, Phase};
 
 #[test]
 fn should_report_an_authority_and_trigger_on_offence() {

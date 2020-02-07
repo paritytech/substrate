@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -26,12 +26,13 @@ use crate::chain::{Client, FinalityProofProvider};
 use crate::on_demand_layer::OnDemand;
 use crate::service::{ExHashT, TransactionPool};
 use bitflags::bitflags;
-use consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
+use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sp_runtime::traits::{Block as BlockT};
 use libp2p::identity::{Keypair, ed25519};
 use libp2p::wasm_ext;
 use libp2p::{PeerId, Multiaddr, multiaddr};
 use core::{fmt, iter};
+use std::{future::Future, pin::Pin};
 use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
 use zeroize::Zeroize;
 
@@ -39,6 +40,10 @@ use zeroize::Zeroize;
 pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// Assigned roles for our node (full, light, ...).
 	pub roles: Roles,
+
+	/// How to spawn background tasks. If you pass `None`, then a threads pool will be used by
+	/// default.
+	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
@@ -255,6 +260,8 @@ pub struct NetworkConfiguration {
 	pub reserved_nodes: Vec<String>,
 	/// The non-reserved peer mode.
 	pub non_reserved_mode: NonReservedPeerMode,
+	/// List of sentry node public addresses.
+	pub sentry_nodes: Vec<String>,
 	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
 	/// Name of the node. Sent over the wire for debugging purposes.
@@ -278,6 +285,7 @@ impl Default for NetworkConfiguration {
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
+			sentry_nodes: Vec::new(),
 			client_version: "unknown".into(),
 			node_name: "unknown".into(),
 			transport: TransportConfig::Normal {

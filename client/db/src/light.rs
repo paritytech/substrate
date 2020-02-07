@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,34 +22,33 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use client_api::backend::{AuxStore, NewBlockState};
-use client::blockchain::{
+use sc_client_api::{backend::{AuxStore, NewBlockState}, UsageInfo};
+use sc_client::blockchain::{
 	BlockStatus, Cache as BlockchainCache,Info as BlockchainInfo,
 };
-use client::cht;
+use sc_client::cht;
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
 	Error as ClientError, Result as ClientResult,
-	HeaderBackend as BlockchainHeaderBackend, 
+	HeaderBackend as BlockchainHeaderBackend,
 	well_known_cache_keys,
 };
-use client::light::blockchain::Storage as LightBlockchainStorage;
+use sc_client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
-use primitives::Blake2Hasher;
 use sp_runtime::generic::{DigestItem, BlockId};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HasherFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
-use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
-use crate::DatabaseSettings;
+use crate::utils::{self, meta_keys, DatabaseType, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
+use crate::{DatabaseSettings, FrozenForDuration};
 use log::{trace, warn, debug};
 
 pub(crate) mod columns {
-	pub const META: Option<u32> = crate::utils::COLUMN_META;
-	pub const KEY_LOOKUP: Option<u32> = Some(1);
-	pub const HEADER: Option<u32> = Some(2);
-	pub const CACHE: Option<u32> = Some(3);
-	pub const CHT: Option<u32> = Some(4);
-	pub const AUX: Option<u32> = Some(5);
+	pub const META: u32 = crate::utils::COLUMN_META;
+	pub const KEY_LOOKUP: u32 = 1;
+	pub const HEADER: u32 = 2;
+	pub const CACHE: u32 = 3;
+	pub const CHT: u32 = 4;
+	pub const AUX: u32 = 5;
 }
 
 /// Prefix for headers CHT.
@@ -64,15 +63,15 @@ pub struct LightStorage<Block: BlockT> {
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: HeaderMetadataCache<Block>,
+
+	#[cfg(not(target_os = "unknown"))]
+	io_stats: FrozenForDuration<kvdb::IoStats>,
 }
 
-impl<Block> LightStorage<Block>
-	where
-		Block: BlockT,
-{
+impl<Block: BlockT> LightStorage<Block> {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
-		let db = crate::utils::open_database(&config, columns::META, "light")?;
+		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Light)?;
 		Self::from_kvdb(db as Arc<_>)
 	}
 
@@ -87,7 +86,7 @@ impl<Block> LightStorage<Block>
 	}
 
 	fn from_kvdb(db: Arc<dyn KeyValueDB>) -> ClientResult<Self> {
-		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
+		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let cache = DbCache::new(
 			db.clone(),
 			columns::KEY_LOOKUP,
@@ -102,6 +101,8 @@ impl<Block> LightStorage<Block>
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
 			header_metadata_cache: HeaderMetadataCache::default(),
+			#[cfg(not(target_os = "unknown"))]
+			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1), kvdb::IoStats::empty()),
 		})
 	}
 
@@ -304,7 +305,7 @@ impl<Block: BlockT> LightStorage<Block> {
 				Some(old_current_num)
 			});
 
-			let new_header_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+			let new_header_cht_root = cht::compute_root::<Block::Header, HasherFor<Block>, _>(
 				cht::size(), new_cht_number, cht_range.map(|num| self.hash(num))
 			)?;
 			transaction.put(
@@ -321,7 +322,7 @@ impl<Block: BlockT> LightStorage<Block> {
 					current_num = current_num + One::one();
 					Some(old_current_num)
 				});
-				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, HasherFor<Block>, _>(
 					cht::size(), new_cht_number, cht_range
 						.map(|num| self.changes_trie_root(BlockId::Number(num)))
 				)?;
@@ -363,14 +364,22 @@ impl<Block: BlockT> LightStorage<Block> {
 		cht_type: u8,
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>
-	) -> ClientResult<Block::Hash> {
-		let no_cht_for_block = || ClientError::Backend(format!("CHT for block {} not exists", block));
+	) -> ClientResult<Option<Block::Hash>> {
+		let no_cht_for_block = || ClientError::Backend(format!("Missing CHT for block {}", block));
 
+		let meta = self.meta.read();
+		let max_cht_number = cht::max_cht_number(cht_size, meta.finalized_number);
 		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
+		match max_cht_number {
+			Some(max_cht_number) if cht_number <= max_cht_number => (),
+			_ => return Ok(None),
+		}
+
 		let cht_start = cht::start_number(cht_size, cht_number);
 		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)?).map_err(db_err)?
 			.ok_or_else(no_cht_for_block)
 			.and_then(|hash| Block::Hash::decode(&mut &*hash).map_err(|_| no_cht_for_block()))
+			.map(Some)
 	}
 }
 
@@ -405,7 +414,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	fn import_header(
 		&self,
 		header: Block::Header,
-		cache_at: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+		mut cache_at: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		leaf_state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()> {
@@ -463,6 +472,13 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			)?;
 		}
 
+		// update changes trie configuration cache
+		if !cache_at.contains_key(&well_known_cache_keys::CHANGES_TRIE_CONFIG) {
+			if let Some(new_configuration) = crate::changes_tries_storage::extract_new_configuration(&header) {
+				cache_at.insert(well_known_cache_keys::CHANGES_TRIE_CONFIG, new_configuration.encode());
+			}
+		}
+
 		{
 			let mut cache = self.cache.0.write();
 			let cache_ops = cache.transaction(&mut transaction)
@@ -475,8 +491,11 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				.into_ops();
 
 			debug!("Light DB Commit {:?} ({})", hash, number);
+
 			self.db.write(transaction).map_err(db_err)?;
-			cache.commit(cache_ops);
+			cache.commit(cache_ops)
+				.expect("only fails if cache with given name isn't loaded yet;\
+						cache is already loaded because there are cache_ops; qed");
 		}
 
 		self.update_meta(hash, number, leaf_state.is_best(), finalized);
@@ -503,7 +522,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		&self,
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> ClientResult<Block::Hash> {
+	) -> ClientResult<Option<Block::Hash>> {
 		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
 	}
 
@@ -511,7 +530,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		&self,
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> ClientResult<Block::Hash> {
+	) -> ClientResult<Option<Block::Hash>> {
 		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
 	}
 
@@ -531,7 +550,9 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 					.into_ops();
 
 				self.db.write(transaction).map_err(db_err)?;
-				cache.commit(cache_ops);
+				cache.commit(cache_ops)
+					.expect("only fails if cache with given name isn't loaded yet;\
+							cache is already loaded because there are cache_ops; qed");
 			}
 			self.update_meta(hash, header.number().clone(), false, true);
 
@@ -548,6 +569,37 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {
 		Some(self.cache.clone())
 	}
+
+	#[cfg(not(target_os = "unknown"))]
+	fn usage_info(&self) -> Option<UsageInfo> {
+		use sc_client_api::{MemoryInfo, IoInfo};
+
+		let database_cache = parity_util_mem::malloc_size(&*self.db);
+		let io_stats = self.io_stats.take_or_else(|| self.db.io_stats(kvdb::IoStatsKind::SincePrevious));
+
+		Some(UsageInfo {
+			memory: MemoryInfo {
+				database_cache,
+				state_cache: 0,
+			},
+			io: IoInfo {
+				transactions: io_stats.transactions,
+				bytes_read: io_stats.bytes_read,
+				bytes_written: io_stats.bytes_written,
+				writes: io_stats.writes,
+				reads: io_stats.reads,
+				average_transaction_size: io_stats.avg_transaction_size() as u64,
+				// Light client does not track those
+				state_reads: 0,
+				state_reads_cache: 0,
+			}
+		})
+	}
+
+	#[cfg(target_os = "unknown")]
+	fn usage_info(&self) -> Option<UsageInfo> {
+		None
+	}
 }
 
 /// Build the key for inserting header-CHT at given block.
@@ -559,14 +611,15 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use client::cht;
-	use sp_runtime::generic::DigestItem;
+	use sc_client::cht;
+	use sp_core::ChangesTrieConfiguration;
+	use sp_runtime::generic::{DigestItem, ChangesTrieSignal};
 	use sp_runtime::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
-	type AuthorityId = primitives::ed25519::Public;
+	type AuthorityId = sp_core::ed25519::Public;
 
 	pub fn default_header(parent: &Hash, number: u64) -> Header {
 		Header {
@@ -739,20 +792,20 @@ pub(crate) mod tests {
 		assert_eq!(db.db.iter(columns::KEY_LOOKUP).count(), (2 * (1 + cht_size + 1)) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 1);
 		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
-		assert!(db.header_cht_root(cht_size, cht_size / 2).is_ok());
-		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).is_err());
+		assert!(db.header_cht_root(cht_size, cht_size / 2).unwrap().is_some());
+		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());
 		assert!(db.changes_trie_cht_root(cht_size, cht_size / 2).is_err());
-		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).is_err());
+		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());
 
 		// when headers are created with changes tries roots
 		let db = insert_headers(header_with_changes_trie);
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht_size + 1) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 2);
 		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
-		assert!(db.header_cht_root(cht_size, cht_size / 2).is_ok());
-		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).is_err());
-		assert!(db.changes_trie_cht_root(cht_size, cht_size / 2).is_ok());
-		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).is_err());
+		assert!(db.header_cht_root(cht_size, cht_size / 2).unwrap().is_some());
+		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());
+		assert!(db.changes_trie_cht_root(cht_size, cht_size / 2).unwrap().is_some());
+		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());
 	}
 
 	#[test]
@@ -763,7 +816,7 @@ pub(crate) mod tests {
 	#[test]
 	fn get_cht_fails_for_non_existant_cht() {
 		let cht_size: u64 = cht::size();
-		assert!(LightStorage::<Block>::new_test().header_cht_root(cht_size, cht_size / 2).is_err());
+		assert!(LightStorage::<Block>::new_test().header_cht_root(cht_size, cht_size / 2).unwrap().is_none());
 	}
 
 	#[test]
@@ -779,15 +832,18 @@ pub(crate) mod tests {
 			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		}
 
-		let cht_root_1 = db.header_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap();
-		let cht_root_2 = db.header_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2).unwrap();
-		let cht_root_3 = db.header_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap();
+		let cht_root_1 = db.header_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap().unwrap();
+		let cht_root_2 = db.header_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2).unwrap().unwrap();
+		let cht_root_3 = db.header_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap().unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
 
-		let cht_root_1 = db.changes_trie_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap();
-		let cht_root_2 = db.changes_trie_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2).unwrap();
-		let cht_root_3 = db.changes_trie_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap();
+		let cht_root_1 = db.changes_trie_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap().unwrap();
+		let cht_root_2 = db.changes_trie_cht_root(
+			cht_size,
+			cht::start_number(cht_size, 0) + cht_size / 2,
+		).unwrap().unwrap();
+		let cht_root_3 = db.changes_trie_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap().unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
 	}
@@ -918,7 +974,7 @@ pub(crate) mod tests {
 		}
 
 		fn get_authorities(cache: &dyn BlockchainCache<Block>, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
-			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at)
+			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at).unwrap_or(None)
 				.and_then(|(_, _, val)| Decode::decode(&mut &val[..]).ok())
 		}
 
@@ -1102,8 +1158,8 @@ pub(crate) mod tests {
 		let (genesis_hash, storage) = {
 			let db = LightStorage::<Block>::new_test();
 
-			// before cache is initialized => None
-			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+			// before cache is initialized => Err
+			assert!(db.cache().get_at(b"test", &BlockId::Number(0)).is_err());
 
 			// insert genesis block (no value for cache is provided)
 			let mut genesis_hash = None;
@@ -1114,14 +1170,14 @@ pub(crate) mod tests {
 			});
 
 			// after genesis is inserted => None
-			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)).unwrap(), None);
 
 			// initialize cache
 			db.cache().initialize(b"test", vec![42]).unwrap();
 
 			// after genesis is inserted + cache is initialized => Some
 			assert_eq!(
-				db.cache().get_at(b"test", &BlockId::Number(0)),
+				db.cache().get_at(b"test", &BlockId::Number(0)).unwrap(),
 				Some(((0, genesis_hash.unwrap()), None, vec![42])),
 			);
 
@@ -1131,8 +1187,37 @@ pub(crate) mod tests {
 		// restart && check that after restart value is read from the cache
 		let db = LightStorage::<Block>::from_kvdb(storage as Arc<_>).expect("failed to create test-db");
 		assert_eq!(
-			db.cache().get_at(b"test", &BlockId::Number(0)),
+			db.cache().get_at(b"test", &BlockId::Number(0)).unwrap(),
 			Some(((0, genesis_hash.unwrap()), None, vec![42])),
+		);
+	}
+
+	#[test]
+	fn changes_trie_configuration_is_tracked_on_light_client() {
+		let db = LightStorage::<Block>::new_test();
+
+		let new_config = Some(ChangesTrieConfiguration::new(2, 2));
+
+		// insert block#0 && block#1 (no value for cache is provided)
+		let hash0 = insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
+		assert_eq!(
+			db.cache().get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, &BlockId::Number(0)).unwrap()
+				.map(|(_, _, v)| ChangesTrieConfiguration::decode(&mut &v[..]).unwrap()),
+			None,
+		);
+
+		// insert configuration at block#1 (starts from block#2)
+		insert_block(&db, HashMap::new(), || {
+			let mut header = default_header(&hash0, 1);
+			header.digest_mut().push(
+				DigestItem::ChangesTrieSignal(ChangesTrieSignal::NewConfiguration(new_config.clone()))
+			);
+			header
+		});
+		assert_eq!(
+			db.cache().get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, &BlockId::Number(1)).unwrap()
+				.map(|(_, _, v)| Option::<ChangesTrieConfiguration>::decode(&mut &v[..]).unwrap()),
+			Some(new_config),
 		);
 	}
 }

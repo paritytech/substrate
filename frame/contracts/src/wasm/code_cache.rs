@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -29,9 +29,9 @@
 use crate::gas::{Gas, GasMeter, Token};
 use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
 use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use sp_runtime::traits::{Hash, Bounded};
-use support::StorageMap;
+use frame_support::StorageMap;
 
 /// Gas metering token that used for charging storing code into the code storage.
 ///

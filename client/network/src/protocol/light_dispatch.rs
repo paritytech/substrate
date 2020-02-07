@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,17 +23,17 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 use log::{trace, info};
-use futures::sync::oneshot::{Sender as OneShotSender};
+use futures::channel::oneshot::{Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};
 use sp_blockchain::Error as ClientError;
-use client_api::{FetchChecker, RemoteHeaderRequest,
+use sc_client_api::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
 	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
 use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 use libp2p::PeerId;
 use crate::config::Roles;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use peerset::ReputationChange;
+use sc_peerset::ReputationChange;
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -69,6 +69,8 @@ pub trait LightDispatchNetwork<B: BlockT> {
 		id: RequestId,
 		block: <B as BlockT>::Hash,
 		storage_key: Vec<u8>,
+		child_info: Vec<u8>,
+		child_type: u32,
 		keys: Vec<Vec<u8>>,
 	);
 
@@ -622,6 +624,8 @@ impl<Block: BlockT> Request<Block> {
 					self.id,
 					data.block,
 					data.storage_key.clone(),
+					data.child_info.clone(),
+					data.child_type,
 					data.keys.clone(),
 				),
 			RequestData::RemoteCall(ref data, _) =>
@@ -676,17 +680,18 @@ pub mod tests {
 	use std::collections::{HashMap, HashSet};
 	use std::sync::Arc;
 	use std::time::Instant;
-	use futures::{Future, sync::oneshot};
+	use futures::channel::oneshot;
+	use sp_core::storage::ChildInfo;
 	use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use sp_blockchain::{Error as ClientError, Result as ClientResult};
-	use client_api::{FetchChecker, RemoteHeaderRequest,
+	use sc_client_api::{FetchChecker, RemoteHeaderRequest,
 		ChangesProof, RemoteCallRequest, RemoteReadRequest,
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
 	use crate::config::Roles;
 	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
-	use test_client::runtime::{changes_trie_config, Block, Extrinsic, Header};
+	use sp_test_primitives::{Block, Extrinsic, Header};
 
 	struct DummyFetchChecker { ok: bool }
 
@@ -808,7 +813,7 @@ pub mod tests {
 		fn send_header_request(&mut self, _: &PeerId, _: RequestId, _: <<B as BlockT>::Header as HeaderT>::Number) {}
 		fn send_read_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<Vec<u8>>) {}
 		fn send_read_child_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<u8>,
-			_: Vec<Vec<u8>>) {}
+			_: Vec<u8>, _: u32, _: Vec<Vec<u8>>) {}
 		fn send_call_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: String, _: Vec<u8>) {}
 		fn send_changes_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: <B as BlockT>::Hash,
 			_: <B as BlockT>::Hash, _: <B as BlockT>::Hash, _: Option<Vec<u8>>, _: Vec<u8>) {}
@@ -994,7 +999,7 @@ pub mod tests {
 		}, tx));
 
 		receive_call_response(&mut network_interface, &mut light_dispatch, peer0.clone(), 0);
-		assert_eq!(response.wait().unwrap().unwrap(), vec![42]);
+		assert_eq!(futures::executor::block_on(response).unwrap().unwrap(), vec![42]);
 	}
 
 	#[test]
@@ -1016,7 +1021,10 @@ pub mod tests {
 			id: 0,
 			proof: StorageProof::empty(),
 		});
-		assert_eq!(response.wait().unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
+		assert_eq!(
+			futures::executor::block_on(response).unwrap().unwrap().remove(b":key".as_ref()).unwrap(),
+			Some(vec![42])
+		);
 	}
 
 	#[test]
@@ -1027,10 +1035,14 @@ pub mod tests {
 		light_dispatch.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
 		let (tx, response) = oneshot::channel();
+		let child_info = ChildInfo::new_default(b"unique_id_1");
+		let (child_info, child_type) = child_info.info();
 		light_dispatch.add_request(&mut network_interface, RequestData::RemoteReadChild(RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			storage_key: b":child_storage:sub".to_vec(),
+			child_info: child_info.to_vec(),
+			child_type,
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		}, tx));
@@ -1040,7 +1052,7 @@ pub mod tests {
 				id: 0,
 				proof: StorageProof::empty(),
 		});
-		assert_eq!(response.wait().unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
+		assert_eq!(futures::executor::block_on(response).unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
 	}
 
 	#[test]
@@ -1069,7 +1081,7 @@ pub mod tests {
 			proof: StorageProof::empty(),
 		});
 		assert_eq!(
-			response.wait().unwrap().unwrap().hash(),
+			futures::executor::block_on(response).unwrap().unwrap().hash(),
 			"6443a0b46e0412e626363028115a9f2cf963eeed526b8b33e5316f08b50d0dc3".parse().unwrap(),
 		);
 	}
@@ -1083,7 +1095,11 @@ pub mod tests {
 
 		let (tx, response) = oneshot::channel();
 		light_dispatch.add_request(&mut network_interface, RequestData::RemoteChanges(RemoteChangesRequest {
-			changes_trie_config: changes_trie_config(),
+			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+				zero: (0, Default::default()),
+				end: None,
+				config: Some(sp_core::ChangesTrieConfiguration::new(4, 2)),
+			}],
 			first_block: (1, Default::default()),
 			last_block: (100, Default::default()),
 			max_block: (100, Default::default()),
@@ -1100,7 +1116,7 @@ pub mod tests {
 			roots: vec![],
 			roots_proof: StorageProof::empty(),
 		});
-		assert_eq!(response.wait().unwrap().unwrap(), vec![(100, 2)]);
+		assert_eq!(futures::executor::block_on(response).unwrap().unwrap(), vec![(100, 2)]);
 	}
 
 	#[test]
@@ -1224,7 +1240,7 @@ pub mod tests {
 		assert_eq!(light_dispatch.active_peers.len(), 1);
 
 		let block = message::BlockData::<Block> {
-			hash: primitives::H256::random(),
+			hash: sp_core::H256::random(),
 			header: None,
 			body: Some(Vec::new()),
 			message_queue: None,
@@ -1262,7 +1278,7 @@ pub mod tests {
 
 		let response = {
 			let blocks: Vec<_> = (0..3).map(|_| message::BlockData::<Block> {
-				hash: primitives::H256::random(),
+				hash: sp_core::H256::random(),
 				header: None,
 				body: Some(Vec::new()),
 				message_queue: None,

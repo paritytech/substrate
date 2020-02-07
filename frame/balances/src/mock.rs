@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,32 +17,27 @@
 //! Test utilities
 
 use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
-use primitives::H256;
-use runtime_io;
-use support::{impl_outer_origin, parameter_types};
-use support::traits::Get;
-use support::weights::{Weight, DispatchInfo};
+use sp_core::H256;
+use sp_io;
+use frame_support::{impl_outer_origin, parameter_types};
+use frame_support::traits::Get;
+use frame_support::weights::{Weight, DispatchInfo};
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
+use frame_system as system;
 impl_outer_origin!{
-	pub enum Origin for Runtime {}
+	pub enum Origin for Test {}
 }
 
 thread_local! {
 	pub(crate) static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
-	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
 	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
 }
 
 pub struct ExistentialDeposit;
 impl Get<u64> for ExistentialDeposit {
 	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
-}
-
-pub struct TransferFee;
-impl Get<u64> for TransferFee {
-	fn get() -> u64 { TRANSFER_FEE.with(|v| *v.borrow()) }
 }
 
 pub struct CreationFee;
@@ -52,14 +47,14 @@ impl Get<u64> for CreationFee {
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Runtime;
+pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl system::Trait for Runtime {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -75,57 +70,48 @@ impl system::Trait for Runtime {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 parameter_types! {
 	pub const TransactionBaseFee: u64 = 0;
 	pub const TransactionByteFee: u64 = 1;
 }
-impl transaction_payment::Trait for Runtime {
-	type Currency = Module<Runtime>;
+impl pallet_transaction_payment::Trait for Test {
+	type Currency = Module<Test>;
 	type OnTransactionPayment = ();
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = ConvertInto;
 	type FeeMultiplierUpdate = ();
 }
-impl Trait for Runtime {
+impl Trait for Test {
 	type Balance = u64;
-	type OnFreeBalanceZero = ();
+	type OnReapAccount = System;
 	type OnNewAccount = ();
 	type Event = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 }
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
-	transfer_fee: u64,
 	creation_fee: u64,
 	monied: bool,
-	vesting: bool,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 0,
-			transfer_fee: 0,
 			creation_fee: 0,
 			monied: false,
-			vesting: false,
 		}
 	}
 }
 impl ExtBuilder {
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
-		self
-	}
-	#[allow(dead_code)]
-	pub fn transfer_fee(mut self, transfer_fee: u64) -> Self {
-		self.transfer_fee = transfer_fee;
 		self
 	}
 	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
@@ -139,19 +125,14 @@ impl ExtBuilder {
 		}
 		self
 	}
-	pub fn vesting(mut self, vesting: bool) -> Self {
-		self.vesting = vesting;
-		self
-	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
-		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
 		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
 	}
-	pub fn build(self) -> runtime_io::TestExternalities {
+	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-		GenesisConfig::<Runtime> {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		GenesisConfig::<Test> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),
@@ -163,26 +144,17 @@ impl ExtBuilder {
 			} else {
 				vec![]
 			},
-			vesting: if self.vesting && self.monied {
-				vec![
-					(1, 0, 10, 5 * self.existential_deposit),
-					(2, 10, 20, 0),
-					(12, 10, 20, 5 * self.existential_deposit)
-				]
-			} else {
-				vec![]
-			},
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 }
 
-pub type System = system::Module<Runtime>;
-pub type Balances = Module<Runtime>;
+pub type System = frame_system::Module<Test>;
+pub type Balances = Module<Test>;
 
-pub const CALL: &<Runtime as system::Trait>::Call = &();
+pub const CALL: &<Test as frame_system::Trait>::Call = &();
 
 /// create a transaction info struct from weight. Handy to avoid building the whole struct.
 pub fn info_from_weight(w: Weight) -> DispatchInfo {
-	DispatchInfo { weight: w, ..Default::default() }
+	DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
 }

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -104,11 +104,11 @@ fn default_byte_getter(
 		#[doc(hidden)]
 		pub struct #struct_name<
 			#runtime_generic, #optional_instance_bound_optional_default
-		>(pub #scrate::rstd::marker::PhantomData<(#runtime_generic #optional_comma_instance)>);
+		>(pub #scrate::sp_std::marker::PhantomData<(#runtime_generic #optional_comma_instance)>);
 
 		#[cfg(feature = "std")]
 		#[allow(non_upper_case_globals)]
-		static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> =
+		static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::sp_std::vec::Vec<u8>> =
 			#scrate::once_cell::sync::OnceCell::new();
 
 		#[cfg(feature = "std")]
@@ -117,7 +117,7 @@ fn default_byte_getter(
 			for #struct_name<#runtime_generic, #optional_instance>
 			#where_clause
 		{
-			fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
+			fn default_byte(&self) -> #scrate::sp_std::vec::Vec<u8> {
 				use #scrate::codec::Encode;
 				#cache_name.get_or_init(|| {
 					let def_val: #query_type = #default;
@@ -138,7 +138,7 @@ fn default_byte_getter(
 			for #struct_name<#runtime_generic, #optional_instance>
 			#where_clause
 		{
-			fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
+			fn default_byte(&self) -> #scrate::sp_std::vec::Vec<u8> {
 				use #scrate::codec::Encode;
 				let def_val: #query_type = #default;
 				<#query_type as Encode>::encode(&def_val)
@@ -146,7 +146,7 @@ fn default_byte_getter(
 		}
 	};
 	let struct_instance = quote!(
-		#struct_name::<#runtime_generic, #optional_instance>(#scrate::rstd::marker::PhantomData)
+		#struct_name::<#runtime_generic, #optional_instance>(#scrate::sp_std::marker::PhantomData)
 	);
 
 	(struct_def, struct_instance)

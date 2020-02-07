@@ -1,11 +1,11 @@
 [package]
 name = "sp-externalities"
-version = "2.0.0"
+version = "0.8.0"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-primitives-storage = { package = "sp-core-storage", path = "../core/storage" }
-rstd = { package = "sp-std", path = "../sr-std" }
-environmental = { version = "1.0.2" }
+sp-storage = { version = "2.0.0", path = "../storage" }
+sp-std = { version = "2.0.0", path = "../std" }
+environmental = { version = "1.1.1" }

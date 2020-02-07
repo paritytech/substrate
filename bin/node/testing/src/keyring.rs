@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,14 +16,16 @@
 
 //! Test accounts.
 
-use keyring::{AccountKeyring, Sr25519Keyring, Ed25519Keyring};
+use sp_keyring::{AccountKeyring, Sr25519Keyring, Ed25519Keyring};
 use node_primitives::{AccountId, Balance, Index};
 use node_runtime::{CheckedExtrinsic, UncheckedExtrinsic, SessionKeys, SignedExtra};
 use sp_runtime::generic::Era;
 use codec::Encode;
 
 /// Alice's account id.
-pub fn alice() -> AccountId { AccountKeyring::Alice.into() }
+pub fn alice() -> AccountId {
+	AccountKeyring::Alice.into()
+}
 
 /// Bob's account id.
 pub fn bob() -> AccountId {
@@ -66,12 +68,12 @@ pub fn to_session_keys(
 /// Returns transaction extra.
 pub fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 	(
-		system::CheckVersion::new(),
-		system::CheckGenesis::new(),
-		system::CheckEra::from(Era::mortal(256, 0)),
-		system::CheckNonce::from(nonce),
-		system::CheckWeight::new(),
-		transaction_payment::ChargeTransactionPayment::from(extra_fee),
+		frame_system::CheckVersion::new(),
+		frame_system::CheckGenesis::new(),
+		frame_system::CheckEra::from(Era::mortal(256, 0)),
+		frame_system::CheckNonce::from(nonce),
+		frame_system::CheckWeight::new(),
+		pallet_transaction_payment::ChargeTransactionPayment::from(extra_fee),
 		Default::default(),
 	)
 }
@@ -84,13 +86,13 @@ pub fn sign(xt: CheckedExtrinsic, version: u32, genesis_hash: [u8; 32]) -> Unche
 			let key = AccountKeyring::from_account_id(&signed).unwrap();
 			let signature = payload.using_encoded(|b| {
 				if b.len() > 256 {
-					key.sign(&runtime_io::hashing::blake2_256(b))
+					key.sign(&sp_io::hashing::blake2_256(b))
 				} else {
 					key.sign(b)
 				}
 			}).into();
 			UncheckedExtrinsic {
-				signature: Some((indices::address::Address::Id(signed), signature, extra)),
+				signature: Some((pallet_indices::address::Address::Id(signed), signature, extra)),
 				function: payload.0,
 			}
 		}

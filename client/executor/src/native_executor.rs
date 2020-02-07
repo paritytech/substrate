@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,20 +16,15 @@
 
 use crate::{
 	RuntimeInfo, error::{Error, Result},
-	wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime},
+	wasm_runtime::{RuntimesCache, WasmExecutionMethod},
 };
-
-use runtime_version::{NativeVersion, RuntimeVersion};
-
+use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
-
-use primitives::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
-
+use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 use log::trace;
-
-use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
-
-use wasm_interface::{HostFunctions, Function};
+use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc};
+use sp_wasm_interface::{HostFunctions, Function};
+use sc_executor_common::wasm_runtime::WasmRuntime;
 
 thread_local! {
 	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());
@@ -38,22 +33,29 @@ thread_local! {
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
 
-pub(crate) fn safe_call<F, U>(f: F) -> Result<U>
-	where F: UnwindSafe + FnOnce() -> U
-{
-	// Substrate uses custom panic hook that terminates process on panic. Disable
-	// termination for the native call.
-	let _guard = panic_handler::AbortGuard::force_unwind();
-	std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
-}
-
-/// Set up the externalities and safe calling environment to execute calls to a native runtime.
+/// Set up the externalities and safe calling environment to execute runtime calls.
 ///
 /// If the inner closure panics, it will be caught and return an error.
-pub fn with_native_environment<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
+pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	externalities::set_and_run_with_externalities(ext, move || safe_call(f))
+	sp_externalities::set_and_run_with_externalities(
+		ext,
+		move || {
+			// Substrate uses custom panic hook that terminates process on panic. Disable
+			// termination for the native call.
+			let _guard = sp_panic_handler::AbortGuard::force_unwind();
+			std::panic::catch_unwind(f).map_err(|e| {
+				if let Some(err) = e.downcast_ref::<String>() {
+					Error::RuntimePanicked(err.clone())
+				} else if let Some(err) = e.downcast_ref::<&'static str>() {
+					Error::RuntimePanicked(err.to_string())
+				} else {
+					Error::RuntimePanicked("Unknown panic".into())
+				}
+			})
+		},
+	)
 }
 
 /// Delegate for dispatching a CodeExecutor call.
@@ -85,7 +87,7 @@ pub struct NativeExecutor<D> {
 	/// The number of 64KB pages to allocate for Wasm execution.
 	default_heap_pages: u64,
 	/// The host functions registered with this instance.
-	host_functions: Vec<&'static dyn Function>,
+	host_functions: Arc<Vec<&'static dyn Function>>,
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
@@ -98,7 +100,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	pub fn new(fallback_method: WasmExecutionMethod, default_heap_pages: Option<u64>) -> Self {
-		let mut host_functions = runtime_io::SubstrateHostFunctions::host_functions();
+		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions();
 		// Add the old and deprecated host functions as well, so that we support old wasm runtimes.
 		host_functions.extend(
 			crate::deprecated_host_interface::SubstrateExternals::host_functions(),
@@ -112,7 +114,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			fallback_method,
 			native_version: D::native_version(),
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
-			host_functions,
+			host_functions: Arc::new(host_functions),
 		}
 	}
 
@@ -144,7 +146,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 				ext,
 				self.fallback_method,
 				self.default_heap_pages,
-				&self.host_functions,
+				&*self.host_functions,
 			)?;
 
 			let runtime = AssertUnwindSafe(runtime);
@@ -186,7 +188,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	type Error = Error;
 
 	fn call
@@ -217,13 +219,15 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 						onchain_version,
 					);
 
-					safe_call(
-						move || runtime.call(&mut **ext, method, data).map(NativeOrEncoded::Encoded)
+					with_externalities_safe(
+						&mut **ext,
+						move || runtime.call(method, data).map(NativeOrEncoded::Encoded)
 					)
 				}
 				(false, _, _) => {
-					safe_call(
-						move || runtime.call(&mut **ext, method, data).map(NativeOrEncoded::Encoded)
+					with_externalities_safe(
+						&mut **ext,
+						move || runtime.call(method, data).map(NativeOrEncoded::Encoded)
 					)
 				},
 				(true, true, Some(call)) => {
@@ -235,7 +239,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 					);
 
 					used_native = true;
-					let res = with_native_environment(&mut **ext, move || (call)())
+					let res = with_externalities_safe(&mut **ext, move || (call)())
 						.and_then(|r| r
 							.map(NativeOrEncoded::Native)
 							.map_err(|s| Error::ApiError(s.to_string()))
@@ -260,6 +264,27 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 	}
 }
 
+impl<D: NativeExecutionDispatch> sp_core::traits::CallInWasm for NativeExecutor<D> {
+	fn call_in_wasm(
+		&self,
+		wasm_blob: &[u8],
+		method: &str,
+		call_data: &[u8],
+		ext: &mut dyn Externalities,
+	) -> std::result::Result<Vec<u8>, String> {
+		crate::call_in_wasm_with_host_functions(
+			method,
+			call_data,
+			self.fallback_method,
+			ext,
+			wasm_blob,
+			self.default_heap_pages,
+			(*self.host_functions).clone(),
+			false,
+		).map_err(|e| e.to_string())
+	}
+}
+
 /// Implements a `NativeExecutionDispatch` for provided parameters.
 ///
 /// # Example
@@ -267,8 +292,8 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 /// ```
 /// sc_executor::native_executor_instance!(
 ///     pub MyExecutor,
-///     test_runtime::api::dispatch,
-///     test_runtime::native_version,
+///     substrate_test_runtime::api::dispatch,
+///     substrate_test_runtime::native_version,
 /// );
 /// ```
 ///
@@ -278,7 +303,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 /// executor aware of the host functions for these interfaces.
 ///
 /// ```
-/// # use runtime_interface::runtime_interface;
+/// # use sp_runtime_interface::runtime_interface;
 ///
 /// #[runtime_interface]
 /// trait MyInterface {
@@ -289,8 +314,8 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 ///
 /// sc_executor::native_executor_instance!(
 ///     pub MyExecutor,
-///     test_runtime::api::dispatch,
-///     test_runtime::native_version,
+///     substrate_test_runtime::api::dispatch,
+///     substrate_test_runtime::native_version,
 ///     my_interface::HostFunctions,
 /// );
 /// ```
@@ -323,7 +348,7 @@ macro_rules! native_executor_instance {
 				method: &str,
 				data: &[u8]
 			) -> $crate::error::Result<Vec<u8>> {
-				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
+				$crate::with_externalities_safe(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::Error::MethodNotFound(method.to_owned()))
 			}
 
@@ -337,7 +362,7 @@ macro_rules! native_executor_instance {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_interface::runtime_interface;
+	use sp_runtime_interface::runtime_interface;
 
 	#[runtime_interface]
 	trait MyInterface {
@@ -348,8 +373,8 @@ mod tests {
 
 	native_executor_instance!(
 		pub MyExecutor,
-		test_runtime::api::dispatch,
-		test_runtime::native_version,
+		substrate_test_runtime::api::dispatch,
+		substrate_test_runtime::native_version,
 		(my_interface::HostFunctions, my_interface::HostFunctions),
 	);
 

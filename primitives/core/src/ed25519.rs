@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 // end::description[]
 
 #[cfg(feature = "full_crypto")]
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 use crate::{hash::H256, hash::H512};
 use codec::{Encode, Decode};
@@ -39,8 +39,8 @@ use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
-use runtime_interface::pass_by::PassByInner;
-use rstd::ops::Deref;
+use sp_runtime_interface::pass_by::PassByInner;
+use sp_std::ops::Deref;
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -94,7 +94,7 @@ impl Deref for Public {
 	}
 }
 
-impl rstd::convert::TryFrom<&[u8]> for Public {
+impl sp_std::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -155,15 +155,15 @@ impl std::fmt::Display for Public {
 	}
 }
 
-impl rstd::fmt::Debug for Public {
+impl sp_std::fmt::Debug for Public {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -187,7 +187,7 @@ impl<'de> Deserialize<'de> for Public {
 #[derive(Encode, Decode, PassByInner)]
 pub struct Signature(pub [u8; 64]);
 
-impl rstd::convert::TryFrom<&[u8]> for Signature {
+impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -270,22 +270,22 @@ impl AsMut<[u8]> for Signature {
 	}
 }
 
-impl rstd::fmt::Debug for Signature {
+impl sp_std::fmt::Debug for Signature {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
 
 #[cfg(feature = "full_crypto")]
-impl rstd::hash::Hash for Signature {
-	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
-		rstd::hash::Hash::hash(&self.0[..], state);
+impl sp_std::hash::Hash for Signature {
+	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
+		sp_std::hash::Hash::hash(&self.0[..], state);
 	}
 }
 

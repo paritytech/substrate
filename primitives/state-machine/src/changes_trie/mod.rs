@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -63,20 +63,25 @@ pub use self::changes_iterator::{
 	key_changes, key_changes_proof,
 	key_changes_proof_check, key_changes_proof_check_with_db,
 };
-pub use self::prune::{prune, oldest_non_pruned_trie};
+pub use self::prune::prune;
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use hash_db::{Hasher, Prefix};
-use crate::backend::Backend;
 use num_traits::{One, Zero};
 use codec::{Decode, Encode};
-use primitives;
-use crate::changes_trie::build::prepare_input;
-use crate::changes_trie::build_cache::{IncompleteCachedBuildData, IncompleteCacheAction};
-use crate::overlayed_changes::OverlayedChanges;
-use trie::{MemoryDB, DBValue, TrieMut};
-use trie::trie_types::TrieDBMut;
+use sp_core;
+use sp_trie::{MemoryDB, DBValue, TrieMut};
+use sp_trie::trie_types::TrieDBMut;
+use crate::{
+	StorageKey,
+	backend::Backend,
+	overlayed_changes::OverlayedChanges,
+	changes_trie::{
+		build::prepare_input,
+		build_cache::{IncompleteCachedBuildData, IncompleteCacheAction},
+	},
+};
 
 /// Changes that are made outside of extrinsics are marked with this index;
 pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
@@ -84,41 +89,53 @@ pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
 /// Requirements for block number that can be used with changes tries.
 pub trait BlockNumber:
 	Send + Sync + 'static +
-	::std::fmt::Display +
+	std::fmt::Display +
 	Clone +
 	From<u32> + TryInto<u32> + One + Zero +
 	PartialEq + Ord +
-	::std::hash::Hash +
-	::std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
-	::std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
-	::std::ops::Rem<Self, Output=Self> +
-	::std::ops::AddAssign<Self> +
+	std::hash::Hash +
+	std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
+	std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
+	std::ops::Rem<Self, Output=Self> +
+	std::ops::AddAssign<Self> +
 	num_traits::CheckedMul + num_traits::CheckedSub +
 	Decode + Encode
 {}
 
 impl<T> BlockNumber for T where T:
 	Send + Sync + 'static +
-	::std::fmt::Display +
+	std::fmt::Display +
 	Clone +
 	From<u32> + TryInto<u32> + One + Zero +
 	PartialEq + Ord +
-	::std::hash::Hash +
-	::std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
-	::std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
-	::std::ops::Rem<Self, Output=Self> +
-	::std::ops::AddAssign<Self> +
+	std::hash::Hash +
+	std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
+	std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
+	std::ops::Rem<Self, Output=Self> +
+	std::ops::AddAssign<Self> +
 	num_traits::CheckedMul + num_traits::CheckedSub +
 	Decode + Encode,
 {}
 
 /// Block identifier that could be used to determine fork of this block.
 #[derive(Debug)]
-pub struct AnchorBlockId<Hash: ::std::fmt::Debug, Number: BlockNumber> {
+pub struct AnchorBlockId<Hash: std::fmt::Debug, Number: BlockNumber> {
 	/// Hash of this block.
 	pub hash: Hash,
 	/// Number of this block.
 	pub number: Number,
+}
+
+/// Changes tries state at some block.
+pub struct State<'a, H, Number> {
+	/// Configuration that is active at given block.
+	pub config: Configuration,
+	/// Configuration activation block number. Zero if it is the first coonfiguration on the chain,
+	/// or number of the block that have emit NewConfiguration signal (thus activating configuration
+	/// starting from the **next** block).
+	pub zero: Number,
+	/// Underlying changes tries storage reference.
+	pub storage: &'a dyn Storage<H, Number>,
 }
 
 /// Changes trie storage. Provides access to trie roots and trie nodes.
@@ -139,7 +156,7 @@ pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 	fn with_cached_changed_keys(
 		&self,
 		root: &H::Out,
-		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+		functor: &mut dyn FnMut(&HashMap<Option<StorageKey>, HashSet<StorageKey>>),
 	) -> bool;
 	/// Get a trie node.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
@@ -149,7 +166,7 @@ pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 pub struct TrieBackendStorageAdapter<'a, H: Hasher, Number: BlockNumber>(pub &'a dyn Storage<H, Number>);
 
 impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackendStorageAdapter<'a, H, N> {
-	type Overlay = trie::MemoryDB<H>;
+	type Overlay = sp_trie::MemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.0.get(key, prefix)
@@ -157,7 +174,7 @@ impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackend
 }
 
 /// Changes trie configuration.
-pub type Configuration = primitives::ChangesTrieConfiguration;
+pub type Configuration = sp_core::ChangesTrieConfiguration;
 
 /// Blocks range where configuration has been constant.
 #[derive(Clone)]
@@ -170,46 +187,100 @@ pub struct ConfigurationRange<'a, N> {
 	pub end: Option<N>,
 }
 
+impl<'a, H, Number> State<'a, H, Number> {
+	/// Create state with given config and storage.
+	pub fn new(
+		config: Configuration,
+		zero: Number,
+		storage: &'a dyn Storage<H, Number>,
+	) -> Self {
+		Self {
+			config,
+			zero,
+			storage,
+		}
+	}
+}
+
+impl<'a, H, Number: Clone> Clone for State<'a, H, Number> {
+	fn clone(&self) -> Self {
+		State {
+			config: self.config.clone(),
+			zero: self.zero.clone(),
+			storage: self.storage,
+		}
+	}
+}
+
+/// Create state where changes tries are disabled.
+pub fn disabled_state<'a, H, Number>() -> Option<State<'a, H, Number>> {
+	None
+}
+
 /// Compute the changes trie root and transaction for given block.
 /// Returns Err(()) if unknown `parent_hash` has been passed.
 /// Returns Ok(None) if there's no data to perform computation.
 /// Panics if background storage returns an error OR if insert to MemoryDB fails.
-pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, Number: BlockNumber>(
+pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 	backend: &B,
-	storage: Option<&'a S>,
+	state: Option<&'a State<'a, H, Number>>,
 	changes: &OverlayedChanges,
 	parent_hash: H::Out,
+	panic_on_storage_error: bool,
 ) -> Result<Option<(MemoryDB<H>, H::Out, CacheAction<H::Out, Number>)>, ()>
 	where
 		H::Out: Ord + 'static + Encode,
 {
-	let (storage, config) = match (storage, changes.changes_trie_config.as_ref()) {
-		(Some(storage), Some(config)) => (storage, config),
-		_ => return Ok(None),
-	};
+	/// Panics when `res.is_err() && panic`, otherwise it returns `Err(())` on an error.
+	fn maybe_panic<R, E: std::fmt::Debug>(
+		res: std::result::Result<R, E>,
+		panic: bool,
+	) -> std::result::Result<R, ()> {
+		res.map(Ok)
+			.unwrap_or_else(|e| if panic {
+				panic!("changes trie: storage access is not allowed to fail within runtime: {:?}", e)
+			} else {
+				Err(())
+			})
+	}
 
-	// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
-	let config = ConfigurationRange {
-		config,
-		zero: Zero::zero(),
-		end: None,
+	// when storage isn't provided, changes tries aren't created
+	let state = match state {
+		Some(state) => state,
+		None => return Ok(None),
 	};
 
 	// build_anchor error should not be considered fatal
-	let parent = storage.build_anchor(parent_hash).map_err(|_| ())?;
+	let parent = state.storage.build_anchor(parent_hash).map_err(|_| ())?;
 	let block = parent.number.clone() + One::one();
 
+	// prepare configuration range - we already know zero block. Current block may be the end block if configuration
+	// has been changed in this block
+	let is_config_changed = match changes.storage(sp_core::storage::well_known_keys::CHANGES_TRIE_CONFIG) {
+		Some(Some(new_config)) => new_config != &state.config.encode()[..],
+		Some(None) => true,
+		None => false,
+	};
+	let config_range = ConfigurationRange {
+		config: &state.config,
+		zero: state.zero.clone(),
+		end: if is_config_changed { Some(block.clone()) } else { None },
+	};
+
 	// storage errors are considered fatal (similar to situations when runtime fetches values from storage)
-	let (input_pairs, child_input_pairs, digest_input_blocks) = prepare_input::<B, H, Number>(
-		backend,
-		storage,
-		config.clone(),
-		changes,
-		&parent,
-	).expect("changes trie: storage access is not allowed to fail within runtime");
+	let (input_pairs, child_input_pairs, digest_input_blocks) = maybe_panic(
+		prepare_input::<B, H, Number>(
+			backend,
+			state.storage,
+			config_range.clone(),
+			changes,
+			&parent,
+		),
+		panic_on_storage_error,
+	)?;
 
 	// prepare cached data
-	let mut cache_action = prepare_cached_build_data(config, block.clone());
+	let mut cache_action = prepare_cached_build_data(config_range, block.clone());
 	let needs_changed_keys = cache_action.collects_changed_keys();
 	cache_action = cache_action.set_digest_input_blocks(digest_input_blocks);
 
@@ -230,8 +301,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 
 				let (key, value) = input_pair.into();
 				not_empty = true;
-				trie.insert(&key, &value)
-					.expect("changes trie: insertion to trie is not allowed to fail within runtime");
+				maybe_panic(trie.insert(&key, &value), panic_on_storage_error)?;
 			}
 
 			cache_action = cache_action.insert(
@@ -247,8 +317,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 	{
 		let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
 		for (key, value) in child_roots.into_iter().map(Into::into) {
-			trie.insert(&key, &value)
-				.expect("changes trie: insertion to trie is not allowed to fail within runtime");
+			maybe_panic(trie.insert(&key, &value), panic_on_storage_error)?;
 		}
 
 		let mut storage_changed_keys = HashSet::new();
@@ -260,9 +329,9 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 			}
 
 			let (key, value) = input_pair.into();
-			trie.insert(&key, &value)
-				.expect("changes trie: insertion to trie is not allowed to fail within runtime");
+			maybe_panic(trie.insert(&key, &value), panic_on_storage_error)?;
 		}
+
 		cache_action = cache_action.insert(
 			None,
 			storage_changed_keys,

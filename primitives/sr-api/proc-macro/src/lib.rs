@@ -46,8 +46,8 @@ mod utils;
 /// ```rust
 /// use sp_version::create_runtime_str;
 /// #
-/// # use sp_runtime::traits::GetNodeBlockType;
-/// # use test_client::runtime::{Block, Header};
+/// # use sp_runtime::traits::{GetNodeBlockType, Block as BlockT};
+/// # use test_client::runtime::Block;
 /// #
 /// # /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// # /// trait are done by the `construct_runtime!` macro in a real runtime.
@@ -76,7 +76,7 @@ mod utils;
 /// #           unimplemented!()
 /// #       }
 /// #       fn execute_block(_block: Block) {}
-/// #       fn initialize_block(_header: &Header) {}
+/// #       fn initialize_block(_header: &<Block as BlockT>::Header) {}
 /// #   }
 ///
 ///     impl self::Balance<Block> for Runtime {

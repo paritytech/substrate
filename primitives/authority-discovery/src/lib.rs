@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,10 +18,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 mod app {
-	use app_crypto::{app_crypto, key_types::AUTHORITY_DISCOVERY, sr25519};
+	use sp_application_crypto::{app_crypto, key_types::AUTHORITY_DISCOVERY, sr25519};
 	app_crypto!(sr25519, AUTHORITY_DISCOVERY);
 }
 
@@ -38,7 +38,7 @@ pub type AuthoritySignature = app::Signature;
 sp_api::decl_runtime_apis! {
 	/// The authority discovery api.
 	///
-	/// This api is used by the `core/authority-discovery` module to retrieve identifiers
+	/// This api is used by the `client/authority-discovery` module to retrieve identifiers
 	/// of the current authority set.
 	pub trait AuthorityDiscoveryApi {
 		/// Retrieve authority identifiers of the current authority set.

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,14 +19,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Encode, Decode, Codec};
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 use sp_runtime::ConsensusEngineId;
 
 pub mod inherents;
 
 pub mod sr25519 {
 	mod app_sr25519 {
-		use app_crypto::{app_crypto, key_types::AURA, sr25519};
+		use sp_application_crypto::{app_crypto, key_types::AURA, sr25519};
 		app_crypto!(sr25519, AURA);
 	}
 
@@ -43,7 +43,7 @@ pub mod sr25519 {
 
 pub mod ed25519 {
 	mod app_ed25519 {
-		use app_crypto::{app_crypto, key_types::AURA, ed25519};
+		use sp_application_crypto::{app_crypto, key_types::AURA, ed25519};
 		app_crypto!(ed25519, AURA);
 	}
 

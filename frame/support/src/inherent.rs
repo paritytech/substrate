@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[doc(hidden)]
-pub use crate::rstd::vec::Vec;
+pub use crate::sp_std::vec::Vec;
 #[doc(hidden)]
 pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
 #[doc(hidden)]
-pub use inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
+pub use sp_inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
 
 
 /// Implement the outer inherent.

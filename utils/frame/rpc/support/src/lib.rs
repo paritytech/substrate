@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,12 +22,12 @@
 use core::marker::PhantomData;
 use futures::compat::Future01CompatExt;
 use jsonrpc_client_transports::RpcError;
-use parity_scale_codec::{DecodeAll, FullCodec, FullEncode};
+use codec::{DecodeAll, FullCodec, FullEncode};
 use serde::{de::DeserializeOwned, Serialize};
 use frame_support::storage::generator::{
 	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue
 };
-use sp_core_storage::{StorageData, StorageKey};
+use sp_storage::{StorageData, StorageKey};
 use sc_rpc_api::state::StateClient;
 
 /// A typed query on chain state usable from an RPC client.
@@ -38,7 +38,7 @@ use sc_rpc_api::state::StateClient;
 /// # use futures::future::FutureExt;
 /// # use jsonrpc_client_transports::RpcError;
 /// # use jsonrpc_client_transports::transports::http;
-/// # use parity_scale_codec::Encode;
+/// # use codec::Encode;
 /// # use frame_support::{decl_storage, decl_module};
 /// # use substrate_frame_rpc_support::StorageQuery;
 /// # use frame_system::Trait;
@@ -65,9 +65,9 @@ use sc_rpc_api::state::StateClient;
 /// decl_storage! {
 ///     trait Store for Module<T: Trait> as TestRuntime {
 ///         pub LastActionId: u64;
-///         pub Voxels: map Loc => Block;
-///         pub Actions: linked_map u64 => Loc;
-///         pub Prefab: double_map u128, blake2_256((i8, i8, i8)) => Block;
+///         pub Voxels: map hasher(blake2_256) Loc => Block;
+///         pub Actions: linked_map hasher(blake2_256) u64 => Loc;
+///         pub Prefab: double_map hasher(blake2_256) u128, hasher(blake2_256) (i8, i8, i8) => Block;
 ///     }
 /// }
 ///

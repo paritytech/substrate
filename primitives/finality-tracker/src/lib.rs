@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use inherents::{InherentIdentifier, InherentData, Error};
+use sp_inherents::{InherentIdentifier, InherentData, Error};
 use codec::Decode;
 
 #[cfg(feature = "std")]
@@ -55,7 +55,7 @@ impl<F, N> InherentDataProvider<F, N> {
 }
 
 #[cfg(feature = "std")]
-impl<F, N: Encode> inherents::ProvideInherentData for InherentDataProvider<F, N>
+impl<F, N: Encode> sp_inherents::ProvideInherentData for InherentDataProvider<F, N>
 	where F: Fn() -> Result<N, Error>
 {
 	fn inherent_identifier(&self) -> &'static InherentIdentifier {

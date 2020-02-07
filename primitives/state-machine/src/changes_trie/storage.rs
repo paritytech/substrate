@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,11 +18,14 @@
 
 use std::collections::{BTreeMap, HashSet, HashMap};
 use hash_db::{Hasher, Prefix, EMPTY_PREFIX};
-use trie::DBValue;
-use trie::MemoryDB;
+use sp_trie::DBValue;
+use sp_trie::MemoryDB;
 use parking_lot::RwLock;
-use crate::changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber};
-use crate::trie_backend_essence::TrieBackendStorage;
+use crate::{
+	StorageKey,
+	trie_backend_essence::TrieBackendStorage,
+	changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber},
+};
 
 #[cfg(test)]
 use crate::backend::insert_into_memory_db;
@@ -38,7 +41,7 @@ pub struct InMemoryStorage<H: Hasher, Number: BlockNumber> {
 /// Adapter for using changes trie storage as a TrieBackendEssence' storage.
 pub struct TrieBackendAdapter<'a, H: Hasher, Number: BlockNumber> {
 	storage: &'a dyn Storage<H, Number>,
-	_hasher: ::std::marker::PhantomData<(H, Number)>,
+	_hasher: std::marker::PhantomData<(H, Number)>,
 }
 
 struct InMemoryStorageData<H: Hasher, Number: BlockNumber> {
@@ -93,7 +96,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 	#[cfg(test)]
 	pub fn with_inputs(
 		mut top_inputs: Vec<(Number, Vec<InputPair<Number>>)>,
-		children_inputs: Vec<(Vec<u8>, Vec<(Number, Vec<InputPair<Number>>)>)>,
+		children_inputs: Vec<(StorageKey, Vec<(Number, Vec<InputPair<Number>>)>)>,
 	) -> Self {
 		let mut mdb = MemoryDB::default();
 		let mut roots = BTreeMap::new();
@@ -179,7 +182,7 @@ impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, N
 	fn with_cached_changed_keys(
 		&self,
 		root: &H::Out,
-		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+		functor: &mut dyn FnMut(&HashMap<Option<StorageKey>, HashSet<StorageKey>>),
 	) -> bool {
 		self.cache.with_changed_keys(root, functor)
 	}

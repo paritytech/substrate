@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -127,6 +127,10 @@ impl crate::traits::BareCryptoStore for KeyStore {
 	fn password(&self) -> Option<&str> {
 		None
 	}
+
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+		public_keys.iter().all(|(k, t)| self.keys.get(&t).and_then(|s| s.get(k)).is_some())
+	}
 }
 
 /// Macro for exporting functions from wasm in with the expected signature for using it with the
@@ -184,7 +188,7 @@ macro_rules! wasm_export_functions {
 				&[0u8; 0]
 			} else {
 				unsafe {
-					$crate::rstd::slice::from_raw_parts(input_data, input_len)
+					$crate::sp_std::slice::from_raw_parts(input_data, input_len)
 				}
 			};
 
@@ -212,7 +216,7 @@ macro_rules! wasm_export_functions {
 				&[0u8; 0]
 			} else {
 				unsafe {
-					$crate::rstd::slice::from_raw_parts(input_data, input_len)
+					$crate::sp_std::slice::from_raw_parts(input_data, input_len)
 				}
 			};
 

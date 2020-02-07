@@ -1,0 +1,19 @@
+error: `Block: BlockT` generic parameter will be added automatically by the `decl_runtime_apis!` macro! If you try to use a different trait than the substrate `Block` trait, please rename it locally.
+ --> $DIR/declaring_old_block.rs:4:23
+  |
+4 |     pub trait Api<Block: BlockT> {
+  |                          ^^^^^^
+
+error: `Block: BlockT` generic parameter will be added automatically by the `decl_runtime_apis!` macro!
+ --> $DIR/declaring_old_block.rs:4:16
+  |
+4 |     pub trait Api<Block: BlockT> {
+  |                   ^^^^^
+
+warning: unused import: `sp_runtime::traits::Block as BlockT`
+ --> $DIR/declaring_old_block.rs:1:5
+  |
+1 | use sp_runtime::traits::Block as BlockT;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default

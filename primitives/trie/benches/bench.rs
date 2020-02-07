@@ -1,4 +1,4 @@
-// Copyright 2015-2019 Parity Technologies (UK) Ltd.
+// Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -20,11 +20,11 @@ criterion_main!(benches);
 
 fn benchmark(c: &mut Criterion) {
 	trie_bench::standard_benchmark::<
-		sp_trie::Layout<primitives::Blake2Hasher>,
+		sp_trie::Layout<sp_core::Blake2Hasher>,
 		sp_trie::TrieStream,
 	>(c, "substrate-blake2");
 	trie_bench::standard_benchmark::<
-		sp_trie::Layout<primitives::Blake2Hasher>,
+		sp_trie::Layout<sp_core::Blake2Hasher>,
 		sp_trie::TrieStream,
 	>(c, "substrate-keccak");
 }

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,9 +19,9 @@
 // end::description[]
 
 #[cfg(feature = "full_crypto")]
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
-use rstd::cmp::Ordering;
+use sp_std::cmp::Ordering;
 use codec::{Encode, Decode};
 
 #[cfg(feature = "full_crypto")]
@@ -46,9 +46,9 @@ use secp256k1::{PublicKey, SecretKey};
 #[cfg(feature = "full_crypto")]
 type Seed = [u8; 32];
 
-/// The ECDSA 64-byte raw public key.
+/// The ECDSA compressed public key.
 #[derive(Clone, Encode, Decode)]
-pub struct Public(pub [u8; 64]);
+pub struct Public([u8; 33]);
 
 impl PartialOrd for Public {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -58,35 +58,59 @@ impl PartialOrd for Public {
 
 impl Ord for Public {
 	fn cmp(&self, other: &Self) -> Ordering {
-		self.0[..].cmp(&other.0[..])
+		self.as_ref().cmp(&other.as_ref())
 	}
 }
 
 impl PartialEq for Public {
 	fn eq(&self, other: &Self) -> bool {
-		&self.0[..] == &other.0[..]
+		self.as_ref() == other.as_ref()
 	}
 }
 
 impl Eq for Public {}
 
-impl Default for Public {
-	fn default() -> Self {
-		Public([0u8; 64])
+/// An error type for SS58 decoding.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum PublicError {
+	/// Bad alphabet.
+	BadBase58,
+	/// Bad length.
+	BadLength,
+	/// Unknown version.
+	UnknownVersion,
+	/// Invalid checksum.
+	InvalidChecksum,
+}
+
+impl Public {
+	/// A new instance from the given 33-byte `data`.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	pub fn from_raw(data: [u8; 33]) -> Self {
+		Self(data)
 	}
 }
 
-/// A key pair.
-#[cfg(feature = "full_crypto")]
-#[derive(Clone)]
-pub struct Pair {
-	public: PublicKey,
-	secret: SecretKey,
+impl TraitPublic for Public {
+	/// A new instance from the given slice that should be 33 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	fn from_slice(data: &[u8]) -> Self {
+		let mut r = [0u8; 33];
+		r.copy_from_slice(data);
+		Self(r)
+	}
 }
 
-impl AsRef<[u8; 64]> for Public {
-	fn as_ref(&self) -> &[u8; 64] {
-		&self.0
+impl Derive for Public {}
+
+impl Default for Public {
+	fn default() -> Self {
+		Public([0u8; 33])
 	}
 }
 
@@ -102,23 +126,18 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
-impl rstd::convert::TryFrom<&[u8]> for Public {
+impl sp_std::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == 64 {
-			let mut inner = [0u8; 64];
-			inner.copy_from_slice(data);
-			Ok(Public(inner))
+		if data.len() == 33 {
+			Ok(Self::from_slice(data))
 		} else {
-			Err(())
+			secp256k1::PublicKey::parse_slice(data, None)
+				.map(|k| k.serialize_compressed())
+				.map(Self)
+				.map_err(|_| ())
 		}
-	}
-}
-
-impl From<Public> for [u8; 64] {
-	fn from(x: Public) -> Self {
-		x.0
 	}
 }
 
@@ -129,8 +148,8 @@ impl From<Pair> for Public {
 	}
 }
 
-impl UncheckedFrom<[u8; 64]> for Public {
-	fn unchecked_from(x: [u8; 64]) -> Self {
+impl UncheckedFrom<[u8; 33]> for Public {
+	fn unchecked_from(x: [u8; 33]) -> Self {
 		Public(x)
 	}
 }
@@ -146,7 +165,7 @@ impl std::fmt::Display for Public {
 impl std::fmt::Debug for Public {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&&self.0[..]), &s[0..8])
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.as_ref()), &s[0..8])
 	}
 }
 
@@ -166,9 +185,9 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 #[cfg(feature = "full_crypto")]
-impl rstd::hash::Hash for Public {
-	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
-		self.0.hash(state);
+impl sp_std::hash::Hash for Public {
+	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
+		self.as_ref().hash(state);
 	}
 }
 
@@ -176,7 +195,7 @@ impl rstd::hash::Hash for Public {
 #[derive(Encode, Decode)]
 pub struct Signature([u8; 65]);
 
-impl rstd::convert::TryFrom<&[u8]> for Signature {
+impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -261,9 +280,9 @@ impl std::fmt::Debug for Signature {
 }
 
 #[cfg(feature = "full_crypto")]
-impl rstd::hash::Hash for Signature {
-	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
-		rstd::hash::Hash::hash(&self.0[..], state);
+impl sp_std::hash::Hash for Signature {
+	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
+		sp_std::hash::Hash::hash(&self.0[..], state);
 	}
 }
 
@@ -291,8 +310,9 @@ impl Signature {
 	pub fn recover<M: AsRef<[u8]>>(&self, message: M) -> Option<Public> {
 		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
 		let sig: (_, _) = self.try_into().ok()?;
-		secp256k1::recover(&message, &sig.0, &sig.1).ok()
-			.map(|recovered| Public::from_full(recovered.serialize()))
+		secp256k1::recover(&message, &sig.0, &sig.1)
+			.ok()
+			.map(|recovered| Public(recovered.serialize_compressed()))
 	}
 }
 
@@ -317,60 +337,6 @@ impl<'a> TryFrom<&'a Signature> for (secp256k1::Signature, secp256k1::RecoveryId
 	}
 }
 
-/// An error type for SS58 decoding.
-#[cfg(feature = "std")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum PublicError {
-	/// Bad alphabet.
-	BadBase58,
-	/// Bad length.
-	BadLength,
-	/// Unknown version.
-	UnknownVersion,
-	/// Invalid checksum.
-	InvalidChecksum,
-}
-
-impl Public {
-	/// A new instance from the given 64-byte `data`.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_raw(data: [u8; 64]) -> Self {
-		Public(data)
-	}
-
-	/// A new instance from the given 65-byte `data`.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_full(data: [u8; 65]) -> Self {
-		let raw_key = &data[1..];
-		let mut key = [0u8; 64];
-		key.copy_from_slice(raw_key);
-		Public(key)
-	}
-
-	/// Return a slice filled with raw data.
-	pub fn as_array_ref(&self) -> &[u8; 64] {
-		self.as_ref()
-	}
-}
-
-impl TraitPublic for Public {
-	/// A new instance from the given slice that should be 33 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 64];
-		r.copy_from_slice(data);
-		Public(r)
-	}
-}
-
-impl Derive for Public {}
-
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
@@ -386,6 +352,14 @@ fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 pub enum DeriveError {
 	/// A soft key was found in the path (and is unsupported).
 	SoftKeyInPath,
+}
+
+/// A key pair.
+#[cfg(feature = "full_crypto")]
+#[derive(Clone)]
+pub struct Pair {
+	public: PublicKey,
+	secret: SecretKey,
 }
 
 #[cfg(feature = "full_crypto")]
@@ -459,7 +433,7 @@ impl TraitPair for Pair {
 
 	/// Get the public key.
 	fn public(&self) -> Public {
-		Public::from_full(self.public.serialize())
+		Public(self.public.serialize_compressed())
 	}
 
 	/// Sign a message.
@@ -473,7 +447,7 @@ impl TraitPair for Pair {
 		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
 		let sig: (_, _) = match sig.try_into() { Ok(x) => x, _ => return false };
 		match secp256k1::recover(&message, &sig.0, &sig.1) {
-			Ok(actual) => &pubkey.0[..] == &actual.serialize()[1..],
+			Ok(actual) => &pubkey.0[..] == &actual.serialize_compressed()[..],
 			_ => false,
 		}
 	}
@@ -568,9 +542,12 @@ mod test {
 			&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
 		);
 		let public = pair.public();
-		assert_eq!(public, Public::from_raw(
-			hex!("8db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd913ebbe148dd17c56551a52952371071a6c604b3f3abe8f2c8fa742158ea6dd7d4")
-		));
+		assert_eq!(
+			public,
+			Public::try_from(
+				&hex!("8db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd913ebbe148dd17c56551a52952371071a6c604b3f3abe8f2c8fa742158ea6dd7d4")[..],
+			).unwrap(),
+		);
 		let message = b"";
 		let signature = hex!("3dde91174bd9359027be59a428b8146513df80a2a3c7eda2194f64de04a69ab97b753169e94db6ffd50921a2668a48b94ca11e3d32c1ff19cfe88890aa7e8f3c00");
 		let signature = Signature::from_raw(signature);
@@ -585,9 +562,12 @@ mod test {
 			None
 		).unwrap();
 		let public = pair.public();
-		assert_eq!(public, Public::from_raw(
-			hex!("8db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd913ebbe148dd17c56551a52952371071a6c604b3f3abe8f2c8fa742158ea6dd7d4")
-		));
+		assert_eq!(
+			public,
+			Public::try_from(
+				&hex!("8db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd913ebbe148dd17c56551a52952371071a6c604b3f3abe8f2c8fa742158ea6dd7d4")[..],
+			).unwrap(),
+		);
 		let message = b"";
 		let signature = hex!("3dde91174bd9359027be59a428b8146513df80a2a3c7eda2194f64de04a69ab97b753169e94db6ffd50921a2668a48b94ca11e3d32c1ff19cfe88890aa7e8f3c00");
 		let signature = Signature::from_raw(signature);
@@ -609,9 +589,12 @@ mod test {
 	fn seeded_pair_should_work() {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
-		assert_eq!(public, Public::from_raw(
-			hex!("5676109c54b9a16d271abeb4954316a40a32bcce023ac14c8e26e958aa68fba995840f3de562156558efbfdac3f16af0065e5f66795f4dd8262a228ef8c6d813")
-		));
+		assert_eq!(
+			public,
+			Public::try_from(
+				&hex!("5676109c54b9a16d271abeb4954316a40a32bcce023ac14c8e26e958aa68fba995840f3de562156558efbfdac3f16af0065e5f66795f4dd8262a228ef8c6d813")[..],
+			).unwrap(),
+		);
 		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
 		let signature = pair.sign(&message[..]);
 		println!("Correct signature: {:?}", signature);

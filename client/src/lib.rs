@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,20 +20,20 @@
 //! parts:
 //!
 //! - A database containing the blocks and chain state, generally referred to as
-//! the [`Backend`](backend::Backend).
+//! the [`Backend`](sc_client_api::backend::Backend).
 //! - A runtime environment, generally referred to as the [`Executor`](CallExecutor).
 //!
 //! # Initialization
 //!
 //! Creating a [`Client`] is done by calling the `new` method and passing to it a
-//! [`Backend`](backend::Backend) and an [`Executor`](CallExecutor).
+//! [`Backend`](sc_client_api::backend::Backend) and an [`Executor`](CallExecutor).
 //!
 //! The former is typically provided by the `sc-client-db` crate.
 //!
 //! The latter typically requires passing one of:
 //!
 //! - A [`LocalCallExecutor`] running the runtime locally.
-//! - A [`RemoteCallExecutor`](light::call_executor::RemoteCallExecutor) that will ask a
+//! - A [`RemoteCallExecutor`](light::call_executor::RemoteCallRequest) that will ask a
 //! third-party to perform the executions.
 //! - A [`RemoteOrLocalCallExecutor`](light::call_executor::RemoteOrLocalCallExecutor), combination
 //! of the two.
@@ -47,17 +47,17 @@
 //! ```
 //! use std::sync::Arc;
 //! use sc_client::{Client, in_mem::Backend, LocalCallExecutor};
-//! use primitives::Blake2Hasher;
-//! use sp_runtime::{StorageOverlay, ChildrenStorageOverlay};
-//! use executor::{NativeExecutor, WasmExecutionMethod};
+//! use sp_core::Blake2Hasher;
+//! use sp_runtime::Storage;
+//! use sc_executor::{NativeExecutor, WasmExecutionMethod};
 //!
 //! // In this example, we're using the `Block` and `RuntimeApi` types from the
 //! // `substrate-test-runtime-client` crate. These types are automatically generated when
 //! // compiling a runtime. In a typical use-case, these types would have been to be generated
 //! // from your runtime.
-//! use test_client::{LocalExecutor, runtime::Block, runtime::RuntimeApi};
+//! use substrate_test_runtime_client::{LocalExecutor, runtime::Block, runtime::RuntimeApi};
 //!
-//! let backend = Arc::new(Backend::<Block, Blake2Hasher>::new());
+//! let backend = Arc::new(Backend::<Block>::new());
 //! let client = Client::<_, _, _, RuntimeApi>::new(
 //! 	backend.clone(),
 //! 	LocalCallExecutor::new(
@@ -65,7 +65,8 @@
 //! 		NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None),
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
-//! 	<(StorageOverlay, ChildrenStorageOverlay)>::default(),
+//! 	&<Storage>::default(),
+//! 	Default::default(),
 //! 	Default::default(),
 //! 	Default::default(),
 //! );
@@ -82,8 +83,9 @@ pub mod light;
 pub mod leaves;
 mod call_executor;
 mod client;
+mod block_rules;
 
-pub use client_api::{
+pub use sc_client_api::{
 	blockchain,
 	blockchain::well_known_cache_keys,
 	blockchain::Info as ChainInfo,
@@ -98,8 +100,8 @@ pub use crate::{
 		new_in_mem,
 		BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
 		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-		LongestChain, BlockOf, ProvideUncles, ForkBlocks, apply_aux,
+		LongestChain, BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
 	},
 	leaves::LeafSet,
 };
-pub use state_machine::{ExecutionStrategy, StorageProof};
+pub use sp_state_machine::{ExecutionStrategy, StorageProof};

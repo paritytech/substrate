@@ -1,22 +1,23 @@
 [package]
 name = "pallet-contracts-rpc-runtime-api"
-version = "2.0.0"
+version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
-sp-api = { path = "../../../../primitives/sr-api", default-features = false }
+sp-api = { version = "2.0.0", default-features = false, path = "../../../../primitives/api" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sp-std", path = "../../../../primitives/sr-std", default-features = false }
-serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-runtime = { path = "../../../../primitives/sr-primitives", default-features = false }
+sp-std = { version = "2.0.0", default-features = false, path = "../../../../primitives/std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../../../primitives/runtime" }
+pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "../../common" }
 
 [features]
 default = ["std"]
 std = [
 	"sp-api/std",
 	"codec/std",
-	"rstd/std",
-	"serde",
+	"sp-std/std",
 	"sp-runtime/std",
+	"pallet-contracts-primitives/std",
 ]

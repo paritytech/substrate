@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,12 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use runtime_interface::runtime_interface;
+use sp_runtime_interface::runtime_interface;
 
 #[cfg(not(feature = "std"))]
-use rstd::{vec, vec::Vec, mem, convert::TryFrom};
+use sp_std::{vec, vec::Vec, mem, convert::TryFrom};
 
-use primitives::{sr25519::Public, wasm_export_functions};
+use sp_core::{sr25519::Public, wasm_export_functions};
 
 // Inlucde the WASM binary
 #[cfg(feature = "std")]
@@ -82,6 +82,16 @@ pub trait TestApi {
 	fn overwrite_native_function_implementation() -> bool {
 		false
 	}
+
+	/// Gets an `u128` and returns this value
+	fn get_and_return_u128(val: u128) -> u128 {
+		val
+	}
+
+	/// Gets an `i128` and returns this value
+	fn get_and_return_i128(val: i128) -> i128 {
+		val
+	}
 }
 
 /// Two random external functions from the old runtime interface.
@@ -95,15 +105,15 @@ extern "C" {
 /// Make sure the old runtime interface needs to be imported.
 #[no_mangle]
 pub fn force_old_runtime_interface_import() {
-	unsafe { ext_clear_storage(rstd::ptr::null(), 0); }
-	unsafe { ext_keccak_256(rstd::ptr::null(), 0, rstd::ptr::null_mut()); }
+	unsafe { ext_clear_storage(sp_std::ptr::null(), 0); }
+	unsafe { ext_keccak_256(sp_std::ptr::null(), 0, sp_std::ptr::null_mut()); }
 }
 
-/// This function is not used, but we require it for the compiler to include `runtime-io`.
-/// `runtime-io` is required for its panic and oom handler.
+/// This function is not used, but we require it for the compiler to include `sp-io`.
+/// `sp-io` is required for its panic and oom handler.
 #[no_mangle]
-pub fn import_runtime_io() {
-	runtime_io::misc::print_utf8(&[]);
+pub fn import_sp_io() {
+	sp_io::misc::print_utf8(&[]);
 }
 
 wasm_export_functions! {
@@ -173,7 +183,7 @@ wasm_export_functions! {
 	fn test_invalid_utf8_data_should_return_an_error() {
 		let data = vec![0, 159, 146, 150];
 		// I'm an evil hacker, trying to hack!
-		let data_str = unsafe { rstd::str::from_utf8_unchecked(&data) };
+		let data_str = unsafe { sp_std::str::from_utf8_unchecked(&data) };
 
 		test_api::invalid_utf8_data(data_str);
 	}
@@ -190,5 +200,15 @@ wasm_export_functions! {
 			.replace_implementation(new_implementation);
 
 		assert!(test_api::overwrite_native_function_implementation());
+	}
+
+	fn test_u128_i128_as_parameter_and_return_value() {
+		for val in &[u128::max_value(), 1u128, 5000u128, u64::max_value() as u128] {
+			assert_eq!(*val, test_api::get_and_return_u128(*val));
+		}
+
+		for val in &[i128::max_value(), i128::min_value(), 1i128, 5000i128, u64::max_value() as i128] {
+			assert_eq!(*val, test_api::get_and_return_i128(*val));
+		}
 	}
 }

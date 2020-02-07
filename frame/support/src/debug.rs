@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@
 //! this that are described below.
 //!
 //! First component to utilize debug-printing and loggin is actually
-//! located in `primitives` crate: `primitives::RuntimeDebug`.
+//! located in `primitives` crate: `sp_core::RuntimeDebug`.
 //! This custom-derive generates `core::fmt::Debug` implementation,
 //! just like regular `derive(Debug)`, however it does not generate
 //! any code when the code is compiled to WASM. This means that
@@ -37,7 +37,7 @@
 //! ```rust,no_run
 //!	use frame_support::debug;
 //!
-//! #[derive(primitives::RuntimeDebug)]
+//! #[derive(sp_core::RuntimeDebug)]
 //!	struct MyStruct {
 //!   a: u64,
 //!	}
@@ -68,7 +68,7 @@
 //! ```rust,no_run
 //!	use frame_support::debug::native;
 //!
-//! #[derive(primitives::RuntimeDebug)]
+//! #[derive(sp_core::RuntimeDebug)]
 //!	struct MyStruct {
 //!   a: u64,
 //!	}
@@ -86,8 +86,8 @@
 //!	native::print!("My struct: {:?}", x);
 //! ```
 
-use rstd::vec::Vec;
-use rstd::fmt::{self, Debug};
+use sp_std::vec::Vec;
+use sp_std::fmt::{self, Debug};
 
 pub use log::{info, debug, error, trace, warn};
 pub use crate::runtime_print as print;
@@ -155,7 +155,7 @@ impl fmt::Write for Writer {
 impl Writer {
 	/// Print the content of this `Writer` out.
 	pub fn print(&self) {
-		runtime_io::misc::print_utf8(&self.0)
+		sp_io::misc::print_utf8(&self.0)
 	}
 }
 
@@ -204,7 +204,7 @@ impl log::Log for RuntimeLogger {
 		let mut w = Writer::default();
 		let _ = core::write!(&mut w, "{}", record.args());
 
-		runtime_io::logging::log(
+		sp_io::logging::log(
 			record.level().into(),
 			record.target(),
 			&w.0,

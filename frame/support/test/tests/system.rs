@@ -1,4 +1,20 @@
-use support::codec::{Encode, Decode, EncodeLike};
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+use frame_support::codec::{Encode, Decode, EncodeLike};
 
 pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
@@ -8,27 +24,26 @@ pub trait Trait: 'static + Eq + Clone {
 	type Hash;
 	type AccountId: Encode + EncodeLike + Decode;
 	type Event: From<Event>;
+	type ModuleToIndex: frame_support::traits::ModuleToIndex;
 }
 
-support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-	}
+frame_support::decl_module! {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn deposit_event(_event: impl Into<T::Event>) {
-	}
+	pub fn deposit_event(_event: impl Into<T::Event>) {}
 }
 
-support::decl_event!(
+frame_support::decl_event!(
 	pub enum Event {
 		ExtrinsicSuccess,
 		ExtrinsicFailed,
 	}
 );
 
-support::decl_error! {
-	pub enum Error {
+frame_support::decl_error! {
+	pub enum Error for Module<T: Trait> {
 		/// Test error documentation
 		TestError,
 		/// Error documentation

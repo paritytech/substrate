@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 use node_primitives::Balance;
 use sp_runtime::traits::{Convert, Saturating};
 use sp_runtime::{Fixed64, Perbill};
-use support::{traits::{OnUnbalanced, Currency, Get}, weights::Weight};
+use frame_support::{traits::{OnUnbalanced, Currency, Get}, weights::Weight};
 use crate::{Balances, System, Authorship, MaximumBlockWeight, NegativeImbalance};
 
 pub struct Author;
@@ -47,7 +47,7 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 
 /// Convert from weight to balance via a simple coefficient multiplication
 /// The associated type C encapsulates a constant in units of balance per weight
-pub struct LinearWeightToFee<C>(rstd::marker::PhantomData<C>);
+pub struct LinearWeightToFee<C>(sp_std::marker::PhantomData<C>);
 
 impl<C: Get<Balance>> Convert<Weight, Balance> for LinearWeightToFee<C> {
 	fn convert(w: Weight) -> Balance {
@@ -66,7 +66,7 @@ impl<C: Get<Balance>> Convert<Weight, Balance> for LinearWeightToFee<C> {
 ///
 /// Where `target_weight` must be given as the `Get` implementation of the `T` generic type.
 /// https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#relay-chain-transaction-fees
-pub struct TargetedFeeAdjustment<T>(rstd::marker::PhantomData<T>);
+pub struct TargetedFeeAdjustment<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Get<Perbill>> Convert<Fixed64, Fixed64> for TargetedFeeAdjustment<T> {
 	fn convert(multiplier: Fixed64) -> Fixed64 {
@@ -118,7 +118,7 @@ mod tests {
 	use sp_runtime::assert_eq_error_rate;
 	use crate::{MaximumBlockWeight, AvailableBlockRatio, Runtime};
 	use crate::{constants::currency::*, TransactionPayment, TargetBlockFullness};
-	use support::weights::Weight;
+	use frame_support::weights::Weight;
 
 	fn max() -> Weight {
 		MaximumBlockWeight::get()
@@ -150,8 +150,8 @@ mod tests {
 	}
 
 	fn run_with_system_weight<F>(w: Weight, assertions: F) where F: Fn() -> () {
-		let mut t: runtime_io::TestExternalities =
-			system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into();
+		let mut t: sp_io::TestExternalities =
+			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into();
 		t.execute_with(|| {
 			System::set_block_limits(w, 0);
 			assertions()
@@ -227,7 +227,7 @@ mod tests {
 				if fm == next { panic!("The fee should ever increase"); }
 				fm = next;
 				iterations += 1;
-				let fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(tx_weight);
+				let fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(tx_weight);
 				let adjusted_fee = fm.saturated_multiply_accumulate(fee);
 				println!(
 					"iteration {}, new fm = {:?}. Fee at this point is: {} units / {} millicents, \

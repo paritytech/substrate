@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,11 +16,11 @@
 
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
-use client_api::BlockchainEvents;
-use futures::{StreamExt, TryStreamExt, FutureExt, future, compat::Stream01CompatExt};
-use log::{info, warn};
+use sc_client_api::BlockchainEvents;
+use futures::prelude::*;
+use log::{info, warn, trace};
 use sp_runtime::traits::Header;
-use service::AbstractService;
+use sc_service::AbstractService;
 use std::time::Duration;
 
 mod display;
@@ -33,16 +33,20 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 
 	let display_notifications = service
 		.network_status(Duration::from_millis(5000))
-		.compat()
-		.try_for_each(move |(net_status, _)| {
-			let info = client.info();
+		.for_each(move |(net_status, _)| {
+			let info = client.usage_info();
+			if let Some(ref usage) = info.usage {
+				trace!(target: "usage", "Usage statistics: {}", usage);
+			} else {
+				trace!(target: "usage", "Usage statistics not displayed as backend does not provide it")
+			}
 			display.display(&info, net_status);
-			future::ok(())
+			future::ready(())
 		});
 
 	let client = service.client();
 	let mut last_best = {
-		let info = client.info();
+		let info = client.usage_info();
 		Some((info.chain.best_number, info.chain.best_hash))
 	};
 

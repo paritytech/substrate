@@ -1,4 +1,4 @@
-// Copyright 2015-2019 Parity Technologies (UK) Ltd.
+// Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -16,10 +16,10 @@
 
 //! `NodeCodec` implementation for Substrate's trie format.
 
-use rstd::marker::PhantomData;
-use rstd::ops::Range;
-use rstd::vec::Vec;
-use rstd::borrow::Borrow;
+use sp_std::marker::PhantomData;
+use sp_std::ops::Range;
+use sp_std::vec::Vec;
+use sp_std::borrow::Borrow;
 use codec::{Encode, Decode, Input, Compact};
 use hash_db::Hasher;
 use trie_db::{self, node::{NibbleSlicePlan, NodePlan, NodeHandlePlan}, ChildReference,
@@ -30,7 +30,7 @@ use super::{node_header::{NodeHeader, NodeKind}};
 
 /// Helper struct for trie node decoder. This implements `codec::Input` on a byte slice, while
 /// tracking the absolute position. This is similar to `std::io::Cursor` but does not implement
-/// `Read` and `io` is not in `rstd`.
+/// `Read` and `io` is not in `sp-std`.
 struct ByteSliceInput<'a> {
 	data: &'a [u8],
 	offset: usize,
@@ -94,7 +94,7 @@ impl<H: Hasher> NodeCodecT for NodeCodec<H> {
 		H::hash(<Self as NodeCodecT>::empty_node())
 	}
 
-	fn decode_plan(data: &[u8]) -> rstd::result::Result<NodePlan, Self::Error> {
+	fn decode_plan(data: &[u8]) -> sp_std::result::Result<NodePlan, Self::Error> {
 		let mut input = ByteSliceInput::new(data);
 		match NodeHeader::decode(&mut input)? {
 			NodeHeader::Null => Ok(NodePlan::Empty),
@@ -229,7 +229,7 @@ fn partial_from_iterator_encode<I: Iterator<Item = u8>>(
 	nibble_count: usize,
 	node_kind: NodeKind,
 ) -> Vec<u8> {
-	let nibble_count = rstd::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibble_count);
+	let nibble_count = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibble_count);
 
 	let mut output = Vec::with_capacity(3 + (nibble_count / nibble_ops::NIBBLE_PER_BYTE));
 	match node_kind {
@@ -247,7 +247,7 @@ fn partial_encode(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
 	let number_nibble_encoded = (partial.0).0 as usize;
 	let nibble_count = partial.1.len() * nibble_ops::NIBBLE_PER_BYTE + number_nibble_encoded;
 
-	let nibble_count = rstd::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibble_count);
+	let nibble_count = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibble_count);
 
 	let mut output = Vec::with_capacity(3 + partial.1.len());
 	match node_kind {
@@ -290,4 +290,3 @@ impl Bitmap {
 		dest[1] = (bitmap / 256) as u8;
 	}
 }
-
