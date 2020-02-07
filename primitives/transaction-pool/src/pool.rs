@@ -29,7 +29,7 @@ use futures::{
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Member},
+	traits::{Block as BlockT, Member, MaybeMallocSizeOf},
 	transaction_validity::{
 		TransactionLongevity, TransactionPriority, TransactionTag,
 	},
@@ -154,7 +154,7 @@ pub trait InPoolTransaction {
 }
 
 /// Transaction pool interface.
-pub trait TransactionPool: Send + Sync {
+pub trait TransactionPool: Send + Sync + MaybeMallocSizeOf {
 	/// Block type.
 	type Block: BlockT;
 	/// Transaction hash type.

@@ -155,6 +155,20 @@ pub struct ImportParams {
 	/// Specify the state cache size.
 	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
+
+	/// Comma separated list of targets for tracing
+	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
+	pub tracing_targets: Option<String>,
+
+	/// Receiver to process tracing messages
+	#[structopt(
+		long = "tracing-receiver",
+		value_name = "RECEIVER",
+		possible_values = &TracingReceiver::variants(),
+		case_insensitive = true,
+		default_value = "Log"
+	)]
+	pub tracing_receiver: TracingReceiver,
 }
 
 /// Parameters used to create the network configuration.
@@ -579,20 +593,6 @@ pub struct RunCmd {
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 
-	/// Comma separated list of targets for tracing
-	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
-	pub tracing_targets: Option<String>,
-
-	/// Receiver to process tracing messages
-	#[structopt(
-		long = "tracing-receiver",
-		value_name = "RECEIVER",
-		possible_values = &TracingReceiver::variants(),
-		case_insensitive = true,
-		default_value = "Log"
-	)]
-	pub tracing_receiver: TracingReceiver,
-
 	/// Specify custom keystore path.
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
@@ -981,11 +981,7 @@ impl RunCmd {
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-		crate::update_config_for_running_node(
-			&mut config,
-			self,
-			&version,
-		)?;
+		crate::update_config_for_running_node(&mut config, self)?;
 
 		crate::run_node(config, new_light, new_full, &version)
 	}

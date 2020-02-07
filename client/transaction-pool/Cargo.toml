@@ -19,6 +19,7 @@ sc-transaction-graph = { version = "2.0.0", path = "./graph" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 sc-client-api = { version = "2.0.0", path = "../api" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
