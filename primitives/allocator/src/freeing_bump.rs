@@ -47,7 +47,7 @@
 //! back the allocation into the linked list from the head.
 
 use crate::Error;
-use sp_std::{convert::{TryFrom, TryInto}, ops::Range};
+use sp_std::{convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
 use sp_wasm_interface::{Pointer, WordSize};
 
 // The pointers need to be aligned to 8 bytes. This is because the
@@ -253,12 +253,46 @@ impl Header {
 	}
 }
 
+/// This struct represents a collection of intrusive linked lists for each order.
+struct FreeLists {
+	heads: [Link; N],
+}
+
+impl FreeLists {
+	/// Creates the free empty lists.
+	fn new() -> Self {
+		Self {
+			heads: [Link::Null; N]
+		}
+	}
+
+	/// Replaces a given link for the specified order and returns the old one.
+	fn replace(&mut self, order: Order, new: Link) -> Link {
+		let prev = self[order];
+		self[order] = new;
+		prev
+	}
+}
+
+impl Index<Order> for FreeLists {
+	type Output = Link;
+	fn index(&self, index: Order) -> &Link {
+		&self.heads[index.0 as usize]
+	}
+}
+
+impl IndexMut<Order> for FreeLists {
+	fn index_mut(&mut self, index: Order) -> &mut Link {
+		&mut self.heads[index.0 as usize]
+	}
+}
+
 /// An implementation of freeing bump allocator.
 ///
 /// Refer to the module-level documentation for further details.
 pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
-	heads: [Link; N],
+	free_lists: FreeLists,
 	total_size: u32,
 }
 
@@ -274,7 +308,7 @@ impl FreeingBumpHeapAllocator {
 
 		FreeingBumpHeapAllocator {
 			bumper: aligned_heap_base,
-			heads: [Link::Null; N],
+			free_lists: FreeLists::new(),
 			total_size: 0,
 		}
 	}
@@ -296,21 +330,26 @@ impl FreeingBumpHeapAllocator {
 	) -> Result<Pointer<u8>, Error> {
 		let order = Order::from_size(size)?;
 
-		let header_ptr: u32 = if let Link::Ptr(header_ptr) = self.heads[order.0 as usize] {
-			assert!(
-				header_ptr + order.size() + HEADER_SIZE <= mem.size(),
-				"Pointer is looked up in list of free entries, into which
-				only valid values are inserted; qed"
-			);
-			let free_link = Header::read_from(&mem, header_ptr)?
-				.into_free()
-				.ok_or_else(|| error("free list points to a occupied header"))?;
+		let header_ptr: u32 = match self.free_lists[order] {
+			Link::Ptr(header_ptr) => {
+				assert!(
+					header_ptr + order.size() + HEADER_SIZE <= mem.size(),
+					"Pointer is looked up in list of free entries, into which
+					only valid values are inserted; qed"
+				);
 
-			self.heads[order.0 as usize] = free_link;
-			header_ptr
-		} else {
-			// Corresponding free list is empty. Allocate a new item.
-			self.bump(order.size() + HEADER_SIZE, mem.size())?
+				// Remove this header from the free list.
+				let next_free = Header::read_from(&mem, header_ptr)?
+					.into_free()
+					.ok_or_else(|| error("free list points to a occupied header"))?;
+				self.free_lists[order] = next_free;
+
+				header_ptr
+			}
+			Link::Null => {
+				// Corresponding free list is empty. Allocate a new item.
+				self.bump(order.size() + HEADER_SIZE, mem.size())?
+			}
 		};
 
 		// Write the order in the occupied header.
@@ -338,9 +377,8 @@ impl FreeingBumpHeapAllocator {
 			.ok_or_else(|| error("the allocation points to an empty header"))?;
 
 		// Update the just freed header and knit it back to the free list.
-		let prev_head = self.heads[order.0 as usize];
+		let prev_head = self.free_lists.replace(order, Link::Ptr(header_ptr));
 		Header::Free(prev_head).write_into(&mut mem, header_ptr)?;
-		self.heads[order.0 as usize] = Link::Ptr(header_ptr);
 
 		// Do the total_size book keeping.
 		self.total_size = self
@@ -491,7 +529,7 @@ mod tests {
 		// then
 		// then the heads table should contain a pointer to the
 		// prefix of ptr2 in the leftmost entry
-		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr2) - HEADER_SIZE));
+		assert_eq!(heap.free_lists.heads[0], Link::Ptr(u32::from(ptr2) - HEADER_SIZE));
 	}
 
 	#[test]
@@ -518,7 +556,7 @@ mod tests {
 		// then
 		// should have re-allocated
 		assert_eq!(ptr3, to_pointer(padded_offset + 16 + HEADER_SIZE));
-		assert_eq!(heap.heads, [Link::Null; N]);
+		assert_eq!(heap.free_lists.heads, [Link::Null; N]);
 	}
 
 	#[test]
@@ -537,12 +575,12 @@ mod tests {
 		heap.deallocate(&mut mem[..], ptr3).unwrap();
 
 		// then
-		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr3) - HEADER_SIZE));
+		assert_eq!(heap.free_lists.heads[0], Link::Ptr(u32::from(ptr3) - HEADER_SIZE));
 
 		let ptr4 = heap.allocate(&mut mem[..], 8).unwrap();
 		assert_eq!(ptr4, ptr3);
 
-		assert_eq!(heap.heads[0], Link::Ptr(u32::from(ptr2) - HEADER_SIZE));
+		assert_eq!(heap.free_lists.heads[0], Link::Ptr(u32::from(ptr2) - HEADER_SIZE));
 	}
 
 	#[test]
