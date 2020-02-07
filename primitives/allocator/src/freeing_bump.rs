@@ -16,42 +16,40 @@
 
 //! This module implements a freeing-bump allocator.
 //!
-//! The algorithm is as follows:
-//! We store `N` linked list heads, where `N` is the total number of sizes
-//! of allocations to support. A simple set is powers of two from 8 bytes
-//! to 16,777,216 bytes (2^3 - 2^24 inclusive), resulting in `N = 22`:
+//! The heap is a continuous linear memory and chunks are allocated using a bump allocator.
 //!
 //! ```ignore
-//!	let mut heads [u64; N] = [0; N];
-//! fn size(n: u64) -> u64 { 8 << n }
-//! let mut bumper = 0;
-//! fn bump(n: u64) -> u64 { let res = bumper; bumper += n; res }
+//! +-------------+-------------------------------------------------+
+//! | <allocated> | <unallocated>                                   |
+//! +-------------+-------------------------------------------------+
+//!               ^
+//!               |_ bumper
 //! ```
 //!
-//! We assume there is a slab of heap to be allocated:
+//! Only allocations with sizes of power of two can be allocated. If the incoming request has a non
+//! power of two size it is increased to the nearest power of two. The power of two of size is
+//! referred as **an order**.
 //!
-//! ```ignore
-//! let mut heap = [0u8; HEAP_SIZE];
-//! ```
+//! Each allocation has a header immediately preceding to it. The header is always 8 bytes and can
+//! be of two types: free and occupied.
 //!
-//! Whenever we allocate, we select the lowest linked list item size that
-//! will fit the allocation (i.e. the next highest power of two).
-//! We then check to see if the linked list is empty. If empty, we use
-//! the bump allocator to get the allocation with an extra 8 bytes
-//! preceding it. We initialise those preceding 8 bytes to identify the
-//! list to which it belongs. If it is not empty, we unlink the first item from
-//! the linked list and then reset the 8 preceding bytes so they now record
-//! the identity of the linked list.
+//! For implementing freeing we maintain a linked lists for each order. The maximum supported
+//! allocation size is capped, therefore the number of orders and thus the linked lists is as well
+//! limited.
 //!
-//! To deallocate we use the preceding 8 bytes of the allocation to knit
-//! back the allocation into the linked list from the head.
+//! When the allocater serves an allocation request it first checks the linked list for the respective
+//! order. If it doesn't have any free chunks, the allocator requests memory from the bump allocator.
+//! In any case the order is stored in the header of the allocation.
+//!
+//! Upon deallocation we get the order of the allocation from its header and then add that
+//! allocation to the linked list for the respective order.
 
 use crate::Error;
 use sp_std::{convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
 use sp_wasm_interface::{Pointer, WordSize};
 
-// The pointers need to be aligned to 8 bytes. This is because the
-// maximum value type handled by wasm32 is u64.
+/// The minimal alignment guaranteed by this allocator. The alignment of 8 is choosen because it is
+/// the alignment guaranteed by wasm32.
 const ALIGNMENT: u32 = 8;
 
 // The pointer returned by `allocate()` needs to fulfill the alignment
