@@ -26,7 +26,7 @@
 use sp_std::prelude::*;
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, print,
-	traits::{Zero, One, StaticLookup, Bounded, Saturating},
+	traits::{Zero, One, StaticLookup, Saturating},
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
@@ -235,14 +235,17 @@ decl_storage! {
 		// bit-wise manner. In order to get a human-readable representation (`Vec<bool>`), use
 		// [`all_approvals_of`]. Furthermore, each vector of scalars is chunked with the cap of
 		// `APPROVAL_SET_SIZE`.
-		pub ApprovalsOf get(fn approvals_of): map (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
+		pub ApprovalsOf get(fn approvals_of):
+			map hasher(blake2_256) (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they
 		/// are not currently registered.
-		pub RegisterInfoOf get(fn candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
+		pub RegisterInfoOf get(fn candidate_reg_info):
+			map hasher(blake2_256) T::AccountId => Option<(VoteIndex, u32)>;
 		/// Basic information about a voter.
-		pub VoterInfoOf get(fn voter_info): map T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
+		pub VoterInfoOf get(fn voter_info):
+			map hasher(blake2_256) T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
 		/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
-		pub Voters get(fn voters): map SetIndex => Vec<Option<T::AccountId>>;
+		pub Voters get(fn voters): map hasher(blake2_256) SetIndex => Vec<Option<T::AccountId>>;
 		/// the next free set to store a voter in. This will keep growing.
 		pub NextVoterSet get(fn next_nonfull_voter_set): SetIndex = 0;
 		/// Current number of Voters.
@@ -263,7 +266,7 @@ decl_storage! {
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
-		pub Proxy get(fn proxy): map T::AccountId => Option<T::AccountId>;
+		pub Proxy get(fn proxy): map hasher(blake2_256) T::AccountId => Option<T::AccountId>;
 	}
 }
 
@@ -891,7 +894,6 @@ impl<T: Trait> Module<T> {
 			MODULE_ID,
 			&who,
 			locked_balance,
-			T::BlockNumber::max_value(),
 			WithdrawReasons::all(),
 		);
 

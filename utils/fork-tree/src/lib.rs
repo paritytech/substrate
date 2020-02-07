@@ -250,8 +250,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 		Ok(None)
 	}
 
-	/// Same as `find_node_where`, but returns mutable reference.
-	pub fn find_node_mut_where<F, E, P>(
+	/// Same as [`find_node_where`](Self::find_node_where), but returns mutable reference.
+	pub fn find_node_where_mut<F, E, P>(
 		&mut self,
 		hash: &H,
 		number: &N,
@@ -264,7 +264,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 	{
 		// search for node starting from all roots
 		for root in self.roots.iter_mut() {
-			let node = root.find_node_mut_where(hash, number, is_descendent_of, predicate)?;
+			let node = root.find_node_where_mut(hash, number, is_descendent_of, predicate)?;
 
 			// found the node, early exit
 			if let FindOutcome::Found(node) = node {
@@ -635,9 +635,9 @@ mod node_implementation {
 		/// The given function `is_descendent_of` should return `true` if the second hash (target)
 		/// is a descendent of the first hash (base).
 		///
-		/// The returned indexes are from last to first, meaning the last is the least significant
-		/// child, and the first is the most significant child. An empty list means that the
-		/// current node is the result.
+		/// The returned indices are from last to first. The earliest index in the traverse path
+		/// goes last, and the final index in the traverse path goes first. An empty list means
+		/// that the current node is the result.
 		pub fn find_node_index_where<F, P, E>(
 			&self,
 			hash: &H,
@@ -730,7 +730,7 @@ mod node_implementation {
 		/// when the predicate fails.
 		/// The given function `is_descendent_of` should return `true` if the second hash (target)
 		/// is a descendent of the first hash (base).
-		pub fn find_node_mut_where<F, P, E>(
+		pub fn find_node_where_mut<F, P, E>(
 			&mut self,
 			hash: &H,
 			number: &N,

@@ -17,8 +17,11 @@
 //! BABE authority selection and slot claiming.
 
 use merlin::Transcript;
-use sp_consensus_babe::{AuthorityId, BabeAuthorityWeight, BABE_ENGINE_ID, BABE_VRF_PREFIX};
-use sp_consensus_babe::{SlotNumber, AuthorityPair, PreDigest, BabeConfiguration};
+use sp_consensus_babe::{
+	AuthorityId, BabeAuthorityWeight, BABE_ENGINE_ID, BABE_VRF_PREFIX,
+	SlotNumber, AuthorityPair, BabeConfiguration
+};
+use sp_consensus_babe::digests::PreDigest;
 use sp_core::{U256, blake2_256};
 use codec::Encode;
 use schnorrkel::vrf::VRFInOut;

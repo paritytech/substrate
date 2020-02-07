@@ -20,7 +20,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
-#![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 
 #![cfg_attr(feature = "std",
    doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
@@ -850,6 +849,14 @@ pub trait Sandbox {
 	fn instance_teardown(&mut self, instance_idx: u32) {
 		self.sandbox().instance_teardown(instance_idx).expect("Failed to teardown sandbox instance")
 	}
+
+	/// Get the value from a global with the given `name`. The sandbox is determined by the given
+	/// `instance_idx`.
+	///
+	/// Returns `Some(_)` when the requested global variable could be found.
+	fn get_global_val(&mut self, instance_idx: u32, name: &str) -> Option<sp_wasm_interface::Value> {
+		self.sandbox().get_global_val(instance_idx, name).expect("Failed to get global from sandbox")
+	}
 }
 
 /// Allocator used by Substrate when executing the Wasm runtime.
@@ -884,7 +891,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 	unsafe {
 		let message = sp_std::alloc::format!("{}", info);
 		logging::log(LogLevel::Error, "runtime", message.as_bytes());
-		core::intrinsics::abort()
+		core::arch::wasm32::unreachable();
 	}
 }
 
@@ -894,7 +901,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 pub fn oom(_: core::alloc::Layout) -> ! {
 	unsafe {
 		logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
-		core::intrinsics::abort();
+		core::arch::wasm32::unreachable();
 	}
 }
 

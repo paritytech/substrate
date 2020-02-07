@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_executor_common::allocator::FreeingBumpHeapAllocator;
+use sp_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::error::{Error, Result};
 use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
 use crate::util::{
@@ -117,32 +117,6 @@ impl<'a> FunctionExecutor<'a> {
 
 impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 	type SupervisorFuncRef = SupervisorFuncRef;
-
-	fn store(&self) -> &sandbox::Store<Self::SupervisorFuncRef> {
-		&self.sandbox_store
-	}
-
-	fn store_mut(&mut self) -> &mut sandbox::Store<Self::SupervisorFuncRef> {
-		&mut self.sandbox_store
-	}
-
-	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>> {
-		self.heap.allocate(self.memory, len)
-	}
-
-	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()> {
-		self.heap.deallocate(self.memory, ptr)
-	}
-
-	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()> {
-		write_memory_from(self.memory, ptr, data)
-	}
-
-	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>> {
-		let mut output = vec![0; len as usize];
-		read_memory_into(self.memory, ptr, output.as_mut())?;
-		Ok(output)
-	}
 
 	fn invoke(
 		&mut self,
@@ -286,7 +260,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
-		let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &args[..])
+		let args = Vec::<sp_wasm_interface::Value>::decode(&mut &args[..])
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
 			.map(Into::into)
@@ -299,7 +273,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
 			Ok(Some(val)) => {
 				// Serialize return value and write it back into the memory.
-				sandbox_primitives::ReturnValue::Value(val.into()).using_encoded(|val| {
+				sp_wasm_interface::ReturnValue::Value(val.into()).using_encoded(|val| {
 					if val.len() > return_val_len as usize {
 						Err("Return value buffer is too small")?;
 					}
@@ -327,8 +301,15 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			SupervisorFuncRef(func_ref)
 		};
 
+		let guest_env = match sandbox::GuestEnvironment::decode(&self.sandbox_store, raw_env_def) {
+			Ok(guest_env) => guest_env,
+			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
+		};
+
 		let instance_idx_or_err_code =
-			match sandbox::instantiate(self, dispatch_thunk, wasm, raw_env_def, state) {
+			match sandbox::instantiate(self, dispatch_thunk, wasm, guest_env, state)
+				.map(|i| i.register(&mut self.sandbox_store))
+			{
 				Ok(instance_idx) => instance_idx,
 				Err(sandbox::InstantiationError::StartTrapped) =>
 					sandbox_primitives::ERR_EXECUTION,
@@ -336,6 +317,17 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			};
 
 		Ok(instance_idx_or_err_code as u32)
+	}
+
+	fn get_global_val(
+		&self,
+		instance_idx: u32,
+		name: &str,
+	) -> WResult<Option<sp_wasm_interface::Value>> {
+		self.sandbox_store
+			.instance(instance_idx)
+			.map(|i| i.get_global_val(name))
+			.map_err(|e| e.to_string())
 	}
 }
 

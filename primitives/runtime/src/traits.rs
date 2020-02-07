@@ -458,36 +458,21 @@ impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H> whe
 	}
 }
 
-macro_rules! impl_maybe_marker {
-	( $( $(#[$doc:meta])+ $trait_name:ident: $($trait_bound:path),+ );+ ) => {
-		$(
-			$(#[$doc])+
-			#[cfg(feature = "std")]
-			pub trait $trait_name: $($trait_bound +)+ {}
-			#[cfg(feature = "std")]
-			impl<T: $($trait_bound +)+> $trait_name for T {}
-
-			$(#[$doc])+
-			#[cfg(not(feature = "std"))]
-			pub trait $trait_name {}
-			#[cfg(not(feature = "std"))]
-			impl<T> $trait_name for T {}
-		)+
-	}
-}
-
-impl_maybe_marker!(
+sp_core::impl_maybe_marker!(
 	/// A type that implements Display when in std environment.
-	MaybeDisplay: Display;
+	trait MaybeDisplay: Display;
 
 	/// A type that implements Hash when in std environment.
-	MaybeHash: sp_std::hash::Hash;
+	trait MaybeHash: sp_std::hash::Hash;
 
 	/// A type that implements Serialize when in std environment.
-	MaybeSerialize: Serialize;
+	trait MaybeSerialize: Serialize;
 
 	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
-	MaybeSerializeDeserialize: DeserializeOwned, Serialize
+	trait MaybeSerializeDeserialize: DeserializeOwned, Serialize;
+
+	/// A type that implements MallocSizeOf.
+	trait MaybeMallocSizeOf: parity_util_mem::MallocSizeOf;
 );
 
 /// A type that provides a randomness beacon.
@@ -521,13 +506,18 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Header:
+	Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug +
+	MaybeMallocSizeOf + 'static
+{
 	/// Header number.
 	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr;
+		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr
+		+ MaybeMallocSizeOf;
 	/// Header hash type
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
-		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>
+		+ AsMut<[u8]> + MaybeMallocSizeOf;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -575,14 +565,15 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 /// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + MaybeMallocSizeOf + 'static {
 	/// Type for extrinsics.
-	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
+	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize + MaybeMallocSizeOf;
 	/// Header type.
-	type Header: Header<Hash=Self::Hash>;
+	type Header: Header<Hash=Self::Hash> + MaybeMallocSizeOf;
 	/// Block hash type.
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
-		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>
+		+ MaybeMallocSizeOf;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
@@ -601,8 +592,9 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8>;
 }
 
+
 /// Something that acts like an `Extrinsic`.
-pub trait Extrinsic: Sized {
+pub trait Extrinsic: Sized + MaybeMallocSizeOf {
 	/// The function call.
 	type Call;
 
@@ -624,6 +616,15 @@ pub trait Extrinsic: Sized {
 	/// 2. Unsigned Transactions (no signature; represent "system calls" or other special kinds of calls)
 	/// 3. Signed Transactions (with signature; a regular transactions with known origin)
 	fn new(_call: Self::Call, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> { None }
+}
+
+/// Implementor is an [`Extrinsic`] and provides metadata about this extrinsic.
+pub trait ExtrinsicMetadata {
+	/// The version of the `Extrinsic`.
+	const VERSION: u8;
+
+	/// Signed extensions attached to this `Extrinsic`.
+	type SignedExtensions: SignedExtension;
 }
 
 /// Extract the hasher type for a block.
@@ -686,6 +687,12 @@ pub trait Dispatchable {
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
 pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq {
+	/// Unique identifier of this signed extension.
+	///
+	/// This will be exposed in the metadata to identify the signed extension used
+	/// in an extrinsic.
+	const IDENTIFIER: &'static str;
+
 	/// The type which encodes the sender identity.
 	type AccountId;
 
@@ -783,6 +790,17 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Do any post-flight stuff for a transaction.
 	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
+
+	/// Returns the list of unique identifier for this signed extension.
+	///
+	/// As a [`SignedExtension`] can be a tuple of [`SignedExtension`]`s we need to return a `Vec`
+	/// that holds all the unique identifiers. Each individual `SignedExtension` must return
+	/// *exactly* one identifier.
+	///
+	/// This method provides a default implementation that returns `vec![SELF::IDENTIFIER]`.
+	fn identifier() -> Vec<&'static str> {
+		sp_std::vec![Self::IDENTIFIER]
+	}
 }
 
 #[impl_for_tuples(1, 12)]
@@ -791,6 +809,7 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 	type AccountId = AccountId;
 	type Call = Call;
 	type DispatchInfo = Info;
+	const IDENTIFIER: &'static str = "You should call `identifier()`!";
 	for_tuples!( type AdditionalSigned = ( #( Tuple::AdditionalSigned ),* ); );
 	for_tuples!( type Pre = ( #( Tuple::Pre ),* ); );
 
@@ -841,6 +860,12 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 	) {
 		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info.clone(), len); )* )
 	}
+
+	fn identifier() -> Vec<&'static str> {
+		let mut ids = Vec::new();
+		for_tuples!( #( ids.extend(Tuple::identifier()); )* );
+		ids
+	}
 }
 
 /// Only for bare bone testing when you don't care about signed extensions at all.
@@ -851,6 +876,7 @@ impl SignedExtension for () {
 	type Call = ();
 	type Pre = ();
 	type DispatchInfo = ();
+	const IDENTIFIER: &'static str = "UnitSignedExtension";
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 }
 
@@ -1124,12 +1150,14 @@ macro_rules! count {
 #[macro_export]
 macro_rules! impl_opaque_keys {
 	(
+		$( #[ $attr:meta ] )*
 		pub struct $name:ident {
 			$(
 				pub $field:ident: $type:ty,
 			)*
 		}
 	) => {
+		$( #[ $attr ] )*
 		#[derive(
 			Default, Clone, PartialEq, Eq,
 			$crate::codec::Encode,
@@ -1160,6 +1188,37 @@ macro_rules! impl_opaque_keys {
 					)*
 				};
 				$crate::codec::Encode::encode(&keys)
+			}
+
+			/// Converts `Self` into a `Vec` of `(raw public key, KeyTypeId)`.
+			pub fn into_raw_public_keys(
+				self,
+			) -> $crate::sp_std::vec::Vec<($crate::sp_std::vec::Vec<u8>, $crate::KeyTypeId)> {
+				let mut keys = Vec::new();
+				$(
+					keys.push((
+						$crate::RuntimeAppPublic::to_raw_vec(&self.$field),
+						<
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::ID,
+					));
+				)*
+
+				keys
+			}
+
+			/// Decode `Self` from the given `encoded` slice and convert `Self` into the raw public
+			/// keys (see [`Self::into_raw_public_keys`]).
+			///
+			/// Returns `None` when the decoding failed, otherwise `Some(_)`.
+			pub fn decode_into_raw_public_keys(
+				encoded: &[u8],
+			) -> Option<$crate::sp_std::vec::Vec<($crate::sp_std::vec::Vec<u8>, $crate::KeyTypeId)>> {
+				<Self as $crate::codec::Decode>::decode(&mut &encoded[..])
+					.ok()
+					.map(|s| s.into_raw_public_keys())
 			}
 		}
 
@@ -1199,6 +1258,12 @@ macro_rules! impl_opaque_keys {
 pub trait Printable {
 	/// Print the object.
 	fn print(&self);
+}
+
+impl<T: Printable> Printable for &T {
+	fn print(&self) {
+		(*self).print()
+	}
 }
 
 impl Printable for u8 {

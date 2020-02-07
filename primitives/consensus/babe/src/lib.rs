@@ -19,16 +19,13 @@
 #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod digest;
+pub mod digests;
 pub mod inherents;
 
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
-
-#[cfg(feature = "std")]
-pub use digest::{PreDigest, CompatibleDigestItem};
-pub use digest::{RawPreDigest, NextEpochDescriptor};
+use crate::digests::NextEpochDescriptor;
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};

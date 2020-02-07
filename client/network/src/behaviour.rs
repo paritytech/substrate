@@ -25,7 +25,7 @@ use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
-use log::{debug, warn};
+use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, Justification};
 use std::{iter, task::Context, task::Poll};
@@ -144,9 +144,9 @@ Behaviour<B, S, H> {
 						roles,
 					}));
 				},
-			CustomMessageOutcome::NotificationsStreamClosed { remote, protocols } =>
+			CustomMessageOutcome::NotificationStreamClosed { remote, protocols } =>
 				for engine_id in protocols {
-					self.events.push(BehaviourOut::Event(Event::NotificationsStreamClosed {
+					self.events.push(BehaviourOut::Event(Event::NotificationStreamClosed {
 						remote: remote.clone(),
 						engine_id,
 					}));
@@ -164,9 +164,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 	for Behaviour<B, S, H> {
 	fn inject_event(&mut self, event: debug_info::DebugInfoEvent) {
 		let debug_info::DebugInfoEvent::Identified { peer_id, mut info } = event;
-		if !info.protocol_version.contains("substrate") {
-			warn!(target: "sub-libp2p", "Connected to a non-Substrate node: {:?}", info);
-		}
 		if info.listen_addrs.len() > 30 {
 			debug!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
 				it is identified by {:?} and {:?}", peer_id, info.protocol_version,

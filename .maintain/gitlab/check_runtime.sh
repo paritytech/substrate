@@ -3,16 +3,17 @@
 #
 # check for any changes in the node/src/runtime, frame/ and primitives/sr_* trees. if
 # there are any changes found, it should mark the PR breaksconsensus and
-# "auto-fail" the PR if there isn't a change in the runtime/src/lib.rs file 
+# "auto-fail" the PR if there isn't a change in the runtime/src/lib.rs file
 # that alters the version.
 
 set -e # fail on any error
 
 
-# give some context
-git log --graph --oneline --decorate=short -n 10
 
 VERSIONS_FILE="bin/node/runtime/src/lib.rs"
+
+boldprint () { printf "|\n| \033[1m${@}\033[0m\n|\n" ; }
+boldcat () { printf "|\n"; while read l; do printf "| \033[1m${l}\033[0m\n"; done; printf "|\n" ; }
 
 github_label () {
 	echo
@@ -26,22 +27,20 @@ github_label () {
 }
 
 
+boldprint "latest 10 commits of ${CI_COMMIT_REF_NAME}"
+git log --graph --oneline --decorate=short -n 10
 
+boldprint "make sure the master branch is available in shallow clones"
 git fetch --depth=${GIT_DEPTH:-100} origin master
 
-# check if master is part of this checkout
-if ! git log -n 1 origin/master
-then
-	echo "unable to check for runtime changes: checkout does not contain origin/master branch"
-	exit 3
-fi
 
-# check if the wasm sources changed
+boldprint "check if the wasm sources changed"
 if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
-	| grep -q -e '^bin/node/src/runtime' -e '^frame/' -e '^primitives/sr-' | grep -v -e '^primitives/sr-arithmetic/fuzzer'
+	| grep -v -e '^primitives/sr-arithmetic/fuzzer' \
+	| grep -q -e '^bin/node/src/runtime' -e '^frame/' -e '^primitives/sr-'
 then
-	cat <<-EOT
-	
+	boldcat <<-EOT
+
 	no changes to the runtime source code detected
 
 	EOT
@@ -61,16 +60,16 @@ sub_spec_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 	| sed -n -r "s/^\-[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
 
 
-# see if the version and the binary blob changed
+
 if [ "${add_spec_version}" != "${sub_spec_version}" ]
 then
 
 	github_label "B2-breaksapi"
 
-	cat <<-EOT
-		
+	boldcat <<-EOT
+
 		changes to the runtime sources and changes in the spec version.
-	
+
 		spec_version: ${sub_spec_version} -> ${add_spec_version}
 
 	EOT
@@ -89,8 +88,8 @@ else
 	# see if the impl version changed
 	if [ "${add_impl_version}" != "${sub_impl_version}" ]
 	then
-		cat <<-EOT
-		
+		boldcat <<-EOT
+
 		changes to the runtime sources and changes in the impl version.
 
 		impl_version: ${sub_impl_version} -> ${add_impl_version}
@@ -100,11 +99,10 @@ else
 	fi
 
 
-	cat <<-EOT
+	boldcat <<-EOT
 
-	wasm source files changed but not the spec/impl version and the runtime
-	binary blob. If changes made do not alter logic, just bump 'impl_version'.
-	If they do change logic, bump 'spec_version' and rebuild wasm.
+	wasm source files changed but not the spec/impl version. If changes made do not alter logic,
+	just bump 'impl_version'. If they do change logic, bump 'spec_version'.
 
 	source file directories:
 	- bin/node/src/runtime
@@ -114,8 +112,6 @@ else
 	versions file: ${VERSIONS_FILE}
 
 	EOT
-
-	# drop through into pushing `gotissues` and exit 1...
 fi
 
 # dropped through. there's something wrong;  exit 1.

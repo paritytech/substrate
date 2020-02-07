@@ -38,10 +38,37 @@ mod keyword {
 	syn::custom_keyword!(hasher);
 }
 
+/// Specific `Opt` to implement structure with optional parsing
+#[derive(Debug, Clone)]
+pub struct Opt<P> {
+	pub inner: Option<P>,
+}
+impl<P: syn::export::ToTokens> syn::export::ToTokens for Opt<P> {
+	fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+		if let Some(ref p) = self.inner {
+			p.to_tokens(tokens);
+		}
+	}
+}
+
+macro_rules! impl_parse_for_opt {
+	($struct:ident => $token:path) => {
+		impl syn::parse::Parse for Opt<$struct> {
+			fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+				if input.peek($token) {
+					input.parse().map(|p| Opt { inner: Some(p) })
+				} else {
+					Ok(Opt { inner: None })
+				}
+			}
+		}
+	};
+}
+
 /// Parsing usage only
 #[derive(Parse, ToTokens, Debug)]
 struct StorageDefinition {
-	pub hidden_crate: ext::Opt<SpecificHiddenCrate>,
+	pub hidden_crate: Opt<SpecificHiddenCrate>,
 	pub visibility: syn::Visibility,
 	pub trait_token: Token![trait],
 	pub ident: Ident,
@@ -62,7 +89,7 @@ struct StorageDefinition {
 	pub crate_ident: Ident,
 	pub where_clause: Option<syn::WhereClause>,
 	pub content: ext::Braces<ext::Punctuated<DeclStorageLine, Token![;]>>,
-	pub extra_genesis: ext::Opt<AddExtraGenesis>,
+	pub extra_genesis: Opt<AddExtraGenesis>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -70,6 +97,7 @@ struct SpecificHiddenCrate {
 	pub keyword: keyword::hiddencrate,
 	pub ident: ext::Parens<Ident>,
 }
+impl_parse_for_opt!(SpecificHiddenCrate => keyword::hiddencrate);
 
 #[derive(Parse, ToTokens, Debug)]
 struct AddExtraGenesis {
@@ -77,15 +105,34 @@ struct AddExtraGenesis {
 	pub content: ext::Braces<AddExtraGenesisContent>,
 }
 
+impl_parse_for_opt!(AddExtraGenesis => keyword::add_extra_genesis);
+
 #[derive(Parse, ToTokens, Debug)]
 struct AddExtraGenesisContent {
 	pub lines: ext::Punctuated<AddExtraGenesisLineEnum, Token![;]>,
 }
 
-#[derive(Parse, ToTokens, Debug)]
+#[derive(ToTokens, Debug)]
 enum AddExtraGenesisLineEnum {
 	AddExtraGenesisLine(AddExtraGenesisLine),
 	AddExtraGenesisBuild(DeclStorageBuild),
+}
+
+impl syn::parse::Parse for AddExtraGenesisLineEnum {
+	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+		let input_fork = input.fork();
+		// OuterAttributes are forbidden for build variant,
+		// However to have better documentation we match against the keyword after those attributes.
+		let _: ext::OuterAttributes = input_fork.parse()?;
+		let lookahead = input_fork.lookahead1();
+		if lookahead.peek(keyword::build) {
+			Ok(Self::AddExtraGenesisBuild(input.parse()?))
+		} else if lookahead.peek(keyword::config) {
+			Ok(Self::AddExtraGenesisLine(input.parse()?))
+		} else {
+			Err(lookahead.error())
+		}
+	}
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -95,7 +142,7 @@ struct AddExtraGenesisLine {
 	pub extra_field: ext::Parens<Ident>,
 	pub coldot_token: Token![:],
 	pub extra_type: syn::Type,
-	pub default_value: ext::Opt<DeclStorageDefault>,
+	pub default_value: Opt<DeclStorageDefault>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -106,12 +153,12 @@ struct DeclStorageLine {
 	pub visibility: syn::Visibility,
 	// name
 	pub name: Ident,
-	pub getter: ext::Opt<DeclStorageGetter>,
-	pub config: ext::Opt<DeclStorageConfig>,
-	pub build: ext::Opt<DeclStorageBuild>,
+	pub getter: Opt<DeclStorageGetter>,
+	pub config: Opt<DeclStorageConfig>,
+	pub build: Opt<DeclStorageBuild>,
 	pub coldot_token: Token![:],
 	pub storage_type: DeclStorageType,
-	pub default_value: ext::Opt<DeclStorageDefault>,
+	pub default_value: Opt<DeclStorageDefault>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -126,11 +173,15 @@ struct DeclStorageGetter {
 	pub getfn: ext::Parens<DeclStorageGetterBody>,
 }
 
+impl_parse_for_opt!(DeclStorageGetter => keyword::get);
+
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageConfig {
 	pub config_keyword: keyword::config,
 	pub expr: ext::Parens<Option<syn::Ident>>,
 }
+
+impl_parse_for_opt!(DeclStorageConfig => keyword::config);
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageBuild {
@@ -138,7 +189,9 @@ struct DeclStorageBuild {
 	pub expr: ext::Parens<syn::Expr>,
 }
 
-#[derive(Parse, ToTokens, Debug)]
+impl_parse_for_opt!(DeclStorageBuild => keyword::build);
+
+#[derive(ToTokens, Debug)]
 enum DeclStorageType {
 	Map(DeclStorageMap),
 	LinkedMap(DeclStorageLinkedMap),
@@ -146,10 +199,24 @@ enum DeclStorageType {
 	Simple(syn::Type),
 }
 
+impl syn::parse::Parse for DeclStorageType {
+	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+		if input.peek(keyword::map) {
+			Ok(Self::Map(input.parse()?))
+		} else if input.peek(keyword::linked_map) {
+			Ok(Self::LinkedMap(input.parse()?))
+		} else if input.peek(keyword::double_map) {
+			Ok(Self::DoubleMap(input.parse()?))
+		} else {
+			Ok(Self::Simple(input.parse()?))
+		}
+	}
+}
+
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageMap {
 	pub map_keyword: keyword::map,
-	pub hasher: ext::Opt<SetHasher>,
+	pub hasher: Opt<SetHasher>,
 	pub key: syn::Type,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
@@ -158,7 +225,7 @@ struct DeclStorageMap {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageLinkedMap {
 	pub map_keyword: keyword::linked_map,
-	pub hasher: ext::Opt<SetHasher>,
+	pub hasher: Opt<SetHasher>,
 	pub key: syn::Type,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
@@ -167,16 +234,16 @@ struct DeclStorageLinkedMap {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDoubleMap {
 	pub map_keyword: keyword::double_map,
-	pub hasher1: ext::Opt<SetHasher>,
+	pub hasher1: Opt<SetHasher>,
 	pub key1: syn::Type,
 	pub comma_keyword: Token![,],
-	pub hasher2: ext::Opt<SetHasher>,
+	pub hasher2: Opt<SetHasher>,
 	pub key2: syn::Type,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
 }
 
-#[derive(Parse, ToTokens, Debug)]
+#[derive(ToTokens, Debug)]
 enum Hasher {
 	Blake2_256(keyword::blake2_256),
 	Blake2_128(keyword::blake2_128),
@@ -186,10 +253,41 @@ enum Hasher {
 	Twox64Concat(keyword::twox_64_concat),
 }
 
+impl syn::parse::Parse for Hasher {
+	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+		let lookahead = input.lookahead1();
+		if lookahead.peek(keyword::blake2_256) {
+			Ok(Self::Blake2_256(input.parse()?))
+		} else if lookahead.peek(keyword::blake2_128) {
+			Ok(Self::Blake2_128(input.parse()?))
+		} else if lookahead.peek(keyword::blake2_128_concat) {
+			Ok(Self::Blake2_128Concat(input.parse()?))
+		} else if lookahead.peek(keyword::twox_256) {
+			Ok(Self::Twox256(input.parse()?))
+		} else if lookahead.peek(keyword::twox_128) {
+			Ok(Self::Twox128(input.parse()?))
+		} else if lookahead.peek(keyword::twox_64_concat) {
+			Ok(Self::Twox64Concat(input.parse()?))
+		} else {
+			Err(lookahead.error())
+		}
+	}
+}
+
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDefault {
 	pub equal_token: Token![=],
 	pub expr: syn::Expr,
+}
+
+impl syn::parse::Parse for Opt<DeclStorageDefault> {
+	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+		if input.peek(Token![=]) {
+			input.parse().map(|p| Opt { inner: Some(p) })
+		} else {
+			Ok(Opt { inner: None })
+		}
+	}
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -197,6 +295,8 @@ struct SetHasher {
 	pub hasher_keyword: keyword::hasher,
 	pub inner: ext::Parens<Hasher>,
 }
+
+impl_parse_for_opt!(SetHasher => keyword::hasher);
 
 impl From<SetHasher> for super::HasherKind {
 	fn from(set_hasher: SetHasher) -> Self {
@@ -361,29 +461,31 @@ fn parse_storage_line_defs(
 			})?;
 		}
 
+		let span = line.storage_type.span();
+		let no_hasher_error = || syn::Error::new(
+			span,
+			"Default hasher has been removed, use explicit hasher(blake2_256) instead."
+		);
+
 		let storage_type = match line.storage_type {
 			DeclStorageType::Map(map) => super::StorageLineTypeDef::Map(
 				super::MapDef {
-					hasher: map.hasher.inner.map(Into::into)
-						.unwrap_or(super::HasherKind::Blake2_256),
+					hasher: map.hasher.inner.ok_or_else(no_hasher_error)?.into(),
 					key: map.key,
 					value: map.value,
 				}
 			),
 			DeclStorageType::LinkedMap(map) => super::StorageLineTypeDef::LinkedMap(
 				super::MapDef {
-					hasher: map.hasher.inner.map(Into::into)
-						.unwrap_or(super::HasherKind::Blake2_256),
+					hasher: map.hasher.inner.ok_or_else(no_hasher_error)?.into(),
 					key: map.key,
 					value: map.value,
 				}
 			),
 			DeclStorageType::DoubleMap(map) => super::StorageLineTypeDef::DoubleMap(
 				super::DoubleMapDef {
-					hasher1: map.hasher1.inner.map(Into::into)
-						.unwrap_or(super::HasherKind::Blake2_256),
-					hasher2: map.hasher2.inner.map(Into::into)
-						.unwrap_or(super::HasherKind::Blake2_256),
+					hasher1: map.hasher1.inner.ok_or_else(no_hasher_error)?.into(),
+					hasher2: map.hasher2.inner.ok_or_else(no_hasher_error)?.into(),
 					key1: map.key1,
 					key2: map.key2,
 					value: map.value,

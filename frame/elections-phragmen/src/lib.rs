@@ -83,7 +83,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{print, DispatchResult, DispatchError, traits::{Zero, StaticLookup, Bounded, Convert}};
+use sp_runtime::{print, DispatchResult, DispatchError, traits::{Zero, StaticLookup, Convert}};
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error, weights::SimpleDispatchInfo,
 	traits::{
@@ -157,9 +157,9 @@ decl_storage! {
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
 		/// Votes of a particular voter, with the round index of the votes.
-		pub VotesOf get(fn votes_of): linked_map T::AccountId => Vec<T::AccountId>;
+		pub VotesOf get(fn votes_of): linked_map hasher(blake2_256) T::AccountId => Vec<T::AccountId>;
 		/// Locked stake of a voter.
-		pub StakeOf get(fn stake_of): map T::AccountId => BalanceOf<T>;
+		pub StakeOf get(fn stake_of): map hasher(blake2_256) T::AccountId => BalanceOf<T>;
 
 		/// The present candidate list. Sorted based on account-id. A current member or a runner can
 		/// never enter this vector and is always implicitly assumed to be a candidate.
@@ -260,7 +260,6 @@ decl_module! {
 				MODULE_ID,
 				&who,
 				locked_balance,
-				T::BlockNumber::max_value(),
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
 			);
 			<StakeOf<T>>::insert(&who, locked_balance);
@@ -816,20 +815,17 @@ mod tests {
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
 
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnNewAccount = ();
-		type OnFreeBalanceZero = ();
 		type OnReapAccount = System;
 		type Event = Event;
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 
@@ -989,7 +985,6 @@ mod tests {
 						(5, 50 * self.balance_factor),
 						(6, 60 * self.balance_factor)
 					],
-					vesting: vec![],
 				}),
 			}.build_storage().unwrap().into()
 		}

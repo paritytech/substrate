@@ -110,8 +110,8 @@ fn basic_setup_works() {
 		assert_eq!(Staking::current_era(), 0);
 
 		// Account 10 has `balance_factor` free balance
-		assert_eq!(Balances::free_balance(&10), 1);
-		assert_eq!(Balances::free_balance(&10), 1);
+		assert_eq!(Balances::free_balance(10), 1);
+		assert_eq!(Balances::free_balance(10), 1);
 
 		// New era is not being forced
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
@@ -759,7 +759,7 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 is stashed
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Confirm account 11 has some free balance
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
 		assert_eq!(Staking::stakers(&11).total, 1000);
 		// Confirm account 11 cannot transfer as a result
@@ -788,7 +788,7 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 is stashed
 		assert_eq!(Staking::bonded(&21), Some(20));
 		// Confirm account 21 has some free balance
-		assert_eq!(Balances::free_balance(&21), 2000);
+		assert_eq!(Balances::free_balance(21), 2000);
 		// Confirm account 21 (via controller 20) is totally staked
 		assert_eq!(Staking::stakers(&21).total, 1000);
 		// Confirm account 21 can transfer at most 1000
@@ -811,7 +811,7 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 is stashed
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Confirm account 11 has some free balance
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
 		assert_eq!(Staking::stakers(&11).own, 1000);
 		// Confirm account 11 cannot transfer as a result
@@ -838,9 +838,9 @@ fn reward_destination_works() {
 		// Check that account 11 is a validator
 		assert!(Staking::current_elected().contains(&11));
 		// Check the balance of the validator account
-		assert_eq!(Balances::free_balance(&10), 1);
+		assert_eq!(Balances::free_balance(10), 1);
 		// Check the balance of the stash account
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 		// Check how much is at stake
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11,
@@ -859,7 +859,7 @@ fn reward_destination_works() {
 		// Check that RewardDestination is Staked (default)
 		assert_eq!(Staking::payee(&11), RewardDestination::Staked);
 		// Check that reward went to the stash account of validator
-		assert_eq!(Balances::free_balance(&11), 1000 + total_payout_0);
+		assert_eq!(Balances::free_balance(11), 1000 + total_payout_0);
 		// Check that amount at stake increased accordingly
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11,
@@ -881,7 +881,7 @@ fn reward_destination_works() {
 		// Check that RewardDestination is Stash
 		assert_eq!(Staking::payee(&11), RewardDestination::Stash);
 		// Check that reward went to the stash account
-		assert_eq!(Balances::free_balance(&11), 1000 + total_payout_0 + total_payout_1);
+		assert_eq!(Balances::free_balance(11), 1000 + total_payout_0 + total_payout_1);
 		// Record this value
 		let recorded_stash_balance = 1000 + total_payout_0 + total_payout_1;
 		// Check that amount at stake is NOT increased
@@ -896,7 +896,7 @@ fn reward_destination_works() {
 		<Payee<Test>>::insert(&11, RewardDestination::Controller);
 
 		// Check controller balance
-		assert_eq!(Balances::free_balance(&10), 1);
+		assert_eq!(Balances::free_balance(10), 1);
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_2 = current_total_payout_for_duration(3000);
@@ -908,7 +908,7 @@ fn reward_destination_works() {
 		// Check that RewardDestination is Controller
 		assert_eq!(Staking::payee(&11), RewardDestination::Controller);
 		// Check that reward went to the controller account
-		assert_eq!(Balances::free_balance(&10), 1 + total_payout_2);
+		assert_eq!(Balances::free_balance(10), 1 + total_payout_2);
 		// Check that amount at stake is NOT increased
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11,
@@ -917,7 +917,7 @@ fn reward_destination_works() {
 			unlocking: vec![],
 		}));
 		// Check that amount in staked account is NOT increased.
-		assert_eq!(Balances::free_balance(&11), recorded_stash_balance);
+		assert_eq!(Balances::free_balance(11), recorded_stash_balance);
 	});
 }
 
@@ -1422,9 +1422,9 @@ fn on_free_balance_zero_stash_removes_validator() {
 	// Tests that storage items are untouched when controller is empty
 	ExtBuilder::default().existential_deposit(10).build().execute_with(|| {
 		// Check the balance of the validator account
-		assert_eq!(Balances::free_balance(&10), 256);
+		assert_eq!(Balances::free_balance(10), 256);
 		// Check the balance of the stash account
-		assert_eq!(Balances::free_balance(&11), 256000);
+		assert_eq!(Balances::free_balance(11), 256000);
 		// Check these two accounts are bonded
 		assert_eq!(Staking::bonded(&11), Some(10));
 
@@ -1442,7 +1442,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		let _ = Balances::slash(&10, u64::max_value());
 
 		// Check the balance of the stash account has not been touched
-		assert_eq!(Balances::free_balance(&11), 256000);
+		assert_eq!(Balances::free_balance(11), 256000);
 		// Check these two accounts are still bonded
 		assert_eq!(Staking::bonded(&11), Some(10));
 
@@ -1476,9 +1476,9 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		// Check that account 10 is a nominator
 		assert!(<Nominators<Test>>::exists(11));
 		// Check the balance of the nominator account
-		assert_eq!(Balances::free_balance(&10), 256);
+		assert_eq!(Balances::free_balance(10), 256);
 		// Check the balance of the stash account
-		assert_eq!(Balances::free_balance(&11), 256000);
+		assert_eq!(Balances::free_balance(11), 256000);
 
 		// Set payee information
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
@@ -1495,7 +1495,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert_eq!(Balances::total_balance(&10), 0);
 
 		// Check the balance of the stash account has not been touched
-		assert_eq!(Balances::free_balance(&11), 256000);
+		assert_eq!(Balances::free_balance(11), 256000);
 		// Check these two accounts are still bonded
 		assert_eq!(Staking::bonded(&11), Some(10));
 
@@ -1689,9 +1689,9 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 			assert_eq!(Staking::slot_stake(), 1);
 
 			// Old ones are rewarded.
-			assert_eq!(Balances::free_balance(&10), init_balance_10 + total_payout_0 / 3);
+			assert_eq!(Balances::free_balance(10), init_balance_10 + total_payout_0 / 3);
 			// no rewards paid to 2. This was initial election.
-			assert_eq!(Balances::free_balance(&2), init_balance_2);
+			assert_eq!(Balances::free_balance(2), init_balance_2);
 
 			let total_payout_1 = current_total_payout_for_duration(3000);
 			assert!(total_payout_1 > 100); // Test is meaningfull if reward something
@@ -1701,7 +1701,7 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 			assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
 			assert_eq!(Staking::slot_stake(), 1);
 
-			assert_eq!(Balances::free_balance(&2), init_balance_2 + total_payout_1 / 3);
+			assert_eq!(Balances::free_balance(2), init_balance_2 + total_payout_1 / 3);
 			assert_eq!(
 				Balances::free_balance(&10),
 				init_balance_10 + total_payout_0 / 3 + total_payout_1 / 3,
@@ -2008,7 +2008,7 @@ fn slashing_performed_according_exposure() {
 		);
 
 		// The stash account should be slashed for 250 (50% of 500).
-		assert_eq!(Balances::free_balance(&11), 1000 - 250);
+		assert_eq!(Balances::free_balance(11), 1000 - 250);
 	});
 }
 
@@ -2102,8 +2102,8 @@ fn reporters_receive_their_slice() {
 		// 50% * (10% * initial_balance / 2)
 		let reward = (initial_balance / 20) / 2;
 		let reward_each = reward / 2; // split into two pieces.
-		assert_eq!(Balances::free_balance(&1), 10 + reward_each);
-		assert_eq!(Balances::free_balance(&2), 20 + reward_each);
+		assert_eq!(Balances::free_balance(1), 10 + reward_each);
+		assert_eq!(Balances::free_balance(2), 20 + reward_each);
 		assert_ledger_consistent(11);
 	});
 }
@@ -2132,7 +2132,7 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 		// F1 * (reward_proportion * slash - 0)
 		// 50% * (10% * initial_balance * 20%)
 		let reward = (initial_balance / 5) / 20;
-		assert_eq!(Balances::free_balance(&1), 10 + reward);
+		assert_eq!(Balances::free_balance(1), 10 + reward);
 
 		on_offence_now(
 			&[OffenceDetails {
@@ -2150,7 +2150,7 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 		// F1 * (reward_proportion * slash - prior_payout)
 		// 50% * (10% * (initial_balance / 2) - prior_payout)
 		let reward = ((initial_balance / 20) - prior_payout) / 2;
-		assert_eq!(Balances::free_balance(&1), 10 + prior_payout + reward);
+		assert_eq!(Balances::free_balance(1), 10 + prior_payout + reward);
 		assert_ledger_consistent(11);
 	});
 }
@@ -2159,8 +2159,8 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 fn invulnerables_are_not_slashed() {
 	// For invulnerable validators no slashing is performed.
 	ExtBuilder::default().invulnerables(vec![11]).build().execute_with(|| {
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Balances::free_balance(&21), 2000);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(21), 2000);
 
 		let exposure = Staking::stakers(&21);
 		let initial_balance = Staking::slashable_balance_of(&21);
@@ -2183,9 +2183,9 @@ fn invulnerables_are_not_slashed() {
 		);
 
 		// The validator 11 hasn't been slashed, but 21 has been.
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 		// 2000 - (0.2 * initial_balance)
-		assert_eq!(Balances::free_balance(&21), 2000 - (2 * initial_balance / 10));
+		assert_eq!(Balances::free_balance(21), 2000 - (2 * initial_balance / 10));
 
 		// ensure that nominators were slashed as well.
 		for (initial_balance, other) in nominator_balances.into_iter().zip(exposure.others) {
@@ -2203,7 +2203,7 @@ fn invulnerables_are_not_slashed() {
 fn dont_slash_if_fraction_is_zero() {
 	// Don't slash if the fraction is zero.
 	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 
 		on_offence_now(
 			&[OffenceDetails {
@@ -2217,7 +2217,7 @@ fn dont_slash_if_fraction_is_zero() {
 		);
 
 		// The validator hasn't been slashed. The new era is not forced.
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 		assert_ledger_consistent(11);
 	});
 }
@@ -2225,7 +2225,7 @@ fn dont_slash_if_fraction_is_zero() {
 #[test]
 fn only_slash_for_max_in_era() {
 	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 
 		on_offence_now(
 			&[
@@ -2238,7 +2238,7 @@ fn only_slash_for_max_in_era() {
 		);
 
 		// The validator has been slashed and has been force-chilled.
-		assert_eq!(Balances::free_balance(&11), 500);
+		assert_eq!(Balances::free_balance(11), 500);
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
 
 		on_offence_now(
@@ -2252,7 +2252,7 @@ fn only_slash_for_max_in_era() {
 		);
 
 		// The validator has not been slashed additionally.
-		assert_eq!(Balances::free_balance(&11), 500);
+		assert_eq!(Balances::free_balance(11), 500);
 
 		on_offence_now(
 			&[
@@ -2265,7 +2265,7 @@ fn only_slash_for_max_in_era() {
 		);
 
 		// The validator got slashed 10% more.
-		assert_eq!(Balances::free_balance(&11), 400);
+		assert_eq!(Balances::free_balance(11), 400);
 		assert_ledger_consistent(11);
 	})
 }
@@ -2273,7 +2273,7 @@ fn only_slash_for_max_in_era() {
 #[test]
 fn garbage_collection_after_slashing() {
 	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
-		assert_eq!(Balances::free_balance(&11), 256_000);
+		assert_eq!(Balances::free_balance(11), 256_000);
 
 		on_offence_now(
 			&[
@@ -2285,7 +2285,7 @@ fn garbage_collection_after_slashing() {
 			&[Perbill::from_percent(10)],
 		);
 
-		assert_eq!(Balances::free_balance(&11), 256_000 - 25_600);
+		assert_eq!(Balances::free_balance(11), 256_000 - 25_600);
 		assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_some());
 		assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &25_600);
 
@@ -2302,7 +2302,7 @@ fn garbage_collection_after_slashing() {
 		// validator and nominator slash in era are garbage-collected by era change,
 		// so we don't test those here.
 
-		assert_eq!(Balances::free_balance(&11), 0);
+		assert_eq!(Balances::free_balance(11), 0);
 		assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
 		assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &0);
 	})
@@ -2313,10 +2313,10 @@ fn garbage_collection_on_window_pruning() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 
 		let exposure = Staking::stakers(&11);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
@@ -2331,8 +2331,8 @@ fn garbage_collection_on_window_pruning() {
 
 		let now = Staking::current_era();
 
-		assert_eq!(Balances::free_balance(&11), 900);
-		assert_eq!(Balances::free_balance(&101), 2000 - (nominated_value / 10));
+		assert_eq!(Balances::free_balance(11), 900);
+		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
 
 		assert!(<Staking as crate::Store>::ValidatorSlashInEra::get(&now, &11).is_some());
 		assert!(<Staking as crate::Store>::NominatorSlashInEra::get(&now, &101).is_some());
@@ -2357,15 +2357,15 @@ fn slashing_nominators_by_span_max() {
 		start_era(2);
 		start_era(3);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Balances::free_balance(&21), 2000);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(21), 2000);
+		assert_eq!(Balances::free_balance(101), 2000);
 		assert_eq!(Staking::slashable_balance_of(&21), 1000);
 
 
 		let exposure_11 = Staking::stakers(&11);
 		let exposure_21 = Staking::stakers(&21);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value_11 = exposure_11.others.iter().find(|o| o.who == 101).unwrap().value;
 		let nominated_value_21 = exposure_21.others.iter().find(|o| o.who == 101).unwrap().value;
 
@@ -2380,10 +2380,10 @@ fn slashing_nominators_by_span_max() {
 			2,
 		);
 
-		assert_eq!(Balances::free_balance(&11), 900);
+		assert_eq!(Balances::free_balance(11), 900);
 
 		let slash_1_amount = Perbill::from_percent(10) * nominated_value_11;
-		assert_eq!(Balances::free_balance(&101), 2000 - slash_1_amount);
+		assert_eq!(Balances::free_balance(101), 2000 - slash_1_amount);
 
 		let expected_spans = vec![
 			slashing::SlashingSpan { index: 1, start: 4, length: None },
@@ -2415,14 +2415,14 @@ fn slashing_nominators_by_span_max() {
 		);
 
 		// 11 was not further slashed, but 21 and 101 were.
-		assert_eq!(Balances::free_balance(&11), 900);
-		assert_eq!(Balances::free_balance(&21), 1700);
+		assert_eq!(Balances::free_balance(11), 900);
+		assert_eq!(Balances::free_balance(21), 1700);
 
 		let slash_2_amount = Perbill::from_percent(30) * nominated_value_21;
 		assert!(slash_2_amount > slash_1_amount);
 
 		// only the maximum slash in a single span is taken.
-		assert_eq!(Balances::free_balance(&101), 2000 - slash_2_amount);
+		assert_eq!(Balances::free_balance(101), 2000 - slash_2_amount);
 
 		// third slash: in same era and on same validator as first, higher
 		// in-era value, but lower slash value than slash 2.
@@ -2438,15 +2438,15 @@ fn slashing_nominators_by_span_max() {
 		);
 
 		// 11 was further slashed, but 21 and 101 were not.
-		assert_eq!(Balances::free_balance(&11), 800);
-		assert_eq!(Balances::free_balance(&21), 1700);
+		assert_eq!(Balances::free_balance(11), 800);
+		assert_eq!(Balances::free_balance(21), 1700);
 
 		let slash_3_amount = Perbill::from_percent(20) * nominated_value_21;
 		assert!(slash_3_amount < slash_2_amount);
 		assert!(slash_3_amount > slash_1_amount);
 
 		// only the maximum slash in a single span is taken.
-		assert_eq!(Balances::free_balance(&101), 2000 - slash_2_amount);
+		assert_eq!(Balances::free_balance(101), 2000 - slash_2_amount);
 	});
 }
 
@@ -2457,7 +2457,7 @@ fn slashes_are_summed_across_spans() {
 		start_era(2);
 		start_era(3);
 
-		assert_eq!(Balances::free_balance(&21), 2000);
+		assert_eq!(Balances::free_balance(21), 2000);
 		assert_eq!(Staking::slashable_balance_of(&21), 1000);
 
 		let get_span = |account| <Staking as crate::Store>::SlashingSpans::get(&account).unwrap();
@@ -2478,7 +2478,7 @@ fn slashes_are_summed_across_spans() {
 		];
 
 		assert_eq!(get_span(21).iter().collect::<Vec<_>>(), expected_spans);
-		assert_eq!(Balances::free_balance(&21), 1900);
+		assert_eq!(Balances::free_balance(21), 1900);
 
 		// 21 has been force-chilled. re-signal intent to validate.
 		Staking::validate(Origin::signed(20), Default::default()).unwrap();
@@ -2504,7 +2504,7 @@ fn slashes_are_summed_across_spans() {
 		];
 
 		assert_eq!(get_span(21).iter().collect::<Vec<_>>(), expected_spans);
-		assert_eq!(Balances::free_balance(&21), 1810);
+		assert_eq!(Balances::free_balance(21), 1810);
 	});
 }
 
@@ -2513,10 +2513,10 @@ fn deferred_slashes_are_deferred() {
 	ExtBuilder::default().slash_defer_duration(2).build().execute_with(|| {
 		start_era(1);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 
 		let exposure = Staking::stakers(&11);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
@@ -2529,25 +2529,25 @@ fn deferred_slashes_are_deferred() {
 			&[Perbill::from_percent(10)],
 		);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
 
 		start_era(2);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
 
 		start_era(3);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
 
 		// at the start of era 4, slashes from era 1 are processed,
 		// after being deferred for at least 2 full eras.
 		start_era(4);
 
-		assert_eq!(Balances::free_balance(&11), 900);
-		assert_eq!(Balances::free_balance(&101), 2000 - (nominated_value / 10));
+		assert_eq!(Balances::free_balance(11), 900);
+		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
 	})
 }
 
@@ -2556,10 +2556,10 @@ fn remove_deferred() {
 	ExtBuilder::default().slash_defer_duration(2).build().execute_with(|| {
 		start_era(1);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 
 		let exposure = Staking::stakers(&11);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
@@ -2572,8 +2572,8 @@ fn remove_deferred() {
 			&[Perbill::from_percent(10)],
 		);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
 
 		start_era(2);
 
@@ -2590,21 +2590,21 @@ fn remove_deferred() {
 
 		Staking::cancel_deferred_slash(Origin::ROOT, 1, vec![0]).unwrap();
 
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
 
 		start_era(3);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
 
 		// at the start of era 4, slashes from era 1 are processed,
 		// after being deferred for at least 2 full eras.
 		start_era(4);
 
 		// the first slash for 10% was cancelled, so no effect.
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
 
 		start_era(5);
 
@@ -2616,8 +2616,8 @@ fn remove_deferred() {
 		let actual_slash = total_slash - initial_slash;
 
 		// 5% slash (15 - 10) processed now.
-		assert_eq!(Balances::free_balance(&11), 950);
-		assert_eq!(Balances::free_balance(&101), 2000 - actual_slash);
+		assert_eq!(Balances::free_balance(11), 950);
+		assert_eq!(Balances::free_balance(101), 2000 - actual_slash);
 	})
 }
 
@@ -2626,10 +2626,10 @@ fn remove_multi_deferred() {
 	ExtBuilder::default().slash_defer_duration(2).build().execute_with(|| {
 		start_era(1);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 
 		let exposure = Staking::stakers(&11);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(101), 2000);
 
 		on_offence_now(
 			&[
@@ -2682,10 +2682,10 @@ fn slash_kicks_validators_not_nominators() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 
 		let exposure = Staking::stakers(&11);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
@@ -2698,8 +2698,8 @@ fn slash_kicks_validators_not_nominators() {
 			&[Perbill::from_percent(10)],
 		);
 
-		assert_eq!(Balances::free_balance(&11), 900);
-		assert_eq!(Balances::free_balance(&101), 2000 - (nominated_value / 10));
+		assert_eq!(Balances::free_balance(11), 900);
+		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
 
 		// This is the best way to check that the validator was chilled; `get` will
 		// return default value.
@@ -2771,10 +2771,10 @@ fn zero_slash_keeps_nominators() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(11), 1000);
 
 		let exposure = Staking::stakers(&11);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(101), 2000);
 
 		on_offence_now(
 			&[
@@ -2786,8 +2786,8 @@ fn zero_slash_keeps_nominators() {
 			&[Perbill::from_percent(0)],
 		);
 
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Balances::free_balance(&101), 2000);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
 
 		// This is the best way to check that the validator was chilled; `get` will
 		// return default value.

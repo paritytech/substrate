@@ -3,6 +3,7 @@ name = "pallet-democracy"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
@@ -16,6 +17,8 @@ frame-system = { version = "2.0.0", default-features = false, path = "../system"
 [dev-dependencies]
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 pallet-balances = { version = "2.0.0", path = "../balances" }
+sp-storage = { version = "2.0.0", path = "../../primitives/storage" }
+hex-literal = "0.2.1"
 
 [features]
 default = ["std"]

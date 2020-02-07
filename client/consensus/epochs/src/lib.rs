@@ -1,3 +1,21 @@
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Generic utilities for epoch-based consensus engines.
+
 use std::{sync::Arc, ops::Add};
 use parking_lot::Mutex;
 use codec::{Encode, Decode};
@@ -5,11 +23,6 @@ use fork_tree::ForkTree;
 use sc_client_api::utils::is_descendent_of;
 use sp_blockchain::{HeaderMetadata, HeaderBackend, Error as ClientError};
 use sp_runtime::traits::{Block as BlockT, NumberFor, One, Zero};
-
-/// Definition of slot number type.
-pub type SlotNumber = u64;
-/// Definition of epoch number type.
-pub type EpochNumber = u64;
 
 /// A builder for `is_descendent_of` functions.
 pub trait IsDescendentOfBuilder<Hash> {
@@ -57,15 +70,17 @@ impl<'a, H, Block> IsDescendentOfBuilder<Block::Hash>
 pub trait Epoch {
 	/// Descriptor for the next epoch.
 	type NextEpochDescriptor;
+	/// Type of the slot number.
+	type SlotNumber: Ord;
 
 	/// Increment the epoch data, using the next epoch descriptor.
 	fn increment(&self, descriptor: Self::NextEpochDescriptor) -> Self;
 
 	/// Produce the "end slot" of the epoch. This is NOT inclusive to the epoch,
 	/// i.e. the slots covered by the epoch are `self.start_slot() .. self.end_slot()`.
-	fn end_slot(&self) -> SlotNumber;
+	fn end_slot(&self) -> Self::SlotNumber;
 	/// Produce the "start slot" of the epoch.
-	fn start_slot(&self) -> SlotNumber;
+	fn start_slot(&self) -> Self::SlotNumber;
 }
 
 /// An unimported genesis epoch.
@@ -193,6 +208,11 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 	Number: Ord + One + Zero + Add<Output=Number> + Copy,
 	Epoch: crate::Epoch + Clone,
 {
+	/// Create a new epoch change.
+	pub fn new() -> Self {
+		Self::default()
+	}
+
 	/// Rebalances the tree of epoch changes so that it is sorted by length of
 	/// fork (longest fork first).
 	pub fn rebalance(&mut self) {
@@ -207,7 +227,7 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 		descendent_of_builder: D,
 		hash: &Hash,
 		number: Number,
-		slot: SlotNumber,
+		slot: Epoch::SlotNumber,
 	) -> Result<(), fork_tree::Error<D::Error>> {
 		let is_descendent_of = descendent_of_builder
 			.build_is_descendent_of(None);
@@ -241,10 +261,10 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 		descendent_of_builder: D,
 		parent_hash: &Hash,
 		parent_number: Number,
-		slot_number: SlotNumber,
+		slot_number: Epoch::SlotNumber,
 		make_genesis: G,
 	) -> Result<Option<ViableEpoch<Epoch>>, fork_tree::Error<D::Error>>
-		where G: FnOnce(SlotNumber) -> Epoch
+		where G: FnOnce(Epoch::SlotNumber) -> Epoch
 	{
 		// find_node_where will give you the node in the fork-tree which is an ancestor
 		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
@@ -322,8 +342,7 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 		}
 	}
 
-	/// Return the inner fork tree, useful for testing purposes.
-	#[cfg(test)]
+	/// Return the inner fork tree.
 	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpoch<Epoch>> {
 		&self.inner
 	}
@@ -380,6 +399,7 @@ mod tests {
 	}
 
 	type Hash = [u8; 1];
+	type SlotNumber = u64;
 
 	#[derive(Debug, Clone, Eq, PartialEq)]
 	struct Epoch {
@@ -389,6 +409,7 @@ mod tests {
 
 	impl EpochT for Epoch {
 		type NextEpochDescriptor = ();
+		type SlotNumber = SlotNumber;
 
 		fn increment(&self, _: ()) -> Self {
 			Epoch {
