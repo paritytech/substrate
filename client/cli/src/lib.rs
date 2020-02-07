@@ -244,23 +244,6 @@ where
 	}
 }
 
-/// Fill the given `PoolConfiguration` by looking at the cli parameters.
-fn fill_transaction_pool_configuration<G, E>(
-	options: &mut Configuration<G, E>,
-	params: TransactionPoolParams,
-) -> error::Result<()> {
-	// ready queue
-	options.transaction_pool.ready.count = params.pool_limit;
-	options.transaction_pool.ready.total_bytes = params.pool_kbytes * 1024;
-
-	// future queue
-	let factor = 10;
-	options.transaction_pool.future.count = params.pool_limit / factor;
-	options.transaction_pool.future.total_bytes = params.pool_kbytes * 1024 / factor;
-
-	Ok(())
-}
-
 /// Initialize the logger
 pub fn init_logger(pattern: &str) {
 	use ansi_term::Colour;
