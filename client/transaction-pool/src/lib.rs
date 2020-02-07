@@ -28,7 +28,7 @@ pub mod testing;
 pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
-use std::{collections::HashMap, sync::Arc, pin::Pin};
+use std::{collections::HashMap, sync::Arc, pin::Pin, time::Instant};
 use futures::{Future, FutureExt, future::ready};
 use parking_lot::Mutex;
 
@@ -41,7 +41,6 @@ use sp_transaction_pool::{
 	TxHash, TransactionFor, TransactionStatusStreamFor, BlockHash,
 	MaintainedTransactionPool, PoolFuture,
 };
-use wasm_timer::Instant;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -206,7 +205,7 @@ enum RevalidationStatus<N> {
 	/// The revalidation has never been completed.
 	NotScheduled,
 	/// The revalidation is scheduled.
-	Scheduled(Option<Instant>, Option<N>),
+	Scheduled(Option<std::time::Instant>, Option<N>),
 	/// The revalidation is in progress.
 	InProgress,
 }

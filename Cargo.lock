@@ -6046,6 +6046,7 @@ dependencies = [
  "ansi_term 0.12.1",
  "futures 0.3.1",
  "log 0.4.8",
+ "parity-util-mem 0.5.1",
  "sc-client-api",
  "sc-network",
  "sc-service",
@@ -6431,7 +6432,6 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "substrate-test-runtime",
- "wasm-timer",
 ]
 
 [[package]]
@@ -6455,7 +6455,6 @@ dependencies = [
  "sp-transaction-pool",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
- "wasm-timer",
 ]
 
 [[package]]
