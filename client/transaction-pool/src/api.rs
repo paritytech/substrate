@@ -24,9 +24,11 @@ use futures::{
 
 use sc_client_api::{
 	blockchain::HeaderBackend,
-	light::{Fetcher, RemoteCallRequest, RemoteBodyRequest},
+	light::{Storage, Fetcher, RemoteCallRequest, RemoteBodyRequest},
 	BlockBody, Backend
 };
+use sc_transaction_graph::BlockHash;
+use sp_blockchain::Backend as _;
 use sp_core::Hasher;
 use sp_runtime::{
 	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
@@ -126,6 +128,10 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 			(traits::HasherFor::<Block>::hash(x), x.len())
 		})
 	}
+
+	fn last_finalized(&self) -> Result<BlockHash<Self>, Self::Error> {
+		self.client.blockchain().last_finalized().map_err(error::Error::from)
+	}
 }
 
 /// The transaction pool logic for light client.
@@ -137,7 +143,7 @@ pub struct LightChainApi<Client, F, Block> {
 
 impl<Client, F, Block> LightChainApi<Client, F, Block> where
 	Block: BlockT,
-	Client: HeaderBackend<Block>,
+	Client: Storage<Block> + HeaderBackend<Block>,
 	F: Fetcher<Block>,
 {
 	/// Create new transaction pool logic.
@@ -152,7 +158,7 @@ impl<Client, F, Block> LightChainApi<Client, F, Block> where
 
 impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, F, Block> where
 	Block: BlockT,
-	Client: HeaderBackend<Block> + 'static,
+	Client: HeaderBackend<Block> + Storage<Block> + 'static,
 	F: Fetcher<Block> + 'static,
 {
 	type Block = Block;
@@ -240,5 +246,9 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 
 	fn block_header(&self, id: BlockId<Block>) -> error::Result<Option<Block::Header>> {
 		Ok(self.client.header(id)?)
+	}
+
+	fn last_finalized(&self) -> Result<BlockHash<Self>, Self::Error> {
+		self.client.last_finalized().map_err(error::Error::from)
 	}
 }

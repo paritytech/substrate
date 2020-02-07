@@ -222,28 +222,27 @@ pub trait TransactionPool: Send + Sync {
 }
 
 /// Events that the transaction pool listens for.
-pub enum ChainEvent<TP: TransactionPool> {
+pub enum ChainEvent<B: BlockT> {
 	/// New blocks have been added to the chain
 	NewBlock {
 		/// Id of the just imported block.
-		id: BlockId<TP::Block>,
+		id: BlockId<B>,
 		/// Header of the just imported block
-		header: <TP::Block as BlockT>::Header,
+		header: B::Header,
 		/// List of retracted blocks ordered by block number.
-		retracted: Vec<BlockHash<TP>>,
+		retracted: Vec<B::Hash>,
 	},
 	/// An existing block has been finalzied.
 	Finalized {
 		/// Hash of just finalized block
-		hash: BlockHash<TP>,
+		hash: B::Hash,
 	}
 }
 
 /// Trait for transaction pool maintenance.
 pub trait MaintainedTransactionPool: TransactionPool {
 	/// Perform maintenance
-	fn maintain(&self, event: ChainEvent<Self>) -> Pin<Box<dyn Future<Output=()> + Send>>
-		where Self: Sized;
+	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>>;
 }
 
 /// An abstraction for transaction pool.

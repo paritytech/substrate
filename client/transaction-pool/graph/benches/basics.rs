@@ -114,6 +114,10 @@ impl ChainApi for TestApi {
 	fn block_header(&self, id: BlockId<Self::Block>) -> Result<Option<Header>, Self::Error> {
 		Ok(None)
 	}
+
+	fn last_finalized(&self) -> Result<BlockHash<Self>, Self::Error> {
+		unimplemented!()
+	}
 }
 
 fn uxt(transfer: Transfer) -> Extrinsic {

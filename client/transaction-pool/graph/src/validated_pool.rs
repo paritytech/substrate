@@ -525,8 +525,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Notify all watchers that transactions in the block with hash been finalized
-	pub async fn finalized(&self, block_hash: &BlockHash<B>) -> Result<(), B::Error> {
+	pub async fn finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
+		debug!(target: "txpool", "Attempting to notify watchers of finalization for {}", block_hash);
 		let last_finalized_hash = *self.last_finalized_hash.lock();
+
 		let mut header = self.api.block_header(BlockId::Hash(block_hash.clone()))?
 			.expect("finalized block should have block header; qed");
 
@@ -534,18 +536,23 @@ impl<B: ChainApi> ValidatedPool<B> {
 			let hash = header.hash();
 			// fetch all extrinsic hashes
 			let tx_hashes = self.api.block_body(&BlockId::Hash(hash.clone())).await?
-				.expect("finalized block should have block body; qed")
+				.expect("fetched block header should have block body; qed")
 				.into_iter()
 				.map(|tx| self.api.hash_and_length(&tx).0)
 				.collect::<Vec<_>>();
 
 			self.listener.write().finalized(&hash, &tx_hashes);
 
-			header = self.api.block_header(BlockId::Hash(hash))?
-				.expect("finalized block should have block header; qed")
+			if last_finalized_hash == Default::default() {
+				// self.last_finalized_hash is created with a default value
+				break
+			}
+
+			header = self.api.block_header(BlockId::Hash(header.parent_hash().clone()))?
+				.expect("parent block should have block header; qed");
 		}
 
-		*self.last_finalized_hash.lock() = block_hash.clone();
+		*self.last_finalized_hash.lock() = block_hash;
 
 		Ok(())
 	}

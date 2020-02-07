@@ -32,6 +32,7 @@ use substrate_test_runtime_client::{
 	runtime::{Index, AccountId, Block, BlockNumber, Extrinsic, Hash, Header, Transfer},
 	AccountKeyring::{self, *},
 };
+use sc_transaction_graph::BlockHash;
 
 /// Error type used by [`TestApi`].
 #[derive(Debug, derive_more::From, derive_more::Display)]
@@ -222,6 +223,10 @@ impl sc_transaction_graph::ChainApi for TestApi {
 		} else {
 			None
 		})
+	}
+
+	fn last_finalized(&self) -> Result<BlockHash<Self>, Self::Error> {
+		unimplemented!()
 	}
 }
 

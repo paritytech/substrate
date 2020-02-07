@@ -292,7 +292,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 		Block: BlockT,
 		PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
 {
-	fn maintain(&self, event: ChainEvent<Self>) -> Pin<Box<dyn Future<Output=()> + Send>> {
+	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>> {
 		match event {
 			ChainEvent::NewBlock { id, retracted, .. } => {
 				let id = id.clone();
@@ -371,7 +371,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 			ChainEvent::Finalized { hash } => {
 				let pool = self.pool.clone();
 				async move {
-					if let Err(e) = pool.finalized(&hash).await {
+					if let Err(e) = pool.finalized(hash).await {
 						log::warn!(
 							target: "txpool",
 							"Error [{}] occurred while attempting to notify watchers of finalization {}",
