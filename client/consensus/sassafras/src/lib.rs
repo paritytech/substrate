@@ -4,7 +4,7 @@ use std::{
 	sync::Arc, marker::PhantomData, time::{Duration, Instant}, collections::HashMap,
 };
 use log::trace;
-use codec::Encode;
+use codec::{Encode, Decode};
 use parking_lot::Mutex;
 use merlin::Transcript;
 use sp_core::{Blake2Hasher, H256, crypto::{Pair, Public}};
@@ -13,7 +13,7 @@ use sp_inherents::InherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use sp_consensus::{
 	Error as ConsensusError, BlockImportParams, BlockOrigin, ForkChoiceStrategy,
-	ImportResult, BlockImport,
+	ImportResult, BlockImport, BlockCheckParams,
 };
 use sp_consensus::import_queue::{Verifier, CacheKeyId, BasicQueue};
 use sp_consensus_sassafras::{
@@ -35,6 +35,7 @@ use sc_consensus_slots::SlotCompatible;
 use crate::aux_schema::{load_epoch_changes, write_epoch_changes};
 
 /// Validator set of a particular epoch, can be either publishing or validating.
+#[derive(Debug, Clone, Encode, Decode)]
 pub struct ValidatorSet {
 	/// Proofs of all VRFs collected.
 	pub proofs: Vec<VRFProof>,
@@ -45,6 +46,7 @@ pub struct ValidatorSet {
 }
 
 /// Epoch data for Sassafras
+#[derive(Debug, Clone, Encode, Decode)]
 pub struct Epoch {
 	/// Start slot of the epoch.
 	pub start_slot: SlotNumber,
@@ -97,6 +99,7 @@ enum Error<B: BlockT> {
 	ParentUnavailable(B::Hash, B::Hash),
 	#[display(fmt = "Could not fetch parent header: {:?}", _0)]
 	FetchParentHeader(sp_blockchain::Error),
+	InvalidEpochData,
 	MultiplePreRuntimeDigest,
 	NoPreRuntimeDigest,
 	MultipleNextEpochDescriptor,
@@ -172,8 +175,8 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 			return Err(Error::SlotInFuture.into())
 		}
 
-		let epoch_changes = self.epoch_changes.lock();
-		let epoch = {
+		let mut epoch_changes = self.epoch_changes.lock();
+		let epoch_data = {
 			epoch_changes.epoch_for_child_of_mut(
 				descendent_query(&*self.client),
 				&parent_hash,
@@ -181,7 +184,10 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 				unimplemented!(), // TODO
 				|slot| unimplemented!() // TODO
 			)
+				.map_err(|_| Error::InvalidEpochData)?
+				.ok_or(Error::InvalidEpochData)?
 		};
+		let epoch = epoch_data.as_mut();
 
 		// Check the signature.
 		let (author, block_weight) = epoch.validating.authorities
@@ -206,7 +212,7 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 		let ticket_transcript = make_ticket_transcript(
 			&epoch.validating.randomness,
 			pre_digest.slot,
-			epoch.validating.epoch,
+			epoch.epoch_index,
 		);
 		schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 			p.vrf_verify(ticket_transcript, &pre_digest.ticket_vrf_output, &ticket_vrf_proof)
@@ -216,7 +222,7 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 		let post_transcript = make_post_transcript(
 			&epoch.validating.randomness,
 			pre_digest.slot,
-			epoch.validating.epoch,
+			epoch.epoch_index,
 		);
 		schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 			p.vrf_verify(post_transcript, &pre_digest.post_vrf_output, &pre_digest.post_vrf_proof)
@@ -238,7 +244,6 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 				proofs: Vec::new(),
 				authorities: next_epoch_desc.authorities,
 				randomness: next_epoch_desc.randomness,
-				epoch: epoch.validating.epoch + 1,
 			};
 
 			// TODO: sort the validating proofs in "outside-in" order.
@@ -252,7 +257,9 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 			finalized: false,
 			justification,
 			auxiliary: vec![],
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			fork_choice: None,
+			intermediates: Default::default(),
+			storage_changes: None,
 			allow_missing_state: false,
 			import_existing: false,
 		};
@@ -319,20 +326,19 @@ where
 		let parent_hash = *block.header.parent_hash();
 		let number = block.header.number().clone();
 
-		let mut auxiliary = aux_schema::load_auxiliary(&parent_hash, self.api.as_ref())
-			.map_err(Error::Client)?;
-
-		let pre_digest = find_pre_digest::<Block>(&block.header)?;
-
-		// Verify that the slot is increasing, and not in the future.
-		if pre_digest.slot <= auxiliary.slot {
-			return Err(Error::SlotInPast.into())
-		}
-		auxiliary.slot = pre_digest.slot;
+		// let pre_digest = find_pre_digest::<Block>(&block.header)?;
+		// TODO: Verify that the slot is increasing, and not in the future.
 
 		let import_result = self.inner.import_block(block, new_cache);
 
 		import_result.map_err(Into::into)
+	}
+
+	fn check_block(
+		&mut self,
+		block: BlockCheckParams<Block>,
+	) -> Result<ImportResult, Self::Error> {
+		self.inner.check_block(block).map_err(Into::into)
 	}
 }
 

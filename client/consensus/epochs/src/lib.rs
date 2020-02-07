@@ -112,6 +112,15 @@ impl<Epoch> AsRef<Epoch> for ViableEpoch<Epoch> {
 	}
 }
 
+impl<Epoch> AsMut<Epoch> for ViableEpoch<Epoch> {
+	fn as_mut(&mut self) -> &mut Epoch {
+		match *self {
+			ViableEpoch::Genesis(UnimportedGenesisEpoch(ref mut e)) => e,
+			ViableEpoch::Regular(ref mut e) => e,
+		}
+	}
+}
+
 impl<Epoch> ViableEpoch<Epoch> where
 	Epoch: crate::Epoch + Clone,
 {
