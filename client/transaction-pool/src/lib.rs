@@ -53,6 +53,18 @@ pub struct BasicPool<PoolApi, Block>
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
 }
 
+impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
+where
+	PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
+	PoolApi::Hash: parity_util_mem::MallocSizeOf,
+	Block: BlockT,
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		// other entries insignificant or non-primary references
+		self.pool.size_of(ops)
+	}
+}
+
 /// Type of revalidation.
 pub enum RevalidationType {
 	/// Light revalidation type.
