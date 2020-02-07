@@ -34,7 +34,7 @@ use crate::trie_backend_essence::{BackendStorageDBRef, TrieBackendEssence,
 use crate::{Error, ExecutionError, Backend};
 use std::collections::{HashMap, HashSet};
 use crate::DBValue;
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildrenMap};
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -42,43 +42,83 @@ pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Has
 	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
 }
 
+#[repr(u32)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum StorageProofKind {
+	/// The proof can be build by multiple child trie only if
+	/// they are of the same kind, that way we can store all
+	/// encoded node in the same container.
+	Flatten,
+	/// Top trie proof only, in compact form.
+	TopTrieCompact,
+	/// Proofs split by child trie.
+	Full,
+	/// Compact form of proofs split by child trie.
+	FullCompact,
+}
+
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
 /// does not already have access to the key-value pairs.
 ///
-/// The proof consists of the set of serialized nodes in the storage trie accessed when looking up
-/// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
-/// the serialized nodes and performing the key lookups.
+/// For default trie, the proof component consists of the set of serialized nodes in the storage trie
+/// accessed when looking up the keys covered by the proof. Verifying the proof requires constructing
+/// the partial trie from the serialized nodes and performing the key lookups.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-pub struct StorageProof {
-	trie_nodes: Vec<Vec<u8>>,
+pub enum StorageProof {
+	/// Single flattened proof component, all default child trie are flattened over a same
+	/// container, no child trie information is provided, this works only for proof accessing
+	/// the same kind of child trie.
+	Flatten(Vec<Vec<u8>>),
+	/// If proof only cover a single trie, we compact the proof by ommitting some content
+	/// that can be rebuild on construction. For patricia merkle trie it will be hashes that
+	/// are not necessary between node, with indexing of the missing hash based on orders
+	/// of nodes.
+	/// TODO replace u32 by codec compact!!! this is a versioning for the compaction type of child
+	/// proof.
+	TopTrieCompact(u32, Vec<Vec<u8>>),
+	///	Fully descriped proof, it includes the child trie individual descriptions.
+	Full(ChildrenMap<Vec<Vec<u8>>>),
+	///	Fully descriped proof, compact encoded.
+	FullCompact(ChildrenMap<(u32, Vec<Vec<u8>>)>),
 }
 
 impl StorageProof {
-	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
-	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
-		StorageProof { trie_nodes }
-	}
-
 	/// Returns a new empty proof.
 	///
 	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
 	/// key-value pairs exist in storage).
-	pub fn empty() -> Self {
-		StorageProof {
-			trie_nodes: Vec::new(),
+	pub fn empty(kind: StorageProofKind) -> Self {
+		match kind {
+			StorageProofKind::Flatten => StorageProof::Flatten(Vec::new()),
+			StorageProofKind::Full => StorageProof::Full(ChildrenMap::default()),
+			StorageProofKind::FullCompact => StorageProof::FullCompact(ChildrenMap::default()),
 		}
 	}
 
 	/// Returns whether this is an empty proof.
 	pub fn is_empty(&self) -> bool {
-		self.trie_nodes.is_empty()
+		match self {
+			StorageProof::Flatten(data) => data.is_empty(),
+			StorageProof::Full(data) => data.is_empty(),
+			StorageProof::FullCompact(data) => data.is_empty(),
+		}
 	}
 
 	/// Create an iterator over trie nodes constructed from the proof. The nodes are not guaranteed
 	/// to be traversed in any particular order.
-	pub fn iter_nodes(self) -> StorageProofNodeIterator {
+	/// This iterator is only for `Flatten` proofs, other kind of proof will return an iterator with
+	/// no content.
+	pub fn iter_nodes_flatten(self) -> StorageProofNodeIterator {
 		StorageProofNodeIterator::new(self)
+	}
+
+	/// This unpack `FullCompact` to `Compact` or do nothing.
+	pub fn unpack(self) -> Self {
+	}
+
+	/// This flatten (does unpack full compact first).
+	pub fn flatten(self) -> Self {
 	}
 }
 
@@ -90,8 +130,13 @@ pub struct StorageProofNodeIterator {
 
 impl StorageProofNodeIterator {
 	fn new(proof: StorageProof) -> Self {
-		StorageProofNodeIterator {
-			inner: proof.trie_nodes.into_iter(),
+		match proof {
+			StorageProof::Flatten(data) => StorageProofNodeIterator {
+				inner: data.into_iter(),
+			},
+			_ => StorageProofNodeIterator {
+				inner: Vec::new().into_iter(),
+			},
 		}
 	}
 }
@@ -107,9 +152,12 @@ impl Iterator for StorageProofNodeIterator {
 /// Merges multiple storage proofs covering potentially different sets of keys into one proof
 /// covering all keys. The merged proof output may be smaller than the aggregate size of the input
 /// proofs due to deduplication of trie nodes.
+/// Merge to `Flatten` if any item is flatten (we cannot unflatten), if not `Flatten` we output
+/// non compact form.
 pub fn merge_storage_proofs<I>(proofs: I) -> StorageProof
 	where I: IntoIterator<Item=StorageProof>
 {
+	let mut StorageProof = 
 	let trie_nodes = proofs.into_iter()
 		.flat_map(|proof| proof.iter_nodes())
 		.collect::<HashSet<_>>()
@@ -194,20 +242,21 @@ pub type ProofRecorder<H> = Arc<RwLock<HashMap<<H as InnerHasher>::Out, Option<D
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
 pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> (
-	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
+	TrieBackend<ProofRecorderBackend<'a, S, H>, H>, StorageProofKind,
 );
 
 /// Trie backend storage with its proof recorder.
 pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	backend: &'a S,
 	proof_recorder: ProofRecorder<H>,
+	flatten: bool,
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	where H::Out: Codec
 {
 	/// Create new proving backend.
-	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
+	pub fn new(backend: &'a TrieBackend<S, H>, kind: StorageProofKind) -> Self {
 		let proof_recorder = Default::default();
 		Self::new_with_recorder(backend, proof_recorder)
 	}

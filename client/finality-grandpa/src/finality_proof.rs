@@ -873,7 +873,7 @@ pub(crate) mod tests {
 			0,
 			auth3,
 			&ClosureAuthoritySetForFinalityChecker(
-				|hash, _header, proof: StorageProof| match proof.clone().iter_nodes().next().map(|x| x[0]) {
+				|hash, _header, proof: StorageProof| match proof.clone().iter_nodes_flatten().next().map(|x| x[0]) {
 					Some(50) => Ok(auth5.clone()),
 					Some(70) => Ok(auth7.clone()),
 					_ => unreachable!("no other proofs should be checked: {}", hash),
