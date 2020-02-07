@@ -54,6 +54,7 @@ pub struct BasicPool<PoolApi, Block>
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
 }
 
+#[cfg(not(target_os = "unknown"))]
 impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
 where
 	PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,

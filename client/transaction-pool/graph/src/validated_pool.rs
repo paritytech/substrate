@@ -74,6 +74,7 @@ pub(crate) struct ValidatedPool<B: ChainApi> {
 	rotator: PoolRotator<ExHash<B>>,
 }
 
+#[cfg(not(target_os = "unknown"))]
 impl<B: ChainApi> parity_util_mem::MallocSizeOf for ValidatedPool<B>
 where
 	B::Hash: parity_util_mem::MallocSizeOf,

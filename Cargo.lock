@@ -6046,6 +6046,7 @@ dependencies = [
  "ansi_term 0.12.1",
  "futures 0.3.1",
  "log 0.4.8",
+ "parity-util-mem 0.5.1",
  "sc-client-api",
  "sc-network",
  "sc-service",

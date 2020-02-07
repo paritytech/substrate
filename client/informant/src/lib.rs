@@ -48,6 +48,7 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			} else {
 				trace!(target: "usage", "Usage statistics not displayed as backend does not provide it")
 			}
+			#[cfg(not(target_os = "unknown"))]
 			trace!(
 				target: "usage",
 				"Subsystems memory [txpool: {} kB]",
