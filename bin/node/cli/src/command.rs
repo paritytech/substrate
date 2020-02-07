@@ -40,7 +40,8 @@ where
 			&version,
 		),
 		Some(Subcommand::Factory(cli_args)) => {
-			sc_cli::init(&mut config, &cli_args.shared_params, &version, load_spec)?;
+			sc_cli::init(&cli_args.shared_params, &version)?;
+			sc_cli::init_config(&mut config, &cli_args.shared_params, &version, load_spec)?;
 			sc_cli::fill_import_params(
 				&mut config,
 				&cli_args.import_params,

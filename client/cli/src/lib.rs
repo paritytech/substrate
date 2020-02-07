@@ -233,7 +233,8 @@ where
 	SL: AbstractService + Unpin,
 	SF: AbstractService + Unpin,
 {
-	init(&mut config, &run_cmd.shared_params, version, spec_factory)?;
+	init(&run_cmd.shared_params, version)?;
+	init_config(&mut config, &run_cmd.shared_params, version, spec_factory)?;
 	run_cmd.run(config, new_light, new_full, version)
 }
 
@@ -256,7 +257,8 @@ where
 	<BB as BlockT>::Hash: std::str::FromStr,
 {
 	let shared_params = subcommand.get_shared_params();
-	init(&mut config, shared_params, version, spec_factory)?;
+	init(shared_params, version)?;
+	init_config(&mut config, shared_params, version, spec_factory)?;
 	subcommand.run(config, builder)
 }
 
@@ -267,18 +269,7 @@ where
 /// 1. Set the panic handler
 /// 2. Raise the FD limit
 /// 3. Initialize the logger
-/// 4. Loads the chain spec.
-/// 5. Initializes the config dir and database dir.
-pub fn init<G, E, F>(
-	config: &mut Configuration<G, E>,
-	shared_params: &SharedParams,
-	version: &VersionInfo,
-	spec_factory: F,
-) -> error::Result<()> where
-	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-{
+pub fn init(shared_params: &SharedParams, version: &VersionInfo) -> error::Result<()> {
 	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
 		version.commit
@@ -288,6 +279,22 @@ pub fn init<G, E, F>(
 	fdlimit::raise_fd_limit();
 	init_logger(shared_params.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
 
+	Ok(())
+}
+
+/// Initialize the given `config`.
+///
+/// This will load the chain spec, set the `config_dir` and the `database_dir`.
+pub fn init_config<G, E, F>(
+	config: &mut Configuration<G, E>,
+	shared_params: &SharedParams,
+	version: &VersionInfo,
+	spec_factory: F,
+) -> error::Result<()> where
+	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+{
 	load_spec(config, shared_params, spec_factory)?;
 
 	if config.config_dir.is_none() {
@@ -849,7 +856,8 @@ mod tests {
 		let cli = RunCmd::from_iter(args);
 
 		let mut config = Configuration::new(TEST_VERSION_INFO);
-		init(
+		init(&cli.shared_params, &TEST_VERSION_INFO).unwrap();
+		init_config(
 			&mut config,
 			&cli.shared_params,
 			&TEST_VERSION_INFO,
