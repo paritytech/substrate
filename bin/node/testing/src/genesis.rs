@@ -38,7 +38,7 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 			code: code.map(|x| x.to_vec()).unwrap_or_else(|| WASM_BINARY.to_vec()),
 		}),
 		pallet_indices: Some(IndicesConfig {
-			ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
+			indices: vec![],
 		}),
 		pallet_balances: Some(BalancesConfig {
 			balances: vec![

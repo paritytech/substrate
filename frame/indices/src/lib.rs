@@ -21,11 +21,14 @@
 
 use sp_std::prelude::*;
 use codec::Codec;
-use sp_runtime::traits::{SimpleArithmetic, StaticLookup, Member, LookupError};
+use sp_runtime::traits::{
+	SimpleArithmetic, StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash
+};
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
-use frame_system::ensure_signed;
+use frame_support::storage::migration::take_storage_value;
+use frame_system::{ensure_signed, ensure_root};
 use self::address::Address as RawAddress;
 
 mod mock;
@@ -54,8 +57,15 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Indices {
 		/// The lookup from index to account.
-		pub Accounts:
-			map hasher(blake2_128_concat) T::AccountIndex => Option<(T::AccountId, BalanceOf<T>)>;
+		pub Accounts build(|config: &GenesisConfig<T>|
+			config.indices.iter()
+				.cloned()
+				.map(|(a, b)| (a, (b, Zero::zero())))
+				.collect::<Vec<_>>()
+		): map hasher(blake2_128_concat) T::AccountIndex => Option<(T::AccountId, BalanceOf<T>)>;
+	}
+	add_extra_genesis {
+		config(indices): Vec<(T::AccountIndex, T::AccountId)>;
 	}
 }
 
@@ -87,6 +97,10 @@ decl_error! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
 		fn deposit_event() = default;
+
+		fn on_initialize() {
+			Self::migrations();
+		}
 
 		/// Assign an previously unassigned index.
 		///
@@ -171,6 +185,34 @@ decl_module! {
 			})?;
 			Self::deposit_event(RawEvent::IndexFreed(index));
 		}
+
+		/// Force an index to an account. This doesn't require a deposit. If the index is already
+		/// held, then any deposit is reimbursed to its current owner.
+		///
+		/// The dispatch origin for this call must be _Root_.
+		///
+		/// - `index`: the index to be (re-)assigned.
+		/// - `new`: the new owner of the index. This function is a no-op if it is equal to sender.
+		///
+		/// Emits `IndexAssigned` if successful.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One storage mutation (codec `O(1)`).
+		/// - Up to one reserve operation.
+		/// - One event.
+		/// # </weight>
+		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex) {
+			ensure_root(origin)?;
+
+			Accounts::<T>::mutate(index, |maybe_value| {
+				if let Some((account, amount)) = maybe_value.take() {
+					T::Currency::unreserve(&account, amount);
+				}
+				*maybe_value = Some((new.clone(), Zero::zero()));
+			});
+			Self::deposit_event(RawEvent::IndexAssigned(new, index));
+		}
 	}
 }
 
@@ -189,6 +231,30 @@ impl<T: Trait> Module<T> {
 		match a {
 			address::Address::Id(i) => Some(i),
 			address::Address::Index(i) => Self::lookup_index(i),
+		}
+	}
+
+	/// Do any migrations.
+	fn migrations() {
+		if let Some(set_count) = take_storage_value::<T::AccountIndex>(b"Indices", b"NextEnumSet", b"") {
+			// migrations need doing.
+			let set_size: T::AccountIndex = 64.into();
+
+			let mut set_index: T::AccountIndex = Zero::zero();
+			while set_index < set_count {
+				let maybe_accounts = take_storage_value::<Vec<T::AccountId>>(b"Indices", b"EnumSet", BlakeTwo256::hash_of(&set_index).as_ref());
+				if let Some(accounts) = maybe_accounts {
+					for (item_index, target) in accounts.into_iter().enumerate() {
+						if target != T::AccountId::default() && !T::Currency::total_balance(&target).is_zero() {
+							let index = set_index * set_size + T::AccountIndex::from(item_index as u32);
+							Accounts::<T>::insert(index, (target, BalanceOf::<T>::zero()));
+						}
+					}
+				} else {
+					break;
+				}
+				set_index += One::one();
+			}
 		}
 	}
 }

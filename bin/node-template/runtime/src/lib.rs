@@ -177,16 +177,21 @@ impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	/// How much an index costs.
+	pub const IndexDeposit: u128 = 100;
+}
+
 impl indices::Trait for Runtime {
 	/// The type for recording indexing into the account enumeration. If this ever overflows, there
 	/// will be problems!
 	type AccountIndex = AccountIndex;
-	/// Use the standard means of resolving an index hint from an id.
-	type ResolveHint = indices::SimpleResolveHint<Self::AccountId, Self::AccountIndex>;
-	/// Determine whether an account is dead.
-	type IsDeadAccount = Balances;
 	/// The ubiquitous event type.
 	type Event = Event;
+	/// The currency type.
+	type Currency = Balances;
+	/// How much an index costs.
+	type Deposit = IndexDeposit;
 }
 
 parameter_types! {
@@ -248,7 +253,7 @@ construct_runtime!(
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
-		Indices: indices,
+		Indices: indices::{Module, Call, Storage, Event<T>, Config<T>},
 		Balances: balances::{Module, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: transaction_payment::{Module, Storage},
 		Sudo: sudo,

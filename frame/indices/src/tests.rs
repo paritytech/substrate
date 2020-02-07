@@ -81,3 +81,23 @@ fn transfer_index_on_accounts_should_work() {
 		assert_eq!(Indices::lookup_index(0), Some(3));
 	});
 }
+
+#[test]
+fn force_transfer_index_on_preowned_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Indices::claim(Some(1).into(), 0));
+		assert_ok!(Indices::force_transfer(Origin::ROOT, 3, 0));
+		assert_eq!(Balances::reserved_balance(1), 0);
+		assert_eq!(Balances::reserved_balance(3), 0);
+		assert_eq!(Indices::lookup_index(0), Some(3));
+	});
+}
+
+#[test]
+fn force_transfer_index_on_free_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Indices::force_transfer(Origin::ROOT, 3, 0));
+		assert_eq!(Balances::reserved_balance(3), 0);
+		assert_eq!(Indices::lookup_index(0), Some(3));
+	});
+}
