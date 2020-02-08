@@ -348,11 +348,6 @@ decl_storage! {
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
 		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
-
-		/// True if network has been upgraded to this version.
-		///
-		/// True for new networks.
-		IsUpgraded build(|_: &GenesisConfig| true): bool;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
