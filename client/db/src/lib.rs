@@ -28,6 +28,8 @@
 
 pub mod light;
 pub mod offchain;
+
+#[cfg(feature = "kvdb-rocksdb")]
 pub mod bench;
 
 mod children;
@@ -80,6 +82,8 @@ use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
+
+#[cfg(feature = "kvdb-rocksdb")]
 pub use bench::BenchmarkingState;
 
 #[cfg(feature = "test-helpers")]

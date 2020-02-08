@@ -96,7 +96,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let db_config = DatabaseConfig::with_columns(1);
 		let path = self.path.to_str()
 			.ok_or_else(|| String::from("Invalid database path"))?;
-		let db = Arc::new(Database::open(&db_config, &path).map_err(|e| format!("Error opening dadabase: {:?}", e))?);
+		let db = Arc::new(Database::open(&db_config, &path).map_err(|e| format!("Error opening database: {:?}", e))?);
 		self.db.set(Some(db.clone()));
 		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
 		*self.state.borrow_mut() = Some(DbState::<B>::new(storage_db, self.root.get()));
