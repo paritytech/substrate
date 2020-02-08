@@ -203,7 +203,6 @@ pub trait Externalities: ExtensionStore {
 	/// Returns the SCALE encoded hash.
 	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
 
-
 	fn wipe(&mut self) {
 		unimplemented!()
 	}

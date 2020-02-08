@@ -110,7 +110,6 @@ pub use kvdb;
 pub struct RefTrackingState<Block: BlockT> {
 	state: DbState<Block>,
 	storage: Arc<StorageDb<Block>>,
-
 	parent_hash: Option<Block::Hash>,
 }
 

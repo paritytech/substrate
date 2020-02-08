@@ -784,12 +784,12 @@ pub trait Benchmarking {
 				.as_nanos()
 		}
 
-		/// Reset state to empty.
+		/// Reset the trie database to the genesis state.
 		fn wipe_db(&mut self) {
 			self.wipe()
 		}
 
-		/// Commit pending storage changes to the trie database.
+		/// Commit pending storage changes to the trie database and clear the database cache.
 		fn commit_db(&mut self) {
 			self.commit()
 		}

@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -208,9 +208,8 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		}
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction) where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.storage_root(delta))
 	}
@@ -220,9 +219,8 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
-	) -> (B::Hash, bool, Self::Transaction)
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+	) -> (B::Hash, bool, Self::Transaction) where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.child_storage_root(storage_key, child_info, delta))
 	}
@@ -250,7 +248,9 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		None
 	}
 
-	fn commit(&self, storage_root: <HasherFor<B> as Hasher>::Out, mut transaction: Self::Transaction) -> Result<(), Self::Error> {
+	fn commit(&self, storage_root: <HasherFor<B> as Hasher>::Out, mut transaction: Self::Transaction)
+		-> Result<(), Self::Error>
+	{
 		if let Some(db) = self.db.take() {
 			let mut db_transaction = DBTransaction::new();
 

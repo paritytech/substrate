@@ -82,7 +82,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 214,
-	impl_version: 1,
+	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -808,7 +808,9 @@ impl_runtime_apis! {
 	}
 
 	impl crate::Benchmark<Block> for Runtime {
-		fn dispatch_benchmark(module: Vec<u8>, extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Option<Vec<BenchmarkResults>> {
+		fn dispatch_benchmark(module: Vec<u8>, extrinsic: Vec<u8>, steps: u32, repeat: u32)
+			-> Option<Vec<BenchmarkResults>>
+		{
 			match module.as_slice() {
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
 				_ => return None,
@@ -820,7 +822,8 @@ impl_runtime_apis! {
 sp_api::decl_runtime_apis! {
 	pub trait Benchmark
 	{
-		fn dispatch_benchmark(module: Vec<u8>, extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Option<Vec<BenchmarkResults>>;
+		fn dispatch_benchmark(module: Vec<u8>, extrinsic: Vec<u8>, steps: u32, repeat: u32)
+			-> Option<Vec<BenchmarkResults>>;
 	}
 }
 

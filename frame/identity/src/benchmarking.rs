@@ -90,7 +90,6 @@ fn create_identity_info<T: Trait>(num_fields: u32) -> IdentityInfo {
 // Benchmark `add_registrar` extrinsic.
 struct AddRegistrar;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for AddRegistrar {
-
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Registrar Count
@@ -98,7 +97,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap().1;
@@ -112,7 +112,6 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 // Benchmark `set_identity` extrinsic.
 struct SetIdentity;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetIdentity {
-
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Registrar Count
@@ -122,7 +121,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap().1;
@@ -162,7 +162,6 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 // Benchmark `set_subs` extrinsic.
 struct SetSubs;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetSubs {
-
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Subs Count
@@ -170,7 +169,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{	
 		// Generic data to be used.
 		let data = Data::Raw(vec![0; 32]);
@@ -199,7 +199,6 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 // Benchmark `clear_identity` extrinsic.
 struct ClearIdentity;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ClearIdentity {
-
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Registrar Count
@@ -211,7 +210,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{	
 		// The target user
 		let caller = account::<T>("caller", 0);
@@ -251,7 +251,6 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 // Benchmark `request_judgement` extrinsic.
 struct RequestJudgement;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for RequestJudgement {
-
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Registrar Count
@@ -261,7 +260,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{	
 		// The target user
 		let caller = account::<T>("caller", 0);
@@ -285,7 +285,6 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 // Benchmark `cancel_request` extrinsic.
 struct CancelRequest;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for CancelRequest {
-
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Registrar Count
@@ -295,7 +294,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{	
 		// The target user
 		let caller = account::<T>("caller", 0);
@@ -321,7 +321,6 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 // Benchmark `set_fee` extrinsic.
 struct SetFee;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetFee {
-
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Registrar Count
@@ -329,7 +328,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{	
 		// The target user
 		let caller = account::<T>("caller", 0);
@@ -350,7 +350,6 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 // Benchmark `set_account_id` extrinsic.
 struct SetAccountId;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetAccountId {
-
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Registrar Count
@@ -358,7 +357,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{	
 		// The target user
 		let caller = account::<T>("caller", 0);
@@ -379,7 +379,6 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 // Benchmark `set_fields` extrinsic.
 struct SetFields;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetFields {
-
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Registrar Count
@@ -387,7 +386,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{	
 		// The target user
 		let caller = account::<T>("caller", 0);
@@ -423,7 +423,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{	
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap().1;
@@ -474,7 +475,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{	
 		// The target user
 		let caller = account::<T>("caller", 0);
@@ -529,8 +531,7 @@ enum SelectedBenchmark {
 // Allow us to select a benchmark from the list of available benchmarks.
 
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>
-	{
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		match self {
 			Self::AddRegistrar => <AddRegistrar as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&AddRegistrar),
 			Self::SetIdentity => <SetIdentity as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&SetIdentity),
@@ -546,7 +547,8 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		}
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
 		match self {
 			Self::AddRegistrar => <AddRegistrar as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&AddRegistrar, components),
@@ -566,7 +568,6 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
-
 		// Map the input to the selected benchmark.
 		let selected_benchmark = match extrinsic.as_slice() {
 			b"add_registrar" => SelectedBenchmark::AddRegistrar,
@@ -607,7 +608,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					).collect();
 
 				// Run the benchmark `repeat` times.
-				for r in 0..repeat {
+				for _ in 0..repeat {
 					// Set up the externalities environment for the setup we want to benchmark.
 					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
 					// Commit the externalities to the database, flushing the DB cache.

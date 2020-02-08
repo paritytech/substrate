@@ -845,10 +845,10 @@ pub struct PurgeChainCmd {
 	pub shared_params: SharedParams,
 }
 
-/// The `benchmark` command used to benchmark FRAME pallets.
+/// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, StructOpt, Clone)]
 pub struct BenchmarkCmd {
-	/// Select a FRAME pallet to benchmark.
+	/// Select a FRAME Pallet to benchmark.
 	#[structopt(short, long)]
 	pub pallet: String,
 
@@ -856,7 +856,7 @@ pub struct BenchmarkCmd {
 	#[structopt(short, long)]
 	pub extrinsic: String,
 
-	/// Select how many steps of the parameters should we test.
+	/// Select how many samples we should take across the variable components.
 	#[structopt(short, long, default_value = "1")]
 	pub steps: u32,
 
