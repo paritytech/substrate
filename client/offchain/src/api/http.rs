@@ -688,31 +688,36 @@ impl fmt::Debug for HttpWorkerRequest {
 
 #[cfg(test)]
 mod tests {
+	use core::convert::Infallible;
 	use crate::api::timestamp;
 	use super::http;
-	use futures::prelude::*;
-	use futures01::Future as _;
 	use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Duration};
 
 	// Returns an `HttpApi` whose worker is ran in the background, and a `SocketAddr` to an HTTP
 	// server that runs in the background as well.
 	macro_rules! build_api_server {
 		() => {{
+			fn tokio_run<T>(future: impl std::future::Future<Output = T>) {
+				let _ = tokio::runtime::Runtime::new().unwrap().block_on(future);
+			}
+
 			let (api, worker) = http();
-			// Note: we have to use tokio because hyper still uses old futures.
-			std::thread::spawn(move || {
-				tokio::run(futures::compat::Compat::new(worker.map(|()| Ok::<(), ()>(()))))
-			});
+			std::thread::spawn(move || tokio_run(worker));
+
 			let (addr_tx, addr_rx) = std::sync::mpsc::channel();
 			std::thread::spawn(move || {
-				let server = hyper::Server::bind(&"127.0.0.1:0".parse().unwrap())
-					.serve(|| {
-						hyper::service::service_fn_ok(move |_: hyper::Request<hyper::Body>| {
-							hyper::Response::new(hyper::Body::from("Hello World!"))
-						})
-					});
-				let _ = addr_tx.send(server.local_addr());
-				hyper::rt::run(server.map_err(|e| panic!("{:?}", e)));
+				tokio_run(async move {
+					let server = hyper::Server::bind(&"127.0.0.1:0".parse().unwrap())
+						.serve(hyper::service::make_service_fn(|_| { async move {
+							Ok::<_, Infallible>(hyper::service::service_fn(move |_req| async move {
+								Ok::<_, Infallible>(
+									hyper::Response::new(hyper::Body::from("Hello World!"))
+								)
+							}))
+						}}));
+					let _ = addr_tx.send(server.local_addr());
+					server.await
+				});
 			});
 			(api, addr_rx.recv().unwrap())
 		}};
