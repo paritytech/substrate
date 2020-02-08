@@ -1381,6 +1381,6 @@ where
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		// this should always be exactly equivalent to `Self::account(who).total().is_zero()`
-		!Account::<T, I>::exists(who)
+		!Account::<T, I>::contains_key(who)
 	}
 }
