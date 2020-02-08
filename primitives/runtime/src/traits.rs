@@ -1332,6 +1332,11 @@ pub trait BlockIdTo<Block: self::Block> {
 /// The pallet benchmarking trait.
 pub trait Benchmarking<T> {
 	/// Run the benchmarks for this pallet.
+	///
+	/// Parameters
+	/// - `extrinsic`: The name of extrinsic function you want to benchmark encoded as bytes.
+	/// - `steps`: The number of sample points you want to take across the range of parameters.
+	/// - `repeat`: The number of times you want to repeat a benchmark.
 	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<T>, &'static str>;
 }
 
