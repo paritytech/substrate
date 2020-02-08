@@ -88,7 +88,7 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"call to undefined external function with index 68\")"
+					"Other(\"call to undefined external function with index 71\")"
 				),
 			}
 		}
@@ -117,7 +117,7 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"call to undefined external function with index 69\")"
+					"Other(\"call to undefined external function with index 72\")"
 				),
 			}
 		}
