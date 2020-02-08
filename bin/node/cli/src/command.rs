@@ -41,7 +41,7 @@ where
 		),
 		Some(Subcommand::Factory(cli_args)) => {
 			sc_cli::init(&cli_args.shared_params, &version)?;
-			sc_cli::load_spec(&mut config, &cli_args.shared_params, load_spec)?;
+			sc_cli::init_config(&mut config, &cli_args.shared_params, &version, load_spec)?;
 			sc_cli::fill_import_params(
 				&mut config,
 				&cli_args.import_params,
@@ -54,6 +54,16 @@ where
 			match ChainSpec::from(config.expect_chain_spec().id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
 				_ => panic!("Factory is only supported for development and local testnet."),
+			}
+
+			// Setup tracing.
+			if let Some(tracing_targets) = cli_args.import_params.tracing_targets.as_ref() {
+				let subscriber = sc_tracing::ProfilingSubscriber::new(
+					cli_args.import_params.tracing_receiver.into(), tracing_targets
+				);
+				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+					panic!("Unable to set global default subscriber {}", e);
+				}
 			}
 
 			let factory_state = FactoryState::new(
