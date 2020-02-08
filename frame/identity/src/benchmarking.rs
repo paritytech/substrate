@@ -25,6 +25,7 @@ use sp_runtime::traits::{Bounded, Benchmarking, BenchmarkingSetup, Dispatchable}
 
 use crate::Module as Identity;
 
+// The maximum number of identity registrars we will test.
 const MAX_REGISTRARS: u32 = 50;
 
 // Support Functions
@@ -33,6 +34,7 @@ fn account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 	T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 }
 
+// Adds `r` registrars to the Identity Pallet. These registrars will have set fees and fields.
 fn add_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
 	for i in 0..r {
 		let _ = T::Currency::make_free_balance_be(&account::<T>("registrar", i), BalanceOf::<T>::max_value());
@@ -49,6 +51,8 @@ fn add_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
 	Ok(())
 }
 
+// Adds `s` sub-accounts to the identity of `who`. Each wil have 32 bytes of raw data added to it.
+// This additionally returns the vector of sub-accounts to it can be modified if needed.
 fn add_sub_accounts<T: Trait>(who: T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
 	let mut subs = Vec::new();
 	let who_origin = RawOrigin::Signed(who.clone());
@@ -63,6 +67,8 @@ fn add_sub_accounts<T: Trait>(who: T::AccountId, s: u32) -> Result<Vec<(T::Accou
 	return Ok(subs)
 }
 
+// This creates an `IdentityInfo` object with `num_fields` extra fields.
+// All data is pre-populated with some arbitrary bytes.
 fn create_identity_info<T: Trait>(num_fields: u32) -> IdentityInfo {
 	let data = Data::Raw(vec![0; 32]);
 
@@ -81,6 +87,7 @@ fn create_identity_info<T: Trait>(num_fields: u32) -> IdentityInfo {
 	return info
 }
 
+// Benchmark `add_registrar` extrinsic.
 struct AddRegistrar;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for AddRegistrar {
 
@@ -102,6 +109,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+// Benchmark `set_identity` extrinsic.
 struct SetIdentity;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetIdentity {
 
@@ -151,6 +159,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+// Benchmark `set_subs` extrinsic.
 struct SetSubs;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetSubs {
 
@@ -187,6 +196,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+// Benchmark `clear_identity` extrinsic.
 struct ClearIdentity;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ClearIdentity {
 
@@ -238,6 +248,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+// Benchmark `request_judgement` extrinsic.
 struct RequestJudgement;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for RequestJudgement {
 
@@ -271,6 +282,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+// Benchmark `cancel_request` extrinsic.
 struct CancelRequest;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for CancelRequest {
 
@@ -306,6 +318,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+// Benchmark `set_fee` extrinsic.
 struct SetFee;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetFee {
 
@@ -334,6 +347,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+// Benchmark `set_account_id` extrinsic.
 struct SetAccountId;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetAccountId {
 
@@ -362,6 +376,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+// Benchmark `set_fields` extrinsic.
 struct SetFields;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetFields {
 
@@ -395,6 +410,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+// Benchmark `provide_judgement` extrinsic.
 struct ProvideJudgement;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ProvideJudgement {
 
@@ -443,6 +459,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+// Benchmark `kill_identity` extrinsic.
 struct KillIdentity;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for KillIdentity {
 
@@ -494,6 +511,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+// The list of available benchmarks for this pallet.
 enum SelectedBenchmark {
 	AddRegistrar,
 	SetIdentity,
@@ -507,6 +525,8 @@ enum SelectedBenchmark {
 	ProvideJudgement,
 	KillIdentity,
 }
+
+// Allow us to select a benchmark from the list of available benchmarks.
 
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>
@@ -547,6 +567,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
 
+		// Map the input to the selected benchmark.
 		let selected_benchmark = match extrinsic.as_slice() {
 			b"add_registrar" => SelectedBenchmark::AddRegistrar,
 			b"set_identity" => SelectedBenchmark::SetIdentity,
@@ -562,7 +583,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 			_ => return Err("Could not find extrinsic."),
 		};
 
-		// Warm up the DB?
+		// Warm up the DB
 		sp_io::benchmarking::commit_db();
 		sp_io::benchmarking::wipe_db();
 
@@ -585,18 +606,21 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 						(*n, if n == name { component_value } else { (h - l) / 2 + l })
 					).collect();
 
+				// Run the benchmark `repeat` times.
 				for r in 0..repeat {
-					sp_std::if_std!{
-						println!("STEP {:?} REPEAT {:?}", s, r);
-					}
+					// Set up the externalities environment for the setup we want to benchmark.
 					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
+					// Commit the externalities to the database, flushing the DB cache.
+					// This will enable worst case scenario for reading from the database.
 					sp_io::benchmarking::commit_db();
+					// Run the benchmark.
 					let start = sp_io::benchmarking::current_time();
 					call.dispatch(caller.into())?;
 					let finish = sp_io::benchmarking::current_time();
 					let elapsed = finish - start;
-					sp_io::benchmarking::wipe_db();
 					results.push((c.clone(), elapsed));
+					// Wipe the DB back to the genesis state.
+					sp_io::benchmarking::wipe_db();
 				}
 			}
 		}

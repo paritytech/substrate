@@ -1329,9 +1329,9 @@ pub trait BlockIdTo<Block: self::Block> {
 	) -> Result<Option<NumberFor<Block>>, Self::Error>;
 }
 
-/// The module benchmarking trait.
+/// The pallet benchmarking trait.
 pub trait Benchmarking<T> {
-	/// Run the benchmarks for this module.
+	/// Run the benchmarks for this pallet.
 	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<T>, &'static str>;
 }
 

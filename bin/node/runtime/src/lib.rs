@@ -504,10 +504,6 @@ impl pallet_identity::Trait for Runtime {
 	type ForceOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 }
 
-impl pallet_benchmark::Trait for Runtime {
-	type Event = Event;
-}
-
 impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtime {
 	type Public = <Signature as traits::Verify>::Signer;
 	type Signature = Signature;
@@ -631,7 +627,6 @@ construct_runtime!(
 		Society: pallet_society::{Module, Call, Storage, Event<T>, Config<T>},
 		Recovery: pallet_recovery::{Module, Call, Storage, Event<T>},
 		Vesting: pallet_vesting::{Module, Call, Storage, Event<T>, Config<T>},
-		Bench: pallet_benchmark::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -816,7 +811,6 @@ impl_runtime_apis! {
 		fn dispatch_benchmark(module: Vec<u8>, extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Option<Vec<BenchmarkResults>> {
 			match module.as_slice() {
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
-				b"pallet-benchmark" | b"benchmark" => Bench::run_benchmark(extrinsic, steps, repeat).ok(),
 				_ => return None,
 			}
 		}
