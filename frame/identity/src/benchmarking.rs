@@ -25,7 +25,7 @@ use sp_runtime::traits::{Bounded, Benchmarking, BenchmarkingSetup, Dispatchable}
 
 use crate::Module as Identity;
 
-const MAX_REGISTRARS: u32 = 16;
+const MAX_REGISTRARS: u32 = 50;
 
 // Support Functions
 fn account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {

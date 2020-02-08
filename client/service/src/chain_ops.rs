@@ -85,12 +85,12 @@ pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 		println!("Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}", pallet, extrinsic, steps, repeat);
 		// Print the table header
 		results[0].0.iter().for_each(|param| print!("{:?},", param.0));
-		print!("time,\n");
+		print!("time\n");
 		// Print the values
 		results.iter().for_each(|result| {
 			let parameters = &result.0;
 			parameters.iter().for_each(|param| print!("{:?},", param.1));
-			print!("{:?},\n", result.1);
+			print!("{:?}\n", result.1);
 		});
 		info!("Done.");
 	} else {
