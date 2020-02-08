@@ -110,8 +110,8 @@ impl Order {
 	/// Compute the order by the given size
 	///
 	/// The size is clamped, so that the following holds:
-	//
-	// MIN_POSSIBLE_ALLOCATION <= size <= MAX_POSSIBLE_ALLOCATION
+	///
+	/// MIN_POSSIBLE_ALLOCATION <= size <= MAX_POSSIBLE_ALLOCATION
 	fn from_size(size: u32) -> Result<Self, Error> {
 		let clamped_size = if size > MAX_POSSIBLE_ALLOCATION {
 			return Err(Error::RequestedAllocationTooLarge);
