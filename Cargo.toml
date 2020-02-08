@@ -1,7 +1,8 @@
 [workspace]
 members = [
-	"bin/node-template",
+	"bin/node-template/node",
 	"bin/node-template/runtime",
+	"bin/node-template/pallets/template",
 	"bin/node/cli",
 	"bin/node/executor",
 	"bin/node/primitives",
@@ -24,8 +25,9 @@ members = [
 	"client/consensus/babe",
 	"client/consensus/manual-seal",
 	"client/consensus/pow",
-	"client/consensus/slots",
 	"client/consensus/uncles",
+	"client/consensus/slots",
+	"client/consensus/epochs",
 	"client/db",
 	"client/executor",
 	"client/executor/common",

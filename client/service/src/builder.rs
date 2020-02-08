@@ -196,7 +196,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 			state_cache_child_ratio:
 			config.state_cache_child_ratio.map(|v| (v, 100)),
 			pruning: config.pruning.clone(),
-			source: match &config.database {
+			source: match config.expect_database() {
 				DatabaseConfig::Path { path, cache_size } =>
 					sc_client_db::DatabaseSettingsSrc::Path {
 						path: path.clone(),
@@ -307,7 +307,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 				state_cache_child_ratio:
 					config.state_cache_child_ratio.map(|v| (v, 100)),
 				pruning: config.pruning.clone(),
-				source: match &config.database {
+				source: match config.expect_database() {
 					DatabaseConfig::Path { path, cache_size } =>
 						sc_client_db::DatabaseSettingsSrc::Path {
 							path: path.clone(),
@@ -995,10 +995,12 @@ ServiceBuilder<
 				"used_db_cache_size" => info.usage.as_ref().map(|usage| usage.memory.database_cache).unwrap_or(0),
 				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
 				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
+				"memory_transaction_pool" => parity_util_mem::malloc_size(&*transaction_pool_),
 			);
 
 			ready(())
 		});
+
 		let _ = to_spawn_tx.unbounded_send((
 			Box::pin(select(tel_task, exit.clone()).map(drop)),
 			From::from("telemetry-periodic-send")
@@ -1187,7 +1189,7 @@ ServiceBuilder<
 			task_executor: if let Some(exec) = config.task_executor {
 				exec
 			} else {
-				return Err(Error::TasksExecutorRequired);
+				return Err(Error::TaskExecutorRequired);
 			},
 			rpc_handlers,
 			_rpc: rpc,

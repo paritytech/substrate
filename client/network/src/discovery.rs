@@ -47,7 +47,7 @@
 
 use futures::prelude::*;
 use futures_timer::Delay;
-use libp2p::core::{ConnectedPoint, Multiaddr, PeerId, PublicKey};
+use libp2p::core::{nodes::listeners::ListenerId, ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{ProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::kad::{Kademlia, KademliaEvent, Quorum, Record};
 use libp2p::kad::GetClosestPeersError;
@@ -59,7 +59,7 @@ use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace, warn, error};
 use std::{cmp, collections::VecDeque, time::Duration};
 use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
@@ -266,6 +266,15 @@ where
 		NetworkBehaviour::inject_replaced(&mut self.kademlia, peer_id, closed, opened)
 	}
 
+	fn inject_addr_reach_failure(
+		&mut self,
+		peer_id: Option<&PeerId>,
+		addr: &Multiaddr,
+		error: &dyn std::error::Error
+	) {
+		NetworkBehaviour::inject_addr_reach_failure(&mut self.kademlia, peer_id, addr, error)
+	}
+
 	fn inject_node_event(
 		&mut self,
 		peer_id: PeerId,
@@ -278,10 +287,30 @@ where
 		let new_addr = addr.clone()
 			.with(Protocol::P2p(self.local_peer_id.clone().into()));
 		info!(target: "sub-libp2p", "Discovered new external address for our node: {}", new_addr);
+		NetworkBehaviour::inject_new_external_addr(&mut self.kademlia, addr)
 	}
 
 	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
 		info!(target: "sub-libp2p", "No longer listening on {}", addr);
+		NetworkBehaviour::inject_expired_listen_addr(&mut self.kademlia, addr)
+	}
+
+	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
+		NetworkBehaviour::inject_dial_failure(&mut self.kademlia, peer_id)
+	}
+
+	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
+		NetworkBehaviour::inject_new_listen_addr(&mut self.kademlia, addr)
+	}
+
+	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
+		error!(target: "sub-libp2p", "Error on libp2p listener {:?}: {}", id, err);
+		NetworkBehaviour::inject_listener_error(&mut self.kademlia, id, err);
+	}
+
+	fn inject_listener_closed(&mut self, id: ListenerId) {
+		error!(target: "sub-libp2p", "Libp2p listener {:?} closed", id);
+		NetworkBehaviour::inject_listener_closed(&mut self.kademlia, id);
 	}
 
 	fn poll(
