@@ -699,7 +699,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for DbGenesisSto
 /// Used as inner structure under lock in `FrozenForDuration`.
 struct Frozen<T: Clone> {
 	at: std::time::Instant,
-	value: T,
+	value: Option<T>,
 }
 
 /// Some value frozen for period of time.
@@ -709,26 +709,26 @@ struct Frozen<T: Clone> {
 /// a new value which will be again frozen for `duration`.
 pub(crate) struct FrozenForDuration<T: Clone> {
 	duration: std::time::Duration,
-	value: RwLock<Frozen<T>>,
+	value: parking_lot::Mutex<Frozen<T>>,
 }
 
 impl<T: Clone> FrozenForDuration<T> {
-	fn new(duration: std::time::Duration, initial: T) -> Self {
+	fn new(duration: std::time::Duration) -> Self {
 		Self {
 			duration,
-			value: Frozen { at: std::time::Instant::now(), value: initial }.into(),
+			value: Frozen { at: std::time::Instant::now(), value: None }.into(),
 		}
 	}
 
 	fn take_or_else<F>(&self, f: F) -> T where F: FnOnce() -> T {
-		if self.value.read().at.elapsed() > self.duration {
-			let mut write_lock = self.value.write();
+		let mut lock = self.value.lock();
+		if lock.at.elapsed() > self.duration || lock.value.is_none() {
 			let new_value = f();
-			write_lock.at = std::time::Instant::now();
-			write_lock.value = new_value.clone();
+			lock.at = std::time::Instant::now();
+			lock.value = Some(new_value.clone());
 			new_value
 		} else {
-			self.value.read().value.clone()
+			lock.value.as_ref().expect("checked with lock above").clone()
 		}
 	}
 }
@@ -818,7 +818,7 @@ impl<Block: BlockT> Backend<Block> {
 			),
 			import_lock: Default::default(),
 			is_archive: is_archive_pruning,
-			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1), (kvdb::IoStats::empty(), StateUsageInfo::empty())),
+			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: StateUsageStats::new(),
 		})
 	}
