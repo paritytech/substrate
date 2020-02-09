@@ -709,7 +709,7 @@ struct Frozen<T: Clone> {
 /// a new value which will be again frozen for `duration`.
 pub(crate) struct FrozenForDuration<T: Clone> {
 	duration: std::time::Duration,
-	value: RwLock<Frozen<T>>,
+	value: parking_lot::Mutex<Frozen<T>>,
 }
 
 impl<T: Clone> FrozenForDuration<T> {
@@ -721,16 +721,14 @@ impl<T: Clone> FrozenForDuration<T> {
 	}
 
 	fn take_or_else<F>(&self, f: F) -> T where F: FnOnce() -> T {
-		let read_lock = self.value.upgradable_read();
-
-		if read_lock.at.elapsed() > self.duration || read_lock.value.is_none() {
-			let mut write_lock = parking_lot::RwLockUpgradableReadGuard::upgrade(read_lock);
+		let mut lock = self.value.lock();
+		if lock.at.elapsed() > self.duration || lock.value.is_none() {
 			let new_value = f();
-			write_lock.at = std::time::Instant::now();
-			write_lock.value = Some(new_value.clone());
+			lock.at = std::time::Instant::now();
+			lock.value = Some(new_value.clone());
 			new_value
 		} else {
-			read_lock.value.as_ref().expect("checked with lock above").clone()
+			lock.value.as_ref().expect("checked with lock above").clone()
 		}
 	}
 }
