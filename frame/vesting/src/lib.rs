@@ -52,7 +52,7 @@ use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
 	StaticLookup, Zero, SimpleArithmetic, MaybeSerializeDeserialize, Saturating, Convert
 }};
-use frame_support::{decl_module, decl_event, decl_storage, ensure, decl_error};
+use frame_support::{decl_module, decl_event, decl_storage, decl_error};
 use frame_support::traits::{
 	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier
 };
@@ -212,16 +212,18 @@ impl<T: Trait> Module<T> {
 	/// (Re)set or remove the module's currency lock on `who`'s account in accordance with their
 	/// current unvested amount.
 	fn update_lock(who: T::AccountId) -> DispatchResult {
-		ensure!(Vesting::<T>::contains_key(&who), Error::<T>::NotVesting);
-		let unvested = Self::vesting_balance(&who);
-		if unvested.is_zero() {
+		let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
+		let now = <frame_system::Module<T>>::block_number();
+		let locked_now = vesting.locked_at::<T::BlockNumberToBalance>(now);
+
+		if locked_now.is_zero() {
 			T::Currency::remove_lock(VESTING_ID, &who);
 			Vesting::<T>::remove(&who);
 			Self::deposit_event(RawEvent::VestingCompleted(who));
 		} else {
 			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
-			T::Currency::set_lock(VESTING_ID, &who, unvested, reasons);
-			Self::deposit_event(RawEvent::VestingUpdated(who, unvested));
+			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
+			Self::deposit_event(RawEvent::VestingUpdated(who, locked_now));
 		}
 		Ok(())
 	}
@@ -248,6 +250,10 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 	///
 	/// If there already exists a vesting schedule for the given account, an `Err` is returned
 	/// and nothing is updated.
+	///
+	/// On success, a linearly reducing amount of funds will be locked. In order to realise any
+	/// reduction of the lock over time as it diminishes, the account owner must use `vest` or
+	/// `vest_other`.
 	///
 	/// Is a no-op if the amount to be vested is zero.
 	fn add_vesting_schedule(
