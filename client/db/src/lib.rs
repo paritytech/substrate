@@ -29,7 +29,7 @@
 pub mod light;
 pub mod offchain;
 
-#[cfg(feature = "kvdb-rocksdb", test)]
+#[cfg(any(feature = "kvdb-rocksdb", test))]
 pub mod bench;
 
 mod children;
@@ -83,7 +83,7 @@ use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
 
-#[cfg(feature = "kvdb-rocksdb", test)]
+#[cfg(any(feature = "kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;
 
 #[cfg(feature = "test-helpers")]
