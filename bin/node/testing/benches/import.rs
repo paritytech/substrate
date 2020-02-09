@@ -75,7 +75,12 @@ criterion_group!(
 	config = Criterion::default().sample_size(10);
 	targets = bench_block_import
 );
-criterion_main!(benches);
+criterion_group!(
+	name = profile;
+	config = Criterion::default().sample_size(10);
+	targets = profile_block_import
+);
+criterion_main!(benches, profile);
 
 fn genesis() -> node_runtime::GenesisConfig {
 	node_testing::genesis::config(false, Some(node_runtime::WASM_BINARY))
@@ -386,5 +391,49 @@ fn bench_block_import(c: &mut Criterion) {
 			);
 		},
 		vec![Profile::Wasm, Profile::Native],
+	);
+}
+
+
+// This is not an actual benchmark, so don't use it to measure anything.
+//   It just produces special pattern of cpu load that allows easy picking
+//   the part of block import for the profiling in the tool of choice.
+fn profile_block_import(c: &mut Criterion) {
+	sc_cli::init_logger("");
+
+	let (block, guard) = {
+		let context = BenchContext::new(Profile::Wasm);
+		let block = generate_block_import(&context.client);
+		(block, context.keep_db())
+	};
+
+	c.bench_function("profile block",
+		move |bencher| {
+			bencher.iter_batched(
+				|| {
+					let context = BenchContext::new_from_seed(
+						Profile::Native,
+						guard.0.path(),
+					);
+					context
+				},
+				|mut context| {
+					// until better osx signpost/callgrind signal is possible to use
+					// in rust, we just pause everything completely to help choosing
+					// actual profiling interval
+					std::thread::park_timeout(std::time::Duration::from_secs(2));
+					import_block(&mut context.client, block.clone());
+					// and here as well
+					std::thread::park_timeout(std::time::Duration::from_secs(2));
+					log::info!(
+						target: "bench-logistics",
+						"imported block, usage info: {}",
+						context.backend.usage_info()
+							.expect("RocksDB backend always provides usage info!"),
+					)
+				},
+				criterion::BatchSize::PerIteration,
+			);
+		},
 	);
 }
