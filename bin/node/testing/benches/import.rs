@@ -126,7 +126,7 @@ fn bench_client(dir: &std::path::Path, profile: Profile) -> (Client, std::sync::
 		pruning: PruningMode::ArchiveAll,
 		source: sc_client_db::DatabaseSettingsSrc::Path {
 			path: dir.into(),
-			cache_size: None,
+			cache_size: Some(0),
 		},
 	};
 
