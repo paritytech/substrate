@@ -77,10 +77,11 @@ impl<B: BlockT> BenchmarkingState<B> {
 		};
 
 		state.reopen()?;
-		let child_delta = genesis.children.into_iter().map(|(storage_key, child_content)|	(
-				storage_key,
-				child_content.data.into_iter().map(|(k, v)| (k, Some(v))), child_content.child_info),
-		);
+		let child_delta = genesis.children.into_iter().map(|(storage_key, child_content)| (
+			storage_key,
+			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
+			child_content.child_info
+		));
 		let (root, transaction) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
 			genesis.top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta,
