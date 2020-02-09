@@ -90,22 +90,22 @@ impl<
 	T: FullCodec
 > StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
 	fn get(k: &K) -> T { S::get(k) }
-	fn is_explicit(k: &K) -> bool { S::exists(k) }
+	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
 	fn insert(k: &K, t: T) {
 		S::insert(k, t);
-		if !S::exists(&k) {
+		if !S::contains_key(&k) {
 			Created::happened(k);
 		}
 	}
 	fn remove(k: &K) {
-		if S::exists(&k) {
+		if S::contains_key(&k) {
 			Removed::happened(&k);
 		}
 		S::remove(k);
 	}
 	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R {
 		let r = S::mutate(k, f);
-		if !S::exists(&k) {
+		if !S::contains_key(&k) {
 			Created::happened(k);
 		}
 		r
