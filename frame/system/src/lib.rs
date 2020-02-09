@@ -907,7 +907,7 @@ impl<T: Trait> Module<T> {
 
 	/// Kill the account and reap any related information.
 	pub fn kill_account(who: T::AccountId) {
-		if Account::<T>::exists(&who) {
+		if Account::<T>::contains_key(&who) {
 			Account::<T>::remove(&who);
 			Self::on_killed_account(who);
 		}
@@ -944,22 +944,22 @@ impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 		Account::<T>::get(k).1
 	}
 	fn is_explicit(k: &T::AccountId) -> bool {
-		Account::<T>::exists(k)
+		Account::<T>::contains_key(k)
 	}
 	fn insert(k: &T::AccountId, t: T::AccountData) {
-		let existed = Account::<T>::exists(k);
+		let existed = Account::<T>::contains_key(k);
 		Account::<T>::insert(k, (T::Index::default(), t));
 		if !existed {
 			Self::on_created_account(k.clone());
 		}
 	}
 	fn remove(k: &T::AccountId) {
-		if Account::<T>::exists(&k) {
+		if Account::<T>::contains_key(&k) {
 			Self::kill_account(k.clone());
 		}
 	}
 	fn mutate<R>(k: &T::AccountId, f: impl FnOnce(&mut T::AccountData) -> R) -> R {
-		let existed = Account::<T>::exists(k);
+		let existed = Account::<T>::contains_key(k);
 		let r = Account::<T>::mutate(k, |a| f(&mut a.1));
 		if !existed {
 			Self::on_created_account(k.clone());
@@ -1223,7 +1223,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 
 impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
 	fn is_dead_account(who: &T::AccountId) -> bool {
-		!Account::<T>::exists(who)
+		!Account::<T>::contains_key(who)
 	}
 }
 
