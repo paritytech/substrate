@@ -137,7 +137,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.rent_allowance))
 	}
 	fn contract_exists(&self, account: &T::AccountId) -> bool {
-		<ContractInfoOf<T>>::exists(account)
+		<ContractInfoOf<T>>::contains_key(account)
 	}
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T> {
 		T::Currency::free_balance(account)

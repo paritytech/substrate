@@ -371,7 +371,7 @@ decl_module! {
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
-			ensure!(<Proposals<T>>::exists(proposal_id), Error::<T>::InvalidProposalIndex);
+			ensure!(<Proposals<T>>::contains_key(proposal_id), Error::<T>::InvalidProposalIndex);
 
 			Approvals::mutate(|v| v.push(proposal_id));
 		}
@@ -403,9 +403,9 @@ decl_module! {
 			ensure!(reason.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
-			ensure!(!Reasons::<T>::exists(&reason_hash), Error::<T>::AlreadyKnown);
+			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
-			ensure!(!Tips::<T>::exists(&hash), Error::<T>::AlreadyKnown);
+			ensure!(!Tips::<T>::contains_key(&hash), Error::<T>::AlreadyKnown);
 
 			let deposit = T::TipReportDepositBase::get()
 				+ T::TipReportDepositPerByte::get() * (reason.len() as u32).into();
@@ -474,7 +474,7 @@ decl_module! {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
-			ensure!(!Reasons::<T>::exists(&reason_hash), Error::<T>::AlreadyKnown);
+			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 
 			Reasons::<T>::insert(&reason_hash, &reason);

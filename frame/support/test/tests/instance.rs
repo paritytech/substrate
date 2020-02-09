@@ -348,8 +348,8 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(Value::get(), 0);
 
 		let key = 1;
-		assert_eq!(Map::exists(0), true);
-		assert_eq!(Map::exists(key), false);
+		assert_eq!(Map::contains_key(0), true);
+		assert_eq!(Map::contains_key(key), false);
 		Map::insert(key, 1);
 		assert_eq!(Map::get(key), 1);
 		assert_eq!(Map::take(key), 1);
@@ -357,11 +357,11 @@ fn storage_with_instance_basic_operation() {
 		Map::mutate(key, |a| *a=2);
 		assert_eq!(Map::get(key), 2);
 		Map::remove(key);
-		assert_eq!(Map::exists(key), false);
+		assert_eq!(Map::contains_key(key), false);
 		assert_eq!(Map::get(key), 0);
 
-		assert_eq!(LinkedMap::exists(0), true);
-		assert_eq!(LinkedMap::exists(key), false);
+		assert_eq!(LinkedMap::contains_key(0), true);
+		assert_eq!(LinkedMap::contains_key(key), false);
 		LinkedMap::insert(key, vec![1]);
 		assert_eq!(LinkedMap::enumerate().count(), 2);
 		assert_eq!(LinkedMap::get(key), vec![1]);
@@ -373,17 +373,17 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(LinkedMap::get(key), vec![2]);
 		LinkedMap::remove(key);
 		assert_eq!(LinkedMap::enumerate().count(), 1);
-		assert_eq!(LinkedMap::exists(key), false);
+		assert_eq!(LinkedMap::contains_key(key), false);
 		assert_eq!(LinkedMap::get(key), vec![]);
-		assert_eq!(LinkedMap::exists(key), false);
+		assert_eq!(LinkedMap::contains_key(key), false);
 		assert_eq!(LinkedMap::enumerate().count(), 1);
 		LinkedMap::insert(key, &vec![1]);
 		assert_eq!(LinkedMap::enumerate().count(), 2);
 
 		let key1 = 1;
 		let key2 = 1;
-		assert_eq!(DoubleMap::exists(&0, &0), true);
-		assert_eq!(DoubleMap::exists(&key1, &key2), false);
+		assert_eq!(DoubleMap::contains_key(&0, &0), true);
+		assert_eq!(DoubleMap::contains_key(&key1, &key2), false);
 		DoubleMap::insert(&key1, &key2, &1);
 		assert_eq!(DoubleMap::get(&key1, &key2), 1);
 		assert_eq!(DoubleMap::take(&key1, &key2), 1);

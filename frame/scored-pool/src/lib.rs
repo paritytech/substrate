@@ -265,7 +265,7 @@ decl_module! {
 		/// the index of the transactor in the `Pool`.
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
-			ensure!(!<CandidateExists<T, I>>::exists(&who), Error::<T, I>::AlreadyInPool);
+			ensure!(!<CandidateExists<T, I>>::contains_key(&who), Error::<T, I>::AlreadyInPool);
 
 			let deposit = T::CandidateDeposit::get();
 			T::Currency::reserve(&who, deposit)?;

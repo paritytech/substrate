@@ -580,7 +580,7 @@ impl<T: Trait> Module<T> {
 		options: AssetOptions<T::Balance, T::AccountId>,
 	) -> DispatchResult {
 		let asset_id = if let Some(asset_id) = asset_id {
-			ensure!(!<TotalIssuance<T>>::exists(&asset_id), Error::<T>::IdAlreadyTaken);
+			ensure!(!<TotalIssuance<T>>::contains_key(&asset_id), Error::<T>::IdAlreadyTaken);
 			ensure!(asset_id < Self::next_asset_id(), Error::<T>::IdUnavailable);
 			asset_id
 		} else {
