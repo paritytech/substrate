@@ -472,9 +472,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.1.2"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fb8038c1ddc0a5f73787b130f4cc75151e96ed33e417fde765eb5a81e3532f4"
+checksum = "1f359dc14ff8911330a51ef78022d376f25ed00248912803b58f00cb1c27f742"
 
 [[package]]
 name = "byte-slice-cast"
@@ -2010,9 +2010,9 @@ dependencies = [
 
 [[package]]
 name = "hex"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "023b39be39e3a2da62a94feb433e91e8bcd37676fbc8bea371daf52b7a769a3e"
+checksum = "76cdda6bf525062a0c9e8f14ee2b37935c86b8efb6c8b69b3c83dfb518a914af"
 
 [[package]]
 name = "hex-literal"
@@ -2409,28 +2409,28 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-http-server"
-version = "14.0.5"
+version = "14.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d83d348120edee487c560b7cdd2565055d61cda053aa0d0ef0f8b6a18429048"
+checksum = "816d63997ea45d3634608edbef83ddb35e661f7c0b27b5b72f237e321f0e9807"
 dependencies = [
  "hyper 0.12.35",
  "jsonrpc-core",
  "jsonrpc-server-utils",
  "log 0.4.8",
  "net2",
- "parking_lot 0.9.0",
+ "parking_lot 0.10.0",
  "unicase 2.6.0",
 ]
 
 [[package]]
 name = "jsonrpc-pubsub"
-version = "14.0.5"
+version = "14.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3453625f0f0f5cd6d6776d389d73b7d70fcc98620b7cbb1cbbb1f6a36e95f39a"
+checksum = "5b31c9b90731276fdd24d896f31bb10aecf2e5151733364ae81123186643d939"
 dependencies = [
  "jsonrpc-core",
  "log 0.4.8",
- "parking_lot 0.9.0",
+ "parking_lot 0.10.0",
  "serde",
 ]
 
@@ -2452,14 +2452,14 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-ws-server"
-version = "14.0.5"
+version = "14.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b34faa167c3ac9705aeecb986c0da6056529f348425dbe0441db60a2c4cc41d1"
+checksum = "b94e5773b2ae66e0e02c80775ce6bbba6f15d5bb47c14ec36a36fcf94f8df851"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-server-utils",
  "log 0.4.8",
- "parking_lot 0.9.0",
+ "parking_lot 0.10.0",
  "slab",
  "ws",
 ]
@@ -3416,7 +3416,7 @@ dependencies = [
  "sp-state-machine",
  "sp-trie",
  "substrate-test-client",
- "trie-root 0.15.2",
+ "trie-root",
  "wabt",
 ]
 
@@ -6527,9 +6527,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.46"
+version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21b01d7f0288608a01dca632cf1df859df6fd6ffa885300fc275ce2ba6221953"
+checksum = "15913895b61e0be854afd32fd4163fcd2a3df34142cf2cb961b310ce694cbf90"
 dependencies = [
  "itoa",
  "ryu",
@@ -7195,8 +7195,8 @@ dependencies = [
  "sp-externalities",
  "sp-panic-handler",
  "sp-trie",
- "trie-db 0.19.2",
- "trie-root 0.15.2",
+ "trie-db",
+ "trie-root",
 ]
 
 [[package]]
@@ -7262,8 +7262,8 @@ dependencies = [
  "sp-core",
  "sp-std",
  "trie-bench",
- "trie-db 0.20.0",
- "trie-root 0.16.0",
+ "trie-db",
+ "trie-root",
  "trie-standardmap",
 ]
 
@@ -7524,7 +7524,7 @@ dependencies = [
  "sp-version",
  "substrate-test-runtime-client",
  "substrate-wasm-builder-runner",
- "trie-db 0.20.0",
+ "trie-db",
 ]
 
 [[package]]
@@ -8147,23 +8147,9 @@ dependencies = [
  "keccak-hasher",
  "memory-db",
  "parity-scale-codec",
- "trie-db 0.20.0",
- "trie-root 0.16.0",
+ "trie-db",
+ "trie-root",
  "trie-standardmap",
-]
-
-[[package]]
-name = "trie-db"
-version = "0.19.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0d747ae5b6f078df7e46477fcc7df66df9eb4f27a031cf4a7c890a8dd03d8e6"
-dependencies = [
- "hash-db",
- "hashbrown 0.6.3",
- "log 0.4.8",
- "rand 0.6.5",
- "rustc-hex",
- "smallvec 1.2.0",
 ]
 
 [[package]]
@@ -8177,15 +8163,6 @@ dependencies = [
  "log 0.4.8",
  "rustc-hex",
  "smallvec 1.2.0",
-]
-
-[[package]]
-name = "trie-root"
-version = "0.15.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b779f7c1c8fe9276365d9d5be5c4b5adeacf545117bb3f64c974305789c5c0b"
-dependencies = [
- "hash-db",
 ]
 
 [[package]]
