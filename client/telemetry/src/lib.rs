@@ -63,7 +63,8 @@ use libp2p::{Multiaddr, wasm_ext};
 use log::{error, warn};
 use parking_lot::Mutex;
 use serde::{Serialize, Deserialize};
-use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::{Duration, Instant}};
+use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::Duration};
+use wasm_timer::Instant;
 
 pub use libp2p::wasm_ext::ExtTransport;
 pub use slog_scope::with_logger;
