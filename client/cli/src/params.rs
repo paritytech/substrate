@@ -155,6 +155,20 @@ pub struct ImportParams {
 	/// Specify the state cache size.
 	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
+
+	/// Comma separated list of targets for tracing
+	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
+	pub tracing_targets: Option<String>,
+
+	/// Receiver to process tracing messages
+	#[structopt(
+		long = "tracing-receiver",
+		value_name = "RECEIVER",
+		possible_values = &TracingReceiver::variants(),
+		case_insensitive = true,
+		default_value = "Log"
+	)]
+	pub tracing_receiver: TracingReceiver,
 }
 
 /// Parameters used to create the network configuration.
@@ -579,20 +593,6 @@ pub struct RunCmd {
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 
-	/// Comma separated list of targets for tracing
-	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
-	pub tracing_targets: Option<String>,
-
-	/// Receiver to process tracing messages
-	#[structopt(
-		long = "tracing-receiver",
-		value_name = "RECEIVER",
-		possible_values = &TracingReceiver::variants(),
-		case_insensitive = true,
-		default_value = "Log"
-	)]
-	pub tracing_receiver: TracingReceiver,
-
 	/// Specify custom keystore path.
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
@@ -845,6 +845,49 @@ pub struct PurgeChainCmd {
 	pub shared_params: SharedParams,
 }
 
+/// The `benchmark` command used to benchmark FRAME Pallets.
+#[derive(Debug, StructOpt, Clone)]
+pub struct BenchmarkCmd {
+	/// Select a FRAME Pallet to benchmark.
+	#[structopt(short, long)]
+	pub pallet: String,
+
+	/// Select an extrinsic to benchmark.
+	#[structopt(short, long)]
+	pub extrinsic: String,
+
+	/// Select how many samples we should take across the variable components.
+	#[structopt(short, long, default_value = "1")]
+	pub steps: u32,
+
+	/// Select how many repetitions of this benchmark should run.
+	#[structopt(short, long, default_value = "1")]
+	pub repeat: u32,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub shared_params: SharedParams,
+
+	/// The execution strategy that should be used for benchmarks
+	#[structopt(
+		long = "execution",
+		value_name = "STRATEGY",
+		possible_values = &ExecutionStrategy::variants(),
+		case_insensitive = true,
+	)]
+	pub execution: Option<ExecutionStrategy>,
+
+	/// Method for executing Wasm runtime code.
+	#[structopt(
+		long = "wasm-execution",
+		value_name = "METHOD",
+		possible_values = &WasmExecutionMethod::enabled_variants(),
+		case_insensitive = true,
+		default_value = "Interpreted"
+	)]
+	pub wasm_method: WasmExecutionMethod,
+}
+
 /// All core commands that are provided by default.
 ///
 /// The core commands are split into multiple subcommands and `Run` is the default subcommand. From
@@ -869,6 +912,9 @@ pub enum Subcommand {
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
+
+	/// Run runtime benchmarks.
+	Benchmark(BenchmarkCmd),
 }
 
 impl Subcommand {
@@ -883,6 +929,7 @@ impl Subcommand {
 			CheckBlock(params) => &params.shared_params,
 			Revert(params) => &params.shared_params,
 			PurgeChain(params) => &params.shared_params,
+			Benchmark(params) => &params.shared_params,
 		}
 	}
 
@@ -909,6 +956,7 @@ impl Subcommand {
 			Subcommand::ImportBlocks(cmd) => cmd.run(config, builder),
 			Subcommand::CheckBlock(cmd) => cmd.run(config, builder),
 			Subcommand::PurgeChain(cmd) => cmd.run(config),
+			Subcommand::Benchmark(cmd) => cmd.run(config, builder),
 			Subcommand::Revert(cmd) => cmd.run(config, builder),
 		}
 	}
@@ -933,10 +981,7 @@ impl RunCmd {
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-		crate::update_config_for_running_node(
-			&mut config,
-			self,
-		)?;
+		crate::update_config_for_running_node(&mut config, self)?;
 
 		crate::run_node(config, new_light, new_full, &version)
 	}
@@ -1003,7 +1048,7 @@ impl ExportBlocksCmd {
 
 		crate::fill_config_keystore_in_memory(&mut config)?;
 
-		if let DatabaseConfig::Path { ref path, .. } = &config.database {
+		if let DatabaseConfig::Path { ref path, .. } = config.expect_database() {
 			info!("DB path: {}", path.display());
 		}
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
@@ -1124,7 +1169,7 @@ impl PurgeChainCmd {
 
 		crate::fill_config_keystore_in_memory(&mut config)?;
 
-		let db_path = match config.database {
+		let db_path = match config.expect_database() {
 			DatabaseConfig::Path { path, .. } => path,
 			_ => {
 				eprintln!("Cannot purge custom database implementation");
@@ -1189,3 +1234,32 @@ impl RevertCmd {
 		Ok(())
 	}
 }
+
+impl BenchmarkCmd {
+	/// Runs the command and benchmarks the chain.
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		config: Configuration<G, E>,
+		_builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		let spec = config.chain_spec.expect("chain_spec is always Some");
+		let execution_strategy = self.execution.unwrap_or(ExecutionStrategy::Native).into();
+		let wasm_method = self.wasm_method.into();
+		let pallet = self.pallet;
+		let extrinsic = self.extrinsic;
+		let steps = self.steps;
+		let repeat = self.repeat;
+		sc_service::chain_ops::benchmark_runtime::<BB, BC::NativeDispatch, _, _>(spec, execution_strategy, wasm_method, pallet, extrinsic, steps, repeat)?;
+		Ok(())
+	}
+}
+
