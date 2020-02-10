@@ -33,9 +33,11 @@ fn pool() -> Pool<TestApi> {
 }
 
 fn maintained_pool() -> (BasicPool<TestApi, Block>, futures::executor::ThreadPool) {
-	let pool = BasicPool::new(Default::default(), std::sync::Arc::new(TestApi::with_alice_nonce(209)));
-	let guard = pool.spawn_maintenance_local();
-	(pool, guard)
+	let (pool, background_task) = BasicPool::new(Default::default(), std::sync::Arc::new(TestApi::with_alice_nonce(209)));
+
+	let thread_pool = futures::executor::ThreadPool::new().unwrap();
+	thread_pool.spawn_ok(background_task);
+	(pool, thread_pool)
 }
 
 #[test]

@@ -54,7 +54,6 @@ pub struct BasicPool<PoolApi, Block>
 	api: Arc<PoolApi>,
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
 	revalidation_queue: Arc<revalidation::RevalidationQueue<PoolApi>>,
-	background_task: Mutex<Option<Pin<Box<dyn Future<Output=()> + Send>>>>,
 }
 
 #[cfg(not(target_os = "unknown"))]
@@ -93,10 +92,13 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash> + 'static,
 {
 	/// Create new basic transaction pool with provided api.
+	///
+	/// It will also optionally return background task that might be started by the
+	/// caller.
 	pub fn new(
 		options: sc_transaction_graph::Options,
 		pool_api: Arc<PoolApi>,
-	) -> Self {
+	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
 		Self::with_revalidation_type(options, pool_api, RevalidationType::Full)
 	}
 
@@ -106,8 +108,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		options: sc_transaction_graph::Options,
 		pool_api: Arc<PoolApi>,
 		revalidation_type: RevalidationType,
-	) -> Self {
-
+	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
 		let pool = Arc::new(sc_transaction_graph::Pool::new(options, pool_api.clone()));
 		let (revalidation_queue, background_task) = match revalidation_type {
 			RevalidationType::Light => (revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()), None),
@@ -116,31 +117,25 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 				(queue, Some(background))
 			},
 		};
-		BasicPool {
-			api: pool_api,
-			pool,
-			background_task: background_task.into(),
-			revalidation_queue: Arc::new(revalidation_queue),
-			revalidation_strategy: Arc::new(Mutex::new(
-				match revalidation_type {
-					RevalidationType::Light => RevalidationStrategy::Light(RevalidationStatus::NotScheduled),
-					RevalidationType::Full => RevalidationStrategy::Always,
-				}
-			)),
-		}
+		(
+			BasicPool {
+				api: pool_api,
+				pool,
+				revalidation_queue: Arc::new(revalidation_queue),
+				revalidation_strategy: Arc::new(Mutex::new(
+					match revalidation_type {
+						RevalidationType::Light => RevalidationStrategy::Light(RevalidationStatus::NotScheduled),
+						RevalidationType::Full => RevalidationStrategy::Always,
+					}
+				)),
+			},
+			background_task,
+		)
 	}
 
 	/// Gets shared reference to the underlying pool.
 	pub fn pool(&self) -> &Arc<sc_transaction_graph::Pool<PoolApi>> {
 		&self.pool
-	}
-
-	#[cfg(test)]
-	/// Test helper that creates a thread pool and  spawns background task on it.
-	pub fn spawn_maintenance_local(&self) -> futures::executor::ThreadPool {
-		let thread_pool = futures::executor::ThreadPool::new().unwrap();
-		thread_pool.spawn_ok(self.background_task().expect("there should be a task for tests"));
-		thread_pool
 	}
 }
 
@@ -219,10 +214,6 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 
 	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>> {
 		self.pool.ready_transaction(hash)
-	}
-
-	fn background_task(&self) -> Option<Pin<Box<dyn Future<Output = ()> + Send>>> {
-		self.background_task.lock().take()
 	}
 }
 

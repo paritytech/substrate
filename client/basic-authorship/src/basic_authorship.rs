@@ -307,7 +307,7 @@ mod tests {
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let txpool = Arc::new(
+		let (txpool, _) = = Arc::new(
 			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())))
 		);
 
@@ -349,7 +349,7 @@ mod tests {
 		let (client, backend) = substrate_test_runtime_client::TestClientBuilder::new()
 			.build_with_backend();
 		let client = Arc::new(client);
-		let txpool = Arc::new(
+		let (txpool, _) = Arc::new(
 			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())))
 		);
 		let genesis_hash = client.info().best_hash;

@@ -215,11 +215,6 @@ pub trait TransactionPool: Send + Sync {
 
 	/// Return specific ready transaction by hash, if there is one.
 	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>>;
-
-	/// Return background task that should be spawned by instantiator, if any.
-	fn background_task(&self) -> Option<Pin<Box<dyn Future<Output=()> + Send>>> {
-		None
-	}
 }
 
 /// Trait for transaction pool maintenance.

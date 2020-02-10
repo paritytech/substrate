@@ -252,7 +252,7 @@ mod tests {
 		let client = Arc::new(builder.build());
 		let select_chain = LongestChain::new(backend.clone());
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api()));
+		let (pool, _) = Arc::new(BasicPool::new(Options::default(), api()));
 		let env = ProposerFactory {
 			transaction_pool: pool.clone(),
 			client: client.clone(),
@@ -317,7 +317,7 @@ mod tests {
 		let client = Arc::new(builder.build());
 		let select_chain = LongestChain::new(backend.clone());
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api()));
+		let (pool, _ )= Arc::new(BasicPool::new(Options::default(), api()));
 		let env = ProposerFactory {
 			transaction_pool: pool.clone(),
 			client: client.clone(),
@@ -386,7 +386,7 @@ mod tests {
 		let select_chain = LongestChain::new(backend.clone());
 		let inherent_data_providers = InherentDataProviders::new();
 		let pool_api = api();
-		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone()));
+		let (pool, _) = Arc::new(BasicPool::new(Options::default(), pool_api.clone()));
 		let env = ProposerFactory {
 			transaction_pool: pool.clone(),
 			client: client.clone(),

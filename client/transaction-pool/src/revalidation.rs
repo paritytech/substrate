@@ -274,7 +274,7 @@ where
 	pub async fn revalidate_later(&self, at: NumberFor<Api>, transactions: Vec<ExHash<Api>>) {
 		if let Some(ref to_worker) = self.background {
 			if let Err(e) = to_worker.unbounded_send(WorkerPayload { at, transactions }) {
-				warn!(target: "txpool", "Failed to update background worker: {:?}", e);
+				log::warn!(target: "txpool", "Failed to update background worker: {:?}", e);
 			}
 			return;
 		} else {
