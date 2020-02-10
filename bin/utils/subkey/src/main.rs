@@ -50,7 +50,7 @@ impl<'a> TryFrom<&'a str> for OutputType {
 		match s {
 			"json" => Ok(OutputType::Json),
 			"text" => Ok(OutputType::Text),
-			_      => Err(())
+			_      => Err(()),
 		}
 	}
 
@@ -88,7 +88,7 @@ trait Crypto: Sized {
 						"secretSeed": format_seed::<Self>(seed),
 						"publicKey": format_public_key::<Self>(public_key.clone()),
 						"accountId": format_account_id::<Self>(public_key),
-						"ss58Address": Self::ss58_from_pair(&pair) 
+						"ss58Address": Self::ss58_from_pair(&pair),
 					});
 					println!("{}", serde_json::to_string_pretty(&json).unwrap());
 				},
@@ -102,9 +102,9 @@ trait Crypto: Sized {
 						format_seed::<Self>(seed),
 						format_public_key::<Self>(public_key.clone()),
 						format_account_id::<Self>(public_key),
-						Self::ss58_from_pair(&pair)
+						Self::ss58_from_pair(&pair),
 					);
-				}
+				},
 			}
 		} else if let Ok((pair, seed)) = Self::Pair::from_string_with_seed(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
@@ -116,7 +116,7 @@ trait Crypto: Sized {
 						"secretSeed": if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
 						"publicKey": format_public_key::<Self>(public_key.clone()),
 						"accountId": format_account_id::<Self>(public_key),
-						"ss58Address": Self::ss58_from_pair(&pair) 
+						"ss58Address": Self::ss58_from_pair(&pair),
 					});
 					println!("{}", serde_json::to_string_pretty(&json).unwrap());
 				},
@@ -130,9 +130,9 @@ trait Crypto: Sized {
 						if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
 						format_public_key::<Self>(public_key.clone()),
 						format_account_id::<Self>(public_key),
-						Self::ss58_from_pair(&pair)
+						Self::ss58_from_pair(&pair),
 					);
-				}
+				},
 			}
 			
 		} else if let Ok((public_key, v)) =
@@ -147,7 +147,7 @@ trait Crypto: Sized {
 						"networkId": String::from(v),
 						"publicKey": format_public_key::<Self>(public_key.clone()),
 						"accountId": format_account_id::<Self>(public_key.clone()),
-						"ss58Address": public_key.to_ss58check_with_version(v)
+						"ss58Address": public_key.to_ss58check_with_version(v),
 					});
 					println!("{}", serde_json::to_string_pretty(&json).unwrap());
 				},
@@ -161,9 +161,9 @@ trait Crypto: Sized {
 						String::from(v),
 						format_public_key::<Self>(public_key.clone()),
 						format_account_id::<Self>(public_key.clone()),
-						public_key.to_ss58check_with_version(v)
+						public_key.to_ss58check_with_version(v),
 					);
-				}
+				},
 			}
 		} else {
 			println!("Invalid phrase/URI given");
