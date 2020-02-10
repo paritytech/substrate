@@ -101,7 +101,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		number: &N,
 		is_descendent_of: &F,
 		predicate: &P,
-	) -> Result<Vec<V>, Error<E>>
+	) -> Result<Vec<(H, N, V)>, Error<E>>
 		where E: std::error::Error,
 			  F: Fn(&H, &H) -> Result<bool, E>,
 			  P: Fn(&V) -> bool,
@@ -126,7 +126,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 					if index == top_index {
 						found = Some(child);
 					} else {
-						removed.push(child.data);
+						removed.push((child.hash, child.number, child.data));
 					}
 				}
 
@@ -140,7 +140,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 					if index == cur_index {
 						found = Some(child);
 					} else {
-						removed.push(child.data);
+						removed.push((child.hash, child.number, child.data));
 					}
 				}
 
@@ -160,7 +160,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 					root.children.push(child);
 					is_first = false;
 				} else {
-					removed.push(child.data);
+					removed.push((child.hash, child.number, child.data));
 				}
 			}
 
