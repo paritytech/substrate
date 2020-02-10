@@ -405,13 +405,13 @@ impl From<&'static str> for DispatchError {
 	}
 }
 
-impl Into<&'static str> for DispatchError {
-	fn into(self) -> &'static str {
-		match self {
-			Self::Other(msg) => msg,
-			Self::CannotLookup => "Can not lookup",
-			Self::BadOrigin => "Bad origin",
-			Self::Module { message, .. } => message.unwrap_or("Unknown module error"),
+impl From<DispatchError> for &'static str {
+	fn from(err: DispatchError) -> &'static str {
+		match err {
+			DispatchError::Other(msg) => msg,
+			DispatchError::CannotLookup => "Can not lookup",
+			DispatchError::BadOrigin => "Bad origin",
+			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
 		}
 	}
 }

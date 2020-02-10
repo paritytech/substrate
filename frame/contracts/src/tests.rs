@@ -460,7 +460,7 @@ fn instantiate_and_call_and_deposit_event() {
 		]);
 
 		assert_ok!(creation);
-		assert!(ContractInfoOf::<Test>::exists(BOB));
+		assert!(ContractInfoOf::<Test>::contains_key(BOB));
 	});
 }
 
