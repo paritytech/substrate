@@ -819,12 +819,18 @@ pub struct CallMetadata {
 
 /// Gets the function name of the Call.
 pub trait GetCallName {
+	/// Return all function names.
+	fn get_call_names() -> &'static [&'static str];
 	/// Return the function name of the Call.
 	fn get_call_name(&self) -> &'static str;
 }
 
 /// Gets the metadata for the Call - function name and pallet name.
 pub trait GetCallMetadata {
+	/// Return all module names.
+	fn get_module_names() -> &'static [&'static str];
+	/// Return all function names for the given `module`.
+	fn get_call_names(module: &str) -> &'static [&'static str];
 	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
 	fn get_call_metadata(&self) -> CallMetadata;
 }

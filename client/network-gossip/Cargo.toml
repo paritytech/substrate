@@ -9,8 +9,9 @@ edition = "2018"
 [dependencies]
 log = "0.4.8"
 futures = { version = "0.3.1", features = ["compat"] }
+wasm-timer = "0.2"
+futures-timer = "3.0.1"
 futures01 = { package = "futures", version = "0.1.29" }
-futures-timer = "0.4.0"
 libp2p = { version = "0.15.0", default-features = false, features = ["libp2p-websocket"] }
 lru = "0.1.2"
 parking_lot = "0.10.0"

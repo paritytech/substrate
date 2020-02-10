@@ -348,13 +348,12 @@ where
 
 			ProtocolState::Init { substreams, mut init_deadline } => {
 				match Pin::new(&mut init_deadline).poll(cx) {
-					Poll::Ready(Ok(())) => {
+					Poll::Ready(()) => {
 						init_deadline = Delay::new(Duration::from_secs(60));
 						error!(target: "sub-libp2p", "Handler initialization process is too long \
 							with {:?}", self.remote_peer_id)
 					},
 					Poll::Pending => {}
-					Poll::Ready(Err(_)) => error!(target: "sub-libp2p", "Tokio timer has errored")
 				}
 
 				self.state = ProtocolState::Init { substreams, init_deadline };
@@ -363,7 +362,7 @@ where
 
 			ProtocolState::Opening { mut deadline } => {
 				match Pin::new(&mut deadline).poll(cx) {
-					Poll::Ready(Ok(())) => {
+					Poll::Ready(()) => {
 						deadline = Delay::new(Duration::from_secs(60));
 						let event = CustomProtoHandlerOut::ProtocolError {
 							is_severe: true,
@@ -373,12 +372,6 @@ where
 						Some(ProtocolsHandlerEvent::Custom(event))
 					},
 					Poll::Pending => {
-						self.state = ProtocolState::Opening { deadline };
-						None
-					},
-					Poll::Ready(Err(_)) => {
-						error!(target: "sub-libp2p", "Tokio timer has errored");
-						deadline = Delay::new(Duration::from_secs(60));
 						self.state = ProtocolState::Opening { deadline };
 						None
 					},
