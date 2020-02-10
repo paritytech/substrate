@@ -104,4 +104,4 @@ pub use crate::{
 	},
 	leaves::LeafSet,
 };
-pub use sp_state_machine::{ExecutionStrategy, StorageProof};
+pub use sp_state_machine::{ExecutionStrategy, StorageProof, StateMachine};

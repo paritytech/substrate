@@ -620,6 +620,10 @@ pub trait VestingSchedule<AccountId> {
 	///
 	/// If there already exists a vesting schedule for the given account, an `Err` is returned
 	/// and nothing is updated.
+	///
+	/// Is a no-op if the amount to be vested is zero.
+	///
+	/// NOTE: This doesn't alter the free balance of the account.
 	fn add_vesting_schedule(
 		who: &AccountId,
 		locked: <Self::Currency as Currency<AccountId>>::Balance,
@@ -628,6 +632,8 @@ pub trait VestingSchedule<AccountId> {
 	) -> DispatchResult;
 
 	/// Remove a vesting schedule for a given account.
+	///
+	/// NOTE: This doesn't alter the free balance of the account.
 	fn remove_vesting_schedule(who: &AccountId);
 }
 
@@ -813,12 +819,18 @@ pub struct CallMetadata {
 
 /// Gets the function name of the Call.
 pub trait GetCallName {
+	/// Return all function names.
+	fn get_call_names() -> &'static [&'static str];
 	/// Return the function name of the Call.
 	fn get_call_name(&self) -> &'static str;
 }
 
 /// Gets the metadata for the Call - function name and pallet name.
 pub trait GetCallMetadata {
+	/// Return all module names.
+	fn get_module_names() -> &'static [&'static str];
+	/// Return all function names for the given `module`.
+	fn get_call_names(module: &str) -> &'static [&'static str];
 	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
 	fn get_call_metadata(&self) -> CallMetadata;
 }

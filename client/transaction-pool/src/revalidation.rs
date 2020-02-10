@@ -265,8 +265,9 @@ where
 	/// revalidation is actually done.
 	pub async fn revalidate_later(&self, at: NumberFor<Api>, transactions: Vec<ExHash<Api>>) {
 		if let Some(ref to_worker) = self.background {
-			to_worker.unbounded_send(WorkerPayload { at, transactions })
-				.expect("background task is never dropped");
+			if let Err(e) = to_worker.unbounded_send(WorkerPayload { at, transactions }) {
+				warn!(target: "txpool", "Failed to update background worker: {:?}", e);
+			}
 			return;
 		} else {
 			let pool = self.pool.clone();

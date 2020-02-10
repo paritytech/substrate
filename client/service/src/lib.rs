@@ -31,7 +31,8 @@ use std::{borrow::Cow, io, pin::Pin};
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use wasm_timer::Instant;
 use std::task::{Poll, Context};
 use parking_lot::Mutex;
 
@@ -52,6 +53,7 @@ use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
+use parity_util_mem::MallocSizeOf;
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -65,12 +67,23 @@ pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoo
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 pub use sc_client::FinalityNotifications;
 pub use sc_rpc::Metadata as RpcMetadata;
+pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
+
+/// A type that implements `MallocSizeOf` on native but not wasm.
+#[cfg(not(target_os = "unknown"))]
+pub trait MallocSizeOfWasm: MallocSizeOf {}
+#[cfg(target_os = "unknown")]
+pub trait MallocSizeOfWasm {}
+#[cfg(not(target_os = "unknown"))]
+impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
+#[cfg(target_os = "unknown")]
+impl<T> MallocSizeOfWasm for T {}
 
 /// Substrate service.
 pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
@@ -162,7 +175,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	/// Chain selection algorithm.
 	type SelectChain: sp_consensus::SelectChain<Self::Block>;
 	/// Transaction pool.
-	type TransactionPool: TransactionPool<Block = Self::Block>;
+	type TransactionPool: TransactionPool<Block = Self::Block> + MallocSizeOfWasm;
 	/// Network specialization.
 	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
@@ -226,7 +239,7 @@ where
 	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send + Unpin,
-	TExPool: 'static + TransactionPool<Block = TBl>,
+	TExPool: 'static + TransactionPool<Block = TBl> + MallocSizeOfWasm,
 	TOc: 'static + Send + Sync,
 	TNetSpec: NetworkSpecialization<TBl>,
 {

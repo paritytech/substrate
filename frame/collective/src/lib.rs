@@ -191,7 +191,7 @@ decl_module! {
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
 
-			ensure!(!<ProposalOf<T, I>>::exists(proposal_hash), Error::<T, I>::DuplicateProposal);
+			ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
 
 			if threshold < 2 {
 				let seats = Self::members().len() as MemberCount;
