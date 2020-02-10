@@ -127,6 +127,15 @@ impl<Epoch, EpochRef> ViableEpoch<Epoch, EpochRef> where
 		}
 	}
 
+	/// Get cloned value for the viable epoch.
+	pub fn into_cloned(self) -> ViableEpoch<Epoch, Epoch> {
+		match self {
+			ViableEpoch::Genesis(UnimportedGenesisEpoch(e)) =>
+				ViableEpoch::Genesis(UnimportedGenesisEpoch(e)),
+			ViableEpoch::Regular(e) => ViableEpoch::Regular(e.borrow().clone()),
+		}
+	}
+
 	/// Increment the epoch, yielding an `IncrementedEpoch` to be imported
 	/// into the fork-tree.
 	pub fn increment(
