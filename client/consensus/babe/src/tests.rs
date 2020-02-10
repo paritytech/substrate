@@ -132,7 +132,7 @@ impl DummyProposer {
 		)
 			.expect("client has data to find epoch")
 			.expect("can compute epoch for baked block")
-			.into_inner();
+			.into_cloned_inner();
 
 		let first_in_epoch = self.parent_slot < epoch.start_slot;
 		if first_in_epoch {
@@ -575,7 +575,7 @@ fn propose_and_import_block<Transaction>(
 		*parent.number(),
 		slot_number,
 		|slot| proposer_factory.config.genesis_epoch(slot)
-	).unwrap().unwrap();
+	).unwrap().unwrap().into_cloned();
 
 	let seal = {
 		// sign the pre-sealed hash of the block and then
@@ -661,7 +661,7 @@ fn importing_block_one_sets_genesis_epoch() {
 		1,
 		1000,
 		|slot| data.link.config.genesis_epoch(slot),
-	).unwrap().unwrap().into_inner();
+	).unwrap().unwrap().into_cloned_inner();
 
 	assert_eq!(epoch_for_second_block, genesis_epoch);
 }

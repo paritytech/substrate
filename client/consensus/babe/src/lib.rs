@@ -435,6 +435,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			|slot| self.config.genesis_epoch(slot)
 		)
 			.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
+			.map(|v| v.into_cloned())
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 	}
 
@@ -798,6 +799,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 				|slot| self.config.genesis_epoch(slot),
 			)
 				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
+				.map(|v| v.into_cloned())
 				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?
 		};
 
