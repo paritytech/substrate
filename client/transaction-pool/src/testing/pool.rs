@@ -27,6 +27,7 @@ use substrate_test_runtime_client::{
 	AccountKeyring::*,
 };
 use substrate_test_runtime_transaction_pool::{TestApi, uxt};
+use crate::revalidation::BACKGROUND_REVALIDATION_INTERVAL;
 
 fn pool() -> Pool<TestApi> {
 	Pool::new(Default::default(), TestApi::with_alice_nonce(209).into())
@@ -36,7 +37,7 @@ fn maintained_pool() -> (BasicPool<TestApi, Block>, futures::executor::ThreadPoo
 	let (pool, background_task) = BasicPool::new(Default::default(), std::sync::Arc::new(TestApi::with_alice_nonce(209)));
 
 	let thread_pool = futures::executor::ThreadPool::new().unwrap();
-	thread_pool.spawn_ok(background_task);
+	thread_pool.spawn_ok(background_task.expect("basic pool have background task"));
 	(pool, thread_pool)
 }
 
@@ -183,7 +184,7 @@ fn should_revalidate_during_maintenance() {
 	block_on(pool.maintain(&BlockId::number(1), &[]));
 
 	// maintaince is in background
-	block_on(futures_timer::Delay::new(std::time::Duration::from_millis(10)));
+	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
 
 	assert_eq!(pool.status().ready, 1);
 	// test that pool revalidated transaction that left ready and not included in the block
@@ -224,7 +225,7 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	block_on(pool.maintain(&BlockId::number(1), &[retracted_hash]));
 
 	// maintenance is in background
-	block_on(futures_timer::Delay::new(std::time::Duration::from_millis(10)));
+	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
 
 	assert_eq!(pool.status().ready, 0);
 }
@@ -256,7 +257,7 @@ fn should_push_watchers_during_maintaince() {
 	block_on(pool.maintain(&BlockId::Number(0), &[]));
 
 	// revalidation is in background
-	block_on(futures_timer::Delay::new(std::time::Duration::from_millis(10)));
+	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
 
 	// then
 	// hash3 is now invalid

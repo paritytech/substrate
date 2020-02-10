@@ -30,7 +30,7 @@ use futures_timer::Delay;
 #[cfg(not(test))]
 const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(200);
 #[cfg(test)]
-const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(5);
+pub const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(5);
 
 const BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
 
