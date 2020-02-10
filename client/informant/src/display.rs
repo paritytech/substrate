@@ -20,7 +20,9 @@ use log::info;
 use sc_network::SyncState;
 use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
 use sc_service::NetworkStatus;
-use std::{convert::{TryFrom, TryInto}, fmt, time};
+use std::{convert::{TryFrom, TryInto}, fmt};
+use wasm_timer::Instant;
+use crate::OutputFormat;
 
 /// State of the informant display system.
 ///
@@ -40,15 +42,18 @@ pub struct InformantDisplay<B: BlockT> {
 	/// `None` if `display` has never been called.
 	last_number: Option<NumberFor<B>>,
 	/// The last time `display` or `new` has been called.
-	last_update: time::Instant,
+	last_update: Instant,
+	/// The format to print output in.
+	format: OutputFormat,
 }
 
 impl<B: BlockT> InformantDisplay<B> {
 	/// Builds a new informant display system.
-	pub fn new() -> InformantDisplay<B> {
+	pub fn new(format: OutputFormat) -> InformantDisplay<B> {
 		InformantDisplay {
 			last_number: None,
-			last_update: time::Instant::now(),
+			last_update: Instant::now(),
+			format,
 		}
 	}
 
@@ -56,8 +61,10 @@ impl<B: BlockT> InformantDisplay<B> {
 	pub fn display(&mut self, info: &ClientInfo<B>, net_status: NetworkStatus<B>) {
 		let best_number = info.chain.best_number;
 		let best_hash = info.chain.best_hash;
+		let finalized_number = info.chain.finalized_number;
+		let num_connected_peers = net_status.num_connected_peers;
 		let speed = speed::<B>(best_number, self.last_number, self.last_update);
-		self.last_update = time::Instant::now();
+		self.last_update = Instant::now();
 		self.last_number = Some(best_number);
 
 		let (status, target) = match (net_status.sync_state, net_status.best_seen_block) {
@@ -66,19 +73,35 @@ impl<B: BlockT> InformantDisplay<B> {
 			(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed), format!(", target=#{}", n)),
 		};
 
-		info!(
-			target: "substrate",
-			"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
-			Colour::White.bold().paint(&status),
-			target,
-			Colour::White.bold().paint(format!("{}", net_status.num_connected_peers)),
-			Colour::White.paint(format!("{}", best_number)),
-			best_hash,
-			Colour::White.paint(format!("{}", info.chain.finalized_number)),
-			info.chain.finalized_hash,
-			TransferRateFormat(net_status.average_download_per_sec),
-			TransferRateFormat(net_status.average_upload_per_sec),
-		);
+		if self.format == OutputFormat::Coloured {
+			info!(
+				target: "substrate",
+				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+				Colour::White.bold().paint(&status),
+				target,
+				Colour::White.bold().paint(format!("{}", num_connected_peers)),
+				Colour::White.paint(format!("{}", best_number)),
+				best_hash,
+				Colour::White.paint(format!("{}", finalized_number)),
+				info.chain.finalized_hash,
+				TransferRateFormat(net_status.average_download_per_sec),
+				TransferRateFormat(net_status.average_upload_per_sec),
+			);
+		} else {
+			info!(
+				target: "substrate",
+				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+				status,
+				target,
+				num_connected_peers,
+				best_number,
+				best_hash,
+				finalized_number,
+				info.chain.finalized_hash,
+				TransferRateFormat(net_status.average_download_per_sec),
+				TransferRateFormat(net_status.average_upload_per_sec),
+			);
+		}
 	}
 }
 
@@ -87,7 +110,7 @@ impl<B: BlockT> InformantDisplay<B> {
 fn speed<B: BlockT>(
 	best_number: NumberFor<B>,
 	last_number: Option<NumberFor<B>>,
-	last_update: time::Instant
+	last_update: Instant
 ) -> String {
 	// Number of milliseconds elapsed since last time.
 	let elapsed_ms = {

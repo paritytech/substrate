@@ -65,6 +65,7 @@ variables:
   only:
     - master
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+    - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
     - web
 
 
@@ -234,15 +235,6 @@ check-web-wasm:
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
     - time cargo build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
     - sccache -s
-
-node-exits:
-  stage:                           test
-  <<:                              *docker-env
-  except:
-    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
-  script:
-    - ./.maintain/check_for_exit.sh
-
 
 test-full-crypto-feature:
   stage:                           test
@@ -524,7 +516,7 @@ publish-gh-doc:
       insteadOf = "https://github.com/"
       EOC
     - unset GITHUB_TOKEN
-    - git clone https://github.com/substrate-developer-hub/rustdocs.git
+    - git clone --depth 1 https://github.com/substrate-developer-hub/rustdocs.git
     - rsync -ax --delete ./crate-docs/ ./rustdocs/${CI_COMMIT_REF_NAME}/
     - cd ./rustdocs; git add .
     - git commit -m "update rustdoc ${CI_COMMIT_REF_NAME}"

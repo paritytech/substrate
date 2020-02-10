@@ -118,11 +118,18 @@ pub fn build_transport(
 
 			core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
 				.map_ok(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
-		})
+		});
 
-		.timeout(Duration::from_secs(20))
-		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-		.boxed();
+	let transport = if cfg!(not(target_os = "unknown")) {
+		transport
+			.timeout(Duration::from_secs(20))
+			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+			.boxed()
+	} else {
+		transport
+			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+			.boxed()
+	};
 
 	(transport, sinks)
 }

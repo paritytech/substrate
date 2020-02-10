@@ -16,7 +16,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
 derive_more = "0.99.2"
 futures = "0.3.1"
-futures-timer = "0.4.0"
+futures-timer = "3.0.1"
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 sc-keystore = { version = "2.0.0", path = "../../keystore" }
 log = "0.4.8"

@@ -274,8 +274,9 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		Vec<B::Extrinsic>,
 		StorageChanges<sp_api::TransactionFor<C, B>, B>,
 		Self::Claim,
+		Self::EpochData,
 	) -> sp_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>> + Send> {
-		Box::new(|header, header_hash, body, storage_changes, pair| {
+		Box::new(|header, header_hash, body, storage_changes, pair, _epoch| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let signature = pair.sign(header_hash.as_ref());

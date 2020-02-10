@@ -28,8 +28,7 @@ where
 	let args: Vec<_> = args.collect();
 	let opt = sc_cli::from_iter::<Cli, _>(args.clone(), &version);
 
-	let mut config = sc_service::Configuration::default();
-	config.impl_name = "substrate-node";
+	let mut config = sc_service::Configuration::new(&version);
 
 	match opt.subcommand {
 		None => sc_cli::run(
@@ -41,8 +40,8 @@ where
 			&version,
 		),
 		Some(Subcommand::Factory(cli_args)) => {
-			sc_cli::init(&mut config, load_spec, &cli_args.shared_params, &version)?;
-
+			sc_cli::init(&cli_args.shared_params, &version)?;
+			sc_cli::init_config(&mut config, &cli_args.shared_params, &version, load_spec)?;
 			sc_cli::fill_import_params(
 				&mut config,
 				&cli_args.import_params,
@@ -50,9 +49,21 @@ where
 				cli_args.shared_params.dev,
 			)?;
 
+			sc_cli::fill_config_keystore_in_memory(&mut config)?;
+
 			match ChainSpec::from(config.expect_chain_spec().id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
 				_ => panic!("Factory is only supported for development and local testnet."),
+			}
+
+			// Setup tracing.
+			if let Some(tracing_targets) = cli_args.import_params.tracing_targets.as_ref() {
+				let subscriber = sc_tracing::ProfilingSubscriber::new(
+					cli_args.import_params.tracing_receiver.into(), tracing_targets
+				);
+				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+					panic!("Unable to set global default subscriber {}", e);
+				}
 			}
 
 			let factory_state = FactoryState::new(

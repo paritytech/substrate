@@ -577,14 +577,14 @@ fn challenges_work() {
 		assert_eq!(Society::defender(), None);
 		// 20 will be challenged during the challenge rotation
 		run_to_block(8);
-		assert_eq!(Society::defender(), Some(20));
+		assert_eq!(Society::defender(), Some(30));
 		// They can always free vote for themselves
-		assert_ok!(Society::defender_vote(Origin::signed(20), true));
+		assert_ok!(Society::defender_vote(Origin::signed(30), true));
 		// If no one else votes, nothing happens
 		run_to_block(16);
 		assert_eq!(Society::members(), vec![10, 20, 30, 40]);
 		// New challenge period
-		assert_eq!(Society::defender(), Some(20));
+		assert_eq!(Society::defender(), Some(30));
 		// Non-member cannot challenge
 		assert_noop!(Society::defender_vote(Origin::signed(1), true), Error::<Test, _>::NotMember);
 		// 3 people say accept, 1 reject
@@ -601,7 +601,7 @@ fn challenges_work() {
 		assert_eq!(<DefenderVotes<Test>>::get(30), None);
 		assert_eq!(<DefenderVotes<Test>>::get(40), None);
 		// One more time
-		assert_eq!(Society::defender(), Some(20));
+		assert_eq!(Society::defender(), Some(30));
 		// 2 people say accept, 2 reject
 		assert_ok!(Society::defender_vote(Origin::signed(10), true));
 		assert_ok!(Society::defender_vote(Origin::signed(20), true));
@@ -609,10 +609,10 @@ fn challenges_work() {
 		assert_ok!(Society::defender_vote(Origin::signed(40), false));
 		run_to_block(32);
 		// 20 is suspended
-		assert_eq!(Society::members(), vec![10, 30, 40]);
-		assert_eq!(Society::suspended_member(20), true);
+		assert_eq!(Society::members(), vec![10, 20, 40]);
+		assert_eq!(Society::suspended_member(30), true);
 		// New defender is chosen
-		assert_eq!(Society::defender(), Some(40));
+		assert_eq!(Society::defender(), Some(20));
 		// Votes are reset
 		assert_eq!(<DefenderVotes<Test>>::get(10), None);
 		assert_eq!(<DefenderVotes<Test>>::get(20), None);
