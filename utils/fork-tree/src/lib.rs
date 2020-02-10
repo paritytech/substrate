@@ -106,46 +106,42 @@ impl<H, N, V> ForkTree<H, N, V> where
 			  F: Fn(&H, &H) -> Result<bool, E>,
 			  P: Fn(&V) -> bool,
 	{
+		let mut removed = Vec::new();
+
 		let new_root_index = self.find_node_index_where(
 			hash,
 			number,
 			is_descendent_of,
 			predicate,
 		)?;
-		let old_roots = std::mem::replace(&mut self.roots, Vec::new());
-
-		let mut removed = Vec::new();
 
 		if let Some(mut root_index) = new_root_index {
-			let mut root = {
-				let mut found = None;
-				let top_index = root_index.pop()
-					.expect("find_node_index_where will return array with at least one index; qed");
+			let old_roots = std::mem::replace(&mut self.roots, Vec::new());
 
-				for (index, child) in old_roots.into_iter().enumerate() {
-					if index == top_index {
-						found = Some(child);
-					} else {
-						removed.push((child.hash, child.number, child.data));
-					}
-				}
-
-				found.expect("find_node_index_where returns indexes that exist in the tree; qed")
-			};
+			let mut cur_children = old_roots;
 
 			while let Some(cur_index) = root_index.pop() {
 				let mut found = None;
-
-				for (index, child) in root.children.into_iter().enumerate() {
+				for (index, child) in cur_children.into_iter().enumerate() {
 					if index == cur_index {
-						found = Some(child);
-					} else {
-						removed.push((child.hash, child.number, child.data));
+						found = Some(child.children);
 					}
+					removed.push((child.hash, child.number, child.data));
 				}
-
-				root = found.expect("find_node_index_where returns indexes that exist in the tree; qed")
+				cur_children = found
+					.expect("find_node_index_where always return valid index; qed");
 			}
+
+			let (root_hash, root_number, root_data) = removed.pop()
+				.expect("find_node_index_where will return array with at least one index; \
+                         this results in at least one item in removed; qed");
+
+			let mut root = Node {
+				hash: root_hash,
+				number: root_number,
+				data: root_data,
+				children: cur_children
+			};
 
 			// we found the deepest ancestor of the finalized block, so we prune
 			// out any children that don't include the finalized block.
