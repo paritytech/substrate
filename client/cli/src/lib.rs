@@ -24,7 +24,6 @@ mod traits;
 mod params;
 mod execution_strategy;
 pub mod error;
-pub mod informant;
 mod runtime;
 mod node_key;
 

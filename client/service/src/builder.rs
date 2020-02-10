@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID};
+use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
 use crate::config::{Configuration, DatabaseConfig, KeystoreConfig};
@@ -46,8 +46,9 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	borrow::Cow,
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, time::SystemTime, pin::Pin
+	marker::PhantomData, sync::Arc, pin::Pin
 };
+use wasm_timer::SystemTime;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::MaintainedTransactionPool;
@@ -738,7 +739,7 @@ ServiceBuilder<
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TNetP: NetworkSpecialization<TBl>,
-	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
+	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + MallocSizeOfWasm + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata> + Clone,
 {
 
@@ -984,6 +985,10 @@ ServiceBuilder<
 				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
 				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
+			#[cfg(not(target_os = "unknown"))]
+			let memory_transaction_pool = parity_util_mem::malloc_size(&*transaction_pool_);
+			#[cfg(target_os = "unknown")]
+			let memory_transaction_pool = 0;
 			let _ = record_metrics!(
 				"peers" => num_peers,
 				"height" => best_number,
@@ -997,7 +1002,7 @@ ServiceBuilder<
 				"used_db_cache_size" => info.usage.as_ref().map(|usage| usage.memory.database_cache).unwrap_or(0),
 				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
 				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
-				"memory_transaction_pool" => parity_util_mem::malloc_size(&*transaction_pool_),
+				"memory_transaction_pool" => memory_transaction_pool,
 			);
 
 			ready(())
