@@ -118,30 +118,28 @@ impl<H, N, V> ForkTree<H, N, V> where
 		if let Some(mut root_index) = new_root_index {
 			let old_roots = std::mem::replace(&mut self.roots, Vec::new());
 
-			let mut cur_children = old_roots;
+			let mut root = None;
+			let mut cur_children = Some(old_roots);
 
 			while let Some(cur_index) = root_index.pop() {
-				let mut found = None;
-				for (index, child) in cur_children.into_iter().enumerate() {
-					if index == cur_index {
-						found = Some(child.children);
+				if let Some(children) = cur_children.take() {
+					for (index, child) in children.into_iter().enumerate() {
+						if index == cur_index {
+							if root_index.is_empty() {
+								root = Some(child);
+							} else {
+								cur_children = Some(child.children);
+							}
+						} else {
+							removed.push((child.hash, child.number, child.data));
+						}
 					}
-					removed.push((child.hash, child.number, child.data));
 				}
-				cur_children = found
-					.expect("find_node_index_where always return valid index; qed");
 			}
 
-			let (root_hash, root_number, root_data) = removed.pop()
+			let mut root = root
 				.expect("find_node_index_where will return array with at least one index; \
                          this results in at least one item in removed; qed");
-
-			let mut root = Node {
-				hash: root_hash,
-				number: root_number,
-				data: root_data,
-				children: cur_children
-			};
 
 			// we found the deepest ancestor of the finalized block, so we prune
 			// out any children that don't include the finalized block.
