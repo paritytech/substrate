@@ -83,7 +83,7 @@ macro_rules! trace {
 
 /// The exponent for the power of two sized block adjusted to the minimum size.
 ///
-/// This way, if MIN_POSSIBLE_ALLOCATION == 8, we would get:
+/// This way, if `MIN_POSSIBLE_ALLOCATION == 8`, we would get:
 ///
 /// power_of_two_size | order
 /// 8                 | 0
@@ -111,7 +111,7 @@ impl Order {
 	///
 	/// The size is clamped, so that the following holds:
 	///
-	/// MIN_POSSIBLE_ALLOCATION <= size <= MAX_POSSIBLE_ALLOCATION
+	/// `MIN_POSSIBLE_ALLOCATION <= size <= MAX_POSSIBLE_ALLOCATION`
 	fn from_size(size: u32) -> Result<Self, Error> {
 		let clamped_size = if size > MAX_POSSIBLE_ALLOCATION {
 			return Err(Error::RequestedAllocationTooLarge);
@@ -137,7 +137,7 @@ impl Order {
 	///
 	/// Note that it is always a power of two.
 	fn size(&self) -> u32 {
-		1 << MIN_POSSIBLE_ALLOCATION.trailing_zeros() << self.0
+		MIN_POSSIBLE_ALLOCATION << self.0
 	}
 
 	/// Extract the order as `u32`.
@@ -162,7 +162,7 @@ impl Link {
 	/// Creates a link from raw value.
 	fn from_raw(raw: u32) -> Self {
 		if raw != EMPTY_MARKER {
-			Self::Ptr(raw as u32)
+			Self::Ptr(raw)
 		} else {
 			Self::Null
 		}
@@ -363,7 +363,7 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// # Arguments
 	///
-	/// - `mem` - a slice representing the linear memory on which this allocator oper®®ates.
+	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk
 	pub fn deallocate<M: Memory + ?Sized>(&mut self, mem: &mut M, ptr: Pointer<u8>) -> Result<(), Error> {
 		let header_ptr = u32::from(ptr)
