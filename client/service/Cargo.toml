@@ -19,7 +19,7 @@ derive_more = "0.99.2"
 futures01 = { package = "futures", version = "0.1.29" }
 futures = "0.3.1"
 futures-diagnose = "1.0"
-parking_lot = "0.9.0"
+parking_lot = "0.10.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
 slog = { version = "2.5.2", features = ["nested-values"] }
@@ -52,10 +52,11 @@ sc-rpc-server = { version = "2.0.0", path = "../rpc-servers" }
 sc-rpc = { version = "2.0.0", path = "../rpc" }
 sc-telemetry = { version = "2.0.0", path = "../telemetry" }
 sc-offchain = { version = "2.0.0", path = "../offchain" }
-parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
+parity-multiaddr = { package = "parity-multiaddr", version = "0.7.1" }
 grafana-data-source = { version = "0.8", path = "../../utils/grafana-data-source" }
 sc-tracing = { version = "2.0.0", path = "../tracing" }
 tracing = "0.1.10"
+parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

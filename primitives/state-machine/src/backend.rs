@@ -213,6 +213,16 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn usage_info(&self) -> UsageInfo {
 		UsageInfo::empty()
 	}
+
+	/// Wipe the state database.
+	fn wipe(&self) -> Result<(), Self::Error> {
+		unimplemented!()
+	}
+
+	/// Commit given transaction to storage.
+	fn commit(&self, _storage_root: H::Out, _transaction: Self::Transaction) -> Result<(), Self::Error> {
+		unimplemented!()
+	}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {

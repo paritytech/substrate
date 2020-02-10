@@ -530,8 +530,8 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		pub fn bid(origin, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), Error::<T, I>::Suspended);
-			ensure!(!<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::Suspended);
+			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
+			ensure!(!<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
 			let bids = <Bids<T, I>>::get();
 			ensure!(!Self::is_bid(&bids, &who), Error::<T, I>::AlreadyBid);
 			let candidates = <Candidates<T, I>>::get();
@@ -640,8 +640,8 @@ decl_module! {
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			// Check user is not suspended.
-			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), Error::<T, I>::Suspended);
-			ensure!(!<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::Suspended);
+			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
+			ensure!(!<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
 			// Check user is not a bid or candidate.
 			let bids = <Bids<T, I>>::get();
 			ensure!(!Self::is_bid(&bids, &who), Error::<T, I>::AlreadyBid);
@@ -652,7 +652,7 @@ decl_module! {
 			ensure!(!Self::is_member(&members, &who), Error::<T, I>::AlreadyMember);
 			// Check sender can vouch.
 			ensure!(Self::is_member(&members, &voucher), Error::<T, I>::NotMember);
-			ensure!(!<Vouching<T, I>>::exists(&voucher), Error::<T, I>::AlreadyVouching);
+			ensure!(!<Vouching<T, I>>::contains_key(&voucher), Error::<T, I>::AlreadyVouching);
 
 			<Vouching<T, I>>::insert(&voucher, VouchingStatus::Vouching);
 			Self::put_bid(bids, &who, value.clone(), BidKind::Vouch(voucher.clone(), tip));
@@ -892,7 +892,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
-			ensure!(<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::NotSuspended);
+			ensure!(<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::NotSuspended);
 
 			if forgive {
 				// Try to add member back to society. Can fail with `MaxMembers` limit.

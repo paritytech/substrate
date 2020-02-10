@@ -150,7 +150,7 @@ impl<T: Trait> Module<T> {
 		for offender in offenders {
 			let report_id = Self::report_id::<O>(time_slot, &offender);
 
-			if !<Reports<T>>::exists(&report_id) {
+			if !<Reports<T>>::contains_key(&report_id) {
 				any_new = true;
 				<Reports<T>>::insert(
 					&report_id,

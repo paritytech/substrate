@@ -977,7 +977,7 @@ fn bond_extra_works() {
 	// See `bond_extra_and_withdraw_unbonded_works` for more details and updates on `Exposure`.
 	ExtBuilder::default().build().execute_with(|| {
 		// Check that account 10 is a validator
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 		// Check that account 10 is bonded to account 11
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Check how much is at stake
@@ -1375,7 +1375,7 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 		// Confirm validator count is 2
 		assert_eq!(Staking::validator_count(), 2);
 		// Confirm account 10 and 20 are validators
-		assert!(<Validators<Test>>::exists(&11) && <Validators<Test>>::exists(&21));
+		assert!(<Validators<Test>>::contains_key(&11) && <Validators<Test>>::contains_key(&21));
 
 		assert_eq!(Staking::stakers(&11).total, 1000);
 		assert_eq!(Staking::stakers(&21).total, 2000);
@@ -1433,10 +1433,10 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
 
 		// Check storage items that should be cleaned up
-		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Bonded<Test>>::exists(&11));
-		assert!(<Validators<Test>>::exists(&11));
-		assert!(<Payee<Test>>::exists(&11));
+		assert!(<Ledger<Test>>::contains_key(&10));
+		assert!(<Bonded<Test>>::contains_key(&11));
+		assert!(<Validators<Test>>::contains_key(&11));
+		assert!(<Payee<Test>>::contains_key(&11));
 
 		// Reduce free_balance of controller to 0
 		let _ = Balances::slash(&10, u64::max_value());
@@ -1447,10 +1447,10 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert_eq!(Staking::bonded(&11), Some(10));
 
 		// Check storage items have not changed
-		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Bonded<Test>>::exists(&11));
-		assert!(<Validators<Test>>::exists(&11));
-		assert!(<Payee<Test>>::exists(&11));
+		assert!(<Ledger<Test>>::contains_key(&10));
+		assert!(<Bonded<Test>>::contains_key(&11));
+		assert!(<Validators<Test>>::contains_key(&11));
+		assert!(<Payee<Test>>::contains_key(&11));
 
 		// Reduce free_balance of stash to 0
 		let _ = Balances::slash(&11, u64::max_value());
@@ -1458,11 +1458,11 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert_eq!(Balances::total_balance(&11), 0);
 
 		// Check storage items do not exist
-		assert!(!<Ledger<Test>>::exists(&10));
-		assert!(!<Bonded<Test>>::exists(&11));
-		assert!(!<Validators<Test>>::exists(&11));
-		assert!(!<Nominators<Test>>::exists(&11));
-		assert!(!<Payee<Test>>::exists(&11));
+		assert!(!<Ledger<Test>>::contains_key(&10));
+		assert!(!<Bonded<Test>>::contains_key(&11));
+		assert!(!<Validators<Test>>::contains_key(&11));
+		assert!(!<Nominators<Test>>::contains_key(&11));
+		assert!(!<Payee<Test>>::contains_key(&11));
 	});
 }
 
@@ -1474,7 +1474,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		// Make 10 a nominator
 		assert_ok!(Staking::nominate(Origin::signed(10), vec![20]));
 		// Check that account 10 is a nominator
-		assert!(<Nominators<Test>>::exists(11));
+		assert!(<Nominators<Test>>::contains_key(11));
 		// Check the balance of the nominator account
 		assert_eq!(Balances::free_balance(10), 256);
 		// Check the balance of the stash account
@@ -1484,10 +1484,10 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
 
 		// Check storage items that should be cleaned up
-		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Bonded<Test>>::exists(&11));
-		assert!(<Nominators<Test>>::exists(&11));
-		assert!(<Payee<Test>>::exists(&11));
+		assert!(<Ledger<Test>>::contains_key(&10));
+		assert!(<Bonded<Test>>::contains_key(&11));
+		assert!(<Nominators<Test>>::contains_key(&11));
+		assert!(<Payee<Test>>::contains_key(&11));
 
 		// Reduce free_balance of controller to 0
 		let _ = Balances::slash(&10, u64::max_value());
@@ -1500,10 +1500,10 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert_eq!(Staking::bonded(&11), Some(10));
 
 		// Check storage items have not changed
-		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Bonded<Test>>::exists(&11));
-		assert!(<Nominators<Test>>::exists(&11));
-		assert!(<Payee<Test>>::exists(&11));
+		assert!(<Ledger<Test>>::contains_key(&10));
+		assert!(<Bonded<Test>>::contains_key(&11));
+		assert!(<Nominators<Test>>::contains_key(&11));
+		assert!(<Payee<Test>>::contains_key(&11));
 
 		// Reduce free_balance of stash to 0
 		let _ = Balances::slash(&11, u64::max_value());
@@ -1511,11 +1511,11 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert_eq!(Balances::total_balance(&11), 0);
 
 		// Check storage items do not exist
-		assert!(!<Ledger<Test>>::exists(&10));
-		assert!(!<Bonded<Test>>::exists(&11));
-		assert!(!<Validators<Test>>::exists(&11));
-		assert!(!<Nominators<Test>>::exists(&11));
-		assert!(!<Payee<Test>>::exists(&11));
+		assert!(!<Ledger<Test>>::contains_key(&10));
+		assert!(!<Bonded<Test>>::contains_key(&11));
+		assert!(!<Validators<Test>>::contains_key(&11));
+		assert!(!<Nominators<Test>>::contains_key(&11));
+		assert!(!<Payee<Test>>::contains_key(&11));
 	});
 }
 
@@ -1968,7 +1968,7 @@ fn offence_ensures_new_era_without_clobbering() {
 #[test]
 fn offence_deselects_validator_when_slash_is_zero() {
 	ExtBuilder::default().build().execute_with(|| {
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (
@@ -1980,7 +1980,7 @@ fn offence_deselects_validator_when_slash_is_zero() {
 			&[Perbill::from_percent(0)],
 		);
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
-		assert!(!<Validators<Test>>::exists(11));
+		assert!(!<Validators<Test>>::contains_key(11));
 	});
 }
 
@@ -2017,7 +2017,7 @@ fn slash_in_old_span_does_not_deselect() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
 
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (
@@ -2029,13 +2029,13 @@ fn slash_in_old_span_does_not_deselect() {
 			&[Perbill::from_percent(0)],
 		);
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
-		assert!(!<Validators<Test>>::exists(11));
+		assert!(!<Validators<Test>>::contains_key(11));
 
 		start_era(2);
 
 		Staking::validate(Origin::signed(10), Default::default()).unwrap();
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 
 		start_era(3);
 
@@ -2056,7 +2056,7 @@ fn slash_in_old_span_does_not_deselect() {
 
 		// not for zero-slash.
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 
 		on_offence_in_era(
 			&[OffenceDetails {
@@ -2072,7 +2072,7 @@ fn slash_in_old_span_does_not_deselect() {
 
 		// or non-zero.
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 		assert_ledger_consistent(11);
 	});
 }

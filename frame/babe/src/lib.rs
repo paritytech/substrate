@@ -35,8 +35,9 @@ use sp_staking::{
 use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_babe::{
-	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, NextEpochDescriptor, RawBabePreDigest,
-	SlotNumber, inherents::{INHERENT_IDENTIFIER, BabeInherentData}
+	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber,
+	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
+	digests::{NextEpochDescriptor, RawPreDigest},
 };
 pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
@@ -205,11 +206,11 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				let pre_digest = RawBabePreDigest::decode(&mut data).ok()?;
+				let pre_digest = RawPreDigest::decode(&mut data).ok()?;
 				return Some(match pre_digest {
-					RawBabePreDigest::Primary { authority_index, .. } =>
+					RawPreDigest::Primary { authority_index, .. } =>
 						authority_index,
-					RawBabePreDigest::Secondary { authority_index, .. } =>
+					RawPreDigest::Secondary { authority_index, .. } =>
 						authority_index,
 				});
 			}
@@ -397,7 +398,7 @@ impl<T: Trait> Module<T> {
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
 			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-				RawBabePreDigest::decode(&mut data).ok()
+				RawPreDigest::decode(&mut data).ok()
 			} else {
 				None
 			})
@@ -424,7 +425,7 @@ impl<T: Trait> Module<T> {
 
 			CurrentSlot::put(digest.slot_number());
 
-			if let RawBabePreDigest::Primary { vrf_output, .. } = digest {
+			if let RawPreDigest::Primary { vrf_output, .. } = digest {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.

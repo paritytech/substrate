@@ -99,6 +99,46 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	_phantom: PhantomData<RA>,
 }
 
+/// An `Iterator` that iterates keys in a given block under a prefix.
+pub struct KeyIterator<'a, State, Block> {
+	state: State,
+	prefix: Option<&'a StorageKey>,
+	current_key: Vec<u8>,
+	_phantom: PhantomData<Block>,
+}
+
+impl <'a, State, Block> KeyIterator<'a, State, Block> {
+	fn new(state: State, prefix: Option<&'a StorageKey>, current_key: Vec<u8>) -> Self {
+		Self {
+			state,
+			prefix,
+			current_key,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
+	Block: BlockT,
+	State: StateBackend<HasherFor<Block>>,
+{
+	type Item = StorageKey;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let next_key = self.state
+			.next_storage_key(&self.current_key)
+			.ok()
+			.flatten()?;
+		if let Some(prefix) = self.prefix {
+			if !next_key.starts_with(&prefix.0[..]) {
+				return None;
+			}
+		}
+		self.current_key = next_key.clone();
+		Some(StorageKey(next_key))
+	}
+}
+
 // used in importing a block, where additional changes are made after the runtime
 // executed.
 enum PrePostHeader<H> {
@@ -234,14 +274,47 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.state_at(*block)
 	}
 
-	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
+	/// Given a `BlockId` and a key prefix, return the matching storage keys in that block.
 	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> sp_blockchain::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
 		Ok(keys)
 	}
 
+	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in that block.
+	pub fn storage_pairs(&self, id: &BlockId<Block>, key_prefix: &StorageKey)
+		-> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>
+	{
+		let state = self.state_at(id)?;
+		let keys = state
+			.keys(&key_prefix.0)
+			.into_iter()
+			.map(|k| {
+				let d = state.storage(&k).ok().flatten().unwrap_or_default();
+				(StorageKey(k), StorageData(d))
+			})
+			.collect();
+		Ok(keys)
+	}
+
+	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in that block.
+	pub fn storage_keys_iter<'a>(
+		&self,
+		id: &BlockId<Block>,
+		prefix: Option<&'a StorageKey>,
+		start_key: Option<&StorageKey>
+	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
+		let state = self.state_at(id)?;
+		let start_key = start_key
+			.or(prefix)
+			.map(|key| key.0.clone())
+			.unwrap_or_else(Vec::new);
+		Ok(KeyIterator::new(state, prefix, start_key))
+	}
+
 	/// Given a `BlockId` and a key, return the value under the key in that block.
-	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<StorageData>> {
+	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey)
+		-> sp_blockchain::Result<Option<StorageData>>
+	{
 		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 			.map(StorageData)
@@ -250,7 +323,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Given a `BlockId` and a key, return the value under the hash in that block.
 	pub fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey)
-		-> sp_blockchain::Result<Option<Block::Hash>> {
+		-> sp_blockchain::Result<Option<Block::Hash>>
+	{
 		Ok(self.state_at(id)?
 			.storage_hash(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 		)
@@ -1900,6 +1974,7 @@ pub(crate) mod tests {
 		sc_client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
+	use hex_literal::hex;
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
@@ -3302,5 +3377,62 @@ pub(crate) mod tests {
 			client.key_changes(1, BlockId::Number(31), None, &StorageKey(vec![42])).unwrap(),
 			vec![(30, 0), (27, 0), (25, 0), (24, 0), (11, 0)]
 		);
+	}
+
+	#[test]
+	fn storage_keys_iter_prefix_and_start_key_works() {
+		let client = substrate_test_runtime_client::new();
+
+		let prefix = StorageKey(hex!("3a").to_vec());
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("3a636f6465").to_vec(), hex!("3a686561707061676573").to_vec()]);
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("3a636f6465").to_vec())))
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("3a686561707061676573").to_vec()]);
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("3a686561707061676573").to_vec())))
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, Vec::<Vec<u8>>::new());
+	}
+
+	#[test]
+	fn storage_keys_iter_works() {
+		let client = substrate_test_runtime_client::new();
+
+		let prefix = StorageKey(hex!("").to_vec());
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
+			.unwrap()
+			.take(2)
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("0befda6e1ca4ef40219d588a727f1271").to_vec(), hex!("3a636f6465").to_vec()]);
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("3a636f6465").to_vec())))
+			.unwrap()
+			.take(3)
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [
+			hex!("3a686561707061676573").to_vec(),
+			hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
+			hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
+		]);
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec())))
+			.unwrap()
+			.take(1)
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f").to_vec()]);
 	}
 }
