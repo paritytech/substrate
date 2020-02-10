@@ -31,7 +31,7 @@
 //! It is not supposed to measure runtime modules weight correctness
 //! (there is a dedicated benchmarking mode for this).
 
-use std::{sync::Arc, path::Path};
+use std::{sync::Arc, path::Path, collections::BTreeMap};
 
 use node_primitives::Block;
 use node_testing::client::{Client, Backend};
@@ -82,12 +82,68 @@ criterion_group!(
 );
 criterion_main!(benches, profile);
 
-fn genesis() -> node_runtime::GenesisConfig {
-	node_testing::genesis::config(false, Some(node_runtime::WASM_BINARY))
+fn genesis(keyring: &BenchKeyring) -> node_runtime::GenesisConfig {
+	node_testing::genesis::config_endowed(
+		false,
+		Some(node_runtime::WASM_BINARY),
+		keyring.collect_account_ids(),
+	)
 }
 
-fn sign(xt: CheckedExtrinsic, genesis_hash: [u8; 32], version: u32) -> UncheckedExtrinsic {
-	node_testing::keyring::sign(xt, version, genesis_hash)
+// this is deterministic keyring of ordered accounts
+//     //endowed-user//00
+//     //endowed-user//01
+//      ...
+//     //endowed-user//N
+struct BenchKeyring {
+	accounts: BTreeMap<AccountId, sr25519::Pair>,
+}
+
+impl BenchKeyring {
+	fn new(num: usize) -> Self {
+		let mut accounts = BTreeMap::new();
+
+		for n in 0..num {
+			let seed = format!("//endowed-user/{}", n);
+			let pair = sr25519::Pair::from_string(&seed, None).expect("failed to generate pair");
+			let account_id = AccountPublic::from(pair.public()).into_account();
+			accounts.insert(account_id, pair);
+		}
+
+		Self { accounts }
+	}
+
+	fn collect_account_ids(&self) -> Vec<AccountId> {
+		self.accounts.keys().cloned().collect()
+	}
+
+	fn at(&self, index: usize) -> AccountId {
+		self.accounts.keys().nth(index).expect("Failed to get account").clone()
+	}
+
+	fn sign(&self, xt: CheckedExtrinsic, version: u32, genesis_hash: [u8; 32]) -> UncheckedExtrinsic {
+		match xt.signed {
+			Some((signed, extra)) => {
+				let payload = (xt.function, extra.clone(), version, genesis_hash, genesis_hash);
+				let key = self.accounts.get(&signed).expect("Account id not found in keyring");
+				let signature = payload.using_encoded(|b| {
+					if b.len() > 256 {
+						key.sign(&sp_io::hashing::blake2_256(b))
+					} else {
+						key.sign(b)
+					}
+				}).into();
+				UncheckedExtrinsic {
+					signature: Some((pallet_indices::address::Address::Id(signed), signature, extra)),
+					function: payload.0,
+				}
+			}
+			None => UncheckedExtrinsic {
+				signature: None,
+				function: xt.function,
+			},
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -124,21 +180,21 @@ impl Profile {
 //     (TODO: configure zero rocksdb block cache)
 // - This client should use best wasm execution method.
 // - This client should work with real database only.
-fn bench_client(dir: &std::path::Path, profile: Profile) -> (Client, std::sync::Arc<Backend>) {
+fn bench_client(dir: &std::path::Path, profile: Profile, keyring: &BenchKeyring) -> (Client, std::sync::Arc<Backend>) {
 	let db_config = sc_client_db::DatabaseSettings {
-		state_cache_size: 0,
+		state_cache_size: 16*1024*1024,
 		state_cache_child_ratio: Some((0, 100)),
 		pruning: PruningMode::ArchiveAll,
 		source: sc_client_db::DatabaseSettingsSrc::Path {
 			path: dir.into(),
-			cache_size: Some(0),
+			cache_size: None,
 		},
 	};
 
 	let (client, backend) = sc_client_db::new_client(
 		db_config,
 		NativeExecutor::new(WasmExecutionMethod::Compiled, None),
-		&genesis(),
+		&genesis(keyring),
 		None,
 		None,
 		ExecutionExtensions::new(profile.into_execution_strategies(), None),
@@ -153,10 +209,12 @@ struct BenchContext {
 	client: Client,
 	backend: Arc<Backend>,
 	db_guard: Guard,
+	keyring: BenchKeyring,
 }
 
 impl BenchContext {
 	fn new(profile: Profile) -> BenchContext {
+		let keyring = BenchKeyring::new(1024);
 
 		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
 		log::trace!(
@@ -164,13 +222,16 @@ impl BenchContext {
 			"Created seed db at {}",
 			dir.path().to_string_lossy(),
 		);
-		let (client, backend) = bench_client(dir.path(), profile);
+		let (client, backend) = bench_client(dir.path(), profile, &keyring);
 		let db_guard = Guard(dir);
 
-		BenchContext { client, backend, db_guard }
+
+		BenchContext { client, backend, db_guard, keyring }
 	}
 
 	fn new_from_seed(profile: Profile, seed_dir: &Path) -> BenchContext {
+		let keyring = BenchKeyring::new(1024);
+
 		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
 
 		log::trace!(
@@ -192,10 +253,10 @@ impl BenchContext {
 			&fs_extra::dir::CopyOptions::new(),
 		).expect("Copy of seed database is ok");
 
-		let (client, backend) = bench_client(dir.path(), profile);
+		let (client, backend) = bench_client(dir.path(), profile, &keyring);
 		let db_guard = Guard(dir);
 
-		BenchContext { client, backend, db_guard }
+		BenchContext { client, backend, db_guard, keyring }
 	}
 
 	fn keep_db(self) -> Guard {
@@ -219,7 +280,7 @@ where
 }
 
 // Full block generation.
-fn generate_block_import(client: &Client) -> Block {
+fn generate_block_import(client: &Client, keyring: &BenchKeyring) -> Block {
 	let version = client.runtime_version_at(&BlockId::number(0))
 		.expect("There should be runtime version at 0")
 		.spec_version;
@@ -250,21 +311,29 @@ fn generate_block_import(client: &Client) -> Block {
 		block.push(extrinsic).expect("Push inherent failed");
 	}
 
-	let mut nonce = 0u32;
+	let mut iteration = 0;
 	let start = std::time::Instant::now();
 	loop {
-		let signed = sign(
+
+		let sender = keyring.at(iteration);
+		let receiver = get_account_id_from_seed::<sr25519::Public>(
+			&format!("random-user//{}", iteration)
+		);
+
+		let signed = keyring.sign(
 			CheckedExtrinsic {
-				signed: Some((charlie(), signed_extra(nonce, 1*DOLLARS))),
+				signed: Some((sender, signed_extra(0, 1*DOLLARS))),
 				function: Call::Balances(
 					BalancesCall::transfer(
-						pallet_indices::address::Address::Id(
-							get_account_id_from_seed::<sr25519::Public>(&format!("user//{}", nonce))
-						),
+						pallet_indices::address::Address::Id(receiver),
 						1*DOLLARS
 					)
 				),
-			}, genesis_hash, version);
+			},
+			version,
+			genesis_hash,
+		);
+
 		let encoded = Encode::encode(&signed);
 
 		let opaque = OpaqueExtrinsic::decode(&mut &encoded[..])
@@ -279,7 +348,7 @@ fn generate_block_import(client: &Client) -> Block {
 			Err(err) => panic!("Error pushing transaction: {:?}", err),
 			Ok(_) => {},
 		}
-		nonce += 1;
+		iteration += 1;
 	}
 	let block = block.build().expect("Block build failed").block;
 
@@ -336,7 +405,7 @@ fn bench_block_import(c: &mut Criterion) {
 
 	let (block, guard) = {
 		let context = BenchContext::new(Profile::Wasm);
-		let block = generate_block_import(&context.client);
+		let block = generate_block_import(&context.client, &context.keyring);
 		(block, context.keep_db())
 	};
 
@@ -403,7 +472,7 @@ fn profile_block_import(c: &mut Criterion) {
 
 	let (block, guard) = {
 		let context = BenchContext::new(Profile::Wasm);
-		let block = generate_block_import(&context.client);
+		let block = generate_block_import(&context.client, &context.keyring);
 		(block, context.keep_db())
 	};
 
