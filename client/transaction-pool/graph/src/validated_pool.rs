@@ -305,7 +305,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 									err,
 								);
 								final_statuses.insert(hash, Status::Failed);
-							}
+							},
 						},
 						ValidatedTransaction::Invalid(_, _) | ValidatedTransaction::Unknown(_, _) => {
 							final_statuses.insert(hash, Status::Failed);
@@ -345,8 +345,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		self.pool.read().by_hashes(&hashes)
 			.into_iter()
 			.map(|existing_in_pool| existing_in_pool
-				.map(|transaction| transaction.provides.iter().cloned()
-					.collect()))
+				.map(|transaction| transaction.provides.iter().cloned().collect()))
 			.collect()
 	}
 
@@ -524,7 +523,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		self.pool.read().status()
 	}
 
-	/// Notify all watchers that transactions in the block with hash been finalized
+	/// Notify all watchers that transactions in the block with hash have been finalized
 	pub async fn finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
 		debug!(target: "txpool", "Attempting to notify watchers of finalization for {}", block_hash);
 		let last_finalized_hash = *self.last_finalized_hash.lock();
@@ -541,6 +540,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				.map(|tx| self.api.hash_and_length(&tx).0)
 				.collect::<Vec<_>>();
 
+			// notify the watcher that these extrinsics have been finalized
 			self.listener.write().finalized(&hash, &tx_hashes);
 
 			if last_finalized_hash == Default::default() {

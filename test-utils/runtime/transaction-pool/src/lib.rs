@@ -225,7 +225,7 @@ impl sc_transaction_graph::ChainApi for TestApi {
 		})
 	}
 
-	fn last_finalized(&self) -> Result<BlockHash<Self>, Self::Error> {
+	fn last_finalized(&self) -> BlockHash<Self> {
 		unimplemented!()
 	}
 }

@@ -115,7 +115,7 @@ impl ChainApi for TestApi {
 		Ok(None)
 	}
 
-	fn last_finalized(&self) -> Result<BlockHash<Self>, Self::Error> {
+	fn last_finalized(&self) -> BlockHash<Self> {
 		unimplemented!()
 	}
 }
