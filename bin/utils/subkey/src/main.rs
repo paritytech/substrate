@@ -74,12 +74,10 @@ trait Crypto: Sized {
 		uri: &str,
 		password: Option<&str>,
 		network_override: Option<Ss58AddressFormat>,
-		output: Option<OutputType>,
+		output: OutputType,
 	) where
 		<Self::Pair as Pair>::Public: PublicT,
 	{
-		let output = output.unwrap_or(OutputType::Text);
-
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
 			
@@ -399,23 +397,23 @@ where
 		set_default_ss58_version(network);
 	}
 
-	let maybe_output: Option<OutputType> = match matches.value_of("output").map(|output| {
+	let output: OutputType = match matches.value_of("output").map(|output| {
 		output
 			.try_into()
 			.map_err(|_| Error::Static("Invalid output name. See --help for available outputs."))
 	}) {
 		Some(Err(e)) => return Err(e),
-		Some(Ok(v)) => Some(v),
-		None => None,
+		Some(Ok(v)) => v,
+		None => OutputType::Text,
 	 };
 
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
 			let mnemonic = generate_mnemonic(matches)?;
-			C::print_from_uri(mnemonic.phrase(), password, maybe_network, maybe_output);
+			C::print_from_uri(mnemonic.phrase(), password, maybe_network, output);
 		}
 		("inspect", Some(matches)) => {
-			C::print_from_uri(&get_uri("uri", &matches)?, password, maybe_network, maybe_output);
+			C::print_from_uri(&get_uri("uri", &matches)?, password, maybe_network, output);
 		}
 		("sign", Some(matches)) => {
 			let suri = get_uri("suri", &matches)?;
@@ -444,7 +442,7 @@ where
 				.unwrap_or_default();
 			let result = vanity::generate_key::<C>(&desired)?;
 			let formated_seed = format_seed::<C>(result.seed);
-			C::print_from_uri(&formated_seed, None, maybe_network, None);
+			C::print_from_uri(&formated_seed, None, maybe_network, output);
 		}
 		("transfer", Some(matches)) => {
 			let signer = read_pair::<C>(matches.value_of("from"), password)?;
