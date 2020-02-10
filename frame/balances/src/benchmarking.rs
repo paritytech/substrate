@@ -31,7 +31,9 @@ fn account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 	T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 }
 
-// Benchmark `add_registrar` extrinsic.
+// Benchmark `transfer` extrinsic with the worst possible conditions:
+// * Transfer will kill the sender account.
+// * Transfer will create the recipient account.
 struct Transfer;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for Transfer {
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
@@ -46,20 +48,69 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
+		// Constants
+		let ed = T::ExistentialDeposit::get();
+		
 		// Select an account
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
 		let user = account::<T>("user", u);
 		let user_origin = RawOrigin::Signed(user.clone());
 
-		// Give some multiple of the existential deposit
+		// Give some multiple of the existential deposit + creation fee + transfer fee
 		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
-		let balance = T::ExistentialDeposit::get().saturating_mul(e.into());
+		let mut balance = ed.saturating_mul(e.into());
+		balance += T::CreationFee::get();
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, balance);
 
-		// Transfer `e - 1` existential deposits, which guarantees to create one account, and reap this user.
+		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
 		let recipient = account::<T>("recipient", u);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient);
-		let transfer_amt = T::ExistentialDeposit::get().saturating_mul((e - 1).into());
+		let transfer_amt = ed.saturating_mul((e - 1).into()) + 1.into();
+
+		// Return the `transfer` call
+		Ok((crate::Call::<T>::transfer(recipient_lookup, transfer_amt), user_origin))
+	}
+}
+
+// Benchmark `transfer` with the best possible condition:
+// * Both accounts exist and will continue to exist.
+struct TransferBestCase;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for TransferBestCase {
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Existential Deposit Multiplier
+			(BenchmarkParameter::E, 2, 1000),
+			// User Seed
+			(BenchmarkParameter::U, 1, 1000),
+		]
+	}
+
+	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	{
+		// Constants
+		let ed = T::ExistentialDeposit::get();
+		
+		// Select a sender
+		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
+		let user = account::<T>("user", u);
+		let user_origin = RawOrigin::Signed(user.clone());
+
+		// Select a recipient
+		let recipient = account::<T>("recipient", u);
+		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
+
+		// Get the existential deposit multiplier
+		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
+
+		// Give the sender account plenty of funds for transfer
+		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, ed.saturating_mul((e + 1).into()));
+
+		// Give the recipient account existential deposit.
+		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&recipient, ed);
+
+		// Transfer e * existential deposit.
+		let transfer_amt = ed.saturating_mul(e.into());
 
 		// Return the `transfer` call
 		Ok((crate::Call::<T>::transfer(recipient_lookup, transfer_amt), user_origin))
@@ -69,6 +120,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 // The list of available benchmarks for this pallet.
 enum SelectedBenchmark {
 	Transfer,
+	TransferBestCase,
 }
 
 // Allow us to select a benchmark from the list of available benchmarks.
@@ -77,6 +129,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		match self {
 			Self::Transfer => <Transfer as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&Transfer),
+			Self::TransferBestCase => <TransferBestCase as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&TransferBestCase),
 		}
 	}
 
@@ -85,6 +138,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		match self {
 			Self::Transfer => <Transfer as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&Transfer, components),
+			Self::TransferBestCase => <TransferBestCase as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&TransferBestCase, components),
 		}
 	}
 }
@@ -94,6 +148,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		// Map the input to the selected benchmark.
 		let selected_benchmark = match extrinsic.as_slice() {
 			b"transfer" => SelectedBenchmark::Transfer,
+			b"transfer_best_case" => SelectedBenchmark::TransferBestCase,
 			_ => return Err("Could not find extrinsic."),
 		};
 
@@ -121,7 +176,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					).collect();
 
 				// Run the benchmark `repeat` times.
-				for _ in 0..repeat {
+				for _r in 0..repeat {
 					// Set up the externalities environment for the setup we want to benchmark.
 					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
 					// Commit the externalities to the database, flushing the DB cache.
@@ -129,9 +184,15 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					sp_io::benchmarking::commit_db();
 					// Run the benchmark.
 					let start = sp_io::benchmarking::current_time();
-					call.dispatch(caller.into())?;
+					call.dispatch(caller.clone().into())?;
 					let finish = sp_io::benchmarking::current_time();
 					let elapsed = finish - start;
+					sp_std::if_std!{
+						if let RawOrigin::Signed(who) = caller.clone() {
+							let balance = Account::<T>::get(&who).free;
+							println!("Free Balance {:?}", balance);
+						}
+					}
 					results.push((c.clone(), elapsed));
 					// Wipe the DB back to the genesis state.
 					sp_io::benchmarking::wipe_db();
