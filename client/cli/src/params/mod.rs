@@ -22,6 +22,7 @@ mod network_configuration_params;
 
 use std::str::FromStr;
 use std::fmt::Debug;
+use structopt::clap::arg_enum;
 
 pub use crate::execution_strategy::ExecutionStrategy;
 
@@ -63,5 +64,42 @@ impl BlockNumber {
 		self.0
 			.parse()
 			.map_err(|e| format!("BlockNumber: {} parsing failed because of {:?}", self.0, e))
+	}
+}
+
+arg_enum! {
+	/// How to execute Wasm runtime code
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy)]
+	pub enum WasmExecutionMethod {
+		// Uses an interpreter.
+		Interpreted,
+		// Uses a compiled runtime.
+		Compiled,
+	}
+}
+
+impl WasmExecutionMethod {
+	/// Returns list of variants that are not disabled by feature flags.
+	pub fn enabled_variants() -> Vec<&'static str> {
+		Self::variants()
+			.iter()
+			.cloned()
+			.filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
+			.collect()
+	}
+}
+
+impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
+	fn into(self) -> sc_service::config::WasmExecutionMethod {
+		match self {
+			WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
+			#[cfg(feature = "wasmtime")]
+			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
+			#[cfg(not(feature = "wasmtime"))]
+			WasmExecutionMethod::Compiled => panic!(
+				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
+			),
+		}
 	}
 }

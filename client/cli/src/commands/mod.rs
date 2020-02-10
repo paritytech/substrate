@@ -21,6 +21,8 @@ mod import_blocks_cmd;
 mod check_block_cmd;
 mod revert_cmd;
 mod purge_chain_cmd;
+#[cfg(feature = "rocksdb")]
+mod benchmark_cmd;
 
 use std::fmt::Debug;
 use structopt::StructOpt;
@@ -40,6 +42,8 @@ pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
 pub use crate::commands::check_block_cmd::CheckBlockCmd;
 pub use crate::commands::revert_cmd::RevertCmd;
 pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
+#[cfg(feature = "rocksdb")]
+pub use crate::commands::benchmark_cmd::BenchmarkCmd;
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -68,6 +72,10 @@ pub enum Subcommand {
 
 	/// Remove the whole chain data.
 	PurgeChain(purge_chain_cmd::PurgeChainCmd),
+
+	/// Run runtime benchmarks.
+	#[cfg(feature = "rocksdb")]
+	Benchmark(BenchmarkCmd),
 }
 
 impl Subcommand {
@@ -82,6 +90,8 @@ impl Subcommand {
 			CheckBlock(params) => &params.shared_params,
 			Revert(params) => &params.shared_params,
 			PurgeChain(params) => &params.shared_params,
+			#[cfg(feature = "rocksdb")]
+			Benchmark(params) => &params.shared_params,
 		}
 	}
 
@@ -109,6 +119,8 @@ impl Subcommand {
 			Subcommand::CheckBlock(cmd) => cmd.run(config, builder),
 			Subcommand::PurgeChain(cmd) => cmd.run(config),
 			Subcommand::Revert(cmd) => cmd.run(config, builder),
+			#[cfg(feature = "rocksdb")]
+			Subcommand::Benchmark(cmd) => cmd.run(config, builder),
 		}
 	}
 }

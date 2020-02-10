@@ -673,6 +673,8 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 pub trait ServiceBuilderCommand {
 	/// Block type this API operates on.
 	type Block: BlockT;
+	/// Native execution dispatch required by some commands.
+	type NativeDispatch: NativeExecutionDispatch + 'static;
 	/// Starts the process of importing blocks.
 	fn import_blocks(
 		self,
