@@ -28,7 +28,8 @@ use std::error;
 use std::collections::hash_map::Entry;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use wasm_timer::Instant;
 use crate::utils::interval;
 
 /// Time after we disconnect from a node before we purge its information from the cache.
