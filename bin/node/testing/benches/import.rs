@@ -450,7 +450,7 @@ fn bench_block_import(c: &mut Criterion) {
 						"usage info: {}",
 						context.backend.usage_info()
 							.expect("RocksDB backend always provides usage info!"),
-					)
+					);
 				},
 				criterion::BatchSize::PerIteration,
 			);
