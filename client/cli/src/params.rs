@@ -1251,14 +1251,14 @@ impl BenchmarkCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		let spec = config.chain_spec.expect("chain_spec is always Some");
-		let execution_strategy = self.execution.unwrap_or(ExecutionStrategy::Native).into();
-		let wasm_method = self.wasm_method.into();
-		let pallet = self.pallet;
-		let extrinsic = self.extrinsic;
-		let steps = self.steps;
-		let repeat = self.repeat;
-		sc_service::chain_ops::benchmark_runtime::<BB, BC::NativeDispatch, _, _>(spec, execution_strategy, wasm_method, pallet, extrinsic, steps, repeat)?;
+		// let spec = config.chain_spec.expect("chain_spec is always Some");
+		// let execution_strategy = self.execution.unwrap_or(ExecutionStrategy::Native).into();
+		// let wasm_method = self.wasm_method.into();
+		// let pallet = self.pallet;
+		// let extrinsic = self.extrinsic;
+		// let steps = self.steps;
+		// let repeat = self.repeat;
+		// sc_service::chain_ops::benchmark_runtime::<BB, BC::NativeDispatch, _, _>(spec, execution_strategy, wasm_method, pallet, extrinsic, steps, repeat)?;
 		Ok(())
 	}
 }
