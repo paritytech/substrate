@@ -50,7 +50,7 @@ impl<'a> TryFrom<&'a str> for OutputType {
 		match s {
 			"json" => Ok(OutputType::Json),
 			"text" => Ok(OutputType::Text),
-			_      => Err(()),
+			_ => Err(()),
 		}
 	}
 
@@ -90,7 +90,7 @@ trait Crypto: Sized {
 						"accountId": format_account_id::<Self>(public_key),
 						"ss58Address": Self::ss58_from_pair(&pair),
 					});
-					println!("{}", serde_json::to_string_pretty(&json).unwrap());
+					println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
 				},
 				OutputType::Text => {
 					println!("Secret phrase `{}` is account:\n  \
@@ -118,7 +118,7 @@ trait Crypto: Sized {
 						"accountId": format_account_id::<Self>(public_key),
 						"ss58Address": Self::ss58_from_pair(&pair),
 					});
-					println!("{}", serde_json::to_string_pretty(&json).unwrap());
+					println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
 				},
 				OutputType::Text => {
 					println!("Secret Key URI `{}` is account:\n  \
@@ -149,7 +149,7 @@ trait Crypto: Sized {
 						"accountId": format_account_id::<Self>(public_key.clone()),
 						"ss58Address": public_key.to_ss58check_with_version(v),
 					});
-					println!("{}", serde_json::to_string_pretty(&json).unwrap());
+					println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
 				},
 				OutputType::Text => {
 					println!("Public Key URI `{}` is account:\n  \
