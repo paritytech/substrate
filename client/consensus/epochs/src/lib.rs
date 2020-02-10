@@ -16,7 +16,7 @@
 
 //! Generic utilities for epoch-based consensus engines.
 
-use std::{sync::Arc, ops::Add};
+use std::{sync::Arc, ops::Add, borrow::Borrow};
 use parking_lot::Mutex;
 use codec::{Encode, Decode};
 use fork_tree::ForkTree;
@@ -90,37 +90,40 @@ pub struct UnimportedGenesisEpoch<Epoch>(Epoch);
 ///
 /// If this is the first non-genesis block in the chain, then it will
 /// hold an `UnimportedGenesis` epoch.
-pub enum ViableEpoch<Epoch> {
+pub enum ViableEpoch<Epoch, EpochRef> {
 	/// Genesis viable epoch data.
 	Genesis(UnimportedGenesisEpoch<Epoch>),
 	/// Regular viable epoch data.
-	Regular(Epoch),
+	Regular(EpochRef),
 }
 
-impl<Epoch> From<Epoch> for ViableEpoch<Epoch> {
-	fn from(epoch: Epoch) -> ViableEpoch<Epoch> {
+impl<Epoch, EpochRef> From<EpochRef> for ViableEpoch<Epoch, EpochRef> {
+	fn from(epoch: EpochRef) -> ViableEpoch<Epoch, EpochRef> {
 		ViableEpoch::Regular(epoch)
 	}
 }
 
-impl<Epoch> AsRef<Epoch> for ViableEpoch<Epoch> {
+impl<Epoch, EpochRef> AsRef<Epoch> for ViableEpoch<Epoch, EpochRef> where
+	EpochRef: Borrow<Epoch>,
+{
 	fn as_ref(&self) -> &Epoch {
 		match *self {
 			ViableEpoch::Genesis(UnimportedGenesisEpoch(ref e)) => e,
-			ViableEpoch::Regular(ref e) => e,
+			ViableEpoch::Regular(ref e) => e.borrow(),
 		}
 	}
 }
 
-impl<Epoch> ViableEpoch<Epoch> where
+impl<Epoch, EpochRef> ViableEpoch<Epoch, EpochRef> where
 	Epoch: crate::Epoch + Clone,
+	EpochRef: Borrow<Epoch>,
 {
 	/// Extract the underlying epoch, disregarding the fact that a genesis
 	/// epoch may be unimported.
-	pub fn into_inner(self) -> Epoch {
+	pub fn into_cloned_inner(self) -> Epoch {
 		match self {
 			ViableEpoch::Genesis(UnimportedGenesisEpoch(e)) => e,
-			ViableEpoch::Regular(e) => e,
+			ViableEpoch::Regular(e) => e.borrow().clone(),
 		}
 	}
 
@@ -278,67 +281,16 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 	}
 
 	/// Finds the epoch for a child of the given block, assuming the given slot number.
-	///
-	/// If the returned epoch is an `UnimportedGenesis` epoch, it should be imported into the
-	/// tree.
-	pub fn epoch_for_child_of<D: IsDescendentOfBuilder<Hash>, G>(
-		&self,
-		descendent_of_builder: D,
-		parent_hash: &Hash,
-		parent_number: Number,
-		slot_number: Epoch::SlotNumber,
-		make_genesis: G,
-	) -> Result<Option<ViableEpoch<Epoch>>, fork_tree::Error<D::Error>>
-		where G: FnOnce(Epoch::SlotNumber) -> Epoch
-	{
-		// find_node_where will give you the node in the fork-tree which is an ancestor
-		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
-		// then it won't be returned. we need to create a new fake chain head hash which
-		// "descends" from our parent-hash.
-		let fake_head_hash = fake_head_hash(parent_hash);
-
-		let is_descendent_of = descendent_of_builder
-			.build_is_descendent_of(Some((fake_head_hash, *parent_hash)));
-
-		if parent_number == Zero::zero() {
-			// need to insert the genesis epoch.
-			let genesis_epoch = make_genesis(slot_number);
-			return Ok(Some(ViableEpoch::Genesis(UnimportedGenesisEpoch(genesis_epoch))));
-		}
-
-		let predicate = epoch_predicate::<Epoch>(slot_number);
-
-		self.inner.find_node_where(
-			&fake_head_hash,
-			&(parent_number + One::one()),
-			&is_descendent_of,
-			&predicate,
-		)
-			.map(|n| n.map(|node| ViableEpoch::Regular(match node.data {
-				// Ok, we found our node.
-				// and here we figure out which of the internal epochs
-				// of a genesis node to use based on their start slot.
-				PersistedEpoch::Genesis(ref epoch_0, ref epoch_1) =>
-					if epoch_1.start_slot() <= slot_number {
-						epoch_1.clone()
-					} else {
-						epoch_0.clone()
-					},
-				PersistedEpoch::Regular(ref epoch_n) => epoch_n.clone(),
-			})))
-	}
-
-	/// Finds the epoch for a child of the given block, assuming the given slot number.
 	/// Returns a reference.
-	pub fn epoch_for_child_of_ref<'a, D: IsDescendentOfBuilder<Hash>, G>(
+	pub fn epoch_for_child_of<'a, D: IsDescendentOfBuilder<Hash>, G>(
 		&'a self,
 		descendent_of_builder: D,
 		parent_hash: &Hash,
 		parent_number: Number,
 		slot_number: Epoch::SlotNumber,
 		make_genesis: G,
-	) -> Result<Option<ViableEpoch<&'a Epoch>>, fork_tree::Error<D::Error>>
-		where G: FnOnce(Epoch::SlotNumber) -> &'a Epoch
+	) -> Result<Option<ViableEpoch<Epoch, &'a Epoch>>, fork_tree::Error<D::Error>>
+		where G: FnOnce(Epoch::SlotNumber) -> Epoch
 	{
 		// find_node_where will give you the node in the fork-tree which is an ancestor
 		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
@@ -386,8 +338,8 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 		parent_number: Number,
 		slot_number: Epoch::SlotNumber,
 		make_genesis: G,
-	) -> Result<Option<ViableEpoch<&'a mut Epoch>>, fork_tree::Error<D::Error>>
-		where G: FnOnce(Epoch::SlotNumber) -> &'a mut Epoch
+	) -> Result<Option<ViableEpoch<Epoch, &'a mut Epoch>>, fork_tree::Error<D::Error>>
+		where G: FnOnce(Epoch::SlotNumber) -> Epoch
 	{
 		// find_node_where will give you the node in the fork-tree which is an ancestor
 		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
@@ -626,6 +578,7 @@ mod tests {
 		let import_epoch_1 = genesis_epoch.increment(());
 		let epoch_1 = import_epoch_1.as_ref().clone();
 
+		let genesis_epoch = genesis_epoch.into_cloned_inner();
 		epoch_changes.import(
 			&is_descendent_of,
 			*b"A",
@@ -633,7 +586,6 @@ mod tests {
 			*b"0",
 			import_epoch_1,
 		).unwrap();
-		let genesis_epoch = genesis_epoch.into_inner();
 
 		assert!(is_descendent_of(b"0", b"A").unwrap());
 
@@ -648,7 +600,7 @@ mod tests {
 				1,
 				end_slot - 1,
 				&make_genesis,
-			).unwrap().unwrap().into_inner();
+			).unwrap().unwrap().into_cloned_inner();
 
 			assert_eq!(x, genesis_epoch);
 		}
@@ -662,7 +614,7 @@ mod tests {
 				1,
 				end_slot,
 				&make_genesis,
-			).unwrap().unwrap().into_inner();
+			).unwrap().unwrap().into_cloned_inner();
 
 			assert_eq!(x, epoch_1);
 		}
@@ -676,7 +628,7 @@ mod tests {
 				1,
 				epoch_1.end_slot() - 1,
 				&make_genesis,
-			).unwrap().unwrap().into_inner();
+			).unwrap().unwrap().into_cloned_inner();
 
 			assert_eq!(x, epoch_1);
 		}
@@ -717,12 +669,14 @@ mod tests {
 				&make_genesis,
 			).unwrap().unwrap();
 
+			let incremented_epoch = genesis_epoch_a.increment(next_descriptor.clone());
+
 			epoch_changes.import(
 				&is_descendent_of,
 				*b"A",
 				1,
 				*b"0",
-				genesis_epoch_a.increment(next_descriptor.clone()),
+				incremented_epoch,
 			).unwrap();
 
 		}
@@ -737,12 +691,14 @@ mod tests {
 				&make_genesis,
 			).unwrap().unwrap();
 
+			let incremented_epoch = genesis_epoch_x.increment(next_descriptor.clone());
+
 			epoch_changes.import(
 				&is_descendent_of,
 				*b"X",
 				1,
 				*b"0",
-				genesis_epoch_x.increment(next_descriptor.clone()),
+				incremented_epoch,
 			).unwrap();
 		}
 
@@ -757,7 +713,7 @@ mod tests {
 				&make_genesis,
 			).unwrap().unwrap();
 
-			assert_eq!(epoch_for_a_child.into_inner(), make_genesis(100));
+			assert_eq!(epoch_for_a_child.into_cloned_inner(), make_genesis(100));
 
 			let epoch_for_x_child = epoch_changes.epoch_for_child_of(
 				&is_descendent_of,
@@ -767,7 +723,7 @@ mod tests {
 				&make_genesis,
 			).unwrap().unwrap();
 
-			assert_eq!(epoch_for_x_child.into_inner(), make_genesis(1000));
+			assert_eq!(epoch_for_x_child.into_cloned_inner(), make_genesis(1000));
 
 			let epoch_for_x_child_before_genesis = epoch_changes.epoch_for_child_of(
 				&is_descendent_of,
