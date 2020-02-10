@@ -10,8 +10,8 @@ license = "GPL-3.0"
 log = "0.4.8"
 parking_lot = "0.10.0"
 hash-db = "0.15.2"
-trie-db = "0.19.2"
-trie-root = "0.15.2"
+trie-db = "0.20.0"
+trie-root = "0.16.0"
 sp-trie = { version = "2.0.0", path = "../trie" }
 sp-core = { version = "2.0.0", path = "../core" }
 sp-panic-handler = { version = "2.0.0", path = "../panic-handler" }
