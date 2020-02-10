@@ -8,6 +8,7 @@ license = "GPL-3.0"
 [dependencies]
 tempfile = "3.1.0"
 futures = "0.3.1"
+tokio = { git = "https://github.com/tokio-rs/tokio", features = ["rt-core"] }
 log = "0.4.8"
 env_logger = "0.7.0"
 fdlimit = "0.1.1"
