@@ -93,6 +93,7 @@ use serde::Serialize;
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
+use sp_std::convert::Infallible;
 use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
@@ -290,12 +291,28 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 /// which can't contain more than `u32::max_value()` items.
 type EventIndex = u32;
 
+/// Type used to encode the number of references an account has.
+type RefCount = u8;
+
+/// Information of an account.
+pub struct AccountInfo<Index, AccountData> {
+	/// The number of transactions this account has sent.
+	nonce: Index,
+	/// The number of other modules that currently depend on this account's existence. The account
+	/// cannot be reaped until this is zero.
+	refcount: RefCount,
+	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
+	/// chains.
+	data: AccountData,
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
 		// TODO: should be hasher(twox64_concat) - will need staged migration
 		// TODO: should not including T::Index (the nonce)
-		pub Account get(fn account): map hasher(blake2_256) T::AccountId => (T::Index, T::AccountData);
+		pub Account get(fn account):
+			map hasher(blake2_256) T::AccountId => AccountInfo<T::Index, T::AccountData>;
 
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
@@ -630,13 +647,55 @@ impl Default for InitKind {
 	}
 }
 
+/// Reference status; can be either referenced or unreferenced.
+pub enum RefStatus {
+	Referenced,
+	Unreferenced,
+}
+
 impl<T: Trait> Module<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {
 		Self::deposit_event_indexed(&[], event.into());
 	}
 
-		/// Deposits an event into this block's event record adding this event
+	/// Increment the reference counter on an account. `_context` is a RefContext value identifying
+	/// the context of the reference.
+	pub fn inc_ref(who: &T::AccountId) {
+		Account::<T>::mutate(|a| *a.refcount = a.refcount.saturating_add(1));
+	}
+
+	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
+	/// you called `inc_ref` on `who`.
+	pub fn dec_ref(who: &T::AccountId) {
+		Account::<T>::mutate(|a| *a.refcount = a.refcount.saturating_sub(1));
+	}
+
+	/// Note that a particular storage key is referring to a particular account. Returns the status
+	/// of this storage key immediately *before* this call (after this call it will be `Referenced`,
+	/// of course).
+	pub fn note_referenced(who: &T::AccountId, storage_key: &[u8]) -> RefStatus {
+		unimplemented!()
+	}
+
+	/// Note that a particular storage key is not referring to a particular account. Returns the
+	/// status of this storage key immediately *before* this call (after this call it will be
+	/// `Unreferenced`, of course).
+	pub fn note_unreferenced(who: &T::AccountId, storage_key: &[u8]) -> RefStatus {
+		unimplemented!()
+	}
+
+	/// The number of outstanding references for the account `who`.
+	pub fn refs(who: &T::AccountId) -> RefCount {
+		Account::<T>::get(who).refcount
+	}
+
+	/// True if the account has no outstanding references.
+	pub fn allow_death(who: &T::AccountId) -> bool {
+		Account::<T>::get(who).refcount == 0
+	}
+
+	/// Deposits an event into this block's event record adding this event
 	/// to the corresponding topic indexes.
 	///
 	/// This will update storage entries that correspond to the specified topics.
@@ -848,12 +907,12 @@ impl<T: Trait> Module<T> {
 
 	/// Retrieve the account transaction counter from storage.
 	pub fn account_nonce(who: impl EncodeLike<T::AccountId>) -> T::Index {
-		Account::<T>::get(who).0
+		Account::<T>::get(who).nonce
 	}
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: impl EncodeLike<T::AccountId>) {
-		Account::<T>::mutate(who, |a| a.0 += T::Index::one());
+		Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
 	}
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this
@@ -905,14 +964,6 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::NewAccount(who));
 	}
 
-	/// Kill the account and reap any related information.
-	pub fn kill_account(who: T::AccountId) {
-		if Account::<T>::contains_key(&who) {
-			Account::<T>::remove(&who);
-			Self::on_killed_account(who);
-		}
-	}
-
 	/// Do anything that needs to be done after an account has been killed.
 	fn on_killed_account(who: T::AccountId) {
 		T::OnReapAccount::on_reap_account(&who);
@@ -932,7 +983,13 @@ impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 pub struct CallKillAccount<T>(PhantomData<T>);
 impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
-		Module::<T>::kill_account(who.clone());
+		if Account::<T>::contains_key(&who) {
+			let account = Account::<T>::take(&who);
+			if account.refcount > 0 {
+				sp_io::print("WARNING: Referenced account deleted. This is probably a bug.");
+			}
+			Self::on_killed_account(who);
+		}
 	}
 }
 
@@ -941,53 +998,48 @@ impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 // Anything more complex will need more sophisticated logic.
 impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 	fn get(k: &T::AccountId) -> T::AccountData {
-		Account::<T>::get(k).1
+		Account::<T>::get(k).data
 	}
 	fn is_explicit(k: &T::AccountId) -> bool {
 		Account::<T>::contains_key(k)
 	}
-	fn insert(k: &T::AccountId, t: T::AccountData) {
+	fn insert(k: &T::AccountId, data: T::AccountData) {
 		let existed = Account::<T>::contains_key(k);
-		Account::<T>::insert(k, (T::Index::default(), t));
+		Account::<T>::insert(k, AccountInfo{ nonce: Default::default(), refcount: 0, data });
 		if !existed {
 			Self::on_created_account(k.clone());
 		}
 	}
 	fn remove(k: &T::AccountId) {
 		if Account::<T>::contains_key(&k) {
-			Self::kill_account(k.clone());
+			Account::<T>::remove(&k);
+			Self::on_killed_account(k);
 		}
 	}
 	fn mutate<R>(k: &T::AccountId, f: impl FnOnce(&mut T::AccountData) -> R) -> R {
 		let existed = Account::<T>::contains_key(k);
-		let r = Account::<T>::mutate(k, |a| f(&mut a.1));
+		let r = Account::<T>::mutate(k, |a| f(&mut a.data));
 		if !existed {
 			Self::on_created_account(k.clone());
 		}
 		r
 	}
 	fn mutate_exists<R>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> R) -> R {
-		let (existed, exists, r) = Account::<T>::mutate_exists(k, |maybe_value| {
-			let existed = maybe_value.is_some();
-			let (maybe_nonce, mut maybe_extra) = split_inner(maybe_value.take(), |v| v);
-			let r = f(&mut maybe_extra);
-			*maybe_value = maybe_extra.map(|extra| (maybe_nonce.unwrap_or_default(), extra));
-			(existed, maybe_value.is_some(), r)
-		});
-		if !existed && exists {
-			Self::on_created_account(k.clone());
-		} else if existed && !exists {
-			Self::on_killed_account(k.clone());
-		}
-		r
+		Self::try_mutate_exists(k, |x| -> Result<R, Infallible> Ok(f(x))).expect("Infallible; qed")
 	}
 	fn try_mutate_exists<R, E>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>) -> Result<R, E> {
 		Account::<T>::try_mutate_exists(k, |maybe_value| {
 			let existed = maybe_value.is_some();
-			let (maybe_nonce, mut maybe_extra) = split_inner(maybe_value.take(), |v| v);
-			f(&mut maybe_extra).map(|v| {
-				*maybe_value = maybe_extra.map(|extra| (maybe_nonce.unwrap_or_default(), extra));
-				(existed, maybe_value.is_some(), v)
+			let (maybe_prefix, mut maybe_data) = split_inner(
+				maybe_value.take(),
+				|account| ((account.nonce, account.refcount), account.data)
+			);
+			f(&mut maybe_data).map(|v| {
+				*maybe_value = maybe_data.map(|data| {
+					let (nonce, refcount) = maybe_prefix.unwrap_or_default();
+					AccountInfo { nonce, refcount, data }
+				});
+				(existed, maybe_value.is_some(), r)
 			})
 		}).map(|(existed, exists, v)| {
 			if !existed && exists {
@@ -1177,8 +1229,8 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> Result<(), TransactionValidityError> {
-		let (expected, extra) = Account::<T>::get(who);
-		if self.0 != expected {
+		let mut account = Account::<T>::get(who);
+		if self.0 != account.nonce {
 			return Err(
 				if self.0 < expected {
 					InvalidTransaction::Stale
@@ -1187,7 +1239,8 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 				}.into()
 			)
 		}
-		Account::<T>::insert(who, (expected + T::Index::one(), extra));
+		account.nonce += T::Index::one();
+		Account::<T>::insert(who, account);
 		Ok(())
 	}
 
@@ -1199,13 +1252,13 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_len: usize,
 	) -> TransactionValidity {
 		// check index
-		let (expected, _extra) = Account::<T>::get(who);
+		let account = Account::<T>::get(who);
 		if self.0 < expected {
 			return InvalidTransaction::Stale.into()
 		}
 
 		let provides = vec![Encode::encode(&(who, self.0))];
-		let requires = if expected < self.0 {
+		let requires = if account.nonce < self.0 {
 			vec![Encode::encode(&(who, self.0 - One::one()))]
 		} else {
 			vec![]
@@ -1609,7 +1662,7 @@ mod tests {
 	#[test]
 	fn signed_ext_check_nonce_works() {
 		new_test_ext().execute_with(|| {
-			Account::<Test>::insert(1, (1, ()));
+			Account::<Test>::insert(1, (1, 0, ()));
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale

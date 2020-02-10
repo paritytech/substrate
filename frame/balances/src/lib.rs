@@ -716,13 +716,20 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				}
 			}
 		});
-		Locks::<T, I>::insert(who, locks);
-	}
-}
 
-impl<T: Trait<I>, I: Instance> OnReapAccount<T::AccountId> for Module<T, I> {
-	fn on_reap_account(who: &T::AccountId) {
-		Locks::<T, I>::remove(who);
+		let existed = Locks::<T, I>::contains_key(who);
+		if locks.is_empty() {
+			Locks::<T, I>::remove(who);
+			if existed {
+				// TODO: use Locks::<T, I>::hashed_key
+				system::Module::<T>::dec_ref(who);
+			}
+		} else {
+			Locks::<T, I>::insert(who, locks);
+			if !existed {
+				system::Module::<T>::inc_ref(who);
+			}
+		}
 	}
 }
 
@@ -1034,6 +1041,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 				)?;
 
 				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
+				let allow_death = allow_death && system::Module::<T>::allow_death(&from_account);
 				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
 
 				Ok(())
