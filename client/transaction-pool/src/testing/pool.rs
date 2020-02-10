@@ -34,7 +34,7 @@ fn pool() -> Pool<TestApi> {
 
 fn maintained_pool() -> (BasicPool<TestApi, Block>, futures::executor::ThreadPool) {
 	let pool = BasicPool::new(Default::default(), std::sync::Arc::new(TestApi::with_alice_nonce(209)));
-	let guard = pool.spawn_maintaince_local();
+	let guard = pool.spawn_maintenance_local();
 	(pool, guard)
 }
 

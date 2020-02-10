@@ -187,7 +187,7 @@ impl<B: ChainApi> Pool<B> {
 	pub fn resubmit(
 		&self,
 		revalidated_transactions: HashMap<ExHash<B>, ValidatedTransactionFor<B>>,
-	) -> Result<(), B::Error> {
+	) {
 
 		let now = Instant::now();
 		self.validated_pool.resubmit(revalidated_transactions);

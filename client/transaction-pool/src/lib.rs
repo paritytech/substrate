@@ -137,7 +137,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 
 	#[cfg(test)]
 	/// Test helper that creates a thread pool and  spawns background task on it.
-	pub fn spawn_maintaince_local(&self) -> futures::executor::ThreadPool {
+	pub fn spawn_maintenance_local(&self) -> futures::executor::ThreadPool {
 		let thread_pool = futures::executor::ThreadPool::new().unwrap();
 		thread_pool.spawn_ok(self.background_task().expect("there should be a task for tests"));
 		thread_pool
