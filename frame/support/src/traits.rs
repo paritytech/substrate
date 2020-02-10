@@ -829,7 +829,7 @@ pub trait GetCallName {
 pub trait GetCallMetadata {
 	/// Return all module names.
 	fn get_module_names() -> &'static [&'static str];
-	/// Return all call names for this module.
+	/// Return all function names for the given `module`.
 	fn get_call_names(module: &str) -> &'static [&'static str];
 	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
 	fn get_call_metadata(&self) -> CallMetadata;
