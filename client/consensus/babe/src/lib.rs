@@ -1333,7 +1333,8 @@ pub mod test_helpers {
 			HeaderMetadata<B, Error = ClientError>,
 		C::Api: BabeApi<B>,
 	{
-		let epoch = link.epoch_changes.lock().epoch_for_child_of(
+		let epoch_changes = link.epoch_changes.lock();
+		let epoch = epoch_changes.epoch_data_for_child_of(
 			descendent_query(client),
 			&parent.hash(),
 			parent.number().clone(),
@@ -1343,7 +1344,7 @@ pub mod test_helpers {
 
 		authorship::claim_slot(
 			slot_number,
-			epoch.as_ref(),
+			&epoch,
 			&link.config,
 			keystore,
 		).map(|(digest, _)| digest)
