@@ -1346,6 +1346,14 @@ macro_rules! decl_module {
 					$call_type::__PhantomItem(_, _) => unreachable!("__PhantomItem should never be used."),
 				}
 			}
+
+			fn get_call_names() -> &'static [&'static str] {
+				&[
+					$(
+						stringify!($fn_name),
+					)*
+				]
+			}
 		}
 
 		// manual implementation of clone/eq/partialeq because using derive erroneously requires
@@ -1427,18 +1435,6 @@ macro_rules! decl_module {
 					)*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				}
-			}
-		}
-
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::benchmarking::Call
-			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
-		{
-			fn all_calls() -> &'static [&'static str] {
-				&[
-					$(
-						stringify!($fn_name),
-					)*
-				]
 			}
 		}
 
@@ -1524,11 +1520,29 @@ macro_rules! impl_outer_dispatch {
 			fn get_call_metadata(&self) -> $crate::dispatch::CallMetadata {
 				use $crate::dispatch::GetCallName;
 				match self {
-					$( $call_type::$camelcase(call) => {
+					$( $call_type::$camelcase(call) => { 
 						let function_name = call.get_call_name();
 						let pallet_name = stringify!($camelcase);
 						$crate::dispatch::CallMetadata { function_name, pallet_name }
 					}, )*
+				}
+			}
+
+			fn get_module_names() -> &'static [&'static str] {
+				&[$(
+					stringify!($camelcase),
+				)*]
+			}
+
+			fn get_call_names(module: &str) -> &'static [&'static str] {
+				use $crate::dispatch::{Callable, GetCallName};
+				match module {
+					$(
+						stringify!($camelcase) =>
+							<<$camelcase as Callable<$runtime>>::Call
+								as GetCallName>::get_call_names(),
+					)*
+					_ => unreachable!(),
 				}
 			}
 		}
@@ -1547,24 +1561,6 @@ macro_rules! impl_outer_dispatch {
 					{}
 					0;
 					$( $camelcase ),*
-				}
-			}
-		}
-		impl $crate::benchmarking::Module for $call_type {
-			fn all_modules() -> &'static [&'static str] {
-				&[$(
-					stringify!($camelcase),
-				)*]
-			}
-
-			fn all_calls(module: &str) -> &'static [&'static str] {
-				match module {
-					$(
-						stringify!($camelcase) =>
-							<<$camelcase as $crate::dispatch::Callable<$runtime>>::Call
-								as $crate::benchmarking::Call>::all_calls(),
-					)*
-					_ => unreachable!(),
 				}
 			}
 		}
@@ -2148,5 +2144,17 @@ mod tests {
 		let metadata = call.get_call_metadata();
 		let expected = CallMetadata { function_name: "aux_3".into(), pallet_name: "Test".into() };
 		assert_eq!(metadata, expected);
+	}
+
+	#[test]
+	fn get_call_names() {
+		let call_names = Call::<TraitImpl>::get_call_names();
+		assert_eq!(["aux_0", "aux_1", "aux_2", "aux_3", "aux_4", "aux_5", "operational"], call_names);
+	}
+
+	#[test]
+	fn get_module_names() {
+		let module_names = OuterCall::get_module_names();
+		assert_eq!(["Test"], module_names);
 	}
 }

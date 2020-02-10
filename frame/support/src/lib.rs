@@ -58,8 +58,6 @@ mod origin;
 #[macro_use]
 pub mod metadata;
 #[macro_use]
-pub mod benchmarking;
-#[macro_use]
 pub mod inherent;
 #[macro_use]
 pub mod unsigned;
