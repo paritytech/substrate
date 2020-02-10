@@ -103,6 +103,7 @@ impl NodeKeyParams {
 	pub fn update_config<G, E>(
 		&self,
 		mut config: &mut Configuration<G, E>,
+		net_config_path: Option<&PathBuf>,
 	) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
@@ -113,8 +114,7 @@ impl NodeKeyParams {
 					parse_ed25519_secret(node_key)?
 				} else {
 					let path = self.node_key_file.clone()
-						.or_else(|| config.network.net_config_path.as_ref()
-							.map(|d| d.join(NODE_KEY_ED25519_FILE)));
+						.or_else(|| net_config_path.map(|d| d.join(NODE_KEY_ED25519_FILE)));
 
 					if let Some(path) = path {
 						sc_network::config::Secret::File(path)

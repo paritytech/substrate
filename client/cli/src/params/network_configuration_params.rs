@@ -92,8 +92,8 @@ impl NetworkConfigurationParams {
 		G: RuntimeGenesis,
 	{
 		config.network.boot_nodes.extend(self.bootnodes.clone());
-		config.network.config_path = Some(config_path);
-		config.network.net_config_path = config.network.config_path.clone();
+		config.network.config_path = Some(config_path.clone());
+		config.network.net_config_path = Some(config_path.clone());
 
 		config.network.reserved_nodes.extend(self.reserved_nodes.clone());
 		if self.reserved_only {
@@ -121,8 +121,7 @@ impl NetworkConfigurationParams {
 		}
 
 		config.network.client_version = client_id;
-		// TODO
-		self.node_key_params.update_config(&mut config)?;
+		self.node_key_params.update_config(&mut config, Some(&config_path))?;
 
 		config.network.in_peers = self.in_peers;
 		config.network.out_peers = self.out_peers;

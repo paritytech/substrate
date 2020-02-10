@@ -1,9 +1,10 @@
 use structopt::StructOpt;
 use log::info;
 use sc_network::config::build_multiaddr;
-use sc_service::{Configuration, ChainSpecExtension, RuntimeGenesis};
+use sc_service::{Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec};
 
 use crate::error;
+use crate::VersionInfo;
 use crate::params::SharedParams;
 use crate::params::NodeKeyParams;
 
@@ -47,20 +48,7 @@ impl BuildSpecCmd {
 		let raw_output = self.raw;
 
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
-			self.node_key_params.update_config(&mut config)?;
-
-			let node_key = config.network.node_key;
-			// TODO
-			/*
-			let node_key = node_key_config(
-				self.node_key_params.clone(),
-				&Some(config
-					.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH)
-					.expect("We provided a base_path")),
-			)?;
-			*/
-
-			let keys = node_key.into_keypair()?;
+			let keys = config.network.node_key.into_keypair()?;
 			let peer_id = keys.public().into_peer_id();
 			let addr = build_multiaddr![
 				Ip4([127, 0, 0, 1]),
@@ -73,6 +61,27 @@ impl BuildSpecCmd {
 		let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
 
 		print!("{}", json);
+
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<G, E, F>(
+		&self,
+		mut config: &mut Configuration<G, E>,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	{
+		let net_config_path = config
+			.in_chain_config_dir(crate::commands::DEFAULT_NETWORK_CONFIG_PATH)
+			.expect("We provided a base_path");
+
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		self.node_key_params.update_config(&mut config, Some(&net_config_path))?;
 
 		Ok(())
 	}

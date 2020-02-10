@@ -17,8 +17,6 @@ use crate::params::SharedParams;
 use crate::params::NetworkConfigurationParams;
 use crate::params::TransactionPoolParams;
 
-/// default sub directory to store network config
-const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
 
@@ -336,7 +334,7 @@ impl RunCmd {
 
 		let client_id = config.client_id();
 		let network_path = config
-			.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH)
+			.in_chain_config_dir(crate::commands::DEFAULT_NETWORK_CONFIG_PATH)
 			.expect("We provided a basepath");
 		self.network_config.update_config(
 			&mut config,

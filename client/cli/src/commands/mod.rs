@@ -41,6 +41,9 @@ pub use crate::commands::check_block_cmd::CheckBlockCmd;
 pub use crate::commands::revert_cmd::RevertCmd;
 pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
 
+/// default sub directory to store network config
+const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
+
 /// All core commands that are provided by default.
 ///
 /// The core commands are split into multiple subcommands and `Run` is the default subcommand. From
