@@ -7,3 +7,6 @@ pub mod runcmd;
 pub mod export_blocks_cmd;
 pub mod build_spec_cmd;
 pub mod import_blocks_cmd;
+pub mod check_block_cmd;
+pub mod revert_cmd;
+pub mod purge_chain_cmd;
