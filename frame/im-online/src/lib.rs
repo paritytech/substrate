@@ -315,7 +315,7 @@ decl_module! {
 			ensure_none(origin)?;
 
 			let current_session = <pallet_session::Module<T>>::current_index();
-			let exists = <ReceivedHeartbeats>::exists(
+			let exists = <ReceivedHeartbeats>::contains_key(
 				&current_session,
 				&heartbeat.authority_index
 			);
@@ -398,7 +398,7 @@ impl<T: Trait> Module<T> {
 	fn is_online_aux(authority_index: AuthIndex, authority: &T::ValidatorId) -> bool {
 		let current_session = <pallet_session::Module<T>>::current_index();
 
-		<ReceivedHeartbeats>::exists(&current_session, &authority_index) ||
+		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index) ||
 			<AuthoredBlocks<T>>::get(
 				&current_session,
 				authority,
@@ -409,7 +409,7 @@ impl<T: Trait> Module<T> {
 	/// the authorities series, during the current session. Otherwise `false`.
 	pub fn received_heartbeat_in_current_session(authority_index: AuthIndex) -> bool {
 		let current_session = <pallet_session::Module<T>>::current_index();
-		<ReceivedHeartbeats>::exists(&current_session, &authority_index)
+		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index)
 	}
 
 	/// Note that the given authority has authored a block in the current session.
