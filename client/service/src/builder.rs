@@ -907,7 +907,7 @@ ServiceBuilder<
 							);
 							let _ = to_spawn_tx_.unbounded_send((
 									Box::pin(future),
-									From::from("offchain-on-block")
+									From::from("offchain-on-block"),
 							));
 						},
 						Some(_) => log::debug!(
