@@ -169,7 +169,6 @@ mod tests {
 	use substrate_test_runtime_client::runtime::Block;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
-	use sp_runtime::{generic::Header, traits::Header as _};
 
 	struct MockNetworkStateInfo();
 
@@ -210,13 +209,7 @@ mod tests {
 			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
 		let db = sc_client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
-		let header = Header::new(
-			0u64,
-			Default::default(),
-			Default::default(),
-			Default::default(),
-			Default::default(),
-		);
+		let header = client.header(&BlockId::number(0)).unwrap().unwrap();
 
 		// when
 		let offchain = OffchainWorkers::new(client, db);
