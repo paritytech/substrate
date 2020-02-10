@@ -1325,7 +1325,7 @@ pub mod test_helpers {
 			parent.number().clone(),
 			slot_number,
 			|slot| link.config.genesis_epoch(slot),
-		).unwrap().unwrap();
+		).unwrap().unwrap().into_cloned();
 
 		authorship::claim_slot(
 			slot_number,
