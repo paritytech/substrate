@@ -191,6 +191,11 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		}
 	}
 
+	/// Background worker main loop.
+	///
+	/// It does two things: periodically tries to process some transactions
+	/// from the queue and also accepts messages to enqueue some more
+	/// transactions from the pool.
 	pub async fn run(mut self, from_queue: mpsc::UnboundedReceiver<WorkerPayload<Api>>) {
 		let interval = interval(BACKGROUND_REVALIDATION_INTERVAL).fuse();
 		let from_queue = from_queue.fuse();
