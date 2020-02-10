@@ -515,7 +515,7 @@ mod tests {
 					parent_number,
 					slot_num,
 					|slot| babe_link.config().genesis_epoch(slot)
-				).unwrap().unwrap();
+				).unwrap().unwrap().into_cloned();
 
 				let mut digest = Digest::<H256>::default();
 
