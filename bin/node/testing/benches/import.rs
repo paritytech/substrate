@@ -27,7 +27,6 @@
 //! This is supposed to be very simple benchmark and is not subject
 //! to much configuring - just block full of randomized transactions.
 //! It is not supposed to measure runtime modules weight correctness
-//! (there is a dedicated benchmarking mode for this).
 
 use std::{sync::Arc, path::Path, collections::BTreeMap};
 
