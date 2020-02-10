@@ -19,17 +19,17 @@ use std::{
 	fmt,
 	hash,
 	sync::Arc,
-	time,
 };
 
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
+use wasm_timer::Instant;
 
 use crate::base_pool::Transaction;
 
-#[derive(parity_util_mem::MallocSizeOf)]
+#[cfg_attr(not(target_os = "unknown"), derive(parity_util_mem::MallocSizeOf))]
 /// Transaction with partially satisfied dependencies.
 pub struct WaitingTransaction<Hash, Ex> {
 	/// Transaction details.
@@ -37,7 +37,7 @@ pub struct WaitingTransaction<Hash, Ex> {
 	/// Tags that are required and have not been satisfied yet by other transactions in the pool.
 	pub missing_tags: HashSet<Tag>,
 	/// Time of import to the Future Queue.
-	pub imported_at: time::Instant,
+	pub imported_at: Instant,
 }
 
 impl<Hash: fmt::Debug, Ex: fmt::Debug> fmt::Debug for WaitingTransaction<Hash, Ex> {
@@ -91,7 +91,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 		WaitingTransaction {
 			transaction: Arc::new(transaction),
 			missing_tags,
-			imported_at: time::Instant::now(),
+			imported_at: Instant::now(),
 		}
 	}
 
@@ -110,7 +110,8 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 ///
 /// Contains transactions that are still awaiting for some other transactions that
 /// could provide a tag that they require.
-#[derive(Debug, parity_util_mem::MallocSizeOf)]
+#[derive(Debug)]
+#[cfg_attr(not(target_os = "unknown"), derive(parity_util_mem::MallocSizeOf))]
 pub struct FutureTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// tags that are not yet provided by any transaction and we await for them
 	wanted_tags: HashMap<Tag, HashSet<Hash>>,

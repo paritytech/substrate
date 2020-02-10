@@ -19,7 +19,7 @@ sc-telemetry = { version = "2.0.0", path = "../../telemetry" }
 sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 futures = "0.3.1"
-futures-timer = "2.0"
+futures-timer = "3.0.1"
 parking_lot = "0.10.0"
 log = "0.4.8"
 
