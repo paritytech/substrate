@@ -1536,18 +1536,24 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				<DefenderVotes<T, I>>::remove_all();
 			}
 
-			// Start a new defender rotation
-			let phrase = b"society_challenge";
-			// we'll need a random seed here.
-			let seed = T::Randomness::random(phrase);
-			// seed needs to be guaranteed to be 32 bytes.
-			let seed = <[u8; 32]>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
-				.expect("input is padded with zeroes; qed");
-			let mut rng = ChaChaRng::from_seed(seed);
-			let chosen = pick_item(&mut rng, &members).expect("exited if members empty; qed");
-
-			<Defender<T, I>>::put(&chosen);
-			Self::deposit_event(RawEvent::Challenged(chosen.clone()));
+			// Avoid challenging if there's only two members since we never challenge the Head or
+			// the Founder.
+			if members.len() > 2 {
+				// Start a new defender rotation
+				let phrase = b"society_challenge";
+				// we'll need a random seed here.
+				let seed = T::Randomness::random(phrase);
+				// seed needs to be guaranteed to be 32 bytes.
+				let seed = <[u8; 32]>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
+					.expect("input is padded with zeroes; qed");
+				let mut rng = ChaChaRng::from_seed(seed);
+				let chosen = pick_item(&mut rng, &members[1..members.len() - 1])
+					.expect("exited if members empty; qed");
+				<Defender<T, I>>::put(&chosen);
+				Self::deposit_event(RawEvent::Challenged(chosen.clone()));
+			} else {
+				<Defender<T, I>>::kill();
+			}
 		}
 	}
 
