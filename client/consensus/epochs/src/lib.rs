@@ -208,14 +208,24 @@ impl<E, ERef> ViableEpoch<E, ERef> where
 /// Descriptor for a viable epoch.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ViableEpochDescriptor<Hash, Number, E: Epoch> {
-	/// The epoch is an unimported genesis, with given slot number.
+	/// The epoch is an unimported genesis, with given start slot number.
 	UnimportedGenesis(E::SlotNumber),
 	/// The epoch is signaled and has been imported, with given identifier and header.
 	Signaled(EpochIdentifier<Hash, Number>, EpochHeader<E>)
 }
 
+impl<Hash, Number, E: Epoch> ViableEpochDescriptor<Hash, Number, E> {
+	/// Start slot of the descriptor.
+	pub fn start_slot(&self) -> E::SlotNumber {
+		match self {
+			Self::UnimportedGenesis(start_slot) => *start_slot,
+			Self::Signaled(_, header) => header.start_slot,
+		}
+	}
+}
+
 /// Persisted epoch stored in EpochChanges.
-#[derive(Clone)]
+#[derive(Clone, Encode, Decode)]
 pub enum PersistedEpoch<E: Epoch> {
 	/// Genesis persisted epoch data. epoch_0, epoch_1.
 	Genesis(E, E),
