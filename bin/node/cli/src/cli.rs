@@ -52,14 +52,13 @@ pub enum Subcommand {
 /// Please note: this command currently only works on an empty database!
 #[derive(Debug, StructOpt, Clone)]
 pub struct FactoryCmd {
-	/// How often to repeat. This option only has an effect in mode `MasterToNToM`.
-	#[structopt(long="rounds", default_value = "1")]
-	pub rounds: u64,
+	/// Number of blocks to generate.
+	#[structopt(long="blocks", default_value = "1")]
+	pub blocks: u32,
 
-	/// Number of transactions to generate. In mode `MasterNToNToM` this is
-	/// the number of transactions per round.
-	#[structopt(long="num", default_value = "8")]
-	pub num: u64,
+	/// Number of transactions to push per block.
+	#[structopt(long="transactions", default_value = "8")]
+	pub transactions: u32,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
