@@ -292,6 +292,7 @@ fn should_push_watchers_during_maintaince() {
 	);
 }
 
+#[test]
 fn can_track_heap_size() {
 	let (pool, _guard) = maintained_pool();
 	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 209))).expect("1. Imported");
