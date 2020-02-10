@@ -74,9 +74,9 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as Trait>::AccountIndex
 	{
-		/// A previously used account index was re-assigned.
+		/// A account index was assigned.
 		IndexAssigned(AccountId, AccountIndex),
-		/// A new account index was assigned.
+		/// A account index has been freed up (unassigned).
 		IndexFreed(AccountIndex),
 	}
 );
