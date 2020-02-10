@@ -221,7 +221,7 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 
 	block_on(pool.maintain(&BlockId::number(1), &[retracted_hash]));
 
-	// maintaince is in background
+	// maintenance is in background
 	block_on(futures_timer::Delay::new(std::time::Duration::from_millis(10)));
 
 	assert_eq!(pool.status().ready, 0);
