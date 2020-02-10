@@ -1536,6 +1536,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				<DefenderVotes<T, I>>::remove_all();
 			}
 
+			// Avoid challenging if there's only two members since we never challenge the Head or
+			// the Founder.
 			if members.len() > 2 {
 				// Start a new defender rotation
 				let phrase = b"society_challenge";
