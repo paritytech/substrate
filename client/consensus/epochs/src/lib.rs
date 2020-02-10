@@ -16,7 +16,7 @@
 
 //! Generic utilities for epoch-based consensus engines.
 
-use std::{sync::Arc, ops::Add, borrow::Borrow};
+use std::{sync::Arc, ops::Add, borrow::{Borrow, BorrowMut}};
 use parking_lot::Mutex;
 use codec::{Encode, Decode};
 use fork_tree::ForkTree;
@@ -110,6 +110,17 @@ impl<Epoch, EpochRef> AsRef<Epoch> for ViableEpoch<Epoch, EpochRef> where
 		match *self {
 			ViableEpoch::Genesis(UnimportedGenesisEpoch(ref e)) => e,
 			ViableEpoch::Regular(ref e) => e.borrow(),
+		}
+	}
+}
+
+impl<Epoch, EpochRef> AsMut<Epoch> for ViableEpoch<Epoch, EpochRef> where
+	EpochRef: BorrowMut<Epoch>,
+{
+	fn as_mut(&mut self) -> &mut Epoch {
+		match *self {
+			ViableEpoch::Genesis(UnimportedGenesisEpoch(ref mut e)) => e,
+			ViableEpoch::Regular(ref mut e) => e.borrow_mut(),
 		}
 	}
 }
