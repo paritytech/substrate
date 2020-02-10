@@ -21,7 +21,8 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use std::time::{Instant, Duration};
+use std::time::Duration;
+use wasm_timer::Instant;
 use log::{trace, info};
 use futures::channel::oneshot::{Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};

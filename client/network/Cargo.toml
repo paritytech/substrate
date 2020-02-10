@@ -17,7 +17,8 @@ fnv = "1.0.6"
 fork-tree = { version = "2.0.0", path = "../../utils/fork-tree" }
 futures = "0.3.1"
 futures_codec = "0.3.3"
-futures-timer = "0.4.0"
+futures-timer = "3.0.1"
+wasm-timer = "0.2"
 libp2p = { version = "0.15.0", default-features = false, features = ["libp2p-websocket"] }
 linked-hash-map = "0.5.2"
 linked_hash_set = "0.1.3"

@@ -35,6 +35,7 @@ members = [
 	"client/executor/wasmtime",
 	"client/executor/runtime-test",
 	"client/finality-grandpa",
+	"client/informant",
 	"client/tracing",
 	"client/keystore",
 	"client/network",

@@ -405,7 +405,7 @@ fn blocks_are_not_announced_by_light_nodes() {
 	net.peers.remove(0);
 
 	// Poll for a few seconds and make sure 1 and 2 (now 0 and 1) don't sync together.
-	let mut delay = futures_timer::Delay::new(Duration::from_secs(5)).compat();
+	let mut delay = futures_timer::Delay::new(Duration::from_secs(5)).unit_error().compat();
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
 		net.poll();
 		delay.poll().map_err(|_| ())
@@ -504,7 +504,7 @@ fn can_not_sync_from_light_peer() {
 	net.peers.remove(0);
 
 	// ensure that the #2 (now #1) fails to sync block #1 even after 5 seconds
-	let mut test_finished = futures_timer::Delay::new(Duration::from_secs(5)).compat();
+	let mut test_finished = futures_timer::Delay::new(Duration::from_secs(5)).unit_error().compat();
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
 		net.poll();
 		test_finished.poll().map_err(|_| ())

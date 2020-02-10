@@ -13,7 +13,7 @@ sp-api = { version = "2.0.0", path = "../../primitives/api" }
 fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }
 futures = "0.3.1"
-futures-timer = "2.0"
+futures-timer = "3.0.1"
 log = "0.4.8"
 threadpool = "1.7"
 num_cpus = "1.10"

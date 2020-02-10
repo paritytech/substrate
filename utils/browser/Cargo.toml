@@ -17,12 +17,15 @@ js-sys = "0.3.34"
 wasm-bindgen = "0.2.57"
 wasm-bindgen-futures = "0.4.7"
 kvdb-web = "0.4"
-service = { version = "0.8", package = "sc-service", path = "../../client/service", default-features = false }
-network = { package = "sc-network", path = "../../client/network" }
-chain-spec = { package = "sc-chain-spec", path = "../../client/chain-spec" }
+sc-informant = { version = "0.8", path = "../../client/informant" }
+sc-service = { version = "0.8", path = "../../client/service", default-features = false }
+sc-network = { path = "../../client/network" }
+sc-chain-spec = { path = "../../client/chain-spec" }
 
 # Imported just for the `no_cc` feature
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] }
 # Imported just for the `wasm-bindgen` feature
 rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"] }
 rand = { version = "0.7", features = ["wasm-bindgen"] }
+futures-timer = { version = "3.0.1", features = ["wasm-bindgen"]}
+chrono = { version = "0.4", features = ["wasmbind"] }
