@@ -19,7 +19,7 @@ use crate::{
 	Event, protocol::event::DhtEvent
 };
 use crate::{ExHashT, specialization::NetworkSpecialization};
-use crate::protocol::{self, CustomMessageOutcome, Protocol};
+use crate::protocol::{self, light_client_handler, CustomMessageOutcome, Protocol};
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
@@ -125,10 +125,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 		self.discovery.put_value(key, value);
 	}
 
-//	/// Issue a light client request.
-//	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::Error> {
-//		self.light_client_handler.request(r)
-//	}
+	/// Issue a light client request.
+	#[allow(unused)]
+	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::Error> {
+		self.light_client_handler.request(r)
+	}
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<void::Void> for
