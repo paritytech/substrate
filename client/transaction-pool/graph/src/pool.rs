@@ -463,13 +463,13 @@ impl<B: ChainApi> Pool<B> {
 		(hash, validity)
 	}
 
-	/// Notify all watchers that transactions in the block with hash been finalized
-	pub async fn finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
+	/// Notify all watchers that transactions in the block with given hash have been finalized
+	pub async fn on_block_finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
 		self.validated_pool.finalized(block_hash).await
 	}
 
 	/// Notify the listener of retracted blocks
-	pub fn retracted(&self, block_hash: &BlockHash<B>) {
+	pub fn on_block_retracted(&self, block_hash: &BlockHash<B>) {
 		self.validated_pool.retracted(block_hash)
 	}
 
@@ -1120,4 +1120,3 @@ mod tests {
 		);
 	}
 }
-
