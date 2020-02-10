@@ -16,7 +16,7 @@
 
 //! Generic utilities for epoch-based consensus engines.
 
-use std::{sync::Arc, ops::Add, collections::BTreeMap};
+use std::{sync::Arc, ops::Add, collections::BTreeMap, borrow::{Borrow, BorrowMut}};
 use parking_lot::Mutex;
 use codec::{Encode, Decode};
 use fork_tree::ForkTree;
@@ -131,6 +131,78 @@ pub struct EpochIdentifier<Hash, Number> {
 	pub hash: Hash,
 	/// Number of the block when the epoch is signaled.
 	pub number: Number,
+}
+
+/// The viable epoch under which a block can be verified.
+///
+/// If this is the first non-genesis block in the chain, then it will
+/// hold an `UnimportedGenesis` epoch.
+pub enum ViableEpoch<E, ERef = E> {
+	/// Unimported genesis viable epoch data.
+	UnimportedGenesis(E),
+	/// Regular viable epoch data.
+	Signaled(ERef),
+}
+
+impl<E, ERef> AsRef<E> for ViableEpoch<E, ERef> where
+	ERef: Borrow<E>,
+{
+	fn as_ref(&self) -> &E {
+		match *self {
+			ViableEpoch::UnimportedGenesis(ref e) => e,
+			ViableEpoch::Signaled(ref e) => e.borrow(),
+		}
+	}
+}
+
+impl<E, ERef> AsMut<E> for ViableEpoch<E, ERef> where
+	ERef: BorrowMut<E>,
+{
+	fn as_mut(&mut self) -> &mut E {
+		match *self {
+			ViableEpoch::UnimportedGenesis(ref mut e) => e,
+			ViableEpoch::Signaled(ref mut e) => e.borrow_mut(),
+		}
+	}
+}
+
+impl<E, ERef> ViableEpoch<E, ERef> where
+	E: Epoch + Clone,
+	ERef: Borrow<E>,
+{
+	/// Extract the underlying epoch, disregarding the fact that a genesis
+	/// epoch may be unimported.
+	pub fn into_cloned_inner(self) -> E {
+		match self {
+			ViableEpoch::UnimportedGenesis(e) => e,
+			ViableEpoch::Signaled(e) => e.borrow().clone(),
+		}
+	}
+
+	/// Get cloned value for the viable epoch.
+	pub fn into_cloned(self) -> ViableEpoch<E, E> {
+		match self {
+			ViableEpoch::UnimportedGenesis(e) =>
+				ViableEpoch::UnimportedGenesis(e),
+			ViableEpoch::Signaled(e) => ViableEpoch::Signaled(e.borrow().clone()),
+		}
+	}
+
+	/// Increment the epoch, yielding an `IncrementedEpoch` to be imported
+	/// into the fork-tree.
+	pub fn increment(
+		&self,
+		next_descriptor: E::NextEpochDescriptor
+	) -> IncrementedEpoch<E> {
+		let next = self.as_ref().increment(next_descriptor);
+		let to_persist = match *self {
+			ViableEpoch::UnimportedGenesis(ref epoch_0) =>
+				PersistedEpoch::Genesis(epoch_0.clone(), next),
+			ViableEpoch::Signaled(_) => PersistedEpoch::Regular(next),
+		};
+
+		IncrementedEpoch(to_persist)
+	}
 }
 
 /// Descriptor for a viable epoch.
@@ -286,6 +358,7 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		Ok(())
 	}
 
+	/// Get a reference to an epoch with given identifier.
 	pub fn epoch(&self, id: &EpochIdentifier<Hash, Number>) -> Option<&E> {
 		self.epochs.get(&(id.hash, id.number))
 			.and_then(|v| {
@@ -301,6 +374,25 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 			})
 	}
 
+	/// Get a reference to a viable epoch with given descriptor.
+	pub fn viable_epoch<G>(
+		&self,
+		descriptor: &ViableEpochDescriptor<Hash, Number, E>,
+		make_genesis: G,
+	) -> Option<ViableEpoch<E, &E>> where
+		G: FnOnce(E::SlotNumber) -> E
+	{
+		match descriptor {
+			ViableEpochDescriptor::UnimportedGenesis(slot_number) => {
+				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot_number)))
+			},
+			ViableEpochDescriptor::Signaled(identifier, _) => {
+				self.epoch(&identifier).map(ViableEpoch::Signaled)
+			},
+		}
+	}
+
+	/// Get a mutable reference to an epoch with given identifier.
 	pub fn epoch_mut(&mut self, id: &EpochIdentifier<Hash, Number>) -> Option<&mut E> {
 		self.epochs.get_mut(&(id.hash, id.number))
 			.and_then(|v| {
@@ -316,29 +408,28 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 			})
 	}
 
-	/// Given an epoch descriptor, increment it using the next epoch descriptor.
-	pub fn increment<G>(
-		&self,
+	/// Get a mutable reference to a viable epoch with given descriptor.
+	pub fn viable_epoch_mut<G>(
+		&mut self,
 		descriptor: &ViableEpochDescriptor<Hash, Number, E>,
-		next_descriptor: E::NextEpochDescriptor,
 		make_genesis: G,
-	) -> Option<IncrementedEpoch<E>> where
-		G: FnOnce(E::SlotNumber) -> E,
+	) -> Option<ViableEpoch<E, &mut E>> where
+		G: FnOnce(E::SlotNumber) -> E
 	{
 		match descriptor {
 			ViableEpochDescriptor::UnimportedGenesis(slot_number) => {
-				let epoch_0 = make_genesis(*slot_number);
-				let epoch_1 = epoch_0.increment(next_descriptor);
-				Some(IncrementedEpoch(PersistedEpoch::Genesis(epoch_0, epoch_1)))
+				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot_number)))
 			},
 			ViableEpochDescriptor::Signaled(identifier, _) => {
-				let epoch_n_plus_1 = self.epoch(identifier)?
-					.increment(next_descriptor);
-				Some(IncrementedEpoch(PersistedEpoch::Regular(epoch_n_plus_1)))
+				self.epoch_mut(&identifier).map(ViableEpoch::Signaled)
 			},
 		}
 	}
 
+	/// Get the epoch data from an epoch descriptor.
+	///
+	/// Note that this function ignores the fact that an genesis epoch might need to be imported.
+	/// Mostly useful for testing.
 	pub fn epoch_data<G>(
 		&self,
 		descriptor: &ViableEpochDescriptor<Hash, Number, E>,
@@ -644,7 +735,10 @@ mod tests {
 
 		assert_eq!(genesis_epoch, ViableEpochDescriptor::UnimportedGenesis(100));
 
-		let import_epoch_1 = epoch_changes.increment(&genesis_epoch, (), &make_genesis).unwrap();
+		let import_epoch_1 = epoch_changes
+			.viable_epoch(&genesis_epoch, &make_genesis)
+			.unwrap()
+			.increment(());
 		let epoch_1 = import_epoch_1.as_ref().clone();
 
 		epoch_changes.import(
@@ -737,11 +831,10 @@ mod tests {
 				100,
 			).unwrap().unwrap();
 
-			let incremented_epoch = epoch_changes.increment(
-				&genesis_epoch_a_descriptor,
-				next_descriptor.clone(),
-				&make_genesis,
-			).unwrap();
+			let incremented_epoch = epoch_changes
+				.viable_epoch(&genesis_epoch_a_descriptor, &make_genesis)
+				.unwrap()
+				.increment(next_descriptor.clone());
 
 			epoch_changes.import(
 				&is_descendent_of,
@@ -761,11 +854,10 @@ mod tests {
 				1000,
 			).unwrap().unwrap();
 
-			let incremented_epoch = epoch_changes.increment(
-				&genesis_epoch_x_descriptor,
-				next_descriptor.clone(),
-				&make_genesis,
-			).unwrap();
+			let incremented_epoch = epoch_changes
+				.viable_epoch(&genesis_epoch_x_descriptor, &make_genesis)
+				.unwrap()
+				.increment(next_descriptor.clone());
 
 			epoch_changes.import(
 				&is_descendent_of,
