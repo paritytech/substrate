@@ -903,7 +903,7 @@ ServiceBuilder<
 							let future = offchain.on_block_imported(
 								&notification.header,
 								network_state_info.clone(),
-								is_validator
+								is_validator,
 							);
 							let _ = to_spawn_tx_.unbounded_send((
 									Box::pin(future),
