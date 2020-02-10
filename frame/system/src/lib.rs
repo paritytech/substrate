@@ -437,12 +437,14 @@ decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// Extrinsics nonce for accounts.
 		pub AccountNonce get(fn account_nonce): map hasher(blake2_256) T::AccountId => T::Index;
+
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
-		/// Total weight for all extrinsics put together, for the current block.
-		AllExtrinsicsWeight: Option<Weight>;
-		/// Total length (in bytes) for all extrinsics put together, for the current block.
-		AllExtrinsicsLen: Option<u32>;
+
+		/// Total weight for all extrinsics put together, for the current block and total length
+		/// (in bytes) for all extrinsics put together, for the current block.
+		AllExtrinsics: Option<(Weight, u32)>;
+
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
 			map hasher(blake2_256) T::BlockNumber => T::Hash;
@@ -682,11 +684,11 @@ impl<T: Trait> Module<T> {
 
 	/// Gets a total weight of all executed extrinsics.
 	pub fn all_extrinsics_weight() -> Weight {
-		AllExtrinsicsWeight::get().unwrap_or_default()
+		AllExtrinsics::get().unwrap_or_default().0
 	}
 
 	pub fn all_extrinsics_len() -> u32 {
-		AllExtrinsicsLen::get().unwrap_or_default()
+		AllExtrinsics::get().unwrap_or_default().1
 	}
 
 	/// Inform the system module of some additional weight that should be accounted for, in the
@@ -707,9 +709,9 @@ impl<T: Trait> Module<T> {
 	///
 	/// If no previous weight exists, the function initializes the weight to zero.
 	pub fn register_extra_weight_unchecked(weight: Weight) {
-		let current_weight = AllExtrinsicsWeight::get().unwrap_or_default();
+		let (current_weight, len) = AllExtrinsics::get().unwrap_or_default();
 		let next_weight = current_weight.saturating_add(weight).min(T::MaximumBlockWeight::get());
-		AllExtrinsicsWeight::put(next_weight);
+		AllExtrinsics::put((next_weight, len));
 	}
 
 	/// Start the execution of a particular block.
@@ -738,8 +740,7 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		ExtrinsicCount::kill();
-		AllExtrinsicsWeight::kill();
-		AllExtrinsicsLen::kill();
+		AllExtrinsics::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -825,8 +826,7 @@ impl<T: Trait> Module<T> {
 	/// Set the current block weight. This should only be used in some integration tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_block_limits(weight: Weight, len: usize) {
-		AllExtrinsicsWeight::put(weight);
-		AllExtrinsicsLen::put(len as u32);
+		AllExtrinsics::put((weight, len as u32));
 	}
 
 	/// Return the chain's current runtime version.
@@ -972,9 +972,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
 		let next_len = Self::check_block_length(info, len)?;
-		AllExtrinsicsLen::put(next_len);
 		let next_weight = Self::check_weight(info)?;
-		AllExtrinsicsWeight::put(next_weight);
+		AllExtrinsics::put((next_weight, next_len));
 		Ok(())
 	}
 
@@ -1506,7 +1505,7 @@ mod tests {
 			let len = 0_usize;
 
 			let reset_check_weight = |i, f, s| {
-				AllExtrinsicsWeight::put(s);
+				AllExtrinsics::put((s, 0));
 				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, i, len);
 				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
 			};
@@ -1553,7 +1552,7 @@ mod tests {
 			let normal_limit = normal_weight_limit();
 
 			// given almost full block
-			AllExtrinsicsWeight::put(normal_limit);
+			AllExtrinsics::put((normal_limit, 0));
 			// will not fit.
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, normal, len).is_err());
 			// will fit.
@@ -1561,7 +1560,7 @@ mod tests {
 
 			// likewise for length limit.
 			let len = 100_usize;
-			AllExtrinsicsLen::put(normal_length_limit());
+			AllExtrinsics::put((normal_length_limit(), 0));
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, normal, len).is_err());
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, op, len).is_ok());
 		})
@@ -1594,7 +1593,7 @@ mod tests {
 			let normal = DispatchInfo::default();
 			let normal_limit = normal_weight_limit() as usize;
 			let reset_check_weight = |tx, s, f| {
-				AllExtrinsicsLen::put(0);
+				AllExtrinsics::mutate(|a| *a = Some((a.unwrap_or_default().0, 0)));
 				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, tx, s);
 				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
 			};
