@@ -90,7 +90,7 @@ pub struct UnimportedGenesisEpoch<Epoch>(Epoch);
 ///
 /// If this is the first non-genesis block in the chain, then it will
 /// hold an `UnimportedGenesis` epoch.
-pub enum ViableEpoch<Epoch, EpochRef> {
+pub enum ViableEpoch<Epoch, EpochRef = Epoch> {
 	/// Genesis viable epoch data.
 	Genesis(UnimportedGenesisEpoch<Epoch>),
 	/// Regular viable epoch data.
