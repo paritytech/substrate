@@ -7454,6 +7454,7 @@ dependencies = [
  "rpassword",
  "rustc-hex",
  "sc-rpc",
+ "serde_json",
  "sp-core",
  "sp-runtime",
  "substrate-bip39",
