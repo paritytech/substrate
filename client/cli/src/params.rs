@@ -49,29 +49,9 @@ pub use crate::commands::shared_params::SharedParams;
 pub use crate::commands::node_key_params::NodeKeyParams;
 pub use crate::commands::network_configuration_params::NetworkConfigurationParams;
 pub use crate::commands::runcmd::RunCmd;
-
-/// The `build-spec` command used to build a specification.
-#[derive(Debug, StructOpt, Clone)]
-pub struct BuildSpecCmd {
-	/// Force raw genesis storage output.
-	#[structopt(long = "raw")]
-	pub raw: bool,
-
-	/// Disable adding the default bootnode to the specification.
-	///
-	/// By default the `/ip4/127.0.0.1/tcp/30333/p2p/NODE_PEER_ID` bootnode is added to the
-	/// specification when no bootnode exists.
-	#[structopt(long = "disable-default-bootnode")]
-	pub disable_default_bootnode: bool,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub node_key_params: NodeKeyParams,
-}
+pub use crate::commands::export_blocks_cmd::ExportBlocksCmd;
+pub use crate::commands::build_spec_cmd::BuildSpecCmd;
+pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
 
 /// Wrapper type of `String` which holds an arbitary sized unsigned integer formatted as decimal.
 #[derive(Debug, Clone)]
@@ -108,55 +88,6 @@ impl BlockNumber {
 	}
 }
 
-/// The `export-blocks` command used to export blocks.
-#[derive(Debug, StructOpt, Clone)]
-pub struct ExportBlocksCmd {
-	/// Output file name or stdout if unspecified.
-	#[structopt(parse(from_os_str))]
-	pub output: Option<PathBuf>,
-
-	/// Specify starting block number.
-	///
-	/// Default is 1.
-	#[structopt(long = "from", value_name = "BLOCK")]
-	pub from: Option<BlockNumber>,
-
-	/// Specify last block number.
-	///
-	/// Default is best block.
-	#[structopt(long = "to", value_name = "BLOCK")]
-	pub to: Option<BlockNumber>,
-
-	/// Use JSON output rather than binary.
-	#[structopt(long = "json")]
-	pub json: bool,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
-}
-
-/// The `import-blocks` command used to import blocks.
-#[derive(Debug, StructOpt, Clone)]
-pub struct ImportBlocksCmd {
-	/// Input file or stdin if unspecified.
-	#[structopt(parse(from_os_str))]
-	pub input: Option<PathBuf>,
-
-	/// The default number of 64KB pages to ever allocate for Wasm execution.
-	///
-	/// Don't alter this unless you know what you're doing.
-	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
-	pub default_heap_pages: Option<u32>,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub import_params: ImportParams,
-}
 
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -270,135 +201,6 @@ impl Subcommand {
 			Subcommand::PurgeChain(cmd) => cmd.run(config),
 			Subcommand::Revert(cmd) => cmd.run(config, builder),
 		}
-	}
-}
-
-impl BuildSpecCmd {
-	/// Run the build-spec command
-	pub fn run<G, E>(
-		self,
-		mut config: Configuration<G, E>,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
-
-		info!("Building chain spec");
-		let mut spec = config.expect_chain_spec().clone();
-		let raw_output = self.raw;
-
-		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
-			self.node_key_params.update_config(&mut config);
-
-			let node_key = config.network.node_key;
-			// TODO
-			/*
-			let node_key = node_key_config(
-				self.node_key_params.clone(),
-				&Some(config
-					.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH)
-					.expect("We provided a base_path")),
-			)?;
-			*/
-
-			let keys = node_key.into_keypair()?;
-			let peer_id = keys.public().into_peer_id();
-			let addr = build_multiaddr![
-				Ip4([127, 0, 0, 1]),
-				Tcp(30333u16),
-				P2p(peer_id)
-			];
-			spec.add_boot_node(addr)
-		}
-
-		let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
-
-		print!("{}", json);
-
-		Ok(())
-	}
-}
-
-impl ExportBlocksCmd {
-	/// Run the export-blocks command
-	pub fn run<G, E, B, BC, BB>(
-		self,
-		mut config: Configuration<G, E>,
-		builder: B,
-	) -> error::Result<()>
-	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
-	{
-		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
-
-		config.use_in_memory_keystore()?;
-
-		if let DatabaseConfig::Path { ref path, .. } = config.expect_database() {
-			info!("DB path: {}", path.display());
-		}
-		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
-		let to = self.to.as_ref().and_then(|t| t.parse().ok());
-
-		let json = self.json;
-
-		let file: Box<dyn io::Write> = match &self.output {
-			Some(filename) => Box::new(fs::File::create(filename)?),
-			None => Box::new(io::stdout()),
-		};
-
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.export_blocks(file, from.into(), to, json))
-		})
-	}
-}
-
-/// Internal trait used to cast to a dynamic type that implements Read and Seek.
-trait ReadPlusSeek: Read + Seek {}
-
-impl<T: Read + Seek> ReadPlusSeek for T {}
-
-impl ImportBlocksCmd {
-	/// Run the import-blocks command
-	pub fn run<G, E, B, BC, BB>(
-		self,
-		mut config: Configuration<G, E>,
-		builder: B,
-	) -> error::Result<()>
-	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
-	{
-		self.import_params.update_config(
-			&mut config,
-			sc_service::Roles::FULL,
-			self.shared_params.dev,
-		)?;
-
-		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
-			Some(filename) => Box::new(fs::File::open(filename)?),
-			None => {
-				let mut buffer = Vec::new();
-				io::stdin().read_to_end(&mut buffer)?;
-				Box::new(io::Cursor::new(buffer))
-			},
-		};
-
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.import_blocks(file, false))
-		})
 	}
 }
 

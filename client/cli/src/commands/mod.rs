@@ -4,3 +4,6 @@ pub mod shared_params;
 pub mod node_key_params;
 pub mod network_configuration_params;
 pub mod runcmd;
+pub mod export_blocks_cmd;
+pub mod build_spec_cmd;
+pub mod import_blocks_cmd;
