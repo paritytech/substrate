@@ -913,7 +913,7 @@ ServiceBuilder<
 						Some(_) => log::debug!(
 							target: "sc_offchain",
 							"Skipping offchain workers for non-canon block: {:?}",
-							notification.header
+							notification.header,
 						),
 						_ => {},
 					}
