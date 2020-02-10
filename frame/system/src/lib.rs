@@ -152,6 +152,40 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::ordered_trie_root(xts)
 }
 
+/// This type alias represents an index of an event.
+///
+/// We use `u32` here because this index is used as index for `Events<T>`
+/// which can't contain more than `u32::max_value()` items.
+type EventIndex = u32;
+
+pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
+pub type DigestItemOf<T> = generic::DigestItem<<T as Trait>::Hash>;
+
+pub type Key = Vec<u8>;
+pub type KeyValue = (Vec<u8>, Vec<u8>);
+
+/// A phase of a block's execution.
+#[derive(Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
+pub enum Phase {
+	/// Applying an extrinsic.
+	ApplyExtrinsic(u32),
+	/// The end.
+	Finalization,
+}
+
+/// Record of an event happening.
+#[derive(Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
+pub struct EventRecord<E: Parameter + Member, T> {
+	/// The phase of the block it happened in.
+	pub phase: Phase,
+	/// The event itself.
+	pub event: E,
+	/// The list of the topics this event has.
+	pub topics: Vec<T>,
+}
+
 pub trait Trait: 'static + Eq + Clone {
 	/// The aggregated `Origin` type used by dispatchable calls.
 	type Origin:
@@ -226,18 +260,162 @@ pub trait Trait: 'static + Eq + Clone {
 	type ModuleToIndex: ModuleToIndex;
 }
 
-pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
-pub type DigestItemOf<T> = generic::DigestItem<<T as Trait>::Hash>;
+/// A selection of fields from a block header that describe a block. Used for the `ThisHeader`
+/// storage item to describe the current block.
+#[derive(Default, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+pub struct HeaderInfo<BlockNumber, Hash> {
+	/// The height of the block.
+	number: BlockNumber,
+	/// The hash of the parent block.
+	parent_hash: Hash,
+	/// The root of the trie formed by the extrinsics.
+	extrinsics_root: Hash,
+}
 
-pub type Key = Vec<u8>;
-pub type KeyValue = (Vec<u8>, Vec<u8>);
+/// Like `HeaderInfo`, except uses refs to fields.
+#[derive(Encode)]
+pub struct HeaderInfoRef<'a, BlockNumber, Hash> {
+	/// The height of the block.
+	number: &'a BlockNumber,
+	/// The hash of the parent block.
+	parent_hash: &'a Hash,
+	/// The root of the trie formed by the extrinsics.
+	extrinsics_root: &'a Hash,
+}
+
+impl<'a, BlockNumber: Encode, Hash: Encode> codec::EncodeLike<HeaderInfo<BlockNumber, Hash>>
+	for HeaderInfoRef<'a, BlockNumber, Hash>
+{}
+
+// Create a Hash with 69 for each byte,
+// only used to build genesis config.
+#[cfg(feature = "std")]
+fn hash69<T: AsMut<[u8]> + Default>() -> T {
+	let mut h = T::default();
+	h.as_mut().iter_mut().for_each(|byte| *byte = 69);
+	h
+}
+
+#[cfg(feature = "std")]
+impl<BlockNumber: From<u32>, Hash: Default + AsMut<[u8]>> HeaderInfo<BlockNumber, Hash> {
+	/// Create an item that reflects the values at block #1, the first block we process.
+	fn genesis() -> Self {
+		HeaderInfo {
+			number: 1.into(),
+			parent_hash: hash69(),
+			extrinsics_root: Default::default(),
+		}
+	}
+}
+
+decl_storage! {
+	trait Store for Module<T: Trait> as System {
+		/// Extrinsics nonce for accounts.
+		pub AccountNonce get(fn account_nonce): map hasher(blake2_256) T::AccountId => T::Index;
+
+		/// Total extrinsics count for the current block.
+		ExtrinsicCount: Option<u32>;
+
+		/// Total weight for all extrinsics put together, for the current block and total length
+		/// (in bytes) for all extrinsics put together, for the current block.
+		AllExtrinsics: Option<(Weight, u32)>;
+
+		/// Map of block numbers to block hashes.
+		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
+			map hasher(blake2_256) T::BlockNumber => T::Hash;
+
+		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
+		ExtrinsicData get(fn extrinsic_data): map hasher(blake2_256) u32 => Vec<u8>;
+
+		/// Information for the current block. These fields are cleared at the end of every block.
+		ThisHeader build(|_| HeaderInfo::genesis()): HeaderInfo<T::BlockNumber, T::Hash>;
+
+		/// Digest of the current block, also part of the block header.
+		Digest get(fn digest): DigestOf<T>;
+
+		/// Events deposited for the current block.
+		Events get(fn events): Vec<EventRecord<T::Event, T::Hash>>;
+		/// The number of events in the `Events<T>` list.
+		EventCount get(fn event_count): EventIndex;
+
+		// TODO: https://github.com/paritytech/substrate/issues/2553
+		// Possibly, we can improve it by using something like:
+		// `Option<(BlockNumber, Vec<EventIndex>)>`, however in this case we won't be able to use
+		// `EventTopics::append`.
+
+		/// Mapping between a topic (represented by T::Hash) and a vector of indexes
+		/// of events in the `<Events<T>>` list.
+		///
+		/// All topic vectors have deterministic storage locations depending on the topic. This
+		/// allows light-clients to leverage the changes trie storage tracking mechanism and
+		/// in case of changes fetch the list of events of interest.
+		///
+		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
+		/// the `EventIndex` then in case if the topic has the same contents on the next block
+		/// no notification will be triggered thus the event might be lost.
+		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+	}
+	add_extra_genesis {
+		config(changes_trie_config): Option<ChangesTrieConfiguration>;
+		#[serde(with = "sp_core::bytes")]
+		config(code): Vec<u8>;
+
+		build(|config: &GenesisConfig| {
+			use codec::Encode;
+
+			sp_io::storage::set(well_known_keys::CODE, &config.code);
+			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
+
+			if let Some(ref changes_trie_config) = config.changes_trie_config {
+				sp_io::storage::set(
+					well_known_keys::CHANGES_TRIE_CONFIG,
+					&changes_trie_config.encode(),
+				);
+			}
+		});
+	}
+}
+
+decl_event!(
+	/// Event for the System module.
+	pub enum Event {
+		/// An extrinsic completed successfully.
+		ExtrinsicSuccess(DispatchInfo),
+		/// An extrinsic failed.
+		ExtrinsicFailed(DispatchError, DispatchInfo),
+		/// `:code` was updated.
+		CodeUpdated,
+	}
+);
+
+decl_error! {
+	/// Error for the System module
+	pub enum Error for Module<T: Trait> {
+		/// The name of specification does not match between the current runtime
+		/// and the new runtime.
+		InvalidSpecName,
+		/// The specification version is not allowed to decrease between the current runtime
+		/// and the new runtime.
+		SpecVersionNotAllowedToDecrease,
+		/// The implementation version is not allowed to decrease between the current runtime
+		/// and the new runtime.
+		ImplVersionNotAllowedToDecrease,
+		/// The specification or the implementation version need to increase between the
+		/// current runtime and the new runtime.
+		SpecOrImplVersionNeedToIncrease,
+		/// Failed to extract the runtime version from the new runtime.
+		///
+		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
+		FailedToExtractRuntimeVersion,
+	}
+}
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		/// A big dispatch that will disallow any other transaction to be included.
-		// TODO: this must be preferable available for testing really (not possible at the moment).
+		// TODO: this must preferably be available for testing really (not possible at the moment).
 		#[weight = SimpleDispatchInfo::MaxOperational]
 		fn fill_block(origin) {
 			ensure_root(origin)?;
@@ -337,62 +515,6 @@ decl_module! {
 	}
 }
 
-/// A phase of a block's execution.
-#[derive(Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
-pub enum Phase {
-	/// Applying an extrinsic.
-	ApplyExtrinsic(u32),
-	/// The end.
-	Finalization,
-}
-
-/// Record of an event happening.
-#[derive(Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
-pub struct EventRecord<E: Parameter + Member, T> {
-	/// The phase of the block it happened in.
-	pub phase: Phase,
-	/// The event itself.
-	pub event: E,
-	/// The list of the topics this event has.
-	pub topics: Vec<T>,
-}
-
-decl_event!(
-	/// Event for the System module.
-	pub enum Event {
-		/// An extrinsic completed successfully.
-		ExtrinsicSuccess(DispatchInfo),
-		/// An extrinsic failed.
-		ExtrinsicFailed(DispatchError, DispatchInfo),
-		/// `:code` was updated.
-		CodeUpdated,
-	}
-);
-
-decl_error! {
-	/// Error for the System module
-	pub enum Error for Module<T: Trait> {
-		/// The name of specification does not match between the current runtime
-		/// and the new runtime.
-		InvalidSpecName,
-		/// The specification version is not allowed to decrease between the current runtime
-		/// and the new runtime.
-		SpecVersionNotAllowedToDecrease,
-		/// The implementation version is not allowed to decrease between the current runtime
-		/// and the new runtime.
-		ImplVersionNotAllowedToDecrease,
-		/// The specification or the implementation version need to increase between the
-		/// current runtime and the new runtime.
-		SpecOrImplVersionNeedToIncrease,
-		/// Failed to extract the runtime version from the new runtime.
-		///
-		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
-		FailedToExtractRuntimeVersion,
-	}
-}
-
 /// Origin for the System module.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 pub enum RawOrigin<AccountId> {
@@ -417,89 +539,6 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 
 /// Exposed trait-generic origin type.
 pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
-
-// Create a Hash with 69 for each byte,
-// only used to build genesis config.
-#[cfg(feature = "std")]
-fn hash69<T: AsMut<[u8]> + Default>() -> T {
-	let mut h = T::default();
-	h.as_mut().iter_mut().for_each(|byte| *byte = 69);
-	h
-}
-
-/// This type alias represents an index of an event.
-///
-/// We use `u32` here because this index is used as index for `Events<T>`
-/// which can't contain more than `u32::max_value()` items.
-type EventIndex = u32;
-
-decl_storage! {
-	trait Store for Module<T: Trait> as System {
-		/// Extrinsics nonce for accounts.
-		pub AccountNonce get(fn account_nonce): map hasher(blake2_256) T::AccountId => T::Index;
-
-		/// Total extrinsics count for the current block.
-		ExtrinsicCount: Option<u32>;
-
-		/// Total weight for all extrinsics put together, for the current block and total length
-		/// (in bytes) for all extrinsics put together, for the current block.
-		AllExtrinsics: Option<(Weight, u32)>;
-
-		/// Map of block numbers to block hashes.
-		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
-			map hasher(blake2_256) T::BlockNumber => T::Hash;
-		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
-		ExtrinsicData get(fn extrinsic_data): map hasher(blake2_256) u32 => Vec<u8>;
-		/// The current block number being processed. Set by `execute_block`.
-		Number get(fn block_number) build(|_| 1.into()): T::BlockNumber;
-		/// Hash of the previous block.
-		ParentHash get(fn parent_hash) build(|_| hash69()): T::Hash;
-		/// Extrinsics root of the current block, also part of the block header.
-		ExtrinsicsRoot get(fn extrinsics_root): T::Hash;
-		/// Digest of the current block, also part of the block header.
-		Digest get(fn digest): DigestOf<T>;
-		/// Events deposited for the current block.
-		Events get(fn events): Vec<EventRecord<T::Event, T::Hash>>;
-		/// The number of events in the `Events<T>` list.
-		EventCount get(fn event_count): EventIndex;
-
-		// TODO: https://github.com/paritytech/substrate/issues/2553
-		// Possibly, we can improve it by using something like:
-		// `Option<(BlockNumber, Vec<EventIndex>)>`, however in this case we won't be able to use
-		// `EventTopics::append`.
-
-		/// Mapping between a topic (represented by T::Hash) and a vector of indexes
-		/// of events in the `<Events<T>>` list.
-		///
-		/// All topic vectors have deterministic storage locations depending on the topic. This
-		/// allows light-clients to leverage the changes trie storage tracking mechanism and
-		/// in case of changes fetch the list of events of interest.
-		///
-		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
-		/// the `EventIndex` then in case if the topic has the same contents on the next block
-		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
-	}
-	add_extra_genesis {
-		config(changes_trie_config): Option<ChangesTrieConfiguration>;
-		#[serde(with = "sp_core::bytes")]
-		config(code): Vec<u8>;
-
-		build(|config: &GenesisConfig| {
-			use codec::Encode;
-
-			sp_io::storage::set(well_known_keys::CODE, &config.code);
-			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
-
-			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				sp_io::storage::set(
-					well_known_keys::CHANGES_TRIE_CONFIG,
-					&changes_trie_config.encode(),
-				);
-			}
-		});
-	}
-}
 
 pub struct EnsureRoot<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<
@@ -682,6 +721,21 @@ impl<T: Trait> Module<T> {
 		ExtrinsicCount::get().unwrap_or_default()
 	}
 
+	/// Gets the current block's number.
+	pub fn block_number() -> T::BlockNumber {
+		ThisHeader::<T>::get().number
+	}
+
+	/// Gets the current block's parent hash.
+	pub fn parent_hash() -> T::Hash {
+		ThisHeader::<T>::get().parent_hash
+	}
+
+	/// Gets the current block's extrinsics root.
+	pub fn extrinsics_root() -> T::Hash {
+		ThisHeader::<T>::get().extrinsics_root
+	}
+
 	/// Gets a total weight of all executed extrinsics.
 	pub fn all_extrinsics_weight() -> Weight {
 		AllExtrinsics::get().unwrap_or_default().0
@@ -718,17 +772,15 @@ impl<T: Trait> Module<T> {
 	pub fn initialize(
 		number: &T::BlockNumber,
 		parent_hash: &T::Hash,
-		txs_root: &T::Hash,
+		extrinsics_root: &T::Hash,
 		digest: &DigestOf<T>,
 		kind: InitKind,
 	) {
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
-		<Number<T>>::put(number);
-		<Digest<T>>::put(digest);
-		<ParentHash<T>>::put(parent_hash);
-		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
-		<ExtrinsicsRoot<T>>::put(txs_root);
+		Digest::<T>::put(digest);
+		BlockHash::<T>::insert(*number - One::one(), &parent_hash);
+		ThisHeader::<T>::put(HeaderInfoRef { number, parent_hash, extrinsics_root });
 
 		if let InitKind::Full = kind {
 			<Events<T>>::kill();
@@ -742,13 +794,11 @@ impl<T: Trait> Module<T> {
 		ExtrinsicCount::kill();
 		AllExtrinsics::kill();
 
-		let number = <Number<T>>::take();
-		let parent_hash = <ParentHash<T>>::take();
-		let mut digest = <Digest<T>>::take();
-		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
+		let HeaderInfo{ number, parent_hash, extrinsics_root } = ThisHeader::<T>::take();
+		let mut digest = Digest::<T>::take();
 
 		// move block hash pruning window by one block
-		let block_hash_count = <T::BlockHashCount>::get();
+		let block_hash_count = T::BlockHashCount::get();
 		if number > block_hash_count {
 			let to_remove = number - block_hash_count - One::one();
 
@@ -795,9 +845,8 @@ impl<T: Trait> Module<T> {
 	pub fn externalities() -> TestExternalities {
 		TestExternalities::new(sp_core::storage::Storage {
 			top: map![
-				<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
-				<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
-				<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
+				BlockHash::<T>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
+				ThisHeader::<T>::hashed_key().to_vec() => (T::BlockNumber::one(), [69u8; 32], [0u8; 32]).encode()
 			],
 			children: map![],
 		})
@@ -807,7 +856,7 @@ impl<T: Trait> Module<T> {
 	/// `initialize` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_block_number(n: T::BlockNumber) {
-		<Number<T>>::put(n);
+		ThisHeader::<T>::mutate(|i| i.number = n);
 	}
 
 	/// Sets the index of extrinsic that is currently executing.
@@ -820,7 +869,7 @@ impl<T: Trait> Module<T> {
 	/// `initialize` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_parent_hash(n: T::Hash) {
-		<ParentHash<T>>::put(n);
+		ThisHeader::<T>::mutate(|i| i.parent_hash = n);
 	}
 
 	/// Set the current block weight. This should only be used in some integration tests.
@@ -877,7 +926,7 @@ impl<T: Trait> Module<T> {
 		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default())
 			.map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
-		<ExtrinsicsRoot<T>>::put(xts_root);
+		ThisHeader::<T>::mutate(|i| i.extrinsics_root = xts_root);
 	}
 }
 
