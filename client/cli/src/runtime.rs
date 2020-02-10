@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::sync::Arc;
+
 use futures::{Future, future, future::FutureExt};
 use futures::select;
 use futures::pin_mut;
@@ -91,7 +93,7 @@ where
 
 	config.task_executor = {
 		let runtime_handle = runtime.handle().clone();
-		Some(Box::new(move |fut| { runtime_handle.spawn(fut); }))
+		Some(Arc::new(move |fut| { runtime_handle.spawn(fut); }))
 	};
 
 	let f = future_builder(config)?;
@@ -117,7 +119,7 @@ where
 
 	config.task_executor = {
 		let runtime_handle = runtime.handle().clone();
-		Some(Box::new(move |fut| { runtime_handle.spawn(fut); }))
+		Some(Arc::new(move |fut| { runtime_handle.spawn(fut); }))
 	};
 
 	let service = service_builder(config)?;

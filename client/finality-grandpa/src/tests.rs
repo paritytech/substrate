@@ -499,11 +499,17 @@ fn add_forced_change(
 	));
 }
 
+fn thread_pool() -> futures::executor::ThreadPool {
+	futures::executor::ThreadPool::builder().pool_size(2)
+		.create()
+		.expect("never fails")
+}
+
 #[test]
 fn finalize_3_voters_no_observers() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
@@ -529,7 +535,7 @@ fn finalize_3_voters_no_observers() {
 #[test]
 fn finalize_3_voters_1_full_observer() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
@@ -635,7 +641,7 @@ fn transition_3_voters_twice_1_full_observer() {
 	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8)));
 
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 
 	net.lock().peer(0).push_blocks(1, false);
 	net.lock().block_until_sync(&mut runtime);
@@ -770,7 +776,7 @@ fn transition_3_voters_twice_1_full_observer() {
 #[test]
 fn justification_is_emitted_when_consensus_data_changes() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 3);
 
@@ -789,7 +795,7 @@ fn justification_is_emitted_when_consensus_data_changes() {
 #[test]
 fn justification_is_generated_periodically() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
@@ -829,7 +835,7 @@ fn consensus_changes_works() {
 #[test]
 fn sync_justifications_on_change_blocks() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let peers_b = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers_b);
@@ -884,7 +890,7 @@ fn sync_justifications_on_change_blocks() {
 fn finalizes_multiple_pending_changes_in_order() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 
 	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let peers_b = &[Ed25519Keyring::Dave, Ed25519Keyring::Eve, Ed25519Keyring::Ferdie];
@@ -945,7 +951,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 fn force_change_to_new_set() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 	// two of these guys are offline.
 	let genesis_authorities = &[
 		Ed25519Keyring::Alice,
@@ -1126,7 +1132,7 @@ fn voter_persists_its_votes() {
 
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 
 	// we have two authorities but we'll only be running the voter for alice
 	// we are going to be listening for the prevotes it casts
@@ -1383,7 +1389,7 @@ fn voter_persists_its_votes() {
 fn finalize_3_voters_1_light_observer() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 	let authorities = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(authorities);
 
@@ -1429,7 +1435,7 @@ fn finalize_3_voters_1_light_observer() {
 fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 	let _ = ::env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 
 	let peers = &[Ed25519Keyring::Alice];
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
@@ -1461,7 +1467,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 
 	let _ = ::env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 
 	// two of these guys are offline.
 	let genesis_authorities = if FORCE_CHANGE {
@@ -1526,7 +1532,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 fn voter_catches_up_to_latest_round_when_behind() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers);
@@ -1646,7 +1652,7 @@ fn grandpa_environment_respects_voting_rules() {
 	use finality_grandpa::Chain;
 	use sc_network_test::TestClient;
 
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let threads_pool = thread_pool();
 
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);

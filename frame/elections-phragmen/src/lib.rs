@@ -520,7 +520,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// State: O(1).
 	fn is_voter(who: &T::AccountId) -> bool {
-		<StakeOf<T>>::exists(who)
+		<StakeOf<T>>::contains_key(who)
 	}
 
 	/// Check if `who` is currently an active member.

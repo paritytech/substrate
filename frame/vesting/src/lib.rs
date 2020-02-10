@@ -212,7 +212,7 @@ impl<T: Trait> Module<T> {
 	/// (Re)set or remove the module's currency lock on `who`'s account in accordance with their
 	/// current unvested amount.
 	fn update_lock(who: T::AccountId) -> DispatchResult {
-		ensure!(Vesting::<T>::exists(&who), Error::<T>::NotVesting);
+		ensure!(Vesting::<T>::contains_key(&who), Error::<T>::NotVesting);
 		let unvested = Self::vesting_balance(&who);
 		if unvested.is_zero() {
 			T::Currency::remove_lock(VESTING_ID, &who);
@@ -257,7 +257,7 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 		starting_block: T::BlockNumber
 	) -> DispatchResult {
 		if locked.is_zero() { return Ok(()) }
-		if Vesting::<T>::exists(who) {
+		if Vesting::<T>::contains_key(who) {
 			Err(Error::<T>::ExistingVestingSchedule)?
 		}
 		let vesting_schedule = VestingInfo {
