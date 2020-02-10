@@ -59,7 +59,10 @@ fn interval(duration: Duration) -> impl Stream<Item=()> + Unpin {
 	}).map(drop)
 }
 
-/// Actual async revalidation batch.
+/// Revalidate batch of transaction.
+///
+/// Each transaction is validated  against chain, and invalid are
+/// removed from the `pool`, while valid are resubmitted.
 async fn batch_revalidate<Api: ChainApi>(
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
