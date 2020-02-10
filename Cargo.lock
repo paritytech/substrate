@@ -6034,6 +6034,8 @@ dependencies = [
 name = "sc-network"
 version = "0.8.0"
 dependencies = [
+ "assert_matches",
+ "async-std",
  "bitflags",
  "bytes 0.5.4",
  "derive_more",
@@ -6050,8 +6052,11 @@ dependencies = [
  "linked_hash_set",
  "log 0.4.8",
  "lru 0.4.3",
+ "nohash-hasher",
  "parity-scale-codec",
  "parking_lot 0.10.0",
+ "prost",
+ "prost-build",
  "quickcheck",
  "rand 0.7.3",
  "rustc-hex",
@@ -6073,8 +6078,10 @@ dependencies = [
  "sp-runtime",
  "sp-test-primitives",
  "substrate-test-client",
+ "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
  "unsigned-varint",
  "void",
  "wasm-timer",
