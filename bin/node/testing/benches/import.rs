@@ -20,11 +20,9 @@
 //! some full block.
 //!
 //! As we also want to protect against cold-cache attacks, this
-//! benchmark should not rely on any caching - database or otherwise
-//! (except those that DO NOT depend on user input).
-//!
-//! This is why we populate block with transactions to random accounts
-//! and set state_cache_size to 0.
+//! benchmark should not rely on any caching (except those that
+//! DO NOT depend on user input). Thus block generation should be
+//! based on randomized operation.
 //!
 //! This is supposed to be very simple benchmark and is not subject
 //! to much configuring - just block full of randomized transactions.
@@ -176,8 +174,6 @@ impl Profile {
 // This should return client that is doing everything that full node
 // is doing.
 //
-// - This client should not cache anything.
-//     (TODO: configure zero rocksdb block cache)
 // - This client should use best wasm execution method.
 // - This client should work with real database only.
 fn bench_client(dir: &std::path::Path, profile: Profile, keyring: &BenchKeyring) -> (Client, std::sync::Arc<Backend>) {
