@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Identity pallet benchmarking.
+//! Balances pallet benchmarking.
 
 use super::*;
 
@@ -275,7 +275,6 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		sp_io::benchmarking::commit_db();
 		sp_io::benchmarking::wipe_db();
 
-		// first one is set_identity.		
 		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);		
 		// results go here
 		let mut results: Vec<BenchmarkResults> = Vec::new();
