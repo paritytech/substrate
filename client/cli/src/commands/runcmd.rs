@@ -1,24 +1,21 @@
-use std::{str::FromStr, path::PathBuf};
-use std::net::{SocketAddr, Ipv4Addr};
+use std::path::PathBuf;
+use std::net::SocketAddr;
 use std::fs;
 use structopt::{StructOpt, clap::arg_enum};
-use app_dirs::{AppInfo, AppDataType};
 use names::{Generator, Name};
 use regex::Regex;
 use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	config::{DatabaseConfig, KeystoreConfig}, ChainSpec, PruningMode,
+	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis,
+	config::KeystoreConfig,
 };
 use sc_telemetry::TelemetryEndpoints;
 
 use crate::VersionInfo;
 use crate::error;
-use crate::execution_strategy::*;
-use crate::execution_strategy::ExecutionStrategy;
-use crate::commands::import_params::ImportParams;
-use crate::commands::shared_params::SharedParams;
-use crate::commands::network_configuration_params::NetworkConfigurationParams;
-use crate::commands::transaction_pool_params::TransactionPoolParams;
+use crate::params::ImportParams;
+use crate::params::SharedParams;
+use crate::params::NetworkConfigurationParams;
+use crate::params::TransactionPoolParams;
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";

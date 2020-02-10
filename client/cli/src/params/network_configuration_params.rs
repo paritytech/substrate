@@ -1,22 +1,14 @@
-use std::{str::FromStr, path::PathBuf};
+use std::path::PathBuf;
 use std::iter;
-use std::net::{SocketAddr, Ipv4Addr};
-use structopt::{StructOpt, clap::arg_enum};
-use app_dirs::{AppInfo, AppDataType};
+use std::net::Ipv4Addr;
+use structopt::StructOpt;
 use sc_network::{
-	config::{build_multiaddr, NonReservedPeerMode, TransportConfig, NodeKeyConfig},
-	multiaddr::Protocol,
+	config::{NonReservedPeerMode, TransportConfig}, multiaddr::Protocol,
 };
-use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	config::{DatabaseConfig, KeystoreConfig}, ChainSpec, PruningMode,
-};
+use sc_service::{Configuration, RuntimeGenesis};
 
-use crate::VersionInfo;
 use crate::error;
-use crate::execution_strategy::*;
-use crate::execution_strategy::ExecutionStrategy;
-pub use crate::commands::node_key_params::NodeKeyParams;
+use crate::params::node_key_params::NodeKeyParams;
 
 /// Parameters used to create the network configuration.
 #[derive(Debug, StructOpt, Clone)]

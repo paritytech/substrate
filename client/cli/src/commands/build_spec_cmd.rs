@@ -1,19 +1,11 @@
-use structopt::{StructOpt, clap::arg_enum};
+use structopt::StructOpt;
 use log::info;
-use sc_network::{
-	config::{build_multiaddr, NonReservedPeerMode, TransportConfig, NodeKeyConfig},
-	multiaddr::Protocol,
-};
-use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	config::{DatabaseConfig, KeystoreConfig}, ChainSpec, PruningMode,
-};
+use sc_network::config::build_multiaddr;
+use sc_service::{Configuration, ChainSpecExtension, RuntimeGenesis};
 
 use crate::error;
-use crate::execution_strategy::*;
-use crate::execution_strategy::ExecutionStrategy;
-use crate::commands::shared_params::SharedParams;
-use crate::commands::node_key_params::NodeKeyParams;
+use crate::params::SharedParams;
+use crate::params::NodeKeyParams;
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
@@ -55,7 +47,7 @@ impl BuildSpecCmd {
 		let raw_output = self.raw;
 
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
-			self.node_key_params.update_config(&mut config);
+			self.node_key_params.update_config(&mut config)?;
 
 			let node_key = config.network.node_key;
 			// TODO

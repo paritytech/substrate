@@ -1,15 +1,13 @@
-use std::{str::FromStr, path::PathBuf};
-use structopt::{StructOpt, clap::arg_enum};
+use std::path::PathBuf;
+use structopt::StructOpt;
 use app_dirs::{AppInfo, AppDataType};
 use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	config::{DatabaseConfig, KeystoreConfig}, ChainSpec, PruningMode,
+	Configuration, ChainSpecExtension, RuntimeGenesis,
+	config::DatabaseConfig, ChainSpec,
 };
 
 use crate::VersionInfo;
 use crate::error;
-use crate::execution_strategy::*;
-use crate::execution_strategy::ExecutionStrategy;
 
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";

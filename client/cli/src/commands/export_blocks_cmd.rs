@@ -1,20 +1,18 @@
 use std::io;
 use std::fs;
-use std::{str::FromStr, path::PathBuf};
+use std::path::PathBuf;
 use std::fmt::Debug;
 use log::info;
-use structopt::{StructOpt, clap::arg_enum};
+use structopt::StructOpt;
 use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	config::{DatabaseConfig, KeystoreConfig}, ChainSpec, PruningMode,
+	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
+	config::DatabaseConfig,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
 use crate::runtime::run_until_exit;
-use crate::execution_strategy::*;
-use crate::execution_strategy::ExecutionStrategy;
-use crate::commands::shared_params::SharedParams;
+use crate::params::SharedParams;
 use crate::params::BlockNumber;
 
 /// The `export-blocks` command used to export blocks.

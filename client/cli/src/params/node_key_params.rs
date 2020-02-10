@@ -14,24 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{path::{Path, PathBuf}, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 use structopt::{StructOpt, clap::arg_enum};
-use app_dirs::{AppInfo, AppDataType};
-use regex::Regex;
-use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	config::{DatabaseConfig, KeystoreConfig}, ChainSpec, PruningMode,
-};
-use sc_network::{
-	config::{build_multiaddr, NonReservedPeerMode, TransportConfig, NodeKeyConfig},
-	multiaddr::Protocol,
-};
+use sc_service::{Configuration, RuntimeGenesis};
+use sc_network::config::NodeKeyConfig;
 use sp_core::H256;
 
-use crate::VersionInfo;
 use crate::error;
-use crate::execution_strategy::*;
-use crate::execution_strategy::ExecutionStrategy;
 
 /// The file name of the node's Ed25519 secret key inside the chain-specific
 /// network config directory, if neither `--node-key` nor `--node-key-file`

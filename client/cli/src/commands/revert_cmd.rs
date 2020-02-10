@@ -1,27 +1,13 @@
 use std::fmt::Debug;
-use std::io::{Read, Write, Seek, self};
-use std::fs;
-use std::{str::FromStr, path::PathBuf};
-use structopt::{StructOpt, clap::arg_enum};
-use log::info;
-use sc_network::{
-	config::{build_multiaddr, NonReservedPeerMode, TransportConfig, NodeKeyConfig},
-	multiaddr::Protocol,
-};
+use structopt::StructOpt;
 use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	config::{DatabaseConfig, KeystoreConfig}, ChainSpec, PruningMode,
+	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
 use crate::params::BlockNumber;
-use crate::runtime::run_until_exit;
-use crate::execution_strategy::*;
-use crate::execution_strategy::ExecutionStrategy;
-use crate::commands::shared_params::SharedParams;
-use crate::commands::node_key_params::NodeKeyParams;
-use crate::commands::import_params::ImportParams;
+use crate::params::SharedParams;
 
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]

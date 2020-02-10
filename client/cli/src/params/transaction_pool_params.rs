@@ -1,12 +1,7 @@
-use structopt::{StructOpt, clap::arg_enum};
-use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	config::{DatabaseConfig, KeystoreConfig}, ChainSpec, PruningMode,
-};
+use structopt::StructOpt;
+use sc_service::Configuration;
 
 use crate::error;
-use crate::execution_strategy::*;
-use crate::execution_strategy::ExecutionStrategy;
 
 /// Parameters used to create the pool configuration.
 #[derive(Debug, StructOpt, Clone)]

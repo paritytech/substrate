@@ -36,23 +36,16 @@ use sc_service::{
 	AbstractService, Roles as ServiceRoles,
 };
 pub use sc_service::config::VersionInfo;
-use sc_network::{
-	self,
-	multiaddr::Protocol,
-	config::{
-		NetworkConfiguration, TransportConfig, NonReservedPeerMode,
-	},
-};
 
-use std::{io::Write, iter, fmt::Debug, fs, net::Ipv4Addr, path::PathBuf};
+use std::{io::Write, fmt::Debug};
 
 use regex::Regex;
 use structopt::{StructOpt, clap};
 pub use structopt;
-use params::{NetworkConfigurationParams, TransactionPoolParams};
-pub use params::{
-	SharedParams, ImportParams, ExecutionStrategy, Subcommand, RunCmd, BuildSpecCmd,
-	ExportBlocksCmd, ImportBlocksCmd, CheckBlockCmd, PurgeChainCmd, RevertCmd,
+pub use params::{SharedParams, ImportParams, ExecutionStrategy};
+pub use commands::{
+	Subcommand, RunCmd, BuildSpecCmd, ExportBlocksCmd, ImportBlocksCmd, CheckBlockCmd,
+	PurgeChainCmd, RevertCmd,
 };
 pub use traits::GetSharedParams;
 use log::info;

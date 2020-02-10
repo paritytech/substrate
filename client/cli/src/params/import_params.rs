@@ -1,7 +1,7 @@
 use structopt::{StructOpt, clap::arg_enum};
 use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	config::{DatabaseConfig, KeystoreConfig}, ChainSpec, PruningMode,
+	Configuration, RuntimeGenesis,
+	config::DatabaseConfig, PruningMode,
 };
 
 use crate::error;
