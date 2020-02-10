@@ -97,7 +97,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 		is_validator: bool,
 	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
-		let at = BlockId::number(*header.number());
+		let at = BlockId::hash(header.hash());
 		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block, Error = ()>, _>(
 			&at, |v| v == 1
 		);
