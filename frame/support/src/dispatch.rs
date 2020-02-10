@@ -1437,7 +1437,6 @@ macro_rules! decl_module {
 				}
 			}
 		}
-
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Callable<$trait_instance>
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
@@ -1520,7 +1519,7 @@ macro_rules! impl_outer_dispatch {
 			fn get_call_metadata(&self) -> $crate::dispatch::CallMetadata {
 				use $crate::dispatch::GetCallName;
 				match self {
-					$( $call_type::$camelcase(call) => { 
+					$( $call_type::$camelcase(call) => {
 						let function_name = call.get_call_name();
 						let pallet_name = stringify!($camelcase);
 						$crate::dispatch::CallMetadata { function_name, pallet_name }
