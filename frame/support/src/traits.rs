@@ -620,6 +620,10 @@ pub trait VestingSchedule<AccountId> {
 	///
 	/// If there already exists a vesting schedule for the given account, an `Err` is returned
 	/// and nothing is updated.
+	///
+	/// Is a no-op if the amount to be vested is zero.
+	///
+	/// NOTE: This doesn't alter the free balance of the account.
 	fn add_vesting_schedule(
 		who: &AccountId,
 		locked: <Self::Currency as Currency<AccountId>>::Balance,
@@ -628,6 +632,8 @@ pub trait VestingSchedule<AccountId> {
 	) -> DispatchResult;
 
 	/// Remove a vesting schedule for a given account.
+	///
+	/// NOTE: This doesn't alter the free balance of the account.
 	fn remove_vesting_schedule(who: &AccountId);
 }
 
