@@ -23,19 +23,16 @@ use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 use log::{warn, info};
 use futures::{future, prelude::*};
 use sp_runtime::{
-	BuildStorage, BenchmarkResults,
 	traits::{
 		Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
 	}
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
-use sc_client::{Client, ExecutionStrategy, StateMachine, LocalCallExecutor};
-#[cfg(feature = "rocksdb")]
-use sc_client_db::BenchmarkingState;
+use sc_client::{Client, LocalCallExecutor};
 use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
 use sp_consensus::BlockOrigin;
-use sc_executor::{NativeExecutor, NativeExecutionDispatch, WasmExecutionMethod};
+use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
 
@@ -53,7 +50,7 @@ pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<Strin
 #[cfg(feature = "rocksdb")]
 pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 	spec: ChainSpec<G, E>,
-	strategy: ExecutionStrategy,
+	strategy: sc_client::ExecutionStrategy,
 	wasm_method: WasmExecutionMethod,
 	pallet: String,
 	extrinsic: String,
@@ -65,6 +62,11 @@ pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 	G: RuntimeGenesis,
 	E: Extension,
 {
+	use sp_runtime::{BuildStorage, BenchmarkResults};
+	use sc_client::StateMachine;
+	use sc_client_db::BenchmarkingState;
+	use sc_executor::WasmExecutionMethod;
+
 	let genesis_storage = spec.build_storage()?;
 	let mut changes = Default::default();
 	let state = BenchmarkingState::<TBl>::new(genesis_storage)?;
