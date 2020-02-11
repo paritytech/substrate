@@ -90,11 +90,12 @@ impl BuildSpecCmd {
 		E: ChainSpecExtension,
 		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+
 		let net_config_path = config
 			.in_chain_config_dir(crate::commands::DEFAULT_NETWORK_CONFIG_PATH)
 			.expect("We provided a base_path");
 
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
 		self.node_key_params.update_config(&mut config, Some(&net_config_path))?;
 
 		Ok(())
