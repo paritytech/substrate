@@ -22,8 +22,8 @@ use std::cell::{Cell, RefCell};
 use rand::Rng;
 
 use hash_db::{Prefix, Hasher};
-use sp_trie::{MemoryDB, prefixed_key};
-use sp_core::storage::ChildInfo;
+use sp_trie::MemoryDB;
+use sp_core::storage::{ChildInfo, ChildType};
 use sp_runtime::traits::{Block as BlockT, HasherFor};
 use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend};
@@ -40,8 +40,13 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for StorageDb<Block> {
-	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		let key = prefixed_key::<HasherFor<Block>>(key, prefix);
+	fn get(
+		&self,
+		child_info: &ChildInfo,
+		key: &Block::Hash,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
+		let key = crate::keyspace_and_prefixed_key(key.as_ref(), child_info.keyspace(), prefix);
 		self.db.get(0, &key)
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
@@ -82,9 +87,10 @@ impl<B: BlockT> BenchmarkingState<B> {
 			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
 			child_content.child_info
 		));
-		let (root, transaction) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
+		let (root, transaction, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
 			genesis.top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta,
+			false,
 		);
 		state.genesis = transaction.clone();
 		state.commit(root, transaction)?;
@@ -142,7 +148,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 	fn child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.borrow().as_ref().ok_or_else(state_err)?.child_storage(storage_key, child_info, key)
@@ -155,7 +161,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 	fn exists_child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
 		self.state.borrow().as_ref().ok_or_else(state_err)?.exists_child_storage(storage_key, child_info, key)
@@ -168,7 +174,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 	fn next_child_storage_key(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.borrow().as_ref().ok_or_else(state_err)?.next_child_storage_key(storage_key, child_info, key)
@@ -189,7 +195,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
 		if let Some(ref state) = *self.state.borrow() {
@@ -200,7 +206,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
@@ -218,7 +224,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 	fn child_storage_root<I>(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction) where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -237,7 +243,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 	fn child_keys(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.child_keys(storage_key, child_info, prefix))
@@ -249,17 +255,34 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 		None
 	}
 
-	fn commit(&self, storage_root: <HasherFor<B> as Hasher>::Out, mut transaction: Self::Transaction)
+	fn commit(&self, storage_root: <HasherFor<B> as Hasher>::Out, transaction: Self::Transaction)
 		-> Result<(), Self::Error>
 	{
 		if let Some(db) = self.db.take() {
 			let mut db_transaction = DBTransaction::new();
+			let mut keyspace = crate::Keyspaced::new(&[]);
+			for (info, mut updates) in transaction.into_iter() {
+				// child info with strong unique id are using the same state-db with prefixed key
+				if info.child_type() != ChildType::CryptoUniqueId {
+					// Unhandled child kind
+					unimplemented!(
+						"Data for {:?} without a backend implementation",
+						info.child_type(),
+					);
+				}
+				keyspace.change_keyspace(info.keyspace());
+				for (key, (val, rc)) in updates.drain() {
+					let key = if info.is_top_trie() {
+						key
+					} else {
+						keyspace.prefix_key(key.as_slice()).to_vec()
+					};
 
-			for (key, (val, rc)) in transaction.drain() {
-				if rc > 0 {
-					db_transaction.put(0, &key, &val);
-				} else if rc < 0 {
-					db_transaction.delete(0, &key);
+					if rc > 0 {
+						db_transaction.put(0, &key, &val);
+					} else if rc < 0 {
+						db_transaction.delete(0, &key);
+					}
 				}
 			}
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
