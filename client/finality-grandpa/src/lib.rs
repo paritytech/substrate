@@ -171,15 +171,6 @@ type CommunicationInH<Block, H> = finality_grandpa::voter::CommunicationIn<
 	AuthorityId,
 >;
 
-/// A global communication sink for commits. Not exposed publicly, used
-/// internally to simplify types in the communication layer.
-type CommunicationOut<Block> = finality_grandpa::voter::CommunicationOut<
-	<Block as BlockT>::Hash,
-	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
->;
-
 /// Global communication sink for commits with the hash type not being derived
 /// from the block, useful for forcing the hash to some type (e.g. `H256`) when
 /// the compiler can't do the inference.

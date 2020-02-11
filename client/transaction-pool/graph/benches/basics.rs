@@ -153,7 +153,7 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 
 fn benchmark_main(c: &mut Criterion) {
 
-    c.bench_function("sequential 50 tx", |b| {
+	c.bench_function("sequential 50 tx", |b| {
 		b.iter(|| {
 			bench_configured(Pool::new(Default::default(), TestApi::new_dependant().into()), 50);
 		});

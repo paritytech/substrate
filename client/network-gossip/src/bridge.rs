@@ -208,7 +208,7 @@ impl<B: BlockT> Future for GossipEngineInner<B> {
 			}
 		}
 
-		while let Poll::Ready(Ok(())) = this.periodic_maintenance_interval.poll_unpin(cx) {
+		while let Poll::Ready(()) = this.periodic_maintenance_interval.poll_unpin(cx) {
 			this.periodic_maintenance_interval.reset(PERIODIC_MAINTENANCE_INTERVAL);
 			this.state_machine.tick(&mut *this.network);
 		}

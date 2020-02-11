@@ -603,6 +603,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
+	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
 	// Note that this could also be assigned to the top-level call enum. It is passed into the
 	// balances module directly and since `Trait: pallet_balances::Trait`, you could also use `T::Call`.
@@ -689,19 +690,16 @@ mod tests {
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
 		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 	impl Trait for Test {

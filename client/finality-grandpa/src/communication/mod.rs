@@ -62,7 +62,7 @@ pub mod gossip;
 mod periodic;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 

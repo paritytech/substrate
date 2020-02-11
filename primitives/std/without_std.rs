@@ -27,7 +27,6 @@ pub use core::convert;
 pub use core::default;
 pub use core::fmt;
 pub use core::hash;
-pub use core::intrinsics;
 pub use core::iter;
 pub use core::marker;
 pub use core::mem;

@@ -28,7 +28,7 @@ pub mod testing;
 pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
-use std::{collections::HashMap, sync::Arc, pin::Pin, time::Instant};
+use std::{collections::HashMap, sync::Arc, pin::Pin};
 use futures::{Future, FutureExt, future::ready};
 use parking_lot::Mutex;
 
@@ -41,8 +41,7 @@ use sp_transaction_pool::{
 	TxHash, TransactionFor, TransactionStatusStreamFor, BlockHash,
 	MaintainedTransactionPool, PoolFuture,
 };
-
-type PoolResult<T> = PoolFuture<T, error::Error>;
+use wasm_timer::Instant;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -53,6 +52,19 @@ pub struct BasicPool<PoolApi, Block>
 	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	api: Arc<PoolApi>,
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
+}
+
+#[cfg(not(target_os = "unknown"))]
+impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
+where
+	PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
+	PoolApi::Hash: parity_util_mem::MallocSizeOf,
+	Block: BlockT,
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		// other entries insignificant or non-primary references
+		self.pool.size_of(ops)
+	}
 }
 
 /// Type of revalidation.
@@ -80,7 +92,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	/// Create new basic transaction pool with provided api.
 	pub fn new(
 		options: sc_transaction_graph::Options,
-		pool_api: PoolApi,
+		pool_api: Arc<PoolApi>,
 	) -> Self {
 		Self::with_revalidation_type(options, pool_api, RevalidationType::Full)
 	}
@@ -89,14 +101,13 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	/// revalidation type.
 	pub fn with_revalidation_type(
 		options: sc_transaction_graph::Options,
-		pool_api: PoolApi,
+		pool_api: Arc<PoolApi>,
 		revalidation_type: RevalidationType,
 	) -> Self {
-		let api = Arc::new(pool_api);
-		let cloned_api = api.clone();
+		let cloned_api = pool_api.clone();
 		BasicPool {
 			api: cloned_api,
-			pool: Arc::new(sc_transaction_graph::Pool::new(options, api)),
+			pool: Arc::new(sc_transaction_graph::Pool::new(options, pool_api)),
 			revalidation_strategy: Arc::new(Mutex::new(
 				match revalidation_type {
 					RevalidationType::Light => RevalidationStrategy::Light(RevalidationStatus::NotScheduled),
@@ -111,29 +122,23 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	pub fn pool(&self) -> &Arc<sc_transaction_graph::Pool<PoolApi>> {
 		&self.pool
 	}
-
-	/// Get reference to the inner chain api, for tests only.
-	#[cfg(any(feature = "test-helpers", test))]
-	pub fn api(&self) -> &Arc<PoolApi> {
-		&self.api
-	}
 }
 
 impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
+		PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
 {
 	type Block = PoolApi::Block;
 	type Hash = sc_transaction_graph::ExHash<PoolApi>;
 	type InPoolTransaction = sc_transaction_graph::base_pool::Transaction<TxHash<Self>, TransactionFor<Self>>;
-	type Error = error::Error;
+	type Error = PoolApi::Error;
 
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
 		xts: Vec<TransactionFor<Self>>,
-	) -> PoolResult<Vec<Result<TxHash<Self>, Self::Error>>> {
+	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
 		async move {
@@ -145,7 +150,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> PoolResult<TxHash<Self>> {
+	) -> PoolFuture<TxHash<Self>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
 		async move {
@@ -157,7 +162,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> PoolResult<Box<TransactionStatusStreamFor<Self>>> {
+	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error> {
 		let at = *at;
 		let pool = self.pool.clone();
 
@@ -202,7 +207,7 @@ enum RevalidationStatus<N> {
 	/// The revalidation has never been completed.
 	NotScheduled,
 	/// The revalidation is scheduled.
-	Scheduled(Option<std::time::Instant>, Option<N>),
+	Scheduled(Option<Instant>, Option<N>),
 	/// The revalidation is in progress.
 	InProgress,
 }
@@ -287,7 +292,7 @@ impl<N: Clone + Copy + SimpleArithmetic> RevalidationStatus<N> {
 impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 where
 	Block: BlockT,
-	PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
+	PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
 {
 	fn maintain(&self, id: &BlockId<Self::Block>, retracted: &[BlockHash<Self>])
 		-> Pin<Box<dyn Future<Output=()> + Send>>

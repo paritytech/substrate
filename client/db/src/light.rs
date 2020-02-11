@@ -102,7 +102,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
 			header_metadata_cache: HeaderMetadataCache::default(),
 			#[cfg(not(target_os = "unknown"))]
-			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1), kvdb::IoStats::empty()),
+			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 		})
 	}
 

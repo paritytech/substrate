@@ -1,6 +1,21 @@
+// Copyright 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::*;
-use sc_transaction_graph::{self, Pool};
+use sc_transaction_graph::Pool;
 use futures::executor::block_on;
 use sp_runtime::{
 	generic::BlockId,
@@ -10,14 +25,14 @@ use substrate_test_runtime_client::{
 	runtime::{Block, Hash, Index},
 	AccountKeyring::*,
 };
-use crate::testing::api::{TestApi, uxt};
+use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 
 fn pool() -> Pool<TestApi> {
 	Pool::new(Default::default(), TestApi::with_alice_nonce(209).into())
 }
 
 fn maintained_pool() -> BasicPool<TestApi, Block> {
-	BasicPool::new(Default::default(), TestApi::with_alice_nonce(209))
+	BasicPool::new(Default::default(), std::sync::Arc::new(TestApi::with_alice_nonce(209)))
 }
 
 #[test]
@@ -199,4 +214,15 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 
 	block_on(pool.maintain(&BlockId::number(1), &[retracted_hash]));
 	assert_eq!(pool.status().ready, 0);
+}
+
+#[test]
+fn can_track_heap_size() {
+	let pool = maintained_pool();
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 209))).expect("1. Imported");
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 210))).expect("1. Imported");
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 211))).expect("1. Imported");
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 212))).expect("1. Imported");
+
+	assert!(parity_util_mem::malloc_size(&pool) > 3000);
 }
