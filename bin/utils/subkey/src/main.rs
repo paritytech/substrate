@@ -40,7 +40,7 @@ mod vanity;
 
 enum OutputType {
 	Json,
-	Text
+	Text,
 }
 
 impl<'a> TryFrom<&'a str> for OutputType {
@@ -146,7 +146,7 @@ trait Crypto: Sized {
 						"publicKeyUri": uri,
 						"networkId": String::from(v),
 						"publicKey": format_public_key::<Self>(public_key.clone()),
-						"accountId": format_account_id::<Self>(public_key.clone()),
+						"accountId": format_account_id::<Self>(public_key),
 						"ss58Address": public_key.to_ss58check_with_version(v),
 					});
 					println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
@@ -160,7 +160,7 @@ trait Crypto: Sized {
 						uri,
 						String::from(v),
 						format_public_key::<Self>(public_key.clone()),
-						format_account_id::<Self>(public_key.clone()),
+						format_account_id::<Self>(public_key),
 						public_key.to_ss58check_with_version(v),
 					);
 				},
