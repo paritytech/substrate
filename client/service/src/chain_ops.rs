@@ -51,7 +51,7 @@ pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<Strin
 pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 	spec: ChainSpec<G, E>,
 	strategy: sc_client::ExecutionStrategy,
-	wasm_method: WasmExecutionMethod,
+	wasm_method: sc_executor::WasmExecutionMethod,
 	pallet: String,
 	extrinsic: String,
 	steps: u32,
@@ -65,7 +65,6 @@ pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 	use sp_runtime::{BuildStorage, BenchmarkResults};
 	use sc_client::StateMachine;
 	use sc_client_db::BenchmarkingState;
-	use sc_executor::WasmExecutionMethod;
 
 	let genesis_storage = spec.build_storage()?;
 	let mut changes = Default::default();
