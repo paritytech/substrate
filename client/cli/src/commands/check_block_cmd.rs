@@ -2,12 +2,13 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use structopt::StructOpt;
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
+	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, Roles, ChainSpec,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_runtime::generic::BlockId;
 
 use crate::error;
+use crate::VersionInfo;
 use crate::runtime::run_until_exit;
 use crate::params::SharedParams;
 use crate::params::ImportParams;
@@ -52,11 +53,6 @@ impl CheckBlockCmd {
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-		self.import_params.update_config(
-			&mut config,
-			sc_service::Roles::FULL,
-			self.shared_params.dev,
-		)?;
 		config.use_in_memory_keystore()?;
 
 		let input = if self.input.starts_with("0x") { &self.input[2..] } else { &self.input[..] };
@@ -73,6 +69,23 @@ impl CheckBlockCmd {
 			Ok(builder(config)?.check_block(block_id))
 		})?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
+
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<G, E, F>(
+		&self,
+		mut config: &mut Configuration<G, E>,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		self.import_params.update_config(&mut config, Roles::FULL, self.shared_params.dev)?;
 
 		Ok(())
 	}

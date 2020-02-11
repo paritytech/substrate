@@ -35,14 +35,12 @@ impl BuildSpecCmd {
 	/// Run the build-spec command
 	pub fn run<G, E>(
 		self,
-		mut config: Configuration<G, E>,
+		config: Configuration<G, E>,
 	) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
-
 		info!("Building chain spec");
 		let mut spec = config.expect_chain_spec().clone();
 		let raw_output = self.raw;

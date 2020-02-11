@@ -5,12 +5,13 @@ use std::fmt::Debug;
 use log::info;
 use structopt::StructOpt;
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
+	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
 	config::DatabaseConfig,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
+use crate::VersionInfo;
 use crate::runtime::run_until_exit;
 use crate::params::SharedParams;
 use crate::params::BlockNumber;
@@ -79,5 +80,21 @@ impl ExportBlocksCmd {
 		run_until_exit(config, |config| {
 			Ok(builder(config)?.export_blocks(file, from.into(), to, json))
 		})
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<G, E, F>(
+		&self,
+		mut config: &mut Configuration<G, E>,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+
+		Ok(())
 	}
 }

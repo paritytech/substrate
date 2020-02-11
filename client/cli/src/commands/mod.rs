@@ -28,11 +28,12 @@ use std::fmt::Debug;
 use structopt::StructOpt;
 
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
+	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
+use crate::VersionInfo;
 use crate::params::SharedParams;
 
 pub use crate::commands::runcmd::RunCmd;
@@ -121,6 +122,29 @@ impl Subcommand {
 			Subcommand::Revert(cmd) => cmd.run(config, builder),
 			#[cfg(feature = "rocksdb")]
 			Subcommand::Benchmark(cmd) => cmd.run(config, builder),
+		}
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<G, E, F>(
+		&self,
+		mut config: &mut Configuration<G, E>,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	{
+		match self {
+			Subcommand::BuildSpec(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::ExportBlocks(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::ImportBlocks(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::CheckBlock(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::PurgeChain(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::Revert(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			#[cfg(feature = "rocksdb")]
+			Subcommand::Benchmark(cmd) => cmd.update_config(&mut config, spec_factory, version),
 		}
 	}
 }
