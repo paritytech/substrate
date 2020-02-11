@@ -2066,7 +2066,8 @@ fn slash_in_old_span_does_not_deselect() {
 				),
 				reporters: vec![],
 			}],
-			&[Perbill::from_percent(100)],
+			// NOTE: A 100% slash here would clean up the account, causing de-registration.
+			&[Perbill::from_percent(95)],
 			1,
 		);
 
