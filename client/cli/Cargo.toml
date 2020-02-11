@@ -48,3 +48,6 @@ tempfile = "3.1.0"
 wasmtime = [
 	"sc-service/wasmtime",
 ]
+rocksdb = [
+	"sc-service/rocksdb",
+]
