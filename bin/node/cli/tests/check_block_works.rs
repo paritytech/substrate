@@ -17,22 +17,20 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use std::{process::Command, fs, path::PathBuf};
+use std::{process::Command, fs};
 
 mod common;
 
 #[test]
-fn build_spec_works() {
-	let base_path = "build_spec_test";
+fn check_block_works() {
+	let base_path = "check_block_test";
 
 	let _ = fs::remove_dir_all(base_path);
+	common::run_command_for_a_while(&["-d", base_path]);
+
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["build-spec", "--dev", "-d", base_path])
+		.args(&["check-block", "-d", base_path, "1"])
 		.status()
 		.unwrap();
 	assert!(status.success());
-
-	// Make sure that the `dev` chain folder exists, but the `db` doesn't
-	assert!(PathBuf::from(base_path).join("chains/dev/").exists());
-	assert!(!PathBuf::from(base_path).join("chains/dev/db").exists());
 }

@@ -14,7 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![cfg(unix)]
+
 use std::{process::{Child, ExitStatus}, thread, time::Duration};
+use assert_cmd::cargo::cargo_bin;
+use std::{convert::TryInto, process::Command};
+use nix::sys::signal::{kill, Signal::SIGINT};
+use nix::unistd::Pid;
 
 /// Wait for the given `child` the given ammount of `secs`.
 ///
@@ -31,4 +37,19 @@ pub fn wait_for(child: &mut Child, secs: usize) -> Option<ExitStatus> {
 	child.wait().unwrap();
 
 	None
+}
+
+pub fn run_command_for_a_while(args: &[&str]) {
+	let mut cmd = Command::new(cargo_bin("substrate"))
+		.args(args)
+		.spawn()
+		.unwrap();
+
+	// Let it produce some blocks.
+	thread::sleep(Duration::from_secs(20));
+	assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
+
+	// Stop the process
+	kill(Pid::from_raw(cmd.id().try_into().unwrap()), SIGINT).unwrap();
+	assert!(wait_for(&mut cmd, 20).map(|x| x.success()).unwrap_or_default());
 }

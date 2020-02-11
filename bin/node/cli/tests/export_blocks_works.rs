@@ -17,22 +17,23 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use std::{process::Command, fs, path::PathBuf};
+use std::{process::Command, fs};
 
 mod common;
 
 #[test]
-fn build_spec_works() {
-	let base_path = "build_spec_test";
+fn export_blocks_works() {
+	let base_path = "export_blocks_test";
 
 	let _ = fs::remove_dir_all(base_path);
+	common::run_command_for_a_while(&["-d", base_path]);
+
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["build-spec", "--dev", "-d", base_path])
+		.args(&["export-blocks", "-d", base_path, "exported_blocks"])
 		.status()
 		.unwrap();
 	assert!(status.success());
 
-	// Make sure that the `dev` chain folder exists, but the `db` doesn't
-	assert!(PathBuf::from(base_path).join("chains/dev/").exists());
-	assert!(!PathBuf::from(base_path).join("chains/dev/db").exists());
+	let metadata = fs::metadata("exported_blocks").unwrap();
+	assert!(metadata.len() > 0, "file exported_blocks should not be empty");
 }
