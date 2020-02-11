@@ -134,53 +134,6 @@ where
 	Ok(T::from_clap(&matches))
 }
 
-/// A helper function that initializes and runs the node
-pub fn run<F, G, E, FNL, FNF, SL, SF>(
-	mut config: Configuration<G, E>,
-	run_cmd: RunCmd,
-	new_light: FNL,
-	new_full: FNF,
-	spec_factory: F,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
-	FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-	SL: AbstractService + Unpin,
-	SF: AbstractService + Unpin,
-{
-	init(&run_cmd.shared_params, version)?;
-	run_cmd.shared_params.update_config(&mut config, spec_factory, version)?;
-	run_cmd.run(config, new_light, new_full, version)
-}
-
-/// A helper function that initializes and runs any of the subcommand variants of `CoreParams`.
-pub fn run_subcommand<F, G, E, B, BC, BB>(
-	mut config: Configuration<G, E>,
-	subcommand: Subcommand,
-	spec_factory: F,
-	builder: B,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-	BC: ServiceBuilderCommand<Block = BB> + Unpin,
-	BB: sp_runtime::traits::Block + Debug,
-	<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-	<BB as BlockT>::Hash: std::str::FromStr,
-{
-	let shared_params = subcommand.get_shared_params();
-	init(shared_params, version)?;
-	shared_params.update_config(&mut config, spec_factory, version)?;
-	subcommand.run(config, builder)
-}
-
 /// Initialize substrate. This must be done only once.
 ///
 /// This method:
@@ -188,7 +141,7 @@ where
 /// 1. Set the panic handler
 /// 2. Raise the FD limit
 /// 3. Initialize the logger
-pub fn init(shared_params: &SharedParams, version: &VersionInfo) -> error::Result<()> {
+pub fn init(logger_pattern: &str, version: &VersionInfo) -> error::Result<()> {
 	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
 		version.commit
@@ -196,7 +149,7 @@ pub fn init(shared_params: &SharedParams, version: &VersionInfo) -> error::Resul
 	sp_panic_handler::set(version.support_url, &full_version);
 
 	fdlimit::raise_fd_limit();
-	init_logger(shared_params.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
+	init_logger(logger_pattern);
 
 	Ok(())
 }

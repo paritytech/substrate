@@ -73,6 +73,17 @@ impl SharedParams {
 
 		Ok(config.chain_spec.as_ref().unwrap())
 	}
+
+	/// Initialize substrate. This must be done only once.
+	///
+	/// This method:
+	///
+	/// 1. Set the panic handler
+	/// 2. Raise the FD limit
+	/// 3. Initialize the logger
+	pub fn init(self, version: &VersionInfo) -> error::Result<()> {
+		crate::init(self.log.as_ref().map(|v| v.as_ref()).unwrap_or(""), version)
+	}
 }
 
 fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
