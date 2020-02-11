@@ -120,6 +120,7 @@ use sp_api::ApiExt;
 mod aux_schema;
 mod verification;
 mod authorship;
+pub mod rpc;
 #[cfg(test)]
 mod tests;
 

@@ -8,12 +8,14 @@ license = "GPL-3.0"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+err-derive = "0.2.2"
 sp-consensus-babe = { version = "0.8", path = "../../../primitives/consensus/babe" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-application-crypto = { version = "2.0.0", path = "../../../primitives/application-crypto" }
 num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
+serde = { version = "1.0.104", features=["derive"] }
 sp-version = { version = "2.0.0", path = "../../../primitives/version" }
 sp-io = { version = "2.0.0", path = "../../../primitives/io" }
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
@@ -33,6 +35,9 @@ sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 fork-tree = { version = "2.0.0", path = "../../../utils/fork-tree" }
 futures = "0.3.1"
 futures-timer = "3.0.1"
+jsonrpc-core = "14.0.3"
+jsonrpc-core-client = "14.0.3"
+jsonrpc-derive = "14.0.3"
 parking_lot = "0.10.0"
 log = "0.4.8"
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"] }
