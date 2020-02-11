@@ -32,7 +32,7 @@ use sp_core::{
 };
 use sp_runtime::{traits::{IdentifyAccount, Verify}, generic::Era};
 use std::{
-	convert::{TryInto, TryFrom}, io::{stdin, Read, Write}, str::FromStr, path::PathBuf, fs, fmt,
+	convert::{TryInto, TryFrom}, io::{stdin, Read}, str::FromStr, path::PathBuf, fs, fmt,
 };
 
 mod rpc;
@@ -345,12 +345,7 @@ where
 			let secret = keypair.secret();
 			let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
 
-			let mut file = fs::OpenOptions::new()
-												.create_new(true)
-												.write(true)
-												.open(file)?;
-												
-			file.write_all(secret.as_ref())?;
+			fs::write(file, secret.as_ref())?;
 
 			println!("{}", peer_id);
 		}
