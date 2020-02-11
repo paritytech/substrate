@@ -68,8 +68,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 		allow_private_ipv4: bool,
+		discovery_only_if_under_num: u64,
 		block_requests: protocol::BlockRequests<Substream<StreamMuxerBox>, B>,
-		light_client_handler: protocol::LightClientHandler<Substream<StreamMuxerBox>, B>
+		light_client_handler: protocol::LightClientHandler<Substream<StreamMuxerBox>, B>,
 	) -> Self {
 		Behaviour {
 			substrate,
@@ -78,7 +79,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 				local_public_key,
 				known_addresses,
 				enable_mdns,
-				allow_private_ipv4
+				allow_private_ipv4,
+				discovery_only_if_under_num,
 			).await,
 			block_requests,
 			light_client_handler,

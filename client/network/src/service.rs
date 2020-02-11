@@ -243,6 +243,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 					TransportConfig::MemoryOnly => false,
 					TransportConfig::Normal { allow_private_ipv4, .. } => allow_private_ipv4,
 				},
+				u64::from(params.network_config.out_peers) + 15,
 				block_requests,
 				light_client_handler
 			));
