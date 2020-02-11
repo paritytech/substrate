@@ -19,11 +19,6 @@ use structopt::StructOpt;
 
 #[allow(missing_docs)]
 #[derive(Clone, Debug, StructOpt)]
-#[structopt(settings = &[
-	structopt::clap::AppSettings::GlobalVersion,
-	structopt::clap::AppSettings::ArgsNegateSubcommands,
-	structopt::clap::AppSettings::SubcommandsNegateReqs,
-])]
 pub struct Cli {
 	#[allow(missing_docs)]
 	#[structopt(subcommand)]
