@@ -20,6 +20,9 @@ use crate::params::NetworkConfigurationParams;
 use crate::params::TransactionPoolParams;
 use crate::runtime::run_service_until_exit;
 
+/// The maximum number of characters for a node name.
+const NODE_NAME_MAX_LENGTH: usize = 32;
+
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
 
@@ -462,7 +465,7 @@ impl RunCmd {
 /// Check whether a node name is considered as valid
 pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	let name = _name.to_string();
-	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
+	if name.chars().count() >= NODE_NAME_MAX_LENGTH {
 		return Err("Node name too long");
 	}
 
@@ -513,7 +516,7 @@ fn generate_node_name() -> String {
 		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
 		let count = node_name.chars().count();
 
-		if count < crate::NODE_NAME_MAX_LENGTH {
+		if count < NODE_NAME_MAX_LENGTH {
 			break node_name
 		}
 	};

@@ -19,8 +19,6 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-#[macro_use]
-mod traits;
 mod params;
 mod execution_strategy;
 pub mod error;
@@ -35,18 +33,11 @@ use std::io::Write;
 use regex::Regex;
 use structopt::{StructOpt, clap::{self, AppSettings}};
 pub use structopt;
-pub use params::{SharedParams, ImportParams, ExecutionStrategy};
-pub use commands::{
-	Subcommand, RunCmd, BuildSpecCmd, ExportBlocksCmd, ImportBlocksCmd, CheckBlockCmd,
-	PurgeChainCmd, RevertCmd,
-};
-pub use traits::GetSharedParams;
+pub use params::*;
+pub use commands::*;
 use log::info;
 use lazy_static::lazy_static;
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
-
-/// The maximum number of characters for a node name.
-const NODE_NAME_MAX_LENGTH: usize = 32;
 
 /// Helper function used to parse the command line arguments. This is the equivalent of
 /// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
