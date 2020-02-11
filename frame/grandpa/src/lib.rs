@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -175,7 +175,7 @@ decl_storage! {
 		CurrentSetId get(fn current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
 
 		/// A mapping from grandpa set ID to the index of the *most recent* session for which its members were responsible.
-		SetIdSession get(fn session_for_set): map SetId => Option<SessionIndex>;
+		SetIdSession get(fn session_for_set): map hasher(blake2_256) SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
 		config(authorities): AuthorityList;

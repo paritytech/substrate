@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -80,7 +80,7 @@ impl<P: TransactionPool, C, B> FullSystem<P, C, B> {
 
 impl<P, C, Block, AccountId, Index> SystemApi<AccountId, Index> for FullSystem<P, C, Block>
 where
-	C: traits::ProvideRuntimeApi,
+	C: sp_api::ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: AccountNonceApi<Block, AccountId, Index>,
@@ -235,7 +235,9 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let pool = Arc::new(
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())))
+		);
 
 		let new_transaction = |nonce: u64| {
 			let t = Transfer {

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,89 +24,61 @@ mod traits;
 mod params;
 mod execution_strategy;
 pub mod error;
-pub mod informant;
+mod runtime;
+mod node_key;
 
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
-	config::{Configuration, DatabaseConfig},
+	config::{Configuration, DatabaseConfig, KeystoreConfig},
 	ServiceBuilderCommand,
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
+	AbstractService, Roles as ServiceRoles,
 };
+pub use sc_service::config::VersionInfo;
 use sc_network::{
 	self,
 	multiaddr::Protocol,
 	config::{
-		NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig, build_multiaddr
+		NetworkConfiguration, TransportConfig, NonReservedPeerMode,
 	},
 };
-use sp_core::H256;
 
 use std::{
-	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fmt::Debug, fs::{self, File},
-	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr, pin::Pin, task::Poll
+	io::Write, iter, fmt::Debug, fs,
+	net::{Ipv4Addr, SocketAddr}, path::PathBuf,
 };
 
-use names::{Generator, Name};
 use regex::Regex;
-use structopt::{StructOpt, clap::AppSettings};
-#[doc(hidden)]
-pub use structopt::clap::App;
+use structopt::{StructOpt, clap};
+pub use structopt;
 use params::{
-	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
-	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
-	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
+	NetworkConfigurationParams, TransactionPoolParams, Cors,
 };
-pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy};
-pub use traits::{GetLogFilter, AugmentClap};
+pub use params::{
+	SharedParams, ImportParams, ExecutionStrategy, Subcommand, RunCmd, BuildSpecCmd,
+	ExportBlocksCmd, ImportBlocksCmd, CheckBlockCmd, PurgeChainCmd, RevertCmd,
+	BenchmarkCmd,
+};
+pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
-use futures::{Future, compat::Future01CompatExt, executor::block_on};
 use sc_telemetry::TelemetryEndpoints;
-use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+pub use crate::runtime::{run_until_exit, run_service_until_exit};
+use execution_strategy::*;
+use names::{Generator, Name};
+use chrono::prelude::*;
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
 /// default sub directory for the key store
-const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str =  "keystore";
+const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
 
 /// The maximum number of characters for a node name.
 const NODE_NAME_MAX_LENGTH: usize = 32;
-
-/// The file name of the node's Ed25519 secret key inside the chain-specific
-/// network config directory, if neither `--node-key` nor `--node-key-file`
-/// is specified in combination with `--node-key-type=ed25519`.
-const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
-
-/// Executable version. Used to pass version information from the root crate.
-#[derive(Clone)]
-pub struct VersionInfo {
-	/// Implementaiton name.
-	pub name: &'static str,
-	/// Implementation version.
-	pub version: &'static str,
-	/// SCM Commit hash.
-	pub commit: &'static str,
-	/// Executable file name.
-	pub executable_name: &'static str,
-	/// Executable file description.
-	pub description: &'static str,
-	/// Executable file author.
-	pub author: &'static str,
-	/// Support URL.
-	pub support_url: &'static str,
-}
-
-/// Something that can be converted into an exit signal.
-pub trait IntoExit {
-	/// Exit signal type.
-	type Exit: Future<Output=()> + Unpin + Send + 'static;
-	/// Convert into exit signal.
-	fn into_exit(self) -> Self::Exit;
-}
 
 fn get_chain_key(cli: &SharedParams) -> String {
 	match cli.chain {
@@ -128,7 +100,12 @@ fn generate_node_name() -> String {
 	result
 }
 
-fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G, E>> where
+/// Load spec to `Configuration` from shared params and spec factory.
+pub fn load_spec<'a, G, E, F>(
+	mut config: &'a mut Configuration<G, E>,
+	cli: &SharedParams,
+	factory: F,
+) -> error::Result<&'a ChainSpec<G, E>> where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
@@ -138,7 +115,13 @@ fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec
 		Some(spec) => spec,
 		None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
 	};
-	Ok(spec)
+
+	config.network.boot_nodes = spec.boot_nodes().to_vec();
+	config.telemetry_endpoints = spec.telemetry_endpoints().clone();
+
+	config.chain_spec = Some(spec);
+
+	Ok(config.chain_spec.as_ref().unwrap())
 }
 
 fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
@@ -154,101 +137,222 @@ fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
 		)
 }
 
-/// Check whether a node name is considered as valid
-fn is_node_name_valid(_name: &str) -> Result<(), &str> {
-	let name = _name.to_string();
-	if name.chars().count() >= NODE_NAME_MAX_LENGTH {
-		return Err("Node name too long");
+/// Helper function used to parse the command line arguments. This is the equivalent of
+/// `structopt`'s `from_args()` except that it takes a `VersionInfo` argument to provide the name of
+/// the application, author, "about" and version.
+///
+/// Gets the struct from the command line arguments. Print the
+/// error message and quit the program in case of failure.
+pub fn from_args<T>(version: &VersionInfo) -> T
+where
+	T: StructOpt + Sized,
+{
+	from_iter::<T, _>(&mut std::env::args_os(), version)
+}
+
+/// Helper function used to parse the command line arguments. This is the equivalent of
+/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
+/// the application, author, "about" and version.
+///
+/// Gets the struct from any iterator such as a `Vec` of your making.
+/// Print the error message and quit the program in case of failure.
+pub fn from_iter<T, I>(iter: I, version: &VersionInfo) -> T
+where
+	T: StructOpt + Sized,
+	I: IntoIterator,
+	I::Item: Into<std::ffi::OsString> + Clone,
+{
+	let app = T::clap();
+
+	let mut full_version = sc_service::config::full_version_from_strs(
+		version.version,
+		version.commit
+	);
+	full_version.push_str("\n");
+
+	let app = app
+		.name(version.executable_name)
+		.author(version.author)
+		.about(version.description)
+		.version(full_version.as_str());
+
+	T::from_clap(&app.get_matches_from(iter))
+}
+
+/// Helper function used to parse the command line arguments. This is the equivalent of
+/// `structopt`'s `try_from_iter()` except that it takes a `VersionInfo` argument to provide the
+/// name of the application, author, "about" and version.
+///
+/// Gets the struct from any iterator such as a `Vec` of your making.
+/// Print the error message and quit the program in case of failure.
+///
+/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
+/// used. It will return a [`clap::Error`], where the [`kind`] is a
+/// [`ErrorKind::HelpDisplayed`] or [`ErrorKind::VersionDisplayed`] respectively. You must call
+/// [`Error::exit`] or perform a [`std::process::exit`].
+pub fn try_from_iter<T, I>(iter: I, version: &VersionInfo) -> clap::Result<T>
+where
+	T: StructOpt + Sized,
+	I: IntoIterator,
+	I::Item: Into<std::ffi::OsString> + Clone,
+{
+	let app = T::clap();
+
+	let mut full_version = sc_service::config::full_version_from_strs(
+		version.version,
+		version.commit,
+	);
+	full_version.push_str("\n");
+
+	let app = app
+		.name(version.executable_name)
+		.author(version.author)
+		.about(version.description)
+		.version(full_version.as_str());
+
+	let matches = app.get_matches_from_safe(iter)?;
+
+	Ok(T::from_clap(&matches))
+}
+
+/// A helper function that initializes and runs the node
+pub fn run<F, G, E, FNL, FNF, SL, SF>(
+	mut config: Configuration<G, E>,
+	run_cmd: RunCmd,
+	new_light: FNL,
+	new_full: FNF,
+	spec_factory: F,
+	version: &VersionInfo,
+) -> error::Result<()>
+where
+	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
+	FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+	SL: AbstractService + Unpin,
+	SF: AbstractService + Unpin,
+{
+	init(&run_cmd.shared_params, version)?;
+	init_config(&mut config, &run_cmd.shared_params, version, spec_factory)?;
+	run_cmd.run(config, new_light, new_full, version)
+}
+
+/// A helper function that initializes and runs any of the subcommand variants of `CoreParams`.
+pub fn run_subcommand<F, G, E, B, BC, BB>(
+	mut config: Configuration<G, E>,
+	subcommand: Subcommand,
+	spec_factory: F,
+	builder: B,
+	version: &VersionInfo,
+) -> error::Result<()>
+where
+	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+	BC: ServiceBuilderCommand<Block = BB> + Unpin,
+	BB: sp_runtime::traits::Block + Debug,
+	<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+	<BB as BlockT>::Hash: std::str::FromStr,
+{
+	let shared_params = subcommand.get_shared_params();
+	init(shared_params, version)?;
+	init_config(&mut config, shared_params, version, spec_factory)?;
+	subcommand.run(config, builder)
+}
+
+/// Initialize substrate. This must be done only once.
+///
+/// This method:
+///
+/// 1. Set the panic handler
+/// 2. Raise the FD limit
+/// 3. Initialize the logger
+pub fn init(shared_params: &SharedParams, version: &VersionInfo) -> error::Result<()> {
+	let full_version = sc_service::config::full_version_from_strs(
+		version.version,
+		version.commit
+	);
+	sp_panic_handler::set(version.support_url, &full_version);
+
+	fdlimit::raise_fd_limit();
+	init_logger(shared_params.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
+
+	Ok(())
+}
+
+/// Initialize the given `config`.
+///
+/// This will load the chain spec, set the `config_dir` and the `database_dir`.
+pub fn init_config<G, E, F>(
+	config: &mut Configuration<G, E>,
+	shared_params: &SharedParams,
+	version: &VersionInfo,
+	spec_factory: F,
+) -> error::Result<()> where
+	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+{
+	load_spec(config, shared_params, spec_factory)?;
+
+	if config.config_dir.is_none() {
+		config.config_dir = Some(base_path(&shared_params, version));
 	}
 
-	let invalid_chars = r"[\\.@]";
-	let re = Regex::new(invalid_chars).unwrap();
-	if re.is_match(&name) {
-		return Err("Node name should not contain invalid chars such as '.' and '@'");
-	}
-
-	let invalid_patterns = r"(https?:\\/+)?(www)+";
-	let re = Regex::new(invalid_patterns).unwrap();
-	if re.is_match(&name) {
-		return Err("Node name should not contain urls");
+	if config.database.is_none() {
+		config.database = Some(DatabaseConfig::Path {
+			path: config
+				.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
+				.expect("We provided a base_path/config_dir."),
+			cache_size: None,
+		});
 	}
 
 	Ok(())
 }
 
-/// Parse command line interface arguments and prepares the command for execution.
+/// Run the node
 ///
-/// Before returning, this function performs various initializations, such as initializing the
-/// panic handler and the logger, or increasing the limit for file descriptors.
-///
-/// # Remarks
-///
-/// `CC` is a custom subcommand. This needs to be an `enum`! If no custom subcommand is required,
-/// `NoCustom` can be used as type here.
-///
-/// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
-/// parameters are visible to the user as if they were normal run command parameters. If no custom
-/// parameters are required, `NoCustom` can be used as type here.
-pub fn parse_and_prepare<'a, CC, RP, I>(
-	version: &'a VersionInfo,
-	impl_name: &'static str,
-	args: I,
-) -> ParseAndPrepare<'a, CC, RP>
+/// Builds and runs either a full or a light node, depending on the `role` within the `Configuration`.
+pub fn run_node<G, E, FNL, FNF, SL, SF>(
+	config: Configuration<G, E>,
+	new_light: FNL,
+	new_full: FNF,
+	version: &VersionInfo,
+) -> error::Result<()>
 where
-	CC: StructOpt + Clone + GetLogFilter,
-	RP: StructOpt + Clone + AugmentClap,
-	I: IntoIterator,
-	<I as IntoIterator>::Item: Into<std::ffi::OsString> + Clone,
+	FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
+	FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+	SL: AbstractService + Unpin,
+	SF: AbstractService + Unpin,
 {
-	let full_version = sc_service::config::full_version_from_strs(
-		version.version,
-		version.commit
-	);
+	info!("{}", version.name);
+	info!("  version {}", config.full_version());
+	info!("  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
+	info!("Chain specification: {}", config.expect_chain_spec().name());
+	info!("Node name: {}", config.name);
+	info!("Roles: {}", display_role(&config));
 
-	sp_panic_handler::set(version.support_url, &full_version);
-	let matches = CoreParams::<CC, RP>::clap()
-		.name(version.executable_name)
-		.author(version.author)
-		.about(version.description)
-		.version(&(full_version + "\n")[..])
-		.setting(AppSettings::GlobalVersion)
-		.setting(AppSettings::ArgsNegateSubcommands)
-		.setting(AppSettings::SubcommandsNegateReqs)
-		.get_matches_from(args);
-	let cli_args = CoreParams::<CC, RP>::from_clap(&matches);
-	init_logger(cli_args.get_log_filter().as_ref().map(|v| v.as_ref()).unwrap_or(""));
-	fdlimit::raise_fd_limit();
-
-	match cli_args {
-		params::CoreParams::Run(params) => ParseAndPrepare::Run(
-			ParseAndPrepareRun { params, impl_name, version }
+	match config.roles {
+		ServiceRoles::LIGHT => run_service_until_exit(
+			config,
+			new_light,
 		),
-		params::CoreParams::BuildSpec(params) => ParseAndPrepare::BuildSpec(
-			ParseAndPrepareBuildSpec { params, version }
+		_ => run_service_until_exit(
+			config,
+			new_full,
 		),
-		params::CoreParams::ExportBlocks(params) => ParseAndPrepare::ExportBlocks(
-			ParseAndPrepareExport { params, version }
-		),
-		params::CoreParams::ImportBlocks(params) => ParseAndPrepare::ImportBlocks(
-			ParseAndPrepareImport { params, version }
-		),
-		params::CoreParams::CheckBlock(params) => ParseAndPrepare::CheckBlock(
-			CheckBlock { params, version }
-		),
-		params::CoreParams::PurgeChain(params) => ParseAndPrepare::PurgeChain(
-			ParseAndPreparePurge { params, version }
-		),
-		params::CoreParams::Revert(params) => ParseAndPrepare::RevertChain(
-			ParseAndPrepareRevert { params, version }
-		),
-		params::CoreParams::Custom(params) => ParseAndPrepare::CustomCommand(params),
 	}
 }
 
 /// Returns a string displaying the node role, special casing the sentry mode
 /// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
 /// doesn't participate.
-pub fn display_role<A, B, C>(config: &Configuration<A, B, C>) -> String {
+pub fn display_role<G, E>(config: &Configuration<G, E>) -> String {
 	if config.sentry_mode {
 		"SENTRY".to_string()
 	} else {
@@ -256,405 +360,9 @@ pub fn display_role<A, B, C>(config: &Configuration<A, B, C>) -> String {
 	}
 }
 
-/// Output of calling `parse_and_prepare`.
-#[must_use]
-pub enum ParseAndPrepare<'a, CC, RP> {
-	/// Command ready to run the main client.
-	Run(ParseAndPrepareRun<'a, RP>),
-	/// Command ready to build chain specs.
-	BuildSpec(ParseAndPrepareBuildSpec<'a>),
-	/// Command ready to export the chain.
-	ExportBlocks(ParseAndPrepareExport<'a>),
-	/// Command ready to import the chain.
-	ImportBlocks(ParseAndPrepareImport<'a>),
-	/// Command to check a block.
-	CheckBlock(CheckBlock<'a>),
-	/// Command ready to purge the chain.
-	PurgeChain(ParseAndPreparePurge<'a>),
-	/// Command ready to revert the chain.
-	RevertChain(ParseAndPrepareRevert<'a>),
-	/// An additional custom command passed to `parse_and_prepare`.
-	CustomCommand(CC),
-}
-
-/// Command ready to run the main client.
-pub struct ParseAndPrepareRun<'a, RP> {
-	params: MergeParameters<RunCmd, RP>,
-	impl_name: &'static str,
-	version: &'a VersionInfo,
-}
-
-impl<'a, RP> ParseAndPrepareRun<'a, RP> {
-	/// Runs the command and runs the main client.
-	pub fn run<C, G, CE, S, Exit, RS, E>(
-		self,
-		spec_factory: S,
-		exit: Exit,
-		run_service: RS,
-	) -> error::Result<()>
-	where
-		S: FnOnce(&str) -> Result<Option<ChainSpec<G, CE>>, String>,
-		E: Into<error::Error>,
-		RP: StructOpt + Clone,
-		C: Default,
-		G: RuntimeGenesis,
-		CE: ChainSpecExtension,
-		Exit: IntoExit,
-		RS: FnOnce(Exit, RunCmd, RP, Configuration<C, G, CE>) -> Result<(), E>
-	{
-		let config = create_run_node_config(
-			self.params.left.clone(), spec_factory, self.impl_name, self.version,
-		)?;
-
-		run_service(exit, self.params.left, self.params.right, config).map_err(Into::into)
-	}
-}
-
-/// Command ready to build chain specs.
-pub struct ParseAndPrepareBuildSpec<'a> {
-	params: BuildSpecCmd,
-	version: &'a VersionInfo,
-}
-
-impl<'a> ParseAndPrepareBuildSpec<'a> {
-	/// Runs the command and build the chain specs.
-	pub fn run<C, G, S, E>(
-		self,
-		spec_factory: S
-	) -> error::Result<()> where
-		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		C: Default,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		info!("Building chain spec");
-		let raw_output = self.params.raw;
-		let mut spec = load_spec(&self.params.shared_params, spec_factory)?;
-
-		if spec.boot_nodes().is_empty() && !self.params.disable_default_bootnode {
-			let base_path = base_path(&self.params.shared_params, self.version);
-			let cfg = sc_service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), Some(base_path));
-			let node_key = node_key_config(
-				self.params.node_key_params,
-				&Some(cfg.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path"))
-			)?;
-			let keys = node_key.into_keypair()?;
-			let peer_id = keys.public().into_peer_id();
-			let addr = build_multiaddr![
-				Ip4([127, 0, 0, 1]),
-				Tcp(30333u16),
-				P2p(peer_id)
-			];
-			spec.add_boot_node(addr)
-		}
-
-		let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
-
-		print!("{}", json);
-
-		Ok(())
-	}
-}
-
-/// Command ready to export the chain.
-pub struct ParseAndPrepareExport<'a> {
-	params: ExportBlocksCmd,
-	version: &'a VersionInfo,
-}
-
-impl<'a> ParseAndPrepareExport<'a> {
-	/// Runs the command and exports from the chain.
-	pub fn run_with_builder<C, G, E, F, B, S, Exit>(
-		self,
-		builder: F,
-		spec_factory: S,
-		exit: Exit,
-	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
-		B: ServiceBuilderCommand,
-		<<<<B as ServiceBuilderCommand>::Block as BlockT>::Header as HeaderT>
-			::Number as FromStr>::Err: Debug,
-		C: Default,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		Exit: IntoExit
-	{
-		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
-
-		if let DatabaseConfig::Path { ref path, .. } = &config.database {
-			info!("DB path: {}", path.display());
-		}
-		let from = self.params.from.and_then(|f| f.parse().ok()).unwrap_or(1);
-		let to = self.params.to.and_then(|t| t.parse().ok());
-
-		let json = self.params.json;
-
-		let file: Box<dyn Write> = match self.params.output {
-			Some(filename) => Box::new(File::create(filename)?),
-			None => Box::new(stdout()),
-		};
-
-		// Note: while we would like the user to handle the exit themselves, we handle it here
-		// for backwards compatibility reasons.
-		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit();
-		std::thread::spawn(move || {
-			block_on(exit);
-			let _ = exit_send.send(());
-		});
-
-		let mut export_fut = builder(config)?
-			.export_blocks(file, from.into(), to, json)
-			.compat();
-		let fut = futures::future::poll_fn(|cx| {
-			if exit_recv.try_recv().is_ok() {
-				return Poll::Ready(Ok(()));
-			}
-			Pin::new(&mut export_fut).poll(cx)
-		});
-
-		let mut runtime = tokio::runtime::Runtime::new().unwrap();
-		runtime.block_on(fut)?;
-		Ok(())
-	}
-}
-
-/// Command ready to import the chain.
-pub struct ParseAndPrepareImport<'a> {
-	params: ImportBlocksCmd,
-	version: &'a VersionInfo,
-}
-
-impl<'a> ParseAndPrepareImport<'a> {
-	/// Runs the command and imports to the chain.
-	pub fn run_with_builder<C, G, E, F, B, S, Exit>(
-		self,
-		builder: F,
-		spec_factory: S,
-		exit: Exit,
-	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
-		B: ServiceBuilderCommand,
-		C: Default,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		Exit: IntoExit
-	{
-		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
-		fill_import_params(&mut config, &self.params.import_params, sc_service::Roles::FULL)?;
-
-		let file: Box<dyn ReadPlusSeek + Send> = match self.params.input {
-			Some(filename) => Box::new(File::open(filename)?),
-			None => {
-				let mut buffer = Vec::new();
-				stdin().read_to_end(&mut buffer)?;
-				Box::new(Cursor::new(buffer))
-			},
-		};
-
-		// Note: while we would like the user to handle the exit themselves, we handle it here
-		// for backwards compatibility reasons.
-		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit();
-		std::thread::spawn(move || {
-			block_on(exit);
-			let _ = exit_send.send(());
-		});
-
-		let mut import_fut = builder(config)?
-			.import_blocks(file, false)
-			.compat();
-		let fut = futures::future::poll_fn(|cx| {
-			if exit_recv.try_recv().is_ok() {
-				return Poll::Ready(Ok(()));
-			}
-			Pin::new(&mut import_fut).poll(cx)
-		});
-
-		let mut runtime = tokio::runtime::Runtime::new().unwrap();
-		runtime.block_on(fut)?;
-		Ok(())
-	}
-}
-
-/// Command to check a block.
-pub struct CheckBlock<'a> {
-	params: CheckBlockCmd,
-	version: &'a VersionInfo,
-}
-
-impl<'a> CheckBlock<'a> {
-	/// Runs the command and imports to the chain.
-	pub fn run_with_builder<C, G, E, F, B, S, Exit>(
-		self,
-		builder: F,
-		spec_factory: S,
-		_exit: Exit,
-	) -> error::Result<()>
-		where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-			F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
-			B: ServiceBuilderCommand,
-			<<B as ServiceBuilderCommand>::Block as BlockT>::Hash: FromStr,
-			C: Default,
-			G: RuntimeGenesis,
-			E: ChainSpecExtension,
-			Exit: IntoExit
-	{
-		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
-		fill_import_params(&mut config, &self.params.import_params, sc_service::Roles::FULL)?;
-
-		let input = if self.params.input.starts_with("0x") { &self.params.input[2..] } else { &self.params.input[..] };
-		let block_id = match FromStr::from_str(input) {
-			Ok(hash) => BlockId::hash(hash),
-			Err(_) => match self.params.input.parse::<u32>() {
-				Ok(n) => BlockId::number((n as u32).into()),
-				Err(_) => return Err(error::Error::Input("Invalid hash or number specified".into())),
-			}
-		};
-
-		let start = std::time::Instant::now();
-		let check = builder(config)?
-			.check_block(block_id)
-			.compat();
-		let mut runtime = tokio::runtime::Runtime::new().unwrap();
-		runtime.block_on(check)?;
-		println!("Completed in {} ms.", start.elapsed().as_millis());
-		Ok(())
-	}
-}
-
-/// Command ready to purge the chain.
-pub struct ParseAndPreparePurge<'a> {
-	params: PurgeChainCmd,
-	version: &'a VersionInfo,
-}
-
-impl<'a> ParseAndPreparePurge<'a> {
-	/// Runs the command and purges the chain.
-	pub fn run<G, E, S>(
-		self,
-		spec_factory: S
-	) -> error::Result<()> where
-		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		let config = create_config_with_db_path::<(), _, _, _>(
-			spec_factory, &self.params.shared_params, self.version
-		)?;
-		let db_path = match config.database {
-			DatabaseConfig::Path { path, .. } => path,
-			_ => {
-				eprintln!("Cannot purge custom database implementation");
-				return Ok(());
-			}
-		};
-
-		if !self.params.yes {
-			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
-			stdout().flush().expect("failed to flush stdout");
-
-			let mut input = String::new();
-			stdin().read_line(&mut input)?;
-			let input = input.trim();
-
-			match input.chars().nth(0) {
-				Some('y') | Some('Y') => {},
-				_ => {
-					println!("Aborted");
-					return Ok(());
-				},
-			}
-		}
-
-		match fs::remove_dir_all(&db_path) {
-			Result::Ok(_) => {
-				println!("{:?} removed.", &db_path);
-				Ok(())
-			},
-			Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
-				eprintln!("{:?} did not exist.", &db_path);
-				Ok(())
-			},
-			Result::Err(err) => Result::Err(err.into())
-		}
-	}
-}
-
-/// Command ready to revert the chain.
-pub struct ParseAndPrepareRevert<'a> {
-	params: RevertCmd,
-	version: &'a VersionInfo,
-}
-
-impl<'a> ParseAndPrepareRevert<'a> {
-	/// Runs the command and reverts the chain.
-	pub fn run_with_builder<C, G, E, F, B, S>(
-		self,
-		builder: F,
-		spec_factory: S
-	) -> error::Result<()> where
-		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
-		B: ServiceBuilderCommand,
-		<<<<B as ServiceBuilderCommand>::Block as BlockT>::Header as HeaderT>
-			::Number as FromStr>::Err: Debug,
-		C: Default,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		let config = create_config_with_db_path(
-			spec_factory, &self.params.shared_params, self.version
-		)?;
-		let blocks = self.params.num.parse()?;
-		builder(config)?.revert_chain(blocks)?;
-		Ok(())
-	}
-}
-
-/// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
-/// of an optional network config storage directory.
-fn node_key_config<P>(params: NodeKeyParams, net_config_dir: &Option<P>)
-	-> error::Result<NodeKeyConfig>
-where
-	P: AsRef<Path>
-{
-	match params.node_key_type {
-		NodeKeyType::Ed25519 =>
-			params.node_key.as_ref().map(parse_ed25519_secret).unwrap_or_else(||
-				Ok(params.node_key_file
-					.or_else(|| net_config_file(net_config_dir, NODE_KEY_ED25519_FILE))
-					.map(sc_network::config::Secret::File)
-					.unwrap_or(sc_network::config::Secret::New)))
-				.map(NodeKeyConfig::Ed25519)
-	}
-}
-
-fn net_config_file<P>(net_config_dir: &Option<P>, name: &str) -> Option<PathBuf>
-where
-	P: AsRef<Path>
-{
-	net_config_dir.as_ref().map(|d| d.as_ref().join(name))
-}
-
-/// Create an error caused by an invalid node key argument.
-fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
-	error::Error::Input(format!("Invalid node key: {}", e))
-}
-
-/// Parse a Ed25519 secret key from a hex string into a `sc_network::Secret`.
-fn parse_ed25519_secret(hex: &String) -> error::Result<sc_network::config::Ed25519Secret> {
-	H256::from_str(&hex).map_err(invalid_node_key).and_then(|bytes|
-		sc_network::config::identity::ed25519::SecretKey::from_bytes(bytes)
-			.map(sc_network::config::Secret::Input)
-			.map_err(invalid_node_key))
-}
-
 /// Fill the given `PoolConfiguration` by looking at the cli parameters.
-fn fill_transaction_pool_configuration<C, G, E>(
-	options: &mut Configuration<C, G, E>,
+fn fill_transaction_pool_configuration<G, E>(
+	options: &mut Configuration<G, E>,
 	params: TransactionPoolParams,
 ) -> error::Result<()> {
 	// ready queue
@@ -706,10 +414,8 @@ fn fill_network_configuration(
 		];
 	}
 
-	config.public_addresses = Vec::new();
-
 	config.client_version = client_id;
-	config.node_key = node_key_config(cli.node_key_params, &config.net_config_path)?;
+	config.node_key = node_key::node_key_config(cli.node_key_params, &config.net_config_path)?;
 
 	config.in_peers = cli.in_peers;
 	config.out_peers = cli.out_peers;
@@ -731,12 +437,22 @@ fn input_keystore_password() -> Result<String, String> {
 		.map_err(|e| format!("{:?}", e))
 }
 
+/// Use in memory keystore config when it is not required at all.
+pub fn fill_config_keystore_in_memory<G, E>(config: &mut sc_service::Configuration<G, E>)
+	-> Result<(), String>
+{
+	match &mut config.keystore {
+		cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
+		_ => Err("Keystore config specified when it should not be!".into()),
+	}
+}
+
 /// Fill the password field of the given config instance.
-fn fill_config_keystore_password<C, G, E>(
-	config: &mut sc_service::Configuration<C, G, E>,
+fn fill_config_keystore_password_and_path<G, E>(
+	config: &mut sc_service::Configuration<G, E>,
 	cli: &RunCmd,
 ) -> Result<(), String> {
-	config.keystore_password = if cli.password_interactive {
+	let password = if cli.password_interactive {
 		#[cfg(not(target_os = "unknown"))]
 		{
 			Some(input_keystore_password()?.into())
@@ -751,24 +467,30 @@ fn fill_config_keystore_password<C, G, E>(
 		None
 	};
 
+	let path = cli.keystore_path.clone().or(
+		config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH)
+	);
+
+	config.keystore = KeystoreConfig::Path {
+		path: path.ok_or_else(|| "No `base_path` provided to create keystore path!")?,
+		password,
+	};
+
 	Ok(())
 }
 
 /// Put block import CLI params into `config` object.
-pub fn fill_import_params<C, G, E>(
-	config: &mut Configuration<C, G, E>,
+pub fn fill_import_params<G, E>(
+	config: &mut Configuration<G, E>,
 	cli: &ImportParams,
 	role: sc_service::Roles,
+	is_dev: bool,
 ) -> error::Result<()>
-	where
-		C: Default,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+where
+	G: RuntimeGenesis,
 {
-	match config.database {
-		DatabaseConfig::Path { ref mut cache_size, .. } =>
-			*cache_size = Some(cli.database_cache_size),
-		DatabaseConfig::Custom(_) => {},
+	if let Some(DatabaseConfig::Path { ref mut cache_size, .. }) = config.database {
+		*cache_size = Some(cli.database_cache_size);
 	}
 
 	config.state_cache_size = cli.state_cache_size;
@@ -798,34 +520,43 @@ pub fn fill_import_params<C, G, E>(
 	config.wasm_method = cli.wasm_method.into();
 
 	let exec = &cli.execution_strategies;
-	let exec_all_or = |strat: ExecutionStrategy| exec.execution.unwrap_or(strat).into();
+	let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
+		exec.execution.unwrap_or(if strat == default && is_dev {
+			ExecutionStrategy::Native
+		} else {
+			strat
+		}).into()
+	};
+
 	config.execution_strategies = ExecutionStrategies {
-		syncing: exec_all_or(exec.execution_syncing),
-		importing: exec_all_or(exec.execution_import_block),
-		block_construction: exec_all_or(exec.execution_block_construction),
-		offchain_worker: exec_all_or(exec.execution_offchain_worker),
-		other: exec_all_or(exec.execution_other),
+		syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
+		importing: exec_all_or(exec.execution_import_block, DEFAULT_EXECUTION_IMPORT_BLOCK),
+		block_construction:
+			exec_all_or(exec.execution_block_construction, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION),
+		offchain_worker:
+			exec_all_or(exec.execution_offchain_worker, DEFAULT_EXECUTION_OFFCHAIN_WORKER),
+		other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
 	};
 	Ok(())
 }
 
-fn create_run_node_config<C, G, E, S>(
-	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo,
-) -> error::Result<Configuration<C, G, E>>
+/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`
+pub fn update_config_for_running_node<G, E>(
+	mut config: &mut Configuration<G, E>,
+	cli: RunCmd,
+) -> error::Result<()>
 where
-	C: Default,
 	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
-	let mut config = create_config_with_db_path(spec_factory, &cli.shared_params, &version)?;
+	fill_config_keystore_password_and_path(&mut config, &cli)?;
 
-	fill_config_keystore_password(&mut config, &cli)?;
-
+	let keyring = cli.get_keyring();
 	let is_dev = cli.shared_params.dev;
-	let is_authority = cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some();
+	let is_light = cli.light;
+	let is_authority = (cli.validator || cli.sentry || is_dev || keyring.is_some())
+		&& !is_light;
 	let role =
-		if cli.light {
+		if is_light {
 			sc_service::Roles::LIGHT
 		} else if is_authority {
 			sc_service::Roles::AUTHORITY
@@ -833,29 +564,21 @@ where
 			sc_service::Roles::FULL
 		};
 
-	fill_import_params(&mut config, &cli.import_params, role)?;
+	fill_import_params(&mut config, &cli.import_params, role, is_dev)?;
 
-	config.impl_name = impl_name;
-	config.impl_commit = version.commit;
-	config.impl_version = version.version;
-
-	config.name = match cli.name.or(cli.keyring.account.map(|a| a.to_string())) {
-		None => generate_node_name(),
-		Some(name) => name,
+	config.name = match (cli.name.as_ref(), keyring) {
+		(Some(name), _) => name.to_string(),
+		(_, Some(keyring)) => keyring.to_string(),
+		(None, None) => generate_node_name(),
 	};
-	match is_node_name_valid(&config.name) {
-		Ok(_) => (),
-		Err(msg) => Err(
-			error::Error::Input(
-				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
-					config.name,
-					msg
-				)
+	if let Err(msg) = node_key::is_node_name_valid(&config.name) {
+		return Err(error::Error::Input(
+			format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
+				config.name,
+				msg,
 			)
-		)?
+		));
 	}
-
-	config.keystore_path = cli.keystore_path.or_else(|| config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH));
 
 	// set sentry mode (i.e. act as an authority but **never** actively participate)
 	config.sentry_mode = cli.sentry;
@@ -881,24 +604,30 @@ where
 
 	fill_transaction_pool_configuration(&mut config, cli.pool_config)?;
 
-	config.dev_key_seed = cli.keyring.account
+	config.dev_key_seed = keyring
 		.map(|a| format!("//{}", a)).or_else(|| {
-			if is_dev {
+			if is_dev && !is_light {
 				Some("//Alice".into())
 			} else {
 				None
 			}
 		});
 
-	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
-	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
-	let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
+	if config.rpc_http.is_none() || cli.rpc_port.is_some() {
+		let rpc_interface: &str = interface_str(cli.rpc_external, cli.unsafe_rpc_external, cli.validator)?;
+		config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
+	}
+	if config.rpc_ws.is_none() || cli.ws_port.is_some() {
+		let ws_interface: &str = interface_str(cli.ws_external, cli.unsafe_ws_external, cli.validator)?;
+		config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
+	}
 
-	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
-	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
-	config.grafana_port = Some(
-		parse_address(&format!("{}:{}", grafana_interface, 9955), cli.grafana_port)?
-	);
+	if config.grafana_port.is_none() || cli.grafana_port.is_some() {
+		let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
+		config.grafana_port = Some(
+			parse_address(&format!("{}:{}", grafana_interface, 9955), cli.grafana_port)?
+		);
+	}
 
 	config.rpc_ws_max_connections = cli.ws_max_connections;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
@@ -922,45 +651,35 @@ where
 		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
 
-	config.tracing_targets = cli.tracing_targets.into();
-	config.tracing_receiver = cli.tracing_receiver.into();
+	config.tracing_targets = cli.import_params.tracing_targets.into();
+	config.tracing_receiver = cli.import_params.tracing_receiver.into();
 
 	// Imply forced authoring on --dev
 	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
 
-	Ok(config)
+	Ok(())
 }
 
-/// Creates a configuration including the database path.
-pub fn create_config_with_db_path<C, G, E, S>(
-	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
-) -> error::Result<Configuration<C, G, E>>
-where
-	C: Default,
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-{
-	let spec = load_spec(cli, spec_factory)?;
-	let base_path = base_path(cli, version);
+fn interface_str(
+	is_external: bool,
+	is_unsafe_external: bool,
+	is_validator: bool,
+) -> Result<&'static str, error::Error> {
+	if is_external && is_validator {
+		return Err(error::Error::Input("--rpc-external and --ws-external options shouldn't be \
+		used if the node is running as a validator. Use `--unsafe-rpc-external` if you understand \
+		the risks. See the options description for more information.".to_owned()));
+	}
 
-	let mut config = sc_service::Configuration::default_with_spec_and_base_path(
-		spec.clone(),
-		Some(base_path),
-	);
+	if is_external || is_unsafe_external {
+		log::warn!("It isn't safe to expose RPC publicly without a proxy server that filters \
+		available set of RPC methods.");
 
-	config.database = DatabaseConfig::Path {
-		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
-		cache_size: None,
-	};
-
-	Ok(config)
+		Ok("0.0.0.0")
+	} else {
+		Ok("127.0.0.1")
+	}
 }
-
-/// Internal trait used to cast to a dynamic type that implements Read and Seek.
-trait ReadPlusSeek: Read + Seek {}
-
-impl<T: Read + Seek> ReadPlusSeek for T {}
 
 fn parse_address(
 	address: &str,
@@ -976,7 +695,8 @@ fn parse_address(
 	Ok(address)
 }
 
-fn init_logger(pattern: &str) {
+/// Initialize the logger
+pub fn init_logger(pattern: &str) {
 	use ansi_term::Colour;
 
 	let mut builder = env_logger::Builder::new();
@@ -1048,116 +768,112 @@ fn kill_color(s: &str) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_network::config::identity::ed25519;
+
+	const TEST_VERSION_INFO: &'static VersionInfo = &VersionInfo {
+		name: "node-test",
+		version: "0.1.0",
+		commit: "some_commit",
+		executable_name: "node-test",
+		description: "description",
+		author: "author",
+		support_url: "http://example.org",
+		copyright_start_year: 2020,
+	};
 
 	#[test]
-	fn tests_node_name_good() {
-		assert!(is_node_name_valid("short name").is_ok());
+	fn keystore_path_is_generated_correctly() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			Vec::new(),
+			None,
+			None,
+			None,
+			None::<()>,
+		);
+
+		for keystore_path in vec![None, Some("/keystore/path")] {
+			let args: Vec<&str> = vec![];
+			let mut run_cmds = RunCmd::from_iter(args);
+			run_cmds.keystore_path = keystore_path.clone().map(PathBuf::from);
+
+			let mut node_config = Configuration::default();
+			node_config.config_dir = Some(PathBuf::from("/test/path"));
+			node_config.chain_spec = Some(chain_spec.clone());
+			update_config_for_running_node(
+				&mut node_config,
+				run_cmds.clone(),
+			).unwrap();
+
+			let expected_path = match keystore_path {
+				Some(path) => PathBuf::from(path),
+				None => PathBuf::from("/test/path/chains/test-id/keystore"),
+			};
+
+			assert_eq!(expected_path, node_config.keystore.path().unwrap().to_owned());
+		}
 	}
 
 	#[test]
-	fn tests_node_name_bad() {
-		assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
-		assert!(is_node_name_valid("Dots.not.Ok").is_err());
-		assert!(is_node_name_valid("http://visit.me").is_err());
-		assert!(is_node_name_valid("https://visit.me").is_err());
-		assert!(is_node_name_valid("www.visit.me").is_err());
-		assert!(is_node_name_valid("email@domain").is_err());
+	fn ensure_load_spec_provide_defaults() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			vec!["boo".to_string()],
+			Some(TelemetryEndpoints::new(vec![("foo".to_string(), 42)])),
+			None,
+			None,
+			None::<()>,
+		);
+
+		let args: Vec<&str> = vec![];
+		let cli = RunCmd::from_iter(args);
+
+		let mut config = Configuration::new(TEST_VERSION_INFO);
+		load_spec(&mut config, &cli.shared_params, |_| Ok(Some(chain_spec))).unwrap();
+
+		assert!(config.chain_spec.is_some());
+		assert!(!config.network.boot_nodes.is_empty());
+		assert!(config.telemetry_endpoints.is_some());
 	}
 
 	#[test]
-	fn test_node_key_config_input() {
-		fn secret_input(net_config_dir: Option<String>) -> error::Result<()> {
-			NodeKeyType::variants().into_iter().try_for_each(|t| {
-				let node_key_type = NodeKeyType::from_str(t).unwrap();
-				let sk = match node_key_type {
-					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
-				};
-				let params = NodeKeyParams {
-					node_key_type,
-					node_key: Some(format!("{:x}", H256::from_slice(sk.as_ref()))),
-					node_key_file: None
-				};
-				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Ed25519(sc_network::config::Secret::Input(ref ski))
-						if node_key_type == NodeKeyType::Ed25519 &&
-							&sk[..] == ski.as_ref() => Ok(()),
-					_ => Err(error::Error::Input("Unexpected node key config".into()))
-				})
-			})
+	fn ensure_update_config_for_running_node_provides_defaults() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			vec![],
+			None,
+			None,
+			None,
+			None::<()>,
+		);
+
+		let args: Vec<&str> = vec![];
+		let cli = RunCmd::from_iter(args);
+
+		let mut config = Configuration::new(TEST_VERSION_INFO);
+		init(&cli.shared_params, &TEST_VERSION_INFO).unwrap();
+		init_config(
+			&mut config,
+			&cli.shared_params,
+			&TEST_VERSION_INFO,
+			|_| Ok(Some(chain_spec)),
+		).unwrap();
+		update_config_for_running_node(&mut config, cli).unwrap();
+
+		assert!(config.config_dir.is_some());
+		assert!(config.database.is_some());
+		if let Some(DatabaseConfig::Path { ref cache_size, .. }) = config.database {
+			assert!(cache_size.is_some());
+		} else {
+			panic!("invalid config.database variant");
 		}
-
-		assert!(secret_input(None).is_ok());
-		assert!(secret_input(Some("x".to_string())).is_ok());
-	}
-
-	#[test]
-	fn test_node_key_config_file() {
-		fn secret_file(net_config_dir: Option<String>) -> error::Result<()> {
-			NodeKeyType::variants().into_iter().try_for_each(|t| {
-				let node_key_type = NodeKeyType::from_str(t).unwrap();
-				let tmp = tempfile::Builder::new().prefix("alice").tempdir()?;
-				let file = tmp.path().join(format!("{}_mysecret", t)).to_path_buf();
-				let params = NodeKeyParams {
-					node_key_type,
-					node_key: None,
-					node_key_file: Some(file.clone())
-				};
-				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
-						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
-					_ => Err(error::Error::Input("Unexpected node key config".into()))
-				})
-			})
-		}
-
-		assert!(secret_file(None).is_ok());
-		assert!(secret_file(Some("x".to_string())).is_ok());
-	}
-
-	#[test]
-	fn test_node_key_config_default() {
-		fn with_def_params<F>(f: F) -> error::Result<()>
-		where
-			F: Fn(NodeKeyParams) -> error::Result<()>
-		{
-			NodeKeyType::variants().into_iter().try_for_each(|t| {
-				let node_key_type = NodeKeyType::from_str(t).unwrap();
-				f(NodeKeyParams {
-					node_key_type,
-					node_key: None,
-					node_key_file: None
-				})
-			})
-		}
-
-		fn no_config_dir() -> error::Result<()> {
-			with_def_params(|params| {
-				let typ = params.node_key_type;
-				node_key_config::<String>(params, &None)
-					.and_then(|c| match c {
-						NodeKeyConfig::Ed25519(sc_network::config::Secret::New)
-							if typ == NodeKeyType::Ed25519 => Ok(()),
-						_ => Err(error::Error::Input("Unexpected node key config".into()))
-					})
-			})
-		}
-
-		fn some_config_dir(net_config_dir: String) -> error::Result<()> {
-			with_def_params(|params| {
-				let dir = PathBuf::from(net_config_dir.clone());
-				let typ = params.node_key_type;
-				node_key_config(params, &Some(net_config_dir.clone()))
-					.and_then(move |c| match c {
-						NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
-							if typ == NodeKeyType::Ed25519 &&
-								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),
-						_ => Err(error::Error::Input("Unexpected node key config".into()))
-				})
-			})
-		}
-
-		assert!(no_config_dir().is_ok());
-		assert!(some_config_dir("x".to_string()).is_ok());
+		assert!(!config.name.is_empty());
+		assert!(config.network.config_path.is_some());
+		assert!(!config.network.listen_addresses.is_empty());
 	}
 }

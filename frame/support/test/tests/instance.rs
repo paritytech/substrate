@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -67,8 +67,8 @@ mod module1 {
 			T::BlockNumber: From<u32> + std::fmt::Display
 		{
 			pub Value config(value): T::GenericType;
-			pub Map: map u32 => u64;
-			pub LinkedMap: linked_map u32 => u64;
+			pub Map: map hasher(blake2_256) u32 => u64;
+			pub LinkedMap: linked_map hasher(blake2_256) u32 => u64;
 		}
 
 		add_extra_genesis {
@@ -136,9 +136,9 @@ mod module2 {
 	frame_support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
-			pub Map config(map): map u64 => u64;
-			pub LinkedMap config(linked_map): linked_map u64 => Vec<u8>;
-			pub DoubleMap config(double_map): double_map u64, blake2_256(u64) => u64;
+			pub Map config(map): map hasher(blake2_256) u64 => u64;
+			pub LinkedMap config(linked_map): linked_map hasher(blake2_256) u64 => Vec<u8>;
+			pub DoubleMap config(double_map): double_map hasher(blake2_256) u64, hasher(blake2_256) u64 => u64;
 		}
 	}
 
@@ -348,8 +348,8 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(Value::get(), 0);
 
 		let key = 1;
-		assert_eq!(Map::exists(0), true);
-		assert_eq!(Map::exists(key), false);
+		assert_eq!(Map::contains_key(0), true);
+		assert_eq!(Map::contains_key(key), false);
 		Map::insert(key, 1);
 		assert_eq!(Map::get(key), 1);
 		assert_eq!(Map::take(key), 1);
@@ -357,11 +357,11 @@ fn storage_with_instance_basic_operation() {
 		Map::mutate(key, |a| *a=2);
 		assert_eq!(Map::get(key), 2);
 		Map::remove(key);
-		assert_eq!(Map::exists(key), false);
+		assert_eq!(Map::contains_key(key), false);
 		assert_eq!(Map::get(key), 0);
 
-		assert_eq!(LinkedMap::exists(0), true);
-		assert_eq!(LinkedMap::exists(key), false);
+		assert_eq!(LinkedMap::contains_key(0), true);
+		assert_eq!(LinkedMap::contains_key(key), false);
 		LinkedMap::insert(key, vec![1]);
 		assert_eq!(LinkedMap::enumerate().count(), 2);
 		assert_eq!(LinkedMap::get(key), vec![1]);
@@ -373,17 +373,17 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(LinkedMap::get(key), vec![2]);
 		LinkedMap::remove(key);
 		assert_eq!(LinkedMap::enumerate().count(), 1);
-		assert_eq!(LinkedMap::exists(key), false);
+		assert_eq!(LinkedMap::contains_key(key), false);
 		assert_eq!(LinkedMap::get(key), vec![]);
-		assert_eq!(LinkedMap::exists(key), false);
+		assert_eq!(LinkedMap::contains_key(key), false);
 		assert_eq!(LinkedMap::enumerate().count(), 1);
 		LinkedMap::insert(key, &vec![1]);
 		assert_eq!(LinkedMap::enumerate().count(), 2);
 
 		let key1 = 1;
 		let key2 = 1;
-		assert_eq!(DoubleMap::exists(&0, &0), true);
-		assert_eq!(DoubleMap::exists(&key1, &key2), false);
+		assert_eq!(DoubleMap::contains_key(&0, &0), true);
+		assert_eq!(DoubleMap::contains_key(&key1, &key2), false);
 		DoubleMap::insert(&key1, &key2, &1);
 		assert_eq!(DoubleMap::get(&key1, &key2), 1);
 		assert_eq!(DoubleMap::take(&key1, &key2), 1);

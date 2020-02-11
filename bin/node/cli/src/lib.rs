@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -39,11 +39,15 @@ mod browser;
 mod cli;
 #[cfg(feature = "cli")]
 mod factory_impl;
+#[cfg(feature = "cli")]
+mod command;
 
 #[cfg(feature = "browser")]
 pub use browser::*;
 #[cfg(feature = "cli")]
 pub use cli::*;
+#[cfg(feature = "cli")]
+pub use command::*;
 
 /// The chain specification option.
 #[derive(Clone, Debug, PartialEq)]

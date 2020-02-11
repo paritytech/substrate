@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -34,9 +34,9 @@ use futures::future::{ready, FutureExt, TryFutureExt};
 use sc_rpc_api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
-use sp_core::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
-use sp_api::ConstructRuntimeApi;
-use sp_runtime::{generic, traits::{self, ProvideRuntimeApi}};
+use sp_core::{Bytes, traits::BareCryptoStorePtr};
+use sp_api::ProvideRuntimeApi;
+use sp_runtime::{generic, traits};
 use sp_transaction_pool::{
 	TransactionPool, InPoolTransaction, TransactionStatus,
 	BlockHash, TxHash, TransactionFor, error::IntoPoolError,
@@ -76,15 +76,18 @@ impl<B, E, P, Block: traits::Block, RA> Author<B, E, P, Block, RA> {
 	}
 }
 
-impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P, Block, RA> where
-	Block: traits::Block<Hash=H256>,
-	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: sc_client_api::CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
-	P: TransactionPool<Block=Block, Hash=Block::Hash> + Sync + Send + 'static,
-	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
-	Client<B, E, Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		SessionKeys<Block, Error = ClientError>,
+impl<B, E, P, RA> AuthorApi<TxHash<P>, BlockHash<P>>
+	for Author<B, E, P, <P as TransactionPool>::Block, RA>
+where
+	B: sc_client_api::backend::Backend<<P as TransactionPool>::Block> + Send + Sync + 'static,
+	E: sc_client::CallExecutor<<P as TransactionPool>::Block> + Send + Sync + 'static,
+	P: TransactionPool + Sync + Send + 'static,
+	P::Block: traits::Block,
+	P::Error: 'static,
+	RA: Send + Sync + 'static,
+	Client<B, E, P::Block, RA>: ProvideRuntimeApi<P::Block>,
+	<Client<B, E, P::Block, RA> as ProvideRuntimeApi<P::Block>>::Api:
+		SessionKeys<P::Block, Error = ClientError>,
 {
 	type Metadata = crate::metadata::Metadata;
 
@@ -102,11 +105,27 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 	}
 
 	fn rotate_keys(&self) -> Result<Bytes> {
-		let best_block_hash = self.client.info().chain.best_hash;
+		let best_block_hash = self.client.chain_info().best_hash;
 		self.client.runtime_api().generate_session_keys(
 			&generic::BlockId::Hash(best_block_hash),
 			None,
 		).map(Into::into).map_err(|e| Error::Client(Box::new(e)))
+	}
+
+	fn has_session_keys(&self, session_keys: Bytes) -> Result<bool> {
+		let best_block_hash = self.client.chain_info().best_hash;
+		let keys = self.client.runtime_api().decode_session_keys(
+			&generic::BlockId::Hash(best_block_hash),
+			session_keys.to_vec(),
+		).map_err(|e| Error::Client(Box::new(e)))?
+			.ok_or_else(|| Error::InvalidSessionKeys)?;
+
+		Ok(self.keystore.read().has_keys(&keys))
+	}
+
+	fn has_key(&self, public_key: Bytes, key_type: String) -> Result<bool> {
+		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
+		Ok(self.keystore.read().has_keys(&[(public_key.to_vec(), key_type)]))
 	}
 
 	fn submit_extrinsic(&self, ext: Bytes) -> FutureResult<TxHash<P>> {
@@ -114,7 +133,7 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 			Ok(xt) => xt,
 			Err(err) => return Box::new(result(Err(err.into()))),
 		};
-		let best_block_hash = self.client.info().chain.best_hash;
+		let best_block_hash = self.client.chain_info().best_hash;
 		Box::new(self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
 			.compat()
@@ -157,7 +176,7 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 		xt: Bytes,
 	) {
 		let submit = || -> Result<_> {
-			let best_block_hash = self.client.info().chain.best_hash;
+			let best_block_hash = self.client.chain_info().best_hash;
 			let dxt = TransactionFor::<P>::decode(&mut &xt[..])
 				.map_err(error::Error::from)?;
 			Ok(

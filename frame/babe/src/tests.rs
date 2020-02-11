@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -34,7 +34,7 @@ fn make_pre_digest(
 	vrf_output: [u8; sp_consensus_babe::VRF_OUTPUT_LENGTH],
 	vrf_proof: [u8; sp_consensus_babe::VRF_PROOF_LENGTH],
 ) -> Digest {
-	let digest_data = sp_consensus_babe::RawBabePreDigest::Primary {
+	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary {
 		authority_index,
 		slot_number,
 		vrf_output,
@@ -81,7 +81,13 @@ fn first_block_epoch_zero_start() {
 		);
 
 		assert_eq!(Babe::genesis_slot(), 0);
-		System::initialize(&1, &Default::default(), &Default::default(), &pre_digest);
+		System::initialize(
+			&1,
+			&Default::default(),
+			&Default::default(),
+			&pre_digest,
+			Default::default(),
+		);
 
 		// see implementation of the function for details why: we issue an
 		// epoch-change digest but don't do it via the normal session mechanism.
@@ -104,7 +110,7 @@ fn first_block_epoch_zero_start() {
 
 		let authorities = Babe::authorities();
 		let consensus_log = sp_consensus_babe::ConsensusLog::NextEpochData(
-			sp_consensus_babe::NextEpochDescriptor {
+			sp_consensus_babe::digests::NextEpochDescriptor {
 				authorities,
 				randomness: Babe::randomness(),
 			}

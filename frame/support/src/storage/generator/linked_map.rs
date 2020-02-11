@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -326,7 +326,7 @@ where
 
 	type Enumerator = Enumerator<K, V, G::KeyFormat>;
 
-	fn exists<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool {
+	fn contains_key<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool {
 		unhashed::exists(Self::storage_linked_map_final_key(key).as_ref())
 	}
 
@@ -433,6 +433,8 @@ where
 		}
 	}
 
+	/// The translation happens in-place, new keys are inserted at the same time as old keys are
+	/// removed, thus new keys must not collide with still remaining old keys.
 	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), Option<K2>>
 		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> K, TV: Fn(V2) -> V
 	{

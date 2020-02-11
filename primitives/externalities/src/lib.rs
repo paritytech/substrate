@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -202,6 +202,14 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Returns the SCALE encoded hash.
 	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
+
+	fn wipe(&mut self) {
+		unimplemented!()
+	}
+
+	fn commit(&mut self) {
+		unimplemented!()
+	}
 }
 
 /// Extension for the [`Externalities`] trait.

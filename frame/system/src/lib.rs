@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -106,23 +106,20 @@ use sp_runtime::{
 	traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, BadOrigin, SaturatedConversion,
-		MaybeSerialize, MaybeSerializeDeserialize, StaticLookup, One, Bounded,
+		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
 	},
 };
 
-use sp_core::storage::well_known_keys;
+use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
-	traits::{Contains, Get, ModuleToIndex},
+	traits::{Contains, Get, ModuleToIndex, OnReapAccount},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 };
 use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
-
-#[cfg(any(feature = "std", test))]
-use sp_core::ChangesTrieConfiguration;
 
 pub mod offchain;
 
@@ -158,7 +155,9 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 pub trait Trait: 'static + Eq + Clone {
 	/// The aggregated `Origin` type used by dispatchable calls.
 	type Origin:
-		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
+		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+		+ From<RawOrigin<Self::AccountId>>
+		+ Clone;
 
 	/// The aggregated `Call` type.
 	type Call: Debug;
@@ -172,12 +171,12 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The block number type used by the runtime.
 	type BlockNumber:
 		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleArithmetic
-		+ Default + Bounded + Copy + sp_std::hash::Hash + sp_std::str::FromStr;
+		+ Default + Bounded + Copy + sp_std::hash::Hash + sp_std::str::FromStr + MaybeMallocSizeOf;
 
 	/// The output of the `Hashing` function.
 	type Hash:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps
-		+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
+		+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
@@ -257,11 +256,58 @@ decl_module! {
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
-		/// Set the new code.
+		/// Set the new runtime code.
 		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
-		pub fn set_code(origin, new: Vec<u8>) {
+		pub fn set_code(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
-			storage::unhashed::put_raw(well_known_keys::CODE, &new);
+
+			let current_version = T::Version::get();
+			let new_version = sp_io::misc::runtime_version(&code)
+				.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
+				.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
+
+			if new_version.spec_name != current_version.spec_name {
+				Err(Error::<T>::InvalidSpecName)?
+			}
+
+			if new_version.spec_version < current_version.spec_version {
+				Err(Error::<T>::SpecVersionNotAllowedToDecrease)?
+			} else if new_version.spec_version == current_version.spec_version {
+				if new_version.impl_version < current_version.impl_version {
+					Err(Error::<T>::ImplVersionNotAllowedToDecrease)?
+				} else if new_version.impl_version == current_version.impl_version {
+					Err(Error::<T>::SpecOrImplVersionNeedToIncrease)?
+				}
+			}
+
+			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			Self::deposit_event(Event::CodeUpdated);
+		}
+
+		/// Set the new runtime code without doing any checks of the given `code`.
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		pub fn set_code_without_checks(origin, code: Vec<u8>) {
+			ensure_root(origin)?;
+			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			Self::deposit_event(Event::CodeUpdated);
+		}
+
+		/// Set the new changes trie configuration.
+		#[weight = SimpleDispatchInfo::FixedOperational(20_000)]
+		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
+			ensure_root(origin)?;
+			match changes_trie_config.clone() {
+				Some(changes_trie_config) => storage::unhashed::put_raw(
+					well_known_keys::CHANGES_TRIE_CONFIG,
+					&changes_trie_config.encode(),
+				),
+				None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
+			}
+
+			let log = generic::DigestItem::ChangesTrieSignal(
+				generic::ChangesTrieSignal::NewConfiguration(changes_trie_config),
+			);
+			Self::deposit_log(log.into());
 		}
 
 		/// Set some items of storage.
@@ -320,12 +366,31 @@ decl_event!(
 		ExtrinsicSuccess(DispatchInfo),
 		/// An extrinsic failed.
 		ExtrinsicFailed(DispatchError, DispatchInfo),
+		/// `:code` was updated.
+		CodeUpdated,
 	}
 );
 
 decl_error! {
 	/// Error for the System module
-	pub enum Error for Module<T: Trait> {}
+	pub enum Error for Module<T: Trait> {
+		/// The name of specification does not match between the current runtime
+		/// and the new runtime.
+		InvalidSpecName,
+		/// The specification version is not allowed to decrease between the current runtime
+		/// and the new runtime.
+		SpecVersionNotAllowedToDecrease,
+		/// The implementation version is not allowed to decrease between the current runtime
+		/// and the new runtime.
+		ImplVersionNotAllowedToDecrease,
+		/// The specification or the implementation version need to increase between the
+		/// current runtime and the new runtime.
+		SpecOrImplVersionNeedToIncrease,
+		/// Failed to extract the runtime version from the new runtime.
+		///
+		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
+		FailedToExtractRuntimeVersion,
+	}
 }
 
 /// Origin for the System module.
@@ -371,7 +436,7 @@ type EventIndex = u32;
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// Extrinsics nonce for accounts.
-		pub AccountNonce get(fn account_nonce): map T::AccountId => T::Index;
+		pub AccountNonce get(fn account_nonce): map hasher(blake2_256) T::AccountId => T::Index;
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
 		/// Total weight for all extrinsics put together, for the current block.
@@ -379,9 +444,10 @@ decl_storage! {
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
 		/// Map of block numbers to block hashes.
-		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
+		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
+			map hasher(blake2_256) T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
-		ExtrinsicData get(fn extrinsic_data): map u32 => Vec<u8>;
+		ExtrinsicData get(fn extrinsic_data): map hasher(blake2_256) u32 => Vec<u8>;
 		/// The current block number being processed. Set by `execute_block`.
 		Number get(fn block_number) build(|_| 1.into()): T::BlockNumber;
 		/// Hash of the previous block.
@@ -403,9 +469,6 @@ decl_storage! {
 		/// Mapping between a topic (represented by T::Hash) and a vector of indexes
 		/// of events in the `<Events<T>>` list.
 		///
-		/// The first key serves no purpose. This field is declared as double_map just
-		/// for convenience of using `remove_prefix`.
-		///
 		/// All topic vectors have deterministic storage locations depending on the topic. This
 		/// allows light-clients to leverage the changes trie storage tracking mechanism and
 		/// in case of changes fetch the list of events of interest.
@@ -413,8 +476,7 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
-			=> Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -469,7 +531,7 @@ pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, Acco
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	Who: Contains<AccountId>,
-	AccountId: PartialEq + Clone,
+	AccountId: PartialEq + Clone + Ord,
 > EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -533,6 +595,27 @@ pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), BadOrig
 	}
 }
 
+/// A type of block initialization to perform.
+pub enum InitKind {
+	/// Leave inspectable storage entries in state.
+	///
+	/// i.e. `Events` are not being reset.
+	/// Should only be used for off-chain calls,
+	/// regular block execution should clear those.
+	Inspection,
+
+	/// Reset also inspectable storage entries.
+	///
+	/// This should be used for regular block execution.
+	Full,
+}
+
+impl Default for InitKind {
+	fn default() -> Self {
+		InitKind::Full
+	}
+}
+
 impl<T: Trait> Module<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {
@@ -581,7 +664,7 @@ impl<T: Trait> Module<T> {
 		let block_no = Self::block_number();
 		for topic in topics {
 			// The same applies here.
-			if <EventTopics<T>>::append(&(), topic, &[(block_no, event_idx)]).is_err() {
+			if <EventTopics<T>>::append(topic, &[(block_no, event_idx)]).is_err() {
 				return;
 			}
 		}
@@ -635,6 +718,7 @@ impl<T: Trait> Module<T> {
 		parent_hash: &T::Hash,
 		txs_root: &T::Hash,
 		digest: &DigestOf<T>,
+		kind: InitKind,
 	) {
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -643,9 +727,12 @@ impl<T: Trait> Module<T> {
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
-		<Events<T>>::kill();
-		EventCount::kill();
-		<EventTopics<T>>::remove_prefix(&());
+
+		if let InitKind::Full = kind {
+			<Events<T>>::kill();
+			EventCount::kill();
+			<EventTopics<T>>::remove_all();
+		}
 	}
 
 	/// Remove temporary "environment" entries in storage.
@@ -765,7 +852,10 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(
 			match r {
 				Ok(()) => Event::ExtrinsicSuccess(info),
-				Err(err) => Event::ExtrinsicFailed(err.clone(), info),
+				Err(err) => {
+					sp_runtime::print(err);
+					Event::ExtrinsicFailed(err.clone(), info)
+				},
 			}
 		);
 
@@ -788,6 +878,13 @@ impl<T: Trait> Module<T> {
 			.map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
+	}
+}
+
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	/// Remove the nonce for the account. Account is considered fully removed from the system.
+	fn on_reap_account(who: &T::AccountId) {
+		<AccountNonce<T>>::remove(who);
 	}
 }
 
@@ -863,6 +960,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	type AdditionalSigned = ();
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckWeight";
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
@@ -943,6 +1041,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AdditionalSigned = ();
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckNonce";
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
@@ -1027,6 +1126,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type AdditionalSigned = T::Hash;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckEra";
 
 	fn validate(
 		&self,
@@ -1046,7 +1146,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
 		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
-		if !<BlockHash<T>>::exists(n) {
+		if !<BlockHash<T>>::contains_key(n) {
 			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {
 			Ok(<Module<T>>::block_hash(n))
@@ -1083,6 +1183,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AdditionalSigned = T::Hash;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckGenesis";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
@@ -1118,6 +1219,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
 	type AdditionalSigned = u32;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckVersion";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok(<Module<T>>::runtime_version().spec_version)
@@ -1159,6 +1261,14 @@ mod tests {
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 		pub const MaximumBlockLength: u32 = 1024;
+		pub const Version: RuntimeVersion = RuntimeVersion {
+			spec_name: sp_version::create_runtime_str!("test"),
+			impl_name: sp_version::create_runtime_str!("system-test"),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_version::create_apis_vec!([]),
+		};
 	}
 
 	impl Trait for Test {
@@ -1176,7 +1286,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
-		type Version = ();
+		type Version = Version;
 		type ModuleToIndex = ();
 	}
 
@@ -1185,6 +1295,7 @@ mod tests {
 			match e {
 				Event::ExtrinsicSuccess(..) => 100,
 				Event::ExtrinsicFailed(..) => 101,
+				Event::CodeUpdated => 102,
 			}
 		}
 	}
@@ -1215,7 +1326,13 @@ mod tests {
 	#[test]
 	fn deposit_event_should_work() {
 		new_test_ext().execute_with(|| {
-			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			System::initialize(
+				&1,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+				InitKind::Full,
+			);
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
 			System::finalize();
@@ -1230,7 +1347,13 @@ mod tests {
 				]
 			);
 
-			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			System::initialize(
+				&2,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+				InitKind::Full,
+			);
 			System::deposit_event(42u16);
 			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
 			System::note_applied_extrinsic(&Err(DispatchError::BadOrigin), 0, Default::default());
@@ -1259,6 +1382,7 @@ mod tests {
 				&[0u8; 32].into(),
 				&[0u8; 32].into(),
 				&Default::default(),
+				InitKind::Full,
 			);
 			System::note_finished_extrinsics();
 
@@ -1300,15 +1424,15 @@ mod tests {
 			// Check that the topic-events mapping reflects the deposited topics.
 			// Note that these are indexes of the events.
 			assert_eq!(
-				System::event_topics(&(), &topics[0]),
+				System::event_topics(&topics[0]),
 				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)],
 			);
 			assert_eq!(
-				System::event_topics(&(), &topics[1]),
+				System::event_topics(&topics[1]),
 				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)],
 			);
 			assert_eq!(
-				System::event_topics(&(), &topics[2]),
+				System::event_topics(&topics[2]),
 				vec![(BLOCK_NUMBER, 0)],
 			);
 		});
@@ -1324,6 +1448,7 @@ mod tests {
 					&[n as u8 - 1; 32].into(),
 					&[0u8; 32].into(),
 					&Default::default(),
+					InitKind::Full,
 				);
 
 				System::finalize();
@@ -1459,7 +1584,7 @@ mod tests {
 				.validate(&1, CALL, op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, Bounded::max_value());
+			assert_eq!(priority, u64::max_value());
 		})
 	}
 
@@ -1517,5 +1642,71 @@ mod tests {
 
 			assert_eq!(ext.validate(&1, CALL, normal, len).unwrap().longevity, 15);
 		})
+	}
+
+
+	#[test]
+	fn set_code_checks_works() {
+		struct CallInWasm(Vec<u8>);
+
+		impl sp_core::traits::CallInWasm for CallInWasm {
+			fn call_in_wasm(
+				&self,
+				_: &[u8],
+				_: &str,
+				_: &[u8],
+				_: &mut dyn sp_externalities::Externalities,
+			) -> Result<Vec<u8>, String> {
+				Ok(self.0.clone())
+			}
+		}
+
+		let test_data = vec![
+			("test", 1, 2, Ok(())),
+			("test", 1, 1, Err(Error::<Test>::SpecOrImplVersionNeedToIncrease)),
+			("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
+			("test", 2, 1, Ok(())),
+			("test", 0, 1, Err(Error::<Test>::SpecVersionNotAllowedToDecrease)),
+			("test", 1, 0, Err(Error::<Test>::ImplVersionNotAllowedToDecrease)),
+		];
+
+		for (spec_name, spec_version, impl_version, expected) in test_data.into_iter() {
+			let version = RuntimeVersion {
+				spec_name: spec_name.into(),
+				spec_version,
+				impl_version,
+				..Default::default()
+			};
+			let call_in_wasm = CallInWasm(version.encode());
+
+			let mut ext = new_test_ext();
+			ext.register_extension(sp_core::traits::CallInWasmExt::new(call_in_wasm));
+			ext.execute_with(|| {
+				let res = System::set_code(
+					RawOrigin::Root.into(),
+					vec![1, 2, 3, 4],
+				);
+
+				assert_eq!(expected.map_err(DispatchError::from), res);
+			});
+		}
+	}
+
+	#[test]
+	fn set_code_with_real_wasm_blob() {
+		let executor = substrate_test_runtime_client::new_native_executor();
+		let mut ext = new_test_ext();
+		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
+		ext.execute_with(|| {
+			System::set_code(
+				RawOrigin::Root.into(),
+				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
+			).unwrap();
+
+			assert_eq!(
+				System::events(),
+				vec![EventRecord { phase: Phase::ApplyExtrinsic(0), event: 102u16, topics: vec![] }],
+			);
+		});
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -36,7 +36,7 @@ pub struct GenesisConfig {
 
 impl GenesisConfig {
 	pub fn new(
-		support_changes_trie: bool,
+		changes_trie_config: Option<ChangesTrieConfiguration>,
 		authorities: Vec<AuthorityId>,
 		endowed_accounts: Vec<AccountId>,
 		balance: u64,
@@ -44,10 +44,7 @@ impl GenesisConfig {
 		extra_storage: Storage,
 	) -> Self {
 		GenesisConfig {
-			changes_trie_config: match support_changes_trie {
-				true => Some(super::changes_trie_config()),
-				false => None,
-			},
+			changes_trie_config,
 			authorities: authorities.clone(),
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,

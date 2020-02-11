@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -273,6 +273,7 @@ impl sp_std::fmt::Debug for DefaultByteGetter {
 pub enum StorageHasher {
 	Blake2_128,
 	Blake2_256,
+	Blake2_128Concat,
 	Twox128,
 	Twox256,
 	Twox64Concat,
@@ -315,10 +316,20 @@ pub struct StorageMetadata {
 	pub entries: DecodeDifferent<&'static [StorageEntryMetadata], Vec<StorageEntryMetadata>>,
 }
 
+/// Metadata prefixed by a u32 for reserved usage
 #[derive(Eq, Encode, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-/// Metadata prefixed by a u32 for reserved usage
 pub struct RuntimeMetadataPrefixed(pub u32, pub RuntimeMetadata);
+
+/// Metadata of the extrinsic used by the runtime.
+#[derive(Eq, Encode, PartialEq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Decode, Serialize))]
+pub struct ExtrinsicMetadata {
+	/// Extrinsic version.
+	pub version: u8,
+	/// The signed extensions in the order they appear in the extrinsic.
+	pub signed_extensions: Vec<DecodeDifferentStr>,
+}
 
 /// The metadata of a runtime.
 /// The version ID encoded/decoded through
@@ -344,8 +355,12 @@ pub enum RuntimeMetadata {
 	V7(RuntimeMetadataDeprecated),
 	/// Version 8 for runtime metadata. No longer used.
 	V8(RuntimeMetadataDeprecated),
-	/// Version 9 for runtime metadata.
-	V9(RuntimeMetadataV9),
+	/// Version 9 for runtime metadata. No longer used.
+	V9(RuntimeMetadataDeprecated),
+	/// Version 10 for runtime metadata. No longer used.
+	V10(RuntimeMetadataDeprecated),
+	/// Version 11 for runtime metadata.
+	V11(RuntimeMetadataV11),
 }
 
 /// Enum that should fail.
@@ -369,12 +384,15 @@ impl Decode for RuntimeMetadataDeprecated {
 /// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-pub struct RuntimeMetadataV9 {
+pub struct RuntimeMetadataV11 {
+	/// Metadata of all the modules.
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
+	/// Metadata of the extrinsic.
+	pub extrinsic: ExtrinsicMetadata,
 }
 
 /// The latest version of the metadata.
-pub type RuntimeMetadataLastVersion = RuntimeMetadataV9;
+pub type RuntimeMetadataLastVersion = RuntimeMetadataV11;
 
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
@@ -399,6 +417,6 @@ impl Into<sp_core::OpaqueMetadata> for RuntimeMetadataPrefixed {
 
 impl Into<RuntimeMetadataPrefixed> for RuntimeMetadataLastVersion {
 	fn into(self) -> RuntimeMetadataPrefixed {
-		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V9(self))
+		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V11(self))
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -55,6 +55,32 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 	/// Called when a block is _imported_ at the head of the chain (not during major sync).
 	/// Not guaranteed to be called for every block, but will be most of the after major sync.
 	fn on_block_imported(&mut self, _ctx: &mut dyn Context<B>, _hash: B::Hash, _header: &B::Header) { }
+}
+
+/// A specialization that does nothing.
+#[derive(Clone)]
+pub struct DummySpecialization;
+
+impl<B: BlockT> NetworkSpecialization<B> for DummySpecialization {
+	fn status(&self) -> Vec<u8> {
+		vec![]
+	}
+
+	fn on_connect(
+		&mut self,
+		_ctx: &mut dyn Context<B>,
+		_peer_id: PeerId,
+		_status: crate::message::Status<B>
+	) {}
+
+	fn on_disconnect(&mut self, _ctx: &mut dyn Context<B>, _peer_id: PeerId) {}
+
+	fn on_message(
+		&mut self,
+		_ctx: &mut dyn Context<B>,
+		_peer_id: PeerId,
+		_message: Vec<u8>,
+	) {}
 }
 
 /// Construct a simple protocol that is composed of several sub protocols.

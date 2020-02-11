@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@
 
 use sp_std::{result, prelude::*};
 use sp_std::collections::btree_set::BTreeSet;
-use frame_support::{decl_module, decl_storage, dispatch, ensure};
+use frame_support::{decl_module, decl_storage, decl_error, dispatch, ensure};
 use frame_support::traits::{FindAuthor, VerifySeal, Get};
 use codec::{Encode, Decode};
 use frame_system::ensure_none;
@@ -161,8 +161,30 @@ decl_storage! {
 	}
 }
 
+decl_error! {
+	/// Error for the authorship module.
+	pub enum Error for Module<T: Trait> {
+		/// The uncle parent not in the chain.
+		InvalidUncleParent,
+		/// Uncles already set in the block.
+		UnclesAlreadySet,
+		/// Too many uncles.
+		TooManyUncles,
+		/// The uncle is genesis.
+		GenesisUncle,
+		/// The uncle is too high in chain.
+		TooHighUncle,
+		/// The uncle is already included.
+		UncleAlreadyIncluded,
+		/// The uncle isn't recent enough to be included.
+		OldUncle,
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn on_initialize(now: T::BlockNumber) {
 			let uncle_generations = T::UncleGenerations::get();
 			// prune uncles that are older than the allowed number of generations.
@@ -186,10 +208,10 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
 			ensure_none(origin)?;
-			ensure!(new_uncles.len() <= MAX_UNCLES, "Too many uncles");
+			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
 
 			if <Self as Store>::DidSetUncles::get() {
-				Err("Uncles already set in block.")?
+				Err(Error::<T>::UnclesAlreadySet)?
 			}
 			<Self as Store>::DidSetUncles::put(true);
 
@@ -251,7 +273,7 @@ impl<T: Trait> Module<T> {
 		uncle: &T::Header,
 		existing_uncles: I,
 		accumulator: &mut <T::FilterUncle as FilterUncle<T::Header, T::AccountId>>::Accumulator,
-	) -> Result<Option<T::AccountId>, &'static str>
+	) -> Result<Option<T::AccountId>, dispatch::DispatchError>
 	{
 		let now = <frame_system::Module<T>>::block_number();
 
@@ -269,34 +291,34 @@ impl<T: Trait> Module<T> {
 		let hash = uncle.hash();
 
 		if uncle.number() < &One::one() {
-			return Err("uncle is genesis");
+			return Err(Error::<T>::GenesisUncle.into());
 		}
 
 		if uncle.number() > &maximum_height {
-			return Err("uncle is too high in chain");
+			return Err(Error::<T>::TooHighUncle.into());
 		}
 
 		{
 			let parent_number = uncle.number().clone() - One::one();
 			let parent_hash = <frame_system::Module<T>>::block_hash(&parent_number);
 			if &parent_hash != uncle.parent_hash() {
-				return Err("uncle parent not in chain");
+				return Err(Error::<T>::InvalidUncleParent.into());
 			}
 		}
 
 		if uncle.number() < &minimum_height {
-			return Err("uncle not recent enough to be included");
+			return Err(Error::<T>::OldUncle.into());
 		}
 
 		let duplicate = existing_uncles.into_iter().find(|h| **h == hash).is_some();
 		let in_chain = <frame_system::Module<T>>::block_hash(uncle.number()) == hash;
 
 		if duplicate || in_chain {
-			return Err("uncle already included")
+			return Err(Error::<T>::UncleAlreadyIncluded.into())
 		}
 
 		// check uncle validity.
-		T::FilterUncle::filter_uncle(&uncle, accumulator)
+		T::FilterUncle::filter_uncle(&uncle, accumulator).map_err(|e| Into::into(e))
 	}
 
 	fn prune_old_uncles(minimum_height: T::BlockNumber) {
@@ -360,7 +382,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	fn check_inherent(call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
 		match call {
 			Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES => {
-				Err(InherentError::Uncles("Too many uncles".into()))
+				Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into()))
 			},
 			_ => {
 				Ok(())
@@ -549,14 +571,22 @@ mod tests {
 				inner: vec![seal_header(create_header(0, Default::default(), Default::default()), 999)],
 			};
 
+			let initialize_block = |number, hash: H256| System::initialize(
+				&number,
+				&hash,
+				&Default::default(),
+				&Default::default(),
+				Default::default()
+			);
+
 			for number in 1..8 {
-				System::initialize(&number, &canon_chain.best_hash(), &Default::default(), &Default::default());
+				initialize_block(number, canon_chain.best_hash());
 				let header = seal_header(System::finalize(), author_a);
 				canon_chain.push(header);
 			}
 
 			// initialize so system context is set up correctly.
-			System::initialize(&8, &canon_chain.best_hash(), &Default::default(), &Default::default());
+			initialize_block(8, canon_chain.best_hash());
 
 			// 2 of the same uncle at once
 			{
@@ -566,7 +596,7 @@ mod tests {
 				);
 				assert_eq!(
 					Authorship::verify_and_import_uncles(vec![uncle_a.clone(), uncle_a.clone()]),
-					Err("uncle already included".into()),
+					Err(Error::<Test>::UncleAlreadyIncluded.into()),
 				);
 			}
 
@@ -581,7 +611,7 @@ mod tests {
 
 				assert_eq!(
 					Authorship::verify_and_import_uncles(vec![uncle_a.clone()]),
-					Err("uncle already included".into()),
+					Err(Error::<Test>::UncleAlreadyIncluded.into()),
 				);
 			}
 
@@ -591,7 +621,7 @@ mod tests {
 
 				assert_eq!(
 					Authorship::verify_and_import_uncles(vec![uncle_clone]),
-					Err("uncle already included".into()),
+					Err(Error::<Test>::UncleAlreadyIncluded.into()),
 				);
 			}
 
@@ -615,7 +645,7 @@ mod tests {
 
 				assert_eq!(
 					Authorship::verify_and_import_uncles(vec![gen_2]),
-					Err("uncle not recent enough to be included".into()),
+					Err(Error::<Test>::OldUncle.into()),
 				);
 			}
 
@@ -641,7 +671,13 @@ mod tests {
 			);
 
 			header.digest_mut().pop(); // pop the seal off.
-			System::initialize(&1, &Default::default(), &Default::default(), header.digest());
+			System::initialize(
+				&1,
+				&Default::default(),
+				&Default::default(),
+				header.digest(),
+				Default::default(),
+			);
 
 			assert_eq!(Authorship::author(), author);
 		});

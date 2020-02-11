@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -41,6 +41,14 @@ pub enum Error {
 		/// Details of the error message.
 		details: String,
 	},
+	/// Provided count exceeds maximum value.
+	#[display(fmt = "count exceeds maximum value. value: {}, max: {}", value, max)]
+	InvalidCount {
+		/// Provided value
+		value: u32,
+		/// Maximum allowed value
+		max: u32,
+	},
 }
 
 impl std::error::Error for Error {
@@ -60,6 +68,11 @@ impl From<Error> for rpc::Error {
 		match e {
 			Error::InvalidBlockRange { .. } => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
+				message: format!("{}", e),
+				data: None,
+			},
+			Error::InvalidCount { .. } => rpc::Error {
+				code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
 				message: format!("{}", e),
 				data: None,
 			},

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -108,7 +108,7 @@ decl_storage! {
 					].to_owned(),
 				))
 				.collect::<Vec<_>>()
-		}): map T::AccountIndex => Vec<T::AccountId>;
+		}): map hasher(blake2_256) T::AccountIndex => Vec<T::AccountId>;
 	}
 	add_extra_genesis {
 		config(ids): Vec<T::AccountId>;

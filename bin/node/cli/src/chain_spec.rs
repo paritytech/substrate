@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,8 +21,8 @@ use sp_core::{Pair, Public, crypto::UncheckedInto, sr25519};
 use serde::{Serialize, Deserialize};
 use node_runtime::{
 	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
-	GrandpaConfig, ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, StakerStatus, StakingConfig, SudoConfig,
-	SystemConfig, TechnicalCommitteeConfig, WASM_BINARY,
+	GrandpaConfig, ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, StakerStatus, StakingConfig,
+	SocietyConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig, WASM_BINARY,
 };
 use node_runtime::Block;
 use node_runtime::constants::currency::*;
@@ -47,9 +47,12 @@ const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 /// Additional parameters for some Substrate core modules,
 /// customizable from the chain spec.
 #[derive(Default, Clone, Serialize, Deserialize, ChainSpecExtension)]
+#[serde(rename_all = "camelCase")]
 pub struct Extensions {
 	/// Block numbers with known hashes.
 	pub fork_blocks: sc_client::ForkBlocks<Block>,
+	/// Known bad block hashes.
+	pub bad_blocks: sc_client::BadBlocks<Block>,
 }
 
 /// Specialized `ChainSpec`.
@@ -234,7 +237,6 @@ pub fn testnet_genesis(
 				.map(|k| (k, ENDOWMENT))
 				.chain(initial_authorities.iter().map(|x| (x.0.clone(), STASH)))
 				.collect(),
-			vesting: vec![],
 		}),
 		pallet_indices: Some(IndicesConfig {
 			ids: endowed_accounts.iter().cloned()
@@ -292,6 +294,12 @@ pub fn testnet_genesis(
 		}),
 		pallet_membership_Instance1: Some(Default::default()),
 		pallet_treasury: Some(Default::default()),
+		pallet_society: Some(SocietyConfig {
+			members: endowed_accounts[0..3].to_vec(),
+			pot: 0,
+			max_members: 999,
+		}),
+		pallet_vesting: Some(Default::default()),
 	}
 }
 

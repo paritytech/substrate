@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,16 +21,36 @@ pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
 pub use sc_network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use sc_executor::WasmExecutionMethod;
 
-use std::{path::PathBuf, net::SocketAddr, sync::Arc};
+use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
+use sc_chain_spec::{ChainSpec, NoExtension};
 use sp_core::crypto::Protected;
 use target_info::Target;
 use sc_telemetry::TelemetryEndpoints;
 
-/// Service configuration.
+/// Executable version. Used to pass version information from the root crate.
 #[derive(Clone)]
-pub struct Configuration<C, G, E = NoExtension> {
+pub struct VersionInfo {
+	/// Implementation name.
+	pub name: &'static str,
+	/// Implementation version.
+	pub version: &'static str,
+	/// SCM Commit hash.
+	pub commit: &'static str,
+	/// Executable file name.
+	pub executable_name: &'static str,
+	/// Executable file description.
+	pub description: &'static str,
+	/// Executable file author.
+	pub author: &'static str,
+	/// Support URL.
+	pub support_url: &'static str,
+	/// Copyright starting year (x-current year)
+	pub copyright_start_year: i32,
+}
+
+/// Service configuration.
+pub struct Configuration<G, E = NoExtension> {
 	/// Implementation name
 	pub impl_name: &'static str,
 	/// Implementation version
@@ -39,16 +59,18 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub impl_commit: &'static str,
 	/// Node roles.
 	pub roles: Roles,
+	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
+	pub task_executor: Option<Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>>,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to the base configuration directory.
 	pub config_dir: Option<PathBuf>,
-	/// Path to key files.
-	pub keystore_path: Option<PathBuf>,
+	/// Configuration for the keystore.
+	pub keystore: KeystoreConfig,
 	/// Configuration for the database.
-	pub database: DatabaseConfig,
+	pub database: Option<DatabaseConfig>,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
@@ -56,9 +78,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	/// Pruning settings.
 	pub pruning: PruningMode,
 	/// Chain configuration.
-	pub chain_spec: ChainSpec<G, E>,
-	/// Custom configuration.
-	pub custom: C,
+	pub chain_spec: Option<ChainSpec<G, E>>,
 	/// Node name.
 	pub name: String,
 	/// Wasm execution method.
@@ -92,8 +112,6 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
 	pub disable_grandpa: bool,
-	/// Node keystore's password
-	pub keystore_password: Option<Protected<String>>,
 	/// Development key seed.
 	///
 	/// When running in development mode, the seed will be used to generate authority keys by the keystore.
@@ -104,6 +122,32 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub tracing_targets: Option<String>,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
+}
+
+/// Configuration of the client keystore.
+#[derive(Clone)]
+pub enum KeystoreConfig {
+	/// No config supplied.
+	None,
+	/// Keystore at a path on-disk. Recommended for native nodes.
+	Path {
+		/// The path of the keystore.
+		path: PathBuf,
+		/// Node keystore's password.
+		password: Option<Protected<String>>
+	},
+	/// In-memory keystore. Recommended for in-browser nodes.
+	InMemory
+}
+
+impl KeystoreConfig {
+	/// Returns the path for the keystore.
+	pub fn path(&self) -> Option<&Path> {
+		match self {
+			Self::Path { path, .. } => Some(&path),
+			Self::None | Self::InMemory => None,
+		}
+	}
 }
 
 /// Configuration of the database of the client.
@@ -121,31 +165,24 @@ pub enum DatabaseConfig {
 	Custom(Arc<dyn KeyValueDB>),
 }
 
-impl<C, G, E> Configuration<C, G, E> where
-	C: Default,
-	G: RuntimeGenesis,
-	E: Extension,
-{
-	/// Create a default config for given chain spec and path to configuration dir
-	pub fn default_with_spec_and_base_path(chain_spec: ChainSpec<G, E>, config_dir: Option<PathBuf>) -> Self {
-		let mut configuration = Configuration {
+impl<G, E> Default for Configuration<G, E> {
+	/// Create a default config
+	fn default() -> Self {
+		Configuration {
 			impl_name: "parity-substrate",
 			impl_version: "0.0.0",
 			impl_commit: "",
-			chain_spec,
-			config_dir: config_dir.clone(),
+			chain_spec: None,
+			config_dir: None,
 			name: Default::default(),
 			roles: Roles::FULL,
+			task_executor: None,
 			transaction_pool: Default::default(),
 			network: Default::default(),
-			keystore_path: config_dir.map(|c| c.join("keystore")),
-			database: DatabaseConfig::Path {
-				path: Default::default(),
-				cache_size: Default::default(),
-			},
+			keystore: KeystoreConfig::None,
+			database: None,
 			state_cache_size: Default::default(),
 			state_cache_child_ratio: Default::default(),
-			custom: Default::default(),
 			pruning: PruningMode::default(),
 			wasm_method: WasmExecutionMethod::Interpreted,
 			execution_strategies: Default::default(),
@@ -161,21 +198,24 @@ impl<C, G, E> Configuration<C, G, E> where
 			sentry_mode: false,
 			force_authoring: false,
 			disable_grandpa: false,
-			keystore_password: None,
 			dev_key_seed: None,
 			tracing_targets: Default::default(),
 			tracing_receiver: Default::default(),
-		};
-		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
-
-		configuration.telemetry_endpoints = configuration.chain_spec.telemetry_endpoints().clone();
-
-		configuration
+		}
 	}
-
 }
 
-impl<C, G, E> Configuration<C, G, E> {
+impl<G, E> Configuration<G, E> {
+	/// Create a default config using `VersionInfo`
+	pub fn new(version: &VersionInfo) -> Self {
+		let mut config = Configuration::default();
+		config.impl_name = version.name;
+		config.impl_version = version.version;
+		config.impl_commit = version.commit;
+
+		config
+	}
+
 	/// Returns full version string of this configuration.
 	pub fn full_version(&self) -> String {
 		full_version_from_strs(self.impl_version, self.impl_commit)
@@ -191,10 +231,28 @@ impl<C, G, E> Configuration<C, G, E> {
 	pub fn in_chain_config_dir(&self, sub: &str) -> Option<PathBuf> {
 		self.config_dir.clone().map(|mut path| {
 			path.push("chains");
-			path.push(self.chain_spec.id());
+			path.push(self.expect_chain_spec().id());
 			path.push(sub);
 			path
 		})
+	}
+
+	/// Return a reference to the `ChainSpec` of this `Configuration`.
+	///
+	/// ### Panics
+	///
+	/// This method panic if the `chain_spec` is `None`
+	pub fn expect_chain_spec(&self) -> &ChainSpec<G, E> {
+		self.chain_spec.as_ref().expect("chain_spec must be specified")
+	}
+
+	/// Return a reference to the `DatabaseConfig` of this `Configuration`.
+	///
+	/// ### Panics
+	///
+	/// This method panic if the `database` is `None`
+	pub fn expect_database(&self) -> &DatabaseConfig {
+		self.database.as_ref().expect("database must be specified")
 	}
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -49,14 +49,10 @@ use sc_client::{
 	},
 };
 use sp_core::{
-	H256, Blake2Hasher, Bytes, OpaqueMetadata,
-	storage::{StorageKey, StorageData, StorageChangeSet},
+	Bytes, OpaqueMetadata, storage::{StorageKey, StorageData, StorageChangeSet},
 };
 use sp_version::RuntimeVersion;
-use sp_runtime::{
-	generic::BlockId,
-	traits::Block as BlockT,
-};
+use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HasherFor}};
 
 use super::{StateBackend, error::{FutureResult, Error}, client_err};
 
@@ -140,9 +136,9 @@ impl<Hash, V> SharedRequests<Hash, V> for SimpleSubscriptions<Hash, V> where
 
 impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, B, E, RA>
 	where
-		Block: BlockT<Hash=H256>,
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT,
+		B: Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 {
 	/// Create new state API backend for light nodes.
@@ -168,15 +164,15 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, 
 
 	/// Returns given block hash or best block hash if None is passed.
 	fn block_or_best(&self, hash: Option<Block::Hash>) -> Block::Hash {
-		hash.unwrap_or_else(|| self.client.info().chain.best_hash)
+		hash.unwrap_or_else(|| self.client.chain_info().best_hash)
 	}
 }
 
 impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, B, E, RA>
 	where
-		Block: BlockT<Hash=H256>,
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT,
+		B: Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		F: Fetcher<Block> + 'static
 {
@@ -199,6 +195,24 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		&self,
 		_block: Option<Block::Hash>,
 		_prefix: StorageKey,
+	) -> FutureResult<Vec<StorageKey>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
+	fn storage_pairs(
+		&self,
+		_block: Option<Block::Hash>,
+		_prefix: StorageKey,
+	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
+	fn storage_keys_paged(
+		&self,
+		_block: Option<Block::Hash>,
+		_prefix: Option<StorageKey>,
+		_count: u32,
+		_start_key: Option<StorageKey>,
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
@@ -227,7 +241,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		Box::new(self
 			.storage(block, key)
 			.and_then(|maybe_storage|
-				result(Ok(maybe_storage.map(|storage| Blake2Hasher::hash(&storage.0))))
+				result(Ok(maybe_storage.map(|storage| HasherFor::<Block>::hash(&storage.0))))
 			)
 		)
 	}
@@ -288,7 +302,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		Box::new(self
 			.child_storage(block, child_storage_key, child_info, child_type, key)
 			.and_then(|maybe_storage|
-				result(Ok(maybe_storage.map(|storage| Blake2Hasher::hash(&storage.0))))
+				result(Ok(maybe_storage.map(|storage| HasherFor::<Block>::hash(&storage.0))))
 			)
 		)
 	}
@@ -329,8 +343,8 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		keys: Option<Vec<StorageKey>>
 	) {
 		let keys = match keys {
-			Some(keys) => keys,
-			None => {
+			Some(keys) if !keys.is_empty() => keys,
+			_ => {
 				warn!("Cannot subscribe to all keys on light client. Subscription rejected.");
 				return;
 			}
@@ -602,7 +616,7 @@ fn subscription_stream<
 	issue_request: IssueRequest,
 	compare_values: CompareValues,
 ) -> impl Stream<Item=N, Error=()> where
-	Block: BlockT<Hash=H256>,
+	Block: BlockT,
 	Requests: 'static + SharedRequests<Block::Hash, V>,
 	FutureBlocksStream: Stream<Item=Block::Hash, Error=()>,
 	V: Send + 'static + Clone,
@@ -712,6 +726,7 @@ fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output=Result<Optio
 mod tests {
 	use rpc::futures::stream::futures_ordered;
 	use substrate_test_runtime_client::runtime::Block;
+	use sp_core::H256;
 	use super::*;
 
 	#[test]

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -300,6 +300,10 @@ macro_rules! app_crypto_public_common {
 
 			fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
 				<$public as $crate::RuntimePublic>::verify(self.as_ref(), msg, &signature.as_ref())
+			}
+
+			fn to_raw_vec(&self) -> $crate::Vec<u8> {
+				<$public as $crate::RuntimePublic>::to_raw_vec(&self.0)
 			}
 		}
 	}

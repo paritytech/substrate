@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,6 +16,8 @@
 
 //! Schema for BABE epoch changes in the aux-db.
 
+use std::sync::Arc;
+use parking_lot::Mutex;
 use log::info;
 use codec::{Decode, Encode};
 
@@ -23,8 +25,8 @@ use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sp_runtime::traits::Block as BlockT;
 use sp_consensus_babe::BabeBlockWeight;
-
-use super::{epoch_changes::EpochChangesFor, SharedEpochChanges};
+use sc_consensus_epochs::{EpochChangesFor, SharedEpochChanges};
+use crate::Epoch;
 
 const BABE_EPOCH_CHANGES: &[u8] = b"babe_epoch_changes";
 
@@ -49,22 +51,28 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 /// Load or initialize persistent epoch change data from backend.
 pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
-) -> ClientResult<SharedEpochChanges<Block>> {
-	let epoch_changes = load_decode::<_, EpochChangesFor<Block>>(backend, BABE_EPOCH_CHANGES)?
-		.map(Into::into)
+) -> ClientResult<SharedEpochChanges<Block, Epoch>> {
+	let epoch_changes = load_decode::<_, EpochChangesFor<Block, Epoch>>(backend, BABE_EPOCH_CHANGES)?
+		.map(|v| Arc::new(Mutex::new(v)))
 		.unwrap_or_else(|| {
 			info!(target: "babe",
 				"Creating empty BABE epoch changes on what appears to be first startup."
 			);
-			SharedEpochChanges::new()
+			SharedEpochChanges::<Block, Epoch>::default()
 		});
+
+	// rebalance the tree after deserialization. this isn't strictly necessary
+	// since the tree is now rebalanced on every update operation. but since the
+	// tree wasn't rebalanced initially it's useful to temporarily leave it here
+	// to avoid having to wait until an import for rebalancing.
+	epoch_changes.lock().rebalance();
 
 	Ok(epoch_changes)
 }
 
 /// Update the epoch changes on disk after a change.
 pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
-	epoch_changes: &EpochChangesFor<Block>,
+	epoch_changes: &EpochChangesFor<Block, Epoch>,
 	write_aux: F,
 ) -> R where
 	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,

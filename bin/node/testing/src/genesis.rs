@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ use crate::keyring::*;
 use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use node_runtime::{
 	GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, SystemConfig,
-	GrandpaConfig, IndicesConfig, ContractsConfig, WASM_BINARY,
+	GrandpaConfig, IndicesConfig, ContractsConfig, SocietyConfig, WASM_BINARY,
 };
 use node_runtime::constants::currency::*;
 use sp_core::ChangesTrieConfiguration;
@@ -49,7 +49,6 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 				(eve(), 101 * DOLLARS),
 				(ferdie(), 100 * DOLLARS),
 			],
-			vesting: vec![],
 		}),
 		pallet_session: Some(SessionConfig {
 			keys: vec![
@@ -96,5 +95,11 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 		pallet_membership_Instance1: Some(Default::default()),
 		pallet_sudo: Some(Default::default()),
 		pallet_treasury: Some(Default::default()),
+		pallet_society: Some(SocietyConfig {
+			members: vec![alice(), bob()],
+			pot: 0,
+			max_members: 999,
+		}),
+		pallet_vesting: Some(Default::default()),
 	}
 }

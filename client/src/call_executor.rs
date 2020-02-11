@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,20 +17,16 @@
 use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
+	generic::BlockId, traits::{Block as BlockT, HasherFor, NumberFor},
 };
 use sp_state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, ChangesTrieTransaction, StorageProof,
+	backend::Backend as _, StorageProof,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
-use hash_db::Hasher;
-use sp_core::{
-	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
-	traits::CodeExecutor,
-};
-use sp_api::{ProofRecorder, InitializeBlock};
+use sp_core::{NativeOrEncoded, NeverNativeValue, traits::CodeExecutor};
+use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor};
 
 /// Call executor that executes methods locally, querying all required
@@ -62,13 +58,15 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 	}
 }
 
-impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
-	where
-		B: backend::Backend<Block, Blake2Hasher>,
-		E: CodeExecutor + RuntimeInfo,
-		Block: BlockT<Hash=H256>,
+impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
+where
+	B: backend::Backend<Block>,
+	E: CodeExecutor + RuntimeInfo + Clone + 'static,
+	Block: BlockT,
 {
 	type Error = E::Error;
+
+	type Backend = B;
 
 	fn call(
 		&self,
@@ -79,10 +77,14 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
+		let changes_trie = backend::changes_tries_state_at_block(
+			id, self.backend.changes_trie_storage()
+		)?;
+		// make sure to destroy state before exiting this function
 		let state = self.backend.state_at(*id)?;
 		let return_data = StateMachine::new(
 			&state,
-			self.backend.changes_trie_storage(),
+			changes_trie,
 			&mut changes,
 			&self.executor,
 			method,
@@ -90,15 +92,13 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 			extensions.unwrap_or_default(),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
-			false,
 			None,
-		)
-		.map(|(result, _, _)| result)?;
+		);
 		{
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
-		Ok(return_data.into_encoded())
+		Ok(return_data?.into_encoded())
 	}
 
 	fn contextual_call<
@@ -117,6 +117,9 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
+		storage_transaction_cache: Option<&RefCell<
+			StorageTransactionCache<Block, B::State>
+		>>,
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
@@ -132,69 +135,66 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 			_ => {},
 		}
 
+		let changes_trie_state = backend::changes_tries_state_at_block(at, self.backend.changes_trie_storage())?;
+		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
+
+		// make sure to destroy state before exiting this function
 		let mut state = self.backend.state_at(*at)?;
-
 		let result = match recorder {
-			Some(recorder) => {
-				let trie_state = state.as_trie_backend()
-					.ok_or_else(||
-						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
-							as Box<dyn sp_state_machine::Error>
-					)?;
-
-				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
-					trie_state,
-					recorder.clone()
-				);
-
-				StateMachine::new(
-					&backend,
-					self.backend.changes_trie_storage(),
-					&mut *changes.borrow_mut(),
-					&self.executor,
-					method,
-					call_data,
-					extensions.unwrap_or_default(),
+			Some(recorder) => state.as_trie_backend()
+				.ok_or_else(||
+					Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
+						as Box<dyn sp_state_machine::Error>
 				)
-				.execute_using_consensus_failure_handler(
-					execution_manager,
-					false,
-					native_call,
-				)
-				.map(|(result, _, _)| result)
-				.map_err(Into::into)
-			}
+				.and_then(|trie_state| {
+					let backend = sp_state_machine::ProvingBackend::new_with_recorder(
+						trie_state,
+						recorder.clone(),
+					);
+
+					StateMachine::new(
+						&backend,
+						changes_trie_state,
+						&mut *changes.borrow_mut(),
+						&self.executor,
+						method,
+						call_data,
+						extensions.unwrap_or_default(),
+					)
+					// TODO: https://github.com/paritytech/substrate/issues/4455
+					// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
+					.execute_using_consensus_failure_handler(execution_manager, native_call)
+				}),
 			None => StateMachine::new(
 				&state,
-				self.backend.changes_trie_storage(),
+				changes_trie_state,
 				&mut *changes.borrow_mut(),
 				&self.executor,
 				method,
 				call_data,
 				extensions.unwrap_or_default(),
 			)
-			.execute_using_consensus_failure_handler(
-				execution_manager,
-				false,
-				native_call,
-			)
-			.map(|(result, _, _)| result)
-		}?;
+			.with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
+			.execute_using_consensus_failure_handler(execution_manager, native_call)
+		};
 		{
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
-		Ok(result)
+		result.map_err(Into::into)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
+		let changes_trie_state = backend::changes_tries_state_at_block(id, self.backend.changes_trie_storage())?;
+		// make sure to destroy state before exiting this function
 		let state = self.backend.state_at(*id)?;
-
+		let mut cache = StorageTransactionCache::<Block, B::State>::default();
 		let mut ext = Ext::new(
 			&mut overlay,
+			&mut cache,
 			&state,
-			self.backend.changes_trie_storage(),
+			changes_trie_state,
 			None,
 		);
 		let version = self.executor.runtime_version(&mut ext);
@@ -205,56 +205,14 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 		version.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
-	fn call_at_state<
-		S: sp_state_machine::Backend<Blake2Hasher>,
-		F: FnOnce(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>,
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-	>(&self,
-		state: &S,
-		changes: &mut OverlayedChanges,
-		method: &str,
-		call_data: &[u8],
-		manager: ExecutionManager<F>,
-		native_call: Option<NC>,
-		extensions: Option<Extensions>,
-	) -> sp_blockchain::Result<(
-		NativeOrEncoded<R>,
-		(S::Transaction, <Blake2Hasher as Hasher>::Out),
-		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
-	)> {
-		StateMachine::new(
-			state,
-			self.backend.changes_trie_storage(),
-			changes,
-			&self.executor,
-			method,
-			call_data,
-			extensions.unwrap_or_default(),
-		).execute_using_consensus_failure_handler(
-			manager,
-			true,
-			native_call,
-		)
-		.map(|(result, storage_tx, changes_tx)| (
-			result,
-			storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
-			changes_tx,
-		))
-		.map_err(Into::into)
-	}
-
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<Blake2Hasher>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<Block>>>(
 		&self,
-		trie_state: &sp_state_machine::TrieBackend<S, Blake2Hasher>,
+		trie_state: &sp_state_machine::TrieBackend<S, HasherFor<Block>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
-		sp_state_machine::prove_execution_on_trie_backend(
+		sp_state_machine::prove_execution_on_trie_backend::<_, _, NumberFor<Block>, _>(
 			trie_state,
 			overlay,
 			&self.executor,
@@ -271,9 +229,9 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 
 impl<B, E, Block> sp_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
 	where
-		B: backend::Backend<Block, Blake2Hasher>,
-		E: CodeExecutor + RuntimeInfo,
-		Block: BlockT<Hash=H256>,
+		B: backend::Backend<Block>,
+		E: CodeExecutor + RuntimeInfo + Clone + 'static,
+		Block: BlockT,
 {
 	fn native_version(&self) -> &sp_version::NativeVersion {
 		self.executor.native_version()

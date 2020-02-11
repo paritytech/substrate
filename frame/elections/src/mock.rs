@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -58,18 +58,16 @@ impl frame_system::Trait for Test {
 
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 0;
-	pub const TransferFee: u64 = 0;
 	pub const CreationFee: u64 = 0;
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type OnNewAccount = ();
-	type OnFreeBalanceZero = ();
+	type OnReapAccount = System;
 	type Event = Event;
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 }
 
@@ -154,7 +152,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event},
-		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>, Error},
+		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 		Elections: elections::{Module, Call, Event<T>, Config<T>},
 	}
 );
@@ -221,7 +219,6 @@ impl ExtBuilder {
 					(5, 50 * self.balance_factor),
 					(6, 60 * self.balance_factor)
 				],
-				vesting: vec![],
 			}),
 			elections: Some(elections::GenesisConfig::<Test>{
 				members: vec![],
@@ -269,7 +266,8 @@ pub(crate) fn create_candidate(i: u64, index: u32) {
 }
 
 pub(crate) fn balances(who: &u64) -> (u64, u64) {
-	(Balances::free_balance(who), Balances::reserved_balance(who))
+	let a = Balances::account(who);
+	(a.free, a.reserved)
 }
 
 pub(crate) fn locks(who: &u64) -> Vec<u64> {

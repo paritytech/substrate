@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,22 +22,22 @@ use crate::error::Error;
 use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 use log::{warn, info};
 use futures::{future, prelude::*};
-use futures03::{
-	TryFutureExt as _,
-};
-use sp_core::{Blake2Hasher, Hasher};
-use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
+use sp_runtime::{
+	BuildStorage, BenchmarkResults,
+	traits::{
+		Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
+	}
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
-use sc_client::Client;
+use sc_client::{Client, ExecutionStrategy, StateMachine, LocalCallExecutor};
+#[cfg(feature = "rocksdb")]
+use sc_client_db::BenchmarkingState;
 use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
 use sp_consensus::BlockOrigin;
+use sc_executor::{NativeExecutor, NativeExecutionDispatch, WasmExecutionMethod};
 
-use std::{
-	io::{Read, Write, Seek},
-};
+use std::{io::{Read, Write, Seek}, pin::Pin};
 
 use sc_network::message;
 
@@ -49,27 +49,82 @@ pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<Strin
 	Ok(spec.to_json(raw)?)
 }
 
+/// Run runtime benchmarks.
+#[cfg(feature = "rocksdb")]
+pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
+	spec: ChainSpec<G, E>,
+	strategy: ExecutionStrategy,
+	wasm_method: WasmExecutionMethod,
+	pallet: String,
+	extrinsic: String,
+	steps: u32,
+	repeat: u32,
+) -> error::Result<()> where
+	TBl: BlockT,
+	TExecDisp: NativeExecutionDispatch + 'static,
+	G: RuntimeGenesis,
+	E: Extension,
+{
+	let genesis_storage = spec.build_storage()?;
+	let mut changes = Default::default();
+	let state = BenchmarkingState::<TBl>::new(genesis_storage)?;
+	let executor = NativeExecutor::<TExecDisp>::new(
+		wasm_method,
+		None, // heap pages
+	);
+	let result = StateMachine::<_, _, NumberFor<TBl>, _>::new(
+		&state,
+		None,
+		&mut changes,
+		&executor,
+		"Benchmark_dispatch_benchmark",
+		&(&pallet, &extrinsic, steps, repeat).encode(),
+		Default::default(),
+	).execute(strategy).map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
+	let results = <Option<Vec<BenchmarkResults>> as Decode>::decode(&mut &result[..]).unwrap_or(None);
+	if let Some(results) = results {
+		// Print benchmark metadata
+		println!("Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}", pallet, extrinsic, steps, repeat);
+		// Print the table header
+		results[0].0.iter().for_each(|param| print!("{:?},", param.0));
+		print!("time\n");
+		// Print the values
+		results.iter().for_each(|result| {
+			let parameters = &result.0;
+			parameters.iter().for_each(|param| print!("{:?},", param.1));
+			print!("{:?}\n", result.1);
+		});
+		info!("Done.");
+	} else {
+		info!("No Results.");
+	}
+	Ok(())
+}
+
+
 impl<
-	TBl, TRtApi, TCfg, TGen, TCSExt, TBackend,
-	TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP,
+	TBl, TRtApi, TGen, TCSExt, TBackend,
+	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP,
 	TExPool, TRpc, Backend
 > ServiceBuilderCommand for ServiceBuilder<
-	TBl, TRtApi, TCfg, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
+	TBl, TRtApi, TGen, TCSExt,
+	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
 	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
 > where
-	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + sc_client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TBl: BlockT,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
+	TExecDisp: 'static + NativeExecutionDispatch,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
 {
 	type Block = TBl;
+	type NativeDispatch = TExecDisp;
 
 	fn import_blocks(
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Box<dyn Future<Item = (), Error = Error> + Send> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
 		struct WaitLink {
 			imported_blocks: u64,
 			has_error: bool,
@@ -118,7 +173,7 @@ impl<
 		// queue, the `Future` re-schedules itself and returns `Poll::Pending`.
 		// This makes it possible either to interleave other operations in-between the block imports,
 		// or to stop the operation completely.
-		let import = futures03::future::poll_fn(move |cx| {
+		let import = future::poll_fn(move |cx| {
 			// Start by reading the number of blocks if not done so already.
 			let count = match count {
 				Some(c) => c,
@@ -198,7 +253,7 @@ impl<
 			}
 
 			if link.imported_blocks >= count {
-				info!("Imported {} blocks. Best: #{}", read_block_count, client.info().chain.best_number);
+				info!("Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
 				return std::task::Poll::Ready(Ok(()));
 
 			} else {
@@ -206,7 +261,7 @@ impl<
 				return std::task::Poll::Pending;
 			}
 		});
-		Box::new(import.compat())
+		Box::pin(import)
 	}
 
 	fn export_blocks(
@@ -215,14 +270,14 @@ impl<
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
 		json: bool
-	) -> Box<dyn Future<Item = (), Error = Error>> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
 		let client = self.client;
 		let mut block = from;
 
 		let last = match to {
 			Some(v) if v.is_zero() => One::one(),
 			Some(v) => v,
-			None => client.info().chain.best_number,
+			None => client.chain_info().best_number,
 		};
 
 		let mut wrote_header = false;
@@ -234,7 +289,7 @@ impl<
 		// `Poll::Pending`.
 		// This makes it possible either to interleave other operations in-between the block exports,
 		// or to stop the operation completely.
-		let export = futures03::future::poll_fn(move |cx| {
+		let export = future::poll_fn(move |cx| {
 			if last < block {
 				return std::task::Poll::Ready(Err("Invalid block range specified".into()));
 			}
@@ -275,7 +330,7 @@ impl<
 			std::task::Poll::Pending
 		});
 
-		Box::new(export.compat())
+		Box::pin(export)
 	}
 
 	fn revert_chain(
@@ -283,7 +338,7 @@ impl<
 		blocks: NumberFor<TBl>
 	) -> Result<(), Error> {
 		let reverted = self.client.revert(blocks)?;
-		let info = self.client.info().chain;
+		let info = self.client.chain_info();
 
 		if reverted.is_zero() {
 			info!("There aren't any non-finalized blocks to revert.");
@@ -296,7 +351,7 @@ impl<
 	fn check_block(
 		self,
 		block_id: BlockId<TBl>
-	) -> Box<dyn Future<Item = (), Error = Error> + Send> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
 		match self.client.block(&block_id) {
 			Ok(Some(block)) => {
 				let mut buf = Vec::new();
@@ -305,9 +360,8 @@ impl<
 				let reader = std::io::Cursor::new(buf);
 				self.import_blocks(reader, true)
 			}
-			Ok(None) => Box::new(future::err("Unknown block".into())),
-			Err(e) => Box::new(future::err(format!("Error reading block: {:?}", e).into())),
+			Ok(None) => Box::pin(future::err("Unknown block".into())),
+			Err(e) => Box::pin(future::err(format!("Error reading block: {:?}", e).into())),
 		}
 	}
 }
-

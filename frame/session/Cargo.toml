@@ -2,11 +2,11 @@
 name = "pallet-session"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition =  "2018"
+edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true }
-safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
@@ -28,7 +28,6 @@ default = ["std", "historical"]
 historical = ["sp-trie"]
 std = [
 	"serde",
-	"safe-mix/std",
 	"codec/std",
 	"sp-std/std",
 	"frame-support/std",

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ pub mod system;
 use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use sp_core::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
+use sp_core::{Blake2Hasher, OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
 use sp_application_crypto::{ed25519, sr25519, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::PrefixedMemoryDB;
@@ -65,7 +65,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: create_runtime_str!("parity-test"),
 	authoring_version: 1,
 	spec_version: 1,
+	#[cfg(feature = "std")]
 	impl_version: 1,
+	#[cfg(not(feature = "std"))]
+	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -108,7 +111,10 @@ pub enum Extrinsic {
 	Transfer(Transfer, AccountSignature),
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
+	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
 }
+
+parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinisic does not need this
 
 #[cfg(feature = "std")]
 impl serde::Serialize for Extrinsic {
@@ -132,6 +138,8 @@ impl BlindCheckable for Extrinsic {
 			},
 			Extrinsic::IncludeData(_) => Err(InvalidTransaction::BadProof.into()),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
+			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
+				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
 		}
 	}
 }
@@ -193,14 +201,6 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	[stxs.len() as u8].encode()
 }
 
-/// Changes trie configuration (optionally) used in tests.
-pub fn changes_trie_config() -> sp_core::ChangesTrieConfiguration {
-	sp_core::ChangesTrieConfiguration {
-		digest_interval: 4,
-		digest_levels: 2,
-	}
-}
-
 /// A type that can not be decoded.
 #[derive(PartialEq)]
 pub struct DecodeFails<B: BlockT> {
@@ -257,8 +257,6 @@ cfg_if! {
 				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
-				fn returns_mutable_static() -> u64;
-				fn allocates_huge_stack_array(trap: bool) -> Vec<u8>;
 				fn vec_with_capacity(size: u32) -> Vec<u8>;
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
@@ -301,8 +299,6 @@ cfg_if! {
 				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
-				fn returns_mutable_static() -> u64;
-				fn allocates_huge_stack_array(trap: bool) -> Vec<u8>;
 				fn vec_with_capacity(size: u32) -> Vec<u8>;
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
@@ -450,11 +446,6 @@ impl_opaque_keys! {
 	}
 }
 
-#[cfg(not(feature = "std"))]
-/// Mutable static variables should be always observed to have
-/// the initialized value at the start of a runtime call.
-static mut MUTABLE_STATIC: u64 = 32;
-
 cfg_if! {
 	if #[cfg(feature = "std")] {
 		impl_runtime_apis! {
@@ -560,14 +551,6 @@ cfg_if! {
 					(0..1000).fold(0, |p, i| p + benchmark_add_one(i))
 				}
 
-				fn returns_mutable_static() -> u64 {
-					unimplemented!("is not expected to be invoked from non-wasm builds");
-				}
-
-				fn allocates_huge_stack_array(_trap: bool) -> Vec<u8> {
-					unimplemented!("is not expected to be invoked from non-wasm builds");
-				}
-
 				fn vec_with_capacity(_size: u32) -> Vec<u8> {
 					unimplemented!("is not expected to be invoked from non-wasm builds");
 				}
@@ -623,8 +606,8 @@ cfg_if! {
 			}
 
 			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-				fn offchain_worker(block: u64) {
-					let ex = Extrinsic::IncludeData(block.encode());
+				fn offchain_worker(header: &<Block as BlockT>::Header) {
+					let ex = Extrinsic::IncludeData(header.number.encode());
 					sp_io::offchain::submit_transaction(ex.encode()).unwrap();
 				}
 			}
@@ -632,6 +615,12 @@ cfg_if! {
 			impl sp_session::SessionKeys<Block> for Runtime {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
+				}
+
+				fn decode_session_keys(
+					encoded: Vec<u8>,
+				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
+					SessionKeys::decode_into_raw_public_keys(&encoded)
 				}
 			}
 
@@ -749,41 +738,6 @@ cfg_if! {
 					(0..10000).fold(0, |p, i| p + benchmark_add_one(i))
 				}
 
-				fn returns_mutable_static() -> u64 {
-					unsafe {
-						MUTABLE_STATIC += 1;
-						MUTABLE_STATIC
-					}
-				}
-
-				fn allocates_huge_stack_array(trap: bool) -> Vec<u8> {
-					// Allocate a stack frame that is approx. 75% of the stack (assuming it is 1MB).
-					// This will just decrease (stacks in wasm32-u-u grow downwards) the stack
-					// pointer. This won't trap on the current compilers.
-					let mut data = [0u8; 1024 * 768];
-
-					// Then make sure we actually write something to it.
-					//
-					// If:
-					// 1. the stack area is placed at the beginning of the linear memory space, and
-					// 2. the stack pointer points to out-of-bounds area, and
-					// 3. a write is performed around the current stack pointer.
-					//
-					// then a trap should happen.
-					//
-					for (i, v) in data.iter_mut().enumerate() {
-						*v = i as u8; // deliberate truncation
-					}
-
-					if trap {
-						// There is a small chance of this to be pulled up in theory. In practice
-						// the probability of that is rather low.
-						panic!()
-					}
-
-					data.to_vec()
-				}
-
 				fn vec_with_capacity(size: u32) -> Vec<u8> {
 					Vec::with_capacity(size as usize)
 				}
@@ -839,8 +793,8 @@ cfg_if! {
 			}
 
 			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-				fn offchain_worker(block: u64) {
-					let ex = Extrinsic::IncludeData(block.encode());
+				fn offchain_worker(header: &<Block as BlockT>::Header) {
+					let ex = Extrinsic::IncludeData(header.number.encode());
 					sp_io::offchain::submit_transaction(ex.encode()).unwrap()
 				}
 			}
@@ -848,6 +802,12 @@ cfg_if! {
 			impl sp_session::SessionKeys<Block> for Runtime {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
+				}
+
+				fn decode_session_keys(
+					encoded: Vec<u8>,
+				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
+					SessionKeys::decode_into_raw_public_keys(&encoded)
 				}
 			}
 
@@ -954,90 +914,42 @@ mod tests {
 		DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};
-	use sp_runtime::{
-		generic::BlockId,
-		traits::ProvideRuntimeApi,
-	};
+	use sp_api::ProvideRuntimeApi;
+	use sp_runtime::generic::BlockId;
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_state_machine::ExecutionStrategy;
 	use codec::Encode;
-
-	#[test]
-	fn returns_mutable_static() {
-		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
-		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
-
-		let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
-		assert_eq!(ret, 33);
-
-		// We expect that every invocation will need to return the initial
-		// value plus one. If the value increases more than that then it is
-		// a sign that the wasm runtime preserves the memory content.
-		let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
-		assert_eq!(ret, 33);
-	}
-
-	// If we didn't restore the wasm instance properly, on a trap the stack pointer would not be
-	// returned to its initial value and thus the stack space is going to be leaked.
-	//
-	// See https://github.com/paritytech/substrate/issues/2967 for details
-	#[test]
-	fn restoration_of_globals() {
-		// Allocate 32 pages (of 65536 bytes) which gives the runtime 2048KB of heap to operate on
-		// (plus some additional space unused from the initial pages requested by the wasm runtime
-		// module).
-		//
-		// The fixture performs 2 allocations of 768KB and this theoretically gives 1536KB, however, due
-		// to our allocator algorithm there are inefficiencies.
-		const REQUIRED_MEMORY_PAGES: u64 = 32;
-
-		let client = TestClientBuilder::new()
-			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-			.set_heap_pages(REQUIRED_MEMORY_PAGES)
-			.build();
-		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
-
-		// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
-		let ret = runtime_api.allocates_huge_stack_array(&block_id, true);
-		assert!(ret.is_err());
-
-		// On the second invocation we allocate yet another 768KB (75%) of stack
-		let ret = runtime_api.allocates_huge_stack_array(&block_id, false);
-		assert!(ret.is_ok());
-	}
 
 	#[test]
 	fn heap_pages_is_respected() {
 		// This tests that the on-chain HEAP_PAGES parameter is respected.
 
 		// Create a client devoting only 8 pages of wasm memory. This gives us ~512k of heap memory.
-		let client = TestClientBuilder::new()
+		let mut client = TestClientBuilder::new()
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.set_heap_pages(8)
 			.build();
-		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
-		let ret = runtime_api.vec_with_capacity(&block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity(&block_id, 1048576);
 		assert!(ret.is_err());
 
 		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
 		// ~2048k of heap memory.
-		let new_block_id = {
+		let (new_block_id, block) = {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
-			let block = builder.bake().unwrap();
+			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
-			client.import(BlockOrigin::Own, block).unwrap();
-			BlockId::Hash(hash)
+			(BlockId::Hash(hash), block)
 		};
 
+		client.import(BlockOrigin::Own, block).unwrap();
+
 		// Allocation of 1024k while having ~2048k should succeed.
-		let ret = runtime_api.vec_with_capacity(&new_block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity(&new_block_id, 1048576);
 		assert!(ret.is_ok());
 	}
 
@@ -1047,7 +959,7 @@ mod tests {
 			.set_execution_strategy(ExecutionStrategy::Both)
 			.build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		runtime_api.test_storage(&block_id).unwrap();
 	}

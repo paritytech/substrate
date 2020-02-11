@@ -4,12 +4,14 @@ version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "PoW consensus algorithm for substrate"
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }

@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,9 +23,10 @@ use std::{
 	collections::HashMap,
 	hash,
 	iter,
-	time::{Duration, Instant},
+	time::Duration,
 };
 use parking_lot::RwLock;
+use wasm_timer::Instant;
 
 use crate::base_pool::Transaction;
 

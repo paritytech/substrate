@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::prelude::*;
-use futures::sync::mpsc;
-use futures::stream::futures_unordered::FuturesUnordered;
-use std::time::{Duration, Instant};
-use tokio_timer::Delay;
+use futures::{Stream, stream::futures_unordered::FuturesUnordered, channel::mpsc};
+use std::time::Duration;
+use std::pin::Pin;
+use std::task::{Poll, Context};
+use futures_timer::Delay;
 
 /// Holds a list of `UnboundedSender`s, each associated with a certain time period. Every time the
 /// period elapses, we push an element on the sender.
@@ -29,7 +29,7 @@ pub struct StatusSinks<T> {
 }
 
 struct YieldAfter<T> {
-	delay: tokio_timer::Delay,
+	delay: Delay,
 	interval: Duration,
 	sender: Option<mpsc::UnboundedSender<T>>,
 }
@@ -47,7 +47,7 @@ impl<T> StatusSinks<T> {
 	/// The `interval` is the time period between two pushes on the sender.
 	pub fn push(&mut self, interval: Duration, sender: mpsc::UnboundedSender<T>) {
 		self.entries.push(YieldAfter {
-			delay: Delay::new(Instant::now() + interval),
+			delay: Delay::new(interval),
 			interval,
 			sender: Some(sender),
 		})
@@ -57,16 +57,16 @@ impl<T> StatusSinks<T> {
 	/// pushes what it returns to the sender.
 	///
 	/// This function doesn't return anything, but it should be treated as if it implicitly
-	/// returns `Ok(Async::NotReady)`. In particular, it should be called again when the task
+	/// returns `Poll::Pending`. In particular, it should be called again when the task
 	/// is waken up.
 	///
 	/// # Panic
 	///
 	/// Panics if not called within the context of a task.
-	pub fn poll(&mut self, mut status_grab: impl FnMut() -> T) {
+	pub fn poll(&mut self, cx: &mut Context, mut status_grab: impl FnMut() -> T) {
 		loop {
-			match self.entries.poll() {
-				Ok(Async::Ready(Some((sender, interval)))) => {
+			match Pin::new(&mut self.entries).poll_next(cx) {
+				Poll::Ready(Some((sender, interval))) => {
 					let status = status_grab();
 					if sender.unbounded_send(status).is_ok() {
 						self.entries.push(YieldAfter {
@@ -74,33 +74,32 @@ impl<T> StatusSinks<T> {
 							// waken up and the moment it is polled, the period is actually not
 							// `interval` but `interval + <delay>`. We ignore this problem in
 							// practice.
-							delay: Delay::new(Instant::now() + interval),
+							delay: Delay::new(interval),
 							interval,
 							sender: Some(sender),
 						});
 					}
 				}
-				Err(()) |
-				Ok(Async::Ready(None)) |
-				Ok(Async::NotReady) => break,
+				Poll::Ready(None) |
+				Poll::Pending => break,
 			}
 		}
 	}
 }
 
-impl<T> Future for YieldAfter<T> {
-	type Item = (mpsc::UnboundedSender<T>, Duration);
-	type Error = ();
+impl<T> futures::Future for YieldAfter<T> {
+	type Output = (mpsc::UnboundedSender<T>, Duration);
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		match self.delay.poll() {
-			Ok(Async::NotReady) => Ok(Async::NotReady),
-			Ok(Async::Ready(())) => {
-				let sender = self.sender.take()
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = Pin::into_inner(self);
+
+		match Pin::new(&mut this.delay).poll(cx) {
+			Poll::Pending => Poll::Pending,
+			Poll::Ready(()) => {
+				let sender = this.sender.take()
 					.expect("sender is always Some unless the future is finished; qed");
-				Ok(Async::Ready((sender, self.interval)))
-			},
-			Err(_) => Err(()),
+				Poll::Ready((sender, this.interval))
+			}
 		}
 	}
 }
@@ -109,8 +108,9 @@ impl<T> Future for YieldAfter<T> {
 mod tests {
 	use super::StatusSinks;
 	use futures::prelude::*;
-	use futures::sync::mpsc;
+	use futures::channel::mpsc;
 	use std::time::Duration;
+	use std::task::Poll;
 
 	#[test]
 	fn works() {
@@ -125,18 +125,18 @@ mod tests {
 		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 
 		let mut val_order = 5;
-		runtime.spawn(futures::future::poll_fn(move || {
-			status_sinks.poll(|| { val_order += 1; val_order });
-			Ok(Async::NotReady)
+		runtime.spawn(futures::future::poll_fn(move |cx| {
+			status_sinks.poll(cx, || { val_order += 1; val_order });
+			Poll::<()>::Pending
 		}));
 
 		let done = rx
 			.into_future()
-			.and_then(|(item, rest)| {
+			.then(|(item, rest)| {
 				assert_eq!(item, Some(6));
 				rest.into_future()
 			})
-			.and_then(|(item, rest)| {
+			.then(|(item, rest)| {
 				assert_eq!(item, Some(7));
 				rest.into_future()
 			})
@@ -144,6 +144,6 @@ mod tests {
 				assert_eq!(item, Some(8));
 			});
 
-		runtime.block_on(done).unwrap();
+		runtime.block_on(done);
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -76,7 +76,7 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
+		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
 	}
 }
 
@@ -151,7 +151,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	///      transactions can have a tip.
 	///
 	/// final_fee = base_fee + targeted_fee_adjustment(len_fee + weight_fee) + tip;
-	fn compute_fee(
+	pub fn compute_fee(
 		len: u32,
 		info: <Self as SignedExtension>::DispatchInfo,
 		tip: BalanceOf<T>,
@@ -178,9 +178,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
 
 			let base_fee = T::TransactionBaseFee::get();
-			let final_fee = base_fee.saturating_add(adjusted_fee).saturating_add(tip);
-
-			final_fee
+			base_fee.saturating_add(adjusted_fee).saturating_add(tip)
 		} else {
 			tip
 		}
@@ -201,6 +199,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 	where BalanceOf<T>: Send + Sync
 {
+	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
@@ -218,20 +217,23 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 		// pay any fees.
 		let tip = self.0;
 		let fee = Self::compute_fee(len as u32, info, tip);
-		let imbalance = match T::Currency::withdraw(
-			who,
-			fee,
-			if tip.is_zero() {
-				WithdrawReason::TransactionPayment.into()
-			} else {
-				WithdrawReason::TransactionPayment | WithdrawReason::Tip
-			},
-			ExistenceRequirement::KeepAlive,
-		) {
-			Ok(imbalance) => imbalance,
-			Err(_) => return InvalidTransaction::Payment.into(),
-		};
-		T::OnTransactionPayment::on_unbalanced(imbalance);
+		// Only mess with balances if fee is not zero.
+		if !fee.is_zero() {
+			let imbalance = match T::Currency::withdraw(
+				who,
+				fee,
+				if tip.is_zero() {
+					WithdrawReason::TransactionPayment.into()
+				} else {
+					WithdrawReason::TransactionPayment | WithdrawReason::Tip
+				},
+				ExistenceRequirement::KeepAlive,
+			) {
+				Ok(imbalance) => imbalance,
+				Err(_) => return InvalidTransaction::Payment.into(),
+			};
+			T::OnTransactionPayment::on_unbalanced(imbalance);
+		}
 
 		let mut r = ValidTransaction::default();
 		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
@@ -303,20 +305,18 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 		pub const ExistentialDeposit: u64 = 0;
 	}
 
 	impl pallet_balances::Trait for Runtime {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 
@@ -402,7 +402,6 @@ mod tests {
 					(5, 50 * self.balance_factor),
 					(6, 60 * self.balance_factor)
 				],
-				vesting: vec![],
 			}.assimilate_storage(&mut t).unwrap();
 			t.into()
 		}
@@ -427,14 +426,14 @@ mod tests {
 					.pre_dispatch(&1, CALL, info_from_weight(5), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&1), 100 - 5 - 5 - 10);
+			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 					.pre_dispatch(&2, CALL, info_from_weight(3), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&2), 200 - 5 - 10 - 3 - 5);
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 3 - 5);
 		});
 	}
 
@@ -469,11 +468,11 @@ mod tests {
 			.execute_with(||
 		{
 			// 1 ain't have a penny.
-			assert_eq!(Balances::free_balance(&1), 0);
+			assert_eq!(Balances::free_balance(1), 0);
 
 			let len = 100;
 
-			// like a FreeOperational
+			// This is a completely free (and thus wholly insecure/DoS-ridden) transaction.
 			let operational_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
@@ -485,7 +484,7 @@ mod tests {
 					.is_ok()
 			);
 
-			// like a FreeNormal
+			// like a InsecureFreeNormal
 			let free_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Normal,
@@ -516,7 +515,7 @@ mod tests {
 					.pre_dispatch(&1, CALL, info_from_weight(3), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
+			assert_eq!(Balances::free_balance(1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
 		})
 	}
 

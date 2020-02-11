@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@
 // end::description[]
 
 use sp_std::hash::Hash;
-#[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use sp_std::convert::TryInto;
@@ -264,11 +263,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		Self::from_ss58check_with_version(s)
 			.and_then(|(r, v)| match v {
-				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
-				Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
-				Ss58AddressFormat::KusamaAccountDirect => Ok(r),
-				Ss58AddressFormat::DothereumAccountDirect => Ok(r),
-				Ss58AddressFormat::EdgewareAccountDirect => Ok(r),
+				v if !v.is_custom() => Ok(r),
 				v if v == *DEFAULT_VERSION.lock() => Ok(r),
 				_ => Err(PublicError::UnknownVersion),
 			})
@@ -298,11 +293,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	fn from_string(s: &str) -> Result<Self, PublicError> {
 		Self::from_string_with_version(s)
 			.and_then(|(r, v)| match v {
-				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
-				Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
-				Ss58AddressFormat::KusamaAccountDirect => Ok(r),
-				Ss58AddressFormat::DothereumAccountDirect => Ok(r),
-				Ss58AddressFormat::EdgewareAccountDirect => Ok(r),
+				v if !v.is_custom() => Ok(r),
 				v if v == *DEFAULT_VERSION.lock() => Ok(r),
 				_ => Err(PublicError::UnknownVersion),
 			})
@@ -377,6 +368,14 @@ macro_rules! ss58_address_format {
 			pub fn all() -> &'static [Ss58AddressFormat] {
 				&ALL_SS58_ADDRESS_FORMATS
 			}
+
+			/// Whether the address is custom.
+			pub fn is_custom(&self) -> bool {
+				match self {
+					Self::Custom(_) => true,
+					_ => false,
+				}
+			}
 		}
 
 		impl From<Ss58AddressFormat> for u8 {
@@ -411,6 +410,13 @@ macro_rules! ss58_address_format {
 		}
 
 		#[cfg(feature = "std")]
+		impl Default for Ss58AddressFormat {
+			fn default() -> Self {
+				*DEFAULT_VERSION.lock()
+			}
+		}
+
+		#[cfg(feature = "std")]
 		impl From<Ss58AddressFormat> for String {
 			fn from(x: Ss58AddressFormat) -> String {
 				match x {
@@ -436,18 +442,17 @@ ss58_address_format!(
 		(16, "kulupu", "Kulupu mainnet, direct checksum, standard account (*25519).")
 	EdgewareAccountDirect =>
 		(7, "edgeware", "Edgeware mainnet, direct checksum, standard account (*25519).")
+	CentrifugeAccountDirect =>
+		(36, "centrifuge", "Centrifuge Chain mainnet, direct checksum, standard account (*25519).")
+	SubstraTeeAccountDirect =>
+		(44, "substratee", "Any SubstraTEE off-chain network private account, direct checksum, standard account (*25519).")
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
 /// typically used not just to encode format/version but also network identity) that is used for
 /// encoding and decoding SS58 addresses. If an unknown version is provided then it fails.
 ///
-/// Current known "versions" are:
-/// - 0 direct (payload) checksum for 32-byte *25519 Polkadot addresses.
-/// - 2 direct (payload) checksum for 32-byte *25519 Kusama addresses.
-/// - 7 direct (payload) checksum for 32-byte *25519 Edgeware addresses.
-/// - 20 direct (payload) checksum for 32-byte *25519 Dothereum addresses.
-/// - 42 direct (payload) checksum for 32-byte *25519 addresses on any Substrate-based network.
+/// See `ss58_address_format!` for all current known "versions".
 #[cfg(feature = "std")]
 pub fn set_default_ss58_version(version: Ss58AddressFormat) {
 	*DEFAULT_VERSION.lock() = version
@@ -518,8 +523,7 @@ pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + Pa
 	fn from_slice(data: &[u8]) -> Self;
 
 	/// Return a `Vec<u8>` filled with raw data.
-	#[cfg(feature = "std")]
-	fn to_raw_vec(&self) -> Vec<u8> { self.as_slice().to_owned() }
+	fn to_raw_vec(&self) -> Vec<u8> { self.as_slice().to_vec() }
 
 	/// Return a slice filled with raw data.
 	fn as_slice(&self) -> &[u8] { self.as_ref() }

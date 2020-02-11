@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -45,9 +45,9 @@ mod tests {
 	use codec::{Encode, Decode, Joiner};
 	use sc_executor::native_executor_instance;
 	use sp_state_machine::{
-		StateMachine, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage,
+		StateMachine, OverlayedChanges, ExecutionStrategy,
+		InMemoryBackend,
 	};
-	use sp_state_machine::backend::InMemory;
 	use substrate_test_runtime_client::{
 		runtime::genesismap::{GenesisConfig, insert_genesis_block},
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
@@ -59,7 +59,7 @@ mod tests {
 	native_executor_instance!(
 		Executor,
 		substrate_test_runtime_client::runtime::api::dispatch,
-		substrate_test_runtime_client::runtime::native_version
+		substrate_test_runtime_client::runtime::native_version,
 	);
 
 	fn executor() -> sc_executor::NativeExecutor<Executor> {
@@ -67,7 +67,7 @@ mod tests {
 	}
 
 	fn construct_block(
-		backend: &InMemory<Blake2Hasher>,
+		backend: &InMemoryBackend<Blake2Hasher>,
 		number: BlockNumber,
 		parent_hash: Hash,
 		state_root: Hash,
@@ -92,7 +92,7 @@ mod tests {
 
 		StateMachine::new(
 			backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_initialize_block",
@@ -105,7 +105,7 @@ mod tests {
 		for tx in transactions.iter() {
 			StateMachine::new(
 				backend,
-				Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+				sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 				&mut overlay,
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
@@ -116,9 +116,9 @@ mod tests {
 			).unwrap();
 		}
 
-		let (ret_data, _, _) = StateMachine::new(
+		let ret_data = StateMachine::new(
 			backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"BlockBuilder_finalize_block",
@@ -132,7 +132,7 @@ mod tests {
 		(vec![].and(&Block { header, extrinsics: transactions }), hash)
 	}
 
-	fn block1(genesis_hash: Hash, backend: &InMemory<Blake2Hasher>) -> (Vec<u8>, Hash) {
+	fn block1(genesis_hash: Hash, backend: &InMemoryBackend<Blake2Hasher>) -> (Vec<u8>, Hash) {
 		construct_block(
 			backend,
 			1,
@@ -149,7 +149,8 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_should_work_with_native() {
-		let mut storage = GenesisConfig::new(false,
+		let mut storage = GenesisConfig::new(
+			None,
 			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
@@ -158,13 +159,13 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -177,7 +178,7 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
-		let mut storage = GenesisConfig::new(false,
+		let mut storage = GenesisConfig::new(None,
 			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
@@ -186,13 +187,13 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -205,7 +206,7 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_with_bad_transaction_should_panic() {
-		let mut storage = GenesisConfig::new(false,
+		let mut storage = GenesisConfig::new(None,
 			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68,
@@ -214,13 +215,13 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
 		let r = StateMachine::new(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",

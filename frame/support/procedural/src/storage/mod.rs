@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -368,6 +368,7 @@ pub struct ExtraGenesisLineDef {
 pub enum HasherKind {
 	Blake2_256,
 	Blake2_128,
+	Blake2_128Concat,
 	Twox256,
 	Twox128,
 	Twox64Concat,
@@ -378,6 +379,7 @@ impl HasherKind {
 		match self {
 			HasherKind::Blake2_256 => quote!( Blake2_256 ),
 			HasherKind::Blake2_128 => quote!( Blake2_128 ),
+			HasherKind::Blake2_128Concat => quote!( Blake2_128Concat ),
 			HasherKind::Twox256 => quote!( Twox256 ),
 			HasherKind::Twox128 => quote!( Twox128 ),
 			HasherKind::Twox64Concat => quote!( Twox64Concat ),
@@ -388,6 +390,7 @@ impl HasherKind {
 		match self {
 			HasherKind::Blake2_256 => quote!( StorageHasher::Blake2_256 ),
 			HasherKind::Blake2_128 => quote!( StorageHasher::Blake2_128 ),
+			HasherKind::Blake2_128Concat => quote!( StorageHasher::Blake2_128Concat ),
 			HasherKind::Twox256 => quote!( StorageHasher::Twox256 ),
 			HasherKind::Twox128 => quote!( StorageHasher::Twox128 ),
 			HasherKind::Twox64Concat => quote!( StorageHasher::Twox64Concat ),

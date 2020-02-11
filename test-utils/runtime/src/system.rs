@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,12 +20,12 @@
 use sp_std::prelude::*;
 use sp_io::{
 	storage::root as storage_root, storage::changes_root as storage_changes_root,
-	hashing::blake2_256,
+	hashing::blake2_256, trie,
 };
 use frame_support::storage;
 use frame_support::{decl_storage, decl_module};
 use sp_runtime::{
-	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyExtrinsicResult,
+	traits::Header as _, generic, ApplyExtrinsicResult,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionValidityError,
 	},
@@ -35,7 +35,7 @@ use frame_system::Trait;
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
-use sp_core::storage::well_known_keys;
+use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -46,11 +46,12 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as TestRuntime {
-		ExtrinsicData: map u32 => Vec<u8>;
+		ExtrinsicData: map hasher(blake2_256) u32 => Vec<u8>;
 		// The current block number being processed. Set by `execute_block`.
 		Number get(fn number): Option<BlockNumber>;
 		ParentHash get(fn parent_hash): Hash;
 		NewAuthorities get(fn new_authorities): Option<Vec<AuthorityId>>;
+		NewChangesTrieConfig get(fn new_changes_trie_config): Option<Option<ChangesTrieConfiguration>>;
 		StorageDigest get(fn storage_digest): Option<Digest>;
 		Authorities get(fn authorities) config(): Vec<AuthorityId>;
 	}
@@ -109,60 +110,36 @@ pub fn execute_block(mut block: Block) {
 	execute_block_with_state_root_handler(&mut block, Mode::Verify);
 }
 
-fn execute_block_with_state_root_handler(
-	block: &mut Block,
-	mode: Mode,
-) {
+fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) {
 	let header = &mut block.header;
 
-	// check transaction trie root represents the transactions.
-	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
-	let txs_root = BlakeTwo256::ordered_trie_root(txs);
-	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
-	if let Mode::Overwrite = mode {
-		header.extrinsics_root = txs_root;
-	} else {
-		assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
-	}
-
-	// try to read something that depends on current header digest
-	// so that it'll be included in execution proof
-	if let Some(generic::DigestItem::Other(v)) = header.digest().logs().iter().next() {
-		let _: Option<u32> = storage::unhashed::get(&v);
-	}
+	initialize_block(header);
 
 	// execute transactions
-	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
-		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-		let _ = execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
-		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
+	block.extrinsics.iter().for_each(|e| {
+		let _ = execute_transaction(e.clone()).unwrap_or_else(|_| panic!("Invalid transaction"));
 	});
 
-	let o_new_authorities = <NewAuthorities>::take();
-	let storage_root = Hash::decode(&mut &storage_root()[..])
-		.expect("`storage_root` is a valid hash");
+	let new_header = finalize_block();
 
 	if let Mode::Overwrite = mode {
-		header.state_root = storage_root;
+		header.state_root = new_header.state_root;
 	} else {
-		// check storage root.
-		info_expect_equal_hash(&storage_root, &header.state_root);
-		assert!(storage_root == header.state_root, "Storage root must match that calculated.");
-	}
-
-	// check digest
-	let digest = &mut header.digest;
-	if let Some(storage_changes_root) = storage_changes_root(&header.parent_hash.encode()) {
-		digest.push(
-			generic::DigestItem::ChangesTrieRoot(
-				Hash::decode(&mut &storage_changes_root[..])
-					.expect("`storage_changes_root` is a valid hash")
-			)
+		info_expect_equal_hash(&new_header.state_root, &header.state_root);
+		assert!(
+			new_header.state_root == header.state_root,
+			"Storage root must match that calculated.",
 		);
 	}
-	if let Some(new_authorities) = o_new_authorities {
-		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
-		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
+
+	if let Mode::Overwrite = mode {
+		header.extrinsics_root = new_header.extrinsics_root;
+	} else {
+		info_expect_equal_hash(&new_header.extrinsics_root, &header.extrinsics_root);
+		assert!(
+			new_header.extrinsics_root == header.extrinsics_root,
+			"Transaction trie root must be valid.",
+		);
 	}
 }
 
@@ -224,12 +201,14 @@ pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 pub fn finalize_block() -> Header {
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
-	let extrinsics_root = BlakeTwo256::ordered_trie_root(txs).into();
+	let extrinsics_root = trie::blake2_256_ordered_root(txs).into();
 	let number = <Number>::take().expect("Number is set by `initialize_block`");
 	let parent_hash = <ParentHash>::take();
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
 
 	let o_new_authorities = <NewAuthorities>::take();
+	let new_changes_trie_config = <NewChangesTrieConfig>::take();
+
 	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
 	let storage_root = Hash::decode(&mut &storage_root()[..])
@@ -244,6 +223,12 @@ pub fn finalize_block() -> Header {
 	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
 		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
+	}
+
+	if let Some(new_config) = new_changes_trie_config {
+		digest.push(generic::DigestItem::ChangesTrieSignal(
+			generic::ChangesTrieSignal::NewConfiguration(new_config)
+		));
 	}
 
 	Header {
@@ -268,6 +253,8 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyExtrinsicResult {
 		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
 		Extrinsic::IncludeData(_) => Ok(Ok(())),
 		Extrinsic::StorageChange(key, value) => execute_storage_change(key, value.as_ref().map(|v| &**v)),
+		Extrinsic::ChangesTrieConfigUpdate(ref new_config) =>
+			execute_changes_trie_config_update(new_config.clone()),
 	}
 }
 
@@ -307,6 +294,18 @@ fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyExtrinsicRes
 		Some(value) => storage::unhashed::put_raw(key, value),
 		None => storage::unhashed::kill(key),
 	}
+	Ok(Ok(()))
+}
+
+fn execute_changes_trie_config_update(new_config: Option<ChangesTrieConfiguration>) -> ApplyExtrinsicResult {
+	match new_config.clone() {
+		Some(new_config) => storage::unhashed::put_raw(
+			well_known_keys::CHANGES_TRIE_CONFIG,
+			&new_config.encode(),
+		),
+		None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
+	}
+	<NewChangesTrieConfig>::put(new_config);
 	Ok(Ok(()))
 }
 

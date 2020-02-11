@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,20 +16,20 @@
 
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
 use log::{debug, warn, info};
 use parity_scale_codec::{Decode, Encode};
 use futures::prelude::*;
-use futures03::future::{FutureExt as _, TryFutureExt as _};
 use futures_timer::Delay;
 use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 
 use sc_client_api::{
 	BlockchainEvents,
-	backend::{Backend},
+	backend::{AuxStore, Backend},
 	Finalizer,
 	call_executor::CallExecutor,
 	utils::is_descendent_of,
@@ -41,7 +41,7 @@ use finality_grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
 };
-use sp_core::{Blake2Hasher, H256, Pair};
+use sp_core::Pair;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
@@ -406,13 +406,13 @@ impl<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> Environment<B, E, Bloc
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, VR>
+impl<Block: BlockT, B, E, N, RA, SC, VR>
 	finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
 for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + Send + Sync,
  	N: NetworkT<Block> + 'static + Send,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
@@ -432,32 +432,26 @@ where
 			return None;
 		}
 
+		let base_header = match self.client.header(&BlockId::Hash(block)).ok()? {
+			Some(h) => h,
+			None => {
+				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find base block", block);
+				return None;
+			}
+		};
+
 		// we refuse to vote beyond the current limit number where transitions are scheduled to
 		// occur.
 		// once blocks are finalized that make that transition irrelevant or activate it,
 		// we will proceed onwards. most of the time there will be no pending transition.
-		let limit = self.authority_set.current_limit();
+		// the limit, if any, is guaranteed to be higher than or equal to the given base number.
+		let limit = self.authority_set.current_limit(*base_header.number());
 		debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
 
 		match self.select_chain.finality_target(block, None) {
 			Ok(Some(best_hash)) => {
-				let base_header = self.client.header(&BlockId::Hash(block)).ok()?
-					.expect("Header known to exist after `best_containing` call; qed");
-
-				if let Some(limit) = limit {
-					// this is a rare case which might cause issues,
-					// might be better to return the header itself.
-					if *base_header.number() > limit {
-						debug!(target: "afg", "Encountered error finding best chain containing {:?} with limit {:?}: target block is after limit",
-							block,
-							limit,
-						);
-						return None;
-					}
-				}
-
 				let best_header = self.client.header(&BlockId::Hash(best_hash)).ok()?
-					.expect("Header known to exist after `best_containing` call; qed");
+					.expect("Header known to exist after `finality_target` call; qed");
 
 				// check if our vote is currently being limited due to a pending change
 				let limit = limit.filter(|limit| limit < best_header.number());
@@ -481,7 +475,7 @@ where
 						}
 
 						target_header = self.client.header(&BlockId::Hash(*target_header.parent_hash())).ok()?
-							.expect("Header known to exist after `best_containing` call; qed");
+							.expect("Header known to exist after `finality_target` call; qed");
 					}
 
 					target = target_header;
@@ -525,13 +519,13 @@ where
 }
 
 
-pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
+pub(crate) fn ancestry<B, Block: BlockT, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	base: Block::Hash,
 	block: Block::Hash,
 ) -> Result<Vec<Block::Hash>, GrandpaError> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
+	B: Backend<Block>,
+	E: CallExecutor<Block>,
 {
 	if base == block { return Err(GrandpaError::NotDescendent) }
 
@@ -556,32 +550,32 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR>
+impl<B, E, Block: BlockT, N, RA, SC, VR>
 	voter::Environment<Block::Hash, NumberFor<Block>>
 for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Send + Sync,
  	N: NetworkT<Block> + 'static + Send,
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	NumberFor<Block>: BlockNumberOps,
+	Client<B, E, Block, RA>: AuxStore,
 {
-	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
+	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
 	type Id = AuthorityId;
 	type Signature = AuthoritySignature;
 
 	// regular round message streams
-	type In = Box<dyn Stream<
-		Item = ::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
+	type In = Pin<Box<dyn Stream<
+		Item = Result<::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>, Self::Error>
+	> + Send>>;
+	type Out = Pin<Box<dyn Sink<
+		::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
 		Error = Self::Error,
-	> + Send>;
-	type Out = Box<dyn Sink<
-		SinkItem = ::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
-		SinkError = Self::Error,
-	> + Send>;
+	> + Send>>;
 
 	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
 
@@ -615,7 +609,7 @@ where
 
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.
-		let incoming = Box::new(UntilVoteTargetImported::new(
+		let incoming = Box::pin(UntilVoteTargetImported::new(
 			self.client.import_notification_stream(),
 			self.network.clone(),
 			self.client.clone(),
@@ -624,12 +618,12 @@ where
 		).map_err(Into::into));
 
 		// schedule network message cleanup when sink drops.
-		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
+		let outgoing = Box::pin(outgoing.sink_err_into());
 
 		voter::RoundData {
 			voter_id: local_key.map(|pair| pair.public()),
-			prevote_timer: Box::new(prevote_timer.map(Ok).compat()),
-			precommit_timer: Box::new(precommit_timer.map(Ok).compat()),
+			prevote_timer: Box::pin(prevote_timer.map(Ok)),
+			precommit_timer: Box::pin(precommit_timer.map(Ok)),
 			incoming,
 			outgoing,
 		}
@@ -903,7 +897,7 @@ where
 
 		//random between 0-1 seconds.
 		let delay: u64 = thread_rng().gen_range(0, 1000);
-		Box::new(Delay::new(Duration::from_millis(delay)).map(Ok).compat())
+		Box::pin(Delay::new(Duration::from_millis(delay)).map(Ok))
 	}
 
 	fn prevote_equivocation(
@@ -946,7 +940,7 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 /// authority set change is enacted then a justification is created (if not
 /// given) and stored with the block when finalizing it.
 /// This method assumes that the block being finalized has already been imported.
-pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
+pub(crate) fn finalize_block<B, Block: BlockT, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -955,8 +949,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	B: Backend<Block>,
+	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
 {
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
@@ -964,7 +958,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	//       below.
 	let mut authority_set = authority_set.inner().write();
 
-	let status = client.info().chain;
+	let status = client.chain_info();
 	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
 		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
 		// the voter will be restarted at the median last finalized block, which can be lower than the local best
@@ -994,7 +988,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		let status = authority_set.apply_standard_changes(
 			hash,
 			number,
-			&is_descendent_of::<_, _, Block::Hash>(client, None),
+			&is_descendent_of::<Block, _>(client, None),
 		).map_err(|e| Error::Safety(e.to_string()))?;
 
 		// check if this is this is the first finalization of some consensus changes
@@ -1037,7 +1031,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				// finalization to remote nodes
 				if !justification_required {
 					if let Some(justification_period) = justification_period {
-						let last_finalized_number = client.info().chain.finalized_number;
+						let last_finalized_number = client.chain_info().finalized_number;
 						justification_required =
 							(!last_finalized_number.is_zero() || number - last_finalized_number == justification_period) &&
 							(last_finalized_number / justification_period != number / justification_period);
@@ -1130,8 +1124,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 /// Using the given base get the block at the given height on this chain. The
 /// target block must be an ancestor of base, therefore `height <= base.height`.
-pub(crate) fn canonical_at_height<Block: BlockT<Hash=H256>, C: HeaderBackend<Block>>(
-	provider: C,
+pub(crate) fn canonical_at_height<Block: BlockT, C: HeaderBackend<Block>>(
+	provider: &C,
 	base: (Block::Hash, NumberFor<Block>),
 	base_is_canonical: bool,
 	height: NumberFor<Block>,

@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ use std::{
 	fmt,
 	hash,
 	sync::Arc,
-	time,
 };
 
 use crate::base_pool as base;
@@ -37,6 +36,7 @@ use sp_runtime::{
 	transaction_validity::TransactionTag as Tag,
 };
 use sp_transaction_pool::{error, PoolStatus};
+use wasm_timer::Instant;
 
 use crate::base_pool::PruneStatus;
 use crate::pool::{EventStream, Options, ChainApi, BlockHash, ExHash, ExtrinsicFor, TransactionFor};
@@ -63,20 +63,32 @@ pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 
 /// Pool that deals with validated transactions.
 pub(crate) struct ValidatedPool<B: ChainApi> {
-	api: B,
+	api: Arc<B>,
 	options: Options,
 	listener: RwLock<Listener<ExHash<B>, BlockHash<B>>>,
 	pool: RwLock<base::BasePool<
 		ExHash<B>,
 		ExtrinsicFor<B>,
 	>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<()>>>,
+	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<ExHash<B>>>>,
 	rotator: PoolRotator<ExHash<B>>,
+}
+
+#[cfg(not(target_os = "unknown"))]
+impl<B: ChainApi> parity_util_mem::MallocSizeOf for ValidatedPool<B>
+where
+	B::Hash: parity_util_mem::MallocSizeOf,
+	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		// other entries insignificant or non-primary references
+		self.pool.size_of(ops)
+	}
 }
 
 impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
-	pub fn new(options: Options, api: B) -> Self {
+	pub fn new(options: Options, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
 		ValidatedPool {
 			api,
@@ -89,7 +101,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Bans given set of hashes.
-	pub fn ban(&self, now: &std::time::Instant, hashes: impl IntoIterator<Item=ExHash<B>>) {
+	pub fn ban(&self, now: &Instant, hashes: impl IntoIterator<Item=ExHash<B>>) {
 		self.rotator.ban(now, hashes)
 	}
 
@@ -125,8 +137,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 			ValidatedTransaction::Valid(tx) => {
 				let imported = self.pool.write().import(tx)?;
 
-				if let base::Imported::Ready { .. } = imported {
-					self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
+				if let base::Imported::Ready { ref hash, .. } = imported {
+					self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(hash.clone()).is_ok());
 				}
 
 				let mut listener = self.listener.write();
@@ -134,7 +146,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				Ok(imported.hash().clone())
 			}
 			ValidatedTransaction::Invalid(hash, err) => {
-				self.rotator.ban(&std::time::Instant::now(), std::iter::once(hash));
+				self.rotator.ban(&Instant::now(), std::iter::once(hash));
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(hash, err) => {
@@ -150,19 +162,27 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let future_limit = &self.options.future;
 
 		debug!(target: "txpool", "Pool Status: {:?}", status);
-
 		if ready_limit.is_exceeded(status.ready, status.ready_bytes)
-			|| future_limit.is_exceeded(status.future, status.future_bytes) {
+			|| future_limit.is_exceeded(status.future, status.future_bytes)
+		{
+			debug!(
+				target: "txpool",
+				"Enforcing limits ({}/{}kB ready, {}/{}kB future",
+				ready_limit.count, ready_limit.total_bytes / 1024,
+				future_limit.count, future_limit.total_bytes / 1024,
+			);
+
 			// clean up the pool
 			let removed = {
 				let mut pool = self.pool.write();
 				let removed = pool.enforce_limits(ready_limit, future_limit)
 					.into_iter().map(|x| x.hash.clone()).collect::<HashSet<_>>();
 				// ban all removed transactions
-				self.rotator.ban(&std::time::Instant::now(), removed.iter().map(|x| x.clone()));
+				self.rotator.ban(&Instant::now(), removed.iter().map(|x| x.clone()));
 				removed
 			};
 			// run notifications
+			debug!(target: "txpool", "Enforcing limits: {} dropped", removed.len());
 			let mut listener = self.listener.write();
 			for h in &removed {
 				listener.dropped(h, None);
@@ -189,7 +209,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 					.map(|_| watcher)
 			},
 			ValidatedTransaction::Invalid(hash, err) => {
-				self.rotator.ban(&std::time::Instant::now(), std::iter::once(hash));
+				self.rotator.ban(&Instant::now(), std::iter::once(hash));
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(_, err) => Err(err.into()),
@@ -320,12 +340,17 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 	/// For each extrinsic, returns tags that it provides (if known), or None (if it is unknown).
 	pub fn extrinsics_tags(&self, hashes: &[ExHash<B>]) -> Vec<Option<Vec<Tag>>> {
-		self.pool.read().by_hash(&hashes)
+		self.pool.read().by_hashes(&hashes)
 			.into_iter()
 			.map(|existing_in_pool| existing_in_pool
 				.map(|transaction| transaction.provides.iter().cloned()
 				.collect()))
 			.collect()
+	}
+
+	/// Get ready transaction by hash
+	pub fn ready_by_hash(&self, hash: &ExHash<B>) -> Option<TransactionFor<B>> {
+		self.pool.read().ready_by_hash(hash)
 	}
 
 	/// Prunes ready transactions that provide given list of tags.
@@ -406,7 +431,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let block_number = self.api.block_id_to_number(at)?
 			.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?
 			.saturated_into::<u64>();
-		let now = time::Instant::now();
+		let now = Instant::now();
 		let to_remove = {
 			self.ready()
 				.filter(|tx| self.rotator.ban_if_stale(&now, block_number, &tx))
@@ -444,7 +469,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Return an event stream of transactions imported to the pool.
-	pub fn import_notification_stream(&self) -> EventStream {
+	pub fn import_notification_stream(&self) -> EventStream<ExHash<B>> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream
@@ -470,11 +495,14 @@ impl<B: ChainApi> ValidatedPool<B> {
 			return vec![]
 		}
 
+		debug!(target: "txpool", "Removing invalid transactions: {:?}", hashes);
+
 		// temporarily ban invalid transactions
-		debug!(target: "txpool", "Banning invalid transactions: {:?}", hashes);
-		self.rotator.ban(&time::Instant::now(), hashes.iter().cloned());
+		self.rotator.ban(&Instant::now(), hashes.iter().cloned());
 
 		let invalid = self.pool.write().remove_subtree(hashes);
+
+		debug!(target: "txpool", "Removed invalid transactions: {:?}", invalid);
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {

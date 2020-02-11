@@ -4,6 +4,7 @@ version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "BABE consensus algorithm for substrate"
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
@@ -20,7 +21,8 @@ sp-timestamp = { version = "2.0.0", path = "../../../primitives/timestamp" }
 sc-telemetry = { version = "2.0.0", path = "../../telemetry" }
 sc-keystore = { version = "2.0.0", path = "../../keystore" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
-sc-client = { version = "2.0.0", path = "../../" }
+sc-client = { version = "0.8", path = "../../" }
+sc-consensus-epochs = { version = "0.8", path = "../epochs" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
@@ -29,10 +31,9 @@ sc-consensus-uncles = { version = "0.8", path = "../uncles" }
 sc-consensus-slots = { version = "0.8", path = "../slots" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 fork-tree = { version = "2.0.0", path = "../../../utils/fork-tree" }
-futures = { version = "0.3.1", features = ["compat"] }
-futures01 = { package = "futures", version = "0.1" }
-futures-timer = "0.4.0"
-parking_lot = "0.9.0"
+futures = "0.3.1"
+futures-timer = "3.0.1"
+parking_lot = "0.10.0"
 log = "0.4.8"
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"] }
 rand = "0.7.2"
@@ -42,15 +43,16 @@ derive_more = "0.99.2"
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
-sc-executor = { version = "2.0.0", path = "../../executor" }
+sc-executor = { version = "0.8", path = "../../executor" }
 sc-network = { version = "0.8", path = "../../network" }
-sc-network-test = { version = "2.0.0", path = "../../network/test" }
-sc-service = { version = "2.0.0", path = "../../service" }
+sc-network-test = { version = "0.8.0", path = "../../network/test" }
+sc-service = { version = "0.8", path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-sc-block-builder = { version = "2.0.0", path = "../../block-builder" }
+sc-block-builder = { version = "0.8", path = "../../block-builder" }
 tokio = "0.1.22"
 env_logger = "0.7.0"
 tempfile = "3.1.0"
+futures01 = { package = "futures", version = "0.1" }
 
 [features]
 test-helpers = []

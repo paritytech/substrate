@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use futures::prelude::*;
-use futures::{future, sync::mpsc};
+use futures::{prelude::*, channel::mpsc};
 
 use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
@@ -25,10 +26,9 @@ use finality_grandpa::{
 use log::{debug, info, warn};
 
 use sp_consensus::SelectChain;
-use sc_client_api::{CallExecutor, backend::Backend};
+use sc_client_api::{CallExecutor, backend::{Backend, AuxStore}};
 use sc_client::Client;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
-use sp_core::{H256, Blake2Hasher};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
@@ -41,10 +41,10 @@ use sp_finality_grandpa::AuthorityId;
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
 
-impl<'a, Block: BlockT<Hash=H256>, B, E, RA> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
+impl<'a, Block: BlockT, B, E, RA> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
 	for ObserverChain<'a, Block, B, E, RA> where
-		B: Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher>,
+		B: Backend<Block>,
+		E: CallExecutor<Block>,
 		NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
@@ -57,7 +57,7 @@ impl<'a, Block: BlockT<Hash=H256>, B, E, RA> finality_grandpa::Chain<Block::Hash
 	}
 }
 
-fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
+fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 	client: &Arc<Client<B, E, Block, RA>>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -65,14 +65,13 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
-) -> impl Future<Item=(), Error=CommandOrError<H256, NumberFor<Block>>> where
+) -> impl Future<Output=Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> where
 	NumberFor<Block>: BlockNumberOps,
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	B: Backend<Block>,
+	E: CallExecutor<Block> + Send + Sync + 'static,
 	RA: Send + Sync,
 	S: Stream<
-		Item = CommunicationIn<Block>,
-		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
+		Item = Result<CommunicationIn<Block>, CommandOrError<Block::Hash, NumberFor<Block>>>,
 	>,
 	F: Fn(u64),
 {
@@ -81,7 +80,7 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 	let client = client.clone();
 	let voters = voters.clone();
 
-	let observer = commits.fold(last_finalized_number, move |last_finalized_number, global| {
+	let observer = commits.try_fold(last_finalized_number, move |last_finalized_number, global| {
 		let (round, commit, callback) = match global {
 			voter::CommunicationIn::Commit(round, commit, callback) => {
 				let commit = finality_grandpa::Commit::from(commit);
@@ -144,27 +143,28 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 		}
 	});
 
-	observer.map(|_| ())
+	observer.map_ok(|_| ())
 }
 
 /// Run a GRANDPA observer as a task, the observer will finalize blocks only by
 /// listening for and validating GRANDPA commits instead of following the full
 /// protocol. Provide configuration and a link to a block import worker that has
 /// already been instantiated with `block_import`.
-pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
+pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
-	on_exit: impl futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
+	on_exit: impl futures::Future<Output=()> + Clone + Send + Unpin + 'static,
 	executor: Sp,
-) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
 	N: NetworkT<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
-	Sp: futures03::task::Spawn + 'static,
+	Sp: futures::task::Spawn + 'static,
+	Client<B, E, Block, RA>: AuxStore,
 {
 	let LinkHalf {
 		client,
@@ -178,7 +178,6 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
 		config.clone(),
 		persistent_data.set_state.clone(),
 		&executor,
-		on_exit.clone(),
 	);
 
 	let observer_work = ObserverWork::new(
@@ -190,20 +189,18 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
 	);
 
 	let observer_work = observer_work
-		.map(|_| ())
+		.map_ok(|_| ())
 		.map_err(|e| {
 			warn!("GRANDPA Observer failed: {:?}", e);
 		});
 
-	use futures03::{FutureExt, TryFutureExt};
-
-	Ok(observer_work.select(on_exit.map(Ok).compat()).map(|_| ()).map_err(|_| ()))
+	Ok(future::select(observer_work, on_exit).map(drop))
 }
 
 /// Future that powers the observer.
 #[must_use]
-struct ObserverWork<B: BlockT<Hash=H256>, N: NetworkT<B>, E, Backend, RA> {
-	observer: Box<dyn Future<Item = (), Error = CommandOrError<B::Hash, NumberFor<B>>> + Send>,
+struct ObserverWork<B: BlockT, N: NetworkT<B>, E, Backend, RA> {
+	observer: Pin<Box<dyn Future<Output = Result<(), CommandOrError<B::Hash, NumberFor<B>>>> + Send>>,
 	client: Arc<Client<Backend, E, B, RA>>,
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
@@ -213,12 +210,13 @@ struct ObserverWork<B: BlockT<Hash=H256>, N: NetworkT<B>, E, Backend, RA> {
 
 impl<B, N, E, Bk, RA> ObserverWork<B, N, E, Bk, RA>
 where
-	B: BlockT<Hash=H256>,
+	B: BlockT,
 	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
-	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,
-	Bk: Backend<B, Blake2Hasher> + 'static,
+	E: CallExecutor<B> + Send + Sync + 'static,
+	Bk: Backend<B> + 'static,
+	Client<Bk, E, B, RA>: AuxStore,
 {
 	fn new(
 		client: Arc<Client<Bk, E, B, RA>>,
@@ -231,7 +229,7 @@ where
 		let mut work = ObserverWork {
 			// `observer` is set to a temporary value and replaced below when
 			// calling `rebuild_observer`.
-			observer: Box::new(futures::empty()) as Box<_>,
+			observer: Box::pin(future::pending()) as Pin<Box<_>>,
 			client,
 			network,
 			persistent_data,
@@ -258,7 +256,7 @@ where
 			&self.keystore,
 		);
 
-		let last_finalized_number = self.client.info().chain.finalized_number;
+		let last_finalized_number = self.client.chain_info().finalized_number;
 
 		// NOTE: since we are not using `round_communication` we have to
 		// manually note the round with the gossip validator, otherwise we won't
@@ -286,7 +284,7 @@ where
 			note_round,
 		);
 
-		self.observer = Box::new(observer);
+		self.observer = Box::pin(observer);
 	}
 
 	fn handle_voter_command(
@@ -328,51 +326,123 @@ where
 
 impl<B, N, E, Bk, RA> Future for ObserverWork<B, N, E, Bk, RA>
 where
-	B: BlockT<Hash=H256>,
+	B: BlockT,
 	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
-	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,
-	Bk: Backend<B, Blake2Hasher> + 'static,
+	E: CallExecutor<B> + Send + Sync + 'static,
+	Bk: Backend<B> + 'static,
+	Client<Bk, E, B, RA>: AuxStore,
 {
-	type Item = ();
-	type Error = Error;
+	type Output = Result<(), Error>;
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		match self.observer.poll() {
-			Ok(Async::NotReady) => {}
-			Ok(Async::Ready(())) => {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		match Future::poll(Pin::new(&mut self.observer), cx) {
+			Poll::Pending => {}
+			Poll::Ready(Ok(())) => {
 				// observer commit stream doesn't conclude naturally; this could reasonably be an error.
-				return Ok(Async::Ready(()))
+				return Poll::Ready(Ok(()))
 			}
-			Err(CommandOrError::Error(e)) => {
+			Poll::Ready(Err(CommandOrError::Error(e))) => {
 				// return inner observer error
-				return Err(e)
+				return Poll::Ready(Err(e))
 			}
-			Err(CommandOrError::VoterCommand(command)) => {
+			Poll::Ready(Err(CommandOrError::VoterCommand(command))) => {
 				// some command issued internally
 				self.handle_voter_command(command)?;
-				futures::task::current().notify();
+				cx.waker().wake_by_ref();
 			}
 		}
 
-		match self.voter_commands_rx.poll() {
-			Ok(Async::NotReady) => {}
-			Err(_) => {
-				// the `voter_commands_rx` stream should not fail.
-				return Ok(Async::Ready(()))
-			}
-			Ok(Async::Ready(None)) => {
+		match Stream::poll_next(Pin::new(&mut self.voter_commands_rx), cx) {
+			Poll::Pending => {}
+			Poll::Ready(None) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
-				return Ok(Async::Ready(()))
+				return Poll::Ready(Ok(()))
 			}
-			Ok(Async::Ready(Some(command))) => {
+			Poll::Ready(Some(command)) => {
 				// some command issued externally
 				self.handle_voter_command(command)?;
-				futures::task::current().notify();
+				cx.waker().wake_by_ref();
 			}
 		}
 
-		Ok(Async::NotReady)
+		Future::poll(Pin::new(&mut self.network), cx)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use assert_matches::assert_matches;
+	use crate::{aux_schema,	communication::tests::{Event, make_test_network}};
+	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
+	use sc_network::PeerId;
+
+	use futures::executor::{self, ThreadPool};
+
+	/// Ensure `Future` implementation of `ObserverWork` is polling its `NetworkBridge`. Regression
+	/// test for bug introduced in d4fbb897c and fixed in b7af8b339.
+	///
+	/// When polled, `NetworkBridge` forwards reputation change requests from the `GossipValidator`
+	/// to the underlying `dyn Network`. This test triggers a reputation change by calling
+	/// `GossipValidator::validate` with an invalid gossip message. After polling the `ObserverWork`
+	/// which should poll the `NetworkBridge`, the reputation change should be forwarded to the test
+	/// network.
+	#[test]
+	fn observer_work_polls_underlying_network_bridge() {
+		let thread_pool = ThreadPool::new().unwrap();
+
+		// Create a test network.
+		let (tester_fut, _network) = make_test_network(&thread_pool);
+		let mut tester = executor::block_on(tester_fut);
+
+		// Create an observer.
+		let (client, backend) = {
+			let builder = TestClientBuilder::with_default_backend();
+			let backend = builder.backend();
+			let (client, _) = builder.build_with_longest_chain();
+			(Arc::new(client), backend)
+		};
+
+		let persistent_data = aux_schema::load_persistent(
+			&*backend,
+			client.chain_info().genesis_hash,
+			0,
+			|| Ok(vec![]),
+		).unwrap();
+
+		let (_tx, voter_command_rx) = mpsc::unbounded();
+		let observer = ObserverWork::new(
+			client,
+			tester.net_handle.clone(),
+			persistent_data,
+			None,
+			voter_command_rx,
+		);
+
+		// Trigger a reputation change through the gossip validator.
+		let peer_id = PeerId::random();
+		tester.trigger_gossip_validator_reputation_change(&peer_id);
+
+		executor::block_on(async move {
+			// Ignore initial event stream request by gossip engine.
+			match tester.events.next().now_or_never() {
+				Some(Some(Event::EventStream(_))) => {},
+				_ => panic!("expected event stream request"),
+			};
+
+			assert!(
+				tester.events.next().now_or_never().is_none(),
+				"expect no further network events",
+			);
+
+			// Poll the observer once and have it forward the reputation change from the gossip
+			// validator to the test network.
+			assert!(observer.now_or_never().is_none());
+
+			assert_matches!(tester.events.next().now_or_never(), Some(Some(Event::Report(_, _))));
+		});
 	}
 }

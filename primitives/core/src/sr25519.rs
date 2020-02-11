@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -727,6 +727,27 @@ mod test {
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
 		assert!(Pair::verify(&signature, &message[..], &public));
+	}
+
+	#[test]
+	fn messed_signature_should_not_work() {
+		let (pair, _) = Pair::generate();
+		let public = pair.public();
+		let message = b"Signed payload";
+		let Signature(mut bytes) = pair.sign(&message[..]);
+		bytes[0] = !bytes[0];
+		bytes[2] = !bytes[2];
+		let signature = Signature(bytes);
+		assert!(!Pair::verify(&signature, &message[..], &public));
+	}
+
+	#[test]
+	fn messed_message_should_not_work() {
+		let (pair, _) = Pair::generate();
+		let public = pair.public();
+		let message = b"Something important";
+		let signature = pair.sign(&message[..]);
+		assert!(!Pair::verify(&signature, &b"Something unimportant", &public));
 	}
 
 	#[test]

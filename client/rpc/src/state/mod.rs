@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,31 +24,28 @@ mod tests;
 
 use std::sync::Arc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use rpc::{Result as RpcResult, futures::Future};
+use rpc::{Result as RpcResult, futures::{Future, future::result}};
 
 use sc_rpc_api::Subscriptions;
 use sc_client::{Client, CallExecutor, light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
-use sp_core::{
-	Blake2Hasher, Bytes, H256,
-	storage::{StorageKey, StorageData, StorageChangeSet},
-};
+use sp_core::{Bytes, storage::{StorageKey, StorageData, StorageChangeSet}};
 use sp_version::RuntimeVersion;
-use sp_runtime::{
-	traits::{Block as BlockT, ProvideRuntimeApi},
-};
+use sp_runtime::traits::Block as BlockT;
 
-use sp_api::Metadata;
+use sp_api::{Metadata, ProvideRuntimeApi};
 
 use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
 
+const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
+
 /// State backend API.
 pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+		Block: BlockT + 'static,
+		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
+		E: sc_client::CallExecutor<Block> + Send + Sync + 'static,
 		RA: Send + Sync + 'static,
 {
 	/// Call runtime method at given block.
@@ -64,6 +61,22 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
+	) -> FutureResult<Vec<StorageKey>>;
+
+	/// Returns the keys with prefix along with their values, leave empty to get all the pairs.
+	fn storage_pairs(
+		&self,
+		block: Option<Block::Hash>,
+		prefix: StorageKey,
+	) -> FutureResult<Vec<(StorageKey, StorageData)>>;
+
+	/// Returns the keys with prefix with pagination support.
+	fn storage_keys_paged(
+		&self,
+		block: Option<Block::Hash>,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
 	) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
@@ -186,12 +199,12 @@ pub fn new_full<B, E, Block: BlockT, RA>(
 	subscriptions: Subscriptions,
 ) -> State<B, E, Block, RA>
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT + 'static,
+		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
-		Client<B, E, Block, RA>: ProvideRuntimeApi,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
 			Metadata<Block, Error = sp_blockchain::Error>,
 {
 	State {
@@ -207,9 +220,9 @@ pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
 	fetcher: Arc<F>,
 ) -> State<B, E, Block, RA>
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT + 'static,
+		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		F: Send + Sync + 'static,
 {
@@ -230,9 +243,9 @@ pub struct State<B, E, Block, RA> {
 
 impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT + 'static,
+		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 {
 	type Metadata = crate::metadata::Metadata;
@@ -247,6 +260,32 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageKey>> {
 		self.backend.storage_keys(block, key_prefix)
+	}
+
+	fn storage_pairs(
+		&self,
+		key_prefix: StorageKey,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
+		self.backend.storage_pairs(block, key_prefix)
+	}
+
+	fn storage_keys_paged(
+		&self,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Vec<StorageKey>> {
+		if count > STORAGE_KEYS_PAGED_MAX_COUNT {
+			return Box::new(result(Err(
+				Error::InvalidCount {
+					value: count,
+					max: STORAGE_KEYS_PAGED_MAX_COUNT,
+				}
+			)));
+		}
+		self.backend.storage_keys_paged(block, prefix, count, start_key)
 	}
 
 	fn storage(&self, key: StorageKey, block: Option<Block::Hash>) -> FutureResult<Option<StorageData>> {

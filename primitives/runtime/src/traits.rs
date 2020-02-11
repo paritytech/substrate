@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,8 @@ use sp_io;
 use std::fmt::Display;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use sp_core::{self, Hasher, Blake2Hasher, TypeId};
+use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
+use crate::BenchmarkParameter;
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -102,7 +103,7 @@ impl Verify for sp_core::ecdsa::Signature {
 			self.as_ref(),
 			&sp_io::hashing::blake2_256(msg.get()),
 		) {
-			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
+			Ok(pubkey) => &signer.as_ref()[..] == &pubkey[..],
 			_ => false,
 		}
 	}
@@ -117,7 +118,7 @@ pub trait AppVerify {
 }
 
 impl<
-	S: Verify<Signer=<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
+	S: Verify<Signer = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
 	T: sp_application_crypto::Wraps<Inner=S> + sp_application_crypto::AppKey + sp_application_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
 > AppVerify for T where
@@ -157,7 +158,7 @@ pub trait EnsureOrigin<OuterOrigin> {
 }
 
 /// An error that indicates that a lookup failed.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, RuntimeDebug)]
 pub struct LookupError;
 
 impl From<LookupError> for &'static str {
@@ -391,7 +392,7 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
@@ -458,53 +459,22 @@ impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H> whe
 	}
 }
 
-macro_rules! impl_maybe_marker {
-	( $( $(#[$doc:meta])+ $trait_name:ident: $($trait_bound:path),+ );+ ) => {
-		$(
-			$(#[$doc])+
-			#[cfg(feature = "std")]
-			pub trait $trait_name: $($trait_bound +)+ {}
-			#[cfg(feature = "std")]
-			impl<T: $($trait_bound +)+> $trait_name for T {}
-
-			$(#[$doc])+
-			#[cfg(not(feature = "std"))]
-			pub trait $trait_name {}
-			#[cfg(not(feature = "std"))]
-			impl<T> $trait_name for T {}
-		)+
-	}
-}
-
-impl_maybe_marker!(
+sp_core::impl_maybe_marker!(
 	/// A type that implements Display when in std environment.
-	MaybeDisplay: Display;
+	trait MaybeDisplay: Display;
 
 	/// A type that implements Hash when in std environment.
-	MaybeHash: sp_std::hash::Hash;
+	trait MaybeHash: sp_std::hash::Hash;
 
 	/// A type that implements Serialize when in std environment.
-	MaybeSerialize: Serialize;
+	trait MaybeSerialize: Serialize;
 
 	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
-	MaybeSerializeDeserialize: DeserializeOwned, Serialize
-);
+	trait MaybeSerializeDeserialize: DeserializeOwned, Serialize;
 
-/// A type that provides a randomness beacon.
-pub trait RandomnessBeacon {
-	/// Returns 32 bytes of random data. The output will change eventually, but
-	/// is not guaranteed to be different between any two calls.
-	///
-	/// # Security
-	///
-	/// This MUST NOT be used for gambling, as it can be influenced by a
-	/// malicious validator in the short term. It MAY be used in many
-	/// cryptographic protocols, however, so long as one remembers that this
-	/// (like everything else on-chain) is public. For example, it can be
-	/// used where a number is needed that cannot have been chosen by an
-	/// adversary, for purposes such as public-coin zero-knowledge proofs.
-	fn random() -> [u8; 32];
-}
+	/// A type that implements MallocSizeOf.
+	trait MaybeMallocSizeOf: parity_util_mem::MallocSizeOf;
+);
 
 /// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static {}
@@ -521,13 +491,18 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Header:
+	Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug +
+	MaybeMallocSizeOf + 'static
+{
 	/// Header number.
 	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr;
+		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr
+		+ MaybeMallocSizeOf;
 	/// Header hash type
-	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
+		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>
+		+ AsMut<[u8]> + MaybeMallocSizeOf;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -575,14 +550,15 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 /// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + MaybeMallocSizeOf + 'static {
 	/// Type for extrinsics.
-	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
+	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize + MaybeMallocSizeOf;
 	/// Header type.
-	type Header: Header<Hash=Self::Hash>;
+	type Header: Header<Hash=Self::Hash> + MaybeMallocSizeOf;
 	/// Block hash type.
-	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
+		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>
+		+ MaybeMallocSizeOf;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
@@ -601,8 +577,9 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8>;
 }
 
+
 /// Something that acts like an `Extrinsic`.
-pub trait Extrinsic: Sized {
+pub trait Extrinsic: Sized + MaybeMallocSizeOf {
 	/// The function call.
 	type Call;
 
@@ -626,6 +603,17 @@ pub trait Extrinsic: Sized {
 	fn new(_call: Self::Call, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> { None }
 }
 
+/// Implementor is an [`Extrinsic`] and provides metadata about this extrinsic.
+pub trait ExtrinsicMetadata {
+	/// The version of the `Extrinsic`.
+	const VERSION: u8;
+
+	/// Signed extensions attached to this `Extrinsic`.
+	type SignedExtensions: SignedExtension;
+}
+
+/// Extract the hasher type for a block.
+pub type HasherFor<B> = <HashFor<B> as Hash>::Hasher;
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
@@ -684,6 +672,12 @@ pub trait Dispatchable {
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
 pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq {
+	/// Unique identifier of this signed extension.
+	///
+	/// This will be exposed in the metadata to identify the signed extension used
+	/// in an extrinsic.
+	const IDENTIFIER: &'static str;
+
 	/// The type which encodes the sender identity.
 	type AccountId;
 
@@ -781,6 +775,17 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Do any post-flight stuff for a transaction.
 	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
+
+	/// Returns the list of unique identifier for this signed extension.
+	///
+	/// As a [`SignedExtension`] can be a tuple of [`SignedExtension`]`s we need to return a `Vec`
+	/// that holds all the unique identifiers. Each individual `SignedExtension` must return
+	/// *exactly* one identifier.
+	///
+	/// This method provides a default implementation that returns `vec![SELF::IDENTIFIER]`.
+	fn identifier() -> Vec<&'static str> {
+		sp_std::vec![Self::IDENTIFIER]
+	}
 }
 
 #[impl_for_tuples(1, 12)]
@@ -789,6 +794,7 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 	type AccountId = AccountId;
 	type Call = Call;
 	type DispatchInfo = Info;
+	const IDENTIFIER: &'static str = "You should call `identifier()`!";
 	for_tuples!( type AdditionalSigned = ( #( Tuple::AdditionalSigned ),* ); );
 	for_tuples!( type Pre = ( #( Tuple::Pre ),* ); );
 
@@ -839,6 +845,12 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 	) {
 		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info.clone(), len); )* )
 	}
+
+	fn identifier() -> Vec<&'static str> {
+		let mut ids = Vec::new();
+		for_tuples!( #( ids.extend(Tuple::identifier()); )* );
+		ids
+	}
 }
 
 /// Only for bare bone testing when you don't care about signed extensions at all.
@@ -849,6 +861,7 @@ impl SignedExtension for () {
 	type Call = ();
 	type Pre = ();
 	type DispatchInfo = ();
+	const IDENTIFIER: &'static str = "UnitSignedExtension";
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 }
 
@@ -889,42 +902,6 @@ pub trait Applyable: Sized + Send + Sync {
 	) -> crate::ApplyExtrinsicResult;
 }
 
-/// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
-pub struct ApiRef<'a, T>(T, sp_std::marker::PhantomData<&'a ()>);
-
-impl<'a, T> From<T> for ApiRef<'a, T> {
-	fn from(api: T) -> Self {
-		ApiRef(api, Default::default())
-	}
-}
-
-impl<'a, T> sp_std::ops::Deref for ApiRef<'a, T> {
-	type Target = T;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl<'a, T> sp_std::ops::DerefMut for ApiRef<'a, T> {
-	fn deref_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
-}
-
-/// Something that provides a runtime api.
-pub trait ProvideRuntimeApi {
-	/// The concrete type that provides the api.
-	type Api;
-
-	/// Returns the runtime api.
-	/// The returned instance will keep track of modifications to the storage. Any successful
-	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
-	/// the modifications will be `discarded`. The modifications will not be applied to the
-	/// storage, even on a `commit`.
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
-}
-
 /// A marker trait for something that knows the type of the runtime block.
 pub trait GetRuntimeBlockType {
 	/// The `RuntimeBlock` type.
@@ -935,14 +912,6 @@ pub trait GetRuntimeBlockType {
 pub trait GetNodeBlockType {
 	/// The `NodeBlock` type.
 	type NodeBlock: self::Block;
-}
-
-/// Something that provides information about a runtime api.
-pub trait RuntimeApiInfo {
-	/// The identifier of the runtime api.
-	const ID: [u8; 8];
-	/// The version of the runtime api.
-	const VERSION: u32;
 }
 
 /// Something that can validate unsigned extrinsics for the transaction pool.
@@ -997,6 +966,52 @@ pub trait OpaqueKeys: Clone {
 	}
 	/// Verify a proof of ownership for the keys.
 	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
+}
+
+/// Input that adds infinite number of zero after wrapped input.
+///
+/// This can add an infinite stream of zeros onto any input, not just a slice as with
+/// `TrailingZerosInput`.
+pub struct AppendZerosInput<'a, T>(&'a mut T);
+
+impl<'a, T> AppendZerosInput<'a, T> {
+	/// Create a new instance from the given byte array.
+	pub fn new(input: &'a mut T) -> Self {
+		Self(input)
+	}
+}
+
+impl<'a, T: codec::Input> codec::Input for AppendZerosInput<'a, T> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(None)
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let remaining = self.0.remaining_len()?;
+		let completed = if let Some(n) = remaining {
+			let readable = into.len().min(n);
+			// this should never fail if `remaining_len` API is implemented correctly.
+			self.0.read(&mut into[..readable])?;
+			readable
+		} else {
+			// Fill it byte-by-byte.
+			let mut i = 0;
+			while i < into.len() {
+				if let Ok(b) = self.0.read_byte() {
+					into[i] = b;
+					i += 1;
+				} else {
+					break;
+				}
+			}
+			i
+		};
+		// Fill the rest with zeros.
+		for i in &mut into[completed..] {
+			*i = 0;
+		}
+		Ok(())
+	}
 }
 
 /// Input that adds infinite number of zero after wrapped input.
@@ -1120,12 +1135,14 @@ macro_rules! count {
 #[macro_export]
 macro_rules! impl_opaque_keys {
 	(
+		$( #[ $attr:meta ] )*
 		pub struct $name:ident {
 			$(
 				pub $field:ident: $type:ty,
 			)*
 		}
 	) => {
+		$( #[ $attr ] )*
 		#[derive(
 			Default, Clone, PartialEq, Eq,
 			$crate::codec::Encode,
@@ -1156,6 +1173,37 @@ macro_rules! impl_opaque_keys {
 					)*
 				};
 				$crate::codec::Encode::encode(&keys)
+			}
+
+			/// Converts `Self` into a `Vec` of `(raw public key, KeyTypeId)`.
+			pub fn into_raw_public_keys(
+				self,
+			) -> $crate::sp_std::vec::Vec<($crate::sp_std::vec::Vec<u8>, $crate::KeyTypeId)> {
+				let mut keys = Vec::new();
+				$(
+					keys.push((
+						$crate::RuntimeAppPublic::to_raw_vec(&self.$field),
+						<
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::ID,
+					));
+				)*
+
+				keys
+			}
+
+			/// Decode `Self` from the given `encoded` slice and convert `Self` into the raw public
+			/// keys (see [`Self::into_raw_public_keys`]).
+			///
+			/// Returns `None` when the decoding failed, otherwise `Some(_)`.
+			pub fn decode_into_raw_public_keys(
+				encoded: &[u8],
+			) -> Option<$crate::sp_std::vec::Vec<($crate::sp_std::vec::Vec<u8>, $crate::KeyTypeId)>> {
+				<Self as $crate::codec::Decode>::decode(&mut &encoded[..])
+					.ok()
+					.map(|s| s.into_raw_public_keys())
 			}
 		}
 
@@ -1195,6 +1243,12 @@ macro_rules! impl_opaque_keys {
 pub trait Printable {
 	/// Print the object.
 	fn print(&self);
+}
+
+impl<T: Printable> Printable for &T {
+	fn print(&self) {
+		(*self).print()
+	}
 }
 
 impl Printable for u8 {
@@ -1259,10 +1313,31 @@ pub trait BlockIdTo<Block: self::Block> {
 	) -> Result<Option<NumberFor<Block>>, Self::Error>;
 }
 
+/// The pallet benchmarking trait.
+pub trait Benchmarking<T> {
+	/// Run the benchmarks for this pallet.
+	///
+	/// Parameters
+	/// - `extrinsic`: The name of extrinsic function you want to benchmark encoded as bytes.
+	/// - `steps`: The number of sample points you want to take across the range of parameters.
+	/// - `repeat`: The number of times you want to repeat a benchmark.
+	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<T>, &'static str>;
+}
+
+/// The required setup for creating a benchmark.
+pub trait BenchmarkingSetup<T, Call, RawOrigin> {
+	/// Return the components and their ranges which should be tested in this benchmark.
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
+
+	/// Set up the storage, and prepare a call and caller to test in a single run of the benchmark.
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(Call, RawOrigin), &'static str>;
+}
+
 #[cfg(test)]
 mod tests {
-	use super::AccountIdConversion;
+	use super::*;
 	use crate::codec::{Encode, Decode, Input};
+	use sp_core::{crypto::Pair, ecdsa};
 
 	mod t {
 		use sp_core::crypto::KeyTypeId;
@@ -1341,5 +1416,17 @@ mod tests {
 		assert_eq!(t.read(&mut buffer), Ok(()));
 		assert_eq!(t.remaining_len(), Ok(None));
 		assert_eq!(buffer, [0, 0]);
+	}
+
+	#[test]
+	fn ecdsa_verify_works() {
+		let msg = &b"test-message"[..];
+		let (pair, _) = ecdsa::Pair::generate();
+
+		let signature = pair.sign(&msg);
+		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
+
+		assert!(signature.verify(msg, &pair.public()));
+		assert!(signature.verify(msg, &pair.public()));
 	}
 }

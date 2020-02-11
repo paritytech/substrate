@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -103,32 +103,23 @@ mod tests {
 	use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 
 	type AuthorityDiscovery = Module<Test>;
-	type SessionIndex = u32;
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl Trait for Test {}
-
-	pub struct TestOnSessionEnding;
-	impl pallet_session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
-		fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<AuthorityId>> {
-			None
-		}
-	}
 
 	parameter_types! {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 	}
 
 	impl pallet_session::Trait for Test {
-		type OnSessionEnding = TestOnSessionEnding;
+		type SessionManager = ();
 		type Keys = UintAuthorityId;
 		type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 		type SessionHandler = TestSessionHandler;
 		type Event = ();
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
-		type SelectInitialValidators = ();
 		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	}
 

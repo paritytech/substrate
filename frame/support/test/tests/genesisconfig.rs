@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ frame_support::decl_module! {
 
 frame_support::decl_storage! {
 	trait Store for Module<T: Trait> as Example {
-		pub AppendableDM config(t): double_map u32, blake2_256(T::BlockNumber) => Vec<u32>;
+		pub AppendableDM config(t): double_map hasher(blake2_256) u32, hasher(blake2_256) T::BlockNumber => Vec<u32>;
 	}
 }
 

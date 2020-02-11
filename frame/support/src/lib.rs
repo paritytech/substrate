@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -66,7 +66,10 @@ pub mod error;
 pub mod traits;
 pub mod weights;
 
-pub use self::hash::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Hashable};
+pub use self::hash::{
+	Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Blake2_128Concat, Hashable,
+	StorageHasher
+};
 pub use self::storage::{
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap
 };
@@ -111,6 +114,31 @@ macro_rules! parameter_types {
 			fn get() -> I {
 				I::from($value)
 			}
+		}
+	}
+}
+
+/// Macro for easily creating a new implementation of both the `Get` and `Contains` traits. Use
+/// exactly as with `parameter_types`, only the type must be `Ord`.
+#[macro_export]
+macro_rules! ord_parameter_types {
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis const $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!{IMPL $name , $type , $value}
+		$crate::ord_parameter_types!{IMPL $name , $type , $value}
+		$crate::ord_parameter_types!{ $( $rest )* }
+	);
+	() => ();
+	(IMPL $name:ident , $type:ty , $value:expr) => {
+		impl $crate::traits::Contains<$type> for $name {
+			fn contains(t: &$type) -> bool { &$value == t }
+			fn sorted_members() -> $crate::sp_std::prelude::Vec<$type> { vec![$value] }
+			fn count() -> usize { 1 }
 		}
 	}
 }
@@ -226,20 +254,23 @@ mod tests {
 		trait Store for Module<T: Trait> as Example {
 			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
 				linked_map hasher(twox_64_concat) u32 => u64;
-			pub OptionLinkedMap: linked_map u32 => Option<u32>;
+			pub OptionLinkedMap: linked_map hasher(blake2_256) u32 => Option<u32>;
 			pub GenericData get(fn generic_data):
 				linked_map hasher(twox_128) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(fn generic_data2):
-				linked_map T::BlockNumber => Option<T::BlockNumber>;
+				linked_map hasher(blake2_256) T::BlockNumber => Option<T::BlockNumber>;
 			pub GetterNoFnKeyword get(no_fn): Option<u32>;
 
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
-				double_map hasher(twox_64_concat) u32, blake2_256(u32) => u64;
+				double_map hasher(twox_64_concat) u32, hasher(blake2_256) u32 => u64;
 			pub GenericDataDM:
-				double_map T::BlockNumber, twox_128(T::BlockNumber) => T::BlockNumber;
+				double_map hasher(blake2_256) T::BlockNumber, hasher(twox_128) T::BlockNumber
+				=> T::BlockNumber;
 			pub GenericData2DM:
-				double_map T::BlockNumber, twox_256(T::BlockNumber) => Option<T::BlockNumber>;
-			pub AppendableDM: double_map u32, blake2_256(T::BlockNumber) => Vec<u32>;
+				double_map hasher(blake2_256) T::BlockNumber, hasher(twox_256) T::BlockNumber
+				=> Option<T::BlockNumber>;
+			pub AppendableDM:
+				double_map hasher(blake2_256) u32, hasher(blake2_256) T::BlockNumber => Vec<u32>;
 		}
 	}
 

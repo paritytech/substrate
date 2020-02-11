@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,26 +27,27 @@ use sc_runtime_test::WASM_BINARY;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 use test_case::test_case;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
+use sp_wasm_interface::HostFunctions as _;
 
 use crate::WasmExecutionMethod;
 
 pub type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
+type HostFunctions = sp_io::SubstrateHostFunctions;
 
 fn call_in_wasm<E: Externalities>(
 	function: &str,
 	call_data: &[u8],
 	execution_method: WasmExecutionMethod,
 	ext: &mut E,
-	code: &[u8],
-	heap_pages: u64,
 ) -> crate::error::Result<Vec<u8>> {
-	crate::call_in_wasm::<E, sp_io::SubstrateHostFunctions>(
+	crate::call_in_wasm::<HostFunctions>(
 		function,
 		call_data,
 		execution_method,
 		ext,
-		code,
-		heap_pages,
+		&WASM_BINARY[..],
+		1024,
+		true,
 	)
 }
 
@@ -55,17 +56,72 @@ fn call_in_wasm<E: Externalities>(
 fn returning_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
-	let test_code = WASM_BINARY;
 
 	let output = call_in_wasm(
 		"test_empty_return",
 		&[],
 		wasm_method,
 		&mut ext,
-		&test_code[..],
-		8,
 	).unwrap();
 	assert_eq!(output, vec![0u8; 0]);
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	match call_in_wasm(
+		"test_calling_missing_external",
+		&[],
+		wasm_method,
+		&mut ext,
+	) {
+		Ok(_) => panic!("was expected an `Err`"),
+		Err(e) => {
+			match wasm_method {
+				WasmExecutionMethod::Interpreted => assert_eq!(
+					&format!("{:?}", e),
+					"Wasmi(Trap(Trap { kind: Host(Other(\"Function `missing_external` is only a stub. Calling a stub is not allowed.\")) }))"
+				),
+				#[cfg(feature = "wasmtime")]
+				WasmExecutionMethod::Compiled => assert_eq!(
+					&format!("{:?}", e),
+					"Other(\"call to undefined external function with index 68\")"
+				),
+			}
+		}
+	}
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	match call_in_wasm(
+		"test_calling_yet_another_missing_external",
+		&[],
+		wasm_method,
+		&mut ext,
+	) {
+		Ok(_) => panic!("was expected an `Err`"),
+		Err(e) => {
+			match wasm_method {
+				WasmExecutionMethod::Interpreted => assert_eq!(
+					&format!("{:?}", e),
+					"Wasmi(Trap(Trap { kind: Host(Other(\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\")) }))"
+				),
+				#[cfg(feature = "wasmtime")]
+				WasmExecutionMethod::Compiled => assert_eq!(
+					&format!("{:?}", e),
+					"Other(\"call to undefined external function with index 69\")"
+				),
+			}
+		}
+	}
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
@@ -73,15 +129,12 @@ fn returning_should_work(wasm_method: WasmExecutionMethod) {
 fn panicking_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
-	let test_code = WASM_BINARY;
 
 	let output = call_in_wasm(
 		"test_panic",
 		&[],
 		wasm_method,
 		&mut ext,
-		&test_code[..],
-		8,
 	);
 	assert!(output.is_err());
 
@@ -90,8 +143,6 @@ fn panicking_should_work(wasm_method: WasmExecutionMethod) {
 		&[0],
 		wasm_method,
 		&mut ext,
-		&test_code[..],
-		8,
 	);
 	assert_eq!(Decode::decode(&mut &output.unwrap()[..]), Ok(Vec::<u8>::new()));
 
@@ -100,8 +151,6 @@ fn panicking_should_work(wasm_method: WasmExecutionMethod) {
 		&vec![2].encode(),
 		wasm_method,
 		&mut ext,
-		&test_code[..],
-		8,
 	);
 	assert!(output.is_err());
 }
@@ -114,15 +163,12 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 	{
 		let mut ext = ext.ext();
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
-		let test_code = WASM_BINARY;
 
 		let output = call_in_wasm(
 			"test_data_in",
 			&b"Hello world".to_vec().encode(),
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec().encode());
@@ -150,7 +196,6 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 		ext.set_storage(b"aba".to_vec(), b"3".to_vec());
 		ext.set_storage(b"abb".to_vec(), b"4".to_vec());
 		ext.set_storage(b"bbb".to_vec(), b"5".to_vec());
-		let test_code = WASM_BINARY;
 
 		// This will clear all entries which prefix is "ab".
 		let output = call_in_wasm(
@@ -158,8 +203,6 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 			&b"ab".to_vec().encode(),
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec().encode());
@@ -181,15 +224,12 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 fn blake2_256_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
-	let test_code = WASM_BINARY;
 	assert_eq!(
 		call_in_wasm(
 			"test_blake2_256",
 			&[0],
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		blake2_256(&b""[..]).to_vec().encode(),
 	);
@@ -199,8 +239,6 @@ fn blake2_256_should_work(wasm_method: WasmExecutionMethod) {
 			&b"Hello world!".to_vec().encode(),
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		blake2_256(&b"Hello world!"[..]).to_vec().encode(),
 	);
@@ -211,15 +249,12 @@ fn blake2_256_should_work(wasm_method: WasmExecutionMethod) {
 fn blake2_128_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
-	let test_code = WASM_BINARY;
 	assert_eq!(
 		call_in_wasm(
 			"test_blake2_128",
 			&[0],
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		blake2_128(&b""[..]).to_vec().encode(),
 	);
@@ -229,8 +264,6 @@ fn blake2_128_should_work(wasm_method: WasmExecutionMethod) {
 			&b"Hello world!".to_vec().encode(),
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		blake2_128(&b"Hello world!"[..]).to_vec().encode(),
 	);
@@ -241,15 +274,12 @@ fn blake2_128_should_work(wasm_method: WasmExecutionMethod) {
 fn sha2_256_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
-	let test_code = WASM_BINARY;
 	assert_eq!(
 		call_in_wasm(
 			"test_sha2_256",
 			&[0],
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		)
 		.unwrap(),
 		hex!("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
@@ -262,8 +292,6 @@ fn sha2_256_should_work(wasm_method: WasmExecutionMethod) {
 			&b"Hello world!".to_vec().encode(),
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		)
 		.unwrap(),
 		hex!("c0535e4be2b79ffd93291305436bf889314e4a3faec05ecffcbb7df31ad9e51a")
@@ -277,15 +305,12 @@ fn sha2_256_should_work(wasm_method: WasmExecutionMethod) {
 fn twox_256_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
-	let test_code = WASM_BINARY;
 	assert_eq!(
 		call_in_wasm(
 			"test_twox_256",
 			&[0],
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		hex!(
 				"99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a"
@@ -297,8 +322,6 @@ fn twox_256_should_work(wasm_method: WasmExecutionMethod) {
 			&b"Hello world!".to_vec().encode(),
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		hex!(
 				"b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74"
@@ -311,15 +334,12 @@ fn twox_256_should_work(wasm_method: WasmExecutionMethod) {
 fn twox_128_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
-	let test_code = WASM_BINARY;
 	assert_eq!(
 		call_in_wasm(
 			"test_twox_128",
 			&[0],
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		hex!("99e9d85137db46ef4bbea33613baafd5").to_vec().encode(),
 	);
@@ -329,8 +349,6 @@ fn twox_128_should_work(wasm_method: WasmExecutionMethod) {
 			&b"Hello world!".to_vec().encode(),
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		hex!("b27dfd7f223f177f2a13647b533599af").to_vec().encode(),
 	);
@@ -341,7 +359,6 @@ fn twox_128_should_work(wasm_method: WasmExecutionMethod) {
 fn ed25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
-	let test_code = WASM_BINARY;
 	let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
 	let sig = key.sign(b"all ok!");
 	let mut calldata = vec![];
@@ -354,8 +371,6 @@ fn ed25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 			&calldata.encode(),
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		true.encode(),
 	);
@@ -371,8 +386,6 @@ fn ed25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 			&calldata.encode(),
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		false.encode(),
 	);
@@ -383,7 +396,6 @@ fn ed25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 fn sr25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
-	let test_code = WASM_BINARY;
 	let key = sr25519::Pair::from_seed(&blake2_256(b"test"));
 	let sig = key.sign(b"all ok!");
 	let mut calldata = vec![];
@@ -396,8 +408,6 @@ fn sr25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 			&calldata.encode(),
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		true.encode(),
 	);
@@ -413,8 +423,6 @@ fn sr25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 			&calldata.encode(),
 			wasm_method,
 			&mut ext,
-			&test_code[..],
-			8,
 		).unwrap(),
 		false.encode(),
 	);
@@ -424,17 +432,13 @@ fn sr25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
 	let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
-	let test_code = WASM_BINARY;
 	assert_eq!(
 		call_in_wasm(
 			"test_ordered_trie_root",
 			&[0],
 			wasm_method,
-			&mut ext,
-			&test_code[..],
-			8,
+			&mut ext.ext(),
 		).unwrap(),
 		Layout::<Blake2Hasher>::ordered_trie_root(trie_input.iter()).as_bytes().encode(),
 	);
@@ -448,16 +452,12 @@ fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();
 	ext.register_extension(OffchainExt::new(offchain));
-	let test_code = WASM_BINARY;
-	let mut ext = ext.ext();
 	assert_eq!(
 		call_in_wasm(
 			"test_offchain_local_storage",
 			&[0],
 			wasm_method,
-			&mut ext,
-			&test_code[..],
-			8,
+			&mut ext.ext(),
 		).unwrap(),
 		true.encode(),
 	);
@@ -484,17 +484,84 @@ fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 		},
 	);
 
-	let test_code = WASM_BINARY;
-	let mut ext = ext.ext();
 	assert_eq!(
 		call_in_wasm(
 			"test_offchain_http",
 			&[0],
 			wasm_method,
-			&mut ext,
-			&test_code[..],
-			8,
+			&mut ext.ext(),
 		).unwrap(),
 		true.encode(),
 	);
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[should_panic(expected = "Allocator ran out of space")]
+fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+
+	crate::call_in_wasm::<HostFunctions>(
+		"test_exhaust_heap",
+		&[0],
+		wasm_method,
+		&mut ext.ext(),
+		&WASM_BINARY[..],
+		// `17` is the initial number of pages compiled into the binary.
+		17,
+		true,
+	).unwrap();
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
+	let mut instance = crate::wasm_runtime::create_wasm_runtime_with_code(
+		wasm_method,
+		1024,
+		&WASM_BINARY[..],
+		HostFunctions::host_functions(),
+		true,
+	).expect("Creates instance");
+
+	let res = instance.call("returns_mutable_static", &[0]).unwrap();
+	assert_eq!(33, u64::decode(&mut &res[..]).unwrap());
+
+	// We expect that every invocation will need to return the initial
+	// value plus one. If the value increases more than that then it is
+	// a sign that the wasm runtime preserves the memory content.
+	let res = instance.call("returns_mutable_static", &[0]).unwrap();
+	assert_eq!(33, u64::decode(&mut &res[..]).unwrap());
+}
+
+// If we didn't restore the wasm instance properly, on a trap the stack pointer would not be
+// returned to its initial value and thus the stack space is going to be leaked.
+//
+// See https://github.com/paritytech/substrate/issues/2967 for details
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
+	// Allocate 32 pages (of 65536 bytes) which gives the runtime 2048KB of heap to operate on
+	// (plus some additional space unused from the initial pages requested by the wasm runtime
+	// module).
+	//
+	// The fixture performs 2 allocations of 768KB and this theoretically gives 1536KB, however, due
+	// to our allocator algorithm there are inefficiencies.
+	const REQUIRED_MEMORY_PAGES: u64 = 32;
+
+	let mut instance = crate::wasm_runtime::create_wasm_runtime_with_code(
+		wasm_method,
+		REQUIRED_MEMORY_PAGES,
+		&WASM_BINARY[..],
+		HostFunctions::host_functions(),
+		true,
+	).expect("Creates instance");
+
+	// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
+	let res = instance.call("allocates_huge_stack_array", &true.encode());
+	assert!(res.is_err());
+
+	// On the second invocation we allocate yet another 768KB (75%) of stack
+	let res = instance.call("allocates_huge_stack_array", &false.encode());
+	assert!(res.is_ok());
 }

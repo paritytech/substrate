@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -33,8 +33,6 @@
 //!
 //! - [Timestamp](../pallet_timestamp/index.html): The Timestamp module is used in Aura to track
 //! consensus rounds (via `slots`).
-//! - [Consensus](../frame_consensus/index.html): The Consensus module does not relate directly to Aura,
-//!  but serves to manage offline reporting by implementing `ProvideInherent` in a similar way.
 //!
 //! ## References
 //!

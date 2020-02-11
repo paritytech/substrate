@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -121,13 +121,12 @@ impl frame_system::Trait for Test {
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnFreeBalanceZero = Contract;
+	type OnReapAccount = (System, Contract);
 	type OnNewAccount = ();
 	type Event = MetaEvent;
 	type DustRemoval = ();
 	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 }
 parameter_types! {
@@ -170,7 +169,6 @@ impl Trait for Test {
 	type RentByteFee = RentByteFee;
 	type RentDepositOffset = RentDepositOffset;
 	type SurchargeReward = SurchargeReward;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
@@ -277,7 +275,6 @@ impl ExtBuilder {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		GenesisConfig::<Test> {
 			current_schedule: Schedule {
@@ -310,7 +307,7 @@ fn refunds_unused_gas() {
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, Vec::new()));
 
 		// 2 * 135 - gas price multiplied by the call base fee.
-		assert_eq!(Balances::free_balance(&ALICE), 100_000_000 - (2 * 135));
+		assert_eq!(Balances::free_balance(ALICE), 100_000_000 - (2 * 135));
 	});
 }
 
@@ -452,7 +449,7 @@ fn instantiate_and_call_and_deposit_event() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Contract(BOB, vec![1, 2, 3, 4])),
+				event: MetaEvent::contract(RawEvent::ContractExecution(BOB, vec![1, 2, 3, 4])),
 				topics: vec![],
 			},
 			EventRecord {
@@ -463,7 +460,7 @@ fn instantiate_and_call_and_deposit_event() {
 		]);
 
 		assert_ok!(creation);
-		assert!(ContractInfoOf::<Test>::exists(BOB));
+		assert!(ContractInfoOf::<Test>::contains_key(BOB));
 	});
 }
 
@@ -649,7 +646,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				100_000,
 				vec![],
 			),
-			"during execution"
+			"contract trapped during execution"
 		);
 		assert_eq!(System::events(), vec![
 			EventRecord {
@@ -860,6 +857,16 @@ fn storage_size() {
 	});
 }
 
+fn initialize_block(number: u64) {
+	System::initialize(
+		&number,
+		&[0u8; 32].into(),
+		&[0u8; 32].into(),
+		&Default::default(),
+		Default::default(),
+	);
+}
+
 #[test]
 fn deduct_blocks() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
@@ -880,7 +887,7 @@ fn deduct_blocks() {
 		assert_eq!(bob_contract.rent_allowance, 1_000);
 
 		// Advance 4 blocks
-		System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(5);
 
 		// Trigger rent through call
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
@@ -895,7 +902,7 @@ fn deduct_blocks() {
 		assert_eq!(Balances::free_balance(BOB), 30_000 - rent);
 
 		// Advance 7 blocks more
-		System::initialize(&12, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(12);
 
 		// Trigger rent through call
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
@@ -970,7 +977,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 		));
 
 		// Advance blocks
-		System::initialize(&blocks, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(blocks);
 
 		// Trigger rent through call
 		assert!(trigger_call());
@@ -1007,23 +1014,23 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
-		assert_eq!(Balances::free_balance(&BOB), 100);
+		assert_eq!(Balances::free_balance(BOB), 100);
 
 		// Advance blocks
-		System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(10);
 
 		// Trigger rent through call
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
-		assert_eq!(Balances::free_balance(&BOB), subsistence_threshold);
+		assert_eq!(Balances::free_balance(BOB), subsistence_threshold);
 
 		// Advance blocks
-		System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(20);
 
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
-		assert_eq!(Balances::free_balance(&BOB), subsistence_threshold);
+		assert_eq!(Balances::free_balance(BOB), subsistence_threshold);
 	});
 
 	// Allowance exceeded
@@ -1041,24 +1048,24 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 100);
-		assert_eq!(Balances::free_balance(&BOB), 1_000);
+		assert_eq!(Balances::free_balance(BOB), 1_000);
 
 		// Advance blocks
-		System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(10);
 
 		// Trigger rent through call
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 		// Balance should be initial balance - initial rent_allowance
-		assert_eq!(Balances::free_balance(&BOB), 900);
+		assert_eq!(Balances::free_balance(BOB), 900);
 
 		// Advance blocks
-		System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(20);
 
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
-		assert_eq!(Balances::free_balance(&BOB), 900);
+		assert_eq!(Balances::free_balance(BOB), 900);
 	});
 
 	// Balance reached and inferior to subsistence threshold
@@ -1076,28 +1083,28 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
-		assert_eq!(Balances::free_balance(&BOB), 50 + Balances::minimum_balance());
+		assert_eq!(Balances::free_balance(BOB), 50 + Balances::minimum_balance());
 
 		// Transfer funds
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::transfer()));
 		assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
-		assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
+		assert_eq!(Balances::free_balance(BOB), Balances::minimum_balance());
 
 		// Advance blocks
-		System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(10);
 
 		// Trigger rent through call
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).is_none());
-		assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
+		assert_eq!(Balances::free_balance(BOB), Balances::minimum_balance());
 
 		// Advance blocks
-		System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(20);
 
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).is_none());
-		assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
+		assert_eq!(Balances::free_balance(BOB), Balances::minimum_balance());
 	});
 }
 
@@ -1121,15 +1128,23 @@ fn call_removed_contract() {
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
 
 		// Advance blocks
-		System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(10);
 
 		// Calling contract should remove contract and fail.
 		assert_err!(
 			Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
 			"contract has been evicted"
 		);
+		// Calling a contract that is about to evict shall emit an event.
+		assert_eq!(System::events(), vec![
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contract(RawEvent::Evicted(BOB, true)),
+				topics: vec![],
+			},
+		]);
 
- 		// Subsequent contract calls should also fail.
+		// Subsequent contract calls should also fail.
 		assert_err!(
 			Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
 			"contract has been evicted"
@@ -1208,7 +1223,7 @@ fn default_rent_allowance_on_instantiate() {
 		assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
 
 		// Advance blocks
-		System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(5);
 
 		// Trigger rent through call
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
@@ -1354,8 +1369,11 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		}
 
 		// Advance 4 blocks, to the 5th.
-		System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(5);
 
+		/// Preserve `BOB`'s code hash for later introspection.
+		let bob_code_hash = ContractInfoOf::<Test>::get(BOB).unwrap()
+			.get_alive().unwrap().code_hash;
 		// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
 		// we expect that it will get removed leaving tombstone.
 		assert_err!(
@@ -1363,6 +1381,15 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			"contract has been evicted"
 		);
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+		assert_eq!(System::events(), vec![
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contract(
+					RawEvent::Evicted(BOB.clone(), true)
+				),
+				topics: vec![],
+			},
+		]);
 
 		/// Create another account with the address `DJANGO` with `CODE_RESTORATION`.
 		///
@@ -1383,7 +1410,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 		if !test_restore_to_with_dirty_storage {
 			// Advance 1 block, to the 6th.
-			System::initialize(&6, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			initialize_block(6);
 		}
 
 		// Perform a call to `DJANGO`. This should either perform restoration successfully or
@@ -1405,6 +1432,60 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(django_contract.storage_size, 16);
 			assert_eq!(django_contract.trie_id, django_trie_id);
 			assert_eq!(django_contract.deduct_block, System::block_number());
+			match (test_different_storage, test_restore_to_with_dirty_storage) {
+				(true, false) => {
+					assert_eq!(System::events(), vec![
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contract(
+								RawEvent::Restored(DJANGO, BOB, bob_code_hash, 50, false)
+							),
+							topics: vec![],
+						},
+					]);
+				}
+				(_, true) => {
+					assert_eq!(System::events(), vec![
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contract(RawEvent::Evicted(BOB, true)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(CHARLIE, 1_000_000)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(DJANGO, 30_000)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contract(RawEvent::Transfer(CHARLIE, DJANGO, 30_000)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contract(RawEvent::Instantiated(CHARLIE, DJANGO)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contract(RawEvent::Restored(
+								DJANGO,
+								BOB,
+								bob_code_hash,
+								50,
+								false,
+							)),
+							topics: vec![],
+						},
+					]);
+				}
+				_ => unreachable!(),
+			}
 		} else {
 			// Here we expect that the restoration is succeeded. Check that the restoration
 			// contract `DJANGO` ceased to exist and that `BOB` returned back.
@@ -1416,6 +1497,20 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(bob_contract.trie_id, django_trie_id);
 			assert_eq!(bob_contract.deduct_block, System::block_number());
 			assert!(ContractInfoOf::<Test>::get(DJANGO).is_none());
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::ReapedAccount(DJANGO, 0)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(
+						RawEvent::Restored(DJANGO, BOB, bob_contract.code_hash, 50, true)
+					),
+					topics: vec![],
+				},
+			]);
 		}
 	});
 }
@@ -1522,7 +1617,7 @@ fn storage_max_value_limit() {
 				100_000,
 				Encode::encode(&(self::MaxValueSize::get() + 1)),
 			),
-			"during execution"
+			"contract trapped during execution"
 		);
 	});
 }
@@ -2045,7 +2140,7 @@ fn cannot_self_destruct_while_live() {
 				100_000,
 				vec![0],
 			),
-			"during execution"
+			"contract trapped during execution"
 		);
 
 		// Check that BOB is still alive.

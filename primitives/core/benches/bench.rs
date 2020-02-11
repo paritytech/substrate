@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies
+// Copyright 2019-2020 Parity Technologies
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,8 +87,8 @@ fn bench_ed25519(c: &mut Criterion) {
 }
 
 criterion_group!{
-    name = benches;
-    config = Criterion::default().warm_up_time(Duration::from_millis(500)).without_plots();
-    targets = bench_hash_128_fix_size, bench_hash_128_dyn_size, bench_ed25519
+	name = benches;
+	config = Criterion::default().warm_up_time(Duration::from_millis(500)).without_plots();
+	targets = bench_hash_128_fix_size, bench_hash_128_dyn_size, bench_ed25519
 }
 criterion_main!(benches);

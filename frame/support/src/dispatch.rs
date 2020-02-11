@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ pub use crate::weights::{
 	TransactionPriority, Weight, WeighBlock, PaysFee,
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError, DispatchResult};
+pub use crate::traits::{CallMetadata, GetCallMetadata, GetCallName};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -1075,7 +1076,6 @@ macro_rules! decl_module {
 
 	// Declare a `Call` variant parameter that should be encoded `compact`.
 	(@create_call_enum
-		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
 		{ $( $other_where_bounds:tt )* }
@@ -1089,7 +1089,6 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module! {
 			@create_call_enum
-			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
 			{ $( $other_where_bounds )* }
@@ -1107,7 +1106,6 @@ macro_rules! decl_module {
 
 	// Declare a `Call` variant parameter.
 	(@create_call_enum
-		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
 		{ $( $other_where_bounds:tt )* }
@@ -1120,7 +1118,6 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module! {
 			@create_call_enum
-			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
 			{ $( $other_where_bounds )* }
@@ -1136,7 +1133,6 @@ macro_rules! decl_module {
 	};
 
 	(@create_call_enum
-		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
 		{ $( $other_where_bounds:tt )* }
@@ -1151,7 +1147,6 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module! {
 			@create_call_enum
-			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
 			{ $( $other_where_bounds )* }
@@ -1172,21 +1167,22 @@ macro_rules! decl_module {
 	};
 
 	(@create_call_enum
-		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
 		{ $( $other_where_bounds:tt )* }
 		{ $( $generated_variants:tt )* }
 		{}
 	) => {
+		/// Dispatchable calls.
+		///
+		/// Each variant of this enum maps to a dispatchable function from the associated module.
 		#[derive($crate::codec::Encode, $crate::codec::Decode)]
-		$( #[$attr] )*
 		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?>
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
 			#[codec(skip)]
-			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
+			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance, $($instance)?)>, $crate::dispatch::Never),
 			$( $generated_variants )*
 		}
 	};
@@ -1221,10 +1217,11 @@ macro_rules! decl_module {
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq, $crate::RuntimeDebug)]
+		$( #[$attr] )*
 		pub struct $mod_type<
 			$trait_instance: $trait_name
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
-		>($crate::sp_std::marker::PhantomData<($trait_instance $(, $instance)?)>) where
+		>($crate::sp_std::marker::PhantomData<($trait_instance, $( $instance)?)>) where
 			$( $other_where_bounds )*;
 
 		$crate::decl_module! {
@@ -1286,7 +1283,6 @@ macro_rules! decl_module {
 
 		$crate::decl_module! {
 			@create_call_enum
-			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
 			{ $( $other_where_bounds )* }
@@ -1307,40 +1303,56 @@ macro_rules! decl_module {
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
-				$(
-					if let $call_type::$fn_name($( ref $param_name ),*) = self {
-						let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
-							&$weight,
-							($( $param_name, )*)
-						);
-						let class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
-							&$weight,
-							($( $param_name, )*)
-						);
-						let pays_fee = <dyn $crate::dispatch::PaysFee>::pays_fee(
-							&$weight
-						);
-						return $crate::dispatch::DispatchInfo { weight, class, pays_fee };
-					}
-					if let $call_type::__PhantomItem(_, _) = self { unreachable!("__PhantomItem should never be used.") }
-				)*
-				// Defensive only: this function must have already returned at this point.
-				// all dispatchable function will have a weight which has the `::default`
-				// implementation of `SimpleDispatchInfo`. Nonetheless, we create one if it does
-				// not exist.
-				let weight = <dyn $crate::dispatch::WeighData<_>>::weigh_data(
-					&$crate::dispatch::SimpleDispatchInfo::default(),
-					()
-				);
-				let class = <dyn $crate::dispatch::ClassifyDispatch<_>>::classify_dispatch(
-					&$crate::dispatch::SimpleDispatchInfo::default(),
-					()
-				);
-				let pays_fee = <dyn $crate::dispatch::PaysFee>::pays_fee(
-					&$crate::dispatch::SimpleDispatchInfo::default()
-				);
-				$crate::dispatch::DispatchInfo { weight, class, pays_fee }
+				match *self {
+					$(
+						$call_type::$fn_name( $( ref $param_name ),* ) => {
+							let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
+								&$weight,
+								($( $param_name, )*)
+							);
+							let class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
+								&$weight,
+								($( $param_name, )*)
+							);
+							let pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
+								&$weight,
+								($( $param_name, )*)
+							);
+							$crate::dispatch::DispatchInfo { 
+								weight, 
+								class, 
+								pays_fee,
+							}
+						},
+					)*
+					$call_type::__PhantomItem(_, _) => unreachable!("__PhantomItem should never be used."),
+				}
+			}
+		}
 
+		// Implement GetCallName for the Call.
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetCallName
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn get_call_name(&self) -> &'static str {
+				match *self {
+					$(
+						$call_type::$fn_name( $( ref $param_name ),* ) => {
+							// Don't generate any warnings for unused variables
+							let _ = ( $( $param_name ),* );
+							stringify!($fn_name)
+						},
+					)*
+					$call_type::__PhantomItem(_, _) => unreachable!("__PhantomItem should never be used."),
+				}
+			}
+
+			fn get_call_names() -> &'static [&'static str] {
+				&[
+					$(
+						stringify!($fn_name),
+					)*
+				]
 			}
 		}
 
@@ -1500,6 +1512,36 @@ macro_rules! impl_outer_dispatch {
 			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
 				match self {
 					$( $call_type::$camelcase(call) => call.get_dispatch_info(), )*
+				}
+			}
+		}
+		impl $crate::dispatch::GetCallMetadata for $call_type {
+			fn get_call_metadata(&self) -> $crate::dispatch::CallMetadata {
+				use $crate::dispatch::GetCallName;
+				match self {
+					$( $call_type::$camelcase(call) => {
+						let function_name = call.get_call_name();
+						let pallet_name = stringify!($camelcase);
+						$crate::dispatch::CallMetadata { function_name, pallet_name }
+					}, )*
+				}
+			}
+
+			fn get_module_names() -> &'static [&'static str] {
+				&[$(
+					stringify!($camelcase),
+				)*]
+			}
+
+			fn get_call_names(module: &str) -> &'static [&'static str] {
+				use $crate::dispatch::{Callable, GetCallName};
+				match module {
+					$(
+						stringify!($camelcase) =>
+							<<$camelcase as Callable<$runtime>>::Call
+								as GetCallName>::get_call_names(),
+					)*
+					_ => unreachable!(),
 				}
 			}
 		}
@@ -1671,7 +1713,7 @@ macro_rules! __impl_module_constants_metadata {
 							<I>, $const_instance: $const_instantiable
 						)?
 					>($crate::dispatch::marker::PhantomData<
-						($const_trait_instance $(, $const_instance)?)
+						($const_trait_instance, $( $const_instance)?)
 					>);
 					impl<$const_trait_instance: 'static + $const_trait_name $(
 						<I>, $const_instance: $const_instantiable)?
@@ -1874,6 +1916,7 @@ mod tests {
 	use super::*;
 	use crate::sp_runtime::traits::{OnInitialize, OnFinalize};
 	use crate::weights::{DispatchInfo, DispatchClass};
+	use crate::traits::{CallMetadata, GetCallMetadata, GetCallName};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
 		type Origin;
@@ -2086,5 +2129,31 @@ mod tests {
 		// dependent
 		assert_eq!(<Test as WeighBlock<u32>>::on_finalize(2), 10);
 		assert_eq!(<Test as WeighBlock<u32>>::on_finalize(3), 0);
+	}
+
+	#[test]
+	fn call_name() {
+		let name = Call::<TraitImpl>::aux_3().get_call_name();
+		assert_eq!("aux_3", name);
+	}
+
+	#[test]
+	fn call_metadata() {
+		let call = OuterCall::Test(Call::<TraitImpl>::aux_3());
+		let metadata = call.get_call_metadata();
+		let expected = CallMetadata { function_name: "aux_3".into(), pallet_name: "Test".into() };
+		assert_eq!(metadata, expected);
+	}
+
+	#[test]
+	fn get_call_names() {
+		let call_names = Call::<TraitImpl>::get_call_names();
+		assert_eq!(["aux_0", "aux_1", "aux_2", "aux_3", "aux_4", "aux_5", "operational"], call_names);
+	}
+
+	#[test]
+	fn get_module_names() {
+		let module_names = OuterCall::get_module_names();
+		assert_eq!(["Test"], module_names);
 	}
 }

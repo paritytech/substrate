@@ -3,9 +3,10 @@ name = "substrate-frame-rpc-system"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
-sc-client = { version = "2.0.0", path = "../../../../client/" }
+sc-client = { version = "0.8", path = "../../../../client/" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 futures = "0.3.1"
 jsonrpc-core = "14.0.3"
@@ -14,6 +15,7 @@ jsonrpc-derive = "14.0.3"
 log = "0.4.8"
 serde = { version = "1.0.101", features = ["derive"] }
 sp-runtime = { version = "2.0.0", path = "../../../../primitives/runtime" }
+sp-api = { version = "2.0.0", path = "../../../../primitives/api" }
 frame-system-rpc-runtime-api = { version = "2.0.0", path = "../../../../frame/system/rpc/runtime-api" }
 sp-core = { version = "2.0.0", path = "../../../../primitives/core" }
 sp-blockchain = { version = "2.0.0", path = "../../../../primitives/blockchain" }

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,13 +21,17 @@ use std::collections::btree_map::Entry;
 use codec::{Decode, Encode};
 use hash_db::Hasher;
 use num_traits::One;
-use crate::backend::Backend;
-use crate::overlayed_changes::OverlayedChanges;
-use crate::trie_backend_essence::TrieBackendEssence;
-use crate::changes_trie::build_iterator::digest_build_iterator;
-use crate::changes_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex};
-use crate::changes_trie::{AnchorBlockId, ConfigurationRange, Storage, BlockNumber};
-use crate::changes_trie::input::ChildIndex;
+use crate::{
+	StorageKey,
+	backend::Backend,
+	overlayed_changes::OverlayedChanges,
+	trie_backend_essence::TrieBackendEssence,
+	changes_trie::{
+		AnchorBlockId, ConfigurationRange, Storage, BlockNumber,
+		build_iterator::digest_build_iterator,
+		input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex, ChildIndex},
+	},
+};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -101,7 +105,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 
-	let mut children_keys = BTreeSet::<Vec<u8>>::new();
+	let mut children_keys = BTreeSet::<StorageKey>::new();
 	let mut children_result = BTreeMap::new();
 	for (storage_key, _) in changes.prospective.children.iter()
 		.chain(changes.committed.children.iter()) {
@@ -126,7 +130,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
 	changes: &'a OverlayedChanges,
-	storage_key: Option<Vec<u8>>,
+	storage_key: Option<StorageKey>,
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
 	where
 		B: Backend<H>,
@@ -231,7 +235,7 @@ fn prepare_digest_input<'a, H, Number>(
 			let trie_root = storage.root(parent, digest_build_block.clone())?;
 			let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block.clone()))?;
 
-			let insert_to_map = |map: &mut BTreeMap<_,_>, key: Vec<u8>| {
+			let insert_to_map = |map: &mut BTreeMap<_,_>, key: StorageKey| {
 				match map.entry(key.clone()) {
 					Entry::Vacant(entry) => {
 						entry.insert((DigestIndex {
@@ -277,7 +281,7 @@ fn prepare_digest_input<'a, H, Number>(
 				return Ok((map, child_map));
 			}
 
-			let mut children_roots = BTreeMap::<Vec<u8>, _>::new();
+			let mut children_roots = BTreeMap::<StorageKey, _>::new();
 			{
 				let trie_storage = TrieBackendEssence::<_, H>::new(
 					crate::changes_trie::TrieBackendStorageAdapter(storage),
@@ -339,9 +343,9 @@ fn prepare_digest_input<'a, H, Number>(
 mod test {
 	use codec::Encode;
 	use sp_core::Blake2Hasher;
-	use sp_core::storage::well_known_keys::{EXTRINSIC_INDEX};
+	use sp_core::storage::well_known_keys::EXTRINSIC_INDEX;
 	use sp_core::storage::ChildInfo;
-	use crate::backend::InMemory;
+	use crate::InMemoryBackend;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
@@ -351,20 +355,19 @@ mod test {
 	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
 
 	fn prepare_for_build(zero: u64) -> (
-		InMemory<Blake2Hasher>,
+		InMemoryBackend<Blake2Hasher>,
 		InMemoryStorage<Blake2Hasher, u64>,
 		OverlayedChanges,
 		Configuration,
 	) {
-		let config = Configuration { digest_interval: 4, digest_levels: 2 };
-		let backend: InMemory<_> = vec![
+		let backend: InMemoryBackend<_> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
 			(vec![102], vec![255]),
 			(vec![103], vec![255]),
 			(vec![104], vec![255]),
 			(vec![105], vec![255]),
-		].into_iter().collect::<::std::collections::BTreeMap<_, _>>().into();
+		].into_iter().collect::<std::collections::BTreeMap<_, _>>().into();
 		let child_trie_key1 = b"1".to_vec();
 		let child_trie_key2 = b"2".to_vec();
 		let storage = InMemoryStorage::with_inputs(vec![
@@ -465,8 +468,9 @@ mod test {
 					].into_iter().collect(), CHILD_INFO_1.to_owned())),
 				].into_iter().collect(),
 			},
-			changes_trie_config: Some(config.clone()),
+			collect_extrinsics: true,
 		};
+		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 
 		(backend, storage, changes, config)
 	}
@@ -553,7 +557,6 @@ mod test {
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![100] }, vec![0, 2]),
 					]),
 			]);
-
 		}
 
 		test_with_zero(0);
@@ -597,7 +600,6 @@ mod test {
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 16, key: vec![100] }, vec![0, 2]),
 					]),
 			]);
-
 		}
 
 		test_with_zero(0);
@@ -706,8 +708,7 @@ mod test {
 
 	#[test]
 	fn cache_is_used_when_changes_trie_is_built() {
-		let (backend, mut storage, changes, _) = prepare_for_build(0);
-		let config = changes.changes_trie_config.as_ref().unwrap();
+		let (backend, mut storage, changes, config) = prepare_for_build(0);
 		let parent = AnchorBlockId { hash: Default::default(), number: 15 };
 
 		// override some actual values from storage with values from the cache
@@ -770,6 +771,5 @@ mod test {
 				InputPair::DigestIndex(DigestIndex { block: 16u64, key: vec![106] }, vec![4]),
 			],
 		);
-
 	}
 }

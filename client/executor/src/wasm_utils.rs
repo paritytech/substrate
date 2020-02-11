@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,8 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Utilities for defining the wasm host environment.
-
-use sp_wasm_interface::{Pointer, WordSize};
 
 /// Converts arguments into respective WASM types.
 #[macro_export]
@@ -173,14 +171,3 @@ macro_rules! impl_wasm_host_interface {
 		}
 	);
 }
-
-/// Runtime API functions return an i64 which encodes a pointer in the least-significant 32 bits
-/// and a length in the most-significant 32 bits. This interprets the returned value as a pointer,
-/// length tuple.
-pub fn interpret_runtime_api_result(retval: i64) -> (Pointer<u8>, WordSize) {
-	let ptr = <Pointer<u8>>::new(retval as u32);
-	// The first cast to u64 is necessary so that the right shift does not sign-extend.
-	let len = ((retval as u64) >> 32) as WordSize;
-	(ptr, len)
-}
-

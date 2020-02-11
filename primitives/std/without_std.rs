@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,7 +27,6 @@ pub use core::convert;
 pub use core::default;
 pub use core::fmt;
 pub use core::hash;
-pub use core::intrinsics;
 pub use core::iter;
 pub use core::marker;
 pub use core::mem;

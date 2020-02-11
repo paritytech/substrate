@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,7 +21,10 @@
 pub mod client_ext;
 
 pub use sc_client::{blockchain, self};
-pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionExtensions};
+pub use sc_client_api::{
+	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
+	ForkBlocks, BadBlocks,
+};
 pub use sc_client_db::{Backend, self};
 pub use sp_consensus;
 pub use sc_executor::{NativeExecutor, WasmExecutionMethod, self};
@@ -33,12 +36,10 @@ pub use sp_keyring::{
 pub use sp_core::{Blake2Hasher, traits::BareCryptoStorePtr};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
-
-pub use self::client_ext::ClientExt;
+pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use hash_db::Hasher;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_runtime::traits::Block as BlockT;
 use sc_client::LocalCallExecutor;
@@ -62,43 +63,29 @@ impl GenesisInit for () {
 }
 
 /// A builder for creating a test client instance.
-pub struct TestClientBuilder<Executor, Backend, G: GenesisInit> {
+pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<Executor>,
 	keystore: Option<BareCryptoStorePtr>,
+	fork_blocks: ForkBlocks<Block>,
+	bad_blocks: BadBlocks<Block>,
 }
 
-impl<Block, Executor, G: GenesisInit> Default for TestClientBuilder<
-	Executor,
-	Backend<Block>,
-	G,
-> where
-	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
-{
+impl<Block: BlockT, Executor, G: GenesisInit> Default
+	for TestClientBuilder<Block, Executor, Backend<Block>, G> {
 	fn default() -> Self {
 		Self::with_default_backend()
 	}
 }
 
-impl<Block, Executor, G: GenesisInit> TestClientBuilder<
-	Executor,
-	Backend<Block>,
-	G,
-> where
-	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
-{
+impl<Block: BlockT, Executor, G: GenesisInit> TestClientBuilder<Block, Executor, Backend<Block>, G> {
 	/// Create new `TestClientBuilder` with default backend.
 	pub fn with_default_backend() -> Self {
 		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
 		Self::with_backend(backend)
-	}
-
-	/// Give access to the underlying backend of these clients
-	pub fn backend(&self) -> Arc<Backend<Block>> {
-		self.backend.clone()
 	}
 
 	/// Create new `TestClientBuilder` with default backend and pruning window size
@@ -108,7 +95,7 @@ impl<Block, Executor, G: GenesisInit> TestClientBuilder<
 	}
 }
 
-impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> {
+impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, Executor, Backend, G> {
 	/// Create a new instance of the test client builder.
 	pub fn with_backend(backend: Arc<Backend>) -> Self {
 		TestClientBuilder {
@@ -118,6 +105,8 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			genesis_init: Default::default(),
 			_executor: Default::default(),
 			keystore: None,
+			fork_blocks: None,
+			bad_blocks: None,
 		}
 	}
 
@@ -130,6 +119,11 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 	/// Alter the genesis storage parameters.
 	pub fn genesis_init_mut(&mut self) -> &mut G {
 		&mut self.genesis_init
+	}
+
+	/// Give access to the underlying backend of these clients
+	pub fn backend(&self) -> Arc<Backend> {
+		self.backend.clone()
 	}
 
 	/// Extend child storage
@@ -164,8 +158,18 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		self
 	}
 
+	/// Sets custom block rules.
+	pub fn set_block_rules(mut self,
+		fork_blocks: ForkBlocks<Block>,
+		bad_blocks: BadBlocks<Block>,
+	) -> Self {
+		self.fork_blocks = fork_blocks;
+		self.bad_blocks = bad_blocks;
+		self
+	}
+
 	/// Build the test client with the given native executor.
-	pub fn build_with_executor<Block, RuntimeApi>(
+	pub fn build_with_executor<RuntimeApi>(
 		self,
 		executor: Executor,
 	) -> (
@@ -177,11 +181,9 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		>,
 		sc_client::LongestChain<Backend, Block>,
 	) where
-		Executor: sc_client::CallExecutor<Block, Blake2Hasher>,
-		Backend: sc_client_api::backend::Backend<Block, Blake2Hasher>,
-		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+		Executor: sc_client::CallExecutor<Block> + 'static,
+		Backend: sc_client_api::backend::Backend<Block>,
 	{
-
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
 
@@ -202,8 +204,9 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		let client = sc_client::Client::new(
 			self.backend.clone(),
 			executor,
-			storage,
-			Default::default(),
+			&storage,
+			self.fork_blocks,
+			self.bad_blocks,
 			ExecutionExtensions::new(
 				self.execution_strategies,
 				self.keystore.clone(),
@@ -216,13 +219,14 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 	}
 }
 
-impl<E, Backend, G: GenesisInit> TestClientBuilder<
+impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
+	Block,
 	sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 	Backend,
 	G,
 > {
 	/// Build the test client with the given native executor.
-	pub fn build_with_native_executor<Block, RuntimeApi, I>(
+	pub fn build_with_native_executor<RuntimeApi, I>(
 		self,
 		executor: I,
 	) -> (
@@ -235,9 +239,8 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 		sc_client::LongestChain<Backend, Block>,
 	) where
 		I: Into<Option<NativeExecutor<E>>>,
-		E: sc_executor::NativeExecutionDispatch,
-		Backend: sc_client_api::backend::Backend<Block, Blake2Hasher>,
-		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+		E: sc_executor::NativeExecutionDispatch + 'static,
+		Backend: sc_client_api::backend::Backend<Block> + 'static,
 	{
 		let executor = executor.into().unwrap_or_else(||
 			NativeExecutor::new(WasmExecutionMethod::Interpreted, None)

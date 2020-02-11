@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -137,7 +137,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.rent_allowance))
 	}
 	fn contract_exists(&self, account: &T::AccountId) -> bool {
-		<ContractInfoOf<T>>::exists(account)
+		<ContractInfoOf<T>>::contains_key(account)
 	}
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T> {
 		T::Currency::free_balance(account)
@@ -149,7 +149,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				let (imbalance, outcome) = T::Currency::make_free_balance_be(&address, balance);
 				total_imbalance = total_imbalance.merge(imbalance);
 				if let UpdateBalanceOutcome::AccountKilled = outcome {
-					// Account killed. This will ultimately lead to calling `OnFreeBalanceZero` callback
+					// Account killed. This will ultimately lead to calling `OnReapAccount` callback
 					// which will make removal of CodeHashOf and AccountStorage for this account.
 					// In order to avoid writing over the deleted properties we `continue` here.
 					continue;

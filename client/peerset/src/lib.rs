@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,12 +19,13 @@
 
 mod peersstate;
 
-use std::{collections::{HashSet, HashMap}, collections::VecDeque, time::Instant};
+use std::{collections::{HashSet, HashMap}, collections::VecDeque};
 use futures::{prelude::*, channel::mpsc};
 use libp2p::PeerId;
 use log::{debug, error, trace};
 use serde_json::json;
 use std::{pin::Pin, task::Context, task::Poll};
+use wasm_timer::Instant;
 
 /// We don't accept nodes whose reputation is under this value.
 const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);

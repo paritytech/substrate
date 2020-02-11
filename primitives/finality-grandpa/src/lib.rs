@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -34,7 +34,7 @@ mod app {
 }
 
 /// The grandpa crypto scheme defined via the keypair type.
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "full_crypto"))]
 pub type AuthorityPair = app::Pair;
 
 /// Identity of a Grandpa authority.

@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -121,13 +121,14 @@ use sp_runtime::{
 };
 use frame_support::dispatch::{DispatchResult, Dispatchable};
 use frame_support::{
-	Parameter, decl_module, decl_event, decl_storage, storage::child,
+	Parameter, decl_module, decl_event, decl_storage, decl_error, storage::child,
 	parameter_types, IsSubType,
 	weights::DispatchInfo,
 };
-use frame_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time, Randomness};
+use frame_support::traits::{OnReapAccount, OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
 use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
+use pallet_contracts_primitives::{RentProjection, ContractAccessError};
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
 pub type TrieId = Vec<u8>;
@@ -400,9 +401,6 @@ pub trait Trait: frame_system::Trait {
 	/// to removal of a contract.
 	type SurchargeReward: Get<BalanceOf<Self>>;
 
-	/// The fee required to make a transfer.
-	type TransferFee: Get<BalanceOf<Self>>;
-
 	/// The fee required to create an account.
 	type CreationFee: Get<BalanceOf<Self>>;
 
@@ -467,9 +465,29 @@ impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultD
 	}
 }
 
+decl_error! {
+	/// Error for the contracts module.
+	pub enum Error for Module<T: Trait> {
+		/// A new schedule must have a greater version than the current one.
+		InvalidScheduleVersion,
+		/// An origin must be signed or inherent and auxiliary sender only provided on inherent.
+		InvalidSurchargeClaim,
+		/// Cannot restore from nonexisting or tombstone contract.
+		InvalidSourceContract,
+		/// Cannot restore to nonexisting or alive contract.
+		InvalidDestinationContract,
+		/// Tombstones don't match.
+		InvalidTombstone,
+		/// An origin TrieId written in the current block.
+		InvalidContractOrigin
+	}
+}
+
 decl_module! {
 	/// Contracts module.
 	pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Trait>::Origin {
+		type Error = Error<T>;
+
 		/// Number of block delay an extrinsic claim surcharge has.
 		///
 		/// When claim surcharge is called by an extrinsic the rent is checked
@@ -498,9 +516,6 @@ decl_module! {
 		/// Reward that is received by the party whose touch has led
 		/// to removal of a contract.
 		const SurchargeReward: BalanceOf<T> = T::SurchargeReward::get();
-
-		/// The fee required to make a transfer.
-		const TransferFee: BalanceOf<T> = T::TransferFee::get();
 
 		/// The fee required to create an account.
 		const CreationFee: BalanceOf<T> = T::CreationFee::get();
@@ -542,7 +557,7 @@ decl_module! {
 		pub fn update_schedule(origin, schedule: Schedule) -> DispatchResult {
 			ensure_root(origin)?;
 			if <Module<T>>::current_schedule().version >= schedule.version {
-				Err("new schedule must have a greater version than current")?
+				Err(Error::<T>::InvalidScheduleVersion)?
 			}
 
 			Self::deposit_event(RawEvent::ScheduleUpdated(schedule.version));
@@ -636,10 +651,7 @@ decl_module! {
 				(Ok(frame_system::RawOrigin::None), Some(aux_sender)) => {
 					(false, aux_sender)
 				},
-				_ => Err(
-					"Invalid surcharge claim: origin must be signed or \
-					inherent and auxiliary sender only provided on inherent"
-				)?,
+				_ => Err(Error::<T>::InvalidSurchargeClaim)?,
 			};
 
 			// Add some advantage for block producers (who send unsigned extrinsics) by
@@ -652,7 +664,7 @@ decl_module! {
 			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			if rent::try_evict::<T>(&dest, handicap) == rent::RentOutcome::Evicted {
+			if rent::snitch_contract_should_be_evicted::<T>(&dest, handicap) {
 				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())?;
 			}
 		}
@@ -661,14 +673,6 @@ decl_module! {
 			GasSpent::kill();
 		}
 	}
-}
-
-/// The possible errors that can happen querying the storage of a contract.
-pub enum GetStorageError {
-	/// The given address doesn't point on a contract.
-	ContractDoesntExist,
-	/// The specified contract is a tombstone and thus cannot have any storage.
-	IsTombstone,
 }
 
 /// Public APIs provided by the contracts module.
@@ -693,11 +697,11 @@ impl<T: Trait> Module<T> {
 	pub fn get_storage(
 		address: T::AccountId,
 		key: [u8; 32],
-	) -> sp_std::result::Result<Option<Vec<u8>>, GetStorageError> {
+	) -> sp_std::result::Result<Option<Vec<u8>>, ContractAccessError> {
 		let contract_info = <ContractInfoOf<T>>::get(&address)
-			.ok_or(GetStorageError::ContractDoesntExist)?
+			.ok_or(ContractAccessError::DoesntExist)?
 			.get_alive()
-			.ok_or(GetStorageError::IsTombstone)?;
+			.ok_or(ContractAccessError::IsTombstone)?;
 
 		let maybe_value = AccountDb::<T>::get_storage(
 			&DirectAccountDb,
@@ -706,6 +710,12 @@ impl<T: Trait> Module<T> {
 			&key,
 		);
 		Ok(maybe_value)
+	}
+
+	pub fn rent_projection(
+		address: T::AccountId,
+	) -> sp_std::result::Result<RentProjection<T::BlockNumber>, ContractAccessError> {
+		rent::compute_rent_projection::<T>(&address)
 	}
 }
 
@@ -769,7 +779,12 @@ impl<T: Trait> Module<T> {
 					rent_allowance,
 					delta,
 				} => {
-					let _result = Self::restore_to(donor, dest, code_hash, rent_allowance, delta);
+					let result = Self::restore_to(
+						donor.clone(), dest.clone(), code_hash.clone(), rent_allowance.clone(), delta
+					);
+					Self::deposit_event(
+						RawEvent::Restored(donor, dest, code_hash, rent_allowance, result.is_ok())
+					);
 				}
 			}
 		});
@@ -786,17 +801,17 @@ impl<T: Trait> Module<T> {
 	) -> DispatchResult {
 		let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 			.and_then(|c| c.get_alive())
-			.ok_or("Cannot restore from inexisting or tombstone contract")?;
+			.ok_or(Error::<T>::InvalidSourceContract)?;
 
 		let current_block = <frame_system::Module<T>>::block_number();
 
 		if origin_contract.last_write == Some(current_block) {
-			Err("Origin TrieId written in the current block")?
+			Err(Error::<T>::InvalidContractOrigin)?
 		}
 
 		let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
 			.and_then(|c| c.get_tombstone())
-			.ok_or("Cannot restore to inexisting or alive contract")?;
+			.ok_or(Error::<T>::InvalidDestinationContract)?;
 
 		let last_write = if !delta.is_empty() {
 			Some(current_block)
@@ -841,7 +856,7 @@ impl<T: Trait> Module<T> {
 				);
 			}
 
-			return Err("Tombstones don't match".into());
+			return Err(Error::<T>::InvalidTombstone.into());
 		}
 
 		origin_contract.storage_size -= key_values_taken.iter()
@@ -879,6 +894,25 @@ decl_event! {
 		/// Contract deployed by address at the specified address.
 		Instantiated(AccountId, AccountId),
 
+		/// Contract has been evicted and is now in tombstone state.
+		///
+		/// # Params
+		///
+		/// - `contract`: `AccountId`: The account ID of the evicted contract.
+		/// - `tombstone`: `bool`: True if the evicted contract left behind a tombstone.
+		Evicted(AccountId, bool),
+
+		/// Restoration for a contract has been initiated.
+		///
+		/// # Params
+		///
+		/// - `donor`: `AccountId`: Account ID of the restoring contract
+		/// - `dest`: `AccountId`: Account ID of the restored contract
+		/// - `code_hash`: `Hash`: Code hash of the restored contract
+		/// - `rent_allowance: `Balance`: Rent allowance of the restored contract
+		/// - `success`: `bool`: True if the restoration was successful
+		Restored(AccountId, AccountId, Hash, Balance, bool),
+
 		/// Code with the specified hash has been stored.
 		CodeStored(Hash),
 
@@ -889,8 +923,8 @@ decl_event! {
 		/// successful execution or not.
 		Dispatched(AccountId, bool),
 
-		/// An event from contract of account.
-		Contract(AccountId, Vec<u8>),
+		/// An event deposited upon execution of a contract from the account.
+		ContractExecution(AccountId, Vec<u8>),
 	}
 }
 
@@ -901,20 +935,20 @@ decl_storage! {
 		/// Current cost schedule for contracts.
 		CurrentSchedule get(fn current_schedule) config(): Schedule = Schedule::default();
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
-		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
+		pub PristineCode: map hasher(blake2_256) CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
-		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
+		pub CodeStorage: map hasher(blake2_256) CodeHash<T> => Option<wasm::PrefabWasmModule>;
 		/// The subtrie counter.
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
-		pub ContractInfoOf: map T::AccountId => Option<ContractInfo<T>>;
+		pub ContractInfoOf: map hasher(blake2_256) T::AccountId => Option<ContractInfo<T>>;
 		/// The price of one unit of gas.
 		GasPrice get(fn gas_price) config(): BalanceOf<T> = 1.into();
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(who: &T::AccountId) {
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	fn on_reap_account(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
 			child::kill_storage(&info.trie_id, info.child_trie_unique_id());
 		}
@@ -928,11 +962,11 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 pub struct Config<T: Trait> {
 	pub schedule: Schedule,
 	pub existential_deposit: BalanceOf<T>,
+	pub tombstone_deposit: BalanceOf<T>,
 	pub max_depth: u32,
 	pub max_value_size: u32,
 	pub contract_account_instantiate_fee: BalanceOf<T>,
 	pub account_create_fee: BalanceOf<T>,
-	pub transfer_fee: BalanceOf<T>,
 }
 
 impl<T: Trait> Config<T> {
@@ -940,11 +974,11 @@ impl<T: Trait> Config<T> {
 		Config {
 			schedule: <Module<T>>::current_schedule(),
 			existential_deposit: T::Currency::minimum_balance(),
+			tombstone_deposit: T::TombstoneDeposit::get(),
 			max_depth: T::MaxDepth::get(),
 			max_value_size: T::MaxValueSize::get(),
 			contract_account_instantiate_fee: T::ContractFee::get(),
 			account_create_fee: T::CreationFee::get(),
-			transfer_fee: T::TransferFee::get(),
 		}
 	}
 }
@@ -989,6 +1023,9 @@ pub struct Schedule {
 	/// Gas cost per one byte written to the sandbox memory.
 	pub sandbox_data_write_cost: Gas,
 
+	/// Cost for a simple balance transfer.
+	pub transfer_cost: Gas,
+
 	/// The maximum number of topics supported by an event.
 	pub max_event_topics: u32,
 
@@ -1027,6 +1064,7 @@ impl Default for Schedule {
 			instantiate_base_cost: 175,
 			sandbox_data_read_cost: 1,
 			sandbox_data_write_cost: 1,
+			transfer_cost: 100,
 			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
@@ -1060,6 +1098,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for CheckBlockGasLimit<T> {
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
+	const IDENTIFIER: &'static str = "CheckBlockGasLimit";
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();

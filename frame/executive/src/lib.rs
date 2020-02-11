@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -82,7 +82,7 @@ use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, Dispatchable,
+		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating,
 	},
 	transaction_validity::TransactionValidity,
 };
@@ -154,9 +154,23 @@ where
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
-		let mut digests = <DigestOf<System>>::default();
-		header.digest().logs().iter().for_each(|d| if d.as_pre_runtime().is_some() { digests.push(d.clone()) });
-		Self::initialize_block_impl(header.number(), header.parent_hash(), header.extrinsics_root(), &digests);
+		let digests = Self::extract_pre_digest(&header);
+		Self::initialize_block_impl(
+			header.number(),
+			header.parent_hash(),
+			header.extrinsics_root(),
+			&digests
+		);
+	}
+
+	fn extract_pre_digest(header: &System::Header) -> DigestOf<System> {
+		let mut digest = <DigestOf<System>>::default();
+		header.digest().logs()
+			.iter()
+			.for_each(|d| if d.as_pre_runtime().is_some() {
+				digest.push(d.clone())
+			});
+		digest
 	}
 
 	fn initialize_block_impl(
@@ -165,7 +179,13 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
-		<frame_system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, digest);
+		<frame_system::Module<System>>::initialize(
+			block_number,
+			parent_hash,
+			extrinsics_root,
+			digest,
+			frame_system::InitKind::Full,
+		);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		<frame_system::Module<System>>::register_extra_weight_unchecked(
 			<AllModules as WeighBlock<System::BlockNumber>>::on_initialize(*block_number)
@@ -242,8 +262,7 @@ where
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
 		match Self::apply_extrinsic_with_len(uxt, l, None) {
-			Ok(Ok(())) => (),
-			Ok(Err(e)) => sp_runtime::print(e),
+			Ok(_) => (),
 			Err(e) => { let err: &'static str = e.into(); panic!(err) },
 		}
 	}
@@ -310,8 +329,24 @@ where
 	}
 
 	/// Start an offchain worker and generate extrinsics.
-	pub fn offchain_worker(n: System::BlockNumber) {
-		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(n)
+	pub fn offchain_worker(header: &System::Header) {
+		// We need to keep events available for offchain workers,
+		// hence we initialize the block manually.
+		// OffchainWorker RuntimeApi should skip initialization.
+		let digests = Self::extract_pre_digest(header);
+
+		<frame_system::Module<System>>::initialize(
+			header.number(),
+			header.parent_hash(),
+			header.extrinsics_root(),
+			&digests,
+			frame_system::InitKind::Inspection,
+		);
+		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(
+			// to maintain backward compatibility we call module offchain workers
+			// with parent block number.
+			header.number().saturating_sub(1.into())
+		)
 	}
 }
 
@@ -322,7 +357,7 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
-		traits::{Bounded, Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
+		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
 		transaction_validity::{InvalidTransaction, UnknownTransaction, TransactionValidityError},
 	};
 	use frame_support::{
@@ -350,7 +385,7 @@ mod tests {
 				fn some_root_operation(origin) {
 					let _ = frame_system::ensure_root(origin);
 				}
-				#[weight = SimpleDispatchInfo::FreeNormal]
+				#[weight = SimpleDispatchInfo::InsecureFreeNormal]
 				fn some_unsigned_message(origin) {
 					let _ = frame_system::ensure_none(origin);
 				}
@@ -419,18 +454,16 @@ mod tests {
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Runtime {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = MetaEvent;
 		type DustRemoval = ();
 		type TransferPayment = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 
@@ -492,7 +525,6 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 211)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = sp_runtime::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
 		let weight = xt.get_dispatch_info().weight as u64;
@@ -516,7 +548,6 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
@@ -528,7 +559,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("c6b01b27df520ba23adb96e7fc032acb7c586ba1b477c6282de43184111f2091").into(),
+					state_root: hex!("a0b84fec49718caf59350dab6ec2993f12db399a7cccdb80f3cf79618ed93bd8").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -675,7 +706,6 @@ mod tests {
 					id,
 					&1,
 					110,
-					Bounded::max_value(),
 					lock,
 				);
 				let xt = sp_runtime::testing::TestXt(
