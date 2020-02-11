@@ -34,7 +34,7 @@ mod app {
 }
 
 /// The grandpa crypto scheme defined via the keypair type.
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "full_crypto"))]
 pub type AuthorityPair = app::Pair;
 
 /// Identity of a Grandpa authority.

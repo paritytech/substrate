@@ -280,6 +280,22 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(keys)
 	}
 
+	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in that block.
+	pub fn storage_pairs(&self, id: &BlockId<Block>, key_prefix: &StorageKey)
+		-> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>
+	{
+		let state = self.state_at(id)?;
+		let keys = state
+			.keys(&key_prefix.0)
+			.into_iter()
+			.map(|k| {
+				let d = state.storage(&k).ok().flatten().unwrap_or_default();
+				(StorageKey(k), StorageData(d))
+			})
+			.collect();
+		Ok(keys)
+	}
+
 	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in that block.
 	pub fn storage_keys_iter<'a>(
 		&self,
@@ -296,7 +312,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Given a `BlockId` and a key, return the value under the key in that block.
-	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<StorageData>> {
+	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey)
+		-> sp_blockchain::Result<Option<StorageData>>
+	{
 		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 			.map(StorageData)
@@ -305,7 +323,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Given a `BlockId` and a key, return the value under the hash in that block.
 	pub fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey)
-		-> sp_blockchain::Result<Option<Block::Hash>> {
+		-> sp_blockchain::Result<Option<Block::Hash>>
+	{
 		Ok(self.state_at(id)?
 			.storage_hash(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 		)
@@ -1580,6 +1599,9 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 		mut import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
+		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
+		let _enter = span.enter();
+
 		if let Some(res) = self.prepare_block_storage_changes(&mut import_block).map_err(|e| {
 			warn!("Block prepare storage changes error:\n{:?}", e);
 			ConsensusError::ClientImport(e.to_string())

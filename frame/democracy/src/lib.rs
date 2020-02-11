@@ -294,7 +294,7 @@ decl_storage! {
 		/// Get the vote in a given referendum of a particular voter. The result is meaningful only
 		/// if `voters_for` includes the voter when called with the referendum (you'll get the
 		/// default `Vote` value otherwise). If you don't want to check `voters_for`, then you can
-		/// also check for simple existence with `VoteOf::exists` first.
+		/// also check for simple existence with `VoteOf::contains_key` first.
 		pub VoteOf get(fn vote_of): map hasher(blake2_256) (ReferendumIndex, T::AccountId) => Vote;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
@@ -537,7 +537,7 @@ decl_module! {
 
 			let info = Self::referendum_info(ref_index).ok_or(Error::<T>::BadIndex)?;
 			let h = info.proposal_hash;
-			ensure!(!<Cancellations<T>>::exists(h), Error::<T>::AlreadyCanceled);
+			ensure!(!<Cancellations<T>>::contains_key(h), Error::<T>::AlreadyCanceled);
 
 			<Cancellations<T>>::insert(h, true);
 			Self::clear_referendum(ref_index);
@@ -667,7 +667,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn set_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
-			ensure!(!<Proxy<T>>::exists(&proxy), Error::<T>::AlreadyProxy);
+			ensure!(!<Proxy<T>>::contains_key(&proxy), Error::<T>::AlreadyProxy);
 			<Proxy<T>>::insert(proxy, who)
 		}
 
@@ -725,7 +725,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn undelegate(origin) {
 			let who = ensure_signed(origin)?;
-			ensure!(<Delegations<T>>::exists(&who), Error::<T>::NotDelegated);
+			ensure!(<Delegations<T>>::contains_key(&who), Error::<T>::NotDelegated);
 			let (_, conviction) = <Delegations<T>>::take(&who);
 			// Indefinite lock is reduced to the maximum voting lock that could be possible.
 			let now = <frame_system::Module<T>>::block_number();
@@ -754,7 +754,7 @@ decl_module! {
 		fn note_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			ensure!(!<Preimages<T>>::exists(&proposal_hash), Error::<T>::DuplicatePreimage);
+			ensure!(!<Preimages<T>>::contains_key(&proposal_hash), Error::<T>::DuplicatePreimage);
 
 			let deposit = <BalanceOf<T>>::from(encoded_proposal.len() as u32)
 				.saturating_mul(T::PreimageByteDeposit::get());
@@ -772,7 +772,7 @@ decl_module! {
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			ensure!(!<Preimages<T>>::exists(&proposal_hash), Error::<T>::DuplicatePreimage);
+			ensure!(!<Preimages<T>>::contains_key(&proposal_hash), Error::<T>::DuplicatePreimage);
 			let queue = <DispatchQueue<T>>::get();
 			ensure!(queue.iter().any(|item| &item.1 == &proposal_hash), Error::<T>::NotImminent);
 
@@ -832,7 +832,7 @@ impl<T: Trait> Module<T> {
 
 	/// Return true if `ref_index` is an on-going referendum.
 	pub fn is_active_referendum(ref_index: ReferendumIndex) -> bool {
-		<ReferendumInfoOf<T>>::exists(ref_index)
+		<ReferendumInfoOf<T>>::contains_key(ref_index)
 	}
 
 	/// Get all referenda currently active.
@@ -913,7 +913,7 @@ impl<T: Trait> Module<T> {
 		if recursion_limit == 0 { return (Zero::zero(), Zero::zero()); }
 		<Delegations<T>>::enumerate()
 			.filter(|(delegator, (delegate, _))|
-				*delegate == to && !<VoteOf<T>>::exists(&(ref_index, delegator.clone()))
+				*delegate == to && !<VoteOf<T>>::contains_key(&(ref_index, delegator.clone()))
 			).fold(
 				(Zero::zero(), Zero::zero()),
 				|(votes_acc, turnout_acc), (delegator, (_delegate, max_conviction))| {
@@ -963,7 +963,7 @@ impl<T: Trait> Module<T> {
 	/// Actually enact a vote, if legit.
 	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> DispatchResult {
 		ensure!(Self::is_active_referendum(ref_index), Error::<T>::ReferendumInvalid);
-		if !<VoteOf<T>>::exists((ref_index, &who)) {
+		if !<VoteOf<T>>::contains_key((ref_index, &who)) {
 			<VotersFor<T>>::append_or_insert(ref_index, &[&who][..]);
 		}
 		<VoteOf<T>>::insert((ref_index, &who), vote);

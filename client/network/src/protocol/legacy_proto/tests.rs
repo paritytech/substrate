@@ -409,7 +409,7 @@ fn reconnect_after_disconnect() {
 			_ => panic!()
 		}
 
-		if let Poll::Ready(Ok(_)) = delay.poll_unpin(cx) {
+		if let Poll::Ready(()) = delay.poll_unpin(cx) {
 			Poll::Ready(Ok(()))
 		} else {
 			Poll::Pending

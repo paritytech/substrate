@@ -21,7 +21,8 @@ use libp2p::PeerId;
 use log::{debug, trace, warn};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use wasm_timer::Instant;
 
 // Time to wait before trying to get the same extra data from the same peer.
 const EXTRA_RETRY_WAIT: Duration = Duration::from_secs(10);
