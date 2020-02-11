@@ -21,7 +21,7 @@ pallet-authorship = { version = "2.0.0", default-features = false, path = "../au
 sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../primitives/application-crypto" }
 
 [dev-dependencies]
-sp-core = { version = "2.0.0", path = "../../primitives/core", features = ["full_crypto"] }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
 pallet-balances = { version = "2.0.0", path = "../balances" }
 pallet-timestamp = { version = "2.0.0", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "2.0.0",  path = "../staking/reward-curve" }

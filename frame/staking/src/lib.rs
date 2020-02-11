@@ -1923,7 +1923,6 @@ impl<T: Trait> Module<T> {
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
 	/// get a chance to set their session keys.
 	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		// TODO: further clean this function. Payment stuff can go elsewhere.
 		// Payout
 		let points = CurrentEraPointsEarned::take();
 		let now = T::Time::now();
@@ -2538,6 +2537,8 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			validator_index,
 			signature,
 		) = call {
+			use offchain_election::SignaturePayloadOf;
+
 			if let Some(queued_score) = Self::queued_score() {
 				if !offchain_election::is_score_better(queued_score, *score) {
 					debug::native::debug!(
@@ -2549,7 +2550,12 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			// check signature
-			let payload = (winners, compact, score, validator_index);
+			let payload: SignaturePayloadOf<T> = (
+				winners,
+				compact,
+				score,
+				validator_index,
+			);
 			let current_validators = T::SessionInterface::keys::<T::KeyType>();
 			let (_, validator_key) = current_validators.get(*validator_index as usize)
 				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(0u8).into()))?;

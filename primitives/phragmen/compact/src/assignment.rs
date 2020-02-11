@@ -1,0 +1,207 @@
+// Copyright 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Code generation for the ratio assignment type.
+
+use crate::field_name_for;
+use proc_macro2::{TokenStream as TokenStream2};
+use syn::{GenericArgument};
+use quote::quote;
+
+fn from_impl(count: usize) -> TokenStream2 {
+	let from_impl_single = {
+		let name = field_name_for(1);
+		quote!(1 => compact.#name.push(
+			(
+				index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+				index_of_target(&distribution[0].0).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+			)
+		),)
+	};
+
+	let from_impl_double = {
+		let name = field_name_for(2);
+		quote!(2 => compact.#name.push(
+			(
+				index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+				(
+					index_of_target(&distribution[0].0).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+					distribution[0].1,
+				),
+				index_of_target(&distribution[1].0).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+			)
+		),)
+	};
+
+	let from_impl_rest = (3..=count).map(|c| {
+		let inner = (0..c-1).map(|i|
+			quote!((index_of_target(&distribution[#i].0).ok_or(_phragmen::Error::CompactInvalidIndex)?, distribution[#i].1),)
+		).collect::<TokenStream2>();
+
+		let field_name = field_name_for(c);
+		let last_index = c - 1;
+		let last = quote!(index_of_target(&distribution[#last_index].0).ok_or(_phragmen::Error::CompactInvalidIndex)?);
+
+		quote!(
+			#c => compact.#field_name.push((index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?, [#inner], #last)),
+		)
+	}).collect::<TokenStream2>();
+
+	quote!(
+		#from_impl_single
+		#from_impl_double
+		#from_impl_rest
+	)
+}
+
+fn into_impl(count: usize) -> TokenStream2 {
+	let into_impl_single = {
+		let name = field_name_for(1);
+		quote!(
+			for (voter_index, target_index) in self.#name {
+				assignments.push(_phragmen::Assignment {
+					who: voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+					distribution: vec![
+						(target_at(target_index).ok_or(_phragmen::Error::CompactInvalidIndex)?, _phragmen::sp_runtime::Perbill::one())
+					],
+				})
+			}
+		)
+	};
+
+	let into_impl_double = {
+		let name = field_name_for(2);
+		quote!(
+			for (voter_index, (t1_idx, p1), t2_idx) in self.#name {
+				if p1 >= _phragmen::sp_runtime::Perbill::one() {
+					return Err(_phragmen::Error::CompactStakeOverflow);
+				}
+
+				// defensive only. Since perbill doesn't have `Sub`.
+				let p2 = _phragmen::sp_runtime::traits::Saturating::saturating_sub(
+					_phragmen::sp_runtime::Perbill::one(),
+					p1,
+				);
+
+				assignments.push( _phragmen::Assignment {
+					who: voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+					distribution: vec![
+						(target_at(t1_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, p1),
+						(target_at(t2_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, p2),
+					]
+				});
+			}
+		)
+	};
+
+	let into_impl_rest = (3..=count).map(|c| {
+		let name = field_name_for(c);
+		quote!(
+			for (voter_index, inners, t_last_idx) in self.#name {
+				let mut sum = _phragmen::sp_runtime::Perbill::zero();
+				let mut inners_parsed = inners
+					.iter()
+					.map(|(ref t_idx, p)| {
+						sum = _phragmen::sp_runtime::traits::Saturating::saturating_add(sum, *p);
+						let target = target_at(*t_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?;
+						Ok((target, *p))
+					})
+					.collect::<Result<Vec<(A, _phragmen::sp_runtime::Perbill)>, _phragmen::Error>>()?;
+
+				if sum >= _phragmen::sp_runtime::Perbill::one() {
+					return Err(_phragmen::Error::CompactStakeOverflow);
+				}
+
+				// defensive only. Since perbill doesn't have `Sub`.
+				let p_last = _phragmen::sp_runtime::traits::Saturating::saturating_sub(
+					_phragmen::sp_runtime::Perbill::one(),
+					sum,
+				);
+
+				inners_parsed.push((target_at(t_last_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, p_last));
+
+				assignments.push(_phragmen::Assignment {
+					who: voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+					distribution: inners_parsed,
+				});
+			}
+		)
+	}).collect::<TokenStream2>();
+
+	quote!(
+		#into_impl_single
+		#into_impl_double
+		#into_impl_rest
+	)
+}
+
+pub(crate) fn assignment(
+	ident: syn::Ident,
+	voter_type: GenericArgument,
+	target_type: GenericArgument,
+	count: usize,
+) -> TokenStream2 {
+
+	let from_impl = from_impl(count);
+	let into_impl = into_impl(count);
+
+	quote!(
+		impl<
+			#voter_type: _phragmen::codec::Codec + Default + Copy,
+			#target_type: _phragmen::codec::Codec + Default + Copy,
+			A: _phragmen::codec::Codec + Default + Clone,
+		>
+		#ident<#voter_type, #target_type, _phragmen::sp_runtime::Perbill, A>
+		{
+			pub fn from_assignment<FV, FT>(
+				assignments: Vec<_phragmen::Assignment<A>>,
+				index_of_voter: FV,
+				index_of_target: FT,
+			) -> Result<Self, _phragmen::Error>
+				where
+					for<'r> FV: Fn(&'r A) -> Option<#voter_type>,
+					for<'r> FT: Fn(&'r A) -> Option<#target_type>,
+			{
+				let mut compact: #ident<
+					#voter_type,
+					#target_type,
+					_phragmen::sp_runtime::Perbill,
+					A,
+				> = Default::default();
+
+				for _phragmen::Assignment { who, distribution } in assignments {
+					match distribution.len() {
+						#from_impl
+						_ => {
+							return Err(_phragmen::Error::CompactTargetOverflow);
+						}
+					}
+				};
+				Ok(compact)
+			}
+
+			pub fn into_assignment(
+				self,
+				voter_at: impl Fn(#voter_type) -> Option<A>,
+				target_at: impl Fn(#target_type) -> Option<A>,
+			) -> Result<Vec<_phragmen::Assignment<A>>, _phragmen::Error> {
+				let mut assignments: Vec<_phragmen::Assignment<A>> = Default::default();
+				#into_impl
+				Ok(assignments)
+			}
+		}
+	)
+}

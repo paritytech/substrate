@@ -52,7 +52,12 @@ mod reduce;
 // re-export reduce stuff
 pub use reduce::reduce;
 
-// re-export the compact macro
+// re-export the compact macro, with the dependencies of the macro.
+#[doc(hidden)]
+pub use codec;
+#[doc(hidden)]
+pub use sp_runtime;
+
 pub use sp_phragmen_compact::generate_compact_solution_type;
 
 // an aggregator trait for a generic type of a voter/target identifier. This usually maps to

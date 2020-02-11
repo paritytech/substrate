@@ -6,10 +6,11 @@ edition = "2018"
 license = "GPL-3.0"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.0.0", optional = true, default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-std = { version = "2.0.0", default-features = false, path = "../std" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
+sp-core = { version = "2.0.0", path = "../core", default-features = false }
 sp-phragmen-compact = { path = "./compact"}
 
 [dev-dependencies]
@@ -26,4 +27,5 @@ std = [
 	"serde",
 	"sp-std/std",
 	"sp-runtime/std",
+	"sp-core/std",
 ]

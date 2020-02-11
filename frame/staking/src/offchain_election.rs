@@ -21,7 +21,7 @@ use crate::{
 };
 use codec::Encode;
 use frame_system::offchain::{SubmitUnsignedTransaction};
-use sp_phragmen::{ reduce, ExtendedBalance, PhragmenResult, StakedAssignment, Assignment};
+use sp_phragmen::{reduce, ExtendedBalance, PhragmenResult, StakedAssignment, Assignment, PhragmenScore};
 use sp_std::{prelude::*, cmp::Ordering, convert::TryInto};
 use sp_runtime::{RuntimeAppPublic, RuntimeDebug};
 use sp_runtime::offchain::storage::StorageValueRef;
@@ -32,6 +32,8 @@ pub(crate) enum OffchainElectionError {
 	/// No signing key has been found on the current node that maps to a validators. This node
 	/// should not run the offchain election code.
 	NoSigningKey,
+	/// Signing operation failed.
+	SigningFailed,
 	/// Phragmen election returned None. This means less candidate that minimum number of needed
 	/// validators were present. The chain is in trouble and not much that we can do about it.
 	ElectionFailed,
@@ -40,6 +42,14 @@ pub(crate) enum OffchainElectionError {
 	/// Failed to create the compact type.
 	CompactFailed,
 }
+
+/// The type of signature data encoded with the unsigned submission
+pub(crate) type SignaturePayloadOf<'a, T> = (
+	&'a [ValidatorIndex],
+	&'a CompactOf<T>,
+	&'a PhragmenScore,
+	&'a u32,
+);
 
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/staking-election/";
 const OFFCHAIN_REPEAT: u32 = 5;
@@ -77,7 +87,7 @@ pub(crate) fn set_check_offchain_execution_status<T: Trait>(now: T::BlockNumber)
 /// Evaluation is done in a lexicographic manner.
 ///
 /// Note that the third component should be minimized.
-pub(crate) fn is_score_better(this: [ExtendedBalance; 3], that: [ExtendedBalance; 3]) -> bool {
+pub(crate) fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool {
 	match that
 		.iter()
 		.enumerate()
@@ -170,9 +180,10 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 				validator_index(&w).expect("winners are chosen from the snapshot list; the must have index; qed")
 			).collect::<Vec<_>>();
 
-			let signature_payload =
-				(winners.clone(), compact.clone(), score, index as u32).encode();
-			let signature = pubkey.sign(&signature_payload).unwrap();
+			let signature_payload: SignaturePayloadOf<T> =
+				(&winners, &compact, &score, &(index as u32));
+			let signature = pubkey.sign(&signature_payload.encode())
+				.ok_or(OffchainElectionError::SigningFailed)?;
 			let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
 				winners,
 				compact,
