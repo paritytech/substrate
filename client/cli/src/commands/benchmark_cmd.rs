@@ -25,8 +25,8 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
 use crate::VersionInfo;
-use crate::execution_strategy::ExecutionStrategy;
-use crate::params::{WasmExecutionMethod, SharedParams};
+use crate::arg_enums::{ExecutionStrategy, WasmExecutionMethod};
+use crate::params::SharedParams;
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, StructOpt, Clone)]
