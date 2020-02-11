@@ -30,16 +30,15 @@ mod commands;
 
 use sc_service::{
 	config::Configuration,
-	ServiceBuilderCommand,
-	RuntimeGenesis, ChainSpecExtension, ChainSpec,
+	RuntimeGenesis, ChainSpecExtension,
 	AbstractService, Roles as ServiceRoles,
 };
 pub use sc_service::config::VersionInfo;
 
-use std::{io::Write, fmt::Debug};
+use std::io::Write;
 
 use regex::Regex;
-use structopt::{StructOpt, clap};
+use structopt::{StructOpt, clap::{self, AppSettings}};
 pub use structopt;
 pub use params::{SharedParams, ImportParams, ExecutionStrategy};
 pub use commands::{
@@ -49,7 +48,6 @@ pub use commands::{
 pub use traits::GetSharedParams;
 use log::info;
 use lazy_static::lazy_static;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
 use chrono::prelude::*;
 
@@ -57,8 +55,11 @@ use chrono::prelude::*;
 const NODE_NAME_MAX_LENGTH: usize = 32;
 
 /// Helper function used to parse the command line arguments. This is the equivalent of
-/// `structopt`'s `from_args()` except that it takes a `VersionInfo` argument to provide the name of
-/// the application, author, "about" and version.
+/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
+/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
+///
+/// To allow running the node without subcommand, tt also sets a few more settings:
+/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
 ///
 /// Gets the struct from the command line arguments. Print the
 /// error message and quit the program in case of failure.
@@ -71,7 +72,10 @@ where
 
 /// Helper function used to parse the command line arguments. This is the equivalent of
 /// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
-/// the application, author, "about" and version.
+/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
+///
+/// To allow running the node without subcommand, tt also sets a few more settings:
+/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
 ///
 /// Gets the struct from any iterator such as a `Vec` of your making.
 /// Print the error message and quit the program in case of failure.
@@ -93,14 +97,22 @@ where
 		.name(version.executable_name)
 		.author(version.author)
 		.about(version.description)
-		.version(full_version.as_str());
+		.version(full_version.as_str())
+		.settings(&[
+			AppSettings::GlobalVersion,
+			AppSettings::ArgsNegateSubcommands,
+			AppSettings::SubcommandsNegateReqs,
+		]);
 
 	T::from_clap(&app.get_matches_from(iter))
 }
 
 /// Helper function used to parse the command line arguments. This is the equivalent of
-/// `structopt`'s `try_from_iter()` except that it takes a `VersionInfo` argument to provide the
-/// name of the application, author, "about" and version.
+/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
+/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
+///
+/// To allow running the node without subcommand, tt also sets a few more settings:
+/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
 ///
 /// Gets the struct from any iterator such as a `Vec` of your making.
 /// Print the error message and quit the program in case of failure.
