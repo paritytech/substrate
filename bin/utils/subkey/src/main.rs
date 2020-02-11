@@ -397,12 +397,8 @@ where
 		set_default_ss58_version(network);
 	}
 
-	let output: OutputType = match matches.value_of("output").map(|output| {
-		output
-			.try_into()
-			.map_err(|_| Error::Static("Invalid output name. See --help for available outputs."))
-	}) {
-		Some(Err(e)) => return Err(e),
+	let output: OutputType = match matches.value_of("output").map(TryInto::try_into) {
+		Some(Err(_)) => return Err(Error::Static("Invalid output name. See --help for available outputs.")),
 		Some(Ok(v)) => v,
 		None => OutputType::Text,
 	 };
