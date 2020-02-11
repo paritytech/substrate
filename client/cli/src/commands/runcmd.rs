@@ -1,11 +1,13 @@
 use std::path::PathBuf;
 use std::net::SocketAddr;
 use std::fs;
+use log::info;
 use structopt::{StructOpt, clap::arg_enum};
 use names::{Generator, Name};
 use regex::Regex;
+use chrono::prelude::*;
 use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis,
+	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec, Roles,
 	config::KeystoreConfig,
 };
 use sc_telemetry::TelemetryEndpoints;
@@ -16,6 +18,7 @@ use crate::params::ImportParams;
 use crate::params::SharedParams;
 use crate::params::NetworkConfigurationParams;
 use crate::params::TransactionPoolParams;
+use crate::runtime::run_service_until_exit;
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
@@ -258,13 +261,19 @@ impl RunCmd {
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`
-	pub fn update_config<G, E>(
+	pub fn update_config<G, E, F>(
 		&self,
 		mut config: &mut Configuration<G, E>,
+		spec_factory: F,
+		version: &VersionInfo,
 	) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+
 		let password = if self.password_interactive {
 			#[cfg(not(target_os = "unknown"))]
 			{
@@ -406,7 +415,7 @@ impl RunCmd {
 	/// Run the command that runs the node
 	pub fn run<G, E, FNL, FNF, SL, SF>(
 		self,
-		mut config: Configuration<G, E>,
+		config: Configuration<G, E>,
 		new_light: FNL,
 		new_full: FNF,
 		version: &VersionInfo,
@@ -419,11 +428,34 @@ impl RunCmd {
 		SL: AbstractService + Unpin,
 		SF: AbstractService + Unpin,
 	{
-		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+		info!("{}", version.name);
+		info!("  version {}", config.full_version());
+		info!("  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
+		info!("Chain specification: {}", config.expect_chain_spec().name());
+		info!("Node name: {}", config.name);
+		info!("Roles: {}", config.display_role());
 
-		self.update_config(&mut config)?;
+		match config.roles {
+			Roles::LIGHT => run_service_until_exit(
+				config,
+				new_light,
+			),
+			_ => run_service_until_exit(
+				config,
+				new_full,
+			),
+		}
+	}
 
-		crate::run_node(config, new_light, new_full, &version)
+	/// Initialize substrate. This must be done only once.
+	///
+	/// This method:
+	///
+	/// 1. Set the panic handler
+	/// 2. Raise the FD limit
+	/// 3. Initialize the logger
+	pub fn init(&self, version: &VersionInfo) -> error::Result<()> {
+		self.shared_params.init(version)
 	}
 }
 

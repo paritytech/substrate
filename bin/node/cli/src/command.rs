@@ -28,28 +28,29 @@ where
 	let args: Vec<_> = args.collect();
 	let opt = sc_cli::from_iter::<Cli, _>(args.clone(), &version);
 
-	let mut config = sc_service::Configuration::new(&version);
+	let mut config = sc_service::Configuration::from_version(&version);
 
 	match opt.subcommand {
-		None => sc_cli::run(
-			config,
-			opt.run,
-			service::new_light,
-			service::new_full,
-			load_spec,
-			&version,
-		),
+		None => {
+			opt.run.init(&version)?;
+			opt.run.update_config(&mut config, load_spec, &version)?;
+			opt.run.run(
+				config,
+				service::new_light,
+				service::new_full,
+				&version,
+			)
+		},
 		Some(Subcommand::Factory(cli_args)) => {
-			sc_cli::init(&cli_args.shared_params, &version)?;
-			sc_cli::init_config(&mut config, &cli_args.shared_params, &version, load_spec)?;
-			sc_cli::fill_import_params(
+			cli_args.shared_params.init(&version)?;
+			cli_args.shared_params.update_config(&mut config, load_spec, &version)?;
+			cli_args.import_params.update_config(
 				&mut config,
-				&cli_args.import_params,
 				ServiceRoles::FULL,
 				cli_args.shared_params.dev,
 			)?;
 
-			sc_cli::fill_config_keystore_in_memory(&mut config)?;
+			config.use_in_memory_keystore()?;
 
 			match ChainSpec::from(config.expect_chain_spec().id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
@@ -82,12 +83,13 @@ where
 
 			Ok(())
 		},
-		Some(Subcommand::Base(subcommand)) => sc_cli::run_subcommand(
-			config,
-			subcommand,
-			load_spec,
-			|config: service::NodeConfiguration| Ok(new_full_start!(config).0),
-			&version,
-		),
+		Some(Subcommand::Base(subcommand)) => {
+			subcommand.init(&version)?;
+			subcommand.update_config(&mut config, load_spec, &version)?;
+			subcommand.run(
+				config,
+				|config: service::NodeConfiguration| Ok(new_full_start!(config).0),
+			)
+		},
 	}
 }

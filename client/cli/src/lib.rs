@@ -28,11 +28,6 @@ mod runtime;
 mod node_key;
 mod commands;
 
-use sc_service::{
-	config::Configuration,
-	RuntimeGenesis, ChainSpecExtension,
-	AbstractService, Roles as ServiceRoles,
-};
 pub use sc_service::config::VersionInfo;
 
 use std::io::Write;
@@ -49,7 +44,6 @@ pub use traits::GetSharedParams;
 use log::info;
 use lazy_static::lazy_static;
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
-use chrono::prelude::*;
 
 /// The maximum number of characters for a node name.
 const NODE_NAME_MAX_LENGTH: usize = 32;
@@ -164,42 +158,6 @@ pub fn init(logger_pattern: &str, version: &VersionInfo) -> error::Result<()> {
 	init_logger(logger_pattern);
 
 	Ok(())
-}
-
-/// Run the node
-///
-/// Builds and runs either a full or a light node, depending on the `role` within the `Configuration`.
-pub fn run_node<G, E, FNL, FNF, SL, SF>(
-	config: Configuration<G, E>,
-	new_light: FNL,
-	new_full: FNF,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
-	FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-	SL: AbstractService + Unpin,
-	SF: AbstractService + Unpin,
-{
-	info!("{}", version.name);
-	info!("  version {}", config.full_version());
-	info!("  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
-	info!("Chain specification: {}", config.expect_chain_spec().name());
-	info!("Node name: {}", config.name);
-	info!("Roles: {}", config.display_role());
-
-	match config.roles {
-		ServiceRoles::LIGHT => run_service_until_exit(
-			config,
-			new_light,
-		),
-		_ => run_service_until_exit(
-			config,
-			new_full,
-		),
-	}
 }
 
 /// Initialize the logger

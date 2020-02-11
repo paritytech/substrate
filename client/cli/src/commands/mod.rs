@@ -147,4 +147,15 @@ impl Subcommand {
 			Subcommand::Benchmark(cmd) => cmd.update_config(&mut config, spec_factory, version),
 		}
 	}
+
+	/// Initialize substrate. This must be done only once.
+	///
+	/// This method:
+	///
+	/// 1. Set the panic handler
+	/// 2. Raise the FD limit
+	/// 3. Initialize the logger
+	pub fn init(&self, version: &VersionInfo) -> error::Result<()> {
+		self.get_shared_params().init(version)
+	}
 }

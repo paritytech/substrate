@@ -81,7 +81,7 @@ impl SharedParams {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init(self, version: &VersionInfo) -> error::Result<()> {
+	pub fn init(&self, version: &VersionInfo) -> error::Result<()> {
 		crate::init(self.log.as_ref().map(|v| v.as_ref()).unwrap_or(""), version)
 	}
 }
@@ -98,5 +98,3 @@ fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
 			).expect("app directories exist on all supported platforms; qed")
 		)
 }
-
-
