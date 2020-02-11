@@ -827,7 +827,7 @@ where
 mod tests {
 	use super::{
 		BalanceOf, ExecFeeToken, ExecutionContext, Ext, Loader, TransferFeeKind, TransferFeeToken,
-		Vm, ExecResult, RawEvent, DeferredAction, Currency,
+		Vm, ExecResult, RawEvent, DeferredAction,
 	};
 	use crate::{
 		account_db::AccountDb, gas::GasMeter, tests::{ExtBuilder, Test},
@@ -1302,7 +1302,7 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
-			let _ = <Test as super::Trait>::Currency::make_free_balance_be(&ALICE, 1);
+			ctx.overlay.set_balance(&ALICE, 1);
 
 			let result = ctx.instantiate(
 				1,
@@ -1350,6 +1350,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+			ctx.overlay.set_balance(&BOB, 1);
 			ctx.overlay.instantiate_contract(&BOB, recurse_ch).unwrap();
 
 			let result = ctx.call(
@@ -1663,7 +1664,7 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
-			let _ = <Test as super::Trait>::Currency::make_free_balance_be(&ALICE, 1);
+			ctx.overlay.set_balance(&ALICE, 1);
 
 			let result = ctx.instantiate(
 				1,
