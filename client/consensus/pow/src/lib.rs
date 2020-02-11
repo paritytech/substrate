@@ -30,6 +30,8 @@
 //! clients.
 
 use std::sync::Arc;
+use std::any::Any;
+use std::borrow::Cow;
 use std::thread;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -61,10 +63,8 @@ pub enum Error<B: BlockT> {
 	HeaderUnsealed(B::Hash),
 	#[display(fmt = "PoW validation error: invalid seal")]
 	InvalidSeal,
-	#[display(fmt = "PoW validation error: invalid difficulty")]
-	InvalidDifficulty,
-	#[display(fmt = "PoW block import expects an intermediate, but not found one")]
-	NoIntermediate,
+	#[display(fmt = "PoW validation error: preliminary verification failed")]
+	FailedPreliminaryVerify,
 	#[display(fmt = "Rejecting block too far in future")]
 	TooFarInFuture,
 	#[display(fmt = "Fetching best header failed using select chain: {:?}", _0)]
@@ -154,18 +154,23 @@ pub trait PowAlgorithm<B: BlockT> {
 	/// This function will be called twice during the import process, so the implementation
 	/// should be properly cached.
 	fn difficulty(&self, parent: &BlockId<B>) -> Result<Self::Difficulty, Error<B>>;
-	/// Verify that the seal is valid against given pre hash.
-	fn verify_seal(
+	/// Verify that the seal is valid against given pre hash when parent block is not yet imported.
+	///
+	/// None means that preliminary verify is not available for this algorithm.
+	fn preliminary_verify(
 		&self,
+		_pre_hash: &B::Hash,
+		_seal: &Seal,
+	) -> Result<Option<bool>, Error<B>> {
+		Ok(None)
+	}
+	/// Verify that the difficulty is valid against given seal.
+	fn verify(
+		&self,
+		parent: &BlockId<B>,
 		pre_hash: &B::Hash,
 		seal: &Seal,
-	) -> Result<bool, Error<B>>;
-	/// Verify that the difficulty is valid against given seal.
-	fn verify_difficulty(
-		&self,
 		difficulty: Self::Difficulty,
-		parent: &BlockId<B>,
-		seal: &Seal,
 	) -> Result<bool, Error<B>>;
 	/// Mine a seal that satisfies the given difficulty.
 	fn mine(
@@ -185,6 +190,19 @@ pub struct PowBlockImport<B: BlockT, I, C, S, Algorithm> {
 	client: Arc<C>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
+}
+
+impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone> Clone for PowBlockImport<B, I, C, S, Algorithm> {
+	fn clone(&self) -> Self {
+		Self {
+			algorithm: self.algorithm.clone(),
+			inner: self.inner.clone(),
+			select_chain: self.select_chain.clone(),
+			client: self.client.clone(),
+			inherent_data_providers: self.inherent_data_providers.clone(),
+			check_inherents_after: self.check_inherents_after.clone(),
+		}
+	}
 }
 
 impl<B, I, C, S, Algorithm> PowBlockImport<B, I, C, S, Algorithm> where
@@ -257,6 +275,7 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
 	Algorithm: PowAlgorithm<B>,
+	Algorithm::Difficulty: 'static,
 {
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<C, B>;
@@ -312,22 +331,23 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 			_ => return Err(Error::<B>::HeaderUnsealed(block.header.hash()).into()),
 		};
 
-		let intermediate = PowIntermediate::<B, Algorithm::Difficulty>::decode(
-			&mut &block.intermediates.remove(INTERMEDIATE_KEY)
-				.ok_or(Error::<B>::NoIntermediate)?[..]
-		).map_err(|_| Error::<B>::NoIntermediate)?;
+		let intermediate = block.take_intermediate::<PowIntermediate::<B, Algorithm::Difficulty>>(
+			INTERMEDIATE_KEY
+		)?;
 
 		let difficulty = match intermediate.difficulty {
 			Some(difficulty) => difficulty,
 			None => self.algorithm.difficulty(&BlockId::hash(parent_hash))?,
 		};
 
-		if !self.algorithm.verify_difficulty(
-			difficulty,
+		let pre_hash = block.header.hash();
+		if !self.algorithm.verify(
 			&BlockId::hash(parent_hash),
+			&pre_hash,
 			&inner_seal,
+			difficulty,
 		)? {
-			return Err(Error::<B>::InvalidDifficulty.into())
+			return Err(Error::<B>::InvalidSeal.into())
 		}
 
 		aux.difficulty = difficulty;
@@ -379,11 +399,8 @@ impl<B: BlockT, Algorithm> PowVerifier<B, Algorithm> {
 
 		let pre_hash = header.hash();
 
-		if !self.algorithm.verify_seal(
-			&pre_hash,
-			&inner_seal,
-		)? {
-			return Err(Error::InvalidSeal);
+		if !self.algorithm.preliminary_verify(&pre_hash, &inner_seal)?.unwrap_or(true) {
+			return Err(Error::FailedPreliminaryVerify);
 		}
 
 		Ok((header, seal))
@@ -392,6 +409,7 @@ impl<B: BlockT, Algorithm> PowVerifier<B, Algorithm> {
 
 impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 	Algorithm: PowAlgorithm<B> + Send + Sync,
+	Algorithm::Difficulty: 'static,
 {
 	fn verify(
 		&mut self,
@@ -418,7 +436,7 @@ impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 			justification,
 			intermediates: {
 				let mut ret = HashMap::new();
-				ret.insert(INTERMEDIATE_KEY.to_vec(), intermediate.encode());
+				ret.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<dyn Any>);
 				ret
 			},
 			auxiliary: vec![],
@@ -449,20 +467,17 @@ pub fn register_pow_inherent_data_provider(
 pub type PowImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 
 /// Import queue for PoW engine.
-pub fn import_queue<B, C, S, Algorithm>(
-	block_import: BoxBlockImport<B, sp_api::TransactionFor<C, B>>,
+pub fn import_queue<B, Transaction, Algorithm>(
+	block_import: BoxBlockImport<B, Transaction>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<
-	PowImportQueue<B, sp_api::TransactionFor<C, B>>,
+	PowImportQueue<B, Transaction>,
 	sp_consensus::Error
 > where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
-	C: Send + Sync + AuxStore + 'static,
-	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
+	Transaction: Send + Sync + 'static,
 	Algorithm: PowAlgorithm<B> + Clone + Send + Sync + 'static,
-	S: SelectChain<B> + 'static,
 {
 	register_pow_inherent_data_provider(&inherent_data_providers)?;
 
@@ -553,6 +568,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 ) -> Result<(), Error<B>> where
 	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi<B>,
 	Algorithm: PowAlgorithm<B>,
+	Algorithm::Difficulty: 'static,
 	E: Environment<B>,
 	E::Proposer: Proposer<B, Transaction = sp_api::TransactionFor<C, B>>,
 	E::Error: std::fmt::Debug,
@@ -659,7 +675,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			storage_changes: Some(proposal.storage_changes),
 			intermediates: {
 				let mut ret = HashMap::new();
-				ret.insert(INTERMEDIATE_KEY.to_vec(), intermediate.encode());
+				ret.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<dyn Any>);
 				ret
 			},
 			finalized: false,

@@ -49,7 +49,6 @@ pub(crate) fn set_check_offchain_execution_status<T: Trait>(now: T::BlockNumber)
 	let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
 
 	let mutate_stat = storage.mutate::<_, &'static str, _>(|maybe_head: Option<Option<T::BlockNumber>>| {
-		dbg!(maybe_head, now);
 		match maybe_head {
 			Some(Some(head)) if now < head => Err("fork."),
 			Some(Some(head)) if now >= head && now <= head + threshold => Err("recently executed."),

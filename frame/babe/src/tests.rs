@@ -18,7 +18,7 @@
 
 use super::*;
 use mock::*;
-use sp_runtime::{traits::OnFinalize};
+use sp_runtime::traits::OnFinalize;
 use pallet_session::ShouldEndSession;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -94,7 +94,7 @@ fn first_block_epoch_zero_start() {
 
 		let authorities = Babe::authorities();
 		let consensus_log = sp_consensus_babe::ConsensusLog::NextEpochData(
-			sp_consensus_babe::NextEpochDescriptor {
+			sp_consensus_babe::digests::NextEpochDescriptor {
 				authorities,
 				randomness: Babe::randomness(),
 			}

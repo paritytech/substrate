@@ -1131,14 +1131,14 @@ decl_module! {
 		///
 		/// TODO: update this one last time at the end.
 		/// - 1 read. `PhragmenScore`. O(1).
-		/// - `m` calls `Validators::exists()` for validator veracity.
+		/// - `m` calls `Validators::contains_key()` for validator veracity.
 		///
 		/// - decode from compact and convert into assignments: O(E)
 		/// - build_support_map: O(E)
 		/// - evaluate_support: O(E)
 		///
 		/// - `n` reads from [`Bonded`], [`Ledger`] and [`Nominators`], and `n` calls to
-		///   `Validators::exists()` to ensure nominator veracity.
+		///   `Validators::contains_key()` to ensure nominator veracity.
 		///
 		/// - O(N * d) to ensure vote veracity.
 		/// # </weight>
@@ -1202,13 +1202,13 @@ decl_module! {
 		) {
 			let stash = ensure_signed(origin)?;
 
-			if <Bonded<T>>::exists(&stash) {
+			if <Bonded<T>>::contains_key(&stash) {
 				Err(Error::<T>::AlreadyBonded)?
 			}
 
 			let controller = T::Lookup::lookup(controller)?;
 
-			if <Ledger<T>>::exists(&controller) {
+			if <Ledger<T>>::contains_key(&controller) {
 				Err(Error::<T>::AlreadyPaired)?
 			}
 
@@ -1454,7 +1454,7 @@ decl_module! {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 			let controller = T::Lookup::lookup(controller)?;
-			if <Ledger<T>>::exists(&controller) {
+			if <Ledger<T>>::contains_key(&controller) {
 				Err(Error::<T>::AlreadyPaired)?
 			}
 			if controller != old_controller {
@@ -1809,7 +1809,7 @@ impl<T: Trait> Module<T> {
 		// Note that we assume all validators and nominators in `assignments` are properly bonded,
 		// because they are coming from the snapshot via a given index.
 		for Assignment { who, distribution } in assignments.iter() {
-			let is_validator = <Validators<T>>::exists(&who);
+			let is_validator = <Validators<T>>::contains_key(&who);
 			let maybe_nomination = Self::nominators(&who);
 
 			if !(maybe_nomination.is_some() ^ is_validator) {
