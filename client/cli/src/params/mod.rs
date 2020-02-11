@@ -24,8 +24,6 @@ use std::str::FromStr;
 use std::fmt::Debug;
 use structopt::clap::arg_enum;
 
-pub use crate::execution_strategy::ExecutionStrategy;
-
 pub use crate::params::import_params::ImportParams;
 pub use crate::params::transaction_pool_params::TransactionPoolParams;
 pub use crate::params::shared_params::SharedParams;

@@ -96,7 +96,7 @@ pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
 	mut factory_state: RA,
 	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
 	select_chain: &Sc,
-) -> sc_cli::error::Result<()>
+) -> sc_cli::Result<()>
 where
 	Block: BlockT,
 	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
@@ -112,10 +112,10 @@ where
 {
 	if *factory_state.mode() != Mode::MasterToNToM && factory_state.rounds() > RA::Number::one() {
 		let msg = "The factory can only be used with rounds set to 1 in this mode.".into();
-		return Err(sc_cli::error::Error::Input(msg));
+		return Err(sc_cli::Error::Input(msg));
 	}
 
-	let best_header: Result<<Block as BlockT>::Header, sc_cli::error::Error> =
+	let best_header: Result<<Block as BlockT>::Header, sc_cli::Error> =
 		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
 	let mut best_hash = best_header?.hash();
 	let mut best_block_id = BlockId::<Block>::hash(best_hash);

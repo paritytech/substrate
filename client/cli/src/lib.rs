@@ -21,7 +21,7 @@
 
 mod params;
 mod execution_strategy;
-pub mod error;
+mod error;
 mod runtime;
 mod node_key;
 mod commands;
@@ -35,6 +35,8 @@ use structopt::{StructOpt, clap::{self, AppSettings}};
 pub use structopt;
 pub use params::*;
 pub use commands::*;
+pub use execution_strategy::*;
+pub use error::*;
 use log::info;
 use lazy_static::lazy_static;
 pub use crate::runtime::{run_until_exit, run_service_until_exit};

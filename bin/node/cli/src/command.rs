@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::{VersionInfo, error};
+use sc_cli::{VersionInfo, self};
 use sc_service::{Roles as ServiceRoles};
 use node_transaction_factory::RuntimeAdapter;
 use crate::{Cli, service, ChainSpec, load_spec, Subcommand, factory_impl::FactoryState};
 
 /// Parse command line arguments into service configuration.
-pub fn run<I, T>(args: I, version: VersionInfo) -> error::Result<()>
+pub fn run<I, T>(args: I, version: VersionInfo) -> sc_cli::Result<()>
 where
 	I: Iterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,

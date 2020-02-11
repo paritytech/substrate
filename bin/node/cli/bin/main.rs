@@ -20,7 +20,7 @@
 
 use sc_cli::VersionInfo;
 
-fn main() -> Result<(), sc_cli::error::Error> {
+fn main() -> sc_cli::Result<()> {
 	let version = VersionInfo {
 		name: "Substrate Node",
 		commit: env!("VERGEN_SHA_SHORT"),
