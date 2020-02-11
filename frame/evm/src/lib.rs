@@ -284,11 +284,11 @@ decl_module! {
 			let total_payment = value.checked_add(total_fee).ok_or(Error::<T>::PaymentOverflow)?;
 			let source_account = Accounts::get(&source);
 			ensure!(source_account.balance >= total_payment, Error::<T>::BalanceLow);
+			executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
+
 			if let Some(nonce) = nonce {
 				ensure!(source_account.nonce == nonce, Error::<T>::InvalidNonce);
 			}
-
-			executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
 
 			let reason = executor.transact_call(
 				source,
@@ -347,11 +347,11 @@ decl_module! {
 			let total_payment = value.checked_add(total_fee).ok_or(Error::<T>::PaymentOverflow)?;
 			let source_account = Accounts::get(&source);
 			ensure!(source_account.balance >= total_payment, Error::<T>::BalanceLow);
+			executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
+
 			if let Some(nonce) = nonce {
 				ensure!(source_account.nonce == nonce, Error::<T>::InvalidNonce);
 			}
-
-			executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
 
 			let create_address = executor.create_address(source, evm::CreateScheme::Dynamic);
 			let reason = executor.transact_create(
