@@ -56,7 +56,7 @@ pub use pallet_timestamp::Call as TimestampCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_contracts::Gas;
 pub use frame_support::StorageValue;
-pub use pallet_staking::StakerStatus;
+pub use pallet_staking::{StakerStatus, LockStakingStatus};
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
@@ -103,6 +103,7 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
 			frame_system::CheckNonce::<Runtime>::from(index),
 			frame_system::CheckWeight::<Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
+			Default::default(),
 			Default::default(),
 		);
 		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
@@ -655,6 +656,7 @@ pub type SignedExtra = (
 	frame_system::CheckWeight<Runtime>,
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 	pallet_contracts::CheckBlockGasLimit<Runtime>,
+	pallet_staking::LockStakingStatus<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;

@@ -75,6 +75,7 @@ pub fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 		frame_system::CheckWeight::new(),
 		pallet_transaction_payment::ChargeTransactionPayment::from(extra_fee),
 		Default::default(),
+		Default::default(),
 	)
 }
 

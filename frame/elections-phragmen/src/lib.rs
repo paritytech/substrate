@@ -666,7 +666,12 @@ impl<T: Trait> Module<T> {
 
 			let staked_assignments: Vec<StakedAssignment<T::AccountId>> = phragmen_result.assignments
 				.into_iter()
-				.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(Self::locked_stake_of, true))
+				.map(|a| {
+					let stake = <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
+						Self::locked_stake_of(&a.who)
+					) as ExtendedBalance;
+					a.into_staked(stake, true)
+				})
 				.collect();
 
 			let (support_map, _) = build_support_map::<T::AccountId>(&new_set, &staked_assignments);

@@ -32,8 +32,14 @@ const PREFIX: &'static str = "votes";
 /// Generates a struct to store the phragmen assignments in a compact way. The struct can only store
 /// distributions up to the given input count. The given count must be greater than 2.
 ///
+/// 3 generic types must be given to the type
+///
+/// - `V`: identifier/index type of the voter.
+/// - `T`: identifier/index type of the target.
+/// - `W`: any type used as the edge weight.
+///
 /// ```rust
-/// // generate a struct with account Identifier u32 and edge weight u128, with maximum supported
+/// // generate a struct with nominator and edge weight u128, with maximum supported
 /// // edge per voter of 32.
 /// generate_compact_solution_type(TestCompact<u32, u128>, 32)
 /// ```
@@ -49,23 +55,23 @@ const PREFIX: &'static str = "votes";
 /// An example expansion of length 16 is as follows:
 ///
 /// ```rust
-/// struct TestCompact<AccountId, W> {
-/// 	votes1: Vec<(AccountId, AccountId)>,
-/// 	votes2: Vec<(AccountId, (AccountId, W), AccountId)>,
-/// 	votes3: Vec<(AccountId, [(AccountId, W); 2usize], AccountId)>,
-/// 	votes4: Vec<(AccountId, [(AccountId, W); 3usize], AccountId)>,
-/// 	votes5: Vec<(AccountId, [(AccountId, W); 4usize], AccountId)>,
-/// 	votes6: Vec<(AccountId, [(AccountId, W); 5usize], AccountId)>,
-/// 	votes7: Vec<(AccountId, [(AccountId, W); 6usize], AccountId)>,
-/// 	votes8: Vec<(AccountId, [(AccountId, W); 7usize], AccountId)>,
-/// 	votes9: Vec<(AccountId, [(AccountId, W); 8usize], AccountId)>,
-/// 	votes10: Vec<(AccountId, [(AccountId, W); 9usize], AccountId)>,
-/// 	votes11: Vec<(AccountId, [(AccountId, W); 10usize], AccountId)>,
-/// 	votes12: Vec<(AccountId, [(AccountId, W); 11usize], AccountId)>,
-/// 	votes13: Vec<(AccountId, [(AccountId, W); 12usize], AccountId)>,
-/// 	votes14: Vec<(AccountId, [(AccountId, W); 13usize], AccountId)>,
-/// 	votes15: Vec<(AccountId, [(AccountId, W); 14usize], AccountId)>,
-/// 	votes16: Vec<(AccountId, [(AccountId, W); 15usize], AccountId)>,
+/// struct TestCompact<V, T, W> {
+/// 	votes1: Vec<(V, T)>,
+/// 	votes2: Vec<(V, (T, W), T)>,
+/// 	votes3: Vec<(V, [(T, W); 2usize], T)>,
+/// 	votes4: Vec<(V, [(T, W); 3usize], T)>,
+/// 	votes5: Vec<(V, [(T, W); 4usize], T)>,
+/// 	votes6: Vec<(V, [(T, W); 5usize], T)>,
+/// 	votes7: Vec<(V, [(T, W); 6usize], T)>,
+/// 	votes8: Vec<(V, [(T, W); 7usize], T)>,
+/// 	votes9: Vec<(V, [(T, W); 8usize], T)>,
+/// 	votes10: Vec<(V, [(T, W); 9usize], T)>,
+/// 	votes11: Vec<(V, [(T, W); 10usize], T)>,
+/// 	votes12: Vec<(V, [(T, W); 11usize], T)>,
+/// 	votes13: Vec<(V, [(T, W); 12usize], T)>,
+/// 	votes14: Vec<(V, [(T, W); 13usize], T)>,
+/// 	votes15: Vec<(V, [(T, W); 14usize], T)>,
+/// 	votes16: Vec<(V, [(T, W); 15usize], T)>,
 /// }
 /// ```
 #[proc_macro]
@@ -76,8 +82,9 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 		count,
 	} = syn::parse_macro_input!(item as CompactSolutionDef);
 
-	let account_type = GenericArgument::Type(Type::Verbatim(quote!(AccountId)));
-	let weight_type = GenericArgument::Type(Type::Verbatim(quote!(weight)));
+	let voter_type = GenericArgument::Type(Type::Verbatim(quote!(V)));
+	let target_type = GenericArgument::Type(Type::Verbatim(quote!(T)));
+	let weight_type = GenericArgument::Type(Type::Verbatim(quote!(W)));
 
 	let imports = imports().unwrap_or_else(|e| e.to_compile_error());
 
@@ -85,19 +92,22 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 		vis,
 		ident.clone(),
 		count,
-		account_type.clone(),
+		voter_type.clone(),
+		target_type.clone(),
 		weight_type,
 	).unwrap_or_else(|e| e.to_compile_error());
 
 	let from_into_impl_assignment = convert_impl_for_assignment(
 		ident.clone(),
-		account_type.clone(),
+		voter_type.clone(),
+		target_type.clone(),
 		count,
 	);
 
 	let from_into_impl_staked_assignment = convert_impl_for_staked_assignment(
 		ident,
-		account_type,
+		voter_type,
+		target_type,
 		count,
 	);
 
@@ -113,7 +123,8 @@ fn struct_def(
 	vis: syn::Visibility,
 	ident: syn::Ident,
 	count: usize,
-	account_type: GenericArgument,
+	voter_type: GenericArgument,
+	target_type: GenericArgument,
 	weight_type: GenericArgument,
 ) -> Result<TokenStream2> {
 	if count <= 2 {
@@ -125,12 +136,12 @@ fn struct_def(
 
 	let singles = {
 		let name = field_name_for(1);
-		quote!(#name: Vec<(#account_type, #account_type)>,)
+		quote!(#name: Vec<(#voter_type, #target_type)>,)
 	};
 
 	let doubles = {
 		let name = field_name_for(2);
-		quote!(#name: Vec<(#account_type, (#account_type, #weight_type), #account_type)>,)
+		quote!(#name: Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,)
 	};
 
 	let rest = (3..=count).map(|c| {
@@ -138,25 +149,24 @@ fn struct_def(
 		let array_len = c - 1;
 		quote!(
 			#field_name: Vec<(
-				#account_type,
-				[(#account_type, #weight_type); #array_len],
-				#account_type
+				#voter_type,
+				[(#target_type, #weight_type); #array_len],
+				#target_type
 			)>,
 		)
 	}).collect::<TokenStream2>();
 
-	let compact_def = quote! (
-		/// A struct to encode a `Vec<StakedAssignment>` or `Vec<_phragmen::Assignment>` of the phragmen module
+	Ok(quote! (
+		/// A struct to encode a `Vec<StakedAssignment>` or `Vec<Assignment>` of the phragmen module
 		/// in a compact way.
 		#[derive(Default, PartialEq, Eq, Clone, _sp_runtime::RuntimeDebug, _codec::Encode, _codec::Decode)]
-		#vis struct #ident<#account_type, #weight_type> {
+		#vis struct #ident<#voter_type, #target_type, #weight_type, A> {
+			_marker: sp_std::marker::PhantomData<A>,
 			#singles
 			#doubles
 			#rest
 		}
-	);
-
-	Ok(compact_def)
+	))
 }
 
 fn imports() -> Result<TokenStream2> {
@@ -199,60 +209,55 @@ fn imports() -> Result<TokenStream2> {
 
 fn convert_impl_for_assignment(
 	ident: syn::Ident,
-	account_type: GenericArgument,
+	voter_type: GenericArgument,
+	target_type: GenericArgument,
 	count: usize
 ) -> TokenStream2 {
 	let from_impl_single = {
 		let name = field_name_for(1);
-		quote!(1 => compact.#name.push((who, distribution[0].clone().0)),)
+		quote!(1 => compact.#name.push(
+			(
+				index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+				index_of_target(&distribution[0].0).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+			)
+		),)
 	};
 	let from_impl_double = {
 		let name = field_name_for(2);
-		quote!(2 => compact.#name.push((who, distribution[0].clone(), distribution[1].clone().0)),)
+		quote!(2 => compact.#name.push(
+			(
+				index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+				(
+					index_of_target(&distribution[0].0).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+					distribution[0].1,
+				),
+				index_of_target(&distribution[1].0).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+			)
+		),)
 	};
 	let from_impl_rest = (3..=count).map(|c| {
-		let inner = (0..c-1).map(|i| quote!(distribution[#i].clone(),)).collect::<TokenStream2>();
+		let inner = (0..c-1).map(|i|
+			quote!((index_of_target(&distribution[#i].0).ok_or(_phragmen::Error::CompactInvalidIndex)?, distribution[#i].1),)
+		).collect::<TokenStream2>();
 
 		let field_name = field_name_for(c);
 		let last_index = c - 1;
-		let last = quote!(distribution[#last_index].clone().0);
+		let last = quote!(index_of_target(&distribution[#last_index].0).ok_or(_phragmen::Error::CompactInvalidIndex)?);
 
 		quote!(
-			#c => compact.#field_name.push((who, [#inner], #last)),
+			#c => compact.#field_name.push((index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?, [#inner], #last)),
 		)
 	}).collect::<TokenStream2>();
-
-	let from_impl = quote!(
-		impl<#account_type: _codec::Codec + Default + Clone>
-		From<Vec<_phragmen::Assignment<#account_type>>>
-		for #ident<#account_type, _sp_runtime::Perbill>
-		{
-			fn from(
-				assignments: Vec<_phragmen::Assignment<#account_type>>,
-			) -> Self {
-				let mut compact: #ident<#account_type, _sp_runtime::Perbill> = Default::default();
-				assignments.into_iter().for_each(|_phragmen::Assignment { who, distribution } | {
-					match distribution.len() {
-						#from_impl_single
-						#from_impl_double
-						#from_impl_rest
-						_ => {
-							_sp_runtime::print("assignment length too big. ignoring");
-						}
-					}
-				});
-				compact
-			}
-		}
-	);
 
 	let into_impl_single = {
 		let name = field_name_for(1);
 		quote!(
-			for (who, target) in self.#name {
+			for (voter_index, target_index) in self.#name {
 				assignments.push(_phragmen::Assignment {
-					who,
-					distribution: vec![(target, _sp_runtime::Perbill::one())],
+					who: voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+					distribution: vec![
+						(target_at(target_index).ok_or(_phragmen::Error::CompactInvalidIndex)?, _sp_runtime::Perbill::one())
+					],
 				})
 			}
 		)
@@ -260,17 +265,22 @@ fn convert_impl_for_assignment(
 	let into_impl_double = {
 		let name = field_name_for(2);
 		quote!(
-			for (who, (t1, p1), t2) in self.#name {
+			for (voter_index, (t1_idx, p1), t2_idx) in self.#name {
 				if p1 >= _sp_runtime::Perbill::one() {
 					return Err(_phragmen::Error::CompactStakeOverflow);
 				}
+
 				// defensive only. Since perbill doesn't have `Sub`.
-				let p2 = _sp_runtime::traits::Saturating::saturating_sub(_sp_runtime::Perbill::one(), p1);
+				let p2 = _sp_runtime::traits::Saturating::saturating_sub(
+					_sp_runtime::Perbill::one(),
+					p1,
+				);
+
 				assignments.push( _phragmen::Assignment {
-					who,
+					who: voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?,
 					distribution: vec![
-						(t1, p1),
-						(t2, p2),
+						(target_at(t1_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, p1),
+						(target_at(t2_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, p2),
 					]
 				});
 			}
@@ -279,39 +289,80 @@ fn convert_impl_for_assignment(
 	let into_impl_rest = (3..=count).map(|c| {
 		let name = field_name_for(c);
 		quote!(
-			for (who, inners, t_last) in self.#name {
+			for (voter_index, inners, t_last_idx) in self.#name {
 				let mut sum = _sp_runtime::Perbill::zero();
 				let mut inners_parsed = inners
 					.iter()
-					.map(|(ref c, p)| {
+					.map(|(ref t_idx, p)| {
 						sum = _sp_runtime::traits::Saturating::saturating_add(sum, *p);
-						(c.clone(), *p)
-					}).collect::<Vec<(#account_type, _sp_runtime::Perbill)>>();
+						let target = target_at(*t_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?;
+						Ok((target, *p))
+					})
+					.collect::<Result<Vec<(A, _sp_runtime::Perbill)>, _phragmen::Error>>()?;
 
 				if sum >= _sp_runtime::Perbill::one() {
 					return Err(_phragmen::Error::CompactStakeOverflow);
 				}
+
 				// defensive only. Since perbill doesn't have `Sub`.
-				let p_last = _sp_runtime::traits::Saturating::saturating_sub(_sp_runtime::Perbill::one(), sum);
-				inners_parsed.push((t_last, p_last));
+				let p_last = _sp_runtime::traits::Saturating::saturating_sub(
+					_sp_runtime::Perbill::one(),
+					sum,
+				);
+
+				inners_parsed.push((target_at(t_last_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, p_last));
 
 				assignments.push(_phragmen::Assignment {
-					who,
+					who: voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?,
 					distribution: inners_parsed,
 				});
 			}
 		)
 	}).collect::<TokenStream2>();
 
-	let into_impl = quote!(
-		impl<#account_type: _codec::Codec + Default + Clone>
-		_sp_std::convert::TryInto<Vec<_phragmen::Assignment<#account_type>>>
-		for #ident<#account_type, _sp_runtime::Perbill>
+	let from_into_impl = quote!(
+		impl<
+			#voter_type: _codec::Codec + Default + Copy,
+			#target_type: _codec::Codec + Default + Copy,
+			A: _codec::Codec + Default + Clone,
+		>
+		#ident<#voter_type, #target_type, _sp_runtime::Perbill, A>
 		{
-			type Error = _phragmen::Error;
+			pub fn from_assignment<FV, FT>(
+				assignments: Vec<_phragmen::Assignment<A>>,
+				index_of_voter: FV,
+				index_of_target: FT,
+			) -> Result<Self, _phragmen::Error>
+				where
+					for<'r> FV: Fn(&'r A) -> Option<#voter_type>,
+					for<'r> FT: Fn(&'r A) -> Option<#target_type>,
+			{
+				let mut compact: #ident<
+					#voter_type,
+					#target_type,
+					_sp_runtime::Perbill,
+					A,
+				> = Default::default();
 
-			fn try_into(self) -> Result<Vec<_phragmen::Assignment<#account_type>>, Self::Error> {
-				let mut assignments: Vec<_phragmen::Assignment<#account_type>> = Default::default();
+				for _phragmen::Assignment { who, distribution } in assignments {
+					match distribution.len() {
+						#from_impl_single
+						#from_impl_double
+						#from_impl_rest
+						_ => {
+							return Err(_phragmen::Error::CompactTargetOverflow);
+						}
+					}
+				};
+				Ok(compact)
+			}
+
+			pub fn into_assignment(
+				self,
+				voter_at: impl Fn(#voter_type) -> Option<A>,
+				target_at: impl Fn(#target_type) -> Option<A>,
+			) -> Result<Vec<_phragmen::Assignment<A>>, _phragmen::Error> {
+				let mut assignments: Vec<_phragmen::Assignment<A>> = Default::default();
 				#into_impl_single
 				#into_impl_double
 				#into_impl_rest
@@ -321,51 +372,60 @@ fn convert_impl_for_assignment(
 		}
 	);
 
-	quote!(
-		#from_impl
-		#into_impl
-	)
+	from_into_impl
 }
 
 fn convert_impl_for_staked_assignment(
 	ident: syn::Ident,
-	account_type: GenericArgument,
-	count: usize
+	voter_type: GenericArgument,
+	target_type: GenericArgument,
+	count: usize,
 ) -> TokenStream2 {
 	let from_impl_single = {
 		let name = field_name_for(1);
-		quote!(1 => compact.#name.push((who, distribution[0].clone().0)),)
+		quote!(1 => compact.#name.push(
+			(
+				index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+				index_of_target(&distribution[0].0).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+			)
+		),)
 	};
 	let from_impl_double = {
 		let name = field_name_for(2);
 		quote!(2 => compact.#name.push(
 			(
-				who,
-				distribution[0].clone(),
-				distribution[1].clone().0,
+				index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+				(
+					index_of_target(&distribution[0].0).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+					distribution[0].1,
+				),
+				index_of_target(&distribution[1].0).ok_or(_phragmen::Error::CompactInvalidIndex)?,
 			)
 		),)
 	};
 	let from_impl_rest = (3..=count).map(|c| {
-		let inner = (0..c-1).map(|i| quote!(distribution[#i].clone(),)).collect::<TokenStream2>();
+		let inner = (0..c-1).map(|i|
+			quote!((index_of_target(&distribution[#i].0).ok_or(_phragmen::Error::CompactInvalidIndex)?, distribution[#i].1),)
+		).collect::<TokenStream2>();
 
 		let field_name = field_name_for(c);
 		let last_index = c - 1;
-		let last = quote!(distribution[#last_index].clone().0);
+		let last = quote!(index_of_target(&distribution[#last_index].0).ok_or(_phragmen::Error::CompactInvalidIndex)?);
 
 		quote!(
-			#c => compact.#field_name.push((who, [#inner], #last)),
+			#c => compact.#field_name.push((index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?, [#inner], #last)),
 		)
 	}).collect::<TokenStream2>();
 
 	let into_impl_single = {
 		let name = field_name_for(1);
 		quote!(
-			for (who, target) in self.#name {
-				let all_stake = C::convert(max_of(&who)) as u128;
+			for (voter_index, target_index) in self.#name {
+				let who = voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?;
+				let all_stake = max_of(&who);
 				assignments.push(_phragmen::StakedAssignment {
 					who,
-					distribution: vec![(target, all_stake)],
+					distribution: vec![(target_at(target_index).ok_or(_phragmen::Error::CompactInvalidIndex)?, all_stake)],
 				})
 			}
 		)
@@ -373,8 +433,9 @@ fn convert_impl_for_staked_assignment(
 	let into_impl_double = {
 		let name = field_name_for(2);
 		quote!(
-			for (who, (t1, w1), t2) in self.#name {
-				let all_stake = C::convert(max_of(&who)) as u128;
+			for (voter_index, (t1_idx, w1), t2_idx) in self.#name {
+				let who = voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?;
+				let all_stake = max_of(&who);
 
 				if w1 >= all_stake {
 					return Err(_phragmen::Error::CompactStakeOverflow);
@@ -385,8 +446,8 @@ fn convert_impl_for_staked_assignment(
 				assignments.push( _phragmen::StakedAssignment {
 					who,
 					distribution: vec![
-						(t1, w1),
-						(t2, w2),
+						(target_at(t1_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, w1),
+						(target_at(t2_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, w2),
 					]
 				});
 			}
@@ -395,15 +456,18 @@ fn convert_impl_for_staked_assignment(
 	let into_impl_rest = (3..=count).map(|c| {
 		let name = field_name_for(c);
 		quote!(
-			for (who, inners, t_last) in self.#name {
+			for (voter_index, inners, t_last_idx) in self.#name {
+				let who = voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?;
 				let mut sum = u128::min_value();
-				let all_stake = C::convert(max_of(&who)) as u128;
+				let all_stake = max_of(&who);
+
 				let mut inners_parsed = inners
 					.iter()
-					.map(|(ref c, w)| {
+					.map(|(ref t_idx, w)| {
 						sum = sum.saturating_add(*w);
-						(c.clone(), *w)
-					}).collect::<Vec<(#account_type, u128)>>();
+						let target = target_at(*t_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?;
+						Ok((target, *w))
+					}).collect::<Result<Vec<(A, u128)>, _phragmen::Error>>()?;
 
 				if sum >= all_stake {
 					return Err(_phragmen::Error::CompactStakeOverflow);
@@ -411,7 +475,7 @@ fn convert_impl_for_staked_assignment(
 				// w_last is proved to be positive.
 				let w_last = all_stake - sum;
 
-				inners_parsed.push((t_last, w_last));
+				inners_parsed.push((target_at(t_last_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, w_last));
 
 				assignments.push(_phragmen::StakedAssignment {
 					who,
@@ -422,19 +486,27 @@ fn convert_impl_for_staked_assignment(
 	}).collect::<TokenStream2>();
 
 	let final_impl = quote!(
-		impl<#account_type: _codec::Codec + Default + Clone>
-		#ident<#account_type, u128>
+		impl<
+			#voter_type: _codec::Codec + Default + Copy,
+			#target_type: _codec::Codec + Default + Copy,
+			A: _codec::Codec + Default + Clone,
+		>
+		#ident<#voter_type, #target_type, u128, A>
 		{
 			/// Convert self into `StakedAssignment`. The given function should return the total
 			/// weight of a voter. It is used to subtract the sum of all the encoded weights to
 			/// infer the last one.
-			fn into_staked<Balance, FM, C>(self, max_of: FM)
-				-> Result<Vec<_phragmen::StakedAssignment<#account_type>>, _phragmen::Error>
+			pub fn into_staked<FM>(
+				self,
+				max_of: FM,
+				voter_at: impl Fn(#voter_type) -> Option<A>,
+				target_at: impl Fn(#target_type) -> Option<A>,
+			)
+				-> Result<Vec<_phragmen::StakedAssignment<A>>, _phragmen::Error>
 			where
-				for<'r> FM: Fn(&'r #account_type) -> Balance,
-				C: _sp_runtime::traits::Convert<Balance, u64>
+				for<'r> FM: Fn(&'r A) -> u128,
 			{
-				let mut assignments: Vec<_phragmen::StakedAssignment<#account_type>> = Default::default();
+				let mut assignments: Vec<_phragmen::StakedAssignment<A>> = Default::default();
 				#into_impl_single
 				#into_impl_double
 				#into_impl_rest
@@ -443,19 +515,27 @@ fn convert_impl_for_staked_assignment(
 			}
 
 			/// Generate self from a vector of `StakedAssignment`.
-			fn from_staked(assignments: Vec<_phragmen::StakedAssignment<#account_type>>) -> Self {
-				let mut compact: #ident<#account_type, u128> = Default::default();
-				assignments.into_iter().for_each(|_phragmen::StakedAssignment { who, distribution } | {
+			pub fn from_staked<FV, FT>(
+				assignments: Vec<_phragmen::StakedAssignment<A>>,
+				index_of_voter: FV,
+				index_of_target: FT,
+			) -> Result<Self, _phragmen::Error>
+				where
+					for<'r> FV: Fn(&'r A) -> Option<#voter_type>,
+					for<'r> FT: Fn(&'r A) -> Option<#target_type>,
+			{
+				let mut compact: #ident<#voter_type, #target_type, u128, A> = Default::default();
+				for _phragmen::StakedAssignment { who, distribution }  in assignments {
 					match distribution.len() {
 						#from_impl_single
 						#from_impl_double
 						#from_impl_rest
 						_ => {
-							_sp_runtime::print("staked assignment length too big. ignoring");
+							return Err(_phragmen::Error::CompactTargetOverflow);
 						}
 					}
-				});
-				compact
+				};
+				Ok(compact)
 			}
 		}
 	);

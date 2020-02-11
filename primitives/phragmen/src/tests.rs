@@ -20,10 +20,11 @@
 
 use crate::mock::*;
 use crate::{
-	elect, equalize, build_support_map, Support, StakedAssignment, Assignment, PhragmenResult,
+	elect, equalize, build_support_map,
+	Support, StakedAssignment, Assignment, PhragmenResult, ExtendedBalance,
 };
 use substrate_test_utils::assert_eq_uvec;
-use sp_runtime::Perbill;
+use sp_runtime::{Perbill, traits::Convert};
 
 #[test]
 fn float_phragmen_poc_works() {
@@ -484,8 +485,10 @@ fn self_votes_should_be_kept() {
 
 	let staked_assignments: Vec<StakedAssignment<AccountId>> = result.assignments
 		.into_iter()
-		.map(|a| a.into_staked::<_, _, TestCurrencyToVote>(&stake_of, true))
-		.collect();
+		.map(|a| {
+			let stake = <TestCurrencyToVote as Convert<Balance, u64>>::convert(stake_of(&a.who)) as ExtendedBalance;
+			a.into_staked(stake, true)
+		}).collect();
 
 	let (mut supports, _) = build_support_map::<AccountId>(
 		&result.winners.into_iter().map(|(who, _)| who).collect(),
@@ -520,22 +523,68 @@ fn self_votes_should_be_kept() {
 	);
 }
 
+#[test]
+fn assignment_conversion_is_reversible_without_fill() {
+	let assignment = Assignment {
+		who: 1,
+		distribution: vec![
+			(20, Perbill::from_percent(33)),
+			(10, Perbill::from_percent(67)),
+		]
+	};
+
+	let staked = assignment.into_staked(1243252161234124, true);
+	dbg!(&staked);
+
+	let sum = staked.distribution[0].1 + staked.distribution[1].1;
+	dbg!(sum == 1243252161234124);
+
+	unimplemented!();
+}
+
+#[test]
+fn assignment_convert_works() {
+	let staked = StakedAssignment {
+		who: 1 as AccountId,
+		distribution: vec![
+			(20, 100 as Balance),
+			(30, 25),
+		],
+	};
+
+	let assignment = staked.clone().into_assignment(true);
+	assert_eq!(
+		assignment,
+		Assignment {
+			who: 1,
+			distribution: vec![
+				(20, Perbill::from_percent(80)),
+				(30, Perbill::from_percent(20)),
+			]
+		}
+	);
+
+	assert_eq!(
+		assignment.into_staked(125, true),
+		staked,
+	);
+}
+
 mod compact {
 	use codec::{Decode, Encode};
 	use crate::generate_compact_solution_type;
-	use crate::mock::{TestCurrencyToVote};
 	use super::{AccountId, Balance};
 	// these need to come from the same dev-dependency `sp-phragmen`, not from the crate.
 	use sp_phragmen::{Assignment, StakedAssignment, Error as PhragmenError};
-	use sp_std::convert::TryInto;
+	use sp_std::{convert::{TryInto, TryFrom}, fmt::Debug};
 	use sp_runtime::Perbill;
 
 	generate_compact_solution_type!(TestCompact, 16);
 
 	#[test]
 	fn compact_struct_is_codec() {
-		let compact = TestCompact {
-			votes1: vec![(2, 20), (4, 40)],
+		let compact = TestCompact::<_, _, _, u64> {
+			votes1: vec![(2u64, 20), (4, 40)],
 			votes2: vec![
 				(1, (10, Perbill::from_percent(80)), 11),
 				(5, (50, Perbill::from_percent(85)), 51),
@@ -551,33 +600,58 @@ mod compact {
 		);
 	}
 
-	#[test]
-	fn basic_from_and_into_compact_works_assignments() {
+	fn basic_ratio_test_with<V, T>() where
+		V: codec::Codec + Copy + Default + PartialEq + Eq + TryInto<usize> + TryFrom<usize> + From<u8> + Debug,
+		T: codec::Codec + Copy + Default + PartialEq + Eq + TryInto<usize> + TryFrom<usize> + From<u8> + Debug,
+		<V as TryFrom<usize>>::Error: std::fmt::Debug,
+		<T as TryFrom<usize>>::Error: std::fmt::Debug,
+		<V as TryInto<usize>>::Error: std::fmt::Debug,
+		<T as TryInto<usize>>::Error: std::fmt::Debug,
+	{
+		let voters = vec![
+			2 as AccountId,
+			4,
+			1,
+			5,
+			3,
+		];
+		let targets = vec![
+			10 as AccountId,
+			11,
+			20, // 2
+			30,
+			31, // 4
+			32,
+			40, // 6
+			50,
+			51, // 8
+		];
+
 		let assignments = vec![
 			Assignment {
-				who: 2u64,
-				distribution: vec![(20, Perbill::from_percent(100))]
+				who: 2 as AccountId,
+				distribution: vec![(20u64, Perbill::from_percent(100))]
 			},
 			Assignment {
-				who: 4u64,
+				who: 4,
 				distribution: vec![(40, Perbill::from_percent(100))],
 			},
 			Assignment {
-				who: 1u64,
+				who: 1,
 				distribution: vec![
 					(10, Perbill::from_percent(80)),
 					(11, Perbill::from_percent(20))
 				],
 			},
 			Assignment {
-				who: 5u64, distribution:
-				vec![
+				who: 5,
+				distribution: vec![
 					(50, Perbill::from_percent(85)),
 					(51, Perbill::from_percent(15)),
 				]
 			},
 			Assignment {
-				who: 3u64,
+				who: 3,
 				distribution: vec![
 					(30, Perbill::from_percent(50)),
 					(31, Perbill::from_percent(25)),
@@ -586,56 +660,96 @@ mod compact {
 			},
 		];
 
-		let compacted: TestCompact<u64, Perbill> = assignments.clone().into();
+		let voter_index = |a: &AccountId| -> Option<V> {
+			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
+		};
+		let target_index = |a: &AccountId| -> Option<T> {
+			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
+		};
+
+		let compacted = <TestCompact<V, T, Perbill, AccountId>>::from_assignment(
+			assignments.clone(),
+			voter_index,
+			target_index,
+		).unwrap();
 
 		assert_eq!(
 			compacted,
 			TestCompact {
-				votes1: vec![(2, 20), (4, 40)],
+				votes1: vec![(V::from(0u8), T::from(2u8)), (V::from(1u8), T::from(6u8))],
 				votes2: vec![
-					(1, (10, Perbill::from_percent(80)), 11),
-					(5, (50, Perbill::from_percent(85)), 51),
+					(V::from(2u8), (T::from(0u8), Perbill::from_percent(80)), T::from(1u8)),
+					(V::from(3u8), (T::from(7u8), Perbill::from_percent(85)), T::from(8u8)),
 				],
 				votes3: vec![
-					(3, [(30, Perbill::from_percent(50)), (31, Perbill::from_percent(25))], 32),
+					(
+						V::from(4),
+						[(T::from(3u8), Perbill::from_percent(50)), (T::from(4u8), Perbill::from_percent(25))],
+						T::from(5u8),
+					),
 				],
 				..Default::default()
 			}
 		);
 
+		let voter_at = |a: V| -> Option<AccountId> { voters.get(<V as TryInto<usize>>::try_into(a).unwrap()).cloned() };
+		let target_at = |a: T| -> Option<AccountId> { targets.get(<T as TryInto<usize>>::try_into(a).unwrap()).cloned() };
+
 		assert_eq!(
-			<TestCompact<u64, Perbill> as TryInto<Vec<Assignment<u64>>>>::try_into(compacted).unwrap(),
-			assignments
+			compacted.into_assignment(voter_at, target_at).unwrap(),
+			assignments,
 		);
 	}
 
 	#[test]
+	fn basic_from_and_into_compact_works_assignments() {
+		basic_ratio_test_with::<u16, u16>();
+		basic_ratio_test_with::<u16, u32>();
+		basic_ratio_test_with::<u8, u32>();
+	}
+
+	#[test]
 	fn basic_from_and_into_compact_works_staked_assignments() {
+		let voters = vec![
+			2 as AccountId,
+			4,
+			1,
+			5,
+			3,
+		];
+		let targets = vec![
+			10 as AccountId, 11,
+			20,
+			30, 31, 32,
+			40,
+			50, 51,
+		];
+
 		let assignments = vec![
 			StakedAssignment {
-				who: 2u64,
-				distribution: vec![(20, 100u128)]
+				who: 2 as AccountId,
+				distribution: vec![(20, 100 as Balance)]
 			},
 			StakedAssignment {
-				who: 4u64,
+				who: 4,
 				distribution: vec![(40, 100)],
 			},
 			StakedAssignment {
-				who: 1u64,
+				who: 1,
 				distribution: vec![
 					(10, 80),
 					(11, 20)
 				],
 			},
 			StakedAssignment {
-				who: 5u64, distribution:
+				who: 5, distribution:
 				vec![
 					(50, 85),
 					(51, 15),
 				]
 			},
 			StakedAssignment {
-				who: 3u64,
+				who: 3,
 				distribution: vec![
 					(30, 50),
 					(31, 25),
@@ -644,106 +758,144 @@ mod compact {
 			},
 		];
 
-		let compacted = <TestCompact<u64, u128>>::from_staked(assignments.clone());
+		let voter_index = |a: &AccountId| -> Option<u16> {
+			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
+		};
+		let target_index = |a: &AccountId| -> Option<u16> {
+			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
+		};
+
+		let compacted = <TestCompact<u16, u16, Balance, AccountId>>::from_staked(
+			assignments.clone(),
+			voter_index,
+			target_index,
+		).unwrap();
 
 		assert_eq!(
 			compacted,
 			TestCompact {
-				votes1: vec![(2, 20), (4, 40)],
+				votes1: vec![(0, 2), (1, 6)],
 				votes2: vec![
-					(1, (10, 80), 11),
-					(5, (50, 85), 51),
+					(2, (0, 80), 1),
+					(3, (7, 85), 8),
 				],
 				votes3: vec![
-					(3, [(30, 50), (31, 25)], 32),
+					(4, [(3, 50), (4, 25)], 5),
 				],
 				..Default::default()
 			}
 		);
 
 		let max_of_fn = |_: &AccountId| -> Balance { 100u128 };
-		let max_of: Box<dyn Fn(&AccountId) -> Balance> = Box::new(max_of_fn);
+		let voter_at = |a: u16| -> Option<AccountId> { voters.get(a as usize).cloned() };
+		let target_at = |a: u16| -> Option<AccountId> { targets.get(a as usize).cloned() };
 
 		assert_eq!(
-			compacted.into_staked::<Balance, _, TestCurrencyToVote>(&max_of).unwrap(),
-			assignments
+			compacted.into_staked(
+				max_of_fn,
+				voter_at,
+				target_at,
+			).unwrap(),
+			assignments,
 		);
 	}
 
 	#[test]
-	fn compact_into_stake_must_report_budget_overflow() {
+	fn compact_into_stake_must_report_overflow() {
 		// The last edge which is computed from the rest should ALWAYS be positive.
 		// in votes2
-		let compact = TestCompact::<AccountId, u128> {
+		let compact = TestCompact::<u16, u16, Balance, AccountId> {
 			votes1: Default::default(),
-			votes2: vec![(1, (10, 10), 20)],
+			votes2: vec![(0, (1, 10), 2)],
 			..Default::default()
 		};
 
-		let max_of_fn = |_: &AccountId| -> Balance { 5 };
-		let max_of: Box<dyn Fn(&AccountId) -> Balance> = Box::new(max_of_fn);
+		let entity_at = |a: u16| -> Option<AccountId> { Some(a as AccountId) };
+		let max_of = |_: &AccountId| -> Balance { 5 };
 
 		assert_eq!(
-			compact.into_staked::<Balance, _, TestCurrencyToVote>(&max_of).unwrap_err(),
+			compact.into_staked(&max_of, &entity_at, &entity_at).unwrap_err(),
 			PhragmenError::CompactStakeOverflow,
 		);
 
 		// in votes3 onwards
-		let compact = TestCompact::<AccountId, u128> {
+		let compact = TestCompact::<u16, u16, Balance, AccountId> {
 			votes1: Default::default(),
 			votes2: Default::default(),
-			votes3: vec![(1, [(10, 7), (20, 8)], 30)],
+			votes3: vec![(0, [(1, 7), (2, 8)], 3)],
 			..Default::default()
 		};
 
 		assert_eq!(
-			compact.into_staked::<Balance, _, TestCurrencyToVote>(&max_of).unwrap_err(),
+			compact.into_staked(&max_of, &entity_at, &entity_at).unwrap_err(),
 			PhragmenError::CompactStakeOverflow,
 		);
 
 		// Also if equal
-		let compact = TestCompact::<AccountId, u128> {
+		let compact = TestCompact::<u16, u16, Balance, AccountId> {
 			votes1: Default::default(),
 			votes2: Default::default(),
 			// 5 is total, we cannot leave none for 30 here.
-			votes3: vec![(1, [(10, 3), (20, 2)], 30)],
+			votes3: vec![(0, [(1, 3), (2, 2)], 3)],
 			..Default::default()
 		};
 
 		assert_eq!(
-			compact.into_staked::<Balance, _, TestCurrencyToVote>(&max_of).unwrap_err(),
+			compact.into_staked(&max_of, &entity_at, &entity_at).unwrap_err(),
 			PhragmenError::CompactStakeOverflow,
 		);
 	}
 
-
 	#[test]
-	fn compact_into_stake_must_report_ratio_overflow() {
+	fn compact_into_assignment_must_report_overflow() {
 		// in votes2
-		let compact = TestCompact::<AccountId, Perbill> {
+		let compact = TestCompact::<u16, u16, Perbill, AccountId> {
 			votes1: Default::default(),
-			votes2: vec![(1, (10, Perbill::from_percent(100)), 20)],
+			votes2: vec![(0, (1, Perbill::from_percent(100)), 2)],
 			..Default::default()
 		};
 
+		let entity_at = |a: u16| -> Option<AccountId> { Some(a as AccountId) };
+
 		assert_eq!(
-			<TestCompact<AccountId, Perbill> as TryInto<Vec<Assignment<AccountId>>>>::try_into(compact)
-				.unwrap_err(),
+			compact.into_assignment(&entity_at, &entity_at).unwrap_err(),
 			PhragmenError::CompactStakeOverflow,
 		);
 
 		// in votes3 onwards
-		let compact = TestCompact::<AccountId, Perbill> {
+		let compact = TestCompact::<u16, u16, Perbill, AccountId> {
 			votes1: Default::default(),
 			votes2: Default::default(),
-			votes3: vec![(1, [(10, Perbill::from_percent(70)), (20, Perbill::from_percent(80))], 30)],
+			votes3: vec![(0, [(1, Perbill::from_percent(70)), (2, Perbill::from_percent(80))], 3)],
 			..Default::default()
 		};
 
 		assert_eq!(
-			<TestCompact<AccountId, Perbill> as TryInto<Vec<Assignment<AccountId>>>>::try_into(compact)
-				.unwrap_err(),
+			compact.into_assignment(&entity_at, &entity_at).unwrap_err(),
 			PhragmenError::CompactStakeOverflow,
 		);
+	}
+
+	#[test]
+	fn target_count_overflow_is_detected() {
+		let assignments = vec![
+			StakedAssignment {
+				who: 1 as AccountId,
+				distribution: (10..30).map(|i| (i as AccountId, i as Balance)).collect::<Vec<_>>(),
+			},
+		];
+
+		let entity_index = |a: &AccountId| -> Option<u16> { Some(*a as u16) };
+
+		let compacted = <TestCompact<u16, u16, Balance, AccountId>>::from_staked(
+			assignments.clone(),
+			entity_index,
+			entity_index,
+		);
+
+		assert_eq!(
+			compacted.unwrap_err(),
+			PhragmenError::CompactTargetOverflow,
+		)
 	}
 }

@@ -64,7 +64,19 @@ pub trait IdentifierT: Clone + Eq + Default + Ord + Debug {}
 pub enum Error {
 	/// While going from compact to staked, the stake of all the edges has gone above the
 	/// total and the last stake cannot be assigned.
-	CompactStakeOverflow
+	CompactStakeOverflow,
+	/// The compact type has a voter who's number of targets is out of bound.
+	CompactTargetOverflow,
+	/// One of the index functions returned none.
+	CompactInvalidIndex,
+
+}
+
+#[macro_export]
+macro_rules! some {
+	($inner:expr) => {
+		$some.ok_or(_phragmen::CompactInvalidIndex)?
+	};
 }
 
 impl<T: Clone + Eq + Default + Ord + Debug> IdentifierT for T {}
@@ -146,15 +158,11 @@ pub struct Assignment<AccountId> {
 impl<AccountId> Assignment<AccountId> {
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
-	/// It needs `stake_of` to know how the total budget of each voter. If `fill` is set to true,
+	/// It needs `stake` which is the total budget of the voter. If `fill` is set to true,
 	/// it ensures that all the potential rounding errors are compensated and the distribution's sum
 	/// is exactly equal to the total budget.
-	pub fn into_staked<Balance, FS, C>(self, stake_of: FS, fill: bool) -> StakedAssignment<AccountId>
-	where
-		C: Convert<Balance, u64>,
-		for<'r> FS: Fn(&'r AccountId) -> Balance,
+	pub fn into_staked(self, stake: ExtendedBalance, fill: bool) -> StakedAssignment<AccountId>
 	{
-		let stake = C::convert(stake_of(&self.who)) as ExtendedBalance;
 		let mut sum: ExtendedBalance = Bounded::min_value();
 		let mut distribution = self.distribution.into_iter().map(|(target, p)| {
 			let distribution_stake = p * stake;
@@ -187,6 +195,35 @@ pub struct StakedAssignment<AccountId> {
 	pub who: AccountId,
 	/// The distribution of the voter's stake.
 	pub distribution: Vec<(AccountId, ExtendedBalance)>,
+}
+
+impl<AccountId> StakedAssignment<AccountId> {
+	/// Converts self into the normal [`Assignment`] type.
+	pub fn into_assignment(self, fill: bool) -> Assignment<AccountId> {
+		let accuracy = Perbill::accuracy() as u128;
+		let mut sum: u128 = Zero::zero();
+
+		let stake = self.distribution.iter().map(|x| x.1).sum();
+		let mut distribution = self.distribution.into_iter().map(|(target, w)| {
+			let portion = multiply_by_rational(w, accuracy, stake).unwrap_or(Bounded::max_value());
+			sum += portion;
+			let per_thing = Perbill::from_parts(portion as u32);
+			(target, per_thing)
+		}).collect::<Vec<(AccountId, Perbill)>>();
+
+		if fill {
+			if let Some(leftover) = accuracy.checked_sub(sum) {
+				if let Some(last) = distribution.last_mut() {
+					last.1 = last.1.saturating_add(Perbill::from_parts(leftover as u32));
+				}
+			}
+		}
+
+		Assignment {
+			who: self.who,
+			distribution,
+		}
+	}
 }
 
 /// A structure to demonstrate the phragmen result from the perspective of the candidate, i.e. how

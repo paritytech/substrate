@@ -16,12 +16,16 @@
 
 //! Helpers for offchain worker election.
 
-use crate::{Call, CompactAssignments, Module, SessionInterface, Trait};
+use crate::{
+	Call, Module, SessionInterface, Trait, BalanceOf, ValidatorIndex, NominatorIndex, CompactOf,
+};
 use codec::Encode;
 use frame_system::offchain::{SubmitUnsignedTransaction};
-use sp_phragmen::{reduce, ExtendedBalance, PhragmenResult, StakedAssignment};
-use sp_std::{prelude::*, cmp::Ordering};
+use sp_phragmen::{ reduce, ExtendedBalance, PhragmenResult, StakedAssignment, Assignment};
+use sp_std::{prelude::*, cmp::Ordering, convert::TryInto};
 use sp_runtime::{RuntimeAppPublic, RuntimeDebug};
+use sp_runtime::offchain::storage::StorageValueRef;
+use sp_runtime::traits::Convert;
 
 #[derive(RuntimeDebug)]
 pub(crate) enum OffchainElectionError {
@@ -30,7 +34,42 @@ pub(crate) enum OffchainElectionError {
 	NoSigningKey,
 	/// Phragmen election returned None. This means less candidate that minimum number of needed
 	/// validators were present. The chain is in trouble and not much that we can do about it.
-	FailedElection,
+	ElectionFailed,
+	/// The snapshot data is not available.
+	SnapshotUnavailable,
+	/// Failed to create the compact type.
+	CompactFailed,
+}
+
+pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/staking-election/";
+const OFFCHAIN_REPEAT: u32 = 5;
+
+pub(crate) fn set_check_offchain_execution_status<T: Trait>(now: T::BlockNumber) -> Result<(), &'static str> {
+	let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+	let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
+
+	let mutate_stat = storage.mutate::<_, &'static str, _>(|maybe_head: Option<Option<T::BlockNumber>>| {
+		dbg!(maybe_head, now);
+		match maybe_head {
+			Some(Some(head)) if now < head => Err("fork."),
+			Some(Some(head)) if now >= head && now <= head + threshold => Err("recently executed."),
+			Some(Some(head)) if now > head + threshold =>
+				// we can run again now. Write the new head.
+				Ok(now),
+			_ =>
+				// value doesn't exists. Probably this node just booted up. Write, and run
+				Ok(now),
+		}
+	});
+
+	match mutate_stat {
+		// all good
+		Ok(Ok(_)) => Ok(()),
+		// failed to write.
+		Ok(Err(_)) => Err("failed to write to offchain db."),
+		// fork etc.
+		Err(why) => Err(why),
+	}
 }
 
 /// Compares two sets of phragmen scores based on desirability and returns true if `that` is
@@ -70,11 +109,16 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 						.and_then(|vk| if *vk == k { Some((index, vk)) } else { None })
 				)
 		) {
+			// make sure that the snapshot is available.
+			let snapshot_validators = <Module<T>>::snapshot_validators()
+				.ok_or(OffchainElectionError::SnapshotUnavailable)?;
+			let snapshot_nominators = <Module<T>>::snapshot_nominators()
+				.ok_or(OffchainElectionError::SnapshotUnavailable)?;
 			// k is a local key who is also among the validators.
 			let PhragmenResult {
 				winners,
 				assignments,
-			} = <Module<T>>::do_phragmen().ok_or(OffchainElectionError::FailedElection)?;
+			} = <Module<T>>::do_phragmen().ok_or(OffchainElectionError::ElectionFailed)?;
 
 			// convert winners into just account ids.
 			let winners: Vec<T::AccountId> = winners.into_iter().map(|(w, _)| w).collect();
@@ -82,10 +126,12 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 			// convert into staked. This is needed to be able to reduce.
 			let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
 				.into_iter()
-				.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(
-					<Module<T>>::slashable_balance_of,
-					true,
-				))
+				.map(|a| {
+					let stake = <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
+						<Module<T>>::slashable_balance_of(&a.who)
+					) as ExtendedBalance;
+					a.into_staked(stake, true)
+				})
 				.collect();
 
 			// reduce the assignments. This will remove some additional edges.
@@ -95,29 +141,48 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 			let (support, _) = sp_phragmen::build_support_map::<T::AccountId>(&winners, &staked);
 			let score = sp_phragmen::evaluate_support(&support);
 
-			// compact encode the assignment.
-			let compact = <CompactAssignments<T::AccountId, ExtendedBalance>>::from_staked(staked);
-
-			#[cfg(feature = "signed")]
-			{
-				unimplemented!();
-			}
-
-			#[cfg(not(feature = "signed"))]
-			{
-				let signature_payload =
-					(winners.clone(), compact.clone(), score, index as u32).encode();
-				let signature = pubkey.sign(&signature_payload).unwrap();
-				let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
-					winners,
-					compact,
-					score,
-					index as u32,
-					signature,
+			// helpers for building the compact
+			let nominator_index = |a: &T::AccountId| -> Option<NominatorIndex> {
+				snapshot_nominators.iter().position(|x| x == a).and_then(|i|
+					<usize as TryInto<NominatorIndex>>::try_into(i).ok()
 				)
-				.into();
-				let _result = T::SubmitTransaction::submit_unsigned(call);
-			}
+			};
+			let validator_index = |a: &T::AccountId| -> Option<ValidatorIndex> {
+				snapshot_validators.iter().position(|x| x == a).and_then(|i|
+					<usize as TryInto<ValidatorIndex>>::try_into(i).ok()
+				)
+			};
+
+			// convert back to ratio assignment. This takes less space.
+			let assignments_reduced: Vec<Assignment<T::AccountId>> = staked
+				.into_iter()
+				.map(|sa| sa.into_assignment(true))
+				.collect();
+
+			// compact encode the assignment.
+			let compact = <CompactOf<T>>::from_assignment(
+				assignments_reduced,
+				nominator_index,
+				validator_index,
+			).map_err(|_| OffchainElectionError::CompactFailed)?;
+
+			// convert winners to index as well
+			let winners = winners.into_iter().map(|w|
+				validator_index(&w).expect("winners are chosen from the snapshot list; the must have index; qed")
+			).collect::<Vec<_>>();
+
+			let signature_payload =
+				(winners.clone(), compact.clone(), score, index as u32).encode();
+			let signature = pubkey.sign(&signature_payload).unwrap();
+			let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
+				winners,
+				compact,
+				score,
+				index as u32,
+				signature,
+			)
+			.into();
+			let _result = T::SubmitTransaction::submit_unsigned(call);
 
 			Ok(())
 		} else {

@@ -28,6 +28,7 @@ use sp_core::H256;
 use sp_io;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, PhragmenScore,
+	Assignment,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::testing::{Header, TestXt, UintAuthorityId};
@@ -70,7 +71,7 @@ thread_local! {
 	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
 	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
 	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
-	static LOCAL_KEY_ACCOUNT: RefCell<AccountId> = RefCell::new(10);
+	pub(crate) static LOCAL_KEY_ACCOUNT: RefCell<AccountId> = RefCell::new(10);
 }
 
 pub struct TestSessionHandler;
@@ -479,7 +480,7 @@ impl ExtBuilder {
 		LOCAL_KEY_ACCOUNT.with(|v| *v.borrow_mut() = self.local_key_account);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
-		env_logger::init();
+		let _ = env_logger::try_init();
 		self.set_associated_constants();
 		let mut storage = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
@@ -739,13 +740,34 @@ pub fn on_offence_now(
 	on_offence_in_era(offenders, slash_fraction, now)
 }
 
+/// convert a vector of staked assignments into ratio
+pub fn assignment_to_staked(assignments: Vec<Assignment<AccountId>>) -> Vec<StakedAssignment<AccountId>> {
+	assignments
+		.into_iter()
+		.map(|a| {
+			let stake = <CurrencyToVoteHandler as Convert<Balance, u64>>::convert(
+				Staking::slashable_balance_of(&a.who)
+			) as ExtendedBalance;
+			a.into_staked(stake, true)
+		})
+		.collect()
+}
+
+/// convert a vector of assignments into staked
+pub fn staked_to_assignment(staked: Vec<StakedAssignment<AccountId>>) -> Vec<Assignment<AccountId>> {
+	staked
+		.into_iter()
+		.map(|sa| sa.into_assignment(true))
+		.collect()
+}
+
 // winners will be chosen by simply their unweighted total backing stake. Nominator stake is
 // distributed evenly.
 pub fn horrible_phragmen_with_post_processing(
 	do_reduce: bool,
 ) -> (
-	CompactAssignments<AccountId, ExtendedBalance>,
-	Vec<AccountId>,
+	CompactOf<Test>,
+	Vec<ValidatorIndex>,
 	PhragmenScore,
 ) {
 	use std::collections::BTreeMap;
@@ -775,7 +797,7 @@ pub fn horrible_phragmen_with_post_processing(
 		.collect();
 
 	// create assignments
-	let mut assignments: Vec<StakedAssignment<AccountId>> = Vec::new();
+	let mut staked_assignment: Vec<StakedAssignment<AccountId>> = Vec::new();
 	<Nominators<Test>>::enumerate().for_each(|(who, nomination)| {
 		let mut dist: Vec<(AccountId, ExtendedBalance)> = Vec::new();
 		nomination.targets.iter().for_each(|v| {
@@ -807,7 +829,7 @@ pub fn horrible_phragmen_with_post_processing(
 			last.1 += leftover;
 		}
 
-		assignments.push(StakedAssignment {
+		staked_assignment.push(StakedAssignment {
 			who,
 			distribution: dist,
 		});
@@ -818,7 +840,7 @@ pub fn horrible_phragmen_with_post_processing(
 	let score = {
 		let (_, _, better_score) = do_phragmen_with_post_processing(true, |_| {});
 
-		let support = build_support_map::<AccountId>(&winners, &assignments).0;
+		let support = build_support_map::<AccountId>(&winners, &staked_assignment).0;
 		let score = evaluate_support(&support);
 
 		assert!(offchain_election::is_score_better(score, better_score));
@@ -827,10 +849,29 @@ pub fn horrible_phragmen_with_post_processing(
 	};
 
 	if do_reduce {
-		reduce(&mut assignments);
+		reduce(&mut staked_assignment);
 	}
 
-	let compact = <CompactAssignments<AccountId, ExtendedBalance>>::from_staked(assignments);
+	let snapshot_validators = Staking::snapshot_validators().unwrap();
+	let snapshot_nominators = Staking::snapshot_nominators().unwrap();
+	let nominator_index = |a: &AccountId| -> Option<NominatorIndex> {
+		snapshot_nominators.iter().position(|x| x == a).map(|i| i as NominatorIndex)
+	};
+	let validator_index = |a: &AccountId| -> Option<ValidatorIndex> {
+		snapshot_validators.iter().position(|x| x == a).map(|i| i as ValidatorIndex)
+	};
+
+	// convert back to ratio assignment. This takes less space.
+	let assignments_reduced = staked_to_assignment(staked_assignment);
+
+	let compact = <CompactOf<Test>>::from_assignment(
+		assignments_reduced,
+		nominator_index,
+		validator_index,
+	).unwrap();
+
+	// winner ids to index
+	let winners = winners.into_iter().map(|w| validator_index(&w).unwrap()).collect::<Vec<_>>();
 
 	(compact, winners, score)
 }
@@ -839,8 +880,8 @@ pub fn do_phragmen_with_post_processing(
 	do_reduce: bool,
 	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
 ) -> (
-	CompactAssignments<AccountId, ExtendedBalance>,
-	Vec<AccountId>,
+	CompactOf<Test>,
+	Vec<ValidatorIndex>,
 	PhragmenScore,
 ) {
 	// run phragmen on the default stuff.
@@ -850,10 +891,7 @@ pub fn do_phragmen_with_post_processing(
 	} = Staking::do_phragmen().unwrap();
 	let winners = winners.into_iter().map(|(w, _)| w).collect();
 
-	let mut staked: Vec<StakedAssignment<AccountId>> = assignments
-		.into_iter()
-		.map(|a| a.into_staked::<_, _, CurrencyToVoteHandler>(Staking::slashable_balance_of, true))
-		.collect();
+	let mut staked = assignment_to_staked(assignments);
 
 	// apply custom tweaks. awesome for testing.
 	tweak(&mut staked);
@@ -862,10 +900,34 @@ pub fn do_phragmen_with_post_processing(
 		reduce(&mut staked);
 	}
 
+	// compute score
 	let (support_map, _) = build_support_map::<AccountId>(&winners, &staked);
 	let score = evaluate_support::<AccountId>(&support_map);
 
-	let compact = <CompactAssignments<AccountId, ExtendedBalance>>::from_staked(staked);
+	// convert back to ratio assignment. This takes less space.
+	let snapshot_validators = Staking::snapshot_validators().unwrap();
+	let snapshot_nominators = Staking::snapshot_nominators().unwrap();
+	let nominator_index = |a: &AccountId| -> Option<NominatorIndex> {
+		snapshot_nominators.iter().position(|x| x == a).map(|i| i as NominatorIndex)
+	};
+	let validator_index = |a: &AccountId| -> Option<ValidatorIndex> {
+		snapshot_validators.iter().position(|x| x == a).map(|i| i as ValidatorIndex)
+	};
+
+	let assignments_reduced: Vec<Assignment<AccountId>> = staked
+		.into_iter()
+		.map(|sa| sa.into_assignment(true))
+		.collect();
+
+	let compact = <CompactOf<Test>>::from_assignment(
+		assignments_reduced,
+		nominator_index,
+		validator_index,
+	).unwrap();
+
+
+	// winner ids to index
+	let winners = winners.into_iter().map(|w| validator_index(&w).unwrap()).collect::<Vec<_>>();
 
 	(compact, winners, score)
 }

@@ -2683,9 +2683,9 @@ fn version_initialized() {
 mod offchain_phragmen {
 	use crate::*;
 	use mock::*;
-	use frame_support::{assert_ok, assert_noop};
+	use frame_support::{assert_ok, assert_noop, debug};
 	use substrate_test_utils::assert_eq_uvec;
-	use sp_runtime::traits::OffchainWorker;
+	use sp_runtime::{traits::OffchainWorker, Perbill};
 	use sp_core::offchain::{
 		OffchainExt,
 		TransactionPoolExt,
@@ -2699,6 +2699,9 @@ mod offchain_phragmen {
 
 	type DummyT = dummy_sr25519::AuthorityId;
 
+	fn percent(x: u32) -> Perbill {
+		Perbill::from_percent(x)
+	}
 
 	/// setup a new set of validators and nominator storage items independent of the parent mock
 	/// file. This produces a edge graph that can be reduced.
@@ -2724,48 +2727,23 @@ mod offchain_phragmen {
 		let (pool, state) = TestTransactionPoolExt::new();
 		let keystore = KeyStore::new();
 
+		let account = LOCAL_KEY_ACCOUNT.with(|v| *v.borrow());
+		let key = dummy_sr25519::dummy_key_for(account);
 		let _ = keystore.write().insert_unknown(
 			<DummyT as sp_application_crypto::AppKey>::ID,
-			&format!("{}/staking{}", mock::PHRASE, 11),
-			dummy_sr25519::dummy_key_for(11).as_ref(),
+			&format!("{}/staking{}", mock::PHRASE, account),
+			key.as_ref(),
 		).unwrap();
-		frame_support::debug::native::debug!(
+		debug::native::debug!(
 			target: "staking",
 			"generated key for account {}: {:?}",
-			11,
-			dummy_sr25519::dummy_key_for(11),
+			account,
+			key,
 		);
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
 		ext.register_extension(KeystoreExt(keystore));
 		state
-	}
-
-	#[test]
-	fn compact_assignment_into_staked_overflow() {
-		ExtBuilder::default().build().execute_with(|| {
-			// everyone's stake is 10.
-			let stake_of = |_who: &AccountId| -> Balance { 10 };
-
-			// a single vote cannot be faked.
-			let malicious_assignments = vec![
-				StakedAssignment {
-					who: 1,
-					distribution: vec![(10, 5), (20, 8), (30, 5)]
-				}
-			];
-
-			let compact = <CompactAssignments<AccountId, ExtendedBalance>>::from_staked(
-				malicious_assignments,
-			);
-
-			assert_eq!(compact.votes3[0], (1, [(10, 5), (20, 8)], 30));
-
-			// converting this back will yield error. This must be provided by the compact lib code.
-			assert!(
-				compact.into_staked::<_, _, CurrencyToVoteHandler>(&stake_of).is_err()
-			);
-		})
 	}
 
 	#[test]
@@ -2828,25 +2806,40 @@ mod offchain_phragmen {
 			run_to_block(10);
 			assert_session_era!(1, 0);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert!(Staking::snapshot_nominators().is_none());
+			assert!(Staking::snapshot_validators().is_none());
 
 			run_to_block(18);
 			assert_session_era!(1, 0);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert!(Staking::snapshot_nominators().is_none());
+			assert!(Staking::snapshot_validators().is_none());
 
 			run_to_block(40);
 			assert_session_era!(4, 0);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert!(Staking::snapshot_nominators().is_none());
+			assert!(Staking::snapshot_validators().is_none());
 
 			run_to_block(46);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert!(Staking::snapshot_nominators().is_none());
+			assert!(Staking::snapshot_validators().is_none());
+
 			run_to_block(47);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Open(47));
+			assert!(Staking::snapshot_nominators().is_some());
+			assert!(Staking::snapshot_validators().is_some());
 
 			run_to_block(49);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Open(47));
+			assert!(Staking::snapshot_nominators().is_some());
+			assert!(Staking::snapshot_validators().is_some());
 
 			run_to_block(50);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert!(Staking::snapshot_nominators().is_none());
+			assert!(Staking::snapshot_validators().is_none());
 		})
 	}
 
@@ -2875,6 +2868,7 @@ mod offchain_phragmen {
 		|| {
 			run_to_block(12);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
+			assert!(Staking::snapshot_validators().is_some());
 
 			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
 			assert_ok!(Staking::submit_election_solution(
@@ -2940,11 +2934,15 @@ mod offchain_phragmen {
 			.build()
 			.execute_with(
 		|| {
-
 			run_to_block(11);
-			// submission is allowed
+			// submission is not yet allowed
 			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+
+			// create all the indices just to build the solution.
+			Staking::create_stakers_snapshot();
 			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			Staking::kill_stakers_snapshot();
+
 			assert_noop!(
 				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenEarlySubmission,
@@ -2970,7 +2968,7 @@ mod offchain_phragmen {
 			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact, score));
 
 			// a bad solution
-			let (compact, winners, score) = horrible_phragmen_with_post_processing(false);
+			let (compact, winners, score) = horrible_phragmen_with_post_processing(true);
 			assert_noop!(
 				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenWeakSubmission,
@@ -2992,7 +2990,7 @@ mod offchain_phragmen {
 			run_to_block(12);
 
 			// a meeeeh solution
-			let (compact, winners, score) = horrible_phragmen_with_post_processing(false);
+			let (compact, winners, score) = horrible_phragmen_with_post_processing(true);
 			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact, score));
 
 			// a better solution
@@ -3002,39 +3000,6 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	#[cfg(feature = "signed")]
-	fn offchain_worker_runs_when_window_open_signed() {
-		// at the end of the first finalized block with ElectionStatus::open(_), it should execute.
-		let mut ext = ExtBuilder::default()
-			.offchain_phragmen_ext()
-			.validator_count(4)
-			.build();
-		let state = offchainify(&mut ext);
-		ext.execute_with(||{
-			run_to_block(12);
-
-			// local key 11 is in the elected set.
-			assert_eq_uvec!(Staking::current_elected(), vec![11, 21, 31]);
-			assert_eq!(state.read().transactions.len(), 0);
-			Staking::offchain_worker(12);
-			assert_eq!(state.read().transactions.len(), 1);
-
-			let encoded = state.read().transactions[0].clone();
-			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
-
-			let author = extrinsic.0.unwrap().0;
-			assert_eq!(author, 11);
-
-			let call = extrinsic.1;
-			match call {
-				mock::Call::Staking(crate::Call::submit_election_solution(_, _, _)) => {},
-				_ => panic!("wrong call submitted"),
-			};
-		})
-	}
-
-	#[test]
-	#[cfg(not(feature = "signed"))]
 	#[allow(deprecated)]
 	fn offchain_worker_runs_when_window_open_unsigned() {
 		// at the end of the first finalized block with ElectionStatus::open(_), it should execute.
@@ -3053,7 +3018,6 @@ mod offchain_phragmen {
 			assert_eq!(state.read().transactions.len(), 1);
 
 			let encoded = state.read().transactions[0].clone();
-			// WTF just happened? I changed Extrinsic::decode() to this and now it works?
 			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
 
 			let call = extrinsic.1;
@@ -3079,9 +3043,43 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn invalid_phragmen_result_build_support_extra_edge() {
-		// an edge that does not point to any of the winners. This should be caught in
-		// build_support_map. All the targets presented must be one of the presented winners.
+	#[allow(deprecated)]
+	fn mediocre_submission_from_authority_is_early_rejected() {
+		let mut ext = ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(4)
+			.build();
+		let state = offchainify(&mut ext);
+		ext.execute_with(||{
+			run_to_block(12);
+			// put a good solution on-chain
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			assert_ok!(
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score)
+			);
+
+			// now run the offchain worker in the same chain state.
+			Staking::offchain_worker(12);
+			assert_eq!(state.read().transactions.len(), 1);
+
+			let encoded = state.read().transactions[0].clone();
+			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
+
+			let call = extrinsic.1;
+			let inner = match call {
+				mock::Call::Staking(inner) => { inner },
+			};
+
+			// pass this call to ValidateUnsigned
+			assert_eq!(
+				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(&inner),
+				TransactionValidity::Err(InvalidTransaction::Custom(1u8).into()),
+			)
+		})
+	}
+
+	#[test]
+	fn invalid_phragmen_result_correct_number_of_winners() {
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.validator_count(4)
@@ -3092,24 +3090,72 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (mut compact, winners, scores) = do_phragmen_with_post_processing(true, |_| {});
-			assert_eq_uvec!(winners, vec![10, 20, 30, 40]);
+			ValidatorCount::put(3);
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			ValidatorCount::put(4);
 
-			// inject a correct nominator voting for a correct, but non-winner validator.
-			compact.votes1.push((1, 999));
+			assert_eq!(winners.len(), 3);
 
 			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact, scores),
-				Error::<Test>::PhragmenBogusEdge,
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+				Error::<Test>::PhragmenBogusWinnerCount,
 			);
 		})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_build_support_extra_winner() {
-		// if some bogus winner is not a candidate. This and
-		// `invalid_phragmen_result_build_support_extra_edge` together ensure that all targets are
-		// actually validators with correct intention.
+	fn invalid_phragmen_result_correct_number_of_winners_1() {
+		// if we have too little validators, then the number of candidates is the bound.
+		ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(8) // we simply cannot elect 8
+			.has_stakers(false)
+			.build()
+			.execute_with(
+		|| {
+			build_offchain_phragmen_test_ext();
+			run_to_block(12);
+
+			ValidatorCount::put(3);
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			ValidatorCount::put(4);
+
+			assert_eq!(winners.len(), 3);
+
+			assert_noop!(
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+				Error::<Test>::PhragmenBogusWinnerCount,
+			);
+		})
+	}
+
+	#[test]
+	fn invalid_phragmen_result_correct_number_of_winners_2() {
+		// if we have too little validators, then the number of candidates is the bound.
+		ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(8) // we simply cannot elect 8
+			.has_stakers(false)
+			.build()
+			.execute_with(
+		|| {
+			build_offchain_phragmen_test_ext();
+			run_to_block(12);
+
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+
+			assert_eq!(winners.len(), 4);
+
+			// all good. We chose 4 and it works.
+			assert_ok!(
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+			);
+		})
+	}
+
+	#[test]
+	fn invalid_phragmen_result_out_of_bound_nominator_index() {
+		// A nominator index which is simply invalid
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.validator_count(4)
@@ -3120,8 +3166,68 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (compact, mut winners, score) = do_phragmen_with_post_processing(true, |_| {});
-			winners.push(999);
+			assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
+			assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
+			let (mut compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+
+			// index 9 doesn't exist.
+			compact.votes1.push((9, 2));
+
+			// The error type sadly cannot be more specific now.
+			assert_noop!(
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+				Error::<Test>::PhragmenBogusCompact,
+			);
+		})
+	}
+
+	#[test]
+	fn invalid_phragmen_result_out_of_bound_validator_index() {
+		// A validator index which is out of bound
+		ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(4)
+			.has_stakers(false)
+			.build()
+			.execute_with(
+		|| {
+			build_offchain_phragmen_test_ext();
+			run_to_block(12);
+
+			assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
+			assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
+			let (mut compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+
+			// index 4 doesn't exist.
+			compact.votes1.push((3, 4));
+
+			// The error type sadly cannot be more specific now.
+			assert_noop!(
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+				Error::<Test>::PhragmenBogusCompact,
+			);
+		})
+	}
+
+	#[test]
+	fn invalid_phragmen_result_out_of_bound_winner_index() {
+		// A winner index which is simply invalid
+		ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(4)
+			.has_stakers(false)
+			.build()
+			.execute_with(
+		|| {
+			build_offchain_phragmen_test_ext();
+			run_to_block(12);
+
+			assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
+			assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
+			let (compact, _, score) = do_phragmen_with_post_processing(true, |_| {});
+
+			// index 4 doesn't exist.
+			let winners = vec![0, 1, 2, 4];
 
 			assert_noop!(
 				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
@@ -3131,13 +3237,12 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn invalid_phragmen_result_invalid_target() {
-		// A valid voter who voted for someone who is not a candidate. Fake candidate is injected as
-		// winner. Hence, build support map will not catch this. But the check for all winners being
-		// validators will.
+	fn invalid_phragmen_result_non_winner_validator_index() {
+		// An edge that points to a correct validator index who is NOT a winner. This is very
+		// similar to the test that raises `PhragmenBogusNomination`.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
-			.validator_count(4)
+			.validator_count(2)
 			.has_stakers(false)
 			.build()
 			.execute_with(
@@ -3145,73 +3250,17 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			// bond a malicious nominator
-			bond_nominator(666, 667, 1, vec![10]);
-
-			let sp_phragmen::PhragmenResult {
-				winners,
-				assignments,
-			} = Staking::do_phragmen().unwrap();
-			let mut winners: Vec<AccountId> = winners.into_iter().map(|(w, _)| w).collect();
-
-			let mut staked: Vec<sp_phragmen::StakedAssignment<AccountId>> = assignments
-				.into_iter()
-				.map(|a| a.into_staked::<_, _, CurrencyToVoteHandler>(Staking::slashable_balance_of, true))
-				.collect();
-
-			let (support, _) = sp_phragmen::build_support_map::<AccountId>(&winners, &staked);
-			let score = sp_phragmen::evaluate_support::<AccountId>(&support);
-
-			staked.push(sp_phragmen::StakedAssignment { who: 666, distribution: vec![(999, 1)] });
-			winners.push(999);
-
-			sp_phragmen::reduce(&mut staked);
-			let compact = <CompactAssignments<AccountId, ExtendedBalance>>::from_staked(staked);
-
-			assert_noop!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
-				Error::<Test>::PhragmenBogusWinner,
-			);
-		})
-	}
-
-
-	#[test]
-	fn invalid_phragmen_result_non_nominating_voter() {
-		// A voter who is not a nominator
-		ExtBuilder::default()
-			.offchain_phragmen_ext()
-			.validator_count(4)
-			.has_stakers(false)
-			.build()
-			.execute_with(
-		|| {
-			build_offchain_phragmen_test_ext();
-			run_to_block(12);
-
-			let (compact, winners, score) = do_phragmen_with_post_processing(false, |a| {
-				// inject a wrong nominator voting for a valid validator.
-				a.push(StakedAssignment::<AccountId> { who: 999, distribution: vec![(10, 10)]});
+			assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
+			assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
+			let (compact, winners, score) = do_phragmen_with_post_processing(true, |a| {
+				a.iter_mut().find(|x| x.who == 5).map(|x|
+					x.distribution = vec![(20, 50), (40, 30), (30, 20)]
+				);
 			});
 
-			// This will cause a score mismatch since 99 doesn't have any money.
-			assert_noop!(
-				Staking::submit_election_solution(
-					Origin::signed(10),
-					winners.clone(),
-					compact.clone(),
-					score,
-				),
-				Error::<Test>::PhragmenBogusScore, // TODO: we can catch this in PhragmenBogusNominatorStake.
-			);
-
-			// even when it is bonded but not nominating.
-			let _ = Balances::make_free_balance_be(&999, 10);
-			assert_ok!(Staking::bond(Origin::signed(999), 998, 10, Default::default()));
-
 			assert_noop!(
 				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
-				Error::<Test>::PhragmenBogusNominator,
+				Error::<Test>::PhragmenBogusEdge,
 			);
 		})
 	}
@@ -3274,7 +3323,7 @@ mod offchain_phragmen {
 
 	#[test]
 	fn invalid_phragmen_result_over_stake() {
-		// A valid voter who's total distributed stake is more than what they bond
+		// Someone's edge ratios sums to more than 100%.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.validator_count(4)
@@ -3285,14 +3334,19 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (mut compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			// Note: we don't reduce here to be able to tweak votes3. votes3 will vanish if you
+			// reduce.
+			let (mut compact, winners, score) = do_phragmen_with_post_processing(false, |_| {});
 
-			// 3 has: (3, (20, 50), 40) which means evenly distributed between 20 and 40 (50 each).
-			compact.votes2.iter_mut().find(|x| x.0 == 3).map(|(_who, v1, _v2)| v1.1 = 120);
+			if let Some(c) = compact.votes3.iter_mut().find(|x| x.0 == 0) {
+				// by default it should have been (0, [(2, 33%), (1, 33%)], 0)
+				// now the sum is above 100%
+				c.1 = [(2, percent(66)), (1, percent(66))];
+			}
 
 			assert_noop!(
 				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
-				Error::<Test>::PhragmenBogusNominatorStake,
+				Error::<Test>::PhragmenBogusCompact,
 			);
 		})
 	}
@@ -3301,14 +3355,14 @@ mod offchain_phragmen {
 	fn invalid_phragmen_result_under_stake() {
 		// at the time of this writing, we cannot under stake someone. The compact assignment works
 		// in a way that some of the stakes are presented by the submitter, and the last one is read
-		// from chain by subtracting the rest from total. This test is only here as a demonstration.
+		// from chain by subtracting the rest from total. Hence, the sum is always correct.
+		// This test is only here as a demonstration.
 	}
 
 	#[test]
 	fn invalid_phragmen_result_invalid_target_stealing() {
-		// A valid voter who voted for someone who is a candidate, but is actually not nominated by
+		// A valid voter who voted for someone who is a candidate, but is actually NOT nominated by
 		// this nominator.
-		// A valid voter who's total distributed stake is more than what they bond
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.validator_count(4)
@@ -3320,7 +3374,7 @@ mod offchain_phragmen {
 			run_to_block(12);
 
 			let (compact, winners, score) = do_phragmen_with_post_processing(false, |a| {
-				// 3 has: (3, (20, 50), 40). We add a fake vote to 30. The stake sum is still
+				// 3 only voted for 20 and 40. We add a fake vote to 30. The stake sum is still
 				// correctly 100.
 				a.iter_mut().find(|x| x.who == 3).map(|x| {
 					x.distribution = vec![(20, 50), (40, 30), (30, 20)]
@@ -3358,8 +3412,79 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn session_keys_work() {
-		unimplemented!();
+	fn session_interface_work() {
+		let mut ext = ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(4)
+			.build();
+		let _ = offchainify(&mut ext);
+		ext.execute_with(|| {
+			assert_eq_uvec!(
+				<Test as SessionInterface<AccountId>>::keys::<DummyT>(),
+				<Validators<Test>>::enumerate()
+					.map(|(acc, _)| (acc, Some(dummy_sr25519::dummy_key_for(acc))))
+					.collect::<Vec<(AccountId, Option<DummyT>)>>()
+			);
+		})
+	}
+
+	#[test]
+	fn offchain_storage_is_set() {
+		let mut ext = ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(4)
+			.build();
+		let state = offchainify(&mut ext);
+
+		ext.execute_with(|| {
+			use offchain_election::OFFCHAIN_HEAD_DB;
+			use sp_runtime::offchain::storage::StorageValueRef;
+
+			run_to_block(12);
+
+			Staking::offchain_worker(12);
+			// it works
+			assert_eq!(state.read().transactions.len(), 1);
+
+			// and it is set
+			let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+			assert_eq!(storage.get::<BlockNumber>().unwrap().unwrap(), 12);
+		})
+	}
+
+	#[test]
+	fn offchain_storage_prevents_duplicate() {
+		let mut ext = ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(4)
+			.build();
+		let _ = offchainify(&mut ext);
+
+		ext.execute_with(|| {
+			use offchain_election::OFFCHAIN_HEAD_DB;
+			use sp_runtime::offchain::storage::StorageValueRef;
+			let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+
+			// first run -- ok
+			run_to_block(12);
+			assert_eq!(
+				offchain_election::set_check_offchain_execution_status::<Test>(12),
+				Ok(()),
+			);
+			assert_eq!(storage.get::<BlockNumber>().unwrap().unwrap(), 12);
+
+			// re-execute after the next. not allowed.
+			assert_eq!(
+				offchain_election::set_check_offchain_execution_status::<Test>(13),
+				Err("recently executed."),
+			);
+
+			// a fork like situation -- re-execute 12. But it won't go through.
+			assert_eq!(
+				offchain_election::set_check_offchain_execution_status::<Test>(11),
+				Err("fork."),
+			);
+		})
 	}
 }
 
