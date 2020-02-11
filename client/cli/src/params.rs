@@ -238,6 +238,21 @@ pub struct NetworkConfigurationParams {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
+
+	/// Enable flow control for yamux streams.
+	///
+	/// By default this is not enabled. When enabled, yamux ensures that senders
+	/// do not overwhelm receivers. Depending on the protocol, there is a risk
+	/// of deadlock, namely if both endpoints want to send data larger than the
+	/// receiver's window and they do not read before finishing their writes.
+	///
+	/// Use this mode only if you are sure that this will never happen, i.e. if
+	/// endpoints A and B never write at the same time, *or* endpoints A and B
+	/// write at most n frames concurrently such that the sum of the frame
+	/// lengths is less or equal to the available credit of A and B
+	/// respectively (which by default is 256 KiB).
+	#[structopt(long = "use-yamux-flow-control")]
+	pub use_yamux_flow_control: bool,
 }
 
 arg_enum! {
