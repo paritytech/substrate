@@ -18,12 +18,11 @@
 
 use std::collections::HashMap;
 use sp_core::H256;
-use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb, ChildTrieChangeSets};
-use sp_core::storage::{ChildInfo, ChildrenMap};
+use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
-	pub data: ChildrenMap<HashMap<H256, DBValue>>,
+	pub data: HashMap<H256, DBValue>,
 	pub meta: HashMap<Vec<u8>, DBValue>,
 }
 
@@ -39,24 +38,17 @@ impl NodeDb for TestDb {
 	type Error = ();
 	type Key = H256;
 
-	fn get(&self, child_info: &ChildInfo, key: &H256) -> Result<Option<DBValue>, ()> {
-		Ok(self.data.get(child_info).and_then(|data| data.get(key).cloned()))
+	fn get(&self, key: &H256) -> Result<Option<DBValue>, ()> {
+		Ok(self.data.get(key).cloned())
 	}
 }
 
 impl TestDb {
 	pub fn commit(&mut self, commit: &CommitSet<H256>) {
-		for ct in commit.data.iter() {
-			self.data.entry(ct.0.clone()).or_default()
-				.extend(ct.1.inserted.iter().cloned())
-		}
+		self.data.extend(commit.data.inserted.iter().cloned());
 		self.meta.extend(commit.meta.inserted.iter().cloned());
-		for ct in commit.data.iter() {
-			if let Some(self_data) = self.data.get_mut(&ct.0) {
-				for k in ct.1.deleted.iter() {
-					self_data.remove(k);
-				}
-			}
+		for k in commit.data.deleted.iter() {
+			self.data.remove(k);
 		}
 		self.meta.extend(commit.meta.inserted.iter().cloned());
 		for k in commit.meta.deleted.iter() {
@@ -81,28 +73,21 @@ pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 	}
 }
 
-pub fn make_childchangeset(inserted: &[u64], deleted: &[u64]) -> ChildTrieChangeSets<H256> {
-	let mut result = ChildTrieChangeSets::default();
-	result.insert(ChildInfo::top_trie(), make_changeset(inserted, deleted));
-	result
-}
-
 pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 	CommitSet {
-		data: make_childchangeset(inserted, deleted),
+		data: make_changeset(inserted, deleted),
 		meta: ChangeSet::default(),
 	}
 }
 
 pub fn make_db(inserted: &[u64]) -> TestDb {
-	let mut data = ChildrenMap::default();
-	data.insert(ChildInfo::top_trie(), inserted.iter()
-		.map(|v| {
-			(H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec())
-		})
-		.collect());
 	TestDb {
-		data,
+		data: inserted
+			.iter()
+			.map(|v| {
+				(H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec())
+			})
+			.collect(),
 		meta: Default::default(),
 	}
 }

@@ -18,7 +18,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
@@ -191,7 +190,7 @@ impl<'a> ChildStorageKey<'a> {
 
 
 /// Information related to a child state.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ChildInfo {
 	Default(ChildTrie),
 }
@@ -269,6 +268,7 @@ impl ChildInfo {
 /// be related to technical consideration or api variant.
 #[repr(u32)]
 #[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum ChildType {
 	/// Default, it uses a cryptographic strong unique id as input.
 	CryptoUniqueId = 1,
@@ -287,7 +287,7 @@ impl ChildType {
 /// It share its trie node storage with any kind of key,
 /// and its unique id needs to be collision free (eg strong
 /// crypto hash).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ChildTrie {
 	/// Data containing unique id.
 	/// Unique id must but unique and free of any possible key collision

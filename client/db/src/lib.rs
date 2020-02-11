@@ -53,10 +53,10 @@ use sp_blockchain::{
 use codec::{Decode, Encode};
 use hash_db::Prefix;
 use kvdb::{KeyValueDB, DBTransaction};
-use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
+use sp_trie::{MemoryDB, PrefixedMemoryDB};
 use parking_lot::RwLock;
 use sp_core::{ChangesTrieConfiguration, traits::CodeExecutor};
-use sp_core::storage::{well_known_keys, ChildInfo, ChildrenMap};
+use sp_core::storage::{well_known_keys, ChildInfo, ChildrenMap, ChildType};
 use sp_runtime::{
 	generic::BlockId, Justification, Storage,
 	BuildStorage,
@@ -667,12 +667,14 @@ struct StorageDb<Block: BlockT> {
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for StorageDb<Block> {
 	fn get(
 		&self,
-		trie: &ChildInfo,
+		child_info: &ChildInfo,
 		key: &Block::Hash,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
-		let key = prefixed_key::<HasherFor<Block>>(key, prefix);
-		self.state_db.get(trie, &key, self)
+		// Default child trie (those with strong unique id) are put
+		// directly into the same address space at state_db level.
+		let key = keyspace_and_prefixed_key(key.as_ref(), child_info.keyspace(), prefix);
+		self.state_db.get(&key, self)
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 }
@@ -681,13 +683,12 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 	type Error = io::Error;
 	type Key = [u8];
 
-	fn get(&self, child_info: &ChildInfo, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		if child_info.is_top_trie() {
-			self.db.get(columns::STATE, key)
-		} else {
-			let mut keyspace = Keyspaced::new(child_info.keyspace());
-			self.db.get(columns::STATE, keyspace.prefix_key(key))
-		}.map(|r| r.map(|v| v.to_vec()))
+	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		// note this implementation should ONLY be call from state_db,
+		// as it rely on the fact that we address a key that is already
+		// prefixed with keyspace
+		self.db.get(columns::STATE, key)
+			.map(|r| r.map(|v| v.to_vec()))
 	}
 }
 
@@ -1121,30 +1122,47 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			let finalized = if operation.commit_state {
-				let mut changesets = ChildrenMap::<sc_state_db::ChangeSet<Vec<u8>>>::default();
+				let mut state_db_changeset: sc_state_db::ChangeSet<Vec<u8>> = sc_state_db::ChangeSet::default();
 				let mut ops: u64 = 0;
 				let mut bytes = 0;
+				let mut keyspace = Keyspaced::new(&[]);
 				for (info, mut updates) in operation.db_updates.into_iter() {
-					let changeset = changesets.entry(info).or_default();
+					// child info with strong unique id are using the same state-db with prefixed key
+					if info.child_type() != ChildType::CryptoUniqueId {
+						// Unhandled child kind
+						return Err(ClientError::Backend(format!(
+							"Data for {:?} without a backend implementation",
+							info.child_type(),
+						)));
+					}
+					keyspace.change_keyspace(info.keyspace());
 					for (key, (val, rc)) in updates.drain() {
+						let key = if info.is_top_trie() {
+							key
+						} else {
+							keyspace.prefix_key(key.as_slice()).to_vec()
+						};
 						if rc > 0 {
 							ops += 1;
-							bytes += key.len() + val.len();
+							bytes += key.len() as u64 + val.len() as u64;
 
-							changeset.inserted.push((key, val.to_vec()));
+							state_db_changeset.inserted.push((key, val.to_vec()));
 						} else if rc < 0 {
 							ops += 1;
-							bytes += key.len();
-
-							changeset.deleted.push(key);
+							bytes += key.len() as u64;
+							state_db_changeset.deleted.push(key);
 						}
 					}
 				}
 				self.state_usage.tally_writes(ops, bytes as u64);
 
 				let number_u64 = number.saturated_into::<u64>();
-				let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changesets)
-					.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
+				let commit = self.storage.state_db.insert_block(
+					&hash,
+					number_u64,
+					&pending_block.header.parent_hash(),
+					state_db_changeset,
+				).map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
 				apply_state_commit(&mut transaction, commit);
 
 				// Check if need to finalize. Genesis is always finalized instantly.
@@ -1329,25 +1347,12 @@ impl<Block: BlockT> Backend<Block> {
 }
 
 fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::CommitSet<Vec<u8>>) {
-	let mut keyspace = Keyspaced::new(&[]);
-	for child_data in commit.data.into_iter() {
-		if child_data.0.is_top_trie() {
-			// empty prefix
-			for (key, val) in child_data.1.inserted.into_iter() {
-				transaction.put(columns::STATE, &key[..], &val);
-			}
-			for key in child_data.1.deleted.into_iter() {
-				transaction.delete(columns::STATE, &key[..]);
-			}
-		} else {
-			keyspace.change_keyspace(child_data.0.keyspace());
-			for (key, val) in child_data.1.inserted.into_iter() {
-				transaction.put(columns::STATE, keyspace.prefix_key(key.as_slice()), &val);
-			}
-			for key in child_data.1.deleted.into_iter() {
-				transaction.delete(columns::STATE, keyspace.prefix_key(key.as_slice()));
-			}
-		}
+	// state_db commit set is only for column STATE
+	for (key, val) in commit.data.inserted.into_iter() {
+		transaction.put(columns::STATE, &key[..], &val);
+	}
+	for key in commit.data.deleted.into_iter() {
+		transaction.delete(columns::STATE, &key[..]);
 	}
 	for (key, val) in commit.meta.inserted.into_iter() {
 		transaction.put(columns::STATE_META, &key[..], &val);
@@ -1697,6 +1702,20 @@ impl Keyspaced {
 		self.buffer[self.keyspace_len..].copy_from_slice(key);
 		self.buffer.as_slice()
 	}
+}
+
+// Prefix key and add keyspace with a single vec alloc
+// Warning if memory_db `sp_trie::prefixed_key` implementation change, this function
+// will need change too.
+fn keyspace_and_prefixed_key(key: &[u8], keyspace: &[u8], prefix: Prefix) -> Vec<u8> {
+	let mut prefixed_key = Vec::with_capacity(key.len() + keyspace.len() + prefix.0.len() + 1);
+	prefixed_key.extend_from_slice(keyspace);
+	prefixed_key.extend_from_slice(prefix.0);
+	if let Some(last) = prefix.1 {
+		prefixed_key.push(last);
+	}
+	prefixed_key.extend_from_slice(key);
+	prefixed_key
 }
 
 #[cfg(test)]

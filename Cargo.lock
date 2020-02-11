@@ -7207,7 +7207,6 @@ name = "sp-storage"
 version = "2.0.0"
 dependencies = [
  "impl-serde 0.2.3",
- "parity-scale-codec",
  "serde",
  "sp-debug-derive",
  "sp-std",
