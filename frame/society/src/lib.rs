@@ -414,7 +414,8 @@ decl_storage! {
 
 		/// The set of suspended candidates.
 		pub SuspendedCandidates get(suspended_candidate):
-			map T::AccountId => Option<(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>)>;
+			map hasher(blake2_256) T::AccountId
+			=> Option<(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>)>;
 
 		/// Amount of our account balance that is specifically for the next round's bid(s).
 		pub Pot get(fn pot) config(): BalanceOf<T, I>;
@@ -431,19 +432,19 @@ decl_storage! {
 		}): Vec<T::AccountId>;
 
 		/// The set of suspended members.
-		pub SuspendedMembers get(fn suspended_member): map T::AccountId => bool;
+		pub SuspendedMembers get(fn suspended_member): map hasher(blake2_256) T::AccountId => bool;
 
 		/// The current bids, stored ordered by the value of the bid.
 		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
 
 		/// Members currently vouching or banned from vouching again
-		Vouching get(fn vouching): map T::AccountId => Option<VouchingStatus>;
+		Vouching get(fn vouching): map hasher(blake2_256) T::AccountId => Option<VouchingStatus>;
 
 		/// Pending payouts; ordered by block number, with the amount that should be paid out.
-		Payouts: map T::AccountId => Vec<(T::BlockNumber, BalanceOf<T, I>)>;
+		Payouts: map hasher(blake2_256) T::AccountId => Vec<(T::BlockNumber, BalanceOf<T, I>)>;
 
 		/// The ongoing number of losing votes cast by the member.
-		Strikes: map T::AccountId => StrikeCount;
+		Strikes: map hasher(blake2_256) T::AccountId => StrikeCount;
 
 		/// Double map from Candidate -> Voter -> (Maybe) Vote.
 		Votes: double_map
@@ -529,8 +530,8 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		pub fn bid(origin, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), Error::<T, I>::Suspended);
-			ensure!(!<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::Suspended);
+			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
+			ensure!(!<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
 			let bids = <Bids<T, I>>::get();
 			ensure!(!Self::is_bid(&bids, &who), Error::<T, I>::AlreadyBid);
 			let candidates = <Candidates<T, I>>::get();
@@ -639,8 +640,8 @@ decl_module! {
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			// Check user is not suspended.
-			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), Error::<T, I>::Suspended);
-			ensure!(!<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::Suspended);
+			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
+			ensure!(!<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
 			// Check user is not a bid or candidate.
 			let bids = <Bids<T, I>>::get();
 			ensure!(!Self::is_bid(&bids, &who), Error::<T, I>::AlreadyBid);
@@ -651,7 +652,7 @@ decl_module! {
 			ensure!(!Self::is_member(&members, &who), Error::<T, I>::AlreadyMember);
 			// Check sender can vouch.
 			ensure!(Self::is_member(&members, &voucher), Error::<T, I>::NotMember);
-			ensure!(!<Vouching<T, I>>::exists(&voucher), Error::<T, I>::AlreadyVouching);
+			ensure!(!<Vouching<T, I>>::contains_key(&voucher), Error::<T, I>::AlreadyVouching);
 
 			<Vouching<T, I>>::insert(&voucher, VouchingStatus::Vouching);
 			Self::put_bid(bids, &who, value.clone(), BidKind::Vouch(voucher.clone(), tip));
@@ -891,7 +892,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
-			ensure!(<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::NotSuspended);
+			ensure!(<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::NotSuspended);
 
 			if forgive {
 				// Try to add member back to society. Can fail with `MaxMembers` limit.
@@ -1535,18 +1536,24 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				<DefenderVotes<T, I>>::remove_all();
 			}
 
-			// Start a new defender rotation
-			let phrase = b"society_challenge";
-			// we'll need a random seed here.
-			let seed = T::Randomness::random(phrase);
-			// seed needs to be guaranteed to be 32 bytes.
-			let seed = <[u8; 32]>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
-				.expect("input is padded with zeroes; qed");
-			let mut rng = ChaChaRng::from_seed(seed);
-			let chosen = pick_item(&mut rng, &members).expect("exited if members empty; qed");
-
-			<Defender<T, I>>::put(&chosen);
-			Self::deposit_event(RawEvent::Challenged(chosen.clone()));
+			// Avoid challenging if there's only two members since we never challenge the Head or
+			// the Founder.
+			if members.len() > 2 {
+				// Start a new defender rotation
+				let phrase = b"society_challenge";
+				// we'll need a random seed here.
+				let seed = T::Randomness::random(phrase);
+				// seed needs to be guaranteed to be 32 bytes.
+				let seed = <[u8; 32]>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
+					.expect("input is padded with zeroes; qed");
+				let mut rng = ChaChaRng::from_seed(seed);
+				let chosen = pick_item(&mut rng, &members[1..members.len() - 1])
+					.expect("exited if members empty; qed");
+				<Defender<T, I>>::put(&chosen);
+				Self::deposit_event(RawEvent::Challenged(chosen.clone()));
+			} else {
+				<Defender<T, I>>::kill();
+			}
 		}
 	}
 

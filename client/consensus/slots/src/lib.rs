@@ -45,7 +45,7 @@ use parking_lot::Mutex;
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
-/// See [`state_machine::StorageChanges`] for more information.
+/// See [`sp_state_machine::StorageChanges`] for more information.
 pub type StorageChanges<Transaction, Block> =
 	sp_state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>;
 
@@ -81,7 +81,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	type Claim: Send + 'static;
 
 	/// Epoch data necessary for authoring.
-	type EpochData;
+	type EpochData: Send + 'static;
 
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
@@ -119,6 +119,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Vec<B::Extrinsic>,
 			StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 			Self::Claim,
+			Self::EpochData,
 		) -> sp_consensus::BlockImportParams<
 			B,
 			<Self::BlockImport as BlockImport<B>>::Transaction
@@ -280,6 +281,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				body,
 				proposal.storage_changes,
 				claim,
+				epoch_data,
 			);
 
 			info!(

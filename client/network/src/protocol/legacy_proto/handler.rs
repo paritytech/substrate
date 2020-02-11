@@ -18,7 +18,7 @@ use super::upgrade::{RegisteredProtocol, RegisteredProtocolEvent, RegisteredProt
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures_timer::Delay;
-use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
+use libp2p::core::{ConnectedPoint, Negotiated, PeerId, Endpoint};
 use libp2p::core::upgrade::{InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
@@ -159,7 +159,7 @@ enum ProtocolState<TSubstream> {
 	/// Waiting for the behaviour to tell the handler whether it is enabled or disabled.
 	Init {
 		/// List of substreams opened by the remote but that haven't been processed yet.
-		substreams: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 6]>,
+		substreams: SmallVec<[RegisteredProtocolSubstream<Negotiated<TSubstream>>; 6]>,
 		/// Deadline after which the initialization is abnormally long.
 		init_deadline: Delay,
 	},
@@ -175,9 +175,9 @@ enum ProtocolState<TSubstream> {
 	/// If we are in this state, we have sent a `CustomProtocolOpen` message to the outside.
 	Normal {
 		/// The substreams where bidirectional communications happen.
-		substreams: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 4]>,
+		substreams: SmallVec<[RegisteredProtocolSubstream<Negotiated<TSubstream>>; 4]>,
 		/// Contains substreams which are being shut down.
-		shutdown: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 4]>,
+		shutdown: SmallVec<[RegisteredProtocolSubstream<Negotiated<TSubstream>>; 4]>,
 	},
 
 	/// We are disabled. Contains substreams that are being closed.
@@ -185,7 +185,7 @@ enum ProtocolState<TSubstream> {
 	/// outside or we have never sent any `CustomProtocolOpen` in the first place.
 	Disabled {
 		/// List of substreams to shut down.
-		shutdown: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 6]>,
+		shutdown: SmallVec<[RegisteredProtocolSubstream<Negotiated<TSubstream>>; 6]>,
 
 		/// If true, we should reactivate the handler after all the substreams in `shutdown` have
 		/// been closed.
@@ -348,13 +348,12 @@ where
 
 			ProtocolState::Init { substreams, mut init_deadline } => {
 				match Pin::new(&mut init_deadline).poll(cx) {
-					Poll::Ready(Ok(())) => {
+					Poll::Ready(()) => {
 						init_deadline = Delay::new(Duration::from_secs(60));
 						error!(target: "sub-libp2p", "Handler initialization process is too long \
 							with {:?}", self.remote_peer_id)
 					},
 					Poll::Pending => {}
-					Poll::Ready(Err(_)) => error!(target: "sub-libp2p", "Tokio timer has errored")
 				}
 
 				self.state = ProtocolState::Init { substreams, init_deadline };
@@ -363,7 +362,7 @@ where
 
 			ProtocolState::Opening { mut deadline } => {
 				match Pin::new(&mut deadline).poll(cx) {
-					Poll::Ready(Ok(())) => {
+					Poll::Ready(()) => {
 						deadline = Delay::new(Duration::from_secs(60));
 						let event = CustomProtoHandlerOut::ProtocolError {
 							is_severe: true,
@@ -373,12 +372,6 @@ where
 						Some(ProtocolsHandlerEvent::Custom(event))
 					},
 					Poll::Pending => {
-						self.state = ProtocolState::Opening { deadline };
-						None
-					},
-					Poll::Ready(Err(_)) => {
-						error!(target: "sub-libp2p", "Tokio timer has errored");
-						deadline = Delay::new(Duration::from_secs(60));
 						self.state = ProtocolState::Opening { deadline };
 						None
 					},
@@ -466,7 +459,7 @@ where
 	/// Called by `inject_fully_negotiated_inbound` and `inject_fully_negotiated_outbound`.
 	fn inject_fully_negotiated(
 		&mut self,
-		mut substream: RegisteredProtocolSubstream<TSubstream>
+		mut substream: RegisteredProtocolSubstream<Negotiated<TSubstream>>
 	) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
@@ -538,14 +531,14 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		proto: <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
+		proto: <Self::InboundProtocol as InboundUpgrade<Negotiated<TSubstream>>>::Output
 	) {
 		self.inject_fully_negotiated(proto);
 	}
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		proto: <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
+		proto: <Self::OutboundProtocol as OutboundUpgrade<Negotiated<TSubstream>>>::Output,
 		_: Self::OutboundOpenInfo
 	) {
 		self.inject_fully_negotiated(proto);
@@ -621,7 +614,7 @@ where
 /// Given a list of substreams, tries to shut them down. The substreams that have been successfully
 /// shut down are removed from the list.
 fn shutdown_list<TSubstream>
-	(list: &mut SmallVec<impl smallvec::Array<Item = RegisteredProtocolSubstream<TSubstream>>>,
+	(list: &mut SmallVec<impl smallvec::Array<Item = RegisteredProtocolSubstream<Negotiated<TSubstream>>>>,
 	cx: &mut Context)
 where TSubstream: AsyncRead + AsyncWrite + Unpin {
 	'outer: for n in (0..list.len()).rev() {

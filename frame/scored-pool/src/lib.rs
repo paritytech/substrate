@@ -165,7 +165,7 @@ decl_storage! {
 		/// check if a candidate is already in the pool, without having to
 		/// iterate over the entire pool (the `Pool` is not sorted by
 		/// `T::AccountId`, but by `T::Score` instead).
-		CandidateExists get(fn candidate_exists): map T::AccountId => bool;
+		CandidateExists get(fn candidate_exists): map hasher(blake2_256) T::AccountId => bool;
 
 		/// The current membership, stored as an ordered Vec.
 		Members get(fn members): Vec<T::AccountId>;
@@ -265,7 +265,7 @@ decl_module! {
 		/// the index of the transactor in the `Pool`.
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
-			ensure!(!<CandidateExists<T, I>>::exists(&who), Error::<T, I>::AlreadyInPool);
+			ensure!(!<CandidateExists<T, I>>::contains_key(&who), Error::<T, I>::AlreadyInPool);
 
 			let deposit = T::CandidateDeposit::get();
 			T::Currency::reserve(&who, deposit)?;

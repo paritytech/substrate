@@ -20,7 +20,7 @@ use crate::utils::interval;
 use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use libp2p::{Multiaddr, PeerId};
-use libp2p::core::{ConnectedPoint, nodes::Substream, muxing::StreamMuxerBox};
+use libp2p::core::{ConnectedPoint, nodes::{listeners::ListenerId, Substream}, muxing::StreamMuxerBox};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use sp_core::storage::{StorageKey, ChildInfo};
@@ -52,6 +52,7 @@ use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
+use wasm_timer::Instant;
 
 mod legacy_proto;
 mod util;
@@ -74,7 +75,7 @@ const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 const MAX_KNOWN_EXTRINSICS: usize = 4096; // ~128kb per peer + overhead
 
 /// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 5;
+pub(crate) const CURRENT_VERSION: u32 = 6;
 /// Lowest version we support
 pub(crate) const MIN_VERSION: u32 = 3;
 
@@ -158,7 +159,7 @@ struct PacketStats {
 /// A peer that we are connected to
 /// and from whom we have not yet received a Status message.
 struct HandshakingPeer {
-	timestamp: time::Instant,
+	timestamp: Instant,
 }
 
 /// Peer information
@@ -166,9 +167,9 @@ struct HandshakingPeer {
 struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
-	block_request: Option<(time::Instant, message::BlockRequest<B>)>,
+	block_request: Option<(Instant, message::BlockRequest<B>)>,
 	/// Requests we are no longer insterested in.
-	obsolete_requests: HashMap<message::RequestId, time::Instant>,
+	obsolete_requests: HashMap<message::RequestId, Instant>,
 	/// Holds a set of transactions known to this peer.
 	known_extrinsics: LruHashSet<H>,
 	/// Holds a set of blocks known to this peer.
@@ -701,7 +702,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Called when a new peer is connected
 	pub fn on_peer_connected(&mut self, who: PeerId) {
 		trace!(target: "sync", "Connecting {}", who);
-		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: time::Instant::now() });
+		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: Instant::now() });
 		self.send_status(who);
 	}
 
@@ -890,7 +891,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	fn maintain_peers(&mut self) {
-		let tick = time::Instant::now();
+		let tick = Instant::now();
 		let mut aborting = Vec::new();
 		{
 			for (who, peer) in self.context_data.peers.iter() {
@@ -1135,18 +1136,26 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	/// Call when we must propagate ready extrinsics to peers.
-	pub fn propagate_extrinsics(
+	/// Propagate one extrinsic.
+	pub fn propagate_extrinsic(
 		&mut self,
+		hash: &H,
 	) {
-		debug!(target: "sync", "Propagating extrinsics");
-
+		debug!(target: "sync", "Propagating extrinsic [{:?}]", hash);
 		// Accept transactions only when fully synced
 		if self.sync.status().state != SyncState::Idle {
 			return;
 		}
+		if let Some(extrinsic) = self.transaction_pool.transaction(hash) {
+			let propagated_to = self.do_propagate_extrinsics(&[(hash.clone(), extrinsic)]);
+			self.transaction_pool.on_broadcasted(propagated_to);
+		}
+	}
 
-		let extrinsics = self.transaction_pool.transactions();
+	fn do_propagate_extrinsics(
+		&mut self,
+		extrinsics: &[(H, B::Extrinsic)],
+	) -> HashMap<H,  Vec<String>> {
 		let mut propagated_to = HashMap::new();
 		for (who, peer) in self.context_data.peers.iter_mut() {
 			// never send extrinsics to the light node
@@ -1177,6 +1186,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 
+		propagated_to
+	}
+
+	/// Call when we must propagate ready extrinsics to peers.
+	pub fn propagate_extrinsics(&mut self) {
+		debug!(target: "sync", "Propagating extrinsics");
+		// Accept transactions only when fully synced
+		if self.sync.status().state != SyncState::Idle {
+			return;
+		}
+		let extrinsics = self.transaction_pool.transactions();
+		let propagated_to = self.do_propagate_extrinsics(&extrinsics);
 		self.transaction_pool.on_broadcasted(propagated_to);
 	}
 
@@ -1792,7 +1813,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened { remote: PeerId, protocols: Vec<ConsensusEngineId>, roles: Roles },
 	/// Notification protocols have been closed with a remote.
-	NotificationsStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
+	NotificationStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
 	None,
@@ -1813,7 +1834,7 @@ fn send_request<B: BlockT, H: ExHashT>(
 				trace!(target: "sync", "Request {} for {} is now obsolete.", request.id, who);
 				peer.obsolete_requests.insert(request.id, timestamp);
 			}
-			peer.block_request = Some((time::Instant::now(), r.clone()));
+			peer.block_request = Some((Instant::now(), r.clone()));
 		}
 	}
 	send_message::<B>(behaviour, stats, who, message)
@@ -1931,7 +1952,7 @@ Protocol<B, S, H> {
 			LegacyProtoOut::CustomProtocolClosed { peer_id, .. } => {
 				self.on_peer_disconnected(peer_id.clone());
 				// Notify all the notification protocols as closed.
-				CustomMessageOutcome::NotificationsStreamClosed {
+				CustomMessageOutcome::NotificationStreamClosed {
 					remote: peer_id,
 					protocols: self.registered_notif_protocols.iter().cloned().collect(),
 				}
@@ -1983,6 +2004,14 @@ Protocol<B, S, H> {
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.behaviour.inject_new_external_addr(addr)
+	}
+
+	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
+		self.behaviour.inject_listener_error(id, err);
+	}
+
+	fn inject_listener_closed(&mut self, id: ListenerId) {
+		self.behaviour.inject_listener_closed(id);
 	}
 }
 

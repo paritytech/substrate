@@ -178,7 +178,7 @@ impl InstanceWrapper {
 	/// to get more details.
 	pub fn allocate(
 		&self,
-		allocator: &mut sc_executor_common::allocator::FreeingBumpHeapAllocator,
+		allocator: &mut sp_allocator::FreeingBumpHeapAllocator,
 		size: WordSize,
 	) -> Result<Pointer<u8>> {
 		unsafe {
@@ -186,7 +186,7 @@ impl InstanceWrapper {
 			// we give up the reference before returning from this function.
 			let memory = self.memory_as_slice_mut();
 
-			allocator.allocate(memory, size)
+			allocator.allocate(memory, size).map_err(Into::into)
 		}
 	}
 
@@ -195,7 +195,7 @@ impl InstanceWrapper {
 	/// Returns `Err` in case the given memory region cannot be deallocated.
 	pub fn deallocate(
 		&self,
-		allocator: &mut sc_executor_common::allocator::FreeingBumpHeapAllocator,
+		allocator: &mut sp_allocator::FreeingBumpHeapAllocator,
 		ptr: Pointer<u8>,
 	) -> Result<()> {
 		unsafe {
@@ -203,7 +203,7 @@ impl InstanceWrapper {
 			// we give up the reference before returning from this function.
 			let memory = self.memory_as_slice_mut();
 
-			allocator.deallocate(memory, ptr)
+			allocator.deallocate(memory, ptr).map_err(Into::into)
 		}
 	}
 

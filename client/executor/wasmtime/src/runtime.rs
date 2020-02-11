@@ -21,8 +21,8 @@ use crate::imports::resolve_imports;
 use crate::instance_wrapper::InstanceWrapper;
 use crate::state_holder::StateHolder;
 
+use sp_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
-	allocator::FreeingBumpHeapAllocator,
 	error::{Error, Result, WasmError},
 	wasm_runtime::WasmRuntime,
 };
@@ -63,6 +63,7 @@ pub fn create_instance(
 	code: &[u8],
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
+	allow_missing_func_imports: bool,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
 	// Create the engine, store and finally the module from the given code.
 	let mut config = Config::new();

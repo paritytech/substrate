@@ -54,6 +54,9 @@ pub enum Error {
 	/// Some random issue with the key store. Shouldn't happen.
 	#[display(fmt="The key store is unavailable")]
 	KeyStoreUnavailable,
+	/// Invalid session keys encoding.
+	#[display(fmt="Session keys are not encoded correctly")]
+	InvalidSessionKeys,
 }
 
 impl std::error::Error for Error {

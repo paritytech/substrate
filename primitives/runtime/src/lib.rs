@@ -238,9 +238,7 @@ impl traits::IdentifyAccount for MultiSigner {
 		match self {
 			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
 			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
-			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(
-				&who.as_compressed().expect("`who` is a valid `ECDSA` public key; qed")[..],
-			).into(),
+			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(&who.as_ref()[..]).into(),
 		}
 	}
 }
@@ -407,13 +405,13 @@ impl From<&'static str> for DispatchError {
 	}
 }
 
-impl Into<&'static str> for DispatchError {
-	fn into(self) -> &'static str {
-		match self {
-			Self::Other(msg) => msg,
-			Self::CannotLookup => "Can not lookup",
-			Self::BadOrigin => "Bad origin",
-			Self::Module { message, .. } => message.unwrap_or("Unknown module error"),
+impl From<DispatchError> for &'static str {
+	fn from(err: DispatchError) -> &'static str {
+		match err {
+			DispatchError::Other(msg) => msg,
+			DispatchError::CannotLookup => "Can not lookup",
+			DispatchError::BadOrigin => "Bad origin",
+			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
 		}
 	}
 }
@@ -641,6 +639,13 @@ macro_rules! assert_eq_error_rate {
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
 
+#[cfg(feature = "std")]
+impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.0.size_of(ops)
+	}
+}
+
 impl sp_std::fmt::Debug for OpaqueExtrinsic {
 	#[cfg(feature = "std")]
 	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
@@ -679,6 +684,18 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 pub fn print(print: impl traits::Printable) {
 	print.print();
 }
+
+/// An alphabet of possible parameters to use for benchmarking.
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
+#[allow(missing_docs)]
+pub enum BenchmarkParameter {
+	A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+}
+
+/// Results from running benchmarks on a FRAME pallet.
+/// Contains duration of the function call in nanoseconds along with the benchmark parameters
+/// used for that benchmark result.
+pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128);
 
 #[cfg(test)]
 mod tests {
@@ -724,7 +741,7 @@ mod tests {
 		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 
-		let multi_signer = MultiSigner::from(pair.public().into_compressed().unwrap());
+		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 	}
 }

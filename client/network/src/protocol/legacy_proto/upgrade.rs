@@ -18,7 +18,7 @@ use crate::config::ProtocolId;
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures_codec::Framed;
-use libp2p::core::{Negotiated, Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
+use libp2p::core::{Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use std::{collections::VecDeque, io, pin::Pin, vec::IntoIter as VecIntoIter};
 use std::task::{Context, Poll};
 use unsigned_varint::codec::UviBytes;
@@ -82,7 +82,7 @@ pub struct RegisteredProtocolSubstream<TSubstream> {
 	/// If true, we should call `poll_complete` on the inner sink.
 	requires_poll_flush: bool,
 	/// The underlying substream.
-	inner: stream::Fuse<Framed<Negotiated<TSubstream>, UviBytes<BytesMut>>>,
+	inner: stream::Fuse<Framed<TSubstream, UviBytes<BytesMut>>>,
 	/// Version of the protocol that was negotiated.
 	protocol_version: u8,
 	/// If true, we have sent a "remote is clogged" event recently and shouldn't send another one
@@ -250,7 +250,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 
 	fn upgrade_inbound(
 		self,
-		socket: Negotiated<TSubstream>,
+		socket: TSubstream,
 		info: Self::Info,
 	) -> Self::Future {
 		let framed = {
@@ -280,7 +280,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 
 	fn upgrade_outbound(
 		self,
-		socket: Negotiated<TSubstream>,
+		socket: TSubstream,
 		info: Self::Info,
 	) -> Self::Future {
 		let framed = Framed::new(socket, UviBytes::default());

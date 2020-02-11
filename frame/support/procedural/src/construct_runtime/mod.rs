@@ -22,7 +22,7 @@ use parse::{ModuleDeclaration, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{Ident, Result};
+use syn::{Ident, Result, TypePath};
 
 /// The fixed name of the system module.
 const SYSTEM_MODULE_NAME: &str = "System";
@@ -86,7 +86,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let module_to_index = decl_module_to_index(modules.iter(), modules.len(), &scrate);
 
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
-	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate);
+	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate, &unchecked_extrinsic);
 	let outer_config = decl_outer_config(&name, modules.iter(), &scrate);
 	let inherent = decl_outer_inherent(&block, &unchecked_extrinsic, modules.iter(), &scrate);
 	let validate_unsigned = decl_validate_unsigned(&name, modules.iter(), &scrate);
@@ -211,6 +211,7 @@ fn decl_runtime_metadata<'a>(
 	runtime: &'a Ident,
 	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
 	scrate: &'a TokenStream2,
+	extrinsic: &TypePath,
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations
 		.filter_map(|module_declaration| {
@@ -236,7 +237,7 @@ fn decl_runtime_metadata<'a>(
 		});
 	quote!(
 		#scrate::impl_runtime_metadata!{
-			for #runtime with modules
+			for #runtime with modules where Extrinsic = #extrinsic
 				#(#modules_tokens)*
 		}
 	)

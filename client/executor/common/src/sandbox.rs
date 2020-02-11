@@ -27,7 +27,7 @@ use wasmi::{
 	Externals, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
 	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
 };
-use sp_wasm_interface::{Pointer, WordSize};
+use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 
 /// Index of a function inside the supervisor.
 ///
@@ -144,41 +144,9 @@ impl ImportResolver for Imports {
 /// This trait encapsulates sandboxing capabilities.
 ///
 /// Note that this functions are only called in the `supervisor` context.
-pub trait SandboxCapabilities {
+pub trait SandboxCapabilities: FunctionContext {
 	/// Represents a function reference into the supervisor environment.
 	type SupervisorFuncRef;
-
-	/// Allocate space of the specified length in the supervisor memory.
-	///
-	/// # Errors
-	///
-	/// Returns `Err` if allocation not possible or errors during heap management.
-	///
-	/// Returns pointer to the allocated block.
-	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>>;
-
-	/// Deallocate space specified by the pointer that was previously returned by [`allocate`].
-	///
-	/// # Errors
-	///
-	/// Returns `Err` if deallocation not possible or because of errors in heap management.
-	///
-	/// [`allocate`]: #tymethod.allocate
-	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()>;
-
-	/// Write `data` into the supervisor memory at offset specified by `ptr`.
-	///
-	/// # Errors
-	///
-	/// Returns `Err` if `ptr + data.len()` is out of bounds.
-	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()>;
-
-	/// Read `len` bytes from the supervisor memory.
-	///
-	/// # Errors
-	///
-	/// Returns `Err` if `ptr + len` is out of bounds.
-	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>>;
 
 	/// Invoke a function in the supervisor environment.
 	///
@@ -218,7 +186,8 @@ fn trap(msg: &'static str) -> Trap {
 }
 
 fn deserialize_result(serialized_result: &[u8]) -> std::result::Result<Option<RuntimeValue>, Trap> {
-	use self::sandbox_primitives::{HostError, ReturnValue};
+	use self::sandbox_primitives::HostError;
+	use sp_wasm_interface::ReturnValue;
 	let result_val = std::result::Result::<ReturnValue, HostError>::decode(&mut &serialized_result[..])
 		.map_err(|_| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
 
@@ -254,7 +223,7 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 		let invoke_args_data: Vec<u8> = args.as_ref()
 			.iter()
 			.cloned()
-			.map(sandbox_primitives::TypedValue::from)
+			.map(sp_wasm_interface::Value::from)
 			.collect::<Vec<_>>()
 			.encode();
 
@@ -263,8 +232,14 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 		// Move serialized arguments inside the memory and invoke dispatch thunk and
 		// then free allocated memory.
 		let invoke_args_len = invoke_args_data.len() as WordSize;
-		let invoke_args_ptr = self.supervisor_externals.allocate(invoke_args_len)?;
-		self.supervisor_externals.write_memory(invoke_args_ptr, &invoke_args_data)?;
+		let invoke_args_ptr = self
+			.supervisor_externals
+			.allocate_memory(invoke_args_len)
+			.map_err(|_| trap("Can't allocate memory in supervisor for the arguments"))?;
+		self
+			.supervisor_externals
+			.write_memory(invoke_args_ptr, &invoke_args_data)
+			.map_err(|_| trap("Can't write invoke args into memory"))?;
 		let result = self.supervisor_externals.invoke(
 			&self.sandbox_instance.dispatch_thunk,
 			invoke_args_ptr,
@@ -272,7 +247,10 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 			state,
 			func_idx,
 		)?;
-		self.supervisor_externals.deallocate(invoke_args_ptr)?;
+		self
+			.supervisor_externals
+			.deallocate_memory(invoke_args_ptr)
+			.map_err(|_| trap("Can't deallocate memory for dispatch thunk's invoke arguments"))?;
 
 		// dispatch_thunk returns pointer to serialized arguments.
 		// Unpack pointer and len of the serialized result data.
@@ -285,9 +263,11 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 		};
 
 		let serialized_result_val = self.supervisor_externals
-			.read_memory(serialized_result_val_ptr, serialized_result_val_len)?;
+			.read_memory(serialized_result_val_ptr, serialized_result_val_len)
+			.map_err(|_| trap("Can't read the serialized result from dispatch thunk"))?;
 		self.supervisor_externals
-			.deallocate(serialized_result_val_ptr)?;
+			.deallocate_memory(serialized_result_val_ptr)
+			.map_err(|_| trap("Can't deallocate memory for dispatch thunk's result"))?;
 
 		deserialize_result(&serialized_result_val)
 	}
@@ -355,6 +335,18 @@ impl<FR> SandboxInstance<FR> {
 					.invoke_export(export_name, args, guest_externals)
 			},
 		)
+	}
+
+	/// Get the value from a global with the given `name`.
+	///
+	/// Returns `Some(_)` if the global could be found.
+	pub fn get_global_val(&self, name: &str) -> Option<sp_wasm_interface::Value> {
+		let global = self.instance
+			.export_by_name(name)?
+			.as_global()?
+			.get();
+
+		Some(global.into())
 	}
 }
 

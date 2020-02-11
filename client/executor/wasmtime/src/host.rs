@@ -19,15 +19,14 @@
 
 use crate::instance_wrapper::InstanceWrapper;
 use crate::util;
-use sc_executor_common::allocator::FreeingBumpHeapAllocator;
+use std::cell::RefCell;
+use log::trace;
+use codec::{Encode, Decode};
+use sp_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::error::Result;
 use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
-
-use codec::{Decode, Encode};
-use log::trace;
 use sp_core::sandbox as sandbox_primitives;
-use sp_wasm_interface::{MemoryId, Pointer, Sandbox, WordSize};
-use std::cell::RefCell;
+use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 use wasmtime::{Func, Val};
 
 /// Wrapper type for pointer to a Wasm table entry.
@@ -90,26 +89,6 @@ impl<'a> std::ops::Deref for HostContext<'a> {
 
 impl<'a> SandboxCapabilities for HostContext<'a> {
 	type SupervisorFuncRef = SupervisorFuncRef;
-
-	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>> {
-		self.instance
-			.allocate(&mut *self.allocator.borrow_mut(), len)
-	}
-
-	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()> {
-		self.instance
-			.deallocate(&mut *self.allocator.borrow_mut(), ptr)
-	}
-
-	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()> {
-		self.instance.write_memory_from(ptr, data)
-	}
-
-	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>> {
-		let mut output = vec![0; len as usize];
-		self.instance.read_memory_into(ptr, output.as_mut())?;
-		Ok(output)
-	}
 
 	fn invoke(
 		&mut self,
@@ -277,7 +256,7 @@ impl<'a> Sandbox for HostContext<'a> {
 		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
-		let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &args[..])
+		let args = Vec::<sp_wasm_interface::Value>::decode(&mut &args[..])
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
 			.map(Into::into)
@@ -294,11 +273,11 @@ impl<'a> Sandbox for HostContext<'a> {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
 			Ok(Some(val)) => {
 				// Serialize return value and write it back into the memory.
-				sandbox_primitives::ReturnValue::Value(val.into()).using_encoded(|val| {
+				sp_wasm_interface::ReturnValue::Value(val.into()).using_encoded(|val| {
 					if val.len() > return_val_len as usize {
 						Err("Return value buffer is too small")?;
 					}
-					HostContext::write_memory(self, return_val, val)
+					<HostContext as FunctionContext>::write_memory(self, return_val, val)
 						.map_err(|_| "can't write return value")?;
 					Ok(sandbox_primitives::ERR_OK)
 				})
@@ -354,5 +333,17 @@ impl<'a> Sandbox for HostContext<'a> {
 			};
 
 		Ok(instance_idx_or_err_code as u32)
+	}
+
+	fn get_global_val(
+		&self,
+		instance_idx: u32,
+		name: &str,
+	) -> sp_wasm_interface::Result<Option<sp_wasm_interface::Value>> {
+		self.sandbox_store
+			.borrow()
+			.instance(instance_idx)
+			.map(|i| i.get_global_val(name))
+			.map_err(|e| e.to_string())
 	}
 }

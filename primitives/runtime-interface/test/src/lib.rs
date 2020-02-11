@@ -108,3 +108,23 @@ fn test_invalid_utf8_data_should_return_an_error() {
 fn test_overwrite_native_function_implementation() {
 	call_wasm_method::<HostFunctions>("test_overwrite_native_function_implementation");
 }
+
+#[test]
+fn test_u128_i128_as_parameter_and_return_value() {
+	call_wasm_method::<HostFunctions>("test_u128_i128_as_parameter_and_return_value");
+}
+
+#[test]
+fn test_vec_return_value_memory_is_freed() {
+	call_wasm_method::<HostFunctions>("test_vec_return_value_memory_is_freed");
+}
+
+#[test]
+fn test_encoded_return_value_memory_is_freed() {
+	call_wasm_method::<HostFunctions>("test_encoded_return_value_memory_is_freed");
+}
+
+#[test]
+fn test_array_return_value_memory_is_freed() {
+	call_wasm_method::<HostFunctions>("test_array_return_value_memory_is_freed");
+}

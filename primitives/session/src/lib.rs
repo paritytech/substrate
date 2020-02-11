@@ -25,6 +25,8 @@ use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 #[cfg(feature = "std")]
 use sp_api::ProvideRuntimeApi;
 
+use sp_core::crypto::KeyTypeId;
+
 sp_api::decl_runtime_apis! {
 	/// Session keys runtime api.
 	pub trait SessionKeys {
@@ -36,6 +38,11 @@ sp_api::decl_runtime_apis! {
 		///
 		/// Returns the concatenated SCALE encoded public keys.
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8>;
+
+		/// Decode the given public session keys.
+		///
+		/// Returns the list of public raw public keys + key type.
+		fn decode_session_keys(encoded: Vec<u8>) -> Option<Vec<(Vec<u8>, KeyTypeId)>>;
 	}
 }
 

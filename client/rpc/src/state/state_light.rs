@@ -199,6 +199,24 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
+	fn storage_pairs(
+		&self,
+		_block: Option<Block::Hash>,
+		_prefix: StorageKey,
+	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
+	fn storage_keys_paged(
+		&self,
+		_block: Option<Block::Hash>,
+		_prefix: Option<StorageKey>,
+		_count: u32,
+		_start_key: Option<StorageKey>,
+	) -> FutureResult<Vec<StorageKey>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
 	fn storage(
 		&self,
 		block: Option<Block::Hash>,
@@ -708,7 +726,7 @@ fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output=Result<Optio
 mod tests {
 	use rpc::futures::stream::futures_ordered;
 	use substrate_test_runtime_client::runtime::Block;
-    use sp_core::H256;
+	use sp_core::H256;
 	use super::*;
 
 	#[test]
