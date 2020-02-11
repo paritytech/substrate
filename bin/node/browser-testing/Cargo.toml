@@ -2,7 +2,7 @@
 name = "node-browser-testing"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Test utilities for Substrate node."
+description = "Tests for the in-browser light client."
 edition = "2018"
 license = "GPL-3.0"
 
@@ -17,5 +17,4 @@ wasm-bindgen-futures = "0.4.7"
 wasm-bindgen-test = "0.3.8"
 
 node-cli = { path = "../cli", default-features = false, features = ["browser"] }
-sc-network = { path = "../../../client/network" }
 sc-rpc-api = { path = "../../../client/rpc-api" }

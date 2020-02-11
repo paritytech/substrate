@@ -3342,7 +3342,6 @@ dependencies = [
  "jsonrpc-core",
  "libp2p",
  "node-cli",
- "sc-network",
  "sc-rpc-api",
  "serde",
  "serde_json",

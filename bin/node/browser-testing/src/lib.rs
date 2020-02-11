@@ -1,3 +1,28 @@
+// Copyright 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! # Running
+//! Running this test can be done with
+//! ```
+//! wasm-pack test --firefox --release --headless bin/node/browser-testing
+//! ```
+//! For debug infomation, such as the informant, run without the `--headless`
+//! flag and open a browser to the url that `wasm-pack test` outputs.
+//! For more infomation see https://rustwasm.github.io/docs/wasm-pack/.
+
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen::JsValue;
