@@ -292,9 +292,10 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 type EventIndex = u32;
 
 /// Type used to encode the number of references an account has.
-type RefCount = u8;
+pub type RefCount = u8;
 
 /// Information of an account.
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
 pub struct AccountInfo<Index, AccountData> {
 	/// The number of transactions this account has sent.
 	nonce: Index,
@@ -310,7 +311,6 @@ decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
 		// TODO: should be hasher(twox64_concat) - will need staged migration
-		// TODO: should not including T::Index (the nonce)
 		pub Account get(fn account):
 			map hasher(blake2_256) T::AccountId => AccountInfo<T::Index, T::AccountData>;
 
@@ -662,26 +662,26 @@ impl<T: Trait> Module<T> {
 	/// Increment the reference counter on an account. `_context` is a RefContext value identifying
 	/// the context of the reference.
 	pub fn inc_ref(who: &T::AccountId) {
-		Account::<T>::mutate(|a| *a.refcount = a.refcount.saturating_add(1));
+		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_add(1));
 	}
 
 	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
 	/// you called `inc_ref` on `who`.
 	pub fn dec_ref(who: &T::AccountId) {
-		Account::<T>::mutate(|a| *a.refcount = a.refcount.saturating_sub(1));
+		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_sub(1));
 	}
 
 	/// Note that a particular storage key is referring to a particular account. Returns the status
 	/// of this storage key immediately *before* this call (after this call it will be `Referenced`,
 	/// of course).
-	pub fn note_referenced(who: &T::AccountId, storage_key: &[u8]) -> RefStatus {
+	pub fn note_referenced(_who: &T::AccountId, _storage_key: &[u8]) -> RefStatus {
 		unimplemented!()
 	}
 
 	/// Note that a particular storage key is not referring to a particular account. Returns the
 	/// status of this storage key immediately *before* this call (after this call it will be
 	/// `Unreferenced`, of course).
-	pub fn note_unreferenced(who: &T::AccountId, storage_key: &[u8]) -> RefStatus {
+	pub fn note_unreferenced(_who: &T::AccountId, _storage_key: &[u8]) -> RefStatus {
 		unimplemented!()
 	}
 
@@ -983,12 +983,12 @@ impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 pub struct CallKillAccount<T>(PhantomData<T>);
 impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
-		if Account::<T>::contains_key(&who) {
-			let account = Account::<T>::take(&who);
+		if Account::<T>::contains_key(who) {
+			let account = Account::<T>::take(who);
 			if account.refcount > 0 {
-				sp_io::print("WARNING: Referenced account deleted. This is probably a bug.");
+				sp_runtime::print("WARNING: Referenced account deleted. This is probably a bug.");
 			}
-			Self::on_killed_account(who);
+			Module::<T>::on_killed_account(who.clone());
 		}
 	}
 }
@@ -1011,9 +1011,12 @@ impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 		}
 	}
 	fn remove(k: &T::AccountId) {
-		if Account::<T>::contains_key(&k) {
-			Account::<T>::remove(&k);
-			Self::on_killed_account(k);
+		if Account::<T>::contains_key(k) {
+			let account = Account::<T>::take(k);
+			if account.refcount > 0 {
+				sp_runtime::print("WARNING: Referenced account deleted. This is probably a bug.");
+			}
+			Self::on_killed_account(k.clone());
 		}
 	}
 	fn mutate<R>(k: &T::AccountId, f: impl FnOnce(&mut T::AccountData) -> R) -> R {
@@ -1025,7 +1028,7 @@ impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 		r
 	}
 	fn mutate_exists<R>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> R) -> R {
-		Self::try_mutate_exists(k, |x| -> Result<R, Infallible> Ok(f(x))).expect("Infallible; qed")
+		Self::try_mutate_exists(k, |x| -> Result<R, Infallible> { Ok(f(x)) }).expect("Infallible; qed")
 	}
 	fn try_mutate_exists<R, E>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>) -> Result<R, E> {
 		Account::<T>::try_mutate_exists(k, |maybe_value| {
@@ -1034,12 +1037,12 @@ impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 				maybe_value.take(),
 				|account| ((account.nonce, account.refcount), account.data)
 			);
-			f(&mut maybe_data).map(|v| {
+			f(&mut maybe_data).map(|result| {
 				*maybe_value = maybe_data.map(|data| {
 					let (nonce, refcount) = maybe_prefix.unwrap_or_default();
 					AccountInfo { nonce, refcount, data }
 				});
-				(existed, maybe_value.is_some(), r)
+				(existed, maybe_value.is_some(), result)
 			})
 		}).map(|(existed, exists, v)| {
 			if !existed && exists {
@@ -1232,7 +1235,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		let mut account = Account::<T>::get(who);
 		if self.0 != account.nonce {
 			return Err(
-				if self.0 < expected {
+				if self.0 < account.nonce {
 					InvalidTransaction::Stale
 				} else {
 					InvalidTransaction::Future
@@ -1253,7 +1256,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	) -> TransactionValidity {
 		// check index
 		let account = Account::<T>::get(who);
-		if self.0 < expected {
+		if self.0 < account.nonce {
 			return InvalidTransaction::Stale.into()
 		}
 
@@ -1662,7 +1665,7 @@ mod tests {
 	#[test]
 	fn signed_ext_check_nonce_works() {
 		new_test_ext().execute_with(|| {
-			Account::<Test>::insert(1, (1, 0, ()));
+			Account::<Test>::insert(1, AccountInfo { nonce: 1, refcount: 0, data: () });
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale
