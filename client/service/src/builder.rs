@@ -898,16 +898,24 @@ ServiceBuilder<
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
-					if let Some(offchain) = offchain {
-						let future = offchain.on_block_imported(
-							&notification.header,
-							network_state_info.clone(),
-							is_validator
-						);
-						let _ = to_spawn_tx_.unbounded_send((
-							Box::pin(future),
-							From::from("offchain-on-block")
-						));
+					match offchain {
+						Some(offchain) if notification.is_new_best => {
+							let future = offchain.on_block_imported(
+								&notification.header,
+								network_state_info.clone(),
+								is_validator,
+							);
+							let _ = to_spawn_tx_.unbounded_send((
+									Box::pin(future),
+									From::from("offchain-on-block"),
+							));
+						},
+						Some(_) => log::debug!(
+							target: "sc_offchain",
+							"Skipping offchain workers for non-canon block: {:?}",
+							notification.header,
+						),
+						_ => {},
 					}
 
 					ready(())
