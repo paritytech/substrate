@@ -524,25 +524,6 @@ fn self_votes_should_be_kept() {
 }
 
 #[test]
-fn assignment_conversion_is_reversible_without_fill() {
-	let assignment = Assignment {
-		who: 1,
-		distribution: vec![
-			(20, Perbill::from_percent(33)),
-			(10, Perbill::from_percent(67)),
-		]
-	};
-
-	let staked = assignment.into_staked(1243252161234124, true);
-	dbg!(&staked);
-
-	let sum = staked.distribution[0].1 + staked.distribution[1].1;
-	dbg!(sum == 1243252161234124);
-
-	unimplemented!();
-}
-
-#[test]
 fn assignment_convert_works() {
 	let staked = StakedAssignment {
 		who: 1 as AccountId,
