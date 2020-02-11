@@ -444,7 +444,9 @@ macro_rules! wrap {
 /// # Example
 ///
 /// ```
-/// application_crypto::with_pair!(pub type Pair = ();)
+/// sp_application_crypto::with_pair! {
+///     pub type Pair = ();
+/// }
 /// ```
 #[macro_export]
 #[cfg(any(feature = "std", feature = "full_crypto"))]
