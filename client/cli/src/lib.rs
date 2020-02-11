@@ -20,7 +20,7 @@
 #![warn(unused_extern_crates)]
 
 mod params;
-mod execution_strategy;
+mod arg_enums;
 mod error;
 mod runtime;
 mod node_key;
@@ -35,7 +35,7 @@ use structopt::{StructOpt, clap::{self, AppSettings}};
 pub use structopt;
 pub use params::*;
 pub use commands::*;
-pub use execution_strategy::*;
+pub use arg_enums::*;
 pub use error::*;
 use log::info;
 use lazy_static::lazy_static;

@@ -14,16 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use structopt::{StructOpt, clap::arg_enum};
+use structopt::StructOpt;
 use sc_service::{
 	Configuration, RuntimeGenesis,
 	config::DatabaseConfig, PruningMode,
 };
 
 use crate::error;
-use crate::execution_strategy::*;
-use crate::execution_strategy::ExecutionStrategy;
-use crate::params::WasmExecutionMethod;
+use crate::arg_enums::{
+	WasmExecutionMethod, TracingReceiver, ExecutionStrategy, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
+	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER,
+	DEFAULT_EXECUTION_SYNCING
+};
 
 /// Parameters for block import.
 #[derive(Debug, StructOpt, Clone)]
@@ -143,37 +145,6 @@ impl ImportParams {
 			other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
 		};
 		Ok(())
-	}
-}
-
-arg_enum! {
-	#[allow(missing_docs)]
-	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-	pub enum TracingReceiver {
-		Log,
-		Telemetry,
-		Grafana,
-	}
-}
-
-impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
-	fn into(self) -> sc_tracing::TracingReceiver {
-		match self {
-			TracingReceiver::Log => sc_tracing::TracingReceiver::Log,
-			TracingReceiver::Telemetry => sc_tracing::TracingReceiver::Telemetry,
-			TracingReceiver::Grafana => sc_tracing::TracingReceiver::Grafana,
-		}
-	}
-}
-
-impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
-	fn into(self) -> sc_client_api::ExecutionStrategy {
-		match self {
-			ExecutionStrategy::Native => sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			ExecutionStrategy::Wasm => sc_client_api::ExecutionStrategy::AlwaysWasm,
-			ExecutionStrategy::Both => sc_client_api::ExecutionStrategy::Both,
-			ExecutionStrategy::NativeElseWasm => sc_client_api::ExecutionStrategy::NativeElseWasm,
-		}
 	}
 }
 

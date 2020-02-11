@@ -15,25 +15,18 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{path::PathBuf, str::FromStr};
-use structopt::{StructOpt, clap::arg_enum};
+use structopt::StructOpt;
 use sc_service::{Configuration, RuntimeGenesis};
 use sc_network::config::NodeKeyConfig;
 use sp_core::H256;
 
 use crate::error;
+use crate::arg_enums::NodeKeyType;
 
 /// The file name of the node's Ed25519 secret key inside the chain-specific
 /// network config directory, if neither `--node-key` nor `--node-key-file`
 /// is specified in combination with `--node-key-type=ed25519`.
 const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
-
-arg_enum! {
-	#[allow(missing_docs)]
-	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-	pub enum NodeKeyType {
-		Ed25519
-	}
-}
 
 /// Parameters used to create the `NodeKeyConfig`, which determines the keypair
 /// used for libp2p networking.

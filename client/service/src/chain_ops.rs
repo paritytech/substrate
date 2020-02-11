@@ -23,19 +23,18 @@ use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 use log::{warn, info};
 use futures::{future, prelude::*};
 use sp_runtime::{
-	BuildStorage, BenchmarkResults,
 	traits::{
 		Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
 	}
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
-use sc_client::{Client, ExecutionStrategy, StateMachine, LocalCallExecutor};
+use sc_client::{Client, LocalCallExecutor};
 #[cfg(feature = "rocksdb")]
 use sc_client_db::BenchmarkingState;
 use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
 use sp_consensus::BlockOrigin;
-use sc_executor::{NativeExecutor, NativeExecutionDispatch, WasmExecutionMethod};
+use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
 
