@@ -231,7 +231,12 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	) -> Result<Option<sc_transaction_graph::BlockHash<Self>>, Error> {
 		Ok(match at {
 			generic::BlockId::Hash(x) => Some(x.clone()),
-			generic::BlockId::Number(num) => self.chain.read().header_by_number.get(num).map(|h| h.hash()),
+			generic::BlockId::Number(num) => {
+				self.chain.read()
+					.header_by_number.get(num)
+					.map(|h| h.hash())
+					.or_else(|| Some(Default::default()))
+			},
 		})
 	}
 
