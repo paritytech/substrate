@@ -219,7 +219,10 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, offchain};
-use sp_runtime::offchain::{http, Duration};
+use sp_runtime::{
+	offchain::{http, Duration},
+	traits::Zero,
+};
 use sp_core::crypto::KeyTypeId;
 use serde_json as json;
 
@@ -424,7 +427,7 @@ impl<T: Trait> Module<T> {
 		// Note that since the request is being driven by the host, we don't have to wait
 		// for the request to have it complete, we will just not read the response.
 		let response = pending.try_wait(deadline)
-			.map_err(|e| http::Error::DeadlineReached)?;
+			.map_err(|e| http::Error::DeadlineReached)??;
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
 			debug::warn!("Unexpected status code: {}", response.code);
@@ -454,7 +457,7 @@ impl<T: Trait> Module<T> {
 		if prices.is_empty() {
 			None
 		} else {
-			Some(prices.iter().fold(0, |a, b| a.saturating_add(b)) / prices.len() as u32)
+			Some(prices.iter().fold(0_u32, |a, b| a.saturating_add(*b)) / prices.len() as u32)
 		}
 	}
 }
