@@ -28,6 +28,7 @@ use sp_runtime::{
 	},
 };
 use std::collections::{HashSet, HashMap};
+use sp_blockchain::{TreeRoute, HeaderMetadata, HeaderMetadataCache, CachedHeaderMetadata, tree_route};
 use substrate_test_runtime_client::{
 	runtime::{Index, AccountId, Block, BlockNumber, Extrinsic, Hash, Header, Transfer},
 	AccountKeyring::{self, *},
@@ -51,7 +52,7 @@ impl std::error::Error for Error {
 }
 
 #[derive(Default)]
-struct ChainState {
+pub struct ChainState {
 	pub block_by_number: HashMap<BlockNumber, Vec<Extrinsic>>,
 	pub block_by_hash: HashMap<Hash, Vec<Extrinsic>>,
 	pub header_by_number: HashMap<BlockNumber, Header>,
@@ -63,6 +64,7 @@ struct ChainState {
 pub struct TestApi {
 	valid_modifier: RwLock<Box<dyn Fn(&mut ValidTransaction) + Send + Sync>>,
 	chain: RwLock<ChainState>,
+	header_metadata: HeaderMetadataCache<Block>,
 	validation_requests: RwLock<Vec<Extrinsic>>,
 }
 
@@ -72,6 +74,7 @@ impl TestApi {
 		let api = TestApi {
 			valid_modifier: RwLock::new(Box::new(|_| {})),
 			chain: Default::default(),
+			header_metadata: HeaderMetadataCache::default(),
 			validation_requests: RwLock::new(Default::default()),
 		};
 
@@ -85,6 +88,7 @@ impl TestApi {
 		let api = TestApi {
 			valid_modifier: RwLock::new(Box::new(|_| {})),
 			chain: Default::default(),
+			header_metadata: HeaderMetadataCache::default(),
 			validation_requests: RwLock::new(Default::default()),
 		};
 
@@ -97,16 +101,25 @@ impl TestApi {
 	}
 
 	/// Push block as a part of canonical chain under given number.
-	pub fn push_block(&self, block_number: BlockNumber, xts: Vec<Extrinsic>) {
+	pub fn push_block(&self, block_number: BlockNumber, xts: Vec<Extrinsic>) -> Header {
 		let mut chain = self.chain.write();
-		chain.block_by_number.insert(block_number, xts);
-		chain.header_by_number.insert(block_number, Header {
+		chain.block_by_number.insert(block_number, xts.clone());
+		let header = Header {
 			number: block_number,
 			digest: Default::default(),
 			extrinsics_root:  Default::default(),
-			parent_hash: Default::default(),
+			parent_hash: block_number
+				.checked_sub(1)
+				.and_then(|num| {
+					chain.header_by_number.get(&num)
+						.cloned().map(|h| h.hash())
+				}).unwrap_or_default(),
 			state_root: Default::default(),
-		});
+		};
+		chain.block_by_hash.insert(header.hash(), xts);
+		chain.header_by_number.insert(block_number, header.clone());
+		self.header_metadata.insert_header_metadata(header.hash(), CachedHeaderMetadata::from(&header));
+		header
 	}
 
 	/// Push a block without a number.
@@ -115,6 +128,21 @@ impl TestApi {
 	pub fn push_fork_block(&self, block_hash: Hash, xts: Vec<Extrinsic>) {
 		let mut chain = self.chain.write();
 		chain.block_by_hash.insert(block_hash, xts);
+	}
+
+	pub fn push_fork_block_with_parent(&self, parent: Hash, xts: Vec<Extrinsic>) -> Header {
+		let mut chain = self.chain.write();
+		let blocknum = chain.block_by_number.keys().max().expect("block_by_number shouldn't be empty");
+		let header = Header {
+			number: *blocknum,
+			digest: Default::default(),
+			extrinsics_root:  Default::default(),
+			parent_hash: parent,
+			state_root: Default::default(),
+		};
+		chain.block_by_hash.insert(header.hash(), xts);
+		self.header_metadata.insert_header_metadata(header.hash(), CachedHeaderMetadata::from(&header));
+		header
 	}
 
 	fn hash_and_length_inner(ex: &Extrinsic) -> (Hash, usize) {
@@ -135,6 +163,11 @@ impl TestApi {
 	/// Query validation requests received.
 	pub fn validation_requests(&self) -> Vec<Extrinsic> {
 		self.validation_requests.read().clone()
+	}
+
+	/// get a reference to the chain state
+	pub fn chain(&self) -> &RwLock<ChainState> {
+		&self.chain
 	}
 
 	/// Increment nonce in the inner state.
@@ -198,7 +231,7 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	) -> Result<Option<sc_transaction_graph::BlockHash<Self>>, Error> {
 		Ok(match at {
 			generic::BlockId::Hash(x) => Some(x.clone()),
-			_ => Some(Default::default()),
+			generic::BlockId::Number(num) => self.chain.read().header_by_number.get(num).map(|h| h.hash()),
 		})
 	}
 
@@ -210,23 +243,19 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	}
 
 	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
-		futures::future::ready(Ok(if let BlockId::Number(num) = id {
-			self.chain.read().block_by_number.get(num).cloned()
-		} else {
-			None
+		futures::future::ready(Ok(match id {
+			BlockId::Number(num) => self.chain.read().block_by_number.get(num).cloned(),
+			BlockId::Hash(hash) => self.chain.read().block_by_hash.get(hash).cloned(),
 		}))
 	}
 
-	fn block_header(&self, id: BlockId<Self::Block>) -> Result<Option<Header>, Self::Error> {
-		Ok(if let BlockId::Number(hash) = id {
-			self.chain.read().header_by_number.get(&hash).cloned()
-		} else {
-			None
-		})
+	fn last_finalized(&self) -> BlockHash<Self> {
+		self.chain.read().block_by_hash.keys().nth(0).cloned().or_else(|| Some(Default::default())).unwrap()
 	}
 
-	fn last_finalized(&self) -> BlockHash<Self> {
-		unimplemented!()
+	fn tree_route(&self, from: BlockHash<Self>, to: BlockHash<Self>) -> Result<TreeRoute<Self::Block>, Self::Error> {
+		tree_route(&self.header_metadata, from, to)
+			.map_err(|_| Error(sp_transaction_pool::error::Error::NoTagsProvided))
 	}
 }
 

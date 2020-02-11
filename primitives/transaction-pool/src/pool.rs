@@ -67,7 +67,7 @@ impl PoolStatus {
 /// 2. Inside `Ready` queue:
 ///		- `Broadcast`
 /// 3. Leaving the pool:
-///		- `InBlock`
+///		- `Finalized`
 ///		- `Invalid`
 ///		- `Usurped`
 ///		- `Dropped`
@@ -225,6 +225,8 @@ pub trait TransactionPool: Send + Sync {
 pub enum ChainEvent<B: BlockT> {
 	/// New blocks have been added to the chain
 	NewBlock {
+		/// Is this the new best block.
+		is_new_best: bool,
 		/// Id of the just imported block.
 		id: BlockId<B>,
 		/// Header of the just imported block

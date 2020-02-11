@@ -883,10 +883,11 @@ ServiceBuilder<
 			let is_validator = config.roles.is_authority();
 
 			let (import_stream, finality_stream) = (
-				client.import_notification_stream().map(|n| ChainEvent::Canonical {
+				client.import_notification_stream().map(|n| ChainEvent::NewBlock {
 					id: BlockId::Hash(n.hash),
 					header: n.header,
 					retracted: n.retracted,
+					is_new_best: n.is_new_best,
 				}),
 				client.finality_notification_stream().map(|n| ChainEvent::Finalized {
 					hash: n.hash
@@ -899,9 +900,9 @@ ServiceBuilder<
 						ChainEvent::NewBlock { ref header, is_new_best, .. } => {
 							let offchain = offchain.as_ref().and_then(|o| o.upgrade());
 							match offchain {
-								Some(offchain) if notification.is_new_best => {
+								Some(offchain) if is_new_best => {
 									let future = offchain.on_block_imported(
-										&notification.header,
+										&header,
 										network_state_info.clone(),
 										is_validator,
 									);
@@ -913,7 +914,7 @@ ServiceBuilder<
 								Some(_) => log::debug!(
 									target: "sc_offchain",
 									"Skipping offchain workers for non-canon block: {:?}",
-									notification.header,
+									header,
 								),
 								_ => {},
 							}

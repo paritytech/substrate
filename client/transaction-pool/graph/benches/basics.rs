@@ -20,12 +20,13 @@ use futures::{future::{ready, Ready}, executor::block_on};
 use sc_transaction_graph::*;
 use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 use codec::Encode;
-use substrate_test_runtime::{Block, Extrinsic, Transfer, Header, H256, AccountId};
+use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
 use sp_core::blake2_256;
+use sp_blockchain::TreeRoute;
 
 #[derive(Clone, Debug, Default)]
 struct TestApi {
@@ -111,11 +112,11 @@ impl ChainApi for TestApi {
 		ready(Ok(None))
 	}
 
-	fn block_header(&self, id: BlockId<Self::Block>) -> Result<Option<Header>, Self::Error> {
-		Ok(None)
+	fn last_finalized(&self) -> BlockHash<Self> {
+		unimplemented!()
 	}
 
-	fn last_finalized(&self) -> BlockHash<Self> {
+	fn tree_route(&self, _from: BlockHash<Self>, _to: BlockHash<Self>) -> Result<TreeRoute<Self::Block>, Self::Error> {
 		unimplemented!()
 	}
 }

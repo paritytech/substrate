@@ -172,7 +172,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	}
 
 	fn remove_invalid(&self, hashes: &[TxHash<Self>]) -> Vec<Arc<Self::InPoolTransaction>> {
-		self.pool.remove_invalid(hashes)
+		self.pool.validated_pool().remove_invalid(hashes)
 	}
 
 	fn status(&self) -> PoolStatus {
@@ -180,11 +180,11 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	}
 
 	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>> {
-		Box::new(self.pool.ready())
+		Box::new(self.pool.validated_pool().ready())
 	}
 
 	fn import_notification_stream(&self) -> ImportNotificationStream<TxHash<Self>> {
-		self.pool.import_notification_stream()
+		self.pool.validated_pool().import_notification_stream()
 	}
 
 	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self> {
@@ -192,11 +192,11 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	}
 
 	fn on_broadcasted(&self, propagations: HashMap<TxHash<Self>, Vec<String>>) {
-		self.pool.on_broadcasted(propagations)
+		self.pool.validated_pool().on_broadcasted(propagations)
 	}
 
 	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>> {
-		self.pool.ready_transaction(hash)
+		self.pool.validated_pool().ready_by_hash(hash)
 	}
 }
 
@@ -338,7 +338,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 						for retracted_hash in retracted {
 							// notify txs awaiting finality that it has been retracted
-							pool.retracted(&retracted_hash);
+							pool.validated_pool().on_block_retracted(&retracted_hash);
 
 							let block_transactions = api.block_body(&BlockId::hash(retracted_hash.clone())).await
 								.unwrap_or_else(|e| {
@@ -371,7 +371,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 			ChainEvent::Finalized { hash } => {
 				let pool = self.pool.clone();
 				async move {
-					if let Err(e) = pool.finalized(hash).await {
+					if let Err(e) = pool.validated_pool().on_block_finalized(hash).await {
 						log::warn!(
 							target: "txpool",
 							"Error [{}] occurred while attempting to notify watchers of finalization {}",

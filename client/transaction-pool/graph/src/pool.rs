@@ -37,6 +37,8 @@ use sp_transaction_pool::{error, PoolStatus};
 use wasm_timer::Instant;
 
 use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
+use sp_blockchain::TreeRoute;
+use std::collections::HashSet;
 
 /// Modification notification event stream type;
 pub type EventStream<H> = mpsc::UnboundedReceiver<H>;
@@ -90,14 +92,11 @@ pub trait ChainApi: Send + Sync {
 	/// Returns a block body given the block id.
 	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
 
-	/// Returns block header
-	fn block_header(&self, at: BlockId<Self::Block>) -> Result<
-		Option<<Self::Block as traits::Block>::Header>,
-		Self::Error
-	>;
-
 	/// Returns the hash of the last finalized block
 	fn last_finalized(&self) -> BlockHash<Self>;
+
+	/// a method to get the metadata provider.
+	fn tree_route(&self, from: BlockHash<Self>, to: BlockHash<Self>) -> Result<TreeRoute<Self::Block>, Self::Error>;
 }
 
 /// Pool configuration options.
@@ -239,8 +238,10 @@ impl<B: ChainApi> Pool<B> {
 		// Prune all transactions that provide given tags
 		let prune_status = self.validated_pool.prune_tags(in_pool_tags)?;
 		let pruned_transactions = hashes.into_iter().cloned()
-			.chain(prune_status.pruned.iter().map(|tx| tx.hash.clone()));
-		self.validated_pool.fire_pruned(at, pruned_transactions)
+			.chain(prune_status.pruned.iter().map(|tx| tx.hash.clone()))
+			// dedupe hashes.
+			.collect::<HashSet<_>>();
+		self.validated_pool.fire_pruned(at, pruned_transactions.into_iter())
 	}
 
 	/// Prunes ready transactions.
@@ -347,29 +348,6 @@ impl<B: ChainApi> Pool<B> {
 		)
 	}
 
-	/// Return an event stream of notifications for when transactions are imported to the pool.
-	///
-	/// Consumers of this stream should use the `ready` method to actually get the
-	/// pending transactions in the right order.
-	pub fn import_notification_stream(&self) -> EventStream<ExHash<B>> {
-		self.validated_pool.import_notification_stream()
-	}
-
-	/// Invoked when extrinsics are broadcasted.
-	pub fn on_broadcasted(&self, propagated: HashMap<ExHash<B>, Vec<String>>) {
-		self.validated_pool.on_broadcasted(propagated)
-	}
-
-	/// Remove invalid transactions from the pool.
-	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<TransactionFor<B>> {
-		self.validated_pool.remove_invalid(hashes)
-	}
-
-	/// Get an iterator for ready transactions ordered by priority
-	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> {
-		self.validated_pool.ready()
-	}
-
 	/// Returns pool status.
 	pub fn status(&self) -> PoolStatus {
 		self.validated_pool.status()
@@ -464,18 +442,8 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Notify all watchers that transactions in the block with given hash have been finalized
-	pub async fn on_block_finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
-		self.validated_pool.finalized(block_hash).await
-	}
-
-	/// Notify the listener of retracted blocks
-	pub fn on_block_retracted(&self, block_hash: &BlockHash<B>) {
-		self.validated_pool.retracted(block_hash)
-	}
-
-	/// Get ready transaction by hash, if it present in the pool.
-	pub fn ready_transaction(&self, hash: &ExHash<B>) -> Option<TransactionFor<B>> {
-		self.validated_pool.ready_by_hash(hash)
+	pub fn validated_pool(&self) ->  &Arc<ValidatedPool<B>> {
+		&self.validated_pool
 	}
 }
 
@@ -496,7 +464,7 @@ mod tests {
 	use sp_transaction_pool::TransactionStatus;
 	use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 	use codec::Encode;
-	use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId, Header};
+	use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
 	use wasm_timer::Instant;
 	use crate::base_pool::Limit;
@@ -594,11 +562,15 @@ mod tests {
 			futures::future::ready(Ok(None))
 		}
 
-		fn block_header(&self, _id: BlockId<Self::Block>) -> Result<Option<Header>, Self::Error> {
-			Ok(None)
+		fn last_finalized(&self) -> BlockHash<Self> {
+			unimplemented!()
 		}
 
-		fn last_finalized(&self) -> BlockHash<Self> {
+		fn tree_route(
+			&self,
+			_from: BlockHash<Self>,
+			_to: BlockHash<Self>
+		) -> Result<TreeRoute<Self::Block>, Self::Error> {
 			unimplemented!()
 		}
 	}
@@ -625,7 +597,7 @@ mod tests {
 		}))).unwrap();
 
 		// then
-		assert_eq!(pool.ready().map(|v| v.hash).collect::<Vec<_>>(), vec![hash]);
+		assert_eq!(pool.validated_pool().ready().map(|v| v.hash).collect::<Vec<_>>(), vec![hash]);
 	}
 
 	#[test]
@@ -654,7 +626,7 @@ mod tests {
 		let stream = {
 			// given
 			let pool = pool();
-			let stream = pool.import_notification_stream();
+			let stream = pool.validated_pool().import_notification_stream();
 
 			// when
 			let _hash = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
@@ -716,7 +688,7 @@ mod tests {
 		pool.validated_pool.clear_stale(&BlockId::Number(5)).unwrap();
 
 		// then
-		assert_eq!(pool.ready().count(), 0);
+		assert_eq!(pool.validated_pool().ready().count(), 0);
 		assert_eq!(pool.status().future, 0);
 		assert_eq!(pool.status().ready, 0);
 		// make sure they are temporarily banned as well
@@ -943,7 +915,7 @@ mod tests {
 			let mut map = HashMap::new();
 			let peers = vec!["a".into(), "b".into(), "c".into()];
 			map.insert(*watcher.hash(), peers.clone());
-			pool.on_broadcasted(map);
+			pool.validated_pool().on_broadcasted(map);
 
 
 			// then

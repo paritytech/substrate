@@ -31,7 +31,7 @@ use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{self, SaturatedConversion, Header as _},
+	traits::{self, SaturatedConversion},
 	transaction_validity::TransactionTag as Tag,
 };
 use sp_transaction_pool::{error, PoolStatus};
@@ -61,7 +61,7 @@ pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 >;
 
 /// Pool that deals with validated transactions.
-pub(crate) struct ValidatedPool<B: ChainApi> {
+pub struct ValidatedPool<B: ChainApi> {
 	api: Arc<B>,
 	options: Options,
 	listener: RwLock<Listener<ExHash<B>, B>>,
@@ -69,7 +69,7 @@ pub(crate) struct ValidatedPool<B: ChainApi> {
 		ExHash<B>,
 		ExtrinsicFor<B>,
 	>>,
-	last_finalized_hash: Arc<Mutex<BlockHash<B>>>,
+	last_finalized_hash: RwLock<BlockHash<B>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<ExHash<B>>>>,
 	rotator: PoolRotator<ExHash<B>>,
 }
@@ -91,10 +91,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 	pub fn new(options: Options, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
 		ValidatedPool {
-			api,
 			options,
 			listener: Default::default(),
-			last_finalized_hash: Default::default(),
+			last_finalized_hash: RwLock::new(api.last_finalized()),
+			api,
 			pool: RwLock::new(base_pool),
 			import_notification_sinks: Default::default(),
 			rotator: Default::default(),
@@ -399,8 +399,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 			});
 		// Fire `pruned` notifications for collected hashes and make sure to include
 		// `known_imported_hashes` since they were just imported as part of the block.
-		let hashes = hashes.chain(known_imported_hashes.into_iter());
-		self.fire_pruned(at, hashes)?;
+		let hashes = hashes.chain(known_imported_hashes.into_iter()).collect::<HashSet<_>>();
+		self.fire_pruned(at, hashes.into_iter())?;
 
 		// perform regular cleanup of old transactions in the pool
 		// and update temporary bans.
@@ -469,7 +469,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 		&self.api
 	}
 
-	/// Return an event stream of transactions imported to the pool.
+	/// Return an event stream of notifications for when transactions are imported to the pool.
+	///
+	/// Consumers of this stream should use the `ready` method to actually get the
+	/// pending transactions in the right order.
 	pub fn import_notification_stream(&self) -> EventStream<ExHash<B>> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
@@ -524,15 +527,25 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Notify all watchers that transactions in the block with hash have been finalized
-	pub async fn finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
+	pub async fn on_block_finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
 		debug!(target: "txpool", "Attempting to notify watchers of finalization for {}", block_hash);
-		let last_finalized_hash = *self.last_finalized_hash.lock();
+		let last_finalized = *self.last_finalized_hash.read();
 
-		let mut header = self.api.block_header(BlockId::Hash(block_hash.clone()))?
-			.expect("finalized block should have block header; qed");
+		// fetch blocks along path `last_finalized`..`block_hash`.
+		let route = self.api.tree_route(last_finalized, block_hash)?;
+		let mut hashes = vec![];
 
-		while header.hash() != last_finalized_hash {
-			let hash = header.hash();
+		if route.enacted().is_empty() {
+			hashes.extend_from_slice(
+				&vec![route.common_block().clone().hash, block_hash.clone()]
+			);
+		} else {
+			hashes.extend_from_slice(
+				&route.enacted().iter().map(|h| h.hash).collect::<Vec<_>>()
+			);
+		}
+
+		for hash in hashes {
 			// fetch all extrinsic hashes
 			let tx_hashes = self.api.block_body(&BlockId::Hash(hash.clone())).await?
 				.expect("fetched block header should have block body; qed")
@@ -542,23 +555,15 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 			// notify the watcher that these extrinsics have been finalized
 			self.listener.write().finalized(&hash, &tx_hashes);
-
-			if last_finalized_hash == Default::default() {
-				// self.last_finalized_hash is created with a default value
-				break
-			}
-
-			header = self.api.block_header(BlockId::Hash(header.parent_hash().clone()))?
-				.expect("parent block should have block header; qed");
 		}
 
-		*self.last_finalized_hash.lock() = block_hash;
+		*self.last_finalized_hash.write() = block_hash;
 
 		Ok(())
 	}
 
 	/// Notify the listener of retracted blocks
-	pub fn retracted(&self, block_hash: &BlockHash<B>) {
+	pub fn on_block_retracted(&self, block_hash: &BlockHash<B>) {
 		self.listener.write().retracted(block_hash)
 	}
 }
