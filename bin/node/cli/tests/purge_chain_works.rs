@@ -15,31 +15,17 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use assert_cmd::cargo::cargo_bin;
-use std::{convert::TryInto, process::Command, thread, time::Duration, fs, path::PathBuf};
+use std::{process::Command, fs, path::PathBuf};
 
 mod common;
 
 #[test]
 #[cfg(unix)]
 fn purge_chain_works() {
-	use nix::sys::signal::{kill, Signal::SIGINT};
-	use nix::unistd::Pid;
-
 	let base_path = "purge_chain_test";
 
 	let _ = fs::remove_dir_all(base_path);
-	let mut cmd = Command::new(cargo_bin("substrate"))
-		.args(&["--dev", "-d", base_path])
-		.spawn()
-		.unwrap();
-
-	// Let it produce some blocks.
-	thread::sleep(Duration::from_secs(30));
-	assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
-
-	// Stop the process
-	kill(Pid::from_raw(cmd.id().try_into().unwrap()), SIGINT).unwrap();
-	assert!(common::wait_for(&mut cmd, 30).map(|x| x.success()).unwrap_or_default());
+	common::run_command_for_a_while(&["--dev", "-d", base_path]);
 
 	let status = Command::new(cargo_bin("substrate"))
 		.args(&["purge-chain", "--dev", "-d", base_path, "-y"])
