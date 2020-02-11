@@ -18,10 +18,10 @@
 
 #![warn(missing_docs)]
 
-use sc_cli::VersionInfo;
+use sc_cli;
 
 fn main() -> sc_cli::Result<()> {
-	let version = VersionInfo {
+	let version = sc_cli::VersionInfo {
 		name: "Substrate Node",
 		commit: env!("VERGEN_SHA_SHORT"),
 		version: env!("CARGO_PKG_VERSION"),
