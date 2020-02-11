@@ -320,7 +320,9 @@ pub fn require_header<Block: BlockT>(
 	id: BlockId<Block>,
 ) -> sp_blockchain::Result<Block::Header> {
 	read_header(db, col_index, col, id)
-		.and_then(|header| header.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", id))))
+		.and_then(|header| header.ok_or_else(||
+			sp_blockchain::Error::UnknownBlock(format!("Require header: {}", id))
+		))
 }
 
 /// Read meta from the database.

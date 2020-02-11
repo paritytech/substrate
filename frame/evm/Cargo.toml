@@ -16,7 +16,7 @@ sp-core = { version = "2.0.0", default-features = false, path = "../../primitive
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
-primitive-types = { version = "0.6", default-features = false, features = ["rlp"] }
+primitive-types = { version = "0.6.2", default-features = false, features = ["rlp"] }
 rlp = { version = "0.4", default-features = false }
 evm = { version = "0.14", default-features = false }
 sha3 = { version = "0.8", default-features = false }
