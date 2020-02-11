@@ -104,7 +104,7 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 	}
 
 	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg) {
-		unhashed::put(Self::storage_map_final_key(key).as_ref(), &val.borrow())
+		unhashed::put(Self::storage_map_final_key(key).as_ref(), &val)
 	}
 
 	fn remove<KeyArg: EncodeLike<K>>(key: KeyArg) {
@@ -117,7 +117,7 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 
 		let ret = f(&mut val);
 		match G::from_query_to_optional_value(val) {
-			Some(ref val) => unhashed::put(final_key.as_ref(), &val.borrow()),
+			Some(ref val) => unhashed::put(final_key.as_ref(), &val),
 			None => unhashed::kill(final_key.as_ref()),
 		}
 		ret
@@ -129,7 +129,7 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 
 		let ret = f(&mut val);
 		match val {
-			Some(ref val) => unhashed::put(final_key.as_ref(), &val.borrow()),
+			Some(ref val) => unhashed::put(final_key.as_ref(), &val),
 			None => unhashed::kill(final_key.as_ref()),
 		}
 		ret
