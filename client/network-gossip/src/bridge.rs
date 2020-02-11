@@ -22,18 +22,12 @@ use sc_network::{Event, ReputationChange};
 
 use futures::{prelude::*, channel::mpsc};
 use libp2p::PeerId;
-use parking_lot::Mutex;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{borrow::Cow, pin::Pin, sync::Arc, task::{Context, Poll}};
 
 /// Wraps around an implementation of the `Network` crate and provides gossiping capabilities on
 /// top of it.
 pub struct GossipEngine<B: BlockT> {
-	inner: Arc<Mutex<GossipEngineInner<B>>>,
-	engine_id: ConsensusEngineId,
-}
-
-struct GossipEngineInner<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
 	network: Box<dyn Network<B> + Send>,
 	periodic_maintenance_interval: futures_timer::Delay,
@@ -41,7 +35,7 @@ struct GossipEngineInner<B: BlockT> {
 	engine_id: ConsensusEngineId,
 }
 
-impl<B: BlockT> Unpin for GossipEngineInner<B> {}
+impl<B: BlockT> Unpin for GossipEngine<B> {}
 
 impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
@@ -60,24 +54,17 @@ impl<B: BlockT> GossipEngine<B> {
 		network.register_notifications_protocol(engine_id, protocol_name.into());
 		state_machine.register_validator(&mut network, engine_id, validator);
 
-		let inner = Arc::new(Mutex::new(GossipEngineInner {
+		GossipEngine {
 			state_machine,
 			network: Box::new(network),
 			periodic_maintenance_interval: futures_timer::Delay::new(PERIODIC_MAINTENANCE_INTERVAL),
 			network_event_stream,
 			engine_id,
-		}));
-
-		let gossip_engine = GossipEngine {
-			inner: inner.clone(),
-			engine_id,
-		};
-
-		gossip_engine
+		}
 	}
 
 	pub fn report(&self, who: PeerId, reputation: ReputationChange) {
-		self.inner.lock().network.report_peer(who, reputation);
+		self.network.report_peer(who, reputation);
 	}
 
 	/// Registers a message without propagating it to any peers. The message
@@ -86,7 +73,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
 	pub fn register_gossip_message(
-		&self,
+		&mut self,
 		topic: B::Hash,
 		message: Vec<u8>,
 	) {
@@ -95,38 +82,34 @@ impl<B: BlockT> GossipEngine<B> {
 			data: message,
 		};
 
-		self.inner.lock().state_machine.register_message(topic, message);
+		self.state_machine.register_message(topic, message);
 	}
 
 	/// Broadcast all messages with given topic.
-	pub fn broadcast_topic(&self, topic: B::Hash, force: bool) {
-		let mut inner = self.inner.lock();
-		let inner = &mut *inner;
-		inner.state_machine.broadcast_topic(&mut *inner.network, topic, force);
+	pub fn broadcast_topic(&mut self, topic: B::Hash, force: bool) {
+		self.state_machine.broadcast_topic(&mut *self.network, topic, force);
 	}
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile).
-	pub fn messages_for(&self, topic: B::Hash)
+	pub fn messages_for(&mut self, topic: B::Hash)
 		-> mpsc::UnboundedReceiver<TopicNotification>
 	{
-		self.inner.lock().state_machine.messages_for(self.engine_id, topic)
+		self.state_machine.messages_for(self.engine_id, topic)
 	}
 
 	/// Send all messages with given topic to a peer.
 	pub fn send_topic(
-		&self,
+		&mut self,
 		who: &PeerId,
 		topic: B::Hash,
 		force: bool
 	) {
-		let mut inner = self.inner.lock();
-		let inner = &mut *inner;
-		inner.state_machine.send_topic(&mut *inner.network, who, topic, self.engine_id, force)
+		self.state_machine.send_topic(&mut *self.network, who, topic, self.engine_id, force)
 	}
 
 	/// Multicast a message to all peers.
 	pub fn gossip_message(
-		&self,
+		&mut self,
 		topic: B::Hash,
 		message: Vec<u8>,
 		force: bool,
@@ -136,19 +119,14 @@ impl<B: BlockT> GossipEngine<B> {
 			data: message,
 		};
 
-		let mut inner = self.inner.lock();
-		let inner = &mut *inner;
-		inner.state_machine.multicast(&mut *inner.network, topic, message, force)
+		self.state_machine.multicast(&mut *self.network, topic, message, force)
 	}
 
 	/// Send addressed message to the given peers. The message is not kept or multicast
 	/// later on.
-	pub fn send_message(&self, who: Vec<sc_network::PeerId>, data: Vec<u8>) {
-		let mut inner = self.inner.lock();
-		let inner = &mut *inner;
-
+	pub fn send_message(&mut self, who: Vec<sc_network::PeerId>, data: Vec<u8>) {
 		for who in &who {
-			inner.state_machine.send_message(&mut *inner.network, who, ConsensusMessage {
+			self.state_machine.send_message(&mut *self.network, who, ConsensusMessage {
 				engine_id: self.engine_id,
 				data: data.clone(),
 			});
@@ -160,19 +138,11 @@ impl<B: BlockT> GossipEngine<B> {
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
 	/// somewhere else.
 	pub fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
-		self.inner.lock().network.announce(block, associated_data);
+		self.network.announce(block, associated_data);
 	}
 }
 
 impl<B: BlockT> Future for GossipEngine<B> {
-	type Output = ();
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		self.inner.lock().poll_unpin(cx)
-	}
-}
-
-impl<B: BlockT> Future for GossipEngineInner<B> {
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
@@ -214,14 +184,5 @@ impl<B: BlockT> Future for GossipEngineInner<B> {
 		}
 
 		Poll::Pending
-	}
-}
-
-impl<B: BlockT> Clone for GossipEngine<B> {
-	fn clone(&self) -> Self {
-		GossipEngine {
-			inner: self.inner.clone(),
-			engine_id: self.engine_id.clone(),
-		}
 	}
 }

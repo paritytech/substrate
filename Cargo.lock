@@ -6275,7 +6275,6 @@ dependencies = [
  "libp2p",
  "log 0.4.8",
  "lru 0.1.17",
- "parking_lot 0.10.0",
  "sc-network",
  "sp-runtime",
  "wasm-timer",
