@@ -17,50 +17,11 @@
 //! # Offchain Worker Example Module
 //!
 //! The Offchain Worker Example: A simple example of a runtime module demonstrating
-//! concepts, APIs and structures common to most runtime modules.
+//! concepts, APIs and structures common to most offchain workers.
 //!
-//! Run `cargo doc --package pallet-example --open` to view this module's documentation.
+//! Run `cargo doc --package pallet-example-offchain-worker --open` to view this module's documentation.
 //!
-//! ### Documentation Guidelines:
-//!
-//! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs addressing issues with -->
-//! <!-- label 'S3-SRML' in https://github.com/paritytech/substrate-developer-hub/issues -->
-//! <ul>
-//!     <li>Documentation comments (i.e. <code>/// comment</code>) - should
-//!         accompany module functions and be restricted to the module interface,
-//!         not the internals of the module implementation. Only state inputs,
-//!         outputs, and a brief description that mentions whether calling it
-//!         requires root, but without repeating the source code details.
-//!         Capitalise the first word of each documentation comment and end it with
-//!         a full stop. See
-//!         <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
-//!         target="_blank"> Generic example of annotating source code with documentation comments</a></li>
-//!     <li>Self-documenting code - Try to refactor code to be self-documenting.</li>
-//!     <li>Code comments - Supplement complex code with a brief explanation, not every line of code.</li>
-//!     <li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,
-//!         <code>u64</code>)</li>
-//!     <li>Usage scenarios - should be simple doctests. The compiler should ensure they stay valid.</li>
-//!     <li>Extended tutorials - should be moved to external files and refer to.</li>
-//!     <!-- Original author of paragraph: @AmarRSingh -->
-//!     <li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
-//!     <li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
-//! </ul>
-//!
-//! ### Documentation Template:<br>
-//!
-//! Copy and paste this template from frame/example/src/lib.rs into file
-//! `frame/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs` of your own custom module and complete it.
-//! <details><p><pre>
-//! // Add heading with custom module name
-//!
-//! \# <INSERT_CUSTOM_MODULE_NAME> Module
-//!
-//! // Add simple description
-//!
-//! // Include the following links that shows what trait needs to be implemented to use the module
-//! // and the supported dispatchables that are documented in the Call enum.
-//!
-//! - \[`<INSERT_CUSTOM_MODULE_NAME>::Trait`](./trait.Trait.html)
+//! - \[`pallet_example_offchain_worker::Trait`](./trait.Trait.html)
 //! - \[`Call`](./enum.Call.html)
 //! - \[`Module`](./struct.Module.html)
 //!
@@ -258,7 +219,7 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, offchain};
-use sp_runtime::offchain::http;
+use sp_runtime::offchain::{http, Duration};
 use sp_core::crypto::KeyTypeId;
 use serde_json as json;
 
@@ -273,16 +234,13 @@ pub mod crypto {
 	app_crypto!(sr25519, KEY_TYPE);
 }
 
-// TODO [ToDr] docs
 pub trait Trait: frame_system::Trait {
+	type SubmitTransaction: offchain::SubmitSignedTransaction<Self, <Self as Trait>::Call>;
+
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// The overarching event type.
 	type Call: From<Call<Self>>;
-
-	/// Transaction submitter.
-	/// TODO [ToDr] Document
-	type SubmitTransaction: offchain::SubmitSignedTransaction<Self, <Self as Trait>::Call>;
 }
 
 decl_storage! {
@@ -301,18 +259,26 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		/// This is your public interface. Be extremely careful.
-		/// This is just a simple example of how to interact with the module from the external
-		/// world.
+		/// Submit new price to the list.
 		///
-		/// TODO [ToDr] Document that this happens on-chain
-		/// and is triggered by transaction.
+		/// This method is a public function of the module and can be called from within
+		/// a transaction. It appends given `price` to current list of prices.
+		///	In our example the `offchain worker` will create, sign & submit a transaction that
+		///	calls this function passing the price.
+		///
+		/// The transaction needs to be signed (see `ensure_signed`) check, so that the caller
+		/// pays fee to execute it.
+		/// This makes sure that it's not easy (or rather cheap) to attack the chain by submitting
+		/// excesive transactions, but note that it doesn't ensure the price oracle is actually
+		/// working and receives (and provides) meaningful data.
+		/// This example is not focused on correctness of the oracle itself, but rather it's
+		/// purpose is to showcase offchain worker capabilities.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		pub fn submit_price(origin, price: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			debug::info!("Adding to the average: {}", price);
-			let average = Prices::mutate(|prices| {
+			Prices::mutate(|prices| {
 				const MAX_LEN: usize = 64;
 
 				if prices.len() < MAX_LEN {
@@ -320,62 +286,146 @@ decl_module! {
 				} else {
 					prices[price as usize % MAX_LEN] = price;
 				}
-
-				// TODO Whatchout for overflows
-				prices.iter().sum::<u32>() / prices.len() as u32
 			});
+
+			let average = Self::average_price()
+				.expect("The average is not empty, because it was just mutated; qed");
 			debug::info!("Current average price is: {}", average);
 			// here we are raising the NewPrice event
 			Self::deposit_event(RawEvent::NewPrice(price, who));
 			Ok(())
 		}
 
-		// TODO [ToDr] Document
+		/// Offchain Worker entry point.
+		///
+		/// By implementing `fn offchain_worker` within `decl_module` you declare a new offchain
+		/// worker.
+		/// This function will be called when the node is fully synced and a new best block is
+		/// succesfuly imported.
+		/// Note that it's not guaranteed for offchain workers to run on EVERY block, there might
+		/// be cases where some blocks are skipped, or for some the worker runs twice (re-orgs),
+		/// so the code should be able to handle that.
+		/// You can use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
-			// TODO [ToDr] Document
-			debug::RuntimeLogger::init();
+			// It's a good idea to add logs to your offchain workers.
+			// Using the `frame_support::debug` module you have access to
+			// the same API exposed by the `log` crate.
+			// Note that having logs compiled to WASM may cause the size of the
+			// blob to increase significantly. You can use `RuntimeDebug` custom
+			// derive to hide details of the types in WASM or use `debug::native`
+			// namespace to produce logs only when the worker is running natively.
+			debug::native::info!("Hello World from offchain workers!");
 
-			let average: Option<u32> = Self::average_price();
-			debug::warn!("Hello World from offchain workers!");
-			debug::warn!("Current price is: {:?}", average);
-
-			// TODO [ToDr] Document
+			// Since off-chain workers are just part of the runtime code,
+			// they have direct access to the storage and other included pallets.
+			//
+			// We can easily import `frame_system` and retrieve a block hash
+			// of the parent block.
 			let block_hash = <system::Module<T>>::block_hash(block_number - 1.into());
-			debug::warn!("Current block is: {:?} ({:?})", block_number, block_hash);
+			debug::debug!("Current block is: {:?} ({:?})", block_number, block_hash);
 
-			let price = match Self::fetch_price() {
-				Ok(price) => {
-					debug::warn!("Got price: {} cents", price);
-					price
-				},
-				Err(_) => {
-					debug::warn!("Error fetching price.");
-					return
-				}
+			// It's a good practice to keep `fn offchain_worker()` function minimal,
+			// and move most of the code to separate `impl` block.
+			// Here we call a helper function to calculate current average price.
+			// This function reads storage entries of the current state.
+			let average: Option<u32> = Self::average_price();
+			debug::debug!("Current price is: {:?}", average);
+
+			// For this example we are going to send both
+			// signed and unsigned transactions depending on the block number.
+			// Usually it's enough to choose either options.
+			let send_signed = block_number % 2.into() == Zero::zero();
+			let res = if send_signed {
+				Self::fetch_price_and_send_signed()
+			} else {
+				Self::fetch_price_and_send_unsigned()
 			};
-
-			// TODO [ToDr] do something with unsigned transaction too.
-			Self::submit_price_on_chain(price);
+			if let Err(e) = res {
+				debug::error!("Error: {}", e);
+			}
 		}
 	}
 }
 
+/// Most of the functions are moved outside of the `decl_module` macro.
+///
+/// This greately helps with error messsages, as the ones inside the macro
+/// can sometimes be hard to debug.
 impl<T: Trait> Module<T> {
-	fn average_price() -> Option<u32> {
-		let prices = Prices::get();
-		if prices.is_empty() {
-			None
-		} else {
-			Some(prices.iter().sum::<u32>() / prices.len() as u32)
+	/// A helper function to fetch the price and send signed transaction.
+	fn fetch_price_and_send_signed() -> Result<(), String> {
+		use system::offchain::SubmitSignedTransaction;
+		// Firstly we check if there are any accounts in the local keystore
+		// that are capable of signing the transaction.
+		// If not it doesn't even make sense to make external HTTP requests, since
+		// we won't be able to put the results back on-chain.
+		if !T::SubmitTransaction::can_sign() {
+			return Err(
+				"No local accounts available. Consider adding one via `author_insertKey` RPC."
+			)?
 		}
+
+		// Make an external HTTP request to fetch the current price.
+		// Note this call will block until response is received.
+		let price = Self::fetch_price().map_err(|e| format!("{:?}", e))?;
+
+		// Received price is wrapped into a call to `submit_price` public function
+		// of this module. This means that the transaction, when executed,
+		// will simply call that function passing `price` as an argument.
+		let call = Call::submit_price(price);
+
+		// Using `SubmitTransaction` associated type we create and submit
+		// a transaction representing the call, we've just created.
+		// Submit signed will return a vector of results for all
+		// accounts that were found in the local keystore with expected `KEY_TYPE`.
+		let results = T::SubmitTransaction::submit_signed(call);
+		for (acc, res) in &results {
+			match res {
+				Ok(()) => debug::info!("[{:?}] Submitted price of {} cents", acc, price),
+				Err(e) => debug::error!("[{:?}] Failed to submit transaction: {:?}", acc, e),
+			}
+		}
+
+		Ok(())
 	}
 
-	fn fetch_price() -> Result<u32, http::Error> {
-		let pending = http::Request::get(
-			"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD"
-		).send().map_err(|_| http::Error::IoError)?;
+	fn fetch_price_and_send_unsigned() -> Result<(), String> {
+		unimplemented!()
+	}
 
-		let response = pending.wait()?;
+	/// Fetch current price and return the result in cents.
+	fn fetch_price() -> Result<u32, http::Error> {
+		// We want to keep the offchain worker execution time reasonable,
+		// so we set a hard-coded deadline to 2s to complete the external
+		// call.
+		// You can also wait idefinitely for the response, however you may still
+		// get a timeout coming from the host machine.
+		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(2_000));
+		// Initiate an external HTTP GET request.
+		// This is using high-level wrappers from `sp_runtime`, for the low-level calls that
+		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
+		// since we are running in a custom WASM execution environment we can't simply
+		// import the library here.
+		let request = http::Request::get(
+			"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD"
+		);
+		// We set the deadline for sending of the request, note that awaiting response can
+		// have a separate deadline. Next we send the request, before that it's also possible
+		// to alter request headers or stream body content in case of non-GET requests.
+		let pending = request
+			.deadline(deadline)
+			.send()
+			.map_err(|_| http::Error::IoError)?;
+
+		// The request is already being processed by the host, we are free to do anything
+		// else in the worker (we can send multiple concurrent requests too).
+		// At some point however we probably want to check the response though,
+		// so we can block current thread and wait for it to finish.
+		// Note that since the request is being driven by the host, we don't have to wait
+		// for the request to have it complete, we will just not read the response.
+		let response = pending.try_wait(deadline)
+			.map_err(|e| http::Error::DeadlineReached)?;
+		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
 			debug::warn!("Unexpected status code: {}", response.code);
 			return Err(http::Error::Unknown);
@@ -384,28 +434,27 @@ impl<T: Trait> Module<T> {
 		let body = response.body().collect::<Vec<u8>>();
 		let val: Result<json::Value, _> = json::from_slice(&body);
 		let price = val.ok().and_then(|v| v.get("USD").and_then(|v| v.as_f64()));
-		match price {
-			Some(pricef) => {
-				Ok((pricef * 100.) as u32)
-			},
+		let price = match price {
+			Some(pricef) => Ok((pricef * 100.) as u32),
 			None => {
 				let s = core::str::from_utf8(&body);
 				debug::warn!("Unable to extract price from the response: {:?}", s);
 				Err(http::Error::Unknown)
 			}
-		}
+		}?;
+
+		debug::warn!("Got price: {} cents", price);
+
+		Ok(price)
 	}
 
-	fn submit_price_on_chain(price: u32) {
-		use system::offchain::SubmitSignedTransaction;
-
-		let call = Call::submit_price(price);
-		let res = T::SubmitTransaction::submit_signed(call);
-
-		if res.is_empty() {
-			debug::error!("No local accounts found.");
+	/// Calculate current average price.
+	fn average_price() -> Option<u32> {
+		let prices = Prices::get();
+		if prices.is_empty() {
+			None
 		} else {
-			debug::info!("Sent transactions from: {:?}", res);
+			Some(prices.iter().fold(0, |a, b| a.saturating_add(b)) / prices.len() as u32)
 		}
 	}
 }

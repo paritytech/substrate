@@ -202,24 +202,17 @@ fn should_generate_heartbeats() {
 		// given
 		let block = 1;
 		System::set_block_number(block);
-		// buffer new validators
-		Session::rotate_session();
-		// enact the change and buffer another one
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
-		Session::rotate_session();
+		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
 
 		// when
-		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
-		ImOnline::send_heartbeats(2)
-			.unwrap()
-			// make sure to consume the iterator and check there are no errors.
-			.collect::<Result<Vec<_>, _>>().unwrap();
-
+		ImOnline::offchain_worker(block);
 
 		// then
 		let transaction = state.write().transactions.pop().unwrap();
-		// All validators have `0` as their session key, so we generate 3 transactions.
+		// All validators have `0` as their session key, so we generate 2 transactions.
 		assert_eq!(state.read().transactions.len(), 2);
+
+
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
 		let heartbeat = match ex.1 {

@@ -20,9 +20,10 @@ use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types,
 	weights::{GetDispatchInfo, Weight},
 };
-use sp_core::H256;
-// The testing primitives are very useful for avoiding having to work with signatures
-// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
+use sp_core::{
+	offchain::{OffchainExt, testing},
+	H256,
+};
 use sp_runtime::{
 	Perbill,
 	testing::{Header, TestXt},
@@ -92,16 +93,9 @@ impl Trait for Test {
 
 type Example = Module<Test>;
 
-// This function basically just builds a genesis storage key/value store according to
-// our desired mockup.
-fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	t.into()
-}
-
 #[test]
 fn it_aggregates_the_price() {
-	new_test_ext().execute_with(|| {
+	sp_io::TestExternalities::default().execute_with(|| {
 		assert_eq!(Example::average_price(), None);
 
 		assert_ok!(Example::submit_price(Origin::signed(Default::default()), 27));
@@ -113,8 +107,47 @@ fn it_aggregates_the_price() {
 }
 
 #[test]
-fn should_make_http_call_and_submit_transaction() {
+fn should_make_http_call_and_parse_result() {
+	let (offchain, state) = testing::TestOffchainExt::new();
+	let mut t = sp_io::TestExternalities::default();
+	t.register_extension(OffchainExt::new(offchain));
 
+	state.write().expect_request(0, testing::PendingRequest {
+		method: "GET".into(),
+		uri: "https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".into(),
+		response: Some(br#"{"USD": 155.23}"#.to_vec()),
+		sent: true,
+		..Default::default()
+	});
+
+	t.execute_with(|| {
+		// when
+		let price = Example::fetch_price().unwrap();
+		// then
+		assert_eq!(price, 15522);
+	});
+}
+
+#[test]
+fn should_submit_transaction_on_chain() {
+	let (offchain, state) = testing::TestOffchainExt::new();
+	let mut t = sp_io::TestExternalities::default();
+	t.register_extension(OffchainExt::new(offchain));
+
+	state.write().expect_request(0, testing::PendingRequest {
+		method: "GET".into(),
+		uri: "https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".into(),
+		response: Some(br#"{"USD": 155.23}"#.to_vec()),
+		sent: true,
+		..Default::default()
+	});
+
+	t.execute_with(|| {
+		// when
+		let price = Example::fetch_price().unwrap();
+		// then
+		assert_eq!(price, 15522);
+	});
 }
 
 #[test]
