@@ -3,11 +3,12 @@
 use std::fmt::Debug;
 use structopt::StructOpt;
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
+	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
+use crate::VersionInfo;
 use crate::execution_strategy::ExecutionStrategy;
 use crate::params::{WasmExecutionMethod, SharedParams};
 
@@ -70,7 +71,7 @@ impl BenchmarkCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		let spec = config.chain_spec.expect("chain_spec is always Some");
+		let spec = config.expect_chain_spec().clone();
 		let execution_strategy = self.execution.unwrap_or(ExecutionStrategy::Native).into();
 		let wasm_method = self.wasm_method.into();
 		let pallet = self.pallet;
@@ -78,6 +79,22 @@ impl BenchmarkCmd {
 		let steps = self.steps;
 		let repeat = self.repeat;
 		sc_service::chain_ops::benchmark_runtime::<BB, BC::NativeDispatch, _, _>(spec, execution_strategy, wasm_method, pallet, extrinsic, steps, repeat)?;
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<G, E, F>(
+		&self,
+		mut config: &mut Configuration<G, E>,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+
 		Ok(())
 	}
 }
