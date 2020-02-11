@@ -19,9 +19,7 @@ variables:
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       3
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
-  # SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_TARGET_DIR:                "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
-  # CARGO_INCREMENTAL:               0
   REGISTRY:                        registry.parity.io/parity/infrastructure/scripts
   CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
@@ -69,31 +67,31 @@ variables:
 
 #### stage:                        test
 
-build-linux-substrate:             &build-binary
-  stage:                           test
-  <<:                              *collect-artifacts
-  <<:                              *docker-env
-  # <<:                              *build-only
-  except:
-    variables:
-      - $DEPLOY_TAG
-  before_script:
-    - mkdir -p ./artifacts/substrate/
-  script:
-    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-    - cp ${CARGO_TARGET_DIR}/release/substrate ./artifacts/substrate/.
-    - echo -n "Substrate version = "
-    - if [ "${CI_COMMIT_TAG}" ]; then
-        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
-      else
-        ./artifacts/substrate/substrate --version |
-          sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-          tee ./artifacts/substrate/VERSION;
-      fi
-    - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
-    - printf '\n# building node-template\n\n'
-    - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-    - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
+# build-linux-substrate:             &build-binary
+#   stage:                           test
+#   <<:                              *collect-artifacts
+#   <<:                              *docker-env
+#   # <<:                              *build-only
+#   except:
+#     variables:
+#       - $DEPLOY_TAG
+#   before_script:
+#     - mkdir -p ./artifacts/substrate/
+#   script:
+#     - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
+#     - cp ${CARGO_TARGET_DIR}/release/substrate ./artifacts/substrate/.
+#     - echo -n "Substrate version = "
+#     - if [ "${CI_COMMIT_TAG}" ]; then
+#         echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
+#       else
+#         ./artifacts/substrate/substrate --version |
+#           sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+#           tee ./artifacts/substrate/VERSION;
+#       fi
+#     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+#     - printf '\n# building node-template\n\n'
+#     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
+#     - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
 
 #### stage:                        build
 
@@ -105,16 +103,17 @@ test-linux-stable:                 &test-linux
     # /ci-cache/substrate/targets/4460/build-linux-substrate
     # https://gitlab.parity.io/parity/substrate/-/jobs/339591
     # TODO: doesn't reuse build-linux-substrate cache, needs checking locally
-    CARGO_TARGET_DIR:              "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/build-linux-substrate"
+    # CARGO_TARGET_DIR:              "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/build-linux-substrate"
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS: -Cdebug-assertions=y
-  needs:
-    - build-linux-substrate
+  # needs:
+  #   - build-linux-substrate
   except:
     variables:
       - $DEPLOY_TAG
   script:
+    - env 
     - echo $CARGO_TARGET_DIR
     - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |
         tee output.log
@@ -122,55 +121,55 @@ test-linux-stable:                 &test-linux
   after_script:
     - echo "___Collecting warnings for check_warnings job___"
     - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
-  artifacts:
-    name:                          $CI_COMMIT_SHORT_SHA
-    expire_in:                     24 hrs
-    paths:
-      - ${CI_COMMIT_SHORT_SHA}_warnings.log
+  # artifacts:
+  #   name:                          $CI_COMMIT_SHORT_SHA
+  #   expire_in:                     24 hrs
+  #   paths:
+  #     - ${CI_COMMIT_SHORT_SHA}_warnings.log
 
-node-exits:
-  stage:                           build
-  <<:                              *docker-env
-  variables:
-    GIT_STRATEGY:                  none
-    CARGO_TARGET_DIR:              "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/build-linux-substrate"
-  needs:
-    - build-linux-substrate
-  except:
-    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
-  script:
-    - ${CARGO_TARGET_DIR}/release/substrate --dev &
-    - PID=$!
-    # Let the chain running for 60 seconds
-    - sleep 60
-    # Send `SIGINT` and give the process 30 seconds to end
-    - kill -INT $PID
-    - timeout 30 tail --pid=$PID -f /dev/null
+# node-exits:
+#   stage:                           build
+#   <<:                              *docker-env
+#   variables:
+#     GIT_STRATEGY:                  none
+#     CARGO_TARGET_DIR:              "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/build-linux-substrate"
+#   needs:
+#     - build-linux-substrate
+#   except:
+#     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+#   script:
+#     - ${CARGO_TARGET_DIR}/release/substrate --dev &
+#     - PID=$!
+#     # Let the chain running for 60 seconds
+#     - sleep 60
+#     # Send `SIGINT` and give the process 30 seconds to end
+#     - kill -INT $PID
+#     - timeout 30 tail --pid=$PID -f /dev/null
 
-test-linux-stable-int:
-  <<:                              *test-linux
-  except:
-    refs:
-      - /^v[0-9]+\.[0-9]+.*$/      # i.e. v1.0, v2.1rc1
-    variables:
-      - $DEPLOY_TAG
-  variables:
-    CARGO_TARGET_DIR:              "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/build-linux-substrate"
-  script:
-    - echo "___Logs will be partly shown at the end in case of failure.___"
-    - echo "___Full log will be saved to the job artifacts only in case of failure.___"
-    - WASM_BUILD_NO_COLOR=1 RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
-        time cargo test -p node-cli --release --verbose --locked -- --ignored
-        &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
-    - sccache -s
-  after_script:
-    - awk '/FAILED|^error\[/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
-  artifacts:
-    name:                          $CI_COMMIT_SHORT_SHA
-    when:                          on_failure
-    expire_in:                     24 hrs
-    paths:
-      - ${CI_COMMIT_SHORT_SHA}_int_failure.log
+# test-linux-stable-int:
+#   <<:                              *test-linux
+#   except:
+#     refs:
+#       - /^v[0-9]+\.[0-9]+.*$/      # i.e. v1.0, v2.1rc1
+#     variables:
+#       - $DEPLOY_TAG
+#   variables:
+#     CARGO_TARGET_DIR:              "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/build-linux-substrate"
+#   script:
+#     - echo "___Logs will be partly shown at the end in case of failure.___"
+#     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
+#     - WASM_BUILD_NO_COLOR=1 RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
+#         time cargo test -p node-cli --release --verbose --locked -- --ignored
+#         &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
+#     - sccache -s
+#   after_script:
+#     - awk '/FAILED|^error\[/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
+#   artifacts:
+#     name:                          $CI_COMMIT_SHORT_SHA
+#     when:                          on_failure
+#     expire_in:                     24 hrs
+#     paths:
+#       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
     
 
 # trigger the pipeline
@@ -189,21 +188,21 @@ test-linux-stable-int:
 #     branch:                        "28"
 #     strategy:                      depend
 
-check_warnings:
-  stage:                           publish
-  <<:                              *docker-env
-  except:
-    variables:
-      - $DEPLOY_TAG
-  variables:
-    GIT_STRATEGY:                  none
-  needs:
-    - test-linux-stable
-  script:
-    - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
-        cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
-        exit 1;
-      else
-        echo "___No warnings___";
-      fi
-  allow_failure:                   true
+# check_warnings:
+#   stage:                           publish
+#   <<:                              *docker-env
+#   except:
+#     variables:
+#       - $DEPLOY_TAG
+#   variables:
+#     GIT_STRATEGY:                  none
+#   needs:
+#     - test-linux-stable
+#   script:
+#     - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
+#         cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
+#         exit 1;
+#       else
+#         echo "___No warnings___";
+#       fi
+#   allow_failure:                   true
