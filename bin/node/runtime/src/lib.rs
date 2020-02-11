@@ -813,6 +813,7 @@ impl_runtime_apis! {
 		{
 			match module.as_slice() {
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
+				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
 				_ => return None,
 			}
 		}
