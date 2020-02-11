@@ -614,7 +614,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			prefixed_hash.extend(&hash[..]);
 			if have_storage_value(b"Session", b"NextKeys", &prefixed_hash) { refs += 1 }
 			if have_storage_value(b"Staking", b"Bonded", &hash) { refs += 1 }
-			if have_storage_value(b"Staking", b"Ledger", &hash) { refs += 1 }
 			put_storage_value(b"System", b"Account", &hash, (nonce, refs, &balances));
 		}
 	}

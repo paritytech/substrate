@@ -113,7 +113,7 @@ use sp_runtime::{
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
+	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnReapAccount, IsDeadAccount, Happened,
 		StoredMap
@@ -298,13 +298,13 @@ pub type RefCount = u8;
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
 pub struct AccountInfo<Index, AccountData> {
 	/// The number of transactions this account has sent.
-	nonce: Index,
+	pub nonce: Index,
 	/// The number of other modules that currently depend on this account's existence. The account
 	/// cannot be reaped until this is zero.
-	refcount: RefCount,
+	pub refcount: RefCount,
 	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
 	/// chains.
-	data: AccountData,
+	pub data: AccountData,
 }
 
 decl_storage! {
@@ -422,6 +422,11 @@ decl_error! {
 		///
 		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
 		FailedToExtractRuntimeVersion,
+
+		/// Suicide called when the account has non-default composite data.
+		NonDefaultComposite,
+		/// There is a non-zero reference count preventing the account from being purged.
+		NonZeroRefCount
 	}
 }
 
@@ -526,6 +531,17 @@ decl_module! {
 		fn kill_prefix(origin, prefix: Key) {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
+		}
+
+		/// Kill the sending account, assuming there are no references outstanding and the composite
+		/// data is equal to its default value.
+		#[weight = SimpleDispatchInfo::FixedOperational(25_000)]
+		fn suicide(origin) {
+			let who = ensure_signed(origin)?;
+			let account = Account::<T>::get(&who);
+			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
+			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
+			Account::<T>::remove(who);
 		}
 	}
 }

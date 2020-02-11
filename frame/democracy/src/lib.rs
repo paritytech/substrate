@@ -270,31 +270,10 @@ pub enum ProxyState<AccountId> {
 }
 
 impl<AccountId> ProxyState<AccountId> {
-	fn ensure_active(self) -> Result<AccountId, AccountId> {
-		match self {
-			ProxyState::Active(a) => Ok(a),
-			ProxyState::Open(a) => Err(a),
-		}
-	}
-
 	fn as_active(self) -> Option<AccountId> {
 		match self {
 			ProxyState::Active(a) => Some(a),
 			ProxyState::Open(_) => None,
-		}
-	}
-
-	fn ensure_open(self) -> Result<AccountId, AccountId> {
-		match self {
-			ProxyState::Active(a) => Err(a),
-			ProxyState::Open(a) => Ok(a),
-		}
-	}
-
-	fn as_open(self) -> Option<AccountId> {
-		match self {
-			ProxyState::Active(_) => None,
-			ProxyState::Open(a) => Some(a),
 		}
 	}
 }
