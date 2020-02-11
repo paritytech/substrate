@@ -484,27 +484,6 @@ pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-	use sc_network::config::identity::ed25519;
-	use super::*;
-
-	#[test]
-	fn tests_node_name_good() {
-		assert!(is_node_name_valid("short name").is_ok());
-	}
-
-	#[test]
-	fn tests_node_name_bad() {
-		assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
-		assert!(is_node_name_valid("Dots.not.Ok").is_err());
-		assert!(is_node_name_valid("http://visit.me").is_err());
-		assert!(is_node_name_valid("https://visit.me").is_err());
-		assert!(is_node_name_valid("www.visit.me").is_err());
-		assert!(is_node_name_valid("email@domain").is_err());
-	}
-}
-
 #[cfg(not(target_os = "unknown"))]
 fn input_keystore_password() -> Result<String, String> {
 	rpassword::read_password_from_tty(Some("Keystore password: "))
@@ -610,4 +589,125 @@ fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 	}
 
 	Ok(if is_all { Cors::All } else { Cors::List(origins) })
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sc_service::config::DatabaseConfig;
+
+	const TEST_VERSION_INFO: &'static VersionInfo = &VersionInfo {
+		name: "node-test",
+		version: "0.1.0",
+		commit: "some_commit",
+		executable_name: "node-test",
+		description: "description",
+		author: "author",
+		support_url: "http://example.org",
+		copyright_start_year: 2020,
+	};
+
+	#[test]
+	fn tests_node_name_good() {
+		assert!(is_node_name_valid("short name").is_ok());
+	}
+
+	#[test]
+	fn tests_node_name_bad() {
+		assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
+		assert!(is_node_name_valid("Dots.not.Ok").is_err());
+		assert!(is_node_name_valid("http://visit.me").is_err());
+		assert!(is_node_name_valid("https://visit.me").is_err());
+		assert!(is_node_name_valid("www.visit.me").is_err());
+		assert!(is_node_name_valid("email@domain").is_err());
+	}
+
+	#[test]
+	fn keystore_path_is_generated_correctly() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			Vec::new(),
+			None,
+			None,
+			None,
+			None::<()>,
+		);
+
+		for keystore_path in vec![None, Some("/keystore/path")] {
+			let args: Vec<&str> = vec![];
+			let mut cli = RunCmd::from_iter(args);
+			cli.keystore_path = keystore_path.clone().map(PathBuf::from);
+
+			let mut config = Configuration::default();
+			config.config_dir = Some(PathBuf::from("/test/path"));
+			config.chain_spec = Some(chain_spec.clone());
+			let chain_spec = chain_spec.clone();
+			cli.update_config(&mut config, move |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+
+			let expected_path = match keystore_path {
+				Some(path) => PathBuf::from(path),
+				None => PathBuf::from("/test/path/chains/test-id/keystore"),
+			};
+
+			assert_eq!(expected_path, config.keystore.path().unwrap().to_owned());
+		}
+	}
+
+	#[test]
+	fn ensure_load_spec_provide_defaults() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			vec!["boo".to_string()],
+			Some(TelemetryEndpoints::new(vec![("foo".to_string(), 42)])),
+			None,
+			None,
+			None::<()>,
+		);
+
+		let args: Vec<&str> = vec![];
+		let cli = RunCmd::from_iter(args);
+
+		let mut config = Configuration::from_version(TEST_VERSION_INFO);
+		cli.update_config(&mut config, |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+
+		assert!(config.chain_spec.is_some());
+		assert!(!config.network.boot_nodes.is_empty());
+		assert!(config.telemetry_endpoints.is_some());
+	}
+
+	#[test]
+	fn ensure_update_config_for_running_node_provides_defaults() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			vec![],
+			None,
+			None,
+			None,
+			None::<()>,
+		);
+
+		let args: Vec<&str> = vec![];
+		let cli = RunCmd::from_iter(args);
+
+		let mut config = Configuration::from_version(TEST_VERSION_INFO);
+		cli.init(&TEST_VERSION_INFO).unwrap();
+		cli.update_config(&mut config, |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+
+		assert!(config.config_dir.is_some());
+		assert!(config.database.is_some());
+		if let Some(DatabaseConfig::Path { ref cache_size, .. }) = config.database {
+			assert!(cache_size.is_some());
+		} else {
+			panic!("invalid config.database variant");
+		}
+		assert!(!config.name.is_empty());
+		assert!(config.network.config_path.is_some());
+		assert!(!config.network.listen_addresses.is_empty());
+	}
 }
