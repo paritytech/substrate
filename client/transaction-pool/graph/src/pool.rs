@@ -34,6 +34,7 @@ use sp_runtime::{
 	transaction_validity::{TransactionValidity, TransactionTag as Tag, TransactionValidityError},
 };
 use sp_transaction_pool::{error, PoolStatus};
+use wasm_timer::Instant;
 
 use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
 
@@ -122,6 +123,7 @@ pub struct Pool<B: ChainApi> {
 	validated_pool: Arc<ValidatedPool<B>>,
 }
 
+#[cfg(not(target_os = "unknown"))]
 impl<B: ChainApi> parity_util_mem::MallocSizeOf for Pool<B>
 where
 	B::Hash: parity_util_mem::MallocSizeOf,
@@ -189,7 +191,6 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		max: Option<usize>,
 	) -> Result<(), B::Error> {
-		use std::time::Instant;
 		log::debug!(target: "txpool",
 			"Fetching ready transactions (up to: {})",
 			max.map(|x| format!("{}", x)).unwrap_or_else(|| "all".into())
@@ -317,7 +318,7 @@ impl<B: ChainApi> Pool<B> {
 		// Make sure that we don't revalidate extrinsics that were part of the recently
 		// imported block. This is especially important for UTXO-like chains cause the
 		// inputs are pruned so such transaction would go to future again.
-		self.validated_pool.ban(&std::time::Instant::now(), known_imported_hashes.clone().into_iter());
+		self.validated_pool.ban(&Instant::now(), known_imported_hashes.clone().into_iter());
 
 		// Try to re-validate pruned transactions since some of them might be still valid.
 		// note that `known_imported_hashes` will be rejected here due to temporary ban.
@@ -469,10 +470,7 @@ impl<B: ChainApi> Clone for Pool<B> {
 
 #[cfg(test)]
 mod tests {
-	use std::{
-		collections::{HashMap, HashSet},
-		time::Instant,
-	};
+	use std::collections::{HashMap, HashSet};
 	use parking_lot::Mutex;
 	use futures::executor::block_on;
 	use super::*;
@@ -481,6 +479,7 @@ mod tests {
 	use codec::Encode;
 	use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
+	use wasm_timer::Instant;
 	use crate::base_pool::Limit;
 
 	const INVALID_NONCE: u64 = 254;

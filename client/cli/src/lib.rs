@@ -24,7 +24,6 @@ mod traits;
 mod params;
 mod execution_strategy;
 pub mod error;
-pub mod informant;
 mod runtime;
 mod node_key;
 
@@ -58,6 +57,7 @@ use params::{
 pub use params::{
 	SharedParams, ImportParams, ExecutionStrategy, Subcommand, RunCmd, BuildSpecCmd,
 	ExportBlocksCmd, ImportBlocksCmd, CheckBlockCmd, PurgeChainCmd, RevertCmd,
+	BenchmarkCmd,
 };
 pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
