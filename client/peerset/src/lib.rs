@@ -29,7 +29,7 @@ use std::{pin::Pin, task::Context, task::Poll};
 /// We don't accept nodes whose reputation is under this value.
 const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
 /// Reputation change for a node when we get disconnected from it.
-const DISCONNECT_REPUTATION_CHANGE: i32 = -10;
+const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// Reserved peers group ID
 const RESERVED_NODES: &'static str = "reserved";
 
