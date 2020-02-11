@@ -113,7 +113,7 @@ impl ChainApi for TestApi {
 	}
 
 	fn last_finalized(&self) -> BlockHash<Self> {
-		unimplemented!()
+		Default::default()
 	}
 
 	fn tree_route(&self, _from: BlockHash<Self>, _to: BlockHash<Self>) -> Result<TreeRoute<Self::Block>, Self::Error> {

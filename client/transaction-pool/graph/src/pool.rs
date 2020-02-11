@@ -38,7 +38,6 @@ use wasm_timer::Instant;
 
 use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
 use sp_blockchain::TreeRoute;
-use std::collections::HashSet;
 
 /// Modification notification event stream type;
 pub type EventStream<H> = mpsc::UnboundedReceiver<H>;
@@ -95,7 +94,7 @@ pub trait ChainApi: Send + Sync {
 	/// Returns the hash of the last finalized block
 	fn last_finalized(&self) -> BlockHash<Self>;
 
-	/// a method to get the metadata provider.
+	/// returns a list of blocks that exists between `from` and `to`
 	fn tree_route(&self, from: BlockHash<Self>, to: BlockHash<Self>) -> Result<TreeRoute<Self::Block>, Self::Error>;
 }
 
@@ -238,10 +237,8 @@ impl<B: ChainApi> Pool<B> {
 		// Prune all transactions that provide given tags
 		let prune_status = self.validated_pool.prune_tags(in_pool_tags)?;
 		let pruned_transactions = hashes.into_iter().cloned()
-			.chain(prune_status.pruned.iter().map(|tx| tx.hash.clone()))
-			// dedupe hashes.
-			.collect::<HashSet<_>>();
-		self.validated_pool.fire_pruned(at, pruned_transactions.into_iter())
+			.chain(prune_status.pruned.iter().map(|tx| tx.hash.clone()));
+		self.validated_pool.fire_pruned(at, pruned_transactions)
 	}
 
 	/// Prunes ready transactions.
@@ -563,7 +560,7 @@ mod tests {
 		}
 
 		fn last_finalized(&self) -> BlockHash<Self> {
-			unimplemented!()
+			Default::default()
 		}
 
 		fn tree_route(

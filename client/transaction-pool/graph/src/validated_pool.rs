@@ -399,8 +399,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 			});
 		// Fire `pruned` notifications for collected hashes and make sure to include
 		// `known_imported_hashes` since they were just imported as part of the block.
-		let hashes = hashes.chain(known_imported_hashes.into_iter()).collect::<HashSet<_>>();
-		self.fire_pruned(at, hashes.into_iter())?;
+		let hashes = hashes.chain(known_imported_hashes.into_iter());
+		self.fire_pruned(at, hashes)?;
 
 		// perform regular cleanup of old transactions in the pool
 		// and update temporary bans.
@@ -417,8 +417,14 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let header_hash = self.api.block_id_to_hash(at)?
 			.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?;
 		let mut listener = self.listener.write();
+		let mut set = HashSet::new();
 		for h in hashes {
-			listener.pruned(header_hash, &h);
+			// `hashes` has possibly duplicate hashes.
+			// we'd like to send out the `InBlock` notification only once.
+			if !set.contains(&h) {
+				set.insert(h.clone());
+				listener.pruned(header_hash, &h);
+			}
 		}
 		Ok(())
 	}
