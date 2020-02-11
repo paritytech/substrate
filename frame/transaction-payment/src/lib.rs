@@ -306,7 +306,7 @@ mod tests {
 
 	parameter_types! {
 		pub const CreationFee: u64 = 0;
-		pub const ExistentialDeposit: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 	}
 
 	impl pallet_balances::Trait for Runtime {
