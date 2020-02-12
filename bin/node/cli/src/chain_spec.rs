@@ -295,7 +295,8 @@ pub fn testnet_genesis(
 		pallet_membership_Instance1: Some(Default::default()),
 		pallet_treasury: Some(Default::default()),
 		pallet_society: Some(SocietyConfig {
-			members: endowed_accounts[0..3].to_vec(),
+			members: endowed_accounts.iter().cloned()
+				.collect::<Vec<_>>()[..(num_endowed_accounts + 1) / 2].to_vec(),
 			pot: 0,
 			max_members: 999,
 		}),
@@ -359,6 +360,7 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::service::{new_full, new_light};
 	use sc_service_test;
+	use sp_runtime::BuildStorage;
 
 	fn local_testnet_genesis_instant_single() -> GenesisConfig {
 		testnet_genesis(
@@ -407,5 +409,20 @@ pub(crate) mod tests {
 			|config| new_full(config),
 			|config| new_light(config),
 		);
+	}
+
+	#[test]
+	fn test_create_development_chain_spec() {
+		development_config().build_storage().unwrap();
+	}
+
+	#[test]
+	fn test_create_local_testnet_chain_spec() {
+		local_testnet_config().build_storage().unwrap();
+	}
+
+	#[test]
+	fn test_staging_test_net_chain_spec() {
+		staging_testnet_config().build_storage().unwrap();
 	}
 }
