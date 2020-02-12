@@ -75,8 +75,7 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[cfg_attr(not(feature = "std"), derive(Default))]
-		#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, CompactAs)]
+		#[derive(Encode, Decode, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, CompactAs)]
 		pub struct $name($type);
 
 		impl PerThing for $name {
@@ -177,13 +176,13 @@ macro_rules! implement_per_thing {
 			pub const fn from_percent_const(x: $type) -> Self {
 				Self([x, 100][(x > 100) as usize] * ($max / 100))
 			}
-		}
 
-		/// For testing, this can be the default.
-		#[cfg(feature = "std")]
-		impl Default for $name {
-			fn default() -> Self {
-				Self::one()
+			/// Everything.
+			///
+			/// To avoid having to import `PerThing` when one needs to be used in test mocks.
+			#[cfg(feature = "std")]
+			pub fn one() -> Self {
+				<Self as PerThing>::one()
 			}
 		}
 

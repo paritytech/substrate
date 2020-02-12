@@ -905,7 +905,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Default::default();
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
 		type Origin = Origin;
