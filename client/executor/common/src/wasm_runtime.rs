@@ -17,7 +17,7 @@
 //! Definitions for a wasm runtime.
 
 use crate::error::Error;
-use sp_wasm_interface::Function;
+use sp_wasm_interface::{Function, Value};
 
 /// A trait that defines an abstract wasm runtime.
 ///
@@ -34,4 +34,7 @@ pub trait WasmRuntime {
 
 	/// Call a method in the Substrate runtime by name. Returns the encoded result on success.
 	fn call(&mut self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error>;
+
+	/// Get the value from a global with the given `name`.
+	fn get_global_val(&mut self, name: &str) -> Result<Option<Value>, Error>;
 }

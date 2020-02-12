@@ -29,7 +29,7 @@ use sc_executor_common::{
 	error::{Error, Result, WasmError},
 	wasm_runtime::WasmRuntime,
 };
-use sp_wasm_interface::{Pointer, WordSize, Function};
+use sp_wasm_interface::{Pointer, WordSize, Function, Value};
 use sp_runtime_interface::unpack_ptr_and_len;
 
 use std::{cell::RefCell, collections::HashMap, convert::TryFrom, rc::Rc};
@@ -79,6 +79,24 @@ impl WasmRuntime for WasmtimeRuntime {
 			self.memory_index,
 			self.heap_pages,
 		)
+	}
+
+	fn get_global_val(&mut self, name: &str) -> Result<Option<Value>> {
+		// Yeah, there is no better way currently :(
+		let instance = self.module.instantiate().map_err(|e| Error::Other(e.to_string()))?;
+		match unsafe { instance.lookup_immutable(name) } {
+			Some(Export::Global { definition, global, .. }) => {
+				match global.ty {
+					ir::types::I32 => Ok(Some(unsafe { Value::I32(*(*definition).as_i32()) })),
+					ir::types::I64 => Ok(Some(unsafe { Value::I64(*(*definition).as_i64()) })),
+					ir::types::F32 => Ok(Some(unsafe { Value::F32(*(*definition).as_f32_bits()) })),
+					ir::types::F64 => Ok(Some(unsafe { Value::F64(*(*definition).as_f64_bits()) })),
+					_ => Err(format!("Global is of unknown type: {}", global.ty).into()),
+				}
+			},
+			None => Ok(None),
+			Some(_) => Err(format!("`{}` is not a global", name).into())
+		}
 	}
 }
 
@@ -525,7 +543,7 @@ fn get_heap_base(instance: &InstanceHandle) -> Result<u32> {
 	// - The defined value is checked to be an I32, which can be read safely as a u32
 	unsafe {
 		match instance.lookup_immutable("__heap_base") {
-			Some(Export::Global { definition, vmctx: _, global })
+			Some(Export::Global { definition, global, .. })
 				if global.ty == ir::types::I32 =>
 				Ok(*(*definition).as_u32()),
 			_ => return Err(Error::HeapBaseNotFoundOrInvalid),
