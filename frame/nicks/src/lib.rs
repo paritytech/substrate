@@ -287,7 +287,7 @@ mod tests {
 		type ModuleToIndex = ();
 	}
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Test {
