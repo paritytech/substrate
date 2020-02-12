@@ -114,26 +114,58 @@ where
 	F: FnOnce(Configuration<G, E>) -> Result<T, sc_service::error::Error>,
 	T: AbstractService + Unpin,
 {
-	let mut runtime = build_runtime()?;
+	wait_for_drop({
+		let mut runtime = build_runtime()?;
 
-	config.task_executor = {
-		let runtime_handle = runtime.handle().clone();
-		Some(Arc::new(move |fut| { runtime_handle.spawn(fut); }))
-	};
+		config.task_executor = {
+			let runtime_handle = runtime.handle().clone();
+			Some(Arc::new(move |fut| { runtime_handle.spawn(fut); }))
+		};
 
-	let service = service_builder(config)?;
+		let service = service_builder(config)?;
+		let client = service.client();
+		let weak_client = Arc::downgrade(&client);
 
-	let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
-	let _informant_handle = runtime.spawn(informant_future);
+		let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
+		let _informant_handle = runtime.spawn(informant_future);
 
-	// we eagerly drop the service so that the internal exit future is fired,
-	// but we need to keep holding a reference to the global telemetry guard
-	let _telemetry = service.telemetry();
+		// we eagerly drop the service so that the internal exit future is fired,
+		// but we need to keep holding a reference to the global telemetry guard
+		let _telemetry = service.telemetry();
 
-	let f = service.fuse();
-	pin_mut!(f);
+		let f = service.fuse();
+		pin_mut!(f);
 
-	runtime.block_on(main(f)).map_err(|e| e.to_string())?;
+		runtime.block_on(main(f)).map_err(|e| e.to_string())?;
+
+		weak_client
+	});
 
 	Ok(())
+}
+
+// This code comes directly from https://github.com/paritytech/parity-ethereum/pull/7695
+fn wait_for_drop<T>(w: std::sync::Weak<T>) {
+	let sleep_duration = std::time::Duration::from_secs(1);
+	let warn_timeout = std::time::Duration::from_secs(60);
+	let max_timeout = std::time::Duration::from_secs(300);
+
+	let instant = std::time::Instant::now();
+	let mut warned = false;
+
+	while instant.elapsed() < max_timeout {
+		eprintln!("try");
+		if w.upgrade().is_none() {
+			return;
+		}
+
+		if !warned && instant.elapsed() > warn_timeout {
+			warned = true;
+			eprintln!("Shutdown is taking longer than expected.");
+		}
+
+		std::thread::sleep(sleep_duration);
+	}
+
+	eprintln!("Shutdown timeout reached, exiting uncleanly.");
 }

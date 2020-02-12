@@ -694,7 +694,7 @@ pub trait ServiceBuilderCommand {
 
 	/// Performs a revert of `blocks` blocks.
 	fn revert_chain(
-		&self,
+		self,
 		blocks: NumberFor<Self::Block>
 	) -> Result<(), Error>;
 
