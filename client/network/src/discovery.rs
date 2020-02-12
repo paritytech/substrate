@@ -87,6 +87,8 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	/// If false, `addresses_of_peer` won't return any private IPv4 address, except for the ones
 	/// stored in `user_defined`.
 	allow_private_ipv4: bool,
+	/// Number of active connections over which we interrupt the discovery process.
+	discovery_only_if_under_num: u64,
 }
 
 impl<TSubstream> DiscoveryBehaviour<TSubstream> {
@@ -98,6 +100,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 		user_defined: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 		allow_private_ipv4: bool,
+		discovery_only_if_under_num: u64,
 	) -> Self {
 		if enable_mdns {
 			#[cfg(target_os = "unknown")]
@@ -120,6 +123,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 			local_peer_id: local_public_key.into_peer_id(),
 			num_connections: 0,
 			allow_private_ipv4,
+			discovery_only_if_under_num,
 			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
 				match Mdns::new() {
@@ -331,11 +335,19 @@ where
 
 		// Poll the stream that fires when we need to start a random Kademlia query.
 		while let Poll::Ready(_) = self.next_kad_random_query.poll_unpin(cx) {
-			let random_peer_id = PeerId::random();
-			debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
-				{:?}", random_peer_id);
+			if self.num_connections < self.discovery_only_if_under_num {
+				let random_peer_id = PeerId::random();
+				debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
+					{:?}", random_peer_id);
 
-			self.kademlia.get_closest_peers(random_peer_id);
+				self.kademlia.get_closest_peers(random_peer_id);
+			} else {
+				debug!(
+					target: "sub-libp2p",
+					"Kademlia paused due to high number of connections ({})",
+					self.num_connections
+				);
+			}
 
 			// Schedule the next random query with exponentially increasing delay,
 			// capped at 60 seconds.
@@ -435,6 +447,10 @@ where
 				NetworkBehaviourAction::GenerateEvent(event) => {
 					match event {
 						MdnsEvent::Discovered(list) => {
+							if self.num_connections >= self.discovery_only_if_under_num {
+								continue;
+							}
+
 							self.discoveries.extend(list.into_iter().map(|(peer_id, _)| peer_id));
 							if let Some(peer_id) = self.discoveries.pop_front() {
 								let ev = DiscoveryOut::Discovered(peer_id);
@@ -502,7 +518,7 @@ mod tests {
 				let user_defined = user_defined.clone();
 				let keypair_public = keypair.public();
 				async move {
-					DiscoveryBehaviour::new(keypair_public, user_defined, false, true).await
+					DiscoveryBehaviour::new(keypair_public, user_defined, false, true, 50).await
 				}
 			});
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());

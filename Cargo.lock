@@ -6034,6 +6034,8 @@ dependencies = [
 name = "sc-network"
 version = "0.8.0"
 dependencies = [
+ "assert_matches",
+ "async-std",
  "bitflags",
  "bytes 0.5.4",
  "derive_more",
@@ -6050,8 +6052,11 @@ dependencies = [
  "linked_hash_set",
  "log 0.4.8",
  "lru 0.4.3",
+ "nohash-hasher",
  "parity-scale-codec",
  "parking_lot 0.10.0",
+ "prost",
+ "prost-build",
  "quickcheck",
  "rand 0.7.3",
  "rustc-hex",
@@ -6073,11 +6078,14 @@ dependencies = [
  "sp-runtime",
  "sp-test-primitives",
  "substrate-test-client",
+ "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
  "unsigned-varint",
  "void",
  "wasm-timer",
+ "yamux",
  "zeroize 1.1.0",
 ]
 
@@ -7445,6 +7453,7 @@ dependencies = [
  "hyper 0.12.35",
  "itertools",
  "jsonrpc-core-client",
+ "libp2p",
  "node-primitives",
  "node-runtime",
  "pallet-balances",
@@ -7454,6 +7463,7 @@ dependencies = [
  "rpassword",
  "rustc-hex",
  "sc-rpc",
+ "serde_json",
  "sp-core",
  "sp-runtime",
  "substrate-bip39",
@@ -8269,7 +8279,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.7.3",
+ "rand 0.3.23",
 ]
 
 [[package]]

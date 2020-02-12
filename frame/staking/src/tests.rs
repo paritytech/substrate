@@ -2066,7 +2066,8 @@ fn slash_in_old_span_does_not_deselect() {
 				),
 				reporters: vec![],
 			}],
-			&[Perbill::from_percent(100)],
+			// NOTE: A 100% slash here would clean up the account, causing de-registration.
+			&[Perbill::from_percent(95)],
 			1,
 		);
 
@@ -2272,7 +2273,7 @@ fn only_slash_for_max_in_era() {
 
 #[test]
 fn garbage_collection_after_slashing() {
-	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(2).build().execute_with(|| {
 		assert_eq!(Balances::free_balance(11), 256_000);
 
 		on_offence_now(

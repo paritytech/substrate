@@ -19,7 +19,7 @@ use crate::{
 	Event, protocol::event::DhtEvent
 };
 use crate::{ExHashT, specialization::NetworkSpecialization};
-use crate::protocol::{CustomMessageOutcome, Protocol};
+use crate::protocol::{self, light_client_handler, CustomMessageOutcome, Protocol};
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
@@ -42,7 +42,10 @@ pub struct Behaviour<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	debug_info: debug_info::DebugInfoBehaviour<Substream<StreamMuxerBox>>,
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour<Substream<StreamMuxerBox>>,
-
+	/// Block request handling.
+	block_requests: protocol::BlockRequests<Substream<StreamMuxerBox>, B>,
+	/// Light client request handling.
+	light_client_handler: protocol::LightClientHandler<Substream<StreamMuxerBox>, B>,
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
 	events: Vec<BehaviourOut<B>>,
@@ -65,6 +68,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 		allow_private_ipv4: bool,
+		discovery_only_if_under_num: u64,
+		block_requests: protocol::BlockRequests<Substream<StreamMuxerBox>, B>,
+		light_client_handler: protocol::LightClientHandler<Substream<StreamMuxerBox>, B>,
 	) -> Self {
 		Behaviour {
 			substrate,
@@ -73,9 +79,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 				local_public_key,
 				known_addresses,
 				enable_mdns,
-				allow_private_ipv4
+				allow_private_ipv4,
+				discovery_only_if_under_num,
 			).await,
-			events: Vec::new(),
+			block_requests,
+			light_client_handler,
+			events: Vec::new()
 		}
 	}
 
@@ -116,6 +125,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 	/// Starts putting a record into DHT. Will later produce either a `ValuePut` or a `ValuePutFailed` event.
 	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
 		self.discovery.put_value(key, value);
+	}
+
+	/// Issue a light client request.
+	#[allow(unused)]
+	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::Error> {
+		self.light_client_handler.request(r)
 	}
 }
 

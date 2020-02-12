@@ -476,22 +476,6 @@ sp_core::impl_maybe_marker!(
 	trait MaybeMallocSizeOf: parity_util_mem::MallocSizeOf;
 );
 
-/// A type that provides a randomness beacon.
-pub trait RandomnessBeacon {
-	/// Returns 32 bytes of random data. The output will change eventually, but
-	/// is not guaranteed to be different between any two calls.
-	///
-	/// # Security
-	///
-	/// This MUST NOT be used for gambling, as it can be influenced by a
-	/// malicious validator in the short term. It MAY be used in many
-	/// cryptographic protocols, however, so long as one remembers that this
-	/// (like everything else on-chain) is public. For example, it can be
-	/// used where a number is needed that cannot have been chosen by an
-	/// adversary, for purposes such as public-coin zero-knowledge proofs.
-	fn random() -> [u8; 32];
-}
-
 /// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static {}
 impl<T: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static> Member for T {}
@@ -1347,6 +1331,55 @@ pub trait BenchmarkingSetup<T, Call, RawOrigin> {
 
 	/// Set up the storage, and prepare a call and caller to test in a single run of the benchmark.
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(Call, RawOrigin), &'static str>;
+}
+
+/// Creates a `SelectedBenchmark` enum implementing `BenchmarkingSetup`.
+///
+/// Every variant must implement [`BenchmarkingSetup`](crate::traits::BenchmarkingSetup).
+///
+/// ```nocompile
+///
+/// struct Transfer;
+/// impl BenchmarkingSetup for Transfer { ... }
+///
+/// struct SetBalance;
+/// impl BenchmarkingSetup for SetBalance { ... }
+///
+/// selected_benchmark!(Transfer, SetBalance);
+/// ```
+#[macro_export]
+macro_rules! selected_benchmark {
+	($($bench:ident),*) => {
+		// The list of available benchmarks for this pallet.
+		enum SelectedBenchmark {
+			$( $bench, )*
+		}
+
+		// Allow us to select a benchmark from the list of available benchmarks.
+		impl<T: Trait> $crate::traits::BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
+			fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+				match self {
+					$( Self::$bench => <$bench as $crate::traits::BenchmarkingSetup<
+						T,
+						Call<T>,
+						RawOrigin<T::AccountId>,
+					>>::components(&$bench), )*
+				}
+			}
+
+			fn instance(&self, components: &[(BenchmarkParameter, u32)])
+				-> Result<(Call<T>, RawOrigin<T::AccountId>), &'static str>
+			{
+				match self {
+					$( Self::$bench => <$bench as $crate::traits::BenchmarkingSetup<
+						T,
+						Call<T>,
+						RawOrigin<T::AccountId>,
+					>>::instance(&$bench, components), )*
+				}
+			}
+		}
+	};
 }
 
 #[cfg(test)]
