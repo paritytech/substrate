@@ -14,7 +14,7 @@ bytes = "0.4.12"
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
 derive_more = "0.99.2"
 futures = "0.3.1"
-futures-timer = "2.0"
+futures-timer = "3.0.1"
 libp2p = { version = "0.15.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"
 prost = "0.6.1"

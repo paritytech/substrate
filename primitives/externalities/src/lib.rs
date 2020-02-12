@@ -215,6 +215,20 @@ pub trait Externalities: ExtensionStore {
 	/// The changes stay attached to parent transaction layer and could still be discarded.
 	/// The transactional layer is closed, a new one is started if this was the last layer.
 	fn storage_commit_transaction(&mut self);
+
+	/// This function modify prospective transactional state,
+	/// it is only for benchmarking purpose and should not be
+	/// use for different purposes.
+	fn wipe(&mut self) {
+		unimplemented!()
+	}
+
+	/// This function modify prospective transactional state,
+	/// it is only for benchmarking purpose and should not be
+	/// use for different purposes.
+	fn commit(&mut self) {
+		unimplemented!()
+	}
 }
 
 /// Extension for the [`Externalities`] trait.

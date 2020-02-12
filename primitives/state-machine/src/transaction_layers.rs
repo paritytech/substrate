@@ -580,7 +580,6 @@ impl GCConfiguration {
 pub mod fuzz {
 	use crate::overlayed_changes::OverlayedChanges;
 	use std::collections::HashMap;
-	use super::Layers;
 
 	/// Size of key, max 255
 	const KEY_SPACE: u8 = 20;

@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,27 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The transaction factory can operate in different modes. See
-//! the `simple_mode` and `complex_mode` modules for details.
+use std::{process::{Child, ExitStatus}, thread, time::Duration};
 
-use std::str::FromStr;
-
-/// Token distribution modes.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Mode {
-	MasterToN,
-	MasterTo1,
-	MasterToNToM
-}
-
-impl FromStr for Mode {
-	type Err = String;
-	fn from_str(mode: &str) -> Result<Self, Self::Err> {
-		match mode {
-			"MasterToN" => Ok(Mode::MasterToN),
-			"MasterTo1" => Ok(Mode::MasterTo1),
-			"MasterToNToM" => Ok(Mode::MasterToNToM),
-			_ => Err(format!("Invalid mode: {}", mode)),
+/// Wait for the given `child` the given ammount of `secs`.
+///
+/// Returns the `Some(exit status)` or `None` if the process did not finish in the given time.
+pub fn wait_for(child: &mut Child, secs: usize) -> Option<ExitStatus> {
+	for _ in 0..secs {
+		match child.try_wait().unwrap() {
+			Some(status) => return Some(status),
+			None => thread::sleep(Duration::from_secs(1)),
 		}
 	}
+	eprintln!("Took to long to exit. Killing...");
+	let _ = child.kill();
+	child.wait().unwrap();
+
+	None
 }

@@ -25,7 +25,7 @@ use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
-use log::{debug, warn};
+use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, Justification};
 use std::{iter, task::Context, task::Poll};
@@ -65,6 +65,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 		allow_private_ipv4: bool,
+		discovery_only_if_under_num: u64,
 	) -> Self {
 		Behaviour {
 			substrate,
@@ -73,7 +74,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 				local_public_key,
 				known_addresses,
 				enable_mdns,
-				allow_private_ipv4
+				allow_private_ipv4,
+				discovery_only_if_under_num,
 			).await,
 			events: Vec::new(),
 		}

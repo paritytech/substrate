@@ -20,7 +20,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
-#![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 
 #![cfg_attr(feature = "std",
    doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
@@ -791,6 +790,36 @@ pub trait Logging {
 	}
 }
 
+/// Interface that provides functions for benchmarking the runtime.
+#[runtime_interface]
+pub trait Benchmarking {
+	/// Get the number of nanoseconds passed since the UNIX epoch
+	///
+	/// WARNING! This is a non-deterministic call. Do not use this within
+	/// consensus critical logic.
+	fn current_time() -> u128 {
+		std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
+			.expect("Unix time doesn't go backwards; qed")
+			.as_nanos()
+	}
+
+	/// Reset the trie database to the genesis state.
+	///
+	/// WARNING! This operation breaks transactional design, should only be use
+	/// for benchmarking.
+	fn wipe_db(&mut self) {
+		self.wipe()
+	}
+
+	/// Commit pending storage changes to the trie database and clear the database cache.
+	///
+	/// WARNING! This operation breaks transactional design, should only be use
+	/// for benchmarking.
+	fn commit_db(&mut self) {
+		self.commit()
+	}
+}
+
 /// Wasm-only interface that provides functions for interacting with the sandbox.
 #[runtime_interface(wasm_only)]
 pub trait Sandbox {
@@ -911,7 +940,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 	unsafe {
 		let message = sp_std::alloc::format!("{}", info);
 		logging::log(LogLevel::Error, "runtime", message.as_bytes());
-		core::intrinsics::abort()
+		core::arch::wasm32::unreachable();
 	}
 }
 
@@ -921,7 +950,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 pub fn oom(_: core::alloc::Layout) -> ! {
 	unsafe {
 		logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
-		core::intrinsics::abort();
+		core::arch::wasm32::unreachable();
 	}
 }
 

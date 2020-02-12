@@ -17,13 +17,17 @@
 //! BABE authority selection and slot claiming.
 
 use merlin::Transcript;
-use sp_consensus_babe::{AuthorityId, BabeAuthorityWeight, BABE_ENGINE_ID, BABE_VRF_PREFIX};
-use sp_consensus_babe::{Epoch, SlotNumber, AuthorityPair, BabePreDigest, BabeConfiguration};
+use sp_consensus_babe::{
+	AuthorityId, BabeAuthorityWeight, BABE_ENGINE_ID, BABE_VRF_PREFIX,
+	SlotNumber, AuthorityPair, BabeConfiguration
+};
+use sp_consensus_babe::digests::PreDigest;
 use sp_core::{U256, blake2_256};
 use codec::Encode;
 use schnorrkel::vrf::VRFInOut;
 use sp_core::Pair;
 use sc_keystore::KeyStorePtr;
+use super::Epoch;
 
 /// Calculates the primary selection threshold for a given authority, taking
 /// into account `c` (`1 - c` represents the probability of a slot being empty).
@@ -104,7 +108,7 @@ fn claim_secondary_slot(
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
 	keystore: &KeyStorePtr,
 	randomness: [u8; 32],
-) -> Option<(BabePreDigest, AuthorityPair)> {
+) -> Option<(PreDigest, AuthorityPair)> {
 	if authorities.is_empty() {
 		return None;
 	}
@@ -124,7 +128,7 @@ fn claim_secondary_slot(
 		})
 	{
 		if pair.public() == *expected_author {
-			let pre_digest = BabePreDigest::Secondary {
+			let pre_digest = PreDigest::Secondary {
 				slot_number,
 				authority_index: authority_index as u32,
 			};
@@ -145,7 +149,7 @@ pub(super) fn claim_slot(
 	epoch: &Epoch,
 	config: &BabeConfiguration,
 	keystore: &KeyStorePtr,
-) -> Option<(BabePreDigest, AuthorityPair)> {
+) -> Option<(PreDigest, AuthorityPair)> {
 	claim_primary_slot(slot_number, epoch, config.c, keystore)
 		.or_else(|| {
 			if config.secondary_slots {
@@ -175,7 +179,7 @@ fn claim_primary_slot(
 	epoch: &Epoch,
 	c: (u64, u64),
 	keystore: &KeyStorePtr,
-) -> Option<(BabePreDigest, AuthorityPair)> {
+) -> Option<(PreDigest, AuthorityPair)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 	let keystore = keystore.read();
 
@@ -196,7 +200,7 @@ fn claim_primary_slot(
 		let pre_digest = get_keypair(&pair)
 			.vrf_sign_after_check(transcript, |inout| super::authorship::check_primary_threshold(inout, threshold))
 			.map(|s| {
-				BabePreDigest::Primary {
+				PreDigest::Primary {
 					slot_number,
 					vrf_output: s.0.to_output(),
 					vrf_proof: s.1,
