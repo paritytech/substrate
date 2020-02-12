@@ -117,19 +117,19 @@ impl Precompiles for () {
 
 struct WeightForCallCreate;
 
-impl WeighData<(&H160, &Vec<u8>, &U256, &u32, &U256)> for WeightForCallCreate {
+impl WeighData<(&H160, &Vec<u8>, &U256, &u32, &U256, &Option<U256>)> for WeightForCallCreate {
 	fn weigh_data(
 		&self,
-		(_, _, _, gas_provided, gas_price): (&H160, &Vec<u8>, &U256, &u32, &U256)
+		(_, _, _, gas_provided, gas_price, _): (&H160, &Vec<u8>, &U256, &u32, &U256, &Option<U256>)
 	) -> Weight {
 		(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_provided)
 	}
 }
 
-impl WeighData<(&Vec<u8>, &U256, &u32, &U256)> for WeightForCallCreate {
+impl WeighData<(&Vec<u8>, &U256, &u32, &U256, &Option<U256>)> for WeightForCallCreate {
 	fn weigh_data(
 		&self,
-		(_, _, gas_provided, gas_price): (&Vec<u8>, &U256, &u32, &U256)
+		(_, _, gas_provided, gas_price, _): (&Vec<u8>, &U256, &u32, &U256, &Option<U256>)
 	) -> Weight {
 		(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_provided)
 	}
@@ -174,6 +174,8 @@ decl_event! {
 	pub enum Event {
 		/// Ethereum events from contracts.
 		Log(Log),
+		/// A contract has been created at given address.
+		Created(H160),
 	}
 }
 
@@ -195,6 +197,8 @@ decl_error! {
 		ExitReasonRevert,
 		/// Call returned VM fatal error
 		ExitReasonFatal,
+		/// Nonce is invalid
+		InvalidNonce,
 	}
 }
 
@@ -256,6 +260,7 @@ decl_module! {
 			value: U256,
 			gas_limit: u32,
 			gas_price: U256,
+			nonce: Option<U256>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
@@ -276,12 +281,14 @@ decl_module! {
 
 			let total_fee = gas_price.checked_mul(U256::from(gas_limit))
 				.ok_or(Error::<T>::FeeOverflow)?;
-			if Accounts::get(&source).balance <
-				value.checked_add(total_fee).ok_or(Error::<T>::PaymentOverflow)?
-			{
-				Err(Error::<T>::BalanceLow)?
-			}
+			let total_payment = value.checked_add(total_fee).ok_or(Error::<T>::PaymentOverflow)?;
+			let source_account = Accounts::get(&source);
+			ensure!(source_account.balance >= total_payment, Error::<T>::BalanceLow);
 			executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
+
+			if let Some(nonce) = nonce {
+				ensure!(source_account.nonce == nonce, Error::<T>::InvalidNonce);
+			}
 
 			let reason = executor.transact_call(
 				source,
@@ -315,6 +322,7 @@ decl_module! {
 			value: U256,
 			gas_limit: u32,
 			gas_price: U256,
+			nonce: Option<U256>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
@@ -336,13 +344,16 @@ decl_module! {
 
 			let total_fee = gas_price.checked_mul(U256::from(gas_limit))
 				.ok_or(Error::<T>::FeeOverflow)?;
-			if Accounts::get(&source).balance <
-				value.checked_add(total_fee).ok_or(Error::<T>::PaymentOverflow)?
-			{
-				Err(Error::<T>::BalanceLow)?
-			}
+			let total_payment = value.checked_add(total_fee).ok_or(Error::<T>::PaymentOverflow)?;
+			let source_account = Accounts::get(&source);
+			ensure!(source_account.balance >= total_payment, Error::<T>::BalanceLow);
 			executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
 
+			if let Some(nonce) = nonce {
+				ensure!(source_account.nonce == nonce, Error::<T>::InvalidNonce);
+			}
+
+			let create_address = executor.create_address(source, evm::CreateScheme::Dynamic);
 			let reason = executor.transact_create(
 				source,
 				value,
@@ -351,7 +362,10 @@ decl_module! {
 			);
 
 			let ret = match reason {
-				ExitReason::Succeed(_) => Ok(()),
+				ExitReason::Succeed(_) => {
+					Module::<T>::deposit_event(Event::Created(create_address));
+					Ok(())
+				},
 				ExitReason::Error(_) => Err(Error::<T>::ExitReasonFailed),
 				ExitReason::Revert(_) => Err(Error::<T>::ExitReasonRevert),
 				ExitReason::Fatal(_) => Err(Error::<T>::ExitReasonFatal),

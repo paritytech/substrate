@@ -235,7 +235,7 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			existential_deposit: 0,
+			existential_deposit: 1,
 			gas_price: 2,
 			block_gas_limit: 100_000_000,
 			transfer_fee: 0,
@@ -460,7 +460,7 @@ fn instantiate_and_call_and_deposit_event() {
 		]);
 
 		assert_ok!(creation);
-		assert!(ContractInfoOf::<Test>::exists(BOB));
+		assert!(ContractInfoOf::<Test>::contains_key(BOB));
 	});
 }
 

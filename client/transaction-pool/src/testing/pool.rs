@@ -215,3 +215,14 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	block_on(pool.maintain(&BlockId::number(1), &[retracted_hash]));
 	assert_eq!(pool.status().ready, 0);
 }
+
+#[test]
+fn can_track_heap_size() {
+	let pool = maintained_pool();
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 209))).expect("1. Imported");
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 210))).expect("1. Imported");
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 211))).expect("1. Imported");
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 212))).expect("1. Imported");
+
+	assert!(parity_util_mem::malloc_size(&pool) > 3000);
+}

@@ -1009,7 +1009,7 @@ mod tests {
 
 			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-			let result = ctx.instantiate(0, &mut gas_meter, &code, vec![]);
+			let result = ctx.instantiate(1, &mut gas_meter, &code, vec![]);
 			assert_matches!(result, Ok(_));
 
 			let mut toks = gas_meter.tokens().iter();
@@ -1302,8 +1302,10 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
+			ctx.overlay.set_balance(&ALICE, 1);
+
 			let result = ctx.instantiate(
-				0,
+				1,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&input_data_ch,
 				vec![1, 2, 3, 4],
@@ -1348,6 +1350,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+			ctx.overlay.set_balance(&BOB, 1);
 			ctx.overlay.instantiate_contract(&BOB, recurse_ch).unwrap();
 
 			let result = ctx.call(
@@ -1661,8 +1664,10 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
+			ctx.overlay.set_balance(&ALICE, 1);
+
 			let result = ctx.instantiate(
-				0,
+				1,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&rent_allowance_ch,
 				vec![],

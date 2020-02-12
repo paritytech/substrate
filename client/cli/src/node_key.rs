@@ -91,9 +91,10 @@ where
 	net_config_dir.as_ref().map(|d| d.as_ref().join(name))
 }
 
+#[cfg(test)]
 mod tests {
-	use super::*;
 	use sc_network::config::identity::ed25519;
+	use super::*;
 
 	#[test]
 	fn tests_node_name_good() {
