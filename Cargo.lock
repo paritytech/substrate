@@ -6079,6 +6079,7 @@ dependencies = [
  "unsigned-varint",
  "void",
  "wasm-timer",
+ "yamux",
  "zeroize 1.1.0",
 ]
 
@@ -7446,6 +7447,7 @@ dependencies = [
  "hyper 0.12.35",
  "itertools",
  "jsonrpc-core-client",
+ "libp2p",
  "node-primitives",
  "node-runtime",
  "pallet-balances",
