@@ -34,6 +34,7 @@ use sp_core::{U256, H256, H160, Hasher};
 use sp_runtime::{
 	DispatchResult, traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion},
 };
+use sha3::{Digest, Keccak256};
 use evm::{ExitReason, ExitSucceed, ExitError};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
@@ -130,6 +131,15 @@ impl WeighData<(&Vec<u8>, &U256, &u32, &U256, &Option<U256>)> for WeightForCallC
 	fn weigh_data(
 		&self,
 		(_, _, gas_provided, gas_price, _): (&Vec<u8>, &U256, &u32, &U256, &Option<U256>)
+	) -> Weight {
+		(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_provided)
+	}
+}
+
+impl WeighData<(&Vec<u8>, &H256, &U256, &u32, &U256, &Option<U256>)> for WeightForCallCreate {
+	fn weigh_data(
+		&self,
+		(_, _, _, gas_provided, gas_price, _): (&Vec<u8>, &H256, &U256, &u32, &U256, &Option<U256>)
 	) -> Weight {
 		(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_provided)
 	}
@@ -353,11 +363,83 @@ decl_module! {
 				ensure!(source_account.nonce == nonce, Error::<T>::InvalidNonce);
 			}
 
-			let create_address = executor.create_address(source, evm::CreateScheme::Dynamic);
+			let create_address = executor.create_address(
+				evm::CreateScheme::Legacy { caller: source }
+			);
 			let reason = executor.transact_create(
 				source,
 				value,
 				init,
+				gas_limit as usize,
+			);
+
+			let ret = match reason {
+				ExitReason::Succeed(_) => {
+					Module::<T>::deposit_event(Event::Created(create_address));
+					Ok(())
+				},
+				ExitReason::Error(_) => Err(Error::<T>::ExitReasonFailed),
+				ExitReason::Revert(_) => Err(Error::<T>::ExitReasonRevert),
+				ExitReason::Fatal(_) => Err(Error::<T>::ExitReasonFatal),
+			};
+			let actual_fee = executor.fee(gas_price);
+			executor.deposit(source, total_fee.saturating_sub(actual_fee));
+
+			let (values, logs) = executor.deconstruct();
+			backend.apply(values, logs, true);
+
+			ret.map_err(Into::into)
+		}
+
+		/// Issue an EVM create2 operation.
+		#[weight = WeightForCallCreate]
+		fn create2(
+			origin,
+			init: Vec<u8>,
+			salt: H256,
+			value: U256,
+			gas_limit: u32,
+			gas_price: U256,
+			nonce: Option<U256>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+
+			let source = T::ConvertAccountId::convert_account_id(&sender);
+
+			let vicinity = Vicinity {
+				gas_price,
+				origin: source,
+			};
+
+			let mut backend = Backend::<T>::new(&vicinity);
+			let mut executor = StackExecutor::new_with_precompile(
+				&backend,
+				gas_limit as usize,
+				&backend::GASOMETER_CONFIG,
+				T::Precompiles::execute,
+			);
+
+			let total_fee = gas_price.checked_mul(U256::from(gas_limit))
+				.ok_or(Error::<T>::FeeOverflow)?;
+			let total_payment = value.checked_add(total_fee).ok_or(Error::<T>::PaymentOverflow)?;
+			let source_account = Accounts::get(&source);
+			ensure!(source_account.balance >= total_payment, Error::<T>::BalanceLow);
+			executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
+
+			if let Some(nonce) = nonce {
+				ensure!(source_account.nonce == nonce, Error::<T>::InvalidNonce);
+			}
+
+			let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
+			let create_address = executor.create_address(
+				evm::CreateScheme::Create2 { caller: source, code_hash, salt }
+			);
+			let reason = executor.transact_create2(
+				source,
+				value,
+				init,
+				salt,
 				gas_limit as usize,
 			);
 
