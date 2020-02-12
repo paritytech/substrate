@@ -17,7 +17,7 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use std::{process::Command, fs, path::PathBuf};
+use std::{process::{Command, Stdio}, fs, path::PathBuf};
 
 mod common;
 
@@ -27,6 +27,7 @@ fn build_spec_works() {
 
 	let _ = fs::remove_dir_all(base_path);
 	let status = Command::new(cargo_bin("substrate"))
+		.stdout(Stdio::null())
 		.args(&["build-spec", "--dev", "-d", base_path])
 		.status()
 		.unwrap();
