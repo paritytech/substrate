@@ -44,7 +44,7 @@ use sp_runtime::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,
 	},
-	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert},
+	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert, MaybeDisplay},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
@@ -115,7 +115,7 @@ impl<T: Trait> Module<T> {
 	) -> RuntimeDispatchInfo<BalanceOf<T>>
 	where
 		T: Send + Sync,
-		BalanceOf<T>: Send + Sync,
+		BalanceOf<T>: Send + Sync + MaybeDisplay,
 	{
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
