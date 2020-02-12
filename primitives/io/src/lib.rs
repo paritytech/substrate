@@ -771,6 +771,37 @@ pub trait Logging {
 	}
 }
 
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate lazy_static;
+#[cfg(feature = "std")]
+use parking_lot::Mutex;
+#[cfg(feature = "std")]
+use sp_profiler::Profiler;
+#[cfg(feature = "std")]
+lazy_static! {
+	static ref PROFILER: Mutex<Box<dyn sp_profiler::Profiler>> = match std::env::var("SP_PROFILER") {
+		Ok(v) => match v.to_lowercase().as_ref() {
+			"async" => Mutex::new(Box::new(sp_profiler::AsyncProfiler::new(std::env::var("SP_PROFILER_FILENAME").unwrap_or("profiling_data.csv".to_string())))),
+			_ => Mutex::new(Box::new(sp_profiler::BasicProfiler::new())),
+		},
+		_ => Mutex::new(Box::new(sp_profiler::BasicProfiler::new())),
+	};
+}
+
+/// Interface that provides functions for profiling the runtime.
+#[runtime_interface]
+pub trait Profiling {
+	fn register_span(target: &str, name: &str) -> u64 {
+		PROFILER.lock().create_span(target.into(), name.into())
+	}
+
+	fn exit_span(id: u64) {
+		PROFILER.lock().exit_span(id);
+	}
+}
+
 /// Interface that provides functions for benchmarking the runtime.
 #[runtime_interface]
 pub trait Benchmarking {
@@ -940,6 +971,7 @@ pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2
 pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
 	misc::HostFunctions,
+	profiling::HostFunctions,
 	offchain::HostFunctions,
 	crypto::HostFunctions,
 	hashing::HostFunctions,

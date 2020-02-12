@@ -860,13 +860,17 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
-					let _enter = span.enter();
-				}
-				{ $( $impl )* }
+//				use $crate::sp_std::if_std;
+//				if_std! {
+//					use $crate::tracing;
+//					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
+//					let _enter = span.enter();
+//				}
+				use $crate::sp_io;
+				let span_id = sp_io::profiling::register_span(module_path!(), "on_initialize");
+				{ $( $impl )* };
+				sp_io::profiling::exit_span(span_id);
+//				{ $( $impl )* }
 			}
 		}
 	};
@@ -882,13 +886,17 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize($param: $param_ty) {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
-					let _enter = span.enter();
-				}
-				{ $( $impl )* }
+//				use $crate::sp_std::if_std;
+//				if_std! {
+//					use $crate::tracing;
+//					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
+//					let _enter = span.enter();
+//				}
+				use $crate::sp_io;
+				let span_id = sp_io::profiling::register_span(module_path!(), "on_initialize");
+				{ $( $impl )* };
+				sp_io::profiling::exit_span(span_id);
+//				{ $( $impl )* }
 			}
 		}
 	};
@@ -914,13 +922,17 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
-					let _enter = span.enter();
-				}
-				{ $( $impl )* }
+//				use $crate::sp_std::if_std;
+//				if_std! {
+//					use $crate::tracing;
+//					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
+//					let _enter = span.enter();
+//				}
+				use $crate::sp_io;
+				let span_id = sp_io::profiling::register_span(module_path!(), "on_finalize");
+				{ $( $impl )* };
+				sp_io::profiling::exit_span(span_id);
+//				{ $( $impl )* }
 			}
 		}
 	};
@@ -936,13 +948,17 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize($param: $param_ty) {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
-					let _enter = span.enter();
-				}
-				{ $( $impl )* }
+//				use $crate::sp_std::if_std;
+//				if_std! {
+//					use $crate::tracing;
+//					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
+//					let _enter = span.enter();
+//				}
+				use $crate::sp_io;
+				let span_id = sp_io::profiling::register_span(module_path!(), "on_finalize");
+				{ $( $impl )* };
+				sp_io::profiling::exit_span(span_id);
+//				{ $( $impl )* }
 			}
 		}
 	};
@@ -1039,14 +1055,17 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
-			$crate::sp_std::if_std! {
-				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
-				let _enter = span.enter();
-			}
+//			$crate::sp_std::if_std! {
+//				use $crate::tracing;
+//				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
+//				let _enter = span.enter();
+//			}
 			{
-				{ $( $impl )* }
-				Ok(())
+				use $crate::sp_io;
+				let span_id = sp_io::profiling::register_span(module_path!(), stringify!($name));
+				let result: $crate::dispatch::DispatchResult = (move || { { $( $impl )* } Ok(()) })();
+				sp_io::profiling::exit_span(span_id);
+				result
 			}
 		}
 	};
@@ -1064,13 +1083,17 @@ macro_rules! decl_module {
 	) => {
 		$(#[doc = $doc_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			use $crate::sp_std::if_std;
-			if_std! {
-				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
-				let _enter = span.enter();
-			}
-			{ $( $impl )* }
+//			use $crate::sp_std::if_std;
+//			if_std! {
+//				use $crate::tracing;
+//				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
+//				let _enter = span.enter();
+//			}
+			use $crate::sp_io;
+			let span_id = sp_io::profiling::register_span(module_path!(), stringify!($name));
+			let result: $result = (move || { $( $impl )* })();
+			sp_io::profiling::exit_span(span_id);
+			result
 		}
 	};
 

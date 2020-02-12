@@ -12,6 +12,7 @@ sp-runtime = { version = "2.0.0", default-features = false, path = "../../primit
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "./rpc/runtime-api" }
+sp-io ={ path = "../../primitives/io", default-features = false }
 
 [dev-dependencies]
 sp-io = { version = "2.0.0", path = "../../primitives/io" }
@@ -23,6 +24,7 @@ default = ["std"]
 std = [
 	"codec/std",
 	"sp-std/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",

@@ -904,6 +904,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69323bff1fb41c635347b8ead484a5ca6c3f11914d784170b158d8449ab07f8e"
+dependencies = [
+ "cfg-if",
+ "crossbeam-channel",
+ "crossbeam-deque",
+ "crossbeam-epoch",
+ "crossbeam-queue",
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7145,11 +7159,14 @@ name = "sp-io"
 version = "2.0.0"
 dependencies = [
  "hash-db",
+ "lazy_static",
  "libsecp256k1",
  "log 0.4.8",
  "parity-scale-codec",
+ "parking_lot 0.10.0",
  "sp-core",
  "sp-externalities",
+ "sp-profiler",
  "sp-runtime-interface",
  "sp-state-machine",
  "sp-std",
@@ -7193,6 +7210,15 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "substrate-test-utils",
+]
+
+[[package]]
+name = "sp-profiler"
+version = "2.0.0"
+dependencies = [
+ "crossbeam",
+ "lazy_static",
+ "parking_lot 0.10.0",
 ]
 
 [[package]]

@@ -26,6 +26,8 @@ extern crate bitmask;
 #[cfg(feature = "std")]
 pub extern crate tracing;
 
+pub use sp_io;
+
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]

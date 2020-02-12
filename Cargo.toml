@@ -125,6 +125,7 @@ members = [
 	"primitives/offchain",
 	"primitives/panic-handler",
 	"primitives/phragmen",
+	"primitives/profiler",
 	"primitives/rpc",
 	"primitives/runtime-interface",
 	"primitives/runtime-interface/proc-macro",

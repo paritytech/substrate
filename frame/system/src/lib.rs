@@ -796,7 +796,7 @@ impl<T: Trait> Module<T> {
 		//
 		// stay to be inspected by the client and will be cleared by `Self::initialize`.
 
-		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
+		<T::er as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
@@ -856,7 +856,9 @@ impl<T: Trait> Module<T> {
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: impl EncodeLike<T::AccountId>) {
+		let span_id = sp_io::profiling::register_span(module_path!(), "inc_account_nonce");
 		Account::<T>::mutate(who, |a| a.0 += T::Index::one());
+		sp_io::profiling::exit_span(span_id);
 	}
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this
@@ -1180,7 +1182,10 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> Result<(), TransactionValidityError> {
+		let span_id = sp_io::profiling::register_span(module_path!(), "pre_dispatch--Account::<T>::get");
 		let (expected, extra) = Account::<T>::get(who);
+		sp_io::profiling::exit_span(span_id);
+
 		if self.0 != expected {
 			return Err(
 				if self.0 < expected {
@@ -1190,7 +1195,9 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 				}.into()
 			)
 		}
+		let span_id = sp_io::profiling::register_span(module_path!(), "pre_dispatch--Account::<T>::insert");
 		Account::<T>::insert(who, (expected + T::Index::one(), extra));
+		sp_io::profiling::exit_span(span_id);
 		Ok(())
 	}
 

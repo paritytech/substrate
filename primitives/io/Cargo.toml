@@ -15,8 +15,12 @@ sp-state-machine = { version = "0.8", optional = true, path = "../../primitives/
 sp-wasm-interface = { version = "2.0.0", path = "../../primitives/wasm-interface", default-features = false }
 sp-runtime-interface = { version = "2.0.0", default-features = false, path = "../runtime-interface" }
 sp-trie = { version = "2.0.0", optional = true, path = "../../primitives/trie" }
+sp-profiler = { version = "2.0.0", optional = true, path = "../profiler" }
 sp-externalities = { version = "0.8.0", optional = true, path = "../externalities" }
 log = { version = "0.4.8", optional = true }
+#sc-tracing = { version = "2.0.0", optional = true, path = "../../client/tracing" }
+parking_lot = { version = "0.10.0", optional = true }
+lazy_static = { version = "1.4.0", optional = true }
 
 [features]
 default = ["std"]
@@ -26,12 +30,16 @@ std = [
 	"sp-std/std",
 	"hash-db/std",
 	"sp-trie",
+	"sp-profiler",
 	"sp-state-machine",
 	"libsecp256k1",
 	"sp-runtime-interface/std",
 	"sp-externalities",
 	"sp-wasm-interface/std",
 	"log",
+#	"sc-tracing",
+	"parking_lot",
+	"lazy_static"
 ]
 
 # These two features are used for `no_std` builds for the environments which already provides

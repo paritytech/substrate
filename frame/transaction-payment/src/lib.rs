@@ -159,6 +159,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	where
 		BalanceOf<T>: Sync + Send,
 	{
+		let span_id = sp_io::profiling::register_span(module_path!(), "compute_fee");
 		if info.pays_fee {
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
@@ -178,8 +179,11 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
 
 			let base_fee = T::TransactionBaseFee::get();
-			base_fee.saturating_add(adjusted_fee).saturating_add(tip)
+			let res = base_fee.saturating_add(adjusted_fee).saturating_add(tip);
+			sp_io::profiling::exit_span(span_id);
+			res
 		} else {
+			sp_io::profiling::exit_span(span_id);
 			tip
 		}
 	}
