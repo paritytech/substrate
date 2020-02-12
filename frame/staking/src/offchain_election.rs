@@ -20,7 +20,7 @@ use crate::{Call, Module, Trait, BalanceOf, ValidatorIndex, NominatorIndex, Comp
 use codec::Encode;
 use frame_system::offchain::{SubmitUnsignedTransaction};
 use sp_phragmen::{reduce, ExtendedBalance, PhragmenResult, StakedAssignment, Assignment, PhragmenScore};
-use sp_std::{prelude::*, cmp::Ordering, convert::TryInto};
+use sp_std::{prelude::*, convert::TryInto};
 use sp_runtime::{RuntimeAppPublic, RuntimeDebug};
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::traits::Convert;
@@ -76,27 +76,6 @@ pub(crate) fn set_check_offchain_execution_status<T: Trait>(now: T::BlockNumber)
 		Ok(Err(_)) => Err("failed to write to offchain db."),
 		// fork etc.
 		Err(why) => Err(why),
-	}
-}
-
-/// Compares two sets of phragmen scores based on desirability and returns true if `that` is
-/// better `this`.
-///
-/// Evaluation is done in a lexicographic manner.
-///
-/// Note that the third component should be minimized.
-pub(crate) fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool {
-	match that
-		.iter()
-		.enumerate()
-		.map(|(i, e)| e.cmp(&this[i]))
-		.collect::<Vec<Ordering>>()
-		.as_slice()
-	{
-		[Ordering::Greater, _, _] => true,
-		[Ordering::Equal, Ordering::Greater, _] => true,
-		[Ordering::Equal, Ordering::Equal, Ordering::Less] => true,
-		_ => false,
 	}
 }
 

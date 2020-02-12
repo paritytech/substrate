@@ -33,7 +33,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug};
+use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering};
 use sp_runtime::{helpers_128bit::multiply_by_rational, Perbill, Rational128, RuntimeDebug};
 use sp_runtime::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
 
@@ -64,6 +64,8 @@ pub use sp_phragmen_compact::generate_compact_solution_type;
 // substrate's account id.
 pub trait IdentifierT: Clone + Eq + Default + Ord + Debug {}
 
+impl<T: Clone + Eq + Default + Ord + Debug> IdentifierT for T {}
+
 /// The errors that might occur in the this crate and compact.
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
@@ -74,17 +76,7 @@ pub enum Error {
 	CompactTargetOverflow,
 	/// One of the index functions returned none.
 	CompactInvalidIndex,
-
 }
-
-#[macro_export]
-macro_rules! some {
-	($inner:expr) => {
-		$some.ok_or(_phragmen::CompactInvalidIndex)?
-	};
-}
-
-impl<T: Clone + Eq + Default + Ord + Debug> IdentifierT for T {}
 
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.
 ///
@@ -547,17 +539,38 @@ pub fn evaluate_support<AccountId>(
 	[min_support, sum, sum_squared]
 }
 
+/// Compares two sets of phragmen scores based on desirability and returns true if `that` is
+/// better `this`.
+///
+/// Evaluation is done in a lexicographic manner.
+///
+/// Note that the third component should be minimized.
+pub fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool {
+	match that
+		.iter()
+		.enumerate()
+		.map(|(i, e)| e.cmp(&this[i]))
+		.collect::<Vec<Ordering>>()
+		.as_slice()
+	{
+		[Ordering::Greater, _, _] => true,
+		[Ordering::Equal, Ordering::Greater, _] => true,
+		[Ordering::Equal, Ordering::Equal, Ordering::Less] => true,
+		_ => false,
+	}
+}
+
 /// Performs equalize post-processing to the output of the election algorithm. This happens in
 /// rounds. The number of rounds and the maximum diff-per-round tolerance can be tuned through input
 /// parameters.
 ///
 /// No value is returned from the function and the `supports` parameter is updated.
 ///
-/// * `assignments`: exactly the same is the output of phragmen.
-/// * `supports`: mutable reference to s `SupportMap`. This parameter is updated.
-/// * `tolerance`: maximum difference that can occur before an early quite happens.
-/// * `iterations`: maximum number of iterations that will be processed.
-/// * `stake_of`: something that can return the stake stake of a particular candidate or voter.
+/// `assignments`: exactly the same is the output of phragmen.
+/// `supports`: mutable reference to s `SupportMap`. This parameter is updated.
+/// `tolerance`: maximum difference that can occur before an early quite happens.
+/// `iterations`: maximum number of iterations that will be processed.
+/// `stake_of`: something that can return the stake stake of a particular candidate or voter.
 pub fn equalize<Balance, AccountId, C, FS>(
 	mut assignments: Vec<StakedAssignment<AccountId>>,
 	supports: &mut SupportMap<AccountId>,

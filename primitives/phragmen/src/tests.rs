@@ -20,7 +20,7 @@
 
 use crate::mock::*;
 use crate::{
-	elect, equalize, build_support_map,
+	elect, equalize, build_support_map, is_score_better,
 	Support, StakedAssignment, Assignment, PhragmenResult, ExtendedBalance,
 };
 use substrate_test_utils::assert_eq_uvec;
@@ -548,6 +548,33 @@ fn assignment_convert_works() {
 	assert_eq!(
 		assignment.into_staked(125, true),
 		staked,
+	);
+}
+
+#[test]
+fn score_comparison_is_lexicographical() {
+	// only better in the fist parameter, worse in the other two ✅
+	assert_eq!(
+		is_score_better([10, 20, 30], [12, 10, 35]),
+		true,
+	);
+
+	// worse in the first, better in the other two ❌
+	assert_eq!(
+		is_score_better([10, 20, 30], [9, 30, 10]),
+		false,
+	);
+
+	// equal in the first, the second one dictates.
+	assert_eq!(
+		is_score_better([10, 20, 30], [10, 25, 40]),
+		true,
+	);
+
+	// equal in the first two, the last one dictates.
+	assert_eq!(
+		is_score_better([10, 20, 30], [10, 20, 40]),
+		false,
 	);
 }
 

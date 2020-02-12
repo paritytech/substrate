@@ -847,7 +847,7 @@ pub fn horrible_phragmen_with_post_processing(
 		let support = build_support_map::<AccountId>(&winners, &staked_assignment).0;
 		let score = evaluate_support(&support);
 
-		assert!(offchain_election::is_score_better(score, better_score));
+		assert!(sp_phragmen::is_score_better(score, better_score));
 
 		score
 	};

@@ -277,7 +277,6 @@ use sp_runtime::{
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
-		TransactionPriority,
 	},
 };
 use sp_staking::{
@@ -292,7 +291,7 @@ use frame_system::{
 };
 use sp_phragmen::{
 	ExtendedBalance, StakedAssignment, Assignment, PhragmenScore, PhragmenResult,
-	build_support_map, evaluate_support, elect, generate_compact_solution_type,
+	build_support_map, evaluate_support, elect, generate_compact_solution_type, is_score_better,
 };
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -1765,7 +1764,7 @@ impl<T: Trait> Module<T> {
 		// assume the given score is valid. Is it better than what we have on-chain, if we have any?
 		if let Some(queued_score) = Self::queued_score() {
 			ensure!(
-				offchain_election::is_score_better(queued_score, claimed_score),
+				is_score_better(queued_score, claimed_score),
 				Error::<T>::PhragmenWeakSubmission,
 			)
 		}
@@ -2574,7 +2573,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			use offchain_election::SignaturePayloadOf;
 
 			if let Some(queued_score) = Self::queued_score() {
-				if !offchain_election::is_score_better(queued_score, *score) {
+				if !is_score_better(queued_score, *score) {
 					debug::native::debug!(
 						target: "staking",
 						"rejecting unsigned transaction because the claimed score is not good enough."
@@ -2605,9 +2604,8 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			Ok(ValidTransaction {
-				priority: TransactionPriority::max_value(),
+				priority: score[0].saturated_into(),
 				requires: vec![],
-				// TODO: what is a good value for this? Also set priority
 				provides: vec![(Self::current_era(), validator_key).encode()],
 				longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(150_u64),
 				propagate: true,

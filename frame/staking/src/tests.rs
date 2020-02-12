@@ -19,7 +19,10 @@
 use super::*;
 use mock::*;
 use codec::Encode;
-use sp_runtime::{assert_eq_error_rate, traits::{OnInitialize, BadOrigin}};
+use sp_runtime::{
+	assert_eq_error_rate,
+	traits::{OnInitialize, BadOrigin},
+};
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
 	assert_ok, assert_noop,
@@ -2748,33 +2751,6 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn score_comparison_is_lexicographical() {
-		// only better in the fist parameter, worse in the other two ✅
-		assert_eq!(
-			offchain_election::is_score_better([10, 20, 30], [12, 10, 35]),
-			true,
-		);
-
-		// worse in the first, better in the other two ❌
-		assert_eq!(
-			offchain_election::is_score_better([10, 20, 30], [9, 30, 10]),
-			false,
-		);
-
-		// equal in the first, the second one dictates.
-		assert_eq!(
-			offchain_election::is_score_better([10, 20, 30], [10, 25, 40]),
-			true,
-		);
-
-		// equal in the first two, the last one dictates.
-		assert_eq!(
-			offchain_election::is_score_better([10, 20, 30], [10, 20, 40]),
-			false,
-		);
-	}
-
-	#[test]
 	fn is_current_session_final_works() {
 		ExtBuilder::default().session_per_era(3).build().execute_with(|| {
 			start_era(1);
@@ -3002,18 +2978,18 @@ mod offchain_phragmen {
 
 	#[test]
 	#[allow(deprecated)]
-	fn offchain_worker_runs_when_window_open_unsigned() {
+	fn offchain_worker_runs_when_window_open() {
 		// at the end of the first finalized block with ElectionStatus::open(_), it should execute.
 		let mut ext = ExtBuilder::default()
 			.offchain_phragmen_ext()
-			.validator_count(4)
+			.validator_count(2)
 			.build();
 		let state = offchainify(&mut ext);
 		ext.execute_with(||{
 			run_to_block(12);
 
 			// local key 11 is in the elected set.
-			assert_eq_uvec!(Staking::current_elected(), vec![11, 21, 31]);
+			assert_eq_uvec!(Staking::current_elected(), vec![11, 21]);
 			assert_eq!(state.read().transactions.len(), 0);
 			Staking::offchain_worker(12);
 			assert_eq!(state.read().transactions.len(), 1);
@@ -3031,7 +3007,7 @@ mod offchain_phragmen {
 			assert_eq!(
 				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(&inner),
 				TransactionValidity::Ok(ValidTransaction {
-					priority: TransactionPriority::max_value(),
+					priority: 1125, // the proposed slot stake.
 					requires: vec![],
 					provides: vec![(Staking::current_era(), signing_key).encode()],
 					longevity: TryInto::<u64>::try_into(
