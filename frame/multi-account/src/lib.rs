@@ -23,12 +23,17 @@
 //! ## Overview
 //!
 //! This module contains functionality to create, update and remove multi accounts, identified by a deterministically
-//! generated account ID, as well as (potentially) stateful multisig dispatches. The multisig dispatch functionality is
-//! very closely implemented after the utility pallet. It allows multiple signed origins (accounts) to coordinate and
-//! dispatch a call from a previously created multi account origin. When dispatching calls, the threshold defined in
-//! the multi account defines the number of accounts from the multi account signatory set that must approve it. In the
-//! case that the threshold is just one then this is a stateless operation. This is useful for multisig wallets where
-//! cryptographic threshold signatures are not available or desired.
+//! generated account ID, as well as (potentially) stateful multisig dispatches.
+//!
+//! This module is closely implemented after the multisig functionality of the utility pallet. The main difference is
+//! that this module stores static account ids on chain which are not changing when the threshold or signatories are
+//! updated.
+//!
+//! This module allows multiple signed origins (accounts) to coordinate and dispatch calls from a previously created
+//! multi account origin. When dispatching calls, the threshold defined in the multi account defines the number of
+//! accounts from the multi account signatory set that must approve it. In the case that the threshold is just one then
+//! this is a stateless operation. This is useful for multisig wallets where cryptographic threshold signatures are
+//! not available or desired or where a dynamic set of signatories with a static account ID is desired.
 //!
 //! The motivation for this module is that a deterministically created account ID from threshold and a set of
 //! signatories as in the utility pallet has certain downsides:
@@ -42,8 +47,8 @@
 //!  3. When using multisigs for voting and changing signatories or the threshold, the accounts needs to unvotes,
 //! 	transfer tokens and vote again, which is cumbersome.
 //!
-//! The downside is that this module is slightly more complex and introduces additional state and the additional
-//! requirement of creating and deleting multi accounts before using multisigs.
+//! The downside of using this multi account module is that it is slightly more complex than the utility multisigs and
+//! that it introduces additional state and the requirement of creating multi accounts before using multisigs.
 //!
 //! ## Interface
 //!
@@ -208,7 +213,8 @@ decl_event! {
 		AccountId = <T as system::Trait>::AccountId,
 		BlockNumber = <T as system::Trait>::BlockNumber
 	{
-		/// A multi account has been created. First param is the account that created it, second is the multisig account.
+		/// A multi account has been created. First param is the account that created it, second is the multisig
+		/// account.
 		NewMultiAccount(AccountId, AccountId),
 		/// A multi account has been updated. First param is the multisig account.
 		MultiAccountUpdated(AccountId),
