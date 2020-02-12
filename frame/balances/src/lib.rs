@@ -153,6 +153,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod migration;
+mod benchmarking;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
