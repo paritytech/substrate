@@ -22,8 +22,8 @@ use std::{process::Command, fs};
 mod common;
 
 #[test]
-fn import_and_export_blocks_works() {
-	let base_path = "import_and_export_blocks_test";
+fn import_export_and_revert_work() {
+	let base_path = "import_export_and_revert_test";
 
 	let _ = fs::remove_dir_all(base_path);
 	common::run_command_for_a_while(&["-d", base_path]);
@@ -41,6 +41,12 @@ fn import_and_export_blocks_works() {
 
 	let status = Command::new(cargo_bin("substrate"))
 		.args(&["import-blocks", "-d", base_path, "exported_blocks"])
+		.status()
+		.unwrap();
+	assert!(status.success());
+
+	let status = Command::new(cargo_bin("substrate"))
+		.args(&["revert", "-d", base_path])
 		.status()
 		.unwrap();
 	assert!(status.success());
