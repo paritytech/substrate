@@ -73,11 +73,7 @@ impl ImportBlocksCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		self.import_params.update_config(
-			&mut config,
-			sc_service::Roles::FULL,
-			self.shared_params.dev,
-		)?;
+		config.use_in_memory_keystore()?;
 
 		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
 			Some(filename) => Box::new(fs::File::open(filename)?),

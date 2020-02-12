@@ -22,8 +22,8 @@ use std::{process::Command, fs};
 mod common;
 
 #[test]
-fn export_blocks_works() {
-	let base_path = "export_blocks_test";
+fn import_and_export_blocks_works() {
+	let base_path = "import_and_export_blocks_test";
 
 	let _ = fs::remove_dir_all(base_path);
 	common::run_command_for_a_while(&["-d", base_path]);
@@ -36,4 +36,12 @@ fn export_blocks_works() {
 
 	let metadata = fs::metadata("exported_blocks").unwrap();
 	assert!(metadata.len() > 0, "file exported_blocks should not be empty");
+
+	let _ = fs::remove_dir_all(base_path);
+
+	let status = Command::new(cargo_bin("substrate"))
+		.args(&["import-blocks", "-d", base_path, "exported_blocks"])
+		.status()
+		.unwrap();
+	assert!(status.success());
 }
