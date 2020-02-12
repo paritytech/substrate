@@ -24,7 +24,7 @@ use node_runtime::{
 };
 use node_runtime::constants::currency::*;
 use sp_core::ChangesTrieConfiguration;
-use sp_runtime::Perbill;
+use sp_runtime::{Perbill, PerThing};
 
 
 /// Create genesis runtime configuration for tests.
@@ -75,7 +75,7 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 			],
 			validator_count: 3,
 			minimum_validator_count: 0,
-			slash_reward_fraction: Perbill::from_percent_const(10),
+			slash_reward_fraction: Perbill::from_percent(10),
 			invulnerables: vec![alice(), bob(), charlie()],
 			.. Default::default()
 		}),

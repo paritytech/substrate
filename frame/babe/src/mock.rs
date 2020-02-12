@@ -20,7 +20,7 @@
 use super::{Trait, Module, GenesisConfig};
 use sp_consensus_babe::AuthorityId;
 use sp_runtime::{
-	traits::IdentityLookup, Perbill, testing::{Header, UintAuthorityId}, impl_opaque_keys,
+	traits::IdentityLookup, Perbill, PerThing, testing::{Header, UintAuthorityId}, impl_opaque_keys,
 };
 use sp_version::RuntimeVersion;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
@@ -46,7 +46,7 @@ parameter_types! {
 	pub const EpochDuration: u64 = 3;
 	pub const ExpectedBlockTime: u64 = 1;
 	pub const Version: RuntimeVersion = substrate_test_runtime::VERSION;
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent_const(16);
+	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
 impl frame_system::Trait for Test {

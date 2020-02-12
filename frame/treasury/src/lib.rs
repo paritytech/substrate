@@ -724,7 +724,9 @@ mod tests {
 	use frame_support::traits::Contains;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, OnFinalize, IdentityLookup, BadOrigin}, testing::Header, Perbill
+		Perbill, PerThing,
+		testing::Header,
+		traits::{BlakeTwo256, OnFinalize, IdentityLookup, BadOrigin},
 	};
 
 	impl_outer_origin! {
@@ -781,12 +783,12 @@ mod tests {
 		}
 	}
 	parameter_types! {
-		pub const ProposalBond: Permill = Permill::from_percent_const(5);
+		pub const ProposalBond: Permill = Permill::from_percent(5);
 		pub const ProposalBondMinimum: u64 = 1;
 		pub const SpendPeriod: u64 = 2;
-		pub const Burn: Permill = Permill::from_percent_const(50);
+		pub const Burn: Permill = Permill::from_percent(50);
 		pub const TipCountdown: u64 = 1;
-		pub const TipFindersFee: Percent = Percent::from_percent_const(20);
+		pub const TipFindersFee: Percent = Percent::from_percent(20);
 		pub const TipReportDepositBase: u64 = 1;
 		pub const TipReportDepositPerByte: u64 = 1;
 	}

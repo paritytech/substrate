@@ -98,7 +98,7 @@ mod tests {
 	use sp_io::TestExternalities;
 	use sp_runtime::{
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		Perbill, KeyTypeId,
+		Perbill, KeyTypeId, PerThing,
 	};
 	use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 
@@ -109,7 +109,7 @@ mod tests {
 	impl Trait for Test {}
 
 	parameter_types! {
-		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent_const(33);
+		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 	}
 
 	impl pallet_session::Trait for Test {
