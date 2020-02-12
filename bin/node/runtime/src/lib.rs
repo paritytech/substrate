@@ -81,8 +81,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 215,
-	impl_version: 2,
+	spec_version: 216,
+	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -813,6 +813,7 @@ impl_runtime_apis! {
 		{
 			match module.as_slice() {
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
+				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
 				_ => return None,
 			}
 		}
