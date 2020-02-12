@@ -232,14 +232,15 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 					TransportConfig::MemoryOnly => false,
 					TransportConfig::Normal { allow_private_ipv4, .. } => allow_private_ipv4,
 				},
+				u64::from(params.network_config.out_peers) + 15,
 			));
 			let (transport, bandwidth) = {
-				let (config_mem, config_wasm) = match params.network_config.transport {
-					TransportConfig::MemoryOnly => (true, None),
-					TransportConfig::Normal { wasm_external_transport, .. } =>
-						(false, wasm_external_transport)
+				let (config_mem, config_wasm, flowctrl) = match params.network_config.transport {
+					TransportConfig::MemoryOnly => (true, None, false),
+					TransportConfig::Normal { wasm_external_transport, use_yamux_flow_control, .. } =>
+						(false, wasm_external_transport, use_yamux_flow_control)
 				};
-				transport::build_transport(local_identity, config_mem, config_wasm)
+				transport::build_transport(local_identity, config_mem, config_wasm, flowctrl)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone());
 			if let Some(spawner) = params.executor {

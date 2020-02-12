@@ -60,7 +60,7 @@ impl frame_system::Trait for Test {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u64 = 0;
+	pub const ExistentialDeposit: u64 = 1;
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;

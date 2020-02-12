@@ -1303,8 +1303,8 @@ mod tests {
 		type OnReapAccount = Balances;
 	}
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 0;
-}
+		pub const ExistentialDeposit: u64 = 1;
+	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type Event = ();
@@ -1312,7 +1312,7 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 	}
-parameter_types! {
+	parameter_types! {
 		pub const LaunchPeriod: u64 = 2;
 		pub const VotingPeriod: u64 = 2;
 		pub const EmergencyVotingPeriod: u64 = 1;
