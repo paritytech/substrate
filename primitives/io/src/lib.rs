@@ -774,25 +774,25 @@ pub trait Logging {
 /// Interface that provides functions for benchmarking the runtime.
 #[runtime_interface]
 pub trait Benchmarking {
-		/// Get the number of nanoseconds passed since the UNIX epoch
-		///
-		/// WARNING! This is a non-deterministic call. Do not use this within
-		/// consensus critical logic.
-		fn current_time() -> u128 {
-			std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
-				.expect("Unix time doesn't go backwards; qed")
-				.as_nanos()
-		}
+	/// Get the number of nanoseconds passed since the UNIX epoch
+	///
+	/// WARNING! This is a non-deterministic call. Do not use this within
+	/// consensus critical logic.
+	fn current_time() -> u128 {
+		std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
+			.expect("Unix time doesn't go backwards; qed")
+			.as_nanos()
+	}
 
-		/// Reset the trie database to the genesis state.
-		fn wipe_db(&mut self) {
-			self.wipe()
-		}
+	/// Reset the trie database to the genesis state.
+	fn wipe_db(&mut self) {
+		self.wipe()
+	}
 
-		/// Commit pending storage changes to the trie database and clear the database cache.
-		fn commit_db(&mut self) {
-			self.commit()
-		}
+	/// Commit pending storage changes to the trie database and clear the database cache.
+	fn commit_db(&mut self) {
+		self.commit()
+	}
 }
 
 /// Wasm-only interface that provides functions for interacting with the sandbox.
@@ -947,7 +947,6 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
-	benchmarking::HostFunctions,
 );
 
 #[cfg(test)]

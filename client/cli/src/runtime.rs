@@ -21,7 +21,6 @@ use futures::select;
 use futures::pin_mut;
 use sc_service::{AbstractService, Configuration};
 use crate::error;
-use crate::informant;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> Result<(), Box<dyn std::error::Error>>
@@ -124,7 +123,7 @@ where
 
 	let service = service_builder(config)?;
 
-	let informant_future = informant::build(&service);
+	let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
 	let _informant_handle = runtime.spawn(informant_future);
 
 	// we eagerly drop the service so that the internal exit future is fired,

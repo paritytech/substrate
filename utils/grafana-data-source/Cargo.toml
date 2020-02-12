@@ -16,7 +16,7 @@ serde = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
 lazy_static = "1.4"
 parking_lot = "0.10.0"
-futures-timer = "2.0"
+futures-timer = "3.0.1"
 derive_more = "0.99"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]

@@ -37,7 +37,7 @@ pub use trie_stream::TrieStream;
 pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
-	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops,
+	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops, TrieDBIterator,
 };
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
