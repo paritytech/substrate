@@ -49,6 +49,12 @@ impl std::convert::From<String> for Error {
 	}
 }
 
+impl std::convert::From<&str> for Error {
+	fn from(s: &str) -> Error {
+		Error::Input(s.to_string())
+	}
+}
+
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {

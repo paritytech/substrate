@@ -54,7 +54,9 @@ where
 
 			match ChainSpec::from(config.expect_chain_spec().id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
-				_ => panic!("Factory is only supported for development and local testnet."),
+				_ => return Err(
+					"Factory is only supported for development and local testnet.".into()
+				),
 			}
 
 			// Setup tracing.
@@ -63,7 +65,9 @@ where
 					cli_args.import_params.tracing_receiver.into(), tracing_targets
 				);
 				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-					panic!("Unable to set global default subscriber {}", e);
+					return Err(
+						format!("Unable to set global default subscriber {}", e).into()
+					);
 				}
 			}
 
