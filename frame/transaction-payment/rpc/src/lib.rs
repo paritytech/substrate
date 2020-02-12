@@ -21,7 +21,7 @@ use codec::{Codec, Decode};
 use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay}};
+use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay, MaybeFromStr}};
 use sp_api::ProvideRuntimeApi;
 use sp_core::Bytes;
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -74,7 +74,7 @@ where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance, Extrinsic>,
-	Balance: Codec + MaybeDisplay,
+	Balance: Codec + MaybeDisplay + MaybeFromStr,
 	Extrinsic: Codec + Send + Sync + 'static,
 {
 	fn query_info(
