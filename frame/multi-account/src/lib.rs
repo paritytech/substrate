@@ -280,12 +280,12 @@ decl_module! {
 				.checked_add(1)
 				.expect("multi account indices will never reach 2^64 before the death of the universe; qed");
 
-			MultiAccountIndex::put(multi_account_index);
-
 			let id = Self::multi_account_id(multi_account_index);
 
 			let deposit = T::MultiAccountDepositBase::get()
 				+ T::MultiAccountDepositFactor::get() * (other_signatories.len() as u32 + 1).into();
+
+			MultiAccountIndex::put(multi_account_index);
 
 			T::Currency::reserve(&who, deposit)?;
 
@@ -295,6 +295,7 @@ decl_module! {
 				deposit,
 				depositor: who.clone(),
 			});
+
 			Self::deposit_event(RawEvent::NewMultiAccount(who, id));
 
 			Ok(())
@@ -721,6 +722,7 @@ mod tests {
 			);
 			assert_eq!(Balances::free_balance(1), 16);
 			assert_eq!(Balances::reserved_balance(1), 4);
+			expect_event(RawEvent::MultisigCancelled(1, now(), multi_id));
 		});
 	}
 
@@ -742,16 +744,31 @@ mod tests {
 				MultiAccount::approve(Origin::signed(2), multi_id, Some(now()), hash.clone()),
 				Error::<Test>::UnexpectedTimepoint,
 			);
+			assert_noop!(
+				MultiAccount::call(Origin::signed(2), multi_id, Some(now()), call.clone()),
+				Error::<Test>::UnexpectedTimepoint,
+			);
 
-			assert_ok!(MultiAccount::approve(Origin::signed(1), multi_id, None, hash));
-
+			assert_ok!(MultiAccount::approve(Origin::signed(1), multi_id, None, hash.clone()));
+			assert_noop!(
+				MultiAccount::approve(Origin::signed(2), multi_id, None, hash.clone()),
+				Error::<Test>::NoTimepoint,
+			);
 			assert_noop!(
 				MultiAccount::call(Origin::signed(2), multi_id, None, call.clone()),
 				Error::<Test>::NoTimepoint,
 			);
 			let later = Timepoint { index: 1, .. now() };
 			assert_noop!(
-				MultiAccount::call(Origin::signed(2), multi_id, Some(later), call.clone()),
+				MultiAccount::approve(Origin::signed(2), multi_id, Some(later), hash.clone()),
+				Error::<Test>::WrongTimepoint,
+			);
+			assert_noop!(
+				MultiAccount::call(Origin::signed(2), multi_id, Some(later), call),
+				Error::<Test>::WrongTimepoint,
+			);
+			assert_noop!(
+				MultiAccount::cancel(Origin::signed(1), multi_id, later, hash),
 				Error::<Test>::WrongTimepoint,
 			);
 		});
@@ -814,6 +831,10 @@ mod tests {
 			assert_noop!(
 				MultiAccount::cancel(Origin::signed(2), multi_id, now(), hash.clone()),
 				Error::<Test>::NotOwner,
+			);
+			assert_noop!(
+				MultiAccount::cancel(Origin::signed(1), multi_id, now(), [0u8; 32]),
+				Error::<Test>::NotFound,
 			);
 			assert_ok!(
 				MultiAccount::cancel(Origin::signed(1), multi_id, now(), hash.clone()),
@@ -897,6 +918,14 @@ mod tests {
 				MultiAccount::create(Origin::signed(1), 0, vec![2]),
 				Error::<Test>::ZeroThreshold,
 			);
+
+			let multi_id = MultiAccount::multi_account_id(1);
+			assert_ok!(MultiAccount::create(Origin::signed(1), 1, vec![2]));
+			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
+			assert_noop!(
+				MultiAccount::update(Origin::signed(multi_id), 0, vec![2]),
+				Error::<Test>::ZeroThreshold,
+			);
 		});
 	}
 
@@ -906,6 +935,40 @@ mod tests {
 			assert_noop!(
 				MultiAccount::create(Origin::signed(1), 2, vec![2, 3, 4]),
 				Error::<Test>::TooManySignatories,
+			);
+
+			let multi_id = MultiAccount::multi_account_id(1);
+			assert_ok!(MultiAccount::create(Origin::signed(1), 1, vec![2]));
+			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
+			assert_noop!(
+				MultiAccount::update(Origin::signed(multi_id), 1, vec![2, 3, 4]),
+				Error::<Test>::TooManySignatories,
+			);
+		});
+	}
+
+	#[test]
+	fn update_non_existing_fails() {
+		new_test_ext().execute_with(|| {
+			let multi_id = MultiAccount::multi_account_id(1);
+			assert_ok!(MultiAccount::create(Origin::signed(1), 2, vec![2, 3]));
+			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
+			assert_noop!(
+				MultiAccount::update(Origin::signed(1), 1, vec![2, 3]),
+				Error::<Test>::MultiAccountNotFound,
+			);
+		});
+	}
+
+	#[test]
+	fn remove_non_existing_fails() {
+		new_test_ext().execute_with(|| {
+			let multi_id = MultiAccount::multi_account_id(1);
+			assert_ok!(MultiAccount::create(Origin::signed(1), 2, vec![2, 3]));
+			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
+			assert_noop!(
+				MultiAccount::remove(Origin::signed(1)),
+				Error::<Test>::MultiAccountNotFound,
 			);
 		});
 	}
@@ -921,6 +984,10 @@ mod tests {
 			assert_ok!(MultiAccount::approve(Origin::signed(1), multi_id, None, hash.clone()));
 			assert_noop!(
 				MultiAccount::approve(Origin::signed(1), multi_id, Some(now()), hash.clone()),
+				Error::<Test>::AlreadyApproved,
+			);
+			assert_noop!(
+				MultiAccount::call(Origin::signed(1), multi_id, Some(now()), call.clone()),
 				Error::<Test>::AlreadyApproved,
 			);
 			assert_ok!(MultiAccount::approve(Origin::signed(2), multi_id, Some(now()), hash.clone()));
@@ -945,12 +1012,53 @@ mod tests {
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			let hash = call.using_encoded(blake2_256);
 			assert_noop!(
-				MultiAccount::approve(Origin::signed(4), multi_id, None, hash.clone()),
-				Error::<Test>::NotSignatory,
-			);
-			assert_noop!(
 				MultiAccount::approve(Origin::signed(1), multi_id, None, hash.clone()),
 				Error::<Test>::NoApprovalsNeeded,
+			);
+			assert_ok!(MultiAccount::call(Origin::signed(1), multi_id, None, call));
+
+			assert_eq!(Balances::free_balance(6), 15);
+		});
+	}
+
+	#[test]
+	fn multisig_fails_if_not_existing() {
+		new_test_ext().execute_with(|| {
+			let multi_id = MultiAccount::multi_account_id(1);
+
+			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
+			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
+			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
+
+			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
+			let hash = call.using_encoded(blake2_256);
+			assert_noop!(
+				MultiAccount::approve(Origin::signed(1), multi_id, None, hash.clone()),
+				Error::<Test>::MultiAccountNotFound,
+			);
+			assert_noop!(
+				MultiAccount::call(Origin::signed(1), multi_id, None, call.clone()),
+				Error::<Test>::MultiAccountNotFound,
+			);
+		});
+	}
+
+	#[test]
+	fn multisig_fails_if_not_signatory() {
+		new_test_ext().execute_with(|| {
+			let multi_id = MultiAccount::multi_account_id(1);
+
+			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
+			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
+			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
+
+			assert_ok!(MultiAccount::create(Origin::signed(1), 1, vec![2, 3]));
+
+			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
+			let hash = call.using_encoded(blake2_256);
+			assert_noop!(
+				MultiAccount::approve(Origin::signed(4), multi_id, None, hash.clone()),
+				Error::<Test>::NotSignatory,
 			);
 			assert_noop!(
 				MultiAccount::call(Origin::signed(4), multi_id, None, call.clone()),
