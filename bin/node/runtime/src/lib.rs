@@ -593,6 +593,11 @@ impl pallet_vesting::Trait for Runtime {
 	type BlockNumberToBalance = ConvertInto;
 }
 
+impl pallet_benchmark::Trait for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -627,6 +632,7 @@ construct_runtime!(
 		Society: pallet_society::{Module, Call, Storage, Event<T>, Config<T>},
 		Recovery: pallet_recovery::{Module, Call, Storage, Event<T>},
 		Vesting: pallet_vesting::{Module, Call, Storage, Event<T>, Config<T>},
+		Bench: pallet_benchmark::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -828,6 +834,7 @@ impl_runtime_apis! {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
+				b"pallet-benchmark" | b"benchmark" => Bench::run_benchmark(extrinsic, steps, repeat).ok(),
 				_ => None,
 			}
 		}
