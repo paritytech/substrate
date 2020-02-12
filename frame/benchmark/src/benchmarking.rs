@@ -21,7 +21,7 @@ use super::*;
 use codec::{Encode, Decode};
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter};
+use sp_runtime::{BenchmarkResults, BenchmarkParameter, selected_benchmark};
 use sp_runtime::traits::{Benchmarking, BenchmarkingSetup, Dispatchable};
 use sp_std::prelude::*;
 
@@ -147,6 +147,79 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+struct ExistsValue;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ExistsValue {
+
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Number of reads
+			(BenchmarkParameter::N, 1, 1000),
+		]
+	}
+
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	{
+		// Get N
+		let n = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
+
+		// Put a value into storage
+		MyValue::put(n);
+
+		// Return the `exists_value` n times call
+		Ok((crate::Call::<T>::exists_value(n), RawOrigin::Signed(account::<T>(n))))
+	}
+}
+
+struct RemoveValue;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for RemoveValue {
+
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Number of reads
+			(BenchmarkParameter::N, 1, 1000),
+		]
+	}
+
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	{
+		// Get N
+		let n = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
+
+		// Add values to the map to be removed
+		for i in 0..n {
+			MyMap::insert(i, i);
+		}
+
+		// Return the `remove_value` n times call
+		Ok((crate::Call::<T>::remove_value(n), RawOrigin::Signed(account::<T>(n))))
+	}
+}
+
+struct ReadMap;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ReadMap {
+
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Number of reads
+			(BenchmarkParameter::N, 1, 1000),
+		]
+	}
+
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	{
+		// Get N
+		let n = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
+
+		// Add values to the map to be read
+		for i in 0..n {
+			MyMap::insert(i, i);
+		}
+
+		// Return the `read_map` n times call
+		Ok((crate::Call::<T>::read_map(n), RawOrigin::Signed(account::<T>(n))))
+	}
+}
+
 struct InsertMap;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for InsertMap {
 
@@ -162,48 +235,75 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		// Get N
 		let n = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
 
-		// Return the `put_value` n times call
+		// Return the `insert_map` n times call
 		Ok((crate::Call::<T>::insert_map(n), RawOrigin::Signed(account::<T>(n))))
 	}
 }
 
-enum SelectedBenchmark {
-	ReadValue,
-	PutValue,
-	RemoveValue,
-	ExistsValue,
-	ReadMap,
-	InsertMap,
-	ExistsMap,
-	RemovePrefix,
-	AddMemberList,
-	AppendMemberList,
-}
+struct ContainsKeyMap;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ContainsKeyMap {
 
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>
-	{
-		match self {
-			Self::AddMemberList => <AddMemberList as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&AddMemberList),
-			Self::AppendMemberList => <AppendMemberList as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&AppendMemberList),
-			Self::ReadValue => <ReadValue as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&ReadValue),
-			Self::PutValue => <PutValue as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&PutValue),
-			Self::InsertMap => <InsertMap as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&InsertMap),
-
-		}
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Number of reads
+			(BenchmarkParameter::N, 1, 1000),
+		]
 	}
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
-		match self {
-			Self::AddMemberList => <AddMemberList as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&AddMemberList, components),
-			Self::AppendMemberList => <AppendMemberList as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&AppendMemberList, components),
-			Self::ReadValue => <ReadValue as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&ReadValue, components),
-			Self::PutValue => <PutValue as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&PutValue, components),
-			Self::InsertMap => <InsertMap as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&InsertMap, components),
+		// Get N
+		let n = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
 
+		// Add values to the map to check for existence, but only half of them,
+		// so exists will return both true and false.
+		for i in 0..n/2 {
+			MyMap::insert(i, i);
 		}
+		
+		// Return the `contains_key_map` n times call
+		Ok((crate::Call::<T>::contains_key_map(n), RawOrigin::Signed(account::<T>(n))))
 	}
+}
+
+struct RemovePrefix;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for RemovePrefix {
+
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Number of reads
+			(BenchmarkParameter::N, 1, 1000),
+		]
+	}
+
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	{
+		// Get N
+		let n = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
+
+		// Add values to a double map.
+		for i in 0..n {
+			for j in 0..n {
+				MyDoubleMap::insert(i, j, n);
+			}
+		}
+		
+		// Return the `remove_prefix` n times call
+		Ok((crate::Call::<T>::remove_prefix(n), RawOrigin::Signed(account::<T>(n))))
+	}
+}
+
+selected_benchmark! {
+	ReadValue,
+	PutValue,
+	ExistsValue,
+	RemoveValue,
+	ReadMap,
+	InsertMap,
+	ContainsKeyMap,
+	RemovePrefix,
+	AddMemberList,
+	AppendMemberList
 }
 
 impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
@@ -211,9 +311,16 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 
 		let selected_benchmark = match extrinsic.as_slice() {
 			b"time_host" => return benchmarking::time_host(steps, repeat),
+			b"read_value" => SelectedBenchmark::ReadValue,
+			b"put_value" => SelectedBenchmark::PutValue,
+			b"exists_value" => SelectedBenchmark::ExistsValue,
+			b"remove_value" => SelectedBenchmark::RemoveValue,
+			b"read_map" => SelectedBenchmark::ReadMap,
+			b"insert_map" => SelectedBenchmark::InsertMap,
+			b"contains_key_map" => SelectedBenchmark::ContainsKeyMap,
+			b"remove_prefix" => SelectedBenchmark::RemovePrefix,
 			b"add_member_list" => SelectedBenchmark::AddMemberList,
 			b"append_member_list" => SelectedBenchmark::AppendMemberList,
-			b"read_value" => SelectedBenchmark::ReadValue,
 			_ => return Err("Extrinsic not found."),
 		};
 
