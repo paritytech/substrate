@@ -23,6 +23,7 @@ use clap::{App, ArgMatches, SubCommand};
 use codec::{Decode, Encode};
 use hex_literal::hex;
 use itertools::Itertools;
+use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
 use node_primitives::{Balance, Hash, Index, AccountId, Signature};
 use node_runtime::{BalancesCall, Call, Runtime, SignedPayload, UncheckedExtrinsic, VERSION};
 use serde_json::json;
@@ -248,6 +249,9 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 						'The number of words in the phrase to generate. One of 12 \
 						(default), 15, 18, 21 and 24.'
 				"),
+			SubCommand::with_name("generate-node-key")
+				.about("Generate a random node libp2p key, save it to file and print its peer ID")
+				.args_from_usage("[file] 'Name of file to save secret key to'"),
 			SubCommand::with_name("inspect")
 				.about("Gets a public key and a SS58 address from the provided Secret URI")
 				.args_from_usage("[uri] 'A Key URI to be inspected. May be a secret seed, \
@@ -407,6 +411,17 @@ where
 		("generate", Some(matches)) => {
 			let mnemonic = generate_mnemonic(matches)?;
 			C::print_from_uri(mnemonic.phrase(), password, maybe_network, output);
+		}
+		("generate-node-key", Some(matches)) => {
+			let file = matches.value_of("file").ok_or(Error::Static("Output file name is required"))?;
+
+			let keypair = libp2p_ed25519::Keypair::generate();
+			let secret = keypair.secret();
+			let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
+
+			fs::write(file, secret.as_ref())?;
+
+			println!("{}", peer_id);
 		}
 		("inspect", Some(matches)) => {
 			C::print_from_uri(&get_uri("uri", &matches)?, password, maybe_network, output);

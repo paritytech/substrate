@@ -273,7 +273,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin, Member, OpaqueKeys, SignedExtension,
+		SimpleArithmetic, EnsureOrigin, Member, SignedExtension,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
@@ -317,6 +317,23 @@ pub type EraIndex = u32;
 
 /// Counter for the number of "reward" points earned by a given validator.
 pub type Points = u32;
+
+pub mod sr25519 {
+	mod app_sr25519 {
+		use sp_application_crypto::{app_crypto, key_types::STAKING, sr25519};
+		app_crypto!(sr25519, STAKING);
+	}
+
+	/// Staking key-pair for signing.
+	#[cfg(feature = "std")]
+	pub type AuthorityPair = app_sr25519::Pair;
+
+	/// Staking signature using sr25519 as its crypto.
+	pub type AuthoritySignature = app_sr25519::Signature;
+
+	/// Staking identifier using sr25519 as its crypto.
+	pub type AuthorityId = app_sr25519::Public;
+}
 
 /// Reward points of an era. Used to split era total payout between validators.
 #[derive(Encode, Decode, Default)]
@@ -632,8 +649,6 @@ pub trait SessionInterface<AccountId>: frame_system::Trait {
 	fn disable_validator(validator: &AccountId) -> Result<bool, ()>;
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
-	/// Get the validators and their corresponding keys from session.
-	fn keys<KeyType: RuntimeAppPublic + Decode>() -> Vec<(AccountId, Option<KeyType>)>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: SessionIndex);
 	/// Current session index.
@@ -656,17 +671,6 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 
 	fn validators() -> Vec<<T as frame_system::Trait>::AccountId> {
 		<pallet_session::Module<T>>::validators()
-	}
-
-	fn keys<KeyT: RuntimeAppPublic + Decode>()
-		-> Vec<(<T as frame_system::Trait>::AccountId, Option<KeyT>)>
-	{
-		Self::validators().iter().map(|v| {
-			let maybe_key = <pallet_session::Module<T>>::load_keys(&v)
-				.and_then(|opk| opk.get(KeyT::ID));
-			(v.clone(), maybe_key)
-		})
-		.collect::<Vec<(<T as frame_system::Trait>::AccountId, Option<KeyT>)>>()
 	}
 
 	fn prune_historical_up_to(up_to: SessionIndex) {
@@ -738,7 +742,7 @@ pub trait Trait: frame_system::Trait {
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
 	/// Key type used to sign and verify transaction.
-	type KeyType: RuntimeAppPublic + Member + Parameter;
+	type KeyType: RuntimeAppPublic + Member + Parameter + Default;
 }
 
 /// Mode of era-forcing.
@@ -810,6 +814,9 @@ decl_storage! {
 
 		/// The currently elected validator set keyed by stash account ID.
 		pub CurrentElected get(fn current_elected): Vec<T::AccountId>;
+
+		/// The current set of staking keys.
+		pub Keys get(fn keys): Vec<T::KeyType>;
 
 		/// The next validator set. At the end of an era, if this is available (potentially from the
 		/// result of an offchain worker), it is immediately used. Otherwise, the on-chain election
@@ -2460,6 +2467,33 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	}
 }
 
+impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
+	type Public = T::KeyType;
+}
+
+impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+	type Key = T::KeyType;
+
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, T::KeyType)>
+	{
+		assert!(Self::keys().is_empty(), "Keys are already initialized!");
+		<Keys<T>>::put(validators.map(|x| x.1).collect::<Vec<_>>());
+	}
+
+	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, _queued_validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, T::KeyType)>
+	{
+		// Update they keys
+		<Keys<T>>::put(validators.map(|x| x.1).collect::<Vec<_>>());
+	}
+
+	fn on_before_session_ending() {}
+
+	fn on_disabled(_i: usize) {}
+}
+
+
 /// Disallows any transactions that change the election result to be submitted after the election
 /// window is open.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
@@ -2556,13 +2590,11 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				score,
 				validator_index,
 			);
-			let current_validators = T::SessionInterface::keys::<T::KeyType>();
-			let (_, validator_key) = current_validators.get(*validator_index as usize)
-				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(0u8).into()))?;
 
-			// unwrap the key if it exists.
-			let validator_key = validator_key.as_ref()
-				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(1u8).into()))?;
+			let all_keys = Self::keys();
+			let validator_key = all_keys.get(*validator_index as usize)
+				// validator index is incorrect -- no key corresponds to it.
+				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(0u8).into()))?;
 
 			let signature_valid = payload.using_encoded(|encoded_payload| {
 				validator_key.verify(&encoded_payload, &signature)
@@ -2575,7 +2607,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			Ok(ValidTransaction {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
-				// TODO: what is a good value for this?
+				// TODO: what is a good value for this? Also set priority
 				provides: vec![(Self::current_era(), validator_key).encode()],
 				longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(150_u64),
 				propagate: true,
@@ -2585,4 +2617,3 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		}
 	}
 }
-

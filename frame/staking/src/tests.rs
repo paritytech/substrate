@@ -2069,7 +2069,8 @@ fn slash_in_old_span_does_not_deselect() {
 				),
 				reporters: vec![],
 			}],
-			&[Perbill::from_percent(100)],
+			// NOTE: A 100% slash here would clean up the account, causing de-registration.
+			&[Perbill::from_percent(95)],
 			1,
 		);
 
@@ -2275,7 +2276,7 @@ fn only_slash_for_max_in_era() {
 
 #[test]
 fn garbage_collection_after_slashing() {
-	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(2).build().execute_with(|| {
 		assert_eq!(Balances::free_balance(11), 256_000);
 
 		on_offence_now(
@@ -3412,7 +3413,7 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn session_interface_work() {
+	fn session_handler_work() {
 		let mut ext = ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.validator_count(4)
@@ -3420,10 +3421,10 @@ mod offchain_phragmen {
 		let _ = offchainify(&mut ext);
 		ext.execute_with(|| {
 			assert_eq_uvec!(
-				<Test as SessionInterface<AccountId>>::keys::<DummyT>(),
+				Staking::keys(),
 				<Validators<Test>>::enumerate()
-					.map(|(acc, _)| (acc, Some(dummy_sr25519::dummy_key_for(acc))))
-					.collect::<Vec<(AccountId, Option<DummyT>)>>()
+					.map(|(acc, _)| dummy_sr25519::dummy_key_for(acc))
+					.collect::<Vec<DummyT>>()
 			);
 		})
 	}

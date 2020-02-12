@@ -306,7 +306,7 @@ mod tests {
 
 	parameter_types! {
 		pub const CreationFee: u64 = 0;
-		pub const ExistentialDeposit: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 	}
 
 	impl pallet_balances::Trait for Runtime {
@@ -394,14 +394,18 @@ mod tests {
 			self.set_constants();
 			let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 			pallet_balances::GenesisConfig::<Runtime> {
-				balances: vec![
-					(1, 10 * self.balance_factor),
-					(2, 20 * self.balance_factor),
-					(3, 30 * self.balance_factor),
-					(4, 40 * self.balance_factor),
-					(5, 50 * self.balance_factor),
-					(6, 60 * self.balance_factor)
-				],
+				balances: if self.balance_factor > 0 {
+					vec![
+						(1, 10 * self.balance_factor),
+						(2, 20 * self.balance_factor),
+						(3, 30 * self.balance_factor),
+						(4, 40 * self.balance_factor),
+						(5, 50 * self.balance_factor),
+						(6, 60 * self.balance_factor)
+					]
+				} else {
+					vec![]
+				},
 			}.assimilate_storage(&mut t).unwrap();
 			t.into()
 		}

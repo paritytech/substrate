@@ -33,10 +33,9 @@ use sp_phragmen::{
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::testing::{Header, TestXt, UintAuthorityId};
 use sp_runtime::traits::{
-	Convert, Extrinsic as ExtrinsicT, IdentityLookup, OnInitialize, OpaqueKeys,
-	SaturatedConversion, Zero,
+	Convert, Extrinsic as ExtrinsicT, IdentityLookup, OnInitialize, SaturatedConversion, Zero,
 };
-use sp_runtime::{KeyTypeId, Perbill};
+use sp_runtime::Perbill;
 use sp_staking::{
 	offence::{OffenceDetails, OnOffenceHandler},
 	SessionIndex,
@@ -74,23 +73,20 @@ thread_local! {
 	pub(crate) static LOCAL_KEY_ACCOUNT: RefCell<AccountId> = RefCell::new(10);
 }
 
-pub struct TestSessionHandler;
-impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[
-		<UintAuthorityId as RuntimeAppPublic>::ID,
-		dummy_sr25519::AuthorityId::ID,
-	];
+/// Another session handler struct ti test on_disabled.
+pub struct OtherSessionHandler;
+impl pallet_session::OneSessionHandler<AccountId> for OtherSessionHandler {
+	type Key = UintAuthorityId;
 
-	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
+	fn on_genesis_session<'a, I: 'a>(_: I)
+		where I: Iterator<Item=(&'a AccountId, Self::Key)>, AccountId: 'a {}
 
-	fn on_new_session<Ks: OpaqueKeys>(
-		_changed: bool,
-		validators: &[(AccountId, Ks)],
-		_queued_validators: &[(AccountId, Ks)],
-	) {
+	fn on_new_session<'a, I: 'a>(_: bool, validators: I, _: I,)
+		where I: Iterator<Item=(&'a AccountId, Self::Key)>, AccountId: 'a
+	{
 		SESSION.with(|x| {
 			*x.borrow_mut() = (
-				validators.iter().map(|x| x.0.clone()).collect(),
+				validators.map(|x| x.0.clone()).collect(),
 				HashSet::new(),
 			)
 		});
@@ -103,6 +99,10 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 			d.1.insert(value);
 		})
 	}
+}
+
+impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
+	type Public = UintAuthorityId;
 }
 
 pub fn is_disabled(controller: AccountId) -> bool {
@@ -242,17 +242,17 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
 }
 
-pub struct Babe;
-impl sp_runtime::BoundToRuntimeAppPublic for Babe {
+/// We prefer using the dummy key defined in `mock::dummy_sr25519`, not `crate::sr25519`, since the
+/// dummy one gives us some nice helpers and a fake `IdentifyAccount`.
+pub struct TestStaking;
+impl sp_runtime::BoundToRuntimeAppPublic for TestStaking {
 	type Public = dummy_sr25519::AuthorityId;
 }
 
-// insert one dummy key and one key as a representative of the babe key which we will use in reality
-// in here.
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
-		pub foo: UintAuthorityId,
-		pub babe: Babe,
+		pub staking: TestStaking,
+		pub other: OtherSessionHandler,
 	}
 }
 
@@ -260,7 +260,7 @@ impl pallet_session::Trait for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type SessionHandler = TestSessionHandler;
+	type SessionHandler = (Staking, OtherSessionHandler,);
 	type Event = MetaEvent;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
@@ -393,7 +393,7 @@ impl Default for ExtBuilder {
 			session_length: 1,
 			election_lookahead: 0,
 			session_per_era: 3,
-			existential_deposit: 0,
+			existential_deposit: 1,
 			validator_pool: false,
 			nominate: true,
 			validator_count: 2,
@@ -485,7 +485,11 @@ impl ExtBuilder {
 		let mut storage = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
 			.unwrap();
-		let balance_factor = if self.existential_deposit > 0 { 256 } else { 1 };
+		let balance_factor = if self.existential_deposit > 1 {
+			256
+		} else {
+			1
+		};
 
 		let num_validators = self.num_validators.unwrap_or(self.validator_count);
 		let validators = (0..num_validators)
@@ -552,8 +556,8 @@ impl ExtBuilder {
 			keys: validators.iter().map(|x| (
 				*x,
 				SessionKeys {
-					foo: UintAuthorityId(*x),
-					babe: dummy_sr25519::dummy_key_for(*x),
+					staking: dummy_sr25519::dummy_key_for(*x),
+					other: UintAuthorityId(*x),
 				}
 			)).collect(),
 		}.assimilate_storage(&mut storage);

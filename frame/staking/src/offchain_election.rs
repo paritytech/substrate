@@ -16,9 +16,7 @@
 
 //! Helpers for offchain worker election.
 
-use crate::{
-	Call, Module, SessionInterface, Trait, BalanceOf, ValidatorIndex, NominatorIndex, CompactOf,
-};
+use crate::{Call, Module, Trait, BalanceOf, ValidatorIndex, NominatorIndex, CompactOf};
 use codec::Encode;
 use frame_system::offchain::{SubmitUnsignedTransaction};
 use sp_phragmen::{reduce, ExtendedBalance, PhragmenResult, StakedAssignment, Assignment, PhragmenScore};
@@ -104,18 +102,17 @@ pub(crate) fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool 
 
 /// The internal logic of the offchain worker of this module.
 pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElectionError> {
-	let validator_keys = T::SessionInterface::keys::<T::KeyType>();
+	let keys = <Module<T>>::keys();
 	let local_keys = T::KeyType::all();
 
 	if let Some((index, ref pubkey)) = local_keys
 		.into_iter()
-		.find_map(|k|
-			validator_keys
+		.find_map(|key|
+			keys
 				.iter()
 				.enumerate()
-				.find_map(|(index, (_acc, maybe_vk))|
-					maybe_vk.as_ref()
-						.and_then(|vk| if *vk == k { Some((index, vk)) } else { None })
+				.find_map(|(index, val_key)|
+					if *val_key == key { Some((index, val_key)) } else { None }
 				)
 		) {
 			// make sure that the snapshot is available.

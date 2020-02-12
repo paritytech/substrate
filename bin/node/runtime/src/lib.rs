@@ -58,7 +58,7 @@ pub use pallet_timestamp::Call as TimestampCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_contracts::Gas;
 pub use frame_support::StorageValue;
-pub use pallet_staking::{StakerStatus, LockStakingStatus};
+pub use pallet_staking::{StakerStatus, LockStakingStatus, sr25519::AuthorityId as StakingId};
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
@@ -127,7 +127,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 215,
+	spec_version: 216,
 	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -333,7 +333,7 @@ impl pallet_staking::Trait for Runtime {
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
 	type SubmitTransaction = TransactionSubmitterOf<Self::KeyType>;
-	type KeyType = pallet_babe::AuthorityId;
+	type KeyType = StakingId;
 }
 
 parameter_types! {
@@ -822,7 +822,9 @@ impl_runtime_apis! {
 			-> Option<Vec<BenchmarkResults>>
 		{
 			match module.as_slice() {
+				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
+				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
 				_ => return None,
 			}
 		}
