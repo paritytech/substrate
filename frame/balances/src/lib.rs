@@ -155,6 +155,7 @@ mod tests_composite;
 #[cfg(test)]
 #[macro_use]
 mod tests;
+mod benchmarking;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
