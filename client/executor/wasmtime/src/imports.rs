@@ -19,7 +19,17 @@ use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{Function, Value, ValueType};
 use std::any::Any;
 use std::rc::Rc;
-use wasmtime::{Callable, Extern, ExternType, Func, Module, Store, Trap, Val};
+use wasmtime::{
+	Callable, Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module,
+	Trap, Val,
+};
+
+pub struct Imports {
+	/// Contains the index into `externs` where the memory import is stored if any. `None` if there
+	/// is none.
+	pub memory_import_index: Option<usize>,
+	pub externs: Vec<Extern>,
+}
 
 /// Goes over all imports of a module and prepares a vector of `Extern`s that can be used for
 /// instantiation of the module. Returns an error if there are imports that cannot be satisfied.
@@ -27,8 +37,11 @@ pub fn resolve_imports(
 	state_holder: &StateHolder,
 	module: &Module,
 	host_functions: &[&'static dyn Function],
-) -> Result<Vec<Extern>, WasmError> {
+	heap_pages: u32,
+	allow_missing_func_imports: bool,
+) -> Result<Imports, WasmError> {
 	let mut externs = vec![];
+	let mut memory_import_index = None;
 	for import_ty in module.imports() {
 		if import_ty.module() != "env" {
 			return Err(WasmError::Other(format!(
@@ -38,42 +51,102 @@ pub fn resolve_imports(
 			)));
 		}
 
-		let host_func = host_functions
-			.iter()
-			.find(|host_func| host_func.name() == import_ty.name())
-			.ok_or_else(|| {
-				WasmError::Other(format!(
-					"host doesn't provide such function: {}:{}",
-					import_ty.module(),
-					import_ty.name()
-				))
-			})?;
-
-		let func_ty = match import_ty.ty() {
-			ExternType::Func(func_ty) => func_ty,
-			_ => {
-				return Err(WasmError::Other(format!(
-					"host doesn't provide any non function imports: {}:{}",
-					import_ty.module(),
-					import_ty.name()
-				)));
+		let resolved = match import_ty.name() {
+			"memory" => {
+				memory_import_index = Some(externs.len());
+				resolve_memory_import(module, import_ty, heap_pages)?
 			}
+			_ => resolve_func_import(
+				module,
+				state_holder,
+				import_ty,
+				host_functions,
+				allow_missing_func_imports,
+			)?,
 		};
-		if !signature_matches(&func_ty, &wasmtime_func_sig(*host_func)) {
+		externs.push(resolved);
+	}
+	Ok(Imports {
+		memory_import_index,
+		externs,
+	})
+}
+
+fn resolve_memory_import(
+	module: &Module,
+	import_ty: &ImportType,
+	heap_pages: u32,
+) -> Result<Extern, WasmError> {
+	let memory_ty = match import_ty.ty() {
+		ExternType::Memory(memory_ty) => memory_ty,
+		_ => {
 			return Err(WasmError::Other(format!(
-				"signature mismatch for: {}:{}",
+				"this import must be of memory type: {}:{}",
+				import_ty.module(),
+				import_ty.name()
+			)))
+		}
+	};
+
+	let at_least = memory_ty.limits().min().saturating_add(heap_pages);
+	if let Some(max) = memory_ty.limits().max() {
+		if at_least > max {
+			return Err(WasmError::Other(format!(
+				"incremented number of pages by heap_pages (total={}) is more than maximum requested\
+				by the runtime wasm module {}",
+				at_least,
+				max,
+			)));
+		}
+	}
+	let limits = Limits::at_least(at_least);
+	let memory = Memory::new(module.store(), MemoryType::new(limits));
+	Ok(Extern::Memory(memory))
+}
+
+fn resolve_func_import(
+	module: &Module,
+	state_holder: &StateHolder,
+	import_ty: &ImportType,
+	host_functions: &[&'static dyn Function],
+	allow_missing_func_imports: bool,
+) -> Result<Extern, WasmError> {
+	let func_ty = match import_ty.ty() {
+		ExternType::Func(func_ty) => func_ty,
+		_ => {
+			return Err(WasmError::Other(format!(
+				"host doesn't provide any non function imports besides 'memory': {}:{}",
 				import_ty.module(),
 				import_ty.name()
 			)));
 		}
+	};
 
-		externs.push(create_host_func_handler(
-			*host_func,
-			module.store(),
-			state_holder.clone(),
-		));
+	let host_func = match host_functions
+		.iter()
+		.find(|host_func| host_func.name() == import_ty.name())
+	{
+		Some(host_func) => host_func,
+		None if allow_missing_func_imports => {
+			return Ok(MissingHostFuncHandler::new(import_ty).into_extern(module, func_ty));
+		}
+		None => {
+			return Err(WasmError::Other(format!(
+				"host doesn't provide such function: {}:{}",
+				import_ty.module(),
+				import_ty.name()
+			)));
+		}
+	};
+	if !signature_matches(&func_ty, &wasmtime_func_sig(*host_func)) {
+		return Err(WasmError::Other(format!(
+			"signature mismatch for: {}:{}",
+			import_ty.module(),
+			import_ty.name()
+		)));
 	}
-	Ok(externs)
+
+	Ok(HostFuncHandler::new(&state_holder, *host_func).into_extern(module))
 }
 
 /// Returns `true` if `lhs` and `rhs` represent the same signature.
@@ -81,29 +154,25 @@ fn signature_matches(lhs: &wasmtime::FuncType, rhs: &wasmtime::FuncType) -> bool
 	lhs.params() == rhs.params() && lhs.results() == rhs.results()
 }
 
-/// Wraps the given `host_func` as a wasmtime's `Extern` suitable for passing it as an import.
-fn create_host_func_handler(
-	host_func: &'static dyn Function,
-	store: &Store,
-	state_holder: StateHolder,
-) -> Extern {
-	let func_ty = wasmtime_func_sig(host_func);
-	let callable = HostFuncHandler::new(state_holder, host_func);
-	let func = Func::new(store, func_ty, Rc::new(callable));
-	Extern::Func(func)
-}
-
+/// This structure implements `Callable` and acts as a bridge between wasmtime and
+/// substrate host functions.
 struct HostFuncHandler {
 	state_holder: StateHolder,
 	host_func: &'static dyn Function,
 }
 
 impl HostFuncHandler {
-	fn new(state_holder: StateHolder, host_func: &'static dyn Function) -> Self {
+	fn new(state_holder: &StateHolder, host_func: &'static dyn Function) -> Self {
 		Self {
-			state_holder,
+			state_holder: state_holder.clone(),
 			host_func,
 		}
+	}
+
+	fn into_extern(self, module: &Module) -> Extern {
+		let func_ty = wasmtime_func_sig(self.host_func);
+		let func = Func::new(module.store(), func_ty, Rc::new(self));
+		Extern::Func(func)
 	}
 }
 
@@ -119,7 +188,7 @@ impl Callable for HostFuncHandler {
 				wasm instance is always called initializing context;
 				therefore host_ctx cannot be None;
 				qed
-				"
+				",
 			);
 			// `into_value` panics if it encounters a value that doesn't fit into the values
 			// available in substrate.
@@ -158,6 +227,39 @@ impl Callable for HostFuncHandler {
 			}
 			Err(msg) => Err(Trap::new(msg)),
 		}
+	}
+}
+
+/// A `Callable` handler for missing functions.
+struct MissingHostFuncHandler {
+	module: String,
+	name: String,
+}
+
+impl MissingHostFuncHandler {
+	fn new(import_ty: &ImportType) -> Self {
+		Self {
+			module: import_ty.module().to_string(),
+			name: import_ty.name().to_string(),
+		}
+	}
+
+	fn into_extern(self, module: &Module, func_ty: &FuncType) -> Extern {
+		let func = Func::new(module.store(), func_ty.clone(), Rc::new(self));
+		Extern::Func(func)
+	}
+}
+
+impl Callable for MissingHostFuncHandler {
+	fn call(
+		&self,
+		_wasmtime_params: &[Val],
+		_wasmtime_results: &mut [Val],
+	) -> Result<(), wasmtime::Trap> {
+		Err(Trap::new(format!(
+			"call to a missing function {}:{}",
+			self.module, self.name
+		)))
 	}
 }
 

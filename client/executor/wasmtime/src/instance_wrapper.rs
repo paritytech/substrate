@@ -18,6 +18,8 @@
 //! runtime module.
 
 use crate::util;
+use crate::imports::Imports;
+
 use sc_executor_common::error::{Error, Result};
 use sp_wasm_interface::{Pointer, WordSize};
 use std::slice;
@@ -44,21 +46,12 @@ impl InstanceWrapper {
 	/// Requiring `Instance` is rather a convenience feature: in reality exclusive ownership is only
 	/// required for `Memory` to guarantee exclusive access to its memory and prevent caching
 	/// the pointer to the memory's base address to prevent invalidation.
-	pub unsafe fn new(instance: Instance) -> Result<Self> {
+	pub unsafe fn new(instance: Instance, memory: Memory) -> Result<Self> {
 		Ok(Self {
 			table: get_table(&instance),
-			memory: get_linear_memory(&instance)?,
+			memory,
 			instance,
 		})
-	}
-
-	/// Increases the size of the linear memory attached to this instance.
-	pub fn grow_memory(&self, pages: u32) -> Result<()> {
-		if self.memory.grow(pages).is_ok() {
-			Ok(())
-		} else {
-			return Err("failed top increase the linear memory size".into());
-		}
 	}
 
 	/// Resolves a substrate entrypoint by the given name.
@@ -123,19 +116,6 @@ fn get_table(instance: &Instance) -> Option<Table> {
 		.get_export("__indirect_function_table")
 		.and_then(|export| export.table())
 		.cloned()
-}
-
-fn get_linear_memory(instance: &Instance) -> Result<Memory> {
-	let memory_export = instance
-		.get_export("memory")
-		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
-
-	let memory = memory_export
-		.memory()
-		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?
-		.clone();
-
-	Ok(memory)
 }
 
 /// Functions realted to memory.

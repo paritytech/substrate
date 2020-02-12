@@ -17,24 +17,24 @@
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
 use crate::host::HostState;
-use crate::imports::resolve_imports;
+use crate::imports::{resolve_imports, Imports};
 use crate::instance_wrapper::InstanceWrapper;
 use crate::state_holder::StateHolder;
 
-use sp_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
 	error::{Error, Result, WasmError},
 	wasm_runtime::WasmRuntime,
 };
+use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize};
-use wasmtime::{Config, Engine, Extern, Instance, Module, Store};
+use wasmtime::{Config, Engine, Instance, Module, Memory, Store};
 
 /// A `WasmRuntime` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
 	module: Module,
-	externs: Vec<Extern>,
+	imports: Imports,
 	state_holder: StateHolder,
 	heap_pages: u32,
 	host_functions: Vec<&'static dyn Function>,
@@ -48,7 +48,7 @@ impl WasmRuntime for WasmtimeRuntime {
 	fn call(&mut self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
 		call_method(
 			&self.module,
-			&self.externs,
+			&mut self.imports,
 			&self.state_holder,
 			method,
 			data,
@@ -78,11 +78,11 @@ pub fn create_instance(
 
 	// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 	// and results.
-	let externs = resolve_imports(&state_holder, &module, &host_functions)?;
+	let imports = resolve_imports(&state_holder, &module, &host_functions, heap_pages as u32, allow_missing_func_imports)?;
 
 	Ok(WasmtimeRuntime {
 		module,
-		externs,
+		imports,
 		state_holder,
 		heap_pages: heap_pages as u32,
 		host_functions,
@@ -92,21 +92,33 @@ pub fn create_instance(
 /// Call a function inside a precompiled Wasm module.
 fn call_method(
 	module: &Module,
-	externs: &[Extern],
+	imports: &mut Imports,
 	state_holder: &StateHolder,
 	method: &str,
 	data: &[u8],
 	heap_pages: u32,
 ) -> Result<Vec<u8>> {
 	let instance_wrapper = unsafe {
-		let instance = Instance::new(module, externs)
+		let instance = Instance::new(module, &imports.externs)
 			.map_err(|e| WasmError::Other(format!("cannot instantiate: {}", e)))?;
 
-		// This is safe since the requirement that `InstanceWrapper` own the instance exclusively
-		// is held.
-		InstanceWrapper::new(instance)?
+		let memory = match imports.memory_import_index {
+			Some(memory_idx) => {
+				imports.externs[memory_idx]
+					.memory()
+					.expect("only memory can be at the `memory_idx`; qed")
+					.clone()
+			}
+			None => {
+				let memory = get_linear_memory(&instance)?;
+				if !memory.grow(heap_pages).is_ok() {
+					return Err("failed top increase the linear memory size".into());
+				}
+				memory
+			},
+		};
+		InstanceWrapper::new(instance, memory)?
 	};
-	instance_wrapper.grow_memory(heap_pages)?;
 
 	let heap_base = instance_wrapper.extract_heap_base()?;
 	let allocator = FreeingBumpHeapAllocator::new(heap_base);
@@ -114,6 +126,20 @@ fn call_method(
 	let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
 
 	perform_call(data, state_holder, instance_wrapper, entrypoint, allocator)
+}
+
+/// Extract linear memory instance from the given instance.
+fn get_linear_memory(instance: &Instance) -> Result<Memory> {
+	let memory_export = instance
+		.get_export("memory")
+		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
+
+	let memory = memory_export
+		.memory()
+		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?
+		.clone();
+
+	Ok(memory)
 }
 
 fn perform_call(
