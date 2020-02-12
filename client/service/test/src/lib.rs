@@ -166,6 +166,7 @@ fn node_config<G, E: Clone> (
 			enable_mdns: false,
 			allow_private_ipv4: true,
 			wasm_external_transport: None,
+			use_yamux_flow_control: true,
 		},
 		max_parallel_downloads: NetworkConfiguration::default().max_parallel_downloads,
 	};

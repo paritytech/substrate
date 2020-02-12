@@ -93,6 +93,10 @@ pub struct NetworkConfigurationParams {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
+
+	/// Experimental feature flag.
+	#[structopt(long = "use-yamux-flow-control")]
+	pub use_yamux_flow_control: bool,
 }
 
 impl NetworkConfigurationParams {
@@ -146,6 +150,7 @@ impl NetworkConfigurationParams {
 			enable_mdns: !is_dev && !self.no_mdns,
 			allow_private_ipv4: !self.no_private_ipv4,
 			wasm_external_transport: None,
+			use_yamux_flow_control: self.use_yamux_flow_control,
 		};
 
 		config.network.max_parallel_downloads = self.max_parallel_downloads;
@@ -153,5 +158,3 @@ impl NetworkConfigurationParams {
 		Ok(())
 	}
 }
-
-
