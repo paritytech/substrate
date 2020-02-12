@@ -164,14 +164,14 @@ macro_rules! implement_per_thing {
 			/// From an explicitly defined number of parts per maximum of the type.
 			///
 			/// This can be called at compile time.
-			pub const fn from_parts_const(parts: $type) -> Self {
+			pub const fn from_parts(parts: $type) -> Self {
 				Self([parts, $max][(parts > $max) as usize])
 			}
 
 			/// Converts a percent into `Self`. Equal to `x / 100`.
 			///
 			/// This can be created at compile time.
-			pub const fn from_percent_const(x: $type) -> Self {
+			pub const fn from_percent(x: $type) -> Self {
 				Self([x, 100][(x > 100) as usize] * ($max / 100))
 			}
 

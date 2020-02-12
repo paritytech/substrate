@@ -21,7 +21,7 @@
 use crate::mock::*;
 use crate::{elect, PhragmenResult, PhragmenStakedAssignment, build_support_map, Support, equalize};
 use substrate_test_utils::assert_eq_uvec;
-use sp_runtime::{Perbill, PerThing};
+use sp_runtime::Perbill;
 
 type Output = Perbill;
 
