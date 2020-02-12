@@ -128,7 +128,7 @@ pub struct Timepoint<BlockNumber> {
 
 /// A multisig account.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
-pub struct MultiAccount<Balance, AccountId> {
+pub struct MultiAccountData<Balance, AccountId> {
 	// The total number of approvals for dispatches before they are executed.
 	threshold: u16,
 	// The accounts who can approve dispatches. May not be empty.
@@ -160,7 +160,7 @@ decl_storage! {
 		/// The set of multi accounts.
 		pub MultiAccounts: map
 			hasher(blake2_256) T::AccountId
-			=> Option<MultiAccount<BalanceOf<T>, T::AccountId>>;
+			=> Option<MultiAccountData<BalanceOf<T>, T::AccountId>>;
 
 		/// The set of open multisig operations.
 		pub Multisigs: double_map
@@ -362,7 +362,7 @@ decl_module! {
 
 			T::Currency::reserve(&who, deposit)?;
 
-			<MultiAccounts<T>>::insert(&id, MultiAccount {
+			<MultiAccounts<T>>::insert(&id, MultiAccountData {
 				threshold,
 				signatories,
 				deposit,
@@ -423,7 +423,7 @@ decl_module! {
 				T::Currency::reserve(&who, updated_deposit)?;
 
 				// save multi account
-				<MultiAccounts<T>>::insert(&who, MultiAccount {
+				<MultiAccounts<T>>::insert(&who, MultiAccountData {
 					threshold,
 					signatories,
 					deposit: updated_deposit,
@@ -903,20 +903,33 @@ mod tests {
 			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
 
 			assert_ok!(MultiAccount::create(Origin::signed(1), 2, vec![2, 3]));
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id).unwrap(), MultiAccountData {
+				threshold: 2,
+				signatories: vec![1, 2, 3],
+				deposit: 4,
+				depositor: 1,
+			});
 			assert_eq!(Balances::free_balance(1), 11);
 			assert_eq!(Balances::reserved_balance(1), 4);
 			assert_eq!(Balances::free_balance(multi_id), 15);
 			assert_eq!(Balances::reserved_balance(multi_id), 0);
 			expect_event(RawEvent::NewMultiAccount(1, multi_id));
 
-			assert_ok!(MultiAccount::update(Origin::signed(multi_id), 3, vec![1, 3, 4]));
+			assert_ok!(MultiAccount::update(Origin::signed(multi_id), 1, vec![1, 3]));
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id).unwrap(), MultiAccountData {
+				threshold: 1,
+				signatories: vec![1, 3],
+				deposit: 3,
+				depositor: multi_id,
+			});
 			assert_eq!(Balances::free_balance(1), 15);
 			assert_eq!(Balances::reserved_balance(1), 0);
-			assert_eq!(Balances::free_balance(multi_id), 11);
-			assert_eq!(Balances::reserved_balance(multi_id), 4);
+			assert_eq!(Balances::free_balance(multi_id), 12);
+			assert_eq!(Balances::reserved_balance(multi_id), 3);
 			expect_event(RawEvent::MultiAccountUpdated(multi_id));
 
 			assert_ok!(MultiAccount::remove(Origin::signed(multi_id)));
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), None);
 			assert_eq!(Balances::free_balance(multi_id), 15);
 			assert_eq!(Balances::reserved_balance(multi_id), 0);
 			expect_event(RawEvent::MultiAccountRemoved(multi_id));
