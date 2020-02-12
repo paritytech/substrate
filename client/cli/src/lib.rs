@@ -424,6 +424,7 @@ fn fill_network_configuration(
 		enable_mdns: !is_dev && !cli.no_mdns,
 		allow_private_ipv4: !cli.no_private_ipv4,
 		wasm_external_transport: None,
+		use_yamux_flow_control: cli.use_yamux_flow_control
 	};
 
 	config.max_parallel_downloads = cli.max_parallel_downloads;

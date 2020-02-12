@@ -6078,6 +6078,7 @@ dependencies = [
  "unsigned-varint",
  "void",
  "wasm-timer",
+ "yamux",
  "zeroize 1.1.0",
 ]
 
