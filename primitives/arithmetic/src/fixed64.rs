@@ -20,7 +20,7 @@ use sp_std::{
 };
 use codec::{Encode, Decode};
 use crate::{
-	Perbill,
+	PerThing, Perbill,
 	traits::{
 		SaturatedConversion, CheckedSub, CheckedAdd, CheckedDiv, Bounded, UniqueSaturatedInto, Saturating
 	}

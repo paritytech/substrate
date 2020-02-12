@@ -49,7 +49,7 @@
 //! Based on research at https://research.web3.foundation/en/latest/polkadot/slashing/npos/
 
 use super::{
-	EraIndex, Trait, Module, Store, BalanceOf, Exposure, Perbill, SessionInterface,
+	EraIndex, Trait, Module, Store, BalanceOf, Exposure, Perbill, PerThing, SessionInterface,
 	NegativeImbalanceOf, UnappliedSlash,
 };
 use sp_runtime::traits::{Zero, Saturating};
@@ -62,7 +62,7 @@ use codec::{Encode, Decode};
 
 /// The proportion of the slashing reward to be paid out on the first slashing detection.
 /// This is f_1 in the paper.
-const REWARD_F1: Perbill = Perbill::from_percent(50);
+const REWARD_F1: Perbill = Perbill::from_percent_const(50);
 
 /// The index of a slashing span - unique to each stash.
 pub(crate) type SpanIndex = u32;

@@ -34,8 +34,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, collections::btree_map::BTreeMap};
-use sp_runtime::RuntimeDebug;
-use sp_runtime::{helpers_128bit::multiply_by_rational, Perbill, Rational128};
+use sp_runtime::{
+	Perbill, Rational128, RuntimeDebug, PerThing,
+	helpers_128bit::multiply_by_rational,
+};
 use sp_runtime::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
 
 #[cfg(test)]

@@ -21,8 +21,9 @@ use std::cell::RefCell;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
-	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
-	testing::{Header, UintAuthorityId}
+	Perbill, PerThing, impl_opaque_keys,
+	traits::{BlakeTwo256, IdentityLookup, ConvertInto},
+	testing::{Header, UintAuthorityId},
 };
 use sp_staking::SessionIndex;
 
@@ -155,7 +156,7 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const MinimumPeriod: u64 = 5;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub const AvailableBlockRatio: Perbill = Default::default();
 }
 
 impl frame_system::Trait for Test {

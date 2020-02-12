@@ -267,8 +267,7 @@ use frame_support::{
 };
 use pallet_session::historical::SessionManager;
 use sp_runtime::{
-	Perbill,
-	RuntimeDebug,
+	Perbill, PerThing, RuntimeDebug,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,

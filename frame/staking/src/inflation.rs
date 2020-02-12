@@ -19,7 +19,7 @@
 //! The staking rate in NPoS is the total amount of tokens staked by nominators and validators,
 //! divided by the total token supply.
 
-use sp_runtime::{Perbill, traits::SimpleArithmetic, curve::PiecewiseLinear};
+use sp_runtime::{Perbill, PerThing, traits::SimpleArithmetic, curve::PiecewiseLinear};
 
 /// The total payout to all validators (and their nominators) per era.
 ///

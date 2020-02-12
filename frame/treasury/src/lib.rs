@@ -590,7 +590,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Remove any non-members of `Tippers` from a `tips` vectr. `O(T)`.
+	/// Remove any non-members of `Tippers` from a `tips` vector. `O(T)`.
 	fn retain_active_tips(tips: &mut Vec<(T::AccountId, BalanceOf<T>)>) {
 		let members = T::Tippers::sorted_members();
 		let mut members_iter = members.iter();
@@ -737,7 +737,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub const AvailableBlockRatio: Perbill = Default::default();
 	}
 	impl frame_system::Trait for Test {
 		type Origin = Origin;
@@ -781,12 +781,12 @@ mod tests {
 		}
 	}
 	parameter_types! {
-		pub const ProposalBond: Permill = Permill::from_percent(5);
+		pub const ProposalBond: Permill = Permill::from_percent_const(5);
 		pub const ProposalBondMinimum: u64 = 1;
 		pub const SpendPeriod: u64 = 2;
-		pub const Burn: Permill = Permill::from_percent(50);
+		pub const Burn: Permill = Permill::from_percent_const(50);
 		pub const TipCountdown: u64 = 1;
-		pub const TipFindersFee: Percent = Percent::from_percent(20);
+		pub const TipFindersFee: Percent = Percent::from_percent_const(20);
 		pub const TipReportDepositBase: u64 = 1;
 		pub const TipReportDepositPerByte: u64 = 1;
 	}

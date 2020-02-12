@@ -19,8 +19,51 @@ use serde::{Serialize, Deserialize};
 
 use sp_std::{ops, prelude::*, convert::TryInto};
 use codec::{Encode, Decode, CompactAs};
-use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
+use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded};
 use sp_debug_derive::RuntimeDebug;
+
+/// Something that implements a fixed point ration with an arbitrary granularity `X`, as _parts per
+/// `X`_.
+pub trait PerThing<T: Bounded>: Sized + Saturating {
+	/// accuracy of this type
+	const ACCURACY: T;
+
+	/// Nothing
+	fn zero() -> Self;
+
+	/// `true` if this is nothing.
+	fn is_zero(&self) -> bool;
+
+	/// Everything.
+	fn one() -> Self;
+
+	/// Consume self and deconstruct into a raw numeric type.
+	fn deconstruct(self) -> T;
+
+	/// Return the scale at which this per-thing is working.
+	fn accuracy() -> T;
+
+	/// From an explicitly defined number of parts per maximum of the type.
+	fn from_parts(parts: T) -> Self;
+
+	/// Converts a percent into `Self`. Equal to `x / 100`.
+	fn from_percent(x: T) -> Self;
+
+	/// Return the product of multiplication of this value by itself.
+	fn square(self) -> Self;
+
+	/// Converts a fraction into `Self`.
+	#[cfg(feature = "std")]
+	fn from_fraction(x: f64) -> Self;
+
+	/// Approximate the fraction `p/q` into a per-thing fraction. This will never overflow.
+	///
+	/// The computation of this approximation is performed in the generic type `N`. Given
+	/// `M` as the data type that can hold the maximum value of this per-thing (e.g. u32 for
+	/// perbill), this can only work if `N == M` or `N: From<M> + TryInto<M>`.
+	fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where N: Clone + Ord + From<T> + TryInto<T> + ops::Div<N, Output=N>;
+}
 
 macro_rules! implement_per_thing {
 	($name:ident, $test_mod:ident, [$($test_units:tt),+], $max:tt, $type:ty, $upper_type:ty, $title:expr $(,)?) => {
@@ -28,41 +71,40 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, CompactAs)]
+		#[cfg_attr(not(test), derive(Default))]
+		#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, CompactAs)]
 		pub struct $name($type);
 
-		impl $name {
+		impl PerThing<$type> for $name {
+			const ACCURACY: $type = $max;
+
 			/// Nothing.
-			pub fn zero() -> Self { Self(0) }
+			fn zero() -> Self { Self(0) }
 
 			/// `true` if this is nothing.
-			pub fn is_zero(&self) -> bool { self.0 == 0 }
+			fn is_zero(&self) -> bool { self.0 == 0 }
 
 			/// Everything.
-			pub fn one() -> Self { Self($max) }
+			fn one() -> Self { Self($max) }
 
 			/// Consume self and deconstruct into a raw numeric type.
-			pub fn deconstruct(self) -> $type { self.0 }
+			fn deconstruct(self) -> $type { self.0 }
 
 			/// Return the scale at which this per-thing is working.
-			pub const fn accuracy() -> $type { $max }
+			fn accuracy() -> $type { $max }
 
 			/// From an explicitly defined number of parts per maximum of the type.
-			///
-			/// This can be called at compile time.
-			pub const fn from_parts(parts: $type) -> Self {
+			fn from_parts(parts: $type) -> Self {
 				Self([parts, $max][(parts > $max) as usize])
 			}
 
 			/// Converts a percent into `Self`. Equal to `x / 100`.
-			///
-			/// This can be created at compile time.
-			pub const fn from_percent(x: $type) -> Self {
+			fn from_percent(x: $type) -> Self {
 				Self([x, 100][(x > 100) as usize] * ($max / 100))
 			}
 
 			/// Return the product of multiplication of this value by itself.
-			pub fn square(self) -> Self {
+			fn square(self) -> Self {
 				// both can be safely casted and multiplied.
 				let p: $upper_type = self.0 as $upper_type * self.0 as $upper_type;
 				let q: $upper_type = <$upper_type>::from($max) * <$upper_type>::from($max);
@@ -71,14 +113,14 @@ macro_rules! implement_per_thing {
 
 			/// Converts a fraction into `Self`.
 			#[cfg(feature = "std")]
-			pub fn from_fraction(x: f64) -> Self { Self((x * ($max as f64)) as $type) }
+			fn from_fraction(x: f64) -> Self { Self((x * ($max as f64)) as $type) }
 
 			/// Approximate the fraction `p/q` into a per-thing fraction. This will never overflow.
 			///
 			/// The computation of this approximation is performed in the generic type `N`. Given
 			/// `M` as the data type that can hold the maximum value of this per-thing (e.g. u32 for
 			/// perbill), this can only work if `N == M` or `N: From<M> + TryInto<M>`.
-			pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+			fn from_rational_approximation<N>(p: N, q: N) -> Self
 				where N: Clone + Ord + From<$type> + TryInto<$type> + ops::Div<N, Output=N>
 			{
 				// q cannot be zero.
@@ -113,6 +155,31 @@ macro_rules! implement_per_thing {
 					/ q_reduce as $upper_type;
 
 				$name(part as $type)
+			}
+		}
+
+		/// Implement const functions
+		impl $name {
+			/// From an explicitly defined number of parts per maximum of the type.
+			///
+			/// This can be called at compile time.
+			pub const fn from_parts_const(parts: $type) -> Self {
+				Self([parts, $max][(parts > $max) as usize])
+			}
+
+			/// Converts a percent into `Self`. Equal to `x / 100`.
+			///
+			/// This can be created at compile time.
+			pub const fn from_percent_const(x: $type) -> Self {
+				Self([x, 100][(x > 100) as usize] * ($max / 100))
+			}
+		}
+
+		/// For testing, this can be the default.
+		#[cfg(test)]
+		impl Default for $name {
+			fn default() -> Self {
+				Self::one()
 			}
 		}
 
@@ -190,7 +257,7 @@ macro_rules! implement_per_thing {
 		#[cfg(test)]
 		mod $test_mod {
 			use codec::{Encode, Decode};
-			use super::{$name, Saturating, RuntimeDebug};
+			use super::{$name, Saturating, RuntimeDebug, PerThing};
 			use crate::traits::Zero;
 
 

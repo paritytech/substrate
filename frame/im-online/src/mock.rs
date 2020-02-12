@@ -21,7 +21,7 @@
 use std::cell::RefCell;
 
 use crate::{Module, Trait};
-use sp_runtime::Perbill;
+use sp_runtime::{Perbill, PerThing};
 use sp_staking::{SessionIndex, offence::ReportOffence};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
@@ -95,7 +95,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub const AvailableBlockRatio: Perbill = Default::default();
 }
 
 impl frame_system::Trait for Runtime {

@@ -79,7 +79,7 @@ use pallet_session::historical::IdentificationTuple;
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
 	RuntimeDebug,
-	traits::{Convert, Member, Saturating, SimpleArithmetic}, Perbill,
+	traits::{Convert, Member, Saturating, SimpleArithmetic}, Perbill, PerThing,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, InvalidTransaction,
 		TransactionPriority,

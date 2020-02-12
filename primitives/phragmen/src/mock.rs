@@ -20,7 +20,7 @@
 
 use crate::{elect, PhragmenResult, PhragmenAssignment};
 use sp_runtime::{
-	assert_eq_error_rate, Perbill,
+	assert_eq_error_rate, Perbill, PerThing,
 	traits::{Convert, Member, SaturatedConversion}
 };
 use sp_std::collections::btree_map::BTreeMap;
