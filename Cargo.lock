@@ -5964,7 +5964,6 @@ dependencies = [
  "sp-core",
  "sp-runtime-interface",
  "sp-wasm-interface",
- "take_mut",
  "wasmi",
  "wasmtime",
 ]

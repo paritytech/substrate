@@ -44,29 +44,20 @@ impl StateHolder {
 	/// Provide `HostState` for the runtime method call and execute the given function `f`.
 	///
 	/// During the execution of the provided function `with_context` will be callable.
-	pub fn init_state<R, F>(&self, state: &mut HostState, f: F) -> R
+	pub fn init_state<R, F>(&self, state: HostState, f: F) -> (R, HostState)
 	where
 		F: FnOnce() -> R,
 	{
-		// We need an `Option` here since Rust will doesn't allow to assign a value for the first
-		// time from within a closure.
-		let mut ret: Option<R> = None;
+		*self.state.borrow_mut() = Some(state);
 
-		take_mut::take(state, |state| {
-			*self.state.borrow_mut() = Some(state);
+		let ret = f();
+		let state = self
+			.state
+			.borrow_mut()
+			.take()
+			.expect("cannot be None since was just assigned; qed");
 
-			ret = Some(f());
-
-			let state = self
-				.state
-				.borrow_mut()
-				.take()
-				.expect("cannot be None since was just assigned; qed");
-
-			state
-		});
-
-		ret.expect("cannot be None since was just in the closure above; qed")
+		(ret, state)
 	}
 
 	/// Create a `HostContext` from the contained `HostState` and execute the given function `f`.

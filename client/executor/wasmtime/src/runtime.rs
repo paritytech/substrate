@@ -121,9 +121,8 @@ fn perform_call(
 ) -> Result<Vec<u8>> {
 	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
 
-	let mut host_state = HostState::new(allocator, instance_wrapper);
-
-	let (output_ptr, output_len) = state_holder.init_state(&mut host_state, || match entrypoint
+	let host_state = HostState::new(allocator, instance_wrapper);
+	let (ret, host_state) = state_holder.init_state(host_state, || match entrypoint
 		.call(&[
 			wasmtime::Val::I32(u32::from(data_ptr) as i32),
 			wasmtime::Val::I32(u32::from(data_len) as i32),
@@ -138,7 +137,8 @@ fn perform_call(
 				trap.message()
 			)));
 		}
-	})?;
+	});
+	let (output_ptr, output_len) = ret?;
 
 	let instance = host_state.into_instance();
 	let output = extract_output_data(&instance, output_ptr, output_len)?;
