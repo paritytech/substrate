@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::{io, convert::TryInto};
 
 use kvdb::{KeyValueDB, DBTransaction};
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(test)]
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use log::debug;
 
@@ -36,7 +36,7 @@ use crate::{DatabaseSettings, DatabaseSettingsSrc};
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "test-helpers", test))]
 pub const NUM_COLUMNS: u32 = 11;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
