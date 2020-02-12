@@ -263,7 +263,7 @@ use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, d
 use frame_support::weights::SimpleDispatchInfo;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers,
-	ExistenceRequirement::{KeepAlive, AllowDeath},
+	ExistenceRequirement::AllowDeath,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -788,7 +788,7 @@ decl_module! {
 			let mut payouts = <Payouts<T, I>>::get(&who);
 			if let Some((when, amount)) = payouts.first() {
 				if when <= &<system::Module<T>>::block_number() {
-					T::Currency::transfer(&Self::payouts(), &who, *amount, KeepAlive)?;
+					T::Currency::transfer(&Self::payouts(), &who, *amount, AllowDeath)?;
 					payouts.remove(0);
 					if payouts.is_empty() {
 						<Payouts<T, I>>::remove(&who);

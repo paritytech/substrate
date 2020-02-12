@@ -394,6 +394,10 @@ decl_storage! {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
 		// ^^ begin, length, amount liquid at genesis
 		build(|config: &GenesisConfig<T, I>| {
+			assert!(
+				<T as Trait<I>>::ExistentialDeposit::get() > Zero::zero(),
+				"The existential deposit should be greater than zero."
+			);
 			for (_, balance) in &config.balances {
 				assert!(
 					*balance >= <T as Trait<I>>::ExistentialDeposit::get(),
