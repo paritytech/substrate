@@ -41,7 +41,7 @@ const PREFIX: &'static str = "votes";
 /// - `T`: identifier/index type of the target.
 /// - `W`: any type used as the edge weight.
 ///
-/// ```rust
+/// ```nocompile
 /// // generate a struct with nominator and edge weight u128, with maximum supported
 /// // edge per voter of 32.
 /// generate_compact_solution_type(TestCompact<u32, u128>, 32)
@@ -57,7 +57,7 @@ const PREFIX: &'static str = "votes";
 ///
 /// An example expansion of length 16 is as follows:
 ///
-/// ```rust
+/// ```nocompile
 /// struct TestCompact<V, T, W> {
 /// 	votes1: Vec<(V, T)>,
 /// 	votes2: Vec<(V, (T, W), T)>,
