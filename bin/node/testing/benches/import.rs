@@ -17,7 +17,7 @@
 //! Block import benchmark.
 //!
 //! This benchmark is expected to measure block import operation of
-//! some full block.
+//! some more or less full block.
 //!
 //! As we also want to protect against cold-cache attacks, this
 //! benchmark should not rely on any caching (except those that
@@ -27,7 +27,6 @@
 //! This is supposed to be very simple benchmark and is not subject
 //! to much configuring - just block full of randomized transactions.
 //! It is not supposed to measure runtime modules weight correctness
-//! (there is a dedicated benchmarking mode for this).
 
 use std::{sync::Arc, path::Path, collections::BTreeMap};
 
@@ -210,7 +209,7 @@ struct BenchContext {
 
 impl BenchContext {
 	fn new(profile: Profile) -> BenchContext {
-		let keyring = BenchKeyring::new(1024);
+		let keyring = BenchKeyring::new(128);
 
 		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
 		log::trace!(
@@ -226,7 +225,7 @@ impl BenchContext {
 	}
 
 	fn new_from_seed(profile: Profile, seed_dir: &Path) -> BenchContext {
-		let keyring = BenchKeyring::new(1024);
+		let keyring = BenchKeyring::new(128);
 
 		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
 
@@ -275,7 +274,7 @@ where
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
-// Full block generation.
+// Block generation.
 fn generate_block_import(client: &Client, keyring: &BenchKeyring) -> Block {
 	let version = client.runtime_version_at(&BlockId::number(0))
 		.expect("There should be runtime version at 0")
@@ -309,7 +308,7 @@ fn generate_block_import(client: &Client, keyring: &BenchKeyring) -> Block {
 
 	let mut iteration = 0;
 	let start = std::time::Instant::now();
-	loop {
+	for _ in 0..100 {
 
 		let sender = keyring.at(iteration);
 		let receiver = get_account_id_from_seed::<sr25519::Public>(
