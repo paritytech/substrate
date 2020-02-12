@@ -66,6 +66,13 @@ decl_module! {
 		// this is needed only if you are using events in your pallet
 		fn deposit_event() = default;
 
+		/// Do nothing.
+		pub fn do_nothing(_origin, input: u32) {
+			if input > 0 {
+				return Ok(());
+			}
+		}
+
 		/// Read a value from storage value `repeat` number of times.
 		pub fn read_value(_origin, repeat: u32) {
 			for _ in 0..repeat {

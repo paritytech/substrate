@@ -293,7 +293,28 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+struct DoNothing;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for DoNothing {
+
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Random input
+			(BenchmarkParameter::N, 1, 1000),
+		]
+	}
+
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	{
+		// Get N
+		let n = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
+
+		// Return `do_nothing`
+		Ok((crate::Call::<T>::do_nothing(n), RawOrigin::Signed(account::<T>(n))))
+	}
+}
+
 selected_benchmark! {
+	DoNothing,
 	ReadValue,
 	PutValue,
 	ExistsValue,
@@ -311,6 +332,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 
 		let selected_benchmark = match extrinsic.as_slice() {
 			b"time_host" => return benchmarking::time_host(steps, repeat),
+			b"do_nothing" => SelectedBenchmark::DoNothing,
 			b"read_value" => SelectedBenchmark::ReadValue,
 			b"put_value" => SelectedBenchmark::PutValue,
 			b"exists_value" => SelectedBenchmark::ExistsValue,
