@@ -23,7 +23,7 @@ use crate::imports::Imports;
 use sc_executor_common::error::{Error, Result};
 use sp_wasm_interface::{Pointer, WordSize};
 use std::slice;
-use wasmtime::{Instance, Memory, Table};
+use wasmtime::{Instance, Module, Memory, Table};
 
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
 ///
@@ -31,22 +31,36 @@ use wasmtime::{Instance, Memory, Table};
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
+	// The memory instance of the `intance`.
+	//
+	// It is important to make sure that we don't make any copies of this to make it easier to proof
+	// See `memory_as_slice` and `memory_as_slice_mut`.
 	memory: Memory,
 	table: Option<Table>,
 }
 
 impl InstanceWrapper {
-	/// Wrap the given `Instance`.
-	///
-	/// # Safety
-	///
-	/// This wrapper requires exclusive ownership over the given instance and all its components.
-	/// Since `Instance` is a `Clone` we cannot use typesystem to prevent this, hence unsafe.
-	///
-	/// Requiring `Instance` is rather a convenience feature: in reality exclusive ownership is only
-	/// required for `Memory` to guarantee exclusive access to its memory and prevent caching
-	/// the pointer to the memory's base address to prevent invalidation.
-	pub unsafe fn new(instance: Instance, memory: Memory) -> Result<Self> {
+	/// Create a new instance wrapper from the given wasm module.
+	pub fn new(module: &Module, imports: &Imports, heap_pages: u32) -> Result<Self> {
+		let instance = Instance::new(module, &imports.externs)
+			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
+
+		let memory = match imports.memory_import_index {
+			Some(memory_idx) => {
+				imports.externs[memory_idx]
+					.memory()
+					.expect("only memory can be at the `memory_idx`; qed")
+					.clone()
+			}
+			None => {
+				let memory = get_linear_memory(&instance)?;
+				if !memory.grow(heap_pages).is_ok() {
+					return Err("failed top increase the linear memory size".into());
+				}
+				memory
+			},
+		};
+
 		Ok(Self {
 			table: get_table(&instance),
 			memory,
@@ -111,6 +125,21 @@ impl InstanceWrapper {
 	}
 }
 
+/// Extract linear memory instance from the given instance.
+fn get_linear_memory(instance: &Instance) -> Result<Memory> {
+	let memory_export = instance
+		.get_export("memory")
+		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
+
+	let memory = memory_export
+		.memory()
+		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?
+		.clone();
+
+	Ok(memory)
+}
+
+/// Extract the table from the given instance if any.
 fn get_table(instance: &Instance) -> Option<Table> {
 	instance
 		.get_export("__indirect_function_table")

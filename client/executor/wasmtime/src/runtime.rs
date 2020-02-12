@@ -28,7 +28,7 @@ use sc_executor_common::{
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize};
-use wasmtime::{Config, Engine, Instance, Module, Memory, Store};
+use wasmtime::{Config, Engine, Module, Store};
 
 /// A `WasmRuntime` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
@@ -78,7 +78,13 @@ pub fn create_instance(
 
 	// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 	// and results.
-	let imports = resolve_imports(&state_holder, &module, &host_functions, heap_pages as u32, allow_missing_func_imports)?;
+	let imports = resolve_imports(
+		&state_holder,
+		&module,
+		&host_functions,
+		heap_pages as u32,
+		allow_missing_func_imports,
+	)?;
 
 	Ok(WasmtimeRuntime {
 		module,
@@ -98,48 +104,12 @@ fn call_method(
 	data: &[u8],
 	heap_pages: u32,
 ) -> Result<Vec<u8>> {
-	let instance_wrapper = unsafe {
-		let instance = Instance::new(module, &imports.externs)
-			.map_err(|e| WasmError::Other(format!("cannot instantiate: {}", e)))?;
-
-		let memory = match imports.memory_import_index {
-			Some(memory_idx) => {
-				imports.externs[memory_idx]
-					.memory()
-					.expect("only memory can be at the `memory_idx`; qed")
-					.clone()
-			}
-			None => {
-				let memory = get_linear_memory(&instance)?;
-				if !memory.grow(heap_pages).is_ok() {
-					return Err("failed top increase the linear memory size".into());
-				}
-				memory
-			},
-		};
-		InstanceWrapper::new(instance, memory)?
-	};
-
+	let instance_wrapper = InstanceWrapper::new(module, imports, heap_pages)?;
+	let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
 	let heap_base = instance_wrapper.extract_heap_base()?;
 	let allocator = FreeingBumpHeapAllocator::new(heap_base);
 
-	let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
-
 	perform_call(data, state_holder, instance_wrapper, entrypoint, allocator)
-}
-
-/// Extract linear memory instance from the given instance.
-fn get_linear_memory(instance: &Instance) -> Result<Memory> {
-	let memory_export = instance
-		.get_export("memory")
-		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
-
-	let memory = memory_export
-		.memory()
-		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?
-		.clone();
-
-	Ok(memory)
 }
 
 fn perform_call(
