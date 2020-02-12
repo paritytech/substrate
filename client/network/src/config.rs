@@ -292,6 +292,7 @@ impl Default for NetworkConfiguration {
 				enable_mdns: false,
 				allow_private_ipv4: true,
 				wasm_external_transport: None,
+				use_yamux_flow_control: false,
 			},
 			max_parallel_downloads: 5,
 		}
@@ -348,6 +349,8 @@ pub enum TransportConfig {
 		/// This parameter exists whatever the target platform is, but it is expected to be set to
 		/// `Some` only when compiling for WASM.
 		wasm_external_transport: Option<wasm_ext::ExtTransport>,
+		/// Use flow control for yamux streams if set to true.
+		use_yamux_flow_control: bool,
 	},
 
 	/// Only allow connections within the same process.
