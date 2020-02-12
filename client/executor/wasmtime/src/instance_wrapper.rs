@@ -23,6 +23,7 @@ use crate::imports::Imports;
 use sc_executor_common::error::{Error, Result};
 use sp_wasm_interface::{Pointer, WordSize};
 use std::slice;
+use std::marker;
 use wasmtime::{Instance, Module, Memory, Table};
 
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
@@ -37,6 +38,8 @@ pub struct InstanceWrapper {
 	// See `memory_as_slice` and `memory_as_slice_mut`.
 	memory: Memory,
 	table: Option<Table>,
+	// Make this struct explicitly !Send & !Sync.
+	_not_send_nor_sync: marker::PhantomData<*const ()>,
 }
 
 impl InstanceWrapper {
@@ -65,6 +68,7 @@ impl InstanceWrapper {
 			table: get_table(&instance),
 			memory,
 			instance,
+			_not_send_nor_sync: marker::PhantomData,
 		})
 	}
 
