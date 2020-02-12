@@ -15,9 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::protocol::legacy_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
-use crate::protocol::legacy_proto::upgrade::RegisteredProtocol;
+use crate::protocol::message::generic::{Message as GenericMessage, ConsensusMessage};
+use crate::protocol::generic_proto::handler::{NotifsHandlerProto, NotifsHandlerOut, NotifsHandlerIn};
+use crate::protocol::generic_proto::upgrade::RegisteredProtocol;
+
 use bytes::BytesMut;
+use codec::Encode as _;
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
@@ -25,16 +28,32 @@ use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
-use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
-use std::time::Duration;
-use wasm_timer::Instant;
+use sp_runtime::ConsensusEngineId;
+use std::{borrow::Cow, collections::hash_map::Entry, cmp};
+use std::{error, marker::PhantomData, mem, pin::Pin, str, time::Duration};
 use std::task::{Context, Poll};
+use wasm_timer::Instant;
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
 ///
+/// ## Legacy vs new protocol
+///
+/// The `GenericProto` behaves as following:
+///
+/// - Whenever a connection is established, we open a single substream (called "legay protocol" in
+/// the source code). This substream name depends on the `protocol_id` and `versions` passed at
+/// initialization. If the remote refuses this substream, we close the connection.
+///
+/// - For each registered protocol, we also open an additional substream for this protocol. If the
+/// remote refuses this substream, then it's fine.
+///
+/// - Whenever we want to send a message, we pass either `None` to force the legacy substream, or
+/// `Some` to indicate a registered protocol. If the registered protocol was refused by the remote,
+/// we use the legacy instead.
+///
 /// ## How it works
 ///
-/// The role of the `LegacyProto` is to synchronize the following components:
+/// The role of the `GenericProto` is to synchronize the following components:
 ///
 /// - The libp2p swarm that opens new connections and reports disconnects.
 /// - The connection handler (see `handler.rs`) that handles individual connections.
@@ -60,9 +79,12 @@ use std::task::{Context, Poll};
 /// Note that this "banning" system is not an actual ban. If a "banned" node tries to connect to
 /// us, we accept the connection. The "banning" system is only about delaying dialing attempts.
 ///
-pub struct LegacyProto< TSubstream> {
-	/// List of protocols to open with peers. Never modified.
-	protocol: RegisteredProtocol,
+pub struct GenericProto<TSubstream> {
+	/// Legacy protocol to open with peers. Never modified.
+	legacy_protocol: RegisteredProtocol,
+
+	/// Notification protocols. Entries are only ever added and not removed.
+	notif_protocols: Vec<(Cow<'static, [u8]>, ConsensusEngineId, Vec<u8>)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -79,7 +101,7 @@ pub struct LegacyProto< TSubstream> {
 	next_incoming_index: sc_peerset::IncomingIndex,
 
 	/// Events to produce from `poll()`.
-	events: SmallVec<[NetworkBehaviourAction<CustomProtoHandlerIn, LegacyProtoOut>; 4]>,
+	events: SmallVec<[NetworkBehaviourAction<NotifsHandlerIn, GenericProtoOut>; 4]>,
 
 	/// Marker to pin the generics.
 	marker: PhantomData<TSubstream>,
@@ -186,13 +208,11 @@ struct IncomingPeer {
 	incoming_id: sc_peerset::IncomingIndex,
 }
 
-/// Event that can be emitted by the `LegacyProto`.
+/// Event that can be emitted by the `GenericProto`.
 #[derive(Debug)]
-pub enum LegacyProtoOut {
+pub enum GenericProtoOut {
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
-		/// Version of the protocol that has been opened.
-		version: u8,
 		/// Id of the node we have opened a connection with.
 		peer_id: PeerId,
 		/// Endpoint used for this custom protocol.
@@ -208,6 +228,8 @@ pub enum LegacyProtoOut {
 	},
 
 	/// Receives a message on a custom protocol substream.
+	///
+	/// Also concerns received notifications for the notifications API.
 	CustomMessage {
 		/// Id of the peer the message came from.
 		peer_id: PeerId,
@@ -225,17 +247,18 @@ pub enum LegacyProtoOut {
 	},
 }
 
-impl<TSubstream> LegacyProto<TSubstream> {
+impl<TSubstream> GenericProto<TSubstream> {
 	/// Creates a `CustomProtos`.
 	pub fn new(
 		protocol: impl Into<ProtocolId>,
 		versions: &[u8],
 		peerset: sc_peerset::Peerset,
 	) -> Self {
-		let protocol = RegisteredProtocol::new(protocol, versions);
+		let legacy_protocol = RegisteredProtocol::new(protocol, versions);
 
-		LegacyProto {
-			protocol,
+		GenericProto {
+			legacy_protocol,
+			notif_protocols: Vec::new(),
 			peerset,
 			peers: FnvHashMap::default(),
 			incoming: SmallVec::new(),
@@ -243,6 +266,19 @@ impl<TSubstream> LegacyProto<TSubstream> {
 			events: SmallVec::new(),
 			marker: PhantomData,
 		}
+	}
+
+	/// Registers a new notifications protocol.
+	///
+	/// You are very strongly encouraged to call this method very early on. Any connection open
+	/// will retain the protocols that were registered then, and not any new one.
+	pub fn register_notif_protocol(
+		&mut self,
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		engine_id: ConsensusEngineId,
+		handshake_msg: impl Into<Vec<u8>>
+	) {
+		self.notif_protocols.push((proto_name.into(), engine_id, handshake_msg.into()));
 	}
 
 	/// Returns the list of all the peers we have an open channel to.
@@ -296,7 +332,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", peer_id);
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: peer_id.clone(),
-					event: CustomProtoHandlerIn::Disable,
+					event: NotifsHandlerIn::Disable,
 				});
 				let banned_until = ban.map(|dur| Instant::now() + dur);
 				*entry.into_mut() = PeerState::Disabled { open, connected_point, banned_until }
@@ -317,7 +353,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", peer_id);
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: peer_id.clone(),
-					event: CustomProtoHandlerIn::Disable,
+					event: NotifsHandlerIn::Disable,
 				});
 				let banned_until = ban.map(|dur| Instant::now() + dur);
 				*entry.into_mut() = PeerState::Disabled { open: false, connected_point, banned_until }
@@ -343,6 +379,44 @@ impl<TSubstream> LegacyProto<TSubstream> {
 		}
 	}
 
+	/// Sends a notification to a peer.
+	///
+	/// Has no effect if the custom protocol is not open with the given peer.
+	///
+	/// Also note that even we have a valid open substream, it may in fact be already closed
+	/// without us knowing, in which case the packet will not be received.
+	///
+	/// > **Note**: Ideally the `engine_id` parameter wouldn't be necessary. See the documentation
+	/// >			of [`NotifsHandlerIn`] for more information.
+	pub fn write_notification(
+		&mut self,
+		target: &PeerId,
+		engine_id: ConsensusEngineId,
+		proto_name: Cow<'static, [u8]>,
+		message: impl Into<Vec<u8>>,
+	) {
+		if !self.is_open(target) {
+			return;
+		}
+
+		trace!(
+			target: "sub-libp2p",
+			"External API => Notification for {:?} with protocol {:?}",
+			target,
+			str::from_utf8(&proto_name)
+		);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
+
+		self.events.push(NetworkBehaviourAction::SendEvent {
+			peer_id: target.clone(),
+			event: NotifsHandlerIn::SendNotification {
+				message: message.into(),
+				engine_id,
+				proto_name,
+			},
+		});
+	}
+
 	/// Sends a message to a peer.
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.
@@ -358,7 +432,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
-			event: CustomProtoHandlerIn::SendCustomMessage {
+			event: NotifsHandlerIn::SendLegacy {
 				message,
 			}
 		});
@@ -418,7 +492,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", occ_entry.key());
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: occ_entry.key().clone(),
-					event: CustomProtoHandlerIn::Enable,
+					event: NotifsHandlerIn::Enable,
 				});
 				*occ_entry.into_mut() = PeerState::Enabled { connected_point, open };
 			},
@@ -436,7 +510,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", occ_entry.key());
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: occ_entry.key().clone(),
-					event: CustomProtoHandlerIn::Enable,
+					event: NotifsHandlerIn::Enable,
 				});
 				*occ_entry.into_mut() = PeerState::Enabled { connected_point, open: false };
 			},
@@ -493,7 +567,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", entry.key());
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: entry.key().clone(),
-					event: CustomProtoHandlerIn::Disable,
+					event: NotifsHandlerIn::Disable,
 				});
 				*entry.into_mut() = PeerState::Disabled { open, connected_point, banned_until: None }
 			},
@@ -557,7 +631,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 		debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", incoming.peer_id);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: incoming.peer_id,
-			event: CustomProtoHandlerIn::Enable,
+			event: NotifsHandlerIn::Enable,
 		});
 
 		*state = PeerState::Enabled { open: false, connected_point };
@@ -599,13 +673,13 @@ impl<TSubstream> LegacyProto<TSubstream> {
 		debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", incoming.peer_id);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: incoming.peer_id,
-			event: CustomProtoHandlerIn::Disable,
+			event: NotifsHandlerIn::Disable,
 		});
 		*state = PeerState::Disabled { open: false, connected_point, banned_until: None };
 	}
 }
 
-impl<TSubstream> DiscoveryNetBehaviour for LegacyProto<TSubstream> {
+impl<TSubstream> DiscoveryNetBehaviour for GenericProto<TSubstream> {
 	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
 			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
@@ -614,15 +688,15 @@ impl<TSubstream> DiscoveryNetBehaviour for LegacyProto<TSubstream> {
 	}
 }
 
-impl<TSubstream> NetworkBehaviour for LegacyProto<TSubstream>
+impl<TSubstream> NetworkBehaviour for GenericProto<TSubstream>
 where
-	TSubstream: AsyncRead + AsyncWrite + Unpin,
+	TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-	type ProtocolsHandler = CustomProtoHandlerProto<TSubstream>;
-	type OutEvent = LegacyProtoOut;
+	type ProtocolsHandler = NotifsHandlerProto<TSubstream>;
+	type OutEvent = GenericProtoOut;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		CustomProtoHandlerProto::new(self.protocol.clone())
+		NotifsHandlerProto::new(self.legacy_protocol.clone(), self.notif_protocols.clone())
 	}
 
 	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
@@ -639,7 +713,7 @@ where
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", peer_id);
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: peer_id.clone(),
-					event: CustomProtoHandlerIn::Enable,
+					event: NotifsHandlerIn::Enable,
 				});
 				*st = PeerState::Enabled { open: false, connected_point };
 			}
@@ -682,7 +756,7 @@ where
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", peer_id);
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: peer_id.clone(),
-					event: CustomProtoHandlerIn::Disable,
+					event: NotifsHandlerIn::Disable,
 				});
 				*st = PeerState::Disabled { open: false, connected_point, banned_until };
 			}
@@ -712,7 +786,7 @@ where
 				}
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
-					let event = LegacyProtoOut::CustomProtocolClosed {
+					let event = GenericProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
 						reason: "Disconnected by libp2p".into(),
 					};
@@ -729,7 +803,7 @@ where
 				self.peers.insert(peer_id.clone(), PeerState::Banned { until: timer_deadline });
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
-					let event = LegacyProtoOut::CustomProtocolClosed {
+					let event = GenericProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
 						reason: "Disconnected by libp2p".into(),
 					};
@@ -751,7 +825,7 @@ where
 
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
-					let event = LegacyProtoOut::CustomProtocolClosed {
+					let event = GenericProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
 						reason: "Disconnected by libp2p".into(),
 					};
@@ -822,10 +896,10 @@ where
 	fn inject_node_event(
 		&mut self,
 		source: PeerId,
-		event: CustomProtoHandlerOut,
+		event: NotifsHandlerOut,
 	) {
 		match event {
-			CustomProtoHandlerOut::CustomProtocolClosed { reason } => {
+			NotifsHandlerOut::Closed { reason } => {
 				debug!(target: "sub-libp2p", "Handler({:?}) => Closed: {}", source, reason);
 
 				let mut entry = if let Entry::Occupied(entry) = self.peers.entry(source.clone()) {
@@ -836,7 +910,7 @@ where
 				};
 
 				debug!(target: "sub-libp2p", "External API <= Closed({:?})", source);
-				let event = LegacyProtoOut::CustomProtocolClosed {
+				let event = GenericProtoOut::CustomProtocolClosed {
 					reason,
 					peer_id: source.clone(),
 				};
@@ -852,7 +926,7 @@ where
 						debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", source);
 						self.events.push(NetworkBehaviourAction::SendEvent {
 							peer_id: source.clone(),
-							event: CustomProtoHandlerIn::Disable,
+							event: NotifsHandlerIn::Disable,
 						});
 
 						*entry.into_mut() = PeerState::Disabled {
@@ -878,8 +952,8 @@ where
 				}
 			}
 
-			CustomProtoHandlerOut::CustomProtocolOpen { version } => {
-				debug!(target: "sub-libp2p", "Handler({:?}) => Open: version {:?}", source, version);
+			NotifsHandlerOut::Open => {
+				debug!(target: "sub-libp2p", "Handler({:?}) => Open", source);
 				let endpoint = match self.peers.get_mut(&source) {
 					Some(PeerState::Enabled { ref mut open, ref connected_point }) |
 					Some(PeerState::DisabledPendingEnable { ref mut open, ref connected_point, .. }) |
@@ -894,8 +968,7 @@ where
 				};
 
 				debug!(target: "sub-libp2p", "External API <= Open({:?})", source);
-				let event = LegacyProtoOut::CustomProtocolOpen {
-					version,
+				let event = GenericProtoOut::CustomProtocolOpen {
 					peer_id: source,
 					endpoint,
 				};
@@ -903,11 +976,11 @@ where
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
 
-			CustomProtoHandlerOut::CustomMessage { message } => {
+			NotifsHandlerOut::CustomMessage { message } => {
 				debug_assert!(self.is_open(&source));
 				trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
 				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
-				let event = LegacyProtoOut::CustomMessage {
+				let event = GenericProtoOut::CustomMessage {
 					peer_id: source,
 					message,
 				};
@@ -915,25 +988,50 @@ where
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
 
-			CustomProtoHandlerOut::Clogged { messages } => {
+			NotifsHandlerOut::Notification { proto_name, engine_id, message } => {
+				debug_assert!(self.is_open(&source));
+				trace!(
+					target: "sub-libp2p",
+					"Handler({:?}) => Notification({:?})",
+					source,
+					str::from_utf8(&proto_name)
+				);
+				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
+				let event = GenericProtoOut::CustomMessage {
+					peer_id: source,
+					message: {
+						let message = GenericMessage::<(), (), (), ()>::Consensus(ConsensusMessage {
+							engine_id,
+							data: message.to_vec(),
+						});
+
+						// Note that we clone `message` here.
+						From::from(&message.encode()[..])
+					},
+				};
+
+				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
+			}
+
+			NotifsHandlerOut::Clogged { messages } => {
 				debug_assert!(self.is_open(&source));
 				trace!(target: "sub-libp2p", "Handler({:?}) => Clogged", source);
 				trace!(target: "sub-libp2p", "External API <= Clogged({:?})", source);
 				warn!(target: "sub-libp2p", "Queue of packets to send to {:?} is \
 					pretty large", source);
-				self.events.push(NetworkBehaviourAction::GenerateEvent(LegacyProtoOut::Clogged {
+				self.events.push(NetworkBehaviourAction::GenerateEvent(GenericProtoOut::Clogged {
 					peer_id: source,
 					messages,
 				}));
 			}
 
 			// Don't do anything for non-severe errors except report them.
-			CustomProtoHandlerOut::ProtocolError { is_severe, ref error } if !is_severe => {
+			NotifsHandlerOut::ProtocolError { is_severe, ref error } if !is_severe => {
 				debug!(target: "sub-libp2p", "Handler({:?}) => Benign protocol error: {:?}",
 					source, error)
 			}
 
-			CustomProtoHandlerOut::ProtocolError { error, .. } => {
+			NotifsHandlerOut::ProtocolError { error, .. } => {
 				debug!(target: "sub-libp2p", "Handler({:?}) => Severe protocol error: {:?}",
 					source, error);
 				// A severe protocol error happens when we detect a "bad" node, such as a node on
@@ -955,7 +1053,7 @@ where
 		_params: &mut impl PollParameters,
 	) -> Poll<
 		NetworkBehaviourAction<
-			CustomProtoHandlerIn,
+			NotifsHandlerIn,
 			Self::OutEvent,
 		>,
 	> {
@@ -1010,7 +1108,7 @@ where
 					debug!(target: "sub-libp2p", "Handler({:?}) <= Enable now that ban has expired", peer_id);
 					self.events.push(NetworkBehaviourAction::SendEvent {
 						peer_id: peer_id.clone(),
-						event: CustomProtoHandlerIn::Enable,
+						event: NotifsHandlerIn::Enable,
 					});
 					*peer_state = PeerState::Enabled { connected_point, open };
 				}

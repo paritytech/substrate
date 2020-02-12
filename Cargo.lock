@@ -6055,6 +6055,7 @@ dependencies = [
  "nohash-hasher",
  "parity-scale-codec",
  "parking_lot 0.10.0",
+ "pin-project",
  "prost",
  "prost-build",
  "quickcheck",
