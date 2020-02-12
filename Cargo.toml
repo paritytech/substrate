@@ -79,6 +79,7 @@ members = [
 	"frame/indices",
 	"frame/membership",
 	"frame/metadata",
+	"frame/multi-account",
 	"frame/nicks",
 	"frame/offences",
 	"frame/randomness-collective-flip",

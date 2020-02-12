@@ -609,7 +609,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// NOTE: `who` must be sorted. If it is not, then you'll get the wrong answer.
 	pub fn multi_account_id(who: &[T::AccountId], threshold: u16) -> T::AccountId {
-		let entropy = (b"modlpy/utilisuba", who, threshold).using_encoded(blake2_256);
+		let entropy = (b"modlpy/multisuba", who, threshold).using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 	}
 
