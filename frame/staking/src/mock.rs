@@ -17,7 +17,7 @@
 //! Test utilities
 
 use std::{collections::HashSet, cell::RefCell};
-use sp_runtime::{Perbill, PerThing, KeyTypeId};
+use sp_runtime::{Perbill, KeyTypeId};
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
 use sp_runtime::testing::{Header, UintAuthorityId};

@@ -60,7 +60,7 @@ impl<T:
 /// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
 /// be able to represent at least `u32` values without loss, hence the trait implies `From<u32>`
 /// and smaller ints. All other conversions are fallible.
-pub trait SimpleArithmetic:
+pub trait RuntimeArithmetic:
 	BaseArithmetic +
 	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> + TryFrom<u64> +
 	TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
@@ -75,11 +75,11 @@ impl<T:
 	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
 	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> +
 	UniqueSaturatedInto<u128>
-> SimpleArithmetic for T {}
+> RuntimeArithmetic for T {}
 
-/// Same as [`SimpleArithmetic`] for integer types of any size, without any assumption of their size
+/// Same as [`RuntimeArithmetic`] for integer types of any size, without any assumption of their size
 /// being at least `u32`.
-pub trait MiniArithmetic:
+pub trait AnyArithmetic:
 	BaseArithmetic +
 	From<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
 	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
@@ -99,7 +99,7 @@ impl<T:
 	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
 	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
 	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128> +
-> MiniArithmetic for T {}
+> AnyArithmetic for T {}
 
 
 /// Just like `From` except that if the source value is too big to fit into the destination type

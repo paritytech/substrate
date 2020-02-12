@@ -168,7 +168,7 @@ use frame_support::{
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
-		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
+		Zero, RuntimeArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
 		MaybeSerializeDeserialize, Saturating, Bounded,
 	},
 };
@@ -179,7 +179,7 @@ pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
+	type Balance: Parameter + Member + RuntimeArithmetic + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
 	/// A function that is invoked when the free-balance and the reserved-balance has fallen below
@@ -201,7 +201,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
+	type Balance: Parameter + Member + RuntimeArithmetic + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
 	/// A function that is invoked when the free-balance and the reserved-balance has fallen below

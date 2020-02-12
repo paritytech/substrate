@@ -98,7 +98,7 @@ mod tests {
 	use sp_io::TestExternalities;
 	use sp_runtime::{
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		Perbill, KeyTypeId, PerThing,
+		Perbill, KeyTypeId,
 	};
 	use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 

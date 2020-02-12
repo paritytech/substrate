@@ -30,7 +30,7 @@ use sp_core::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, PerThing, ApplyExtrinsicResult, BenchmarkResults,
+	Permill, Perbill, Percent, ApplyExtrinsicResult, BenchmarkResults,
 	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;

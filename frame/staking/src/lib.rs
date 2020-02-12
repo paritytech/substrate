@@ -271,7 +271,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin,
+		RuntimeArithmetic, EnsureOrigin,
 	}
 };
 use sp_staking::{
@@ -395,7 +395,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 
 impl<
 	AccountId,
-	Balance: HasCompact + Copy + Saturating + SimpleArithmetic,
+	Balance: HasCompact + Copy + Saturating + RuntimeArithmetic,
 > StakingLedger<AccountId, Balance> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
@@ -439,7 +439,7 @@ impl<
 }
 
 impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
-	Balance: SimpleArithmetic + Saturating + Copy,
+	Balance: RuntimeArithmetic + Saturating + Copy,
 {
 	/// Slash the validator for a given amount of balance. This can grow the value
 	/// of the slash in the case that the validator has less than `minimum_balance`

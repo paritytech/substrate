@@ -724,7 +724,7 @@ mod tests {
 	use frame_support::traits::Contains;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill, PerThing,
+		Perbill,
 		testing::Header,
 		traits::{BlakeTwo256, OnFinalize, IdentityLookup, BadOrigin},
 	};

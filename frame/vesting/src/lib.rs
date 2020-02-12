@@ -50,7 +50,7 @@ use sp_std::prelude::*;
 use sp_std::fmt::Debug;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
-	StaticLookup, Zero, SimpleArithmetic, MaybeSerializeDeserialize, Saturating, Convert
+	StaticLookup, Zero, RuntimeArithmetic, MaybeSerializeDeserialize, Saturating, Convert
 }};
 use frame_support::{decl_module, decl_event, decl_storage, decl_error};
 use frame_support::traits::{
@@ -85,8 +85,8 @@ pub struct VestingInfo<Balance, BlockNumber> {
 }
 
 impl<
-	Balance: SimpleArithmetic + Copy,
-	BlockNumber: SimpleArithmetic + Copy,
+	Balance: RuntimeArithmetic + Copy,
+	BlockNumber: RuntimeArithmetic + Copy,
 > VestingInfo<Balance, BlockNumber> {
 	/// Amount locked at block `n`.
 	pub fn locked_at<

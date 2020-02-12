@@ -21,7 +21,7 @@
 use std::cell::RefCell;
 
 use crate::{Module, Trait};
-use sp_runtime::{Perbill, PerThing};
+use sp_runtime::Perbill;
 use sp_staking::{SessionIndex, offence::ReportOffence};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};

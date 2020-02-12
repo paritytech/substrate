@@ -24,7 +24,7 @@ use node_runtime::{
 };
 use node_runtime::constants::currency::*;
 use sp_core::ChangesTrieConfiguration;
-use sp_runtime::{Perbill, PerThing};
+use sp_runtime::Perbill;
 
 
 /// Create genesis runtime configuration for tests.

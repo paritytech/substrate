@@ -21,7 +21,7 @@
 use std::cell::RefCell;
 use crate::{Module, Trait};
 use codec::Encode;
-use sp_runtime::{Perbill, PerThing};
+use sp_runtime::Perbill;
 use sp_staking::{
 	SessionIndex,
 	offence::{self, Kind, OffenceDetails},

@@ -33,7 +33,7 @@ use grandpa_primitives::{AuthorityId as GrandpaId};
 use sp_consensus_babe::{AuthorityId as BabeId};
 use pallet_im_online::sr25519::{AuthorityId as ImOnlineId};
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
-use sp_runtime::{Perbill, PerThing, traits::{Verify, IdentifyAccount}};
+use sp_runtime::{Perbill, traits::{Verify, IdentifyAccount}};
 
 pub use node_primitives::{AccountId, Balance, Signature};
 pub use node_runtime::GenesisConfig;

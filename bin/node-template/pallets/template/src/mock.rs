@@ -4,7 +4,7 @@ use crate::{Module, Trait};
 use sp_core::H256;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill, PerThing,
+	traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 };
 
 impl_outer_origin! {
