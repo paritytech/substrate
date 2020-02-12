@@ -27,9 +27,7 @@ use sp_debug_derive::RuntimeDebug;
 /// Something that implements a fixed point ration with an arbitrary granularity `X`, as _parts per
 /// `X`_.
 pub trait PerThing: Sized + Saturating + Copy {
-	/// The data type used to build this per-thingy. It can always be up-casted to u128, and might
-	/// be creatable from any of the [u8 -> u64]. This is because even the biggest Per-Thing impl
-	/// cannot have $type = u128. u128 is reserved as the $upper_type.
+	/// The data type used to build this per-thingy.
 	type Inner: MiniArithmetic + Copy;
 
 	/// accuracy of this type

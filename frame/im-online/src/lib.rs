@@ -706,7 +706,7 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 			let x = Perbill::from_rational_approximation(3 * threshold, validator_set_count);
 			x.saturating_mul(Perbill::from_percent(7))
 		} else {
-			Perbill::zero()
+			Perbill::default()
 		}
 	}
 }
