@@ -14,7 +14,53 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// TODO add docs
+//! # Multi Account Module
+//! A module with multisig functionality with a static AccountId and a dynamic threshold and set of signatories.
+//!
+//! - [`utility::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This module contains functionality to create, update and remove multi accounts, identified by a deterministically
+//! generated account ID, as well as (potentially) stateful multisig dispatches. The multisig dispatch functionality is
+//! very closely implemented after the utility pallet. It allows multiple signed origins (accounts) to coordinate and
+//! dispatch a call from a previously created multi account origin. When dispatching calls, the threshold defined in
+//! the multi account defines the number of accounts from the multi account signatory set that must approve it. In the
+//! case that the threshold is just one then this is a stateless operation. This is useful for multisig wallets where
+//! cryptographic threshold signatures are not available or desired.
+//!
+//! The motivation for this module is that a deterministically created account ID from threshold and a set of
+//! signatories as in the utility pallet has certain downsides:
+//!
+//!  1. When using multisigs for token holdings and changing signatories or the threshold, the tokens need to be
+//! 	transferred to a new account ID, which might be a taxable event, depending on jurisdiction. Even if it's not, it
+//! 	complicates communication with accountants/tax advisors.
+//!  2. When using multisigs for staking and changing signatories or the threshold, the account needs to unbond,
+//! 	transfer tokens and re-stake again. That can lead to months of lost staking rewards, depending on the unbonding
+//! 	time.
+//!  3. When using multisigs for voting and changing signatories or the threshold, the accounts needs to unvotes,
+//! 	transfer tokens and vote again, which is cumbersome.
+//!
+//! The downside is that this module is slightly more complex and introduces additional state and the additional
+//! requirement of creating and deleting multi accounts before using multisigs.
+//!
+//! ## Interface
+//!
+//! ### Dispatchable Functions
+//!
+//! #### For multi account management
+//! * `create` - Create a new multi account with a threshold and given signatories.
+//! * `update` - Update an existing multi account with a new threshold and new signatories.
+//! * `remove` - Remove an existing multi account.
+//!
+//! #### For multisig dispatch
+//! * `call` - Approve and if possible dispatch a call from a multi account origin.
+//! * `approve` - Approve a call from a multi account origin.
+//! * `cancel` - Cancel a call from a multi account origin.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -262,6 +308,33 @@ decl_module! {
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
+		/// Create a new multi account with a threshold and given signatories.
+		///
+		/// This generates a new static account id, that will persist when the threshold or set of signatories are
+		/// changed later on.
+		///
+		/// Payment: `MultiAccountDepositBase` will be reserved, plus the number of signatories times
+		/// `MultiAccountDepositFactor`. It is returned when the multi account is updated or removed.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `threshold`: The total number of approvals dispatches from this multi account require before they are
+		///    executed.
+		/// - `other_signatories`: The accounts (other than the sender) who can approve dispatches from this multi
+		///    account. May not be empty.
+		///
+		/// # <weight>
+		/// - `O(S)`.
+		/// - One balance-reserve operation.
+		/// - One insert with `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - I/O: 1 mutate `O(S)`
+		/// - One event.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
+		///   deposit taken for its lifetime of
+		///   `MultiAccountDepositBase + other_signatories.len() * MultiAccountDepositFactor`.
+		/// # </weight>
 		#[weight = <SigsLen<T::AccountId>>::new()]
 		fn create(origin,
 			threshold: u16,
@@ -301,24 +374,51 @@ decl_module! {
 			Ok(())
 		}
 
+		/// Update an existing multi account with a new threshold and new signatories.
+		///
+		/// This maintains the multi account's account id.
+		///
+		/// Payment: `MultiAccountDepositBase` will be reserved, plus the number of signatories times
+		/// `MultiAccountDepositFactor`. It is returned when the multi account is updated or removed. This call will
+		/// unreserve the previous deposit.
+		///
+		/// The dispatch origin for this call must be _Signed_ and be equal to the multi account ID. It can be
+		/// dispatched by a `call` from this module.
+		///
+		/// - `threshold`: The total number of approvals dispatches from this multi account require before they are
+		///    executed.
+		/// - `signatories`: The accounts who can approve dispatches from this multi account. May not be empty.
+		///
+		/// # <weight>
+		/// - `O(S)`.
+		/// - One balance-reserve and unreserve operation.
+		/// - One insert with `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - I/O: 1 read `O(S)`, 1 mutate `O(S)`.
+		/// - One event.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
+		///   deposit taken for its lifetime of
+		///   `MultiAccountDepositBase + signatories.len() * MultiAccountDepositFactor`.
+		/// # </weight>
 		#[weight = <SigsLen<T::AccountId>>::new()]
 		fn update(origin,
 			threshold: u16,
-			other_signatories: Vec<T::AccountId>
+			signatories: Vec<T::AccountId>
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
-			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			ensure!(threshold as usize <= other_signatories.len() + 1, Error::<T>::TooFewSignatories);
-			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
-			ensure!(other_signatories.len() < u32::max_value() as usize, Error::<T>::TooManySignatories);
-			let signatories = Self::ensure_sorted_and_insert(other_signatories.clone(), who.clone())?;
+			ensure!(signatories.len() >= 2, Error::<T>::TooFewSignatories);
+			ensure!(threshold as usize <= signatories.len(), Error::<T>::TooFewSignatories);
+			ensure!(signatories.len() <= max_sigs, Error::<T>::TooManySignatories);
+			ensure!(signatories.len() <= u32::max_value() as usize, Error::<T>::TooManySignatories);
+			let signatories = Self::ensure_sorted(signatories.clone())?;
 
 			if let Some(multi_account) = <MultiAccounts<T>>::get(&who) {
 				// reserve new deposit for updated multi account
 				let updated_deposit = T::MultiAccountDepositBase::get()
-					+ T::MultiAccountDepositFactor::get() * (other_signatories.len() as u32 + 1).into();
+					+ T::MultiAccountDepositFactor::get() * (signatories.len() as u32).into();
 
 				T::Currency::reserve(&who, updated_deposit)?;
 
@@ -341,6 +441,22 @@ decl_module! {
 			Ok(())
 		}
 
+		/// Remove an existing multi account.
+		///
+		/// Payment: Previous deposits will be unreserved.
+		///
+		/// The dispatch origin for this call must be _Signed_ and be equal to the multi account ID. It can be
+		/// dispatched by a `call` from this module.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One balance-unreserve operation.
+		/// - One remove with `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - I/O: 1 mutate `O(S)`.
+		/// - One event.
+		/// - Storage: removes one item, value size bounded by `MaxSignatories`.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		fn remove(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -358,6 +474,45 @@ decl_module! {
 			Ok(())
 		}
 
+		/// Register approval for a dispatch to be made from the given multi account if approved by a total of
+		/// `threshold` of `signatories`, as specified in the multi account.
+		///
+		/// If there are enough approvals, then dispatch the call.
+		///
+		/// Payment: `MultisigDepositBase` will be reserved if this is the first approval, plus
+		/// `threshold` times `MultisigDepositFactor`. It is returned once this dispatch happens or
+		/// is cancelled.
+		///
+		/// The dispatch origin for this call must be _Signed_ and must be one of the signatories.
+		///
+		/// - `multi_account_id`: The account ID of the multi account that was created before.
+		/// - `maybe_timepoint`: If this is the first approval, then this must be `None`. If it is
+		/// not the first approval, then it must be `Some`, with the timepoint (block number and
+		/// transaction index) of the first approval transaction.
+		/// - `call`: The call to be executed.
+		///
+		/// NOTE: Unless this is the final approval, you will generally want to use
+		/// `approve` instead, since it only requires a hash of the call.
+		///
+		/// Result is equivalent to the dispatched result if `threshold` is exactly `1`. Otherwise
+		/// on success, result is `Ok` and the result from the interior call, if it was executed,
+		/// may be found in the deposited `MultisigExecuted` event.
+		///
+		/// # <weight>
+		/// - `O(S + Z + Call)`.
+		/// - Up to one balance-reserve or unreserve operation.
+		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One call encode & hash, both of complexity `O(Z)` where `Z` is tx-len.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - Up to two binary searches and inserts (`O(logS + S)`).
+		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
+		/// - One event.
+		/// - The weight of the `call`.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
+		///   deposit taken for its lifetime of
+		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
+		/// # </weight>
 		#[weight = <MultiPassthrough<<T as Trait>::Call, T::AccountId, Option<Timepoint<T::BlockNumber>>>>::new()]
 		fn call(origin,
 			multi_account_id: T::AccountId,
@@ -419,6 +574,36 @@ decl_module! {
 			Ok(())
 		}
 
+		/// Register approval for a dispatch to be made from the given multi account if approved by a total of
+		/// `threshold` of `signatories`, as specified in the multi account.
+		///
+		/// Payment: `MultisigDepositBase` will be reserved if this is the first approval, plus
+		/// `threshold` times `MultisigDepositFactor`. It is returned once this dispatch happens or
+		/// is cancelled.
+		///
+		/// The dispatch origin for this call must be _Signed_ and must be one of the signatories.
+		///
+		/// - `multi_account_id`: The account ID of the multi account that was created before.
+		/// - `maybe_timepoint`: If this is the first approval, then this must be `None`. If it is
+		/// not the first approval, then it must be `Some`, with the timepoint (block number and
+		/// transaction index) of the first approval transaction.
+		/// - `call_hash`: The hash of the call to be executed.
+		///
+		/// NOTE: If this is the final approval, you will want to use `call` instead.
+		///
+		/// # <weight>
+		/// - `O(S)`.
+		/// - Up to one balance-reserve or unreserve operation.
+		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - Up to two binary searches and inserts (`O(logS + S)`).
+		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
+		/// - One event.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
+		///   deposit taken for its lifetime of
+		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		fn approve(origin,
 			multi_account_id: T::AccountId,
@@ -467,6 +652,26 @@ decl_module! {
 			Ok(())
 		}
 
+		/// Cancel a pre-existing, on-going multisig transaction. Any deposit reserved previously
+		/// for this operation will be unreserved on success.
+		///
+		/// The dispatch origin for this call must be _Signed_ and must be the initiator of the multisig.
+		///
+		/// - `multi_account_id`: The account ID of the multi account that was created before.
+		/// - `timepoint`: The timepoint (block number and transaction index) of the first approval
+		/// transaction for this dispatch.
+		/// - `call_hash`: The hash of the call to be executed.
+		///
+		/// # <weight>
+		/// - `O(S)`.
+		/// - Up to one balance-reserve or unreserve operation.
+		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - One event.
+		/// - I/O: 1 read `O(S)`, one remove.
+		/// - Storage: removes one item.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		fn cancel(origin,
 			multi_account_id: T::AccountId,
@@ -506,6 +711,18 @@ impl<T: Trait> Module<T> {
 			height: <system::Module<T>>::block_number(),
 			index: <system::Module<T>>::extrinsic_count(),
 		}
+	}
+
+	/// Check that signatories is sorted.
+	fn ensure_sorted(signatories: Vec<T::AccountId>) -> Result<Vec<T::AccountId>, DispatchError> {
+		let mut maybe_last = None;
+		for item in signatories.iter() {
+			if let Some(last) = maybe_last {
+				ensure!(last < item, Error::<T>::SignatoriesOutOfOrder);
+			}
+			maybe_last = Some(item);
+		}
+		Ok(signatories)
 	}
 
 	/// Check that signatories is sorted and doesn't contain sender, then insert sender.
@@ -692,7 +909,7 @@ mod tests {
 			assert_eq!(Balances::reserved_balance(multi_id), 0);
 			expect_event(RawEvent::NewMultiAccount(1, multi_id));
 
-			assert_ok!(MultiAccount::update(Origin::signed(multi_id), 3, vec![3, 4]));
+			assert_ok!(MultiAccount::update(Origin::signed(multi_id), 3, vec![1, 3, 4]));
 			assert_eq!(Balances::free_balance(1), 15);
 			assert_eq!(Balances::reserved_balance(1), 0);
 			assert_eq!(Balances::free_balance(multi_id), 11);
@@ -923,7 +1140,7 @@ mod tests {
 			assert_ok!(MultiAccount::create(Origin::signed(1), 1, vec![2]));
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_noop!(
-				MultiAccount::update(Origin::signed(multi_id), 0, vec![2]),
+				MultiAccount::update(Origin::signed(multi_id), 0, vec![2, 3]),
 				Error::<Test>::ZeroThreshold,
 			);
 		});
@@ -941,7 +1158,7 @@ mod tests {
 			assert_ok!(MultiAccount::create(Origin::signed(1), 1, vec![2]));
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_noop!(
-				MultiAccount::update(Origin::signed(multi_id), 1, vec![2, 3, 4]),
+				MultiAccount::update(Origin::signed(multi_id), 1, vec![2, 3, 4, 5]),
 				Error::<Test>::TooManySignatories,
 			);
 		});
