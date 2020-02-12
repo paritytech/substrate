@@ -54,14 +54,29 @@ use crate::error;
 use util::LruHashSet;
 use wasm_timer::Instant;
 
+// Include sources generated from protobuf definitions.
+pub mod api {
+	pub mod v1 {
+		include!(concat!(env!("OUT_DIR"), "/api.v1.rs"));
+		pub mod light {
+			include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
+		}
+	}
+}
+
 mod legacy_proto;
 mod util;
 
+pub mod block_requests;
 pub mod message;
 pub mod event;
+pub mod light_client_handler;
 pub mod light_dispatch;
 pub mod specialization;
 pub mod sync;
+
+pub use block_requests::BlockRequests;
+pub use light_client_handler::LightClientHandler;
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 /// Interval at which we perform time based maintenance
