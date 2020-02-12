@@ -1502,7 +1502,7 @@ impl<T: Trait> Module<T> {
 		});
 		all_nominators.extend(nominator_votes);
 
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote>(
+		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote, Perbill>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,
@@ -1519,7 +1519,7 @@ impl<T: Trait> Module<T> {
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
-			let supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
+			let supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote, Perbill>(
 				&elected_stashes,
 				&assignments,
 				Self::slashable_balance_of,
