@@ -24,21 +24,21 @@ use frame_system::RawOrigin;
 use sp_runtime::{BenchmarkResults, BenchmarkParameter, selected_benchmark};
 use sp_runtime::traits::{Benchmarking, BenchmarkingSetup, Dispatchable};
 
-// Benchmark `set` extrinsic.
+/// Benchmark `set` extrinsic.
 struct Set;
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for Set {
+impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Set {
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![]
 	}
 
 	fn instance(&self, _components: &[(BenchmarkParameter, u32)])
-		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+		-> Result<(Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
-		let user_origin = RawOrigin::None;
+		let user_origin = RawOrigin::None; 
 		let now = 1.into();
 
 		// Return the `set` call
-		Ok((crate::Call::<T>::set(now), user_origin))
+		Ok((Call::<T>::set(now), user_origin))
 	}
 }
 
@@ -61,7 +61,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		// Run the benchmark `repeat` times.
 		for _r in 0..repeat {
 			// Set up the externalities environment for the setup we want to benchmark.
-			let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &[])?;
+			let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &[])?;
 			// Commit the externalities to the database, flushing the DB cache.
 			// This will enable worst case scenario for reading from the database.
 			sp_io::benchmarking::commit_db();

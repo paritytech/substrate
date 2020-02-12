@@ -1349,11 +1349,11 @@ pub trait BenchmarkingSetup<T, Call, RawOrigin> {
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(Call, RawOrigin), &'static str>;
 }
 
-/// Implement `BenchmarkingSetup` for a given list of targets.
+/// Creates a `SelectedBenchmark` enum implementing `BenchmarkingSetup`.
 ///
-/// Every field type must implement [`BenchmarkingSetup`](crate::BenchmarkingSetup).
+/// Every variant must implement [`BenchmarkingSetup`](crate::traits::BenchmarkingSetup).
 ///
-/// ```rust
+/// ```nocompile
 ///
 /// struct Transfer;
 /// impl BenchmarkingSetup for Transfer { ... }
@@ -1372,18 +1372,26 @@ macro_rules! selected_benchmark {
 		}
 
 		// Allow us to select a benchmark from the list of available benchmarks.
-		impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
+		impl<T: Trait> $crate::traits::BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
 			fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 				match self {
-					$( Self::$bench => <$bench as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&$bench), )*
+					$( Self::$bench => <$bench as $crate::traits::BenchmarkingSetup<
+						T,
+						Call<T>,
+						RawOrigin<T::AccountId>,
+					>>::components(&$bench), )*
 				}
 			}
 
 			fn instance(&self, components: &[(BenchmarkParameter, u32)])
-				-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+				-> Result<(Call<T>, RawOrigin<T::AccountId>), &'static str>
 			{
 				match self {
-					$( Self::$bench => <$bench as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&$bench, components), )*
+					$( Self::$bench => <$bench as $crate::traits::BenchmarkingSetup<
+						T,
+						Call<T>,
+						RawOrigin<T::AccountId>,
+					>>::instance(&$bench, components), )*
 				}
 			}
 		}
