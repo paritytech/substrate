@@ -34,7 +34,7 @@ use parking_lot::Mutex;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, SimpleArithmetic, Extrinsic},
+	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic},
 };
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
@@ -223,7 +223,7 @@ struct RevalidationAction {
 	revalidate_amount: Option<usize>,
 }
 
-impl<N: Clone + Copy + SimpleArithmetic> RevalidationStrategy<N> {
+impl<N: Clone + Copy + AtLeast32Bit> RevalidationStrategy<N> {
 	pub fn clear(&mut self) {
 		if let Self::Light(status) = self {
 			status.clear()
@@ -255,7 +255,7 @@ impl<N: Clone + Copy + SimpleArithmetic> RevalidationStrategy<N> {
 	}
 }
 
-impl<N: Clone + Copy + SimpleArithmetic> RevalidationStatus<N> {
+impl<N: Clone + Copy + AtLeast32Bit> RevalidationStatus<N> {
 	/// Called when revalidation is completed.
 	pub fn clear(&mut self) {
 		*self = Self::NotScheduled;

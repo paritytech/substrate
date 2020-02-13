@@ -1588,6 +1588,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs_extra"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f2a4a2034423744d2cc7ca2068453168dcdb82c438419e639a26bd87839c674"
+
+[[package]]
 name = "fuchsia-cprng"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3599,8 +3605,12 @@ dependencies = [
 name = "node-testing"
 version = "2.0.0"
 dependencies = [
+ "criterion 0.3.1",
  "frame-support",
  "frame-system",
+ "fs_extra",
+ "hex-literal",
+ "log 0.4.8",
  "node-executor",
  "node-primitives",
  "node-runtime",
@@ -3615,13 +3625,24 @@ dependencies = [
  "pallet-transaction-payment",
  "pallet-treasury",
  "parity-scale-codec",
+ "sc-cli",
  "sc-client",
+ "sc-client-api",
+ "sc-client-db",
  "sc-executor",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-consensus",
  "sp-core",
+ "sp-finality-tracker",
+ "sp-inherents",
  "sp-io",
  "sp-keyring",
  "sp-runtime",
+ "sp-timestamp",
  "substrate-test-client",
+ "tempdir",
  "wabt",
 ]
 
@@ -6081,6 +6102,8 @@ dependencies = [
 name = "sc-network"
 version = "0.8.0"
 dependencies = [
+ "assert_matches",
+ "async-std",
  "bitflags",
  "bytes 0.5.4",
  "derive_more",
@@ -6097,8 +6120,11 @@ dependencies = [
  "linked_hash_set",
  "log 0.4.8",
  "lru 0.4.3",
+ "nohash-hasher",
  "parity-scale-codec",
  "parking_lot 0.10.0",
+ "prost",
+ "prost-build",
  "quickcheck",
  "rand 0.7.3",
  "rustc-hex",
@@ -6120,11 +6146,14 @@ dependencies = [
  "sp-runtime",
  "sp-test-primitives",
  "substrate-test-client",
+ "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
  "unsigned-varint",
  "void",
  "wasm-timer",
+ "yamux",
  "zeroize 1.1.0",
 ]
 
@@ -7497,6 +7526,7 @@ dependencies = [
  "hyper 0.12.35",
  "itertools",
  "jsonrpc-core-client",
+ "libp2p",
  "node-primitives",
  "node-runtime",
  "pallet-balances",
@@ -7506,6 +7536,7 @@ dependencies = [
  "rpassword",
  "rustc-hex",
  "sc-rpc",
+ "serde_json",
  "sp-core",
  "sp-runtime",
  "substrate-bip39",
@@ -7756,6 +7787,16 @@ name = "target_info"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c63f48baada5c52e65a29eef93ab4f8982681b67f9e8d29c7b05abcfec2b9ffe"
+
+[[package]]
+name = "tempdir"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15f2b5fb00ccdf689e0149d1b1b3c03fead81c2b37735d812fa8bddbbf41b6d8"
+dependencies = [
+ "rand 0.4.6",
+ "remove_dir_all",
+]
 
 [[package]]
 name = "tempfile"
@@ -8321,7 +8362,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.7.3",
+ "rand 0.3.23",
 ]
 
 [[package]]

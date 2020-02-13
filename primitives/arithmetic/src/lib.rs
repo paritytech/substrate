@@ -40,5 +40,5 @@ mod fixed64;
 mod rational128;
 
 pub use fixed64::Fixed64;
-pub use per_things::{Percent, Permill, Perbill, Perquintill};
+pub use per_things::{PerThing, Percent, Permill, Perbill, Perquintill};
 pub use rational128::Rational128;

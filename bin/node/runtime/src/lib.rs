@@ -27,11 +27,12 @@ use frame_support::{
 	traits::{SplitTwoWays, Currency, Randomness},
 };
 use sp_core::u32_trait::{_1, _2, _3, _4};
-use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
+pub use node_primitives::{AccountId, Signature};
+use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str,
-	BenchmarkResults,
+	Permill, Perbill, Percent, ApplyExtrinsicResult, BenchmarkResults,
+	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::TransactionValidity;
@@ -81,8 +82,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 215,
-	impl_version: 1,
+	spec_version: 216,
+	impl_version: 3,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -812,7 +813,9 @@ impl_runtime_apis! {
 			-> Option<Vec<BenchmarkResults>>
 		{
 			match module.as_slice() {
+				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
+				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
 				_ => return None,
 			}
 		}
