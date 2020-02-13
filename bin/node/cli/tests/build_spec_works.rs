@@ -26,14 +26,16 @@ fn build_spec_works() {
 	let base_path = "build_spec_test";
 
 	let _ = fs::remove_dir_all(base_path);
-	let status = Command::new(cargo_bin("substrate"))
+	let output = Command::new(cargo_bin("substrate"))
 		.stdout(Stdio::null())
 		.args(&["build-spec", "--dev", "-d", base_path])
-		.status()
+		.output()
 		.unwrap();
-	assert!(status.success());
+	assert!(output.success());
 
 	// Make sure that the `dev` chain folder exists, but the `db` doesn't
 	assert!(PathBuf::from(base_path).join("chains/dev/").exists());
 	assert!(!PathBuf::from(base_path).join("chains/dev/db").exists());
+
+	serde_json::from_slice(output.stdout).unwrap();
 }
