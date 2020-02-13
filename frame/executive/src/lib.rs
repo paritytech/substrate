@@ -98,8 +98,12 @@ pub trait ExecuteBlock<Block: BlockT> {
 	fn execute_block(block: Block);
 }
 
+enum CheckSignature {
+	Yes,
+	No,
+}
+
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
-pub type UnsafeConvertResultOf<E, C> = <E as UnsafeConvert<C>>::UnsafeResult;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
@@ -120,13 +124,9 @@ impl<
 		WeighBlock<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context> + UnsafeConvert<Context> + Codec,
+	Block::Extrinsic: Checkable<Context> + UnsafeConvert<Context, UnsafeResult=CheckedOf<Block::Extrinsic, Context>> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
 		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
-		GetDispatchInfo,
-	UnsafeConvertResultOf<Block::Extrinsic, Context>:
-		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
-		Into<CheckedOf<Block::Extrinsic, Context>> +
 		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
@@ -150,13 +150,9 @@ impl<
 		WeighBlock<System::BlockNumber>,
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context> + UnsafeConvert<Context> + Codec,
+	Block::Extrinsic: Checkable<Context> + UnsafeConvert<Context, UnsafeResult=CheckedOf<Block::Extrinsic, Context>> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
 		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
-		GetDispatchInfo,
-	UnsafeConvertResultOf<Block::Extrinsic, Context>:
-		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
-		Into<CheckedOf<Block::Extrinsic, Context>> +
 		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
@@ -265,7 +261,7 @@ where
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
-		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded), true)
+		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded), CheckSignature::Yes)
 	}
 
 	/// Apply extrinsic outside of the block execution function.
@@ -276,14 +272,14 @@ where
 	pub fn apply_trusted_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
-		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded), false)
+		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded), CheckSignature::No)
 	}
 
 
 	/// Apply an extrinsic inside the block execution function.
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
-		match Self::apply_extrinsic_with_len(uxt, l, None, true) {
+		match Self::apply_extrinsic_with_len(uxt, l, None, CheckSignature::Yes) {
 			Ok(_) => (),
 			Err(e) => { let err: &'static str = e.into(); panic!(err) },
 		}
@@ -294,12 +290,13 @@ where
 		uxt: Block::Extrinsic,
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
-		check_signature: bool,
+		check_signature: CheckSignature,
 	) -> ApplyExtrinsicResult {
 		// Verify that the signature is good.
-		let xt = if check_signature { uxt.check(&Default::default())? }
-			else { uxt.unsafe_convert(&Default::default())?.into() };
-
+		let xt = match check_signature {
+			CheckSignature::Yes => uxt.check(&Default::default())?,
+			CheckSignature::No => uxt.unsafe_convert(&Default::default())?,
+		};
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
 		// executed to prevent it from leaking in storage since at this point, it will either
 		// execute or panic (and revert storage changes).
