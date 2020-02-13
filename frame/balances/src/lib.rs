@@ -1142,7 +1142,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 
 			// bail if we need to keep the account alive and this would kill it.
 			let ed = T::ExistentialDeposit::get();
-			let new_total = new_free_account + account.reserved < ed;
+			let would_be_dead = new_free_account + account.reserved < ed;
 			let would_kill = would_be_dead && account.free + account.reserved >= ed;
 			ensure!(liveness == AllowDeath || !would_kill, Error::<T, I>::KeepAlive);
 
