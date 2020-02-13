@@ -37,15 +37,15 @@ use sp_consensus::block_import::BlockImport;
 use codec::{Decode, Encode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, SimpleArithmetic, One, Zero,
+	Block as BlockT, Header as HeaderT, AtLeast32Bit, One, Zero,
 };
 
 pub trait RuntimeAdapter {
 	type AccountId: Display;
-	type Balance: Display + SimpleArithmetic + From<Self::Number>;
+	type Balance: Display + AtLeast32Bit + From<Self::Number>;
 	type Block: BlockT;
 	type Index: Copy;
-	type Number: Display + PartialOrd + SimpleArithmetic + Zero + One;
+	type Number: Display + PartialOrd + AtLeast32Bit + Zero + One;
 	type Phase: Copy;
 	type Secret;
 

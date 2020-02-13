@@ -88,7 +88,7 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"call to undefined external function with index 68\")"
+					"Other(\"Wasm execution trapped: call to a missing function env:missing_external\")"
 				),
 			}
 		}
@@ -117,7 +117,7 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"call to undefined external function with index 69\")"
+					"Other(\"Wasm execution trapped: call to a missing function env:yet_another_missing_external\")"
 				),
 			}
 		}

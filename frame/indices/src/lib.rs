@@ -22,7 +22,7 @@
 use sp_std::{prelude::*, marker::PhantomData, convert::TryInto};
 use codec::{Encode, Codec};
 use frame_support::{Parameter, decl_module, decl_event, decl_storage};
-use sp_runtime::traits::{One, SimpleArithmetic, StaticLookup, Member, LookupError};
+use sp_runtime::traits::{One, AtLeast32Bit, StaticLookup, Member, LookupError};
 use frame_system::{IsDeadAccount, OnNewAccount};
 
 use self::address::Address as RawAddress;
@@ -59,7 +59,7 @@ impl<AccountId: Encode, AccountIndex: From<u32>>
 pub trait Trait: frame_system::Trait {
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Codec + Default + SimpleArithmetic + Copy;
+	type AccountIndex: Parameter + Member + Codec + Default + AtLeast32Bit + Copy;
 
 	/// Whether an account is dead or not.
 	type IsDeadAccount: IsDeadAccount<Self::AccountId>;

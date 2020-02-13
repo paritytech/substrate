@@ -103,7 +103,7 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			existential_deposit: 0,
+			existential_deposit: 1,
 			creation_fee: 0,
 			monied: false,
 		}
@@ -120,9 +120,6 @@ impl ExtBuilder {
 	}
 	pub fn monied(mut self, monied: bool) -> Self {
 		self.monied = monied;
-		if self.existential_deposit == 0 {
-			self.existential_deposit = 1;
-		}
 		self
 	}
 	pub fn set_associated_consts(&self) {

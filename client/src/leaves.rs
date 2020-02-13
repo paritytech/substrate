@@ -19,7 +19,7 @@
 use std::collections::BTreeMap;
 use std::cmp::Reverse;
 use kvdb::{KeyValueDB, DBTransaction};
-use sp_runtime::traits::SimpleArithmetic;
+use sp_runtime::traits::AtLeast32Bit;
 use codec::{Encode, Decode};
 use sp_blockchain::{Error, Result};
 
@@ -65,7 +65,7 @@ pub struct LeafSet<H, N> {
 
 impl<H, N> LeafSet<H, N> where
 	H: Clone + PartialEq + Decode + Encode,
-	N: std::fmt::Debug + Clone + SimpleArithmetic + Decode + Encode,
+	N: std::fmt::Debug + Clone + AtLeast32Bit + Decode + Encode,
 {
 	/// Construct a new, blank leaf set.
 	pub fn new() -> Self {
@@ -251,7 +251,7 @@ pub struct Undo<'a, H: 'a, N: 'a> {
 
 impl<'a, H: 'a, N: 'a> Undo<'a, H, N> where
 	H: Clone + PartialEq + Decode + Encode,
-	N: std::fmt::Debug + Clone + SimpleArithmetic + Decode + Encode,
+	N: std::fmt::Debug + Clone + AtLeast32Bit + Decode + Encode,
 {
 	/// Undo an imported block by providing the displaced leaf.
 	pub fn undo_import(&mut self, displaced: ImportDisplaced<H, N>) {

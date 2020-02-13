@@ -97,14 +97,14 @@ use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	RuntimeDebug,
-	generic::{self, Era}, Perbill, DispatchOutcome, DispatchError,
+	RuntimeDebug, Perbill, DispatchOutcome, DispatchError,
+	generic::{self, Era},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
 		InvalidTransaction, TransactionValidity,
 	},
 	traits::{
-		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Lookup, LookupError,
+		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, BadOrigin, SaturatedConversion,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
 	},
@@ -165,12 +165,12 @@ pub trait Trait: 'static + Eq + Clone {
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated
 	/// with a sender account.
 	type Index:
-		Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + SimpleArithmetic
+		Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + AtLeast32Bit
 		+ Copy;
 
 	/// The block number type used by the runtime.
 	type BlockNumber:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleArithmetic
+		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + AtLeast32Bit
 		+ Default + Bounded + Copy + sp_std::hash::Hash + sp_std::str::FromStr + MaybeMallocSizeOf;
 
 	/// The output of the `Hashing` function.
@@ -898,7 +898,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	/// a portion.
 	fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
 		match class {
-			DispatchClass::Operational => Perbill::one(),
+			DispatchClass::Operational => <Perbill as sp_runtime::PerThing>::one(),
 			DispatchClass::Normal => T::AvailableBlockRatio::get(),
 		}
 	}

@@ -90,6 +90,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
+
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
 use frame_support::{Parameter, decl_storage, decl_module};
@@ -97,7 +99,7 @@ use frame_support::traits::{Time, Get};
 use sp_runtime::{
 	RuntimeString,
 	traits::{
-		SimpleArithmetic, Zero, SaturatedConversion, Scale
+		AtLeast32Bit, Zero, SaturatedConversion, Scale
 	}
 };
 use frame_support::weights::SimpleDispatchInfo;
@@ -110,7 +112,7 @@ use sp_timestamp::{
 /// The module configuration trait
 pub trait Trait: frame_system::Trait {
 	/// Type used for expressing timestamp.
-	type Moment: Parameter + Default + SimpleArithmetic
+	type Moment: Parameter + Default + AtLeast32Bit
 		+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
 
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.

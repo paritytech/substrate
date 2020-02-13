@@ -53,6 +53,7 @@ where
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
 		enable_mdns: false,
+		use_yamux_flow_control: true,
 	};
 	config.task_executor = Some(Arc::new(move |fut| {
 		wasm_bindgen_futures::spawn_local(fut)
