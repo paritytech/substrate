@@ -87,6 +87,12 @@ pub enum DigestItem<Hash> {
 	/// the consensus engine can (and should) read them itself to avoid
 	/// code and state duplication. It is erroneous for a runtime to produce
 	/// these, but this is not (yet) checked.
+	///
+	/// NOTE: the runtime is not allowed to panic or fail in an `on_initialize`
+	/// call if an expected `PreRuntime` digest is not present. It is the
+	/// responsibility of a external block verifier to check this. Runtime API calls
+	/// will initialize the block without pre-runtime digests, so initialization
+	/// cannot fail when they are missing.
 	PreRuntime(ConsensusEngineId, Vec<u8>),
 
 	/// A message from the runtime to the consensus engine. This should *never*

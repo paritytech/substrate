@@ -22,6 +22,8 @@ use sp_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
+use std::str::FromStr;
+#[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
 use crate::BenchmarkParameter;
@@ -462,6 +464,9 @@ impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H> whe
 sp_core::impl_maybe_marker!(
 	/// A type that implements Display when in std environment.
 	trait MaybeDisplay: Display;
+
+	/// A type that implements FromStr when in std environment.
+	trait MaybeFromStr: FromStr;
 
 	/// A type that implements Hash when in std environment.
 	trait MaybeHash: sp_std::hash::Hash;

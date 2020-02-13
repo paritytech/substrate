@@ -82,7 +82,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 216,
-	impl_version: 1,
+	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -812,6 +812,7 @@ impl_runtime_apis! {
 			-> Option<Vec<BenchmarkResults>>
 		{
 			match module.as_slice() {
+				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
 				_ => return None,
