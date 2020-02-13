@@ -149,11 +149,12 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
 
-			Accounts::<T>::try_mutate(index, |maybe_value| {
+			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
 				let (account, amount) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
 				ensure!(&account == &who, Error::<T>::NotOwner);
 				let lost = T::Currency::repatriate_reserved(&who, &new, amount, Reserved)?;
 				*maybe_value = Some((new.clone(), amount.saturating_sub(lost)));
+				Ok(())
 			})?;
 			Self::deposit_event(RawEvent::IndexAssigned(new, index));
 		}
