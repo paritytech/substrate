@@ -261,13 +261,17 @@ pub fn testnet_genesis(
 		}),
 		pallet_democracy: Some(DemocracyConfig::default()),
 		pallet_collective_Instance1: Some(CouncilConfig {
-			members: endowed_accounts.iter().cloned()
-				.collect::<Vec<_>>()[..(num_endowed_accounts + 1) / 2].to_vec(),
+			members: endowed_accounts.iter()
+						.take((num_endowed_accounts + 1) / 2)
+						.cloned()
+						.collect(),
 			phantom: Default::default(),
 		}),
 		pallet_collective_Instance2: Some(TechnicalCommitteeConfig {
-			members: endowed_accounts.iter().cloned()
-				.collect::<Vec<_>>()[..(num_endowed_accounts + 1) / 2].to_vec(),
+			members: endowed_accounts.iter()
+						.take((num_endowed_accounts + 1) / 2)
+						.cloned()
+						.collect(),
 			phantom: Default::default(),
 		}),
 		pallet_contracts: Some(ContractsConfig {
@@ -295,8 +299,10 @@ pub fn testnet_genesis(
 		pallet_membership_Instance1: Some(Default::default()),
 		pallet_treasury: Some(Default::default()),
 		pallet_society: Some(SocietyConfig {
-			members: endowed_accounts.iter().cloned()
-				.collect::<Vec<_>>()[..(num_endowed_accounts + 1) / 2].to_vec(),
+			members: endowed_accounts.iter()
+						.take((num_endowed_accounts + 1) / 2)
+						.cloned()
+						.collect(),
 			pot: 0,
 			max_members: 999,
 		}),
