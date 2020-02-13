@@ -153,6 +153,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod migration;
+mod benchmarking;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
@@ -168,7 +169,7 @@ use frame_support::{
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
-		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
+		Zero, AtLeast32Bit, StaticLookup, Member, CheckedAdd, CheckedSub,
 		MaybeSerializeDeserialize, Saturating, Bounded,
 	},
 };
@@ -179,7 +180,7 @@ pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
+	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
 	/// A function that is invoked when the free-balance and the reserved-balance has fallen below
@@ -201,7 +202,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
+	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
 	/// A function that is invoked when the free-balance and the reserved-balance has fallen below
@@ -394,6 +395,10 @@ decl_storage! {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
 		// ^^ begin, length, amount liquid at genesis
 		build(|config: &GenesisConfig<T, I>| {
+			assert!(
+				<T as Trait<I>>::ExistentialDeposit::get() > Zero::zero(),
+				"The existential deposit should be greater than zero."
+			);
 			for (_, balance) in &config.balances {
 				assert!(
 					*balance >= <T as Trait<I>>::ExistentialDeposit::get(),

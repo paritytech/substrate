@@ -87,7 +87,7 @@ where
 	P: TransactionPool + 'static,
 	Block: traits::Block,
 	AccountId: Clone + std::fmt::Display + Codec,
-	Index: Clone + std::fmt::Display + Codec + Send + traits::SimpleArithmetic + 'static,
+	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
 	fn nonce(&self, account: AccountId) -> FutureResult<Index> {
 		let get_nonce = || {
@@ -141,7 +141,7 @@ where
 	F: Fetcher<Block> + 'static,
 	Block: traits::Block,
 	AccountId: Clone + std::fmt::Display + Codec + Send + 'static,
-	Index: Clone + std::fmt::Display + Codec + Send + traits::SimpleArithmetic + 'static,
+	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
 	fn nonce(&self, account: AccountId) -> FutureResult<Index> {
 		let best_hash = self.client.info().best_hash;
@@ -189,7 +189,7 @@ fn adjust_nonce<P, AccountId, Index>(
 ) -> Index where
 	P: TransactionPool,
 	AccountId: Clone + std::fmt::Display + Encode,
-	Index: Clone + std::fmt::Display + Encode + traits::SimpleArithmetic + 'static,
+	Index: Clone + std::fmt::Display + Encode + traits::AtLeast32Bit + 'static,
 {
 	log::debug!(target: "rpc", "State nonce for {}: {}", account, nonce);
 	// Now we need to query the transaction pool

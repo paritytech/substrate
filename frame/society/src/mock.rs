@@ -23,7 +23,9 @@ use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 use sp_runtime::{
-	Perbill, traits::{BlakeTwo256, IdentityLookup, OnInitialize, OnFinalize}, testing::Header,
+	Perbill,
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup, OnInitialize, OnFinalize},
 };
 use frame_system::EnsureSignedBy;
 
@@ -50,7 +52,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 
-	pub const ExistentialDeposit: u64 = 0;
+	pub const ExistentialDeposit: u64 = 1;
 	pub const CreationFee: u64 = 0;
 }
 

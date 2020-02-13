@@ -34,7 +34,7 @@ use sp_std::prelude::*;
 use codec::{self as codec, Encode, Decode};
 use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
 use sp_runtime::{
-	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
+	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill, PerThing,
 };
 use sp_staking::{
 	SessionIndex,

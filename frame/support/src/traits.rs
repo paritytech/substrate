@@ -24,7 +24,7 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	RuntimeDebug,
 	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, TrailingZeroInput},
+	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput},
 };
 
 use crate::dispatch::Parameter;
@@ -267,7 +267,7 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 impl<
 	P: Imbalance<B, Opposite=N>,
 	N: Imbalance<B, Opposite=P>,
-	B: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
+	B: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
 > SignedImbalance<B, P> {
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
@@ -330,7 +330,7 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+	type Balance: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
@@ -659,7 +659,7 @@ bitmask! {
 }
 
 pub trait Time {
-	type Moment: SimpleArithmetic + Parameter + Default + Copy;
+	type Moment: AtLeast32Bit + Parameter + Default + Copy;
 
 	fn now() -> Self::Moment;
 }
@@ -767,7 +767,10 @@ pub trait Randomness<Output> {
 	/// Get a "random" value
 	///
 	/// Being a deterministic blockchain, real randomness is difficult to come by. This gives you
-	/// something that approximates it. `subject` is a context identifier and allows you to get a
+	/// something that approximates it. At best, this will be randomness which was
+	/// hard to predict a long time ago, but that has become easy to predict recently.
+	///
+	/// `subject` is a context identifier and allows you to get a
 	/// different result to other callers of this function; use it like
 	/// `random(&b"my context"[..])`.
 	fn random(subject: &[u8]) -> Output;

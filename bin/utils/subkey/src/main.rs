@@ -23,8 +23,10 @@ use clap::{App, ArgMatches, SubCommand};
 use codec::{Decode, Encode};
 use hex_literal::hex;
 use itertools::Itertools;
+use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
 use node_primitives::{Balance, Hash, Index, AccountId, Signature};
 use node_runtime::{BalancesCall, Call, Runtime, SignedPayload, UncheckedExtrinsic, VERSION};
+use serde_json::json;
 use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
 	ed25519, sr25519, ecdsa, Pair, Public, H256, hexdisplay::HexDisplay,
@@ -36,6 +38,24 @@ use std::{
 
 mod rpc;
 mod vanity;
+
+enum OutputType {
+	Json,
+	Text,
+}
+
+impl<'a> TryFrom<&'a str> for OutputType {
+	type Error = ();
+
+	fn try_from(s: &'a str) -> Result<OutputType, ()> {
+		match s {
+			"json" => Ok(OutputType::Json),
+			"text" => Ok(OutputType::Text),
+			_ => Err(()),
+		}
+	}
+
+}
 
 trait Crypto: Sized {
 	type Pair: Pair<Public = Self::Public>;
@@ -55,50 +75,97 @@ trait Crypto: Sized {
 		uri: &str,
 		password: Option<&str>,
 		network_override: Option<Ss58AddressFormat>,
+		output: OutputType,
 	) where
 		<Self::Pair as Pair>::Public: PublicT,
 	{
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
-			println!("Secret phrase `{}` is account:\n  \
-				Secret seed:      {}\n  \
-				Public key (hex): {}\n  \
-				Account ID:       {}\n  \
-				SS58 Address:     {}",
-				uri,
-				format_seed::<Self>(seed),
-				format_public_key::<Self>(public_key.clone()),
-				format_account_id::<Self>(public_key),
-				Self::ss58_from_pair(&pair)
-			);
+			
+			match output {
+				OutputType::Json => {
+					let json = json!({
+						"secretPhrase": uri,
+						"secretSeed": format_seed::<Self>(seed),
+						"publicKey": format_public_key::<Self>(public_key.clone()),
+						"accountId": format_account_id::<Self>(public_key),
+						"ss58Address": Self::ss58_from_pair(&pair),
+					});
+					println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
+				},
+				OutputType::Text => {
+					println!("Secret phrase `{}` is account:\n  \
+						Secret seed:      {}\n  \
+						Public key (hex): {}\n  \
+						Account ID:       {}\n  \
+						SS58 Address:     {}",
+						uri,
+						format_seed::<Self>(seed),
+						format_public_key::<Self>(public_key.clone()),
+						format_account_id::<Self>(public_key),
+						Self::ss58_from_pair(&pair),
+					);
+				},
+			}
 		} else if let Ok((pair, seed)) = Self::Pair::from_string_with_seed(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
-			println!("Secret Key URI `{}` is account:\n  \
-				Secret seed:      {}\n  \
-				Public key (hex): {}\n  \
-				Account ID:       {}\n  \
-				SS58 Address:     {}",
-				uri,
-				if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
-				format_public_key::<Self>(public_key.clone()),
-				format_account_id::<Self>(public_key),
-				Self::ss58_from_pair(&pair)
-			);
+
+			match output {
+				OutputType::Json => {
+					let json = json!({
+						"secretKeyUri": uri,
+						"secretSeed": if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
+						"publicKey": format_public_key::<Self>(public_key.clone()),
+						"accountId": format_account_id::<Self>(public_key),
+						"ss58Address": Self::ss58_from_pair(&pair),
+					});
+					println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
+				},
+				OutputType::Text => {
+					println!("Secret Key URI `{}` is account:\n  \
+						Secret seed:      {}\n  \
+						Public key (hex): {}\n  \
+						Account ID:       {}\n  \
+						SS58 Address:     {}",
+						uri,
+						if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
+						format_public_key::<Self>(public_key.clone()),
+						format_account_id::<Self>(public_key),
+						Self::ss58_from_pair(&pair),
+					);
+				},
+			}
+			
 		} else if let Ok((public_key, v)) =
 			<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{
 			let v = network_override.unwrap_or(v);
-			println!("Public Key URI `{}` is account:\n  \
-				Network ID/version: {}\n  \
-				Public key (hex):   {}\n  \
-				Account ID:         {}\n  \
-				SS58 Address:       {}",
-				uri,
-				String::from(v),
-				format_public_key::<Self>(public_key.clone()),
-				format_account_id::<Self>(public_key.clone()),
-				public_key.to_ss58check_with_version(v)
-			);
+
+			match output {
+				OutputType::Json => {
+					let json = json!({
+						"publicKeyUri": uri,
+						"networkId": String::from(v),
+						"publicKey": format_public_key::<Self>(public_key.clone()),
+						"accountId": format_account_id::<Self>(public_key.clone()),
+						"ss58Address": public_key.to_ss58check_with_version(v),
+					});
+					println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
+				},
+				OutputType::Text => {
+					println!("Public Key URI `{}` is account:\n  \
+						Network ID/version: {}\n  \
+						Public key (hex):   {}\n  \
+						Account ID:         {}\n  \
+						SS58 Address:       {}",
+						uri,
+						String::from(v),
+						format_public_key::<Self>(public_key.clone()),
+						format_account_id::<Self>(public_key.clone()),
+						public_key.to_ss58check_with_version(v),
+					);
+				},
+			}
 		} else {
 			println!("Invalid phrase/URI given");
 		}
@@ -165,6 +232,7 @@ fn get_usage() -> String {
 		[network] -n, --network <network> 'Specify a network. One of {}. Default is {}'
 		[password] -p, --password <password> 'The password for the key'
 		--password-interactive 'You will be prompted for the password for the key.'
+		[output] -o, --output <output> 'Specify an output format. One of text, json. Default is text.'
 	", networks, default_network)
 }
 
@@ -181,6 +249,9 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 						'The number of words in the phrase to generate. One of 12 \
 						(default), 15, 18, 21 and 24.'
 				"),
+			SubCommand::with_name("generate-node-key")
+				.about("Generate a random node libp2p key, save it to file and print its peer ID")
+				.args_from_usage("[file] 'Name of file to save secret key to'"),
 			SubCommand::with_name("inspect")
 				.about("Gets a public key and a SS58 address from the provided Secret URI")
 				.args_from_usage("[uri] 'A Key URI to be inspected. May be a secret seed, \
@@ -329,13 +400,31 @@ where
 	if let Some(network) = maybe_network {
 		set_default_ss58_version(network);
 	}
+
+	let output: OutputType = match matches.value_of("output").map(TryInto::try_into) {
+		Some(Err(_)) => return Err(Error::Static("Invalid output name. See --help for available outputs.")),
+		Some(Ok(v)) => v,
+		None => OutputType::Text,
+	 };
+
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
 			let mnemonic = generate_mnemonic(matches)?;
-			C::print_from_uri(mnemonic.phrase(), password, maybe_network);
+			C::print_from_uri(mnemonic.phrase(), password, maybe_network, output);
+		}
+		("generate-node-key", Some(matches)) => {
+			let file = matches.value_of("file").ok_or(Error::Static("Output file name is required"))?;
+
+			let keypair = libp2p_ed25519::Keypair::generate();
+			let secret = keypair.secret();
+			let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
+
+			fs::write(file, secret.as_ref())?;
+
+			println!("{}", peer_id);
 		}
 		("inspect", Some(matches)) => {
-			C::print_from_uri(&get_uri("uri", &matches)?, password, maybe_network);
+			C::print_from_uri(&get_uri("uri", &matches)?, password, maybe_network, output);
 		}
 		("sign", Some(matches)) => {
 			let suri = get_uri("suri", &matches)?;
@@ -364,7 +453,7 @@ where
 				.unwrap_or_default();
 			let result = vanity::generate_key::<C>(&desired)?;
 			let formated_seed = format_seed::<C>(result.seed);
-			C::print_from_uri(&formated_seed, None, maybe_network);
+			C::print_from_uri(&formated_seed, None, maybe_network, output);
 		}
 		("transfer", Some(matches)) => {
 			let signer = read_pair::<C>(matches.value_of("from"), password)?;
