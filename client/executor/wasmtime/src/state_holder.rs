@@ -44,7 +44,7 @@ impl StateHolder {
 	/// Provide `HostState` for the runtime method call and execute the given function `f`.
 	///
 	/// During the execution of the provided function `with_context` will be callable.
-	pub fn init_state<R, F>(&self, state: HostState, f: F) -> (R, HostState)
+	pub fn with_initialized_state<R, F>(&self, state: HostState, f: F) -> (R, HostState)
 	where
 		F: FnOnce() -> R,
 	{
