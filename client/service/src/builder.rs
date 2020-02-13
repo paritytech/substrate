@@ -638,6 +638,8 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			Arc<Backend>,
 			Option<TFchr>,
 			Option<Arc<dyn RemoteBlockchain<TBl>>>,
+			Option<TSc>,
+			Arc<RwLock<Keystore>>,
 		) -> Result<URpc, Error>,
 	) -> Result<ServiceBuilder<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		TNetP, TExPool, URpc, Backend>, Error>
@@ -648,6 +650,8 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			self.backend.clone(),
 			self.fetcher.clone(),
 			self.remote_backend.clone(),
+			self.select_chain.clone(),
+			self.keystore.clone(),
 		)?;
 
 		Ok(ServiceBuilder {

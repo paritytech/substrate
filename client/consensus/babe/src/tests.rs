@@ -840,7 +840,7 @@ fn rpc() {
 	let config = Config::get_or_compute(&*client).expect("lol");
 	let select_chain = peer.select_chain().expect("Full client has select_chain");
 	let keystore = create_temp_keystore::<AuthorityPair>(Ed25519Keyring::Alice).0;
-	let handler = BabeRPCHandler::new(client.clone(), epoch_changes, keystore, config, Arc::new(select_chain)).unwrap();
+	let handler = BabeRPCHandler::new(client.clone(), epoch_changes, keystore, config, select_chain).unwrap();
 	let mut io = IoHandler::new();
 
 	io.extend_with(BabeRPC::to_delegate(handler));

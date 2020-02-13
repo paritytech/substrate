@@ -29,73 +29,131 @@
 
 #![warn(missing_docs)]
 
-use std::sync::Arc;
+use std::{sync::Arc, io, fmt};
 
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance};
 use node_runtime::UncheckedExtrinsic;
 use sp_api::ProvideRuntimeApi;
 use sp_transaction_pool::TransactionPool;
+use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
+use sp_consensus::SelectChain;
+use sc_keystore::KeyStorePtr;
+use sp_consensus_babe::BabeApi;
+use sc_consensus_epochs::SharedEpochChanges;
+use sc_consensus_babe::{Config, Epoch, rpc::{BabeRPC, BabeRPCHandler}};
 
 /// Light client extra dependencies.
-pub struct LightDeps<F> {
+pub struct LightDeps<C, F, P> {
+	/// client instance
+	pub client: Arc<C>,
+	/// txpool
+	pub pool: Arc<P>,
 	/// Remote access to the blockchain (async).
 	pub remote_blockchain: Arc<dyn sc_client::light::blockchain::RemoteBlockchain<Block>>,
 	/// Fetcher instance.
 	pub fetcher: Arc<F>,
 }
 
-impl<F> LightDeps<F> {
-	/// Create empty `LightDeps` with given `F` type.
-	///
-	/// This is a convenience method to be used in the service builder,
-	/// to make sure the type of the `LightDeps<F>` is matching.
-	pub fn none(_: Option<Arc<F>>) -> Option<Self> {
-		None
-	}
+/// extra dependencies for babe.
+pub struct BabeDeps {
+	/// babe config.
+	pub babe_config: Config,
+	/// shared reference to EpochChanges
+	pub shared_epoch_changes: SharedEpochChanges<Block, Epoch>,
+	/// shared reference to the Keystore
+	pub keystore: KeyStorePtr,
 }
 
-/// Instantiate all RPC extensions.
-///
-/// If you provide `LightDeps`, the system is configured for light client.
-pub fn create<C, P, M, F>(
-	client: Arc<C>,
-	pool: Arc<P>,
-	light_deps: Option<LightDeps<F>>,
-) -> jsonrpc_core::IoHandler<M> where
+/// Full client dependecies
+pub struct FullDeps<C, P, SC> {
+	/// client instance
+	pub client: Arc<C>,
+	/// txpool
+	pub pool: Arc<P>,
+	/// SelectChain instance
+	pub select_chain: SC,
+	/// babe specific dependencies.
+	pub babe: BabeDeps,
+}
+
+
+/// Instantiate all Full RPC extensions.
+pub fn create_full<C, P, M, SC>(
+	deps: FullDeps<C, P, SC>,
+) -> Result<jsonrpc_core::IoHandler<M>, io::Error> where
 	C: ProvideRuntimeApi<Block>,
-	C: sc_client::blockchain::HeaderBackend<Block>,
+	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
 	C: Send + Sync + 'static,
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
-	F: sc_client::light::fetcher::Fetcher<Block> + 'static,
+	C::Api: BabeApi<Block>,
+	<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
 	P: TransactionPool + 'static,
 	M: jsonrpc_core::Metadata + Default,
+	SC: SelectChain<Block> +'static,
 {
-	use substrate_frame_rpc_system::{FullSystem, LightSystem, SystemApi};
+	use substrate_frame_rpc_system::{FullSystem, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
 
 	let mut io = jsonrpc_core::IoHandler::default();
+	let FullDeps {
+		client,
+		pool,
+		select_chain,
+		babe
+	} = deps;
+	let BabeDeps {
+		keystore,
+		babe_config,
+		shared_epoch_changes,
+	} = babe;
 
-	if let Some(LightDeps { remote_blockchain, fetcher }) = light_deps {
-		io.extend_with(
-			SystemApi::<AccountId, Index>::to_delegate(LightSystem::new(client, remote_blockchain, fetcher, pool))
-		);
-	} else {
-		io.extend_with(
-			SystemApi::to_delegate(FullSystem::new(client.clone(), pool))
-		);
 
-		// Making synchronous calls in light client freezes the browser currently,
-		// more context: https://github.com/paritytech/substrate/pull/3480
-		// These RPCs should use an asynchronous caller instead.
-		io.extend_with(
-			ContractsApi::to_delegate(Contracts::new(client.clone()))
-		);
-		io.extend_with(
-			TransactionPaymentApi::to_delegate(TransactionPayment::new(client))
-		);
-	}
+	io.extend_with(
+		SystemApi::to_delegate(FullSystem::new(client.clone(), pool))
+	);
+	// Making synchronous calls in light client freezes the browser currently,
+	// more context: https://github.com/paritytech/substrate/pull/3480
+	// These RPCs should use an asynchronous caller instead.
+	io.extend_with(
+		ContractsApi::to_delegate(Contracts::new(client.clone()))
+	);
+	io.extend_with(
+		TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone()))
+	);
+	io.extend_with(
+		BabeRPC::to_delegate(
+			BabeRPCHandler::new(client, shared_epoch_changes, keystore, babe_config, select_chain)?
+		)
+	);
+
+	Ok(io)
+}
+
+/// Instantiate all Light RPC extensions.
+pub fn create_light<C, P, M, F>(
+	deps: LightDeps<C, F, P>,
+) -> jsonrpc_core::IoHandler<M> where
+	C: sc_client::blockchain::HeaderBackend<Block>,
+	C: Send + Sync + 'static,
+	F: sc_client::light::fetcher::Fetcher<Block> + 'static,
+	P: TransactionPool + 'static,
+	M: jsonrpc_core::Metadata + Default,
+{
+	use substrate_frame_rpc_system::{LightSystem, SystemApi};
+
+	let LightDeps {
+		client,
+		pool,
+		remote_blockchain,
+		fetcher
+	} = deps;
+	let mut io = jsonrpc_core::IoHandler::default();
+	io.extend_with(
+		SystemApi::<AccountId, Index>::to_delegate(LightSystem::new(client, remote_blockchain, fetcher, pool))
+	);
+
 	io
 }

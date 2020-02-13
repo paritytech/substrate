@@ -69,7 +69,7 @@ pub struct BabeRPCHandler<B: BlockT, C, SC> {
 	/// threadpool for spawning cpu bound tasks.
 	threadpool: ThreadPool,
 	/// select chain
-	select_chain: Arc<SC>,
+	select_chain: SC,
 }
 
 impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
@@ -79,7 +79,7 @@ impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
 		shared_epoch_changes: SharedEpochChanges<B, Epoch>,
 		keystore: KeyStorePtr,
 		babe_config: Config,
-		select_chain: Arc<SC>,
+		select_chain: SC,
 	) -> io::Result<Self> {
 		let threadpool = ThreadPool::builder()
 			// single thread is fine.
@@ -103,7 +103,7 @@ impl<B, C, SC> BabeRPC for BabeRPCHandler<B, C, SC>
 		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
 		C::Api: BabeApi<B>,
 		<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
-		SC: SelectChain<B> + 'static,
+		SC: SelectChain<B> + Clone + 'static,
 {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>> {
 		let (
@@ -195,7 +195,7 @@ fn epoch_data<B, C, SC>(
 	client: &Arc<C>,
 	babe_config: &Config,
 	slot_number: u64,
-	select_chain: &Arc<SC>,
+	select_chain: &SC,
 ) -> Result<Epoch, Error>
 	where
 		B: BlockT,
