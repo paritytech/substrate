@@ -3056,6 +3056,27 @@ mod offchain_phragmen {
 	}
 
 	#[test]
+	fn offchain_wont_run_without_signing_key() {
+		let mut ext = ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(2)
+			.local_key_account(5)
+			.build();
+		let state = offchainify(&mut ext);
+		ext.execute_with(||{
+			run_to_block(12);
+
+			// local key 5 is not there.
+			assert_eq_uvec!(Staking::current_elected(), vec![11, 21]);
+
+			assert_eq!(state.read().transactions.len(), 0);
+			Staking::offchain_worker(12);
+			assert_eq!(state.read().transactions.len(), 0);
+			// Error in phragmen offchain worker call: OffchainElectionError::NoSigningKey
+		})
+	}
+
+	#[test]
 	fn invalid_phragmen_result_correct_number_of_winners() {
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
