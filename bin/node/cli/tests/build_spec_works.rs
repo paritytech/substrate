@@ -31,11 +31,11 @@ fn build_spec_works() {
 		.args(&["build-spec", "--dev", "-d", base_path])
 		.output()
 		.unwrap();
-	assert!(output.success());
+	assert!(output.status.success());
 
 	// Make sure that the `dev` chain folder exists, but the `db` doesn't
 	assert!(PathBuf::from(base_path).join("chains/dev/").exists());
 	assert!(!PathBuf::from(base_path).join("chains/dev/db").exists());
 
-	serde_json::from_slice(output.stdout).unwrap();
+	serde_json::from_slice(output.stdout.as_slice()).unwrap();
 }
