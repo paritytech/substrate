@@ -1,7 +1,7 @@
-name: Rust
+name: Substrate
 
 on: [push]
-
+jobs:
   check:
     name: Test
     runs-on: self-hosted
