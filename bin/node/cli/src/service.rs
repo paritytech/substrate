@@ -111,7 +111,7 @@ macro_rules! new_full_start {
 						shared_epoch_changes: sc_consensus_babe::BabeLink::epoch_changes(babe_link).clone()
 					}
 				};
-				Ok(node_rpc::create_full(deps)?)
+				Ok(node_rpc::create_full(deps))
 			})?;
 
 		(builder, import_setup, inherent_data_providers)

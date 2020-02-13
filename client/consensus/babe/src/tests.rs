@@ -39,7 +39,7 @@ use sc_client_api::{BlockchainEvents, backend::TransactionFor};
 use log::debug;
 use std::{time::Duration, cell::RefCell};
 use sp_keyring::Ed25519Keyring;
-use rpc::{BabeRPC, BabeRPCHandler};
+use rpc::{BabeApi, BabeRPCHandler};
 use jsonrpc_core::IoHandler;
 
 type Item = DigestItem<Hash>;
@@ -840,10 +840,10 @@ fn rpc() {
 	let config = Config::get_or_compute(&*client).expect("lol");
 	let select_chain = peer.select_chain().expect("Full client has select_chain");
 	let keystore = create_temp_keystore::<AuthorityPair>(Ed25519Keyring::Alice).0;
-	let handler = BabeRPCHandler::new(client.clone(), epoch_changes, keystore, config, select_chain).unwrap();
+	let handler = BabeRPCHandler::new(client.clone(), epoch_changes, keystore, config, select_chain);
 	let mut io = IoHandler::new();
 
-	io.extend_with(BabeRPC::to_delegate(handler));
+	io.extend_with(BabeApi::to_delegate(handler));
 	let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4]}},"id":1}"#;
 

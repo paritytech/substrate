@@ -17,12 +17,7 @@
 //! rpc api for babe.
 
 use crate::{Epoch, SharedEpochChanges, authorship, Config};
-use futures::{
-	FutureExt as _, TryFutureExt as _,
-	executor::ThreadPool,
-	channel::oneshot,
-	future::ready,
-};
+use futures::{FutureExt as _, TryFutureExt as _};
 use jsonrpc_core::{
 	Error as RpcError,
 	futures::future as rpc_future,
@@ -31,7 +26,7 @@ use jsonrpc_derive::rpc;
 use sc_consensus_epochs::{descendent_query, Epoch as EpochT};
 use sp_consensus_babe::{
 	AuthorityId,
-	BabeApi,
+	BabeApi as BabeRuntimeApi,
 	digests::PreDigest,
 };
 use serde::{Deserialize, Serialize};
@@ -41,13 +36,13 @@ use sp_core::crypto::Pair;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use sp_consensus::{SelectChain, Error as ConsensusError};
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
-use std::{collections::HashMap, fmt, io, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 type FutureResult<T> = Box<dyn rpc_future::Future<Item = T, Error = RpcError> + Send>;
 
 /// Provides rpc methods for interacting with Babe.
 #[rpc]
-pub trait BabeRPC {
+pub trait BabeApi {
 	/// Returns data about which slots (primary or secondary) can be claimed in the current epoch
 	/// with the keys in the keystore.
 	#[rpc(name = "babe_epochAuthorship")]
@@ -66,8 +61,6 @@ pub struct BabeRPCHandler<B: BlockT, C, SC> {
 	keystore: KeyStorePtr,
 	/// config (actually holds the slot duration)
 	babe_config: Config,
-	/// threadpool for spawning cpu bound tasks.
-	threadpool: ThreadPool,
 	/// select chain
 	select_chain: SC,
 }
@@ -80,28 +73,23 @@ impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
 		keystore: KeyStorePtr,
 		babe_config: Config,
 		select_chain: SC,
-	) -> io::Result<Self> {
-		let threadpool = ThreadPool::builder()
-			// single thread is fine.
-			.pool_size(1)
-			.create()?;
+	) -> Self {
 
-		Ok(Self {
+		Self {
 			client,
 			shared_epoch_changes,
 			keystore,
 			babe_config,
-			threadpool,
 			select_chain,
-		})
+		}
 	}
 }
 
-impl<B, C, SC> BabeRPC for BabeRPCHandler<B, C, SC>
+impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 	where
 		B: BlockT,
 		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
-		C::Api: BabeApi<B>,
+		C::Api: BabeRuntimeApi<B>,
 		<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
 		SC: SelectChain<B> + Clone + 'static,
 {
@@ -119,8 +107,6 @@ impl<B, C, SC> BabeRPC for BabeRPCHandler<B, C, SC>
 			self.client.clone(),
 			self.select_chain.clone(),
 		);
-		let (tx, rx) = oneshot::channel();
-
 		let future = async move {
 			let header = select_chain.best_chain().map_err(Error::Consensus)?;
 			let epoch_start = client.runtime_api()
@@ -148,14 +134,9 @@ impl<B, C, SC> BabeRPC for BabeRPCHandler<B, C, SC>
 			}
 
 			Ok(claims)
-		}.then(|result| {
-			let _ = tx.send(result).expect("receiever is never dropped; qed");
-			ready(())
-		}).boxed();
+		}.boxed();
 
-		self.threadpool.spawn_ok(future);
-
-		Box::new(async { rx.await.expect("sender is never dropped; qed") }.boxed().compat())
+		Box::new(future.compat())
 	}
 }
 
@@ -169,13 +150,11 @@ pub struct EpochAuthorship {
 }
 
 /// Errors encountered by the RPC
-#[derive(Debug, err_derive::Error, derive_more::From)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Consensus error
-	#[error(display = "Consensus Error: {}", _0)]
 	Consensus(ConsensusError),
 	/// Errors that can be formatted as a String
-	#[error(display = "{}", _0)]
 	StringError(String)
 }
 

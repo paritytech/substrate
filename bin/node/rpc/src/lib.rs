@@ -29,7 +29,7 @@
 
 #![warn(missing_docs)]
 
-use std::{sync::Arc, io, fmt};
+use std::{sync::Arc, fmt};
 
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance};
 use node_runtime::UncheckedExtrinsic;
@@ -40,7 +40,7 @@ use sp_consensus::SelectChain;
 use sc_keystore::KeyStorePtr;
 use sp_consensus_babe::BabeApi;
 use sc_consensus_epochs::SharedEpochChanges;
-use sc_consensus_babe::{Config, Epoch, rpc::{BabeRPC, BabeRPCHandler}};
+use sc_consensus_babe::{Config, Epoch, rpc::{self as sc_consensus_babe_rpc, BabeRPCHandler}};
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -80,7 +80,7 @@ pub struct FullDeps<C, P, SC> {
 /// Instantiate all Full RPC extensions.
 pub fn create_full<C, P, M, SC>(
 	deps: FullDeps<C, P, SC>,
-) -> Result<jsonrpc_core::IoHandler<M>, io::Error> where
+) -> jsonrpc_core::IoHandler<M> where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
 	C: Send + Sync + 'static,
@@ -124,12 +124,12 @@ pub fn create_full<C, P, M, SC>(
 		TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone()))
 	);
 	io.extend_with(
-		BabeRPC::to_delegate(
-			BabeRPCHandler::new(client, shared_epoch_changes, keystore, babe_config, select_chain)?
+		sc_consensus_babe_rpc::BabeApi::to_delegate(
+			BabeRPCHandler::new(client, shared_epoch_changes, keystore, babe_config, select_chain)
 		)
 	);
 
-	Ok(io)
+	io
 }
 
 /// Instantiate all Light RPC extensions.

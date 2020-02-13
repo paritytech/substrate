@@ -1201,20 +1201,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "err-derive"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14ce82f12540e448ece75759f36d341dcca4148bb76fb393b087c24e00b15d07"
-dependencies = [
- "proc-macro-error",
- "proc-macro2 1.0.8",
- "quote 1.0.2",
- "rustversion",
- "syn",
- "synstructure",
-]
-
-[[package]]
 name = "errno"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5793,7 +5779,6 @@ version = "0.8.0"
 dependencies = [
  "derive_more",
  "env_logger 0.7.1",
- "err-derive",
  "fork-tree",
  "futures 0.1.29",
  "futures 0.3.4",

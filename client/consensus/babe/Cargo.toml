@@ -8,7 +8,6 @@ license = "GPL-3.0"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-err-derive = "0.2.2"
 sp-consensus-babe = { version = "0.8", path = "../../../primitives/consensus/babe" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-application-crypto = { version = "2.0.0", path = "../../../primitives/application-crypto" }
