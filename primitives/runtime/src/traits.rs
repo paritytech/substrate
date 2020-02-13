@@ -33,7 +33,7 @@ use crate::transaction_validity::{
 };
 use crate::generic::{Digest, DigestItem};
 pub use sp_arithmetic::traits::{
-	SimpleArithmetic, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
+	AtLeast32Bit, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
 	CheckedShl, CheckedShr, IntegerSquareRoot
 };
@@ -502,7 +502,7 @@ pub trait Header:
 {
 	/// Header number.
 	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr
+		+ Copy + MaybeDisplay + AtLeast32Bit + Codec + sp_std::str::FromStr
 		+ MaybeMallocSizeOf;
 	/// Header hash type
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
