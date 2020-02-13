@@ -5525,6 +5525,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-state-machine",
+ "substrate-test-runtime-client",
 ]
 
 [[package]]

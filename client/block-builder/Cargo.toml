@@ -15,3 +15,6 @@ sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-block-builder = { version = "2.0.0", path = "../../primitives/block-builder" }
 sc-client-api = { version = "2.0.0", path = "../api" }
 codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive"] }
+
+[dev-dependencies]
+substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }

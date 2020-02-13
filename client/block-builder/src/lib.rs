@@ -216,3 +216,31 @@ where
 		})
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_blockchain::HeaderBackend;
+	use sp_core::Blake2Hasher;
+	use sp_state_machine::Backend;
+
+	#[test]
+	fn block_building_storage_proof_does_not_include_runtime_by_default() {
+		let client = substrate_test_runtime_client::new();
+
+		let block = client.new_block_at(
+			&BlockId::Hash(client.info().best_hash),
+			Default::default(),
+			RecordProof::Yes,
+		).unwrap().build().unwrap();
+
+		let proof = block.proof.expect("Proof is build on request");
+
+		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
+			block.storage_changes.transaction_storage_root,
+			proof,
+		).unwrap();
+
+		backend.storage(&sp_core::storage::well_known_keys::CODE).unwrap();
+	}
+}
