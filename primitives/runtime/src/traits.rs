@@ -660,7 +660,7 @@ pub trait UnsafeConvert<Context>: Sized {
 	/// Returned type of unsafe convert.
 	type UnsafeResult;
 
-	/// Convert self to .
+	/// Convert self to `Self::UnsafeResult`.
 	fn unsafe_convert(self, c: &Context) -> Result<Self::UnsafeResult, TransactionValidityError>;
 }
 
