@@ -100,9 +100,6 @@ jobs:
           && rm -f  ./target/.rustc_info.json
   check-wasm:
     name: Check web wasm
-    strategy:
-      matrix:
-        crate: [" -p sp-io"," -p sp-runtime"," -p sp-std"," -p sc-client"," -p sc-consensus-aura"," -p sc-consensus-babe"," -p sp-consensus"," -p sc-telemetry"," --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features browser"]
     runs-on: ubuntu-latest
     container: parity/rust-builder:latest
     steps:
@@ -128,11 +125,17 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-      - name: Check ${{ matrix.crate }}
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --target=wasm32-unknown-unknown
+      - name: Check wasm crates
+        run: |
+          time cargo build --target=wasm32-unknown-unknown -p sp-io && \
+          cargo build --target=wasm32-unknown-unknown -p sp-runtime && \
+          cargo build --target=wasm32-unknown-unknown -p sp-std && \
+          cargo build --target=wasm32-unknown-unknown -p sc-client && \
+          cargo build --target=wasm32-unknown-unknown -p sc-consensus-aura && \
+          cargo build --target=wasm32-unknown-unknown -p sc-consensus-babe && \
+          cargo build --target=wasm32-unknown-unknown -p sp-consensus && \
+          cargo build --target=wasm32-unknown-unknown -p sc-telemetry && \
+          cargo build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
       - name: Prepare build directory for cache
         run: |
           find ./target/debug -maxdepth 1 -type f -delete \
