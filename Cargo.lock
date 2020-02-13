@@ -3650,6 +3650,7 @@ dependencies = [
  "sc-client-api",
  "sc-client-db",
  "sc-executor",
+ "sc-service",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
