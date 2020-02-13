@@ -39,7 +39,7 @@ use sp_runtime::{
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup, UnsafeConvert,
 	},
 };
 use sp_version::RuntimeVersion;
@@ -130,7 +130,7 @@ impl BlindCheckable for Extrinsic {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
-				if sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+				cif sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
 					Err(InvalidTransaction::BadProof.into())
@@ -141,6 +141,15 @@ impl BlindCheckable for Extrinsic {
 			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
 				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
 		}
+	}
+}
+
+
+impl UnsafeConvert for Extrinsic {
+	type UnsafeResult = Self;
+
+	fn unsafe_convert(self) -> Result<Self, TransactionValidityError> {
+		Ok(self)
 	}
 }
 

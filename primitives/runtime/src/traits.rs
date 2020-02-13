@@ -652,6 +652,18 @@ pub trait BlindCheckable: Sized {
 	fn check(self) -> Result<Self::Checked, TransactionValidityError>;
 }
 
+/// Unsafe convert.
+///
+/// Similar to `Checkable`, but without an actual check. "Unsafe" means that user is encouraged
+/// to look in individual implementation of this trait for actual assumption which could be unsafe.
+pub trait UnsafeConvert<Context>: Sized {
+	/// Returned type of unsafe convert.
+	type UnsafeResult;
+
+	/// Convert self to .
+	fn unsafe_convert(self, c: &Context) -> Result<Self::UnsafeResult, TransactionValidityError>;
+}
+
 // Every `BlindCheckable` is also a `StaticCheckable` for arbitrary `Context`.
 impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;

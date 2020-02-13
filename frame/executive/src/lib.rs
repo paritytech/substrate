@@ -79,10 +79,11 @@
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::weights::{GetDispatchInfo, WeighBlock, DispatchInfo};
 use sp_runtime::{
-	generic::Digest, ApplyExtrinsicResult,
+	generic::Digest,
+	ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating,
+		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating, UnsafeConvert,
 	},
 	transaction_validity::TransactionValidity,
 };
@@ -98,6 +99,7 @@ pub trait ExecuteBlock<Block: BlockT> {
 }
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
+pub type UnsafeConvertResultOf<E, C> = <E as UnsafeConvert<C>>::UnsafeResult;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
@@ -118,9 +120,13 @@ impl<
 		WeighBlock<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context> + Codec,
+	Block::Extrinsic: Checkable<Context> + UnsafeConvert<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
 		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
+		GetDispatchInfo,
+	UnsafeConvertResultOf<Block::Extrinsic, Context>:
+		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
+		Into<CheckedOf<Block::Extrinsic, Context>> +
 		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
@@ -144,9 +150,13 @@ impl<
 		WeighBlock<System::BlockNumber>,
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context> + Codec,
+	Block::Extrinsic: Checkable<Context> + UnsafeConvert<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
 		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
+		GetDispatchInfo,
+	UnsafeConvertResultOf<Block::Extrinsic, Context>:
+		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
+		Into<CheckedOf<Block::Extrinsic, Context>> +
 		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
@@ -252,16 +262,28 @@ where
 	///
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
+	/// This also does not check transaction signature and assumes `uxt` passed is originated
+	/// from the source that validates transactions before applying (for example, transaction pool).
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
-		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded))
+		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded), true)
 	}
+
+	/// Apply extrinsic outside of the block execution function.
+	///
+	/// Same as `apply_extrinsic`, but without signature checks.
+	pub fn apply_trusted_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
+		let encoded = uxt.encode();
+		let encoded_len = encoded.len();
+		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded), false)
+	}
+
 
 	/// Apply an extrinsic inside the block execution function.
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
-		match Self::apply_extrinsic_with_len(uxt, l, None) {
+		match Self::apply_extrinsic_with_len(uxt, l, None, true) {
 			Ok(_) => (),
 			Err(e) => { let err: &'static str = e.into(); panic!(err) },
 		}
@@ -272,9 +294,11 @@ where
 		uxt: Block::Extrinsic,
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
+		check_signature: bool,
 	) -> ApplyExtrinsicResult {
 		// Verify that the signature is good.
-		let xt = uxt.check(&Default::default())?;
+		let xt = if check_signature { uxt.check(&Default::default())? }
+			else { uxt.unsafe_convert(&Default::default())?.into() };
 
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
 		// executed to prevent it from leaking in storage since at this point, it will either

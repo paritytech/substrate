@@ -321,6 +321,12 @@ impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Ca
 	type Checked = Self;
 	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> { Ok(self) }
 }
+
+impl<Call: Codec + Sync + Send, Context, Extra> traits::UnsafeConvert<Context> for TestXt<Call, Extra> {
+	type UnsafeResult = Self;
+	fn unsafe_convert(self, _: &Context) -> Result<Self::UnsafeResult, TransactionValidityError> { Ok(self) }
+}
+
 impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
 	type Call = Call;
 	type SignaturePayload = (u64, Extra);

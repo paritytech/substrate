@@ -22,7 +22,7 @@ use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
 	traits::{
 		self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, ExtrinsicMetadata,
-		IdentifyAccount,
+		IdentifyAccount, UnsafeConvert,
 	},
 	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
@@ -141,6 +141,31 @@ where
 				signed: None,
 				function: self.function,
 			},
+		})
+	}
+}
+
+impl<Address, AccountId, Call, Signature, Extra, Lookup>
+	UnsafeConvert<Lookup>
+for
+	UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Address: Member + MaybeDisplay,
+	Call: Encode + Member,
+	Lookup: traits::Lookup<Source=Address, Target=AccountId>,
+	Extra: SignedExtension
+{
+	type UnsafeResult = CheckedExtrinsic<AccountId, Call, Extra>;
+
+	fn unsafe_convert(self, lookup: &Lookup) -> Result<Self::UnsafeResult, TransactionValidityError> {
+		let UncheckedExtrinsic { signature, function } = self;
+
+		Ok(CheckedExtrinsic {
+			signed: match signature {
+				Some((address, _signature, extra)) => Some((lookup.lookup(address)?, extra)),
+				None => None,
+			},
+			function,
 		})
 	}
 }
