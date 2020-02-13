@@ -307,70 +307,50 @@ benchmark! {
 	}: set_fee(RawOrigin::Signed(caller), r, 10.into())
 }
 
-
-// Benchmark `set_account_id` extrinsic.
-struct SetAccountId;
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetAccountId {
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-		vec![
-			// Registrar Count
-			(BenchmarkParameter::R, 1, MAX_REGISTRARS),
-		]
-	}
-
-	fn instance(&self, components: &[(BenchmarkParameter, u32)])
-		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{
-		// The target user
+benchmark! {
+	SetAccountId {
 		let caller = account::<T>("caller", 0);
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-
-		// Register r registrars
-		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap().1;
-		benchmarking::add_registrars::<T>(r)?;
-
-		// Add caller as registrar
+		let r as R in 1 .. MAX_REGISTRARS => benchmarking::add_registrars::<T>(r)?;
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
-
-		// Return `set_account_id` call
-		Ok((crate::Call::<T>::set_account_id(r, account::<T>("new", 0)), RawOrigin::Signed(caller)))
-	}
+	}: set_account_id(RawOrigin::Signed(caller), r, account::<T>("new", 0))
 }
 
-// Benchmark `set_fields` extrinsic.
-struct SetFields;
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SetFields {
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-		vec![
-			// Registrar Count
-			(BenchmarkParameter::R, 1, MAX_REGISTRARS),
-		]
-	}
-
-	fn instance(&self, components: &[(BenchmarkParameter, u32)])
-		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{
-		// The target user
+benchmark! {
+	SetFields {
 		let caller = account::<T>("caller", 0);
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-
-		// Register r registrars
-		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap().1;
-		benchmarking::add_registrars::<T>(r)?;
-
-		// Add caller as registrar
+		let r as R in 1 .. MAX_REGISTRARS => benchmarking::add_registrars::<T>(r)?;
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
-
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
 			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
 		);
-
-		// Return `set_account_id` call
-		Ok((crate::Call::<T>::set_fields(r, fields), RawOrigin::Signed(caller)))
-	}
+	}: set_fields(RawOrigin::Signed(caller), r, fields)
 }
 
+benchmark! {
+	ProvideJudgement {
+		// The user
+		let user = account::<T>("user", r);
+		let user_origin = <T as frame_system::Trait>::Origin::from(RawOrigin::Signed(user.clone()));
+		let user_lookup = <T::Lookup as StaticLookup>::unlookup(user.clone());
+		let _ = T::Currency::make_free_balance_be(&user, BalanceOf::<T>::max_value());
+
+		let caller = account::<T>("caller", r);
+		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+
+		let r as R in 1 .. MAX_REGISTRARS => benchmarking::add_registrars::<T>(r)?;
+		let x as X in 1 .. T::MaxAdditionalFields::get() => {
+			let info = benchmarking::create_identity_info::<T>(x);
+			Identity::<T>::set_identity(user_origin.clone(), info)?;
+		}
+
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
+		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into())?;
+	}: provide_judgement(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
+}
+/*
 // Benchmark `provide_judgement` extrinsic.
 struct ProvideJudgement;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ProvideJudgement {
@@ -420,7 +400,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		), RawOrigin::Signed(caller)))
 	}
 }
-
+*/
 // Benchmark `kill_identity` extrinsic.
 struct KillIdentity;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for KillIdentity {
