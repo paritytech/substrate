@@ -344,99 +344,30 @@ benchmark! {
 		let x as X in 1 .. T::MaxAdditionalFields::get() => {
 			let info = benchmarking::create_identity_info::<T>(x);
 			Identity::<T>::set_identity(user_origin.clone(), info)?;
-		}
+		};
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into())?;
 	}: provide_judgement(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
 }
-/*
-// Benchmark `provide_judgement` extrinsic.
-struct ProvideJudgement;
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ProvideJudgement {
 
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-		vec![
-			// Registrar Count
-			(BenchmarkParameter::R, 1, MAX_REGISTRARS),
-			// Additional Field Count
-			(BenchmarkParameter::X, 1, T::MaxAdditionalFields::get()),
-		]
-	}
-
-	fn instance(&self, components: &[(BenchmarkParameter, u32)])
-		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{
-		// Add r registrars
-		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap().1;
-		benchmarking::add_registrars::<T>(r)?;
-
-		// The user
-		let user = account::<T>("user", r);
-		let user_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(user.clone()).into();
-		let user_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(user.clone());
-		let _ = T::Currency::make_free_balance_be(&user, BalanceOf::<T>::max_value());
-
-		// Create their main identity with x additional fields
-		let x = components.iter().find(|&c| c.0 == BenchmarkParameter::X).unwrap().1;
-		let info = benchmarking::create_identity_info::<T>(x);
-		Identity::<T>::set_identity(user_origin.clone(), info)?;
-
-		// The caller registrar
-		let caller = account::<T>("caller", r);
-		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-
-		// Add caller as registrar
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
-
-		// User requests judgement from caller registrar
-		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into())?;
-
-		// Return `provide_judgement` call
-		Ok((crate::Call::<T>::provide_judgement(
-			r,
-			user_lookup.clone(),
-			Judgement::Reasonable
-		), RawOrigin::Signed(caller)))
-	}
-}
-*/
-// Benchmark `kill_identity` extrinsic.
-struct KillIdentity;
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for KillIdentity {
-
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-		vec![
-			// Registrar Count
-			(BenchmarkParameter::R, 1, MAX_REGISTRARS),
-			// Subs Count
-			(BenchmarkParameter::S, 1, T::MaxSubAccounts::get()),
-			// Additional Field Count
-			(BenchmarkParameter::X, 1, T::MaxAdditionalFields::get()),
-		]
-	}
-
-	fn instance(&self, components: &[(BenchmarkParameter, u32)])
-		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{
-		// The target user
+benchmark! {
+	KillIdentity {
 		let caller = account::<T>("caller", 0);
 		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		// Register r registrars
-		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap().1;
-		benchmarking::add_registrars::<T>(r)?;
-
-		// Create their main identity with x additional fields
-		let x = components.iter().find(|&c| c.0 == BenchmarkParameter::X).unwrap().1;
-		let info = benchmarking::create_identity_info::<T>(x);
-		Identity::<T>::set_identity(caller_origin.clone(), info)?;
-
-		// Give them s many sub accounts
-		let s = components.iter().find(|&c| c.0 == BenchmarkParameter::S).unwrap().1;
-		let _ = benchmarking::add_sub_accounts::<T>(caller.clone(), s)?;
+		let r as R in 1 .. MAX_REGISTRARS => benchmarking::add_registrars::<T>(r)?;
+		let s as S in 1 .. T::MaxSubAccounts::get() => {
+			// Give them s many sub accounts
+			let _ = benchmarking::add_sub_accounts::<T>(caller.clone(), s)?;
+		};
+		let x as X in 1 .. T::MaxAdditionalFields::get() => {
+			// Create their main identity with x additional fields
+			let info = benchmarking::create_identity_info::<T>(x);
+			Identity::<T>::set_identity(caller_origin.clone(), info)?;
+		};
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
@@ -448,10 +379,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 				Judgement::Reasonable
 			)?;
 		}
-
-		// Return the `kill_identity` call
-		Ok((crate::Call::<T>::kill_identity(caller_lookup), RawOrigin::Root))
-	}
+	}: kill_identity(RawOrigin::Root, caller_lookup)
 }
 
 // The list of available benchmarks for this pallet.
