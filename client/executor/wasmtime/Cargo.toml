@@ -16,7 +16,7 @@ sp-runtime-interface = { version = "2.0.0", path = "../../../primitives/runtime-
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-allocator = { version = "2.0.0", path = "../../../primitives/allocator" }
 
-wasmtime = { version = "0.11" }
+wasmtime = "0.11"
 
 [dev-dependencies]
 assert_matches = "1.3.0"
