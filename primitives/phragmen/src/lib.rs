@@ -39,7 +39,7 @@ use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
 };
 use sp_runtime::traits::{
-	Zero, Convert, Member, RuntimeArithmetic, SaturatedConversion, Bounded, Saturating,
+	Zero, Convert, Member, AtLeast32Bit, SaturatedConversion, Bounded, Saturating,
 };
 
 #[cfg(test)]
@@ -157,7 +157,7 @@ pub fn elect<AccountId, Balance, FS, C, R>(
 	stake_of: FS,
 ) -> Option<PhragmenResult<AccountId, R>> where
 	AccountId: Default + Ord + Member,
-	Balance: Default + Copy + RuntimeArithmetic,
+	Balance: Default + Copy + AtLeast32Bit,
 	for<'r> FS: Fn(&'r AccountId) -> Balance,
 	C: Convert<Balance, u64> + Convert<u128, Balance>,
 	R: PerThing,
@@ -357,7 +357,7 @@ pub fn build_support_map<Balance, AccountId, FS, C, R>(
 	stake_of: FS,
 ) -> SupportMap<AccountId> where
 	AccountId: Default + Ord + Member,
-	Balance: Default + Copy + RuntimeArithmetic,
+	Balance: Default + Copy + AtLeast32Bit,
 	C: Convert<Balance, u64> + Convert<u128, Balance>,
 	for<'r> FS: Fn(&'r AccountId) -> Balance,
 	R: PerThing + sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,

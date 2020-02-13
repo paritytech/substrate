@@ -20,7 +20,7 @@ use serde::{Serialize, Deserialize};
 use sp_std::{ops, prelude::*, convert::TryInto};
 use codec::{Encode, Decode, CompactAs};
 use crate::traits::{
-	SaturatedConversion, UniqueSaturatedInto, Saturating, AnyArithmetic,
+	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic,
 };
 use sp_debug_derive::RuntimeDebug;
 
@@ -28,7 +28,7 @@ use sp_debug_derive::RuntimeDebug;
 /// `X`_.
 pub trait PerThing: Sized + Saturating + Copy {
 	/// The data type used to build this per-thingy.
-	type Inner: AnyArithmetic + Copy;
+	type Inner: BaseArithmetic + Copy;
 
 	/// accuracy of this type
 	const ACCURACY: Self::Inner;

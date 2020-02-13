@@ -30,6 +30,7 @@ use sp_std::ops::{
 
 /// A meta trait for arithmetic type operations, regardless of any limitation on size.
 pub trait BaseArithmetic:
+	From<u8> +
 	Zero + One + IntegerSquareRoot +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
@@ -49,6 +50,7 @@ pub trait BaseArithmetic:
 {}
 
 impl<T:
+	From<u8> +
 	Zero + One + IntegerSquareRoot +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
@@ -71,17 +73,10 @@ impl<T:
 ///
 /// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
 /// be able to represent at least `u32` values without loss, hence the trait implies `From<u32>`
-/// and smaller ints. All other conversions are fallible.
-pub trait RuntimeArithmetic:BaseArithmetic + From<u8> + From<u16> + From<u32> {}
+/// and smaller integers. All other conversions are fallible.
+pub trait AtLeast32Bit: BaseArithmetic + From<u16> + From<u32> {}
 
-impl<T: BaseArithmetic + From<u8> + From<u16> + From<u32>> RuntimeArithmetic for T {}
-
-/// Same as [`RuntimeArithmetic`] for integer types of any size, without any assumption of their size
-/// being at least `u32`.
-pub trait AnyArithmetic: BaseArithmetic + From<u8> {}
-
-impl<T:BaseArithmetic + From<u8>> AnyArithmetic for T {}
-
+impl<T: BaseArithmetic + From<u16> + From<u32>> AtLeast32Bit for T {}
 
 /// Just like `From` except that if the source value is too big to fit into the destination type
 /// then it'll saturate the destination.
