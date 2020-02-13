@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{mem, pin::Pin, time::Duration, marker::PhantomData};
+use std::{mem, pin::Pin, time::Duration, marker::PhantomData, sync::Arc};
 use futures::{prelude::*, channel::mpsc, task::Context, task::Poll};
 use futures_timer::Delay;
+use parking_lot::{Mutex, Condvar};
 use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 
 use crate::block_import::BlockOrigin;
@@ -40,7 +41,27 @@ pub struct BasicQueue<B: BlockT, Transaction> {
 	manual_poll: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	/// A thread pool where the background worker is being run.
 	pool: Option<futures::executor::ThreadPool>,
+	pool_guard: Arc<(Mutex<usize>, Condvar)>,
 	_phantom: PhantomData<Transaction>,
+}
+
+impl<B: BlockT, Transaction> Drop for BasicQueue<B, Transaction> {
+	fn drop(&mut self) {
+		drop(self.pool.take());
+		// Flush the queue and close the receiver to terminate the future.
+		let _ = self.sender.unbounded_send(ToWorkerMsg::Shutdown);
+		let (_, closed) = buffered_link::buffered_link();
+		drop(std::mem::replace(&mut self.result_port, closed));
+
+		// Make sure all pool threads terminate.
+		// https://github.com/rust-lang/futures-rs/issues/1470
+		// https://github.com/rust-lang/futures-rs/issues/1349
+		let (ref mutex, ref condvar) = *self.pool_guard;
+		let mut lock = mutex.lock();
+		while *lock != 0 {
+			condvar.wait(&mut lock);
+		}
+	}
 }
 
 impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
@@ -63,9 +84,22 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 			finality_proof_import,
 		);
 
+		let guard = Arc::new((Mutex::new(0usize), Condvar::new()));
+		let guard_start = guard.clone();
+		let guard_end = guard.clone();
+
 		let mut pool = futures::executor::ThreadPool::builder()
 			.name_prefix("import-queue-worker-")
-			.pool_size(1)
+			.pool_size(2)
+			.after_start(move |_| *guard_start.0.lock() += 1)
+			.before_stop(move |_| {
+				let (ref mutex, ref condvar) = *guard_end;
+				let mut lock = mutex.lock();
+				*lock -= 1;
+				if *lock == 0 {
+					condvar.notify_one();
+				}
+			})
 			.create()
 			.ok();
 
@@ -82,6 +116,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 			result_port,
 			manual_poll,
 			pool,
+			pool_guard: guard,
 			_phantom: PhantomData,
 		}
 	}
@@ -144,6 +179,7 @@ enum ToWorkerMsg<B: BlockT> {
 	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
 	ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
 	ImportFinalityProof(Origin, B::Hash, NumberFor<B>, Vec<u8>),
+	Shutdown,
 }
 
 struct BlockImportWorker<B: BlockT, Transaction> {
@@ -239,6 +275,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 					ToWorkerMsg::ImportJustification(who, hash, number, justification) => {
 						worker.import_justification(who, hash, number, justification);
 					}
+					ToWorkerMsg::Shutdown => return Poll::Ready(()),
 				}
 			}
 		});
