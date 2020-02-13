@@ -73,7 +73,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --manifest-path "./bin/utils/subkey" --benches --all
+          args: --manifest-path "bin/utils/subkey/Cargo.toml" --benches --all
         env: 
           BUILD_DUMMY_WASM_BINARY: 1
       - name: Test linux stable
@@ -81,6 +81,22 @@ jobs:
         with:
           command: test
           args: --all --release --verbose --locked
+        env: 
+          RUSTFLAGS: "-Cdebug-assertions=y"
+      - name: Test dependency rules
+        run: .maintain/ensure-deps.sh
+      - name: Test frame staking
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --manifest-path "frame/staking/Cargo.toml" --release --verbose --no-default-features --features std
+        env: 
+          RUSTFLAGS: "-Cdebug-assertions=y"
+      - name: Test wasmtime
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --manifest-path "client/executor/Cargo.toml" --release --verbose --features wasmtime
         env: 
           RUSTFLAGS: "-Cdebug-assertions=y"
       - name: Prepare build directory for cache
