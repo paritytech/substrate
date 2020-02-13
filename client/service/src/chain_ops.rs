@@ -183,10 +183,6 @@ impl<
 						Ok(c) => c,
 						Err(err) => {
 							let err = format!("Error reading file: {}", err);
-
-							let weak_client = std::sync::Arc::downgrade(&client);
-							wait_for_drop(weak_client);
-
 							return std::task::Poll::Ready(Err(From::from(err)));
 						},
 					};
@@ -225,10 +221,6 @@ impl<
 					}
 					Err(e) => {
 						warn!("Error reading block data at {}: {}", read_block_count, e);
-
-						let weak_client = std::sync::Arc::downgrade(&client);
-						wait_for_drop(weak_client);
-
 						return std::task::Poll::Ready(Ok(()));
 					}
 				}
@@ -250,10 +242,6 @@ impl<
 					"Stopping after #{} blocks because of an error",
 					link.imported_blocks,
 				);
-
-				let weak_client = std::sync::Arc::downgrade(&client);
-				wait_for_drop(weak_client);
-
 				return std::task::Poll::Ready(Ok(()));
 			}
 
@@ -267,10 +255,6 @@ impl<
 
 			if link.imported_blocks >= count {
 				info!("Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
-
-				let weak_client = std::sync::Arc::downgrade(&client);
-				wait_for_drop(weak_client);
-
 				return std::task::Poll::Ready(Ok(()));
 
 			} else {
@@ -308,9 +292,6 @@ impl<
 		// or to stop the operation completely.
 		let export = future::poll_fn(move |cx| {
 			if last < block {
-				let weak_client = std::sync::Arc::downgrade(&client);
-				wait_for_drop(weak_client);
-
 				return std::task::Poll::Ready(Err("Invalid block range specified".into()));
 			}
 
@@ -335,20 +316,12 @@ impl<
 					}
 				},
 				// Reached end of the chain.
-				None => {
-					let weak_client = std::sync::Arc::downgrade(&client);
-					wait_for_drop(weak_client);
-
-					return std::task::Poll::Ready(Ok(()))
-				},
+				None => return std::task::Poll::Ready(Ok(())),
 			}
 			if (block % 10000.into()).is_zero() {
 				info!("#{}", block);
 			}
 			if block == last {
-				let weak_client = std::sync::Arc::downgrade(&client);
-				wait_for_drop(weak_client);
-
 				return std::task::Poll::Ready(Ok(()));
 			}
 			block += One::one();
@@ -362,23 +335,17 @@ impl<
 	}
 
 	fn revert_chain(
-		self,
+		&self,
 		blocks: NumberFor<TBl>
 	) -> Result<(), Error> {
-		let client = self.client();
-		let reverted = client.revert(blocks)?;
-		let info = client.chain_info();
+		let reverted = self.client.revert(blocks)?;
+		let info = self.client.chain_info();
 
 		if reverted.is_zero() {
 			info!("There aren't any non-finalized blocks to revert.");
 		} else {
 			info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);
 		}
-
-		let weak_client = std::sync::Arc::downgrade(&client);
-		drop(self);
-		wait_for_drop(weak_client);
-
 		Ok(())
 	}
 
@@ -394,45 +361,8 @@ impl<
 				let reader = std::io::Cursor::new(buf);
 				self.import_blocks(reader, true)
 			}
-			Ok(None) => {
-				let weak_client = std::sync::Arc::downgrade(&self.client);
-				drop(self);
-				wait_for_drop(weak_client);
-
-				Box::pin(future::err("Unknown block".into()))
-			},
-			Err(e) => {
-				let weak_client = std::sync::Arc::downgrade(&self.client);
-				drop(self);
-				wait_for_drop(weak_client);
-
-				Box::pin(future::err(format!("Error reading block: {:?}", e).into()))
-			},
+			Ok(None) => Box::pin(future::err("Unknown block".into())),
+			Err(e) => Box::pin(future::err(format!("Error reading block: {:?}", e).into())),
 		}
 	}
-}
-
-// This code comes directly from https://github.com/paritytech/parity-ethereum/pull/7695
-fn wait_for_drop<T>(w: std::sync::Weak<T>) {
-	let sleep_duration = std::time::Duration::from_secs(1);
-	let warn_timeout = std::time::Duration::from_secs(60);
-	let max_timeout = std::time::Duration::from_secs(300);
-
-	let instant = std::time::Instant::now();
-	let mut warned = false;
-
-	while instant.elapsed() < max_timeout {
-		if w.upgrade().is_none() {
-			return;
-		}
-
-		if !warned && instant.elapsed() > warn_timeout {
-			warned = true;
-			warn!("Shutdown is taking longer than expected.");
-		}
-
-		std::thread::sleep(sleep_duration);
-	}
-
-	warn!("Shutdown timeout reached, exiting uncleanly.");
 }
