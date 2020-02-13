@@ -42,7 +42,7 @@ impl RevertCmd {
 	/// Run the revert command
 	pub fn run<G, E, B, BC, BB>(
 		self,
-		mut config: Configuration<G, E>,
+		config: Configuration<G, E>,
 		builder: B,
 	) -> error::Result<()>
 	where
@@ -54,10 +54,6 @@ impl RevertCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
-
-		config.use_in_memory_keystore()?;
-
 		let blocks = self.num.parse()?;
 		builder(config)?.revert_chain(blocks)?;
 
@@ -76,6 +72,7 @@ impl RevertCmd {
 		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

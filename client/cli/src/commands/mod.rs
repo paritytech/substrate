@@ -111,8 +111,6 @@ impl Subcommand {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
-
 		match self {
 			Subcommand::BuildSpec(cmd) => cmd.run(config),
 			Subcommand::ExportBlocks(cmd) => cmd.run(config, builder),

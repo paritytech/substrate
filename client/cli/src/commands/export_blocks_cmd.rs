@@ -64,7 +64,7 @@ impl ExportBlocksCmd {
 	/// Run the export-blocks command
 	pub fn run<G, E, B, BC, BB>(
 		self,
-		mut config: Configuration<G, E>,
+		config: Configuration<G, E>,
 		builder: B,
 	) -> error::Result<()>
 	where
@@ -76,10 +76,6 @@ impl ExportBlocksCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
-
-		config.use_in_memory_keystore()?;
-
 		if let DatabaseConfig::Path { ref path, .. } = config.expect_database() {
 			info!("DB path: {}", path.display());
 		}
@@ -110,6 +106,7 @@ impl ExportBlocksCmd {
 		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

@@ -43,16 +43,12 @@ impl PurgeChainCmd {
 	/// Run the purge command
 	pub fn run<G, E>(
 		self,
-		mut config: Configuration<G, E>,
+		config: Configuration<G, E>,
 	) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
-
-		config.use_in_memory_keystore()?;
-
 		let db_path = match config.expect_database() {
 			DatabaseConfig::Path { path, .. } => path,
 			_ => {
@@ -103,6 +99,7 @@ impl PurgeChainCmd {
 		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

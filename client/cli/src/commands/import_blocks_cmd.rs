@@ -61,7 +61,7 @@ impl ImportBlocksCmd {
 	/// Run the import-blocks command
 	pub fn run<G, E, B, BC, BB>(
 		self,
-		mut config: Configuration<G, E>,
+		config: Configuration<G, E>,
 		builder: B,
 	) -> error::Result<()>
 	where
@@ -73,8 +73,6 @@ impl ImportBlocksCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		config.use_in_memory_keystore()?;
-
 		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
 			Some(filename) => Box::new(fs::File::open(filename)?),
 			None => {
@@ -102,6 +100,7 @@ impl ImportBlocksCmd {
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
 		self.import_params.update_config(&mut config, Roles::FULL, self.shared_params.dev)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

@@ -55,7 +55,7 @@ impl CheckBlockCmd {
 	/// Run the check-block command
 	pub fn run<G, E, B, BC, BB>(
 		self,
-		mut config: Configuration<G, E>,
+		config: Configuration<G, E>,
 		builder: B,
 	) -> error::Result<()>
 	where
@@ -67,10 +67,6 @@ impl CheckBlockCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
-
-		config.use_in_memory_keystore()?;
-
 		let input = if self.input.starts_with("0x") { &self.input[2..] } else { &self.input[..] };
 		let block_id = match FromStr::from_str(input) {
 			Ok(hash) => BlockId::hash(hash),
@@ -102,6 +98,7 @@ impl CheckBlockCmd {
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
 		self.import_params.update_config(&mut config, Roles::FULL, self.shared_params.dev)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}
