@@ -262,8 +262,6 @@ where
 	///
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
-	/// This also does not check transaction signature and assumes `uxt` passed is originated
-	/// from the source that validates transactions before applying (for example, transaction pool).
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
@@ -273,6 +271,8 @@ where
 	/// Apply extrinsic outside of the block execution function.
 	///
 	/// Same as `apply_extrinsic`, but without signature checks.
+	/// This does not check transaction signature and assumes `uxt` passed is originated
+	/// from the source that validates transactions before applying (for example, transaction pool).
 	pub fn apply_trusted_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
