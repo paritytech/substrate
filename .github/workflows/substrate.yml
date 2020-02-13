@@ -4,7 +4,7 @@ on: [push]
 jobs:
   check:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -69,13 +69,11 @@ jobs:
           args: --benches --all
         env: 
           BUILD_DUMMY_WASM_BINARY: 1
-      - name: Set subkey dir
-        run: cd ./bin/utils/subkey
       - name: Cargo check subkey
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --benches --all
+          args: --manifest-path "./bin/utils/subkey" --benches --all
         env: 
           BUILD_DUMMY_WASM_BINARY: 1
       - name: Test linux stable
