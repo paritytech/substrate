@@ -255,14 +255,86 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		// Get N
 		let n = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
 
-		// Add values to the map to check for existence, but only half of them,
-		// so exists will return both true and false.
-		for i in 0..n/2 {
+		for i in 0..n {
 			MyMap::insert(i, i);
 		}
 		
 		// Return the `contains_key_map` n times call
 		Ok((crate::Call::<T>::contains_key_map(n), RawOrigin::Signed(account::<T>(n))))
+	}
+}
+
+struct ContainsKeyHashMap;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ContainsKeyHashMap {
+
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Number of reads
+			(BenchmarkParameter::N, 1, 1000),
+		]
+	}
+
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	{
+		// Get N
+		let n = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
+
+		let mut keys: Vec<u128> = Vec::new();
+
+		let max_size = <ContainsKeyHashMap as BenchmarkingSetup<T, _, _>>::components(&ContainsKeyHashMap)[0].2;
+
+		sp_std::if_std! {
+			println!("{:?}", max_size);
+		}
+
+		for i in 0..max_size {
+			let hash = sp_io::hashing::twox_128(&i.encode()).into();
+			let num = u128::from_le_bytes(hash);
+			if i <= n {
+				keys.push(num);
+			}
+			MyHashMap::insert(num, i);
+		}
+
+		// Return the `contains_key_hash_map` n times call
+		Ok((crate::Call::<T>::contains_key_hash_map(keys), RawOrigin::Signed(account::<T>(n))))
+	}
+}
+
+struct ContainsKeyHashMap2;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ContainsKeyHashMap2 {
+
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Number of reads
+			(BenchmarkParameter::N, 1, 1000),
+		]
+	}
+
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	{
+		// Get N
+		let n = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
+
+		let mut keys: Vec<u128> = Vec::new();
+
+		let max_size = <ContainsKeyHashMap as BenchmarkingSetup<T, _, _>>::components(&ContainsKeyHashMap)[0].2;
+
+		sp_std::if_std! {
+			println!("{:?}", max_size);
+		}
+
+		for i in 0..n {
+			let hash = sp_io::hashing::twox_128(&i.encode()).into();
+			let num = u128::from_le_bytes(hash);
+			if i <= n {
+				keys.push(num);
+			}
+			MyHashMap::insert(num, i);
+		}
+
+		// Return the `contains_key_hash_map` n times call
+		Ok((crate::Call::<T>::contains_key_hash_map(keys), RawOrigin::Signed(account::<T>(n))))
 	}
 }
 
@@ -322,6 +394,8 @@ selected_benchmark! {
 	ReadMap,
 	InsertMap,
 	ContainsKeyMap,
+	ContainsKeyHashMap,
+	ContainsKeyHashMap2,
 	RemovePrefix,
 	AddMemberList,
 	AppendMemberList
@@ -340,6 +414,8 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 			b"read_map" => SelectedBenchmark::ReadMap,
 			b"insert_map" => SelectedBenchmark::InsertMap,
 			b"contains_key_map" => SelectedBenchmark::ContainsKeyMap,
+			b"contains_key_hash_map" => SelectedBenchmark::ContainsKeyHashMap,
+			b"contains_key_hash_map2" => SelectedBenchmark::ContainsKeyHashMap2,
 			b"remove_prefix" => SelectedBenchmark::RemovePrefix,
 			b"add_member_list" => SelectedBenchmark::AddMemberList,
 			b"append_member_list" => SelectedBenchmark::AppendMemberList,
