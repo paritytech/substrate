@@ -2627,7 +2627,7 @@ dependencies = [
 [[package]]
 name = "libp2p"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.4",
@@ -2701,7 +2701,7 @@ dependencies = [
 [[package]]
 name = "libp2p-core"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "asn1_der",
  "bs58",
@@ -2721,7 +2721,7 @@ dependencies = [
  "prost-build",
  "rand 0.7.3",
  "ring",
- "rw-stream-sink 0.2.1 (git+https://github.com/expenses/rust-libp2p?branch=noise)",
+ "rw-stream-sink",
  "sha2",
  "smallvec 1.2.0",
  "thiserror",
@@ -2754,7 +2754,7 @@ dependencies = [
  "prost-build",
  "rand 0.7.3",
  "ring",
- "rw-stream-sink 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rw-stream-sink",
  "sha2",
  "smallvec 1.2.0",
  "thiserror",
@@ -2767,7 +2767,7 @@ dependencies = [
 [[package]]
 name = "libp2p-core-derive"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "quote 1.0.2",
  "syn",
@@ -2786,7 +2786,7 @@ dependencies = [
 [[package]]
 name = "libp2p-deflate"
 version = "0.7.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "flate2",
  "futures 0.3.4",
@@ -2807,7 +2807,7 @@ dependencies = [
 [[package]]
 name = "libp2p-dns"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core 0.15.0 (git+https://github.com/expenses/rust-libp2p?branch=noise)",
@@ -2828,7 +2828,7 @@ dependencies = [
 [[package]]
 name = "libp2p-floodsub"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "cuckoofilter",
  "fnv",
@@ -2862,7 +2862,7 @@ dependencies = [
 [[package]]
 name = "libp2p-gossipsub"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "base64 0.11.0",
  "byteorder 1.3.4",
@@ -2912,7 +2912,7 @@ dependencies = [
 [[package]]
 name = "libp2p-identify"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core 0.15.0 (git+https://github.com/expenses/rust-libp2p?branch=noise)",
@@ -2943,7 +2943,7 @@ dependencies = [
 [[package]]
 name = "libp2p-kad"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "arrayvec 0.5.1",
  "bytes 0.5.4",
@@ -2996,7 +2996,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mdns"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "async-std",
  "data-encoding",
@@ -3039,7 +3039,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mplex"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "bytes 0.5.4",
  "fnv",
@@ -3070,7 +3070,7 @@ dependencies = [
 [[package]]
 name = "libp2p-noise"
 version = "0.13.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "curve25519-dalek 1.2.3",
  "futures 0.3.4",
@@ -3109,7 +3109,7 @@ dependencies = [
 [[package]]
 name = "libp2p-ping"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core 0.15.0 (git+https://github.com/expenses/rust-libp2p?branch=noise)",
@@ -3138,7 +3138,7 @@ dependencies = [
 [[package]]
 name = "libp2p-plaintext"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.4",
@@ -3147,7 +3147,7 @@ dependencies = [
  "log 0.4.8",
  "prost",
  "prost-build",
- "rw-stream-sink 0.2.1 (git+https://github.com/expenses/rust-libp2p?branch=noise)",
+ "rw-stream-sink",
  "unsigned-varint",
  "void",
 ]
@@ -3165,7 +3165,7 @@ dependencies = [
  "log 0.4.8",
  "prost",
  "prost-build",
- "rw-stream-sink 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rw-stream-sink",
  "unsigned-varint",
  "void",
 ]
@@ -3173,7 +3173,7 @@ dependencies = [
 [[package]]
 name = "libp2p-pnet"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "futures 0.3.4",
  "log 0.4.8",
@@ -3186,7 +3186,7 @@ dependencies = [
 [[package]]
 name = "libp2p-secio"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "aes-ctr",
  "ctr",
@@ -3203,7 +3203,7 @@ dependencies = [
  "quicksink",
  "rand 0.7.3",
  "ring",
- "rw-stream-sink 0.2.1 (git+https://github.com/expenses/rust-libp2p?branch=noise)",
+ "rw-stream-sink",
  "sha2",
  "static_assertions",
  "twofish",
@@ -3233,7 +3233,7 @@ dependencies = [
  "quicksink",
  "rand 0.7.3",
  "ring",
- "rw-stream-sink 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rw-stream-sink",
  "sha2",
  "static_assertions",
  "twofish",
@@ -3245,7 +3245,7 @@ dependencies = [
 [[package]]
 name = "libp2p-swarm"
 version = "0.5.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core 0.15.0 (git+https://github.com/expenses/rust-libp2p?branch=noise)",
@@ -3272,7 +3272,7 @@ dependencies = [
 [[package]]
 name = "libp2p-tcp"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "async-std",
  "futures 0.3.4",
@@ -3301,7 +3301,7 @@ dependencies = [
 [[package]]
 name = "libp2p-uds"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "async-std",
  "futures 0.3.4",
@@ -3324,7 +3324,7 @@ dependencies = [
 [[package]]
 name = "libp2p-wasm-ext"
 version = "0.8.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "futures 0.3.4",
  "js-sys",
@@ -3351,7 +3351,7 @@ dependencies = [
 [[package]]
 name = "libp2p-websocket"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "async-tls",
  "bytes 0.5.4",
@@ -3361,7 +3361,7 @@ dependencies = [
  "log 0.4.8",
  "quicksink",
  "rustls",
- "rw-stream-sink 0.2.1 (git+https://github.com/expenses/rust-libp2p?branch=noise)",
+ "rw-stream-sink",
  "soketto",
  "url 2.1.1",
  "webpki",
@@ -3382,7 +3382,7 @@ dependencies = [
  "log 0.4.8",
  "quicksink",
  "rustls",
- "rw-stream-sink 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rw-stream-sink",
  "soketto",
  "url 2.1.1",
  "webpki",
@@ -3392,7 +3392,7 @@ dependencies = [
 [[package]]
 name = "libp2p-yamux"
 version = "0.15.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core 0.15.0 (git+https://github.com/expenses/rust-libp2p?branch=noise)",
@@ -3680,7 +3680,7 @@ checksum = "a97fbd5d00e0e37bfb10f433af8f5aaf631e739368dc9fc28286ca81ca4948dc"
 [[package]]
 name = "multistream-select"
 version = "0.7.0"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.1.29",
@@ -3759,6 +3759,7 @@ dependencies = [
 name = "node-browser-testing"
 version = "2.0.0"
 dependencies = [
+ "futures 0.3.4",
  "futures-timer 3.0.1",
  "jsonrpc-core",
  "libp2p 0.15.0 (git+https://github.com/expenses/rust-libp2p?branch=noise)",
@@ -4943,7 +4944,7 @@ checksum = "0c276d76c5333b8c2579e02d49a06733a55b8282d2d9b13e8d53b6406bd7e30a"
 [[package]]
 name = "parity-multiaddr"
 version = "0.7.1"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "arrayref",
  "bs58",
@@ -4978,7 +4979,7 @@ dependencies = [
 [[package]]
 name = "parity-multihash"
 version = "0.2.2"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
+source = "git+https://github.com/expenses/rust-libp2p?branch=noise#7fbd5b112fcb0b5bc5fdd81a5b66114caef8d157"
 dependencies = [
  "blake2",
  "bytes 0.5.4",
@@ -5896,16 +5897,6 @@ dependencies = [
  "proc-macro2 1.0.8",
  "quote 1.0.2",
  "syn",
-]
-
-[[package]]
-name = "rw-stream-sink"
-version = "0.2.1"
-source = "git+https://github.com/expenses/rust-libp2p?branch=noise#e5d47c19fc06b96bad16f433a1526ecf4d9ce99b"
-dependencies = [
- "futures 0.3.4",
- "pin-project",
- "static_assertions",
 ]
 
 [[package]]
@@ -8810,7 +8801,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.3.23",
+ "rand 0.7.3",
 ]
 
 [[package]]

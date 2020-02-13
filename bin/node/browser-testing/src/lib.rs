@@ -29,6 +29,9 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 use jsonrpc_core::types::{MethodCall, Success, Version, Params, Id};
 use serde::de::DeserializeOwned;
+use futures_timer::Delay;
+use std::time::Duration;
+use futures::FutureExt;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -62,17 +65,22 @@ async fn runs() {
             .await
             .unwrap();
 
-    // Give the node a bit of time to connect to peers.
-    futures_timer::Delay::new(std::time::Duration::from_secs(5)).await;
+    let mut master_timeout = Delay::new(Duration::from_secs(45));
+    loop {
+        // Check that timeout hasn't expired.
+        assert!((&mut master_timeout).now_or_never().is_none());
 
-    let state: sc_rpc_api::system::Health = deserialize_rpc_result(
-        JsFuture::from(client.rpc_send(&rpc_call("system_health")))
-            .await
-            .unwrap()
-    );
+        // Let the node do a bit of work.
+        Delay::new(Duration::from_secs(5)).await;
 
-    assert!(state.should_have_peers);
-    assert!(state.peers > 0);
-    assert!(state.is_syncing);
+        let state: sc_rpc_api::system::Health = deserialize_rpc_result(
+            JsFuture::from(client.rpc_send(&rpc_call("system_health")))
+                .await
+                .unwrap()
+        );
+    
+        if state.should_have_peers && state.peers > 0 && state.is_syncing {
+            break;
+        }
+    }
 }
-
