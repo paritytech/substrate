@@ -39,7 +39,7 @@ use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
 };
 use sp_runtime::traits::{
-	Zero, Convert, Member, RuntimeArithmetic, SaturatedConversion, Bounded, Saturating, CheckedSub,
+	Zero, Convert, Member, RuntimeArithmetic, SaturatedConversion, Bounded, Saturating,
 };
 
 #[cfg(test)]
@@ -294,13 +294,12 @@ pub fn elect<AccountId, Balance, FS, C, R>(
 							// If result cannot fit in u128. Not much we can do about it.
 							.unwrap_or(Bounded::max_value());
 
-							<R::Inner as TryFrom<ExtendedBalance>>::try_from(parts)
+							TryFrom::try_from(parts)
 								// If the result cannot fit into R::Inner. Defensive only. This can
 								// never happen. `desired_scale * e / n`, where `e / n < 1` always
 								// yields a value smaller than `desired_scale`, which will fit into
 								// R::Inner.
-							.unwrap_or(Bounded::max_value())
-
+								.unwrap_or(Bounded::max_value())
 						} else {
 							// defensive only. Both edge and nominator loads are built from
 							// scores, hence MUST have the same denominator.
@@ -316,12 +315,12 @@ pub fn elect<AccountId, Balance, FS, C, R>(
 		if assignment.1.len() > 0 {
 			// To ensure an assertion indicating: no stake from the nominator going to waste,
 			// we add a minimal post-processing to equally assign all of the leftover stake ratios.
-			let vote_count: R::Inner = (assignment.1.len() as u32).saturated_into();
+			let vote_count: R::Inner = assignment.1.len().saturated_into();
 			let len = assignment.1.len();
 			let mut sum: R::Inner = Zero::zero();
 			assignment.1.iter().for_each(|a| sum = sum.saturating_add(a.1.deconstruct()));
 			let accuracy = R::ACCURACY;
-			let diff = accuracy.checked_sub(&sum).unwrap_or(Zero::zero());
+			let diff = accuracy.saturating_sub(sum);
 			let diff_per_vote = (diff / vote_count).min(accuracy);
 
 			if !diff_per_vote.is_zero() {
@@ -337,8 +336,8 @@ pub fn elect<AccountId, Balance, FS, C, R>(
 			// safe to cast it to usize.
 			let remainder = diff - diff_per_vote * vote_count;
 			for i in 0..remainder.saturated_into::<usize>() {
-				let current_ratio = assignment.1[i  % len].1;
-				let next_ratio = current_ratio.saturating_add(R::from_parts(R::Inner::from(1u8)));
+				let current_ratio = assignment.1[i % len].1;
+				let next_ratio = current_ratio.saturating_add(R::from_parts(1u8.into()));
 				assignment.1[i % len].1 = next_ratio;
 			}
 			assigned.push(assignment);

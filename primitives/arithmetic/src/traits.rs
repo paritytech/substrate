@@ -68,6 +68,7 @@ pub trait RuntimeArithmetic:
 	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> +
 	UniqueSaturatedInto<u128>
 {}
+
 impl<T:
 	BaseArithmetic +
 	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> + TryFrom<u64> +
@@ -87,7 +88,7 @@ pub trait AnyArithmetic:
 	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
 	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
 	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
-	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128> +
+	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
 {}
 
 impl<T:
@@ -98,7 +99,7 @@ impl<T:
 	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
 	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
 	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
-	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128> +
+	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
 > AnyArithmetic for T {}
 
 
