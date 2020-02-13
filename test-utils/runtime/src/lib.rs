@@ -130,7 +130,7 @@ impl BlindCheckable for Extrinsic {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
-				cif sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+				if sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
 					Err(InvalidTransaction::BadProof.into())
@@ -145,10 +145,10 @@ impl BlindCheckable for Extrinsic {
 }
 
 
-impl UnsafeConvert for Extrinsic {
+impl<Context> UnsafeConvert<Context> for Extrinsic {
 	type UnsafeResult = Self;
 
-	fn unsafe_convert(self) -> Result<Self, TransactionValidityError> {
+	fn unsafe_convert(self, _context: &Context) -> Result<Self, TransactionValidityError> {
 		Ok(self)
 	}
 }
@@ -499,6 +499,10 @@ cfg_if! {
 					system::execute_transaction(extrinsic)
 				}
 
+				fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
+					system::execute_transaction(extrinsic)
+				}
+
 				fn finalize_block() -> <Block as BlockT>::Header {
 					system::finalize_block()
 				}
@@ -679,6 +683,10 @@ cfg_if! {
 
 			impl sp_block_builder::BlockBuilder<Block> for Runtime {
 				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
+					system::execute_transaction(extrinsic)
+				}
+
+				fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 					system::execute_transaction(extrinsic)
 				}
 

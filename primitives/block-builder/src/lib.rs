@@ -58,6 +58,11 @@ sp_api::decl_runtime_apis! {
 		/// Returns an inclusion outcome which specifies if this extrinsic is included in
 		/// this block or not.
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult;
+		/// Apply the given extrinsic.
+		///
+		/// Same as `apply_extrinsic`, but assumes that signature check has been already performed
+		/// elsewhere.
+		fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult;
 		/// Finish the current block.
 		#[renamed("finalise_block", 3)]
 		fn finalize_block() -> <Block as BlockT>::Header;

@@ -153,7 +153,7 @@ where
 			})
 		} else {
 			self.api.map_api_result(|api| {
-				match api.apply_extrinsic_with_context(
+				match api.apply_trusted_extrinsic_with_context(
 					block_id,
 					ExecutionContext::BlockConstruction,
 					xt.clone(),
