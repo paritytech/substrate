@@ -17,7 +17,7 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use std::{process::{Command, Stdio}, fs, path::PathBuf};
+use std::{process::Command, fs, path::PathBuf};
 
 mod common;
 

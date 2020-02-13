@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #![cfg(unix)]
+#![allow(dead_code)]
 
 use std::{process::{Child, ExitStatus}, thread, time::Duration};
 use assert_cmd::cargo::cargo_bin;
