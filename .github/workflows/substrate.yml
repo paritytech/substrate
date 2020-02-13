@@ -4,7 +4,7 @@ on: [push]
 jobs:
   check:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -134,7 +134,7 @@ jobs:
           - sc-consensus-babe
           - sp-consensus
           - sc-telemetry
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
