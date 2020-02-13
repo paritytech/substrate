@@ -101,9 +101,9 @@ pub enum TransactionStatus<Hash, BlockHash> {
 	#[serde(rename = "finalized")] // See #4438
 	InBlock(BlockHash),
 	/// The block this transaction was included in has been retracted.
-	Retracted,
+	Retracted(BlockHash),
 	/// Transaction has been finalized by a finality-gadget, e.g GRANDPA
-	Finalized,
+	Finalized(BlockHash),
 	/// Transaction has been replaced in the pool, by another transaction
 	/// that provides the same tags. (e.g. same (sender, nonce)).
 	Usurped(Hash),

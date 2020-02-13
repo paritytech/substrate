@@ -69,7 +69,6 @@ pub struct ValidatedPool<B: ChainApi> {
 		ExHash<B>,
 		ExtrinsicFor<B>,
 	>>,
-	last_finalized_hash: RwLock<BlockHash<B>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<ExHash<B>>>>,
 	rotator: PoolRotator<ExHash<B>>,
 }
@@ -93,7 +92,6 @@ impl<B: ChainApi> ValidatedPool<B> {
 		ValidatedPool {
 			options,
 			listener: Default::default(),
-			last_finalized_hash: RwLock::new(api.last_finalized()),
 			api,
 			pool: RwLock::new(base_pool),
 			import_notification_sinks: Default::default(),
@@ -422,8 +420,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 			// `hashes` has possibly duplicate hashes.
 			// we'd like to send out the `InBlock` notification only once.
 			if !set.contains(&h) {
-				set.insert(h.clone());
 				listener.pruned(header_hash, &h);
+				set.insert(h);
 			}
 		}
 		Ok(())
@@ -535,35 +533,15 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// Notify all watchers that transactions in the block with hash have been finalized
 	pub async fn on_block_finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
 		debug!(target: "txpool", "Attempting to notify watchers of finalization for {}", block_hash);
-		let last_finalized = *self.last_finalized_hash.read();
+		// fetch all extrinsic hashes
+		let tx_hashes = self.api.block_body(&BlockId::Hash(block_hash.clone())).await?
+			.expect("fetched block header should have block body; qed")
+			.into_iter()
+			.map(|tx| self.api.hash_and_length(&tx).0)
+			.collect::<Vec<_>>();
 
-		// fetch blocks along path `last_finalized`..`block_hash`.
-		let route = self.api.tree_route(last_finalized, block_hash)?;
-		let mut hashes = vec![];
-
-		if route.enacted().is_empty() {
-			hashes.extend_from_slice(
-				&[route.common_block().hash.clone(), block_hash.clone()]
-			);
-		} else {
-			hashes.extend_from_slice(
-				&route.enacted().iter().map(|h| h.hash).collect::<Vec<_>>()
-			);
-		}
-
-		for hash in hashes {
-			// fetch all extrinsic hashes
-			let tx_hashes = self.api.block_body(&BlockId::Hash(hash.clone())).await?
-				.expect("fetched block header should have block body; qed")
-				.into_iter()
-				.map(|tx| self.api.hash_and_length(&tx).0)
-				.collect::<Vec<_>>();
-
-			// notify the watcher that these extrinsics have been finalized
-			self.listener.write().finalized(&hash, &tx_hashes);
-		}
-
-		*self.last_finalized_hash.write() = block_hash;
+		// notify the watcher that these extrinsics have been finalized
+		self.listener.write().finalized(&block_hash, &tx_hashes);
 
 		Ok(())
 	}

@@ -26,7 +26,6 @@ use sp_runtime::{
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
 use sp_core::blake2_256;
-use sp_blockchain::TreeRoute;
 
 #[derive(Clone, Debug, Default)]
 struct TestApi {
@@ -111,14 +110,6 @@ impl ChainApi for TestApi {
 	fn block_body(&self, _id: &BlockId<Self::Block>) -> Self::BodyFuture {
 		ready(Ok(None))
 	}
-
-	fn last_finalized(&self) -> BlockHash<Self> {
-		Default::default()
-	}
-
-	fn tree_route(&self, _from: BlockHash<Self>, _to: BlockHash<Self>) -> Result<TreeRoute<Self::Block>, Self::Error> {
-		unimplemented!()
-	}
 }
 
 fn uxt(transfer: Transfer) -> Extrinsic {
@@ -144,8 +135,8 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 	let res = block_on(futures::future::join_all(futures.into_iter()));
 	assert!(res.iter().all(Result::is_ok));
 
-	assert_eq!(pool.status().future, 0);
-	assert_eq!(pool.status().ready, number as usize);
+	assert_eq!(pool.validated_pool().status().future, 0);
+	assert_eq!(pool.validated_pool().status().ready, number as usize);
 
 	// Prune all transactions.
 	let block_num = 6;
@@ -156,8 +147,8 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 	)).expect("Prune failed");
 
 	// pool is empty
-	assert_eq!(pool.status().ready, 0);
-	assert_eq!(pool.status().future, 0);
+	assert_eq!(pool.validated_pool().status().ready, 0);
+	assert_eq!(pool.validated_pool().status().future, 0);
 }
 
 fn benchmark_main(c: &mut Criterion) {

@@ -94,14 +94,14 @@ impl<H: Clone, BH: Clone> Sender<H, BH> {
 	}
 
 	/// Extrinsic has been finalized by a finality gadget.
-	pub fn finalized(&mut self) {
-		self.send(TransactionStatus::Finalized);
+	pub fn finalized(&mut self, hash: &BH) {
+		self.send(TransactionStatus::Finalized(hash.clone()));
 		self.is_finalized = true;
 	}
 
 	/// The block this extrinsic was included in has been retracted
-	pub fn retracted(&mut self) {
-		self.send(TransactionStatus::Retracted);
+	pub fn retracted(&mut self, hash: &BH) {
+		self.send(TransactionStatus::Retracted(hash.clone()));
 	}
 
 	/// Extrinsic has been marked as invalid by the block builder.

@@ -33,11 +33,10 @@ use sp_runtime::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag, TransactionValidityError},
 };
-use sp_transaction_pool::{error, PoolStatus};
+use sp_transaction_pool::error;
 use wasm_timer::Instant;
 
 use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
-use sp_blockchain::TreeRoute;
 
 /// Modification notification event stream type;
 pub type EventStream<H> = mpsc::UnboundedReceiver<H>;
@@ -90,14 +89,6 @@ pub trait ChainApi: Send + Sync {
 
 	/// Returns a block body given the block id.
 	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
-
-	/// Returns the hash of the last finalized block.
-	fn last_finalized(&self) -> BlockHash<Self>;
-
-	/// Returns a tree route between `from` and `to`.
-	///
-    /// This includes a list of blocks between them, or a path through a shared common ancestor.
-	fn tree_route(&self, from: BlockHash<Self>, to: BlockHash<Self>) -> Result<TreeRoute<Self::Block>, Self::Error>;
 }
 
 /// Pool configuration options.
@@ -347,11 +338,6 @@ impl<B: ChainApi> Pool<B> {
 		)
 	}
 
-	/// Returns pool status.
-	pub fn status(&self) -> PoolStatus {
-		self.validated_pool.status()
-	}
-
 	/// Returns transaction hash
 	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
 		self.validated_pool.api().hash_and_length(xt).0
@@ -440,7 +426,7 @@ impl<B: ChainApi> Pool<B> {
 		(hash, validity)
 	}
 
-	/// Notify all watchers that transactions in the block with given hash have been finalized
+	/// get a reference to the underlying validated pool.
 	pub fn validated_pool(&self) ->  &ValidatedPool<B> {
 		&self.validated_pool
 	}
@@ -560,18 +546,6 @@ mod tests {
 		fn block_body(&self, _id: &BlockId<Self::Block>) -> Self::BodyFuture {
 			futures::future::ready(Ok(None))
 		}
-
-		fn last_finalized(&self) -> BlockHash<Self> {
-			Default::default()
-		}
-
-		fn tree_route(
-			&self,
-			_from: BlockHash<Self>,
-			_to: BlockHash<Self>
-		) -> Result<TreeRoute<Self::Block>, Self::Error> {
-			unimplemented!()
-		}
 	}
 
 	fn uxt(transfer: Transfer) -> Extrinsic {
@@ -613,8 +587,8 @@ mod tests {
 		// when
 		pool.validated_pool.rotator().ban(&Instant::now(), vec![pool.hash_of(&uxt)]);
 		let res = block_on(pool.submit_one(&BlockId::Number(0), uxt));
-		assert_eq!(pool.status().ready, 0);
-		assert_eq!(pool.status().future, 0);
+		assert_eq!(pool.validated_pool().status().ready, 0);
+		assert_eq!(pool.validated_pool().status().future, 0);
 
 		// then
 		assert_matches!(res.unwrap_err(), error::Error::TemporarilyBanned);
@@ -648,8 +622,8 @@ mod tests {
 				nonce: 3,
 			}))).unwrap();
 
-			assert_eq!(pool.status().ready, 2);
-			assert_eq!(pool.status().future, 1);
+			assert_eq!(pool.validated_pool().status().ready, 2);
+			assert_eq!(pool.validated_pool().status().future, 1);
 			stream
 		};
 
@@ -688,8 +662,8 @@ mod tests {
 
 		// then
 		assert_eq!(pool.validated_pool().ready().count(), 0);
-		assert_eq!(pool.status().future, 0);
-		assert_eq!(pool.status().ready, 0);
+		assert_eq!(pool.validated_pool().status().future, 0);
+		assert_eq!(pool.validated_pool().status().ready, 0);
 		// make sure they are temporarily banned as well
 		assert!(pool.validated_pool.rotator().is_banned(&hash1));
 		assert!(pool.validated_pool.rotator().is_banned(&hash2));
@@ -733,7 +707,7 @@ mod tests {
 			amount: 5,
 			nonce: 1,
 		}))).unwrap();
-		assert_eq!(pool.status().future, 1);
+		assert_eq!(pool.validated_pool().status().future, 1);
 
 		// when
 		let hash2 = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
@@ -744,7 +718,7 @@ mod tests {
 		}))).unwrap();
 
 		// then
-		assert_eq!(pool.status().future, 1);
+		assert_eq!(pool.validated_pool().status().future, 1);
 		assert!(pool.validated_pool.rotator().is_banned(&hash1));
 		assert!(!pool.validated_pool.rotator().is_banned(&hash2));
 	}
@@ -771,8 +745,8 @@ mod tests {
 		}))).unwrap_err();
 
 		// then
-		assert_eq!(pool.status().ready, 0);
-		assert_eq!(pool.status().future, 0);
+		assert_eq!(pool.validated_pool().status().ready, 0);
+		assert_eq!(pool.validated_pool().status().future, 0);
 	}
 
 	#[test]
@@ -789,8 +763,8 @@ mod tests {
 		}))).unwrap_err();
 
 		// then
-		assert_eq!(pool.status().ready, 0);
-		assert_eq!(pool.status().future, 0);
+		assert_eq!(pool.validated_pool().status().ready, 0);
+		assert_eq!(pool.validated_pool().status().future, 0);
 		assert_matches!(err, error::Error::NoTagsProvided);
 	}
 
@@ -807,13 +781,13 @@ mod tests {
 				amount: 5,
 				nonce: 0,
 			}))).unwrap();
-			assert_eq!(pool.status().ready, 1);
-			assert_eq!(pool.status().future, 0);
+			assert_eq!(pool.validated_pool().status().ready, 1);
+			assert_eq!(pool.validated_pool().status().future, 0);
 
 			// when
 			block_on(pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![])).unwrap();
-			assert_eq!(pool.status().ready, 0);
-			assert_eq!(pool.status().future, 0);
+			assert_eq!(pool.validated_pool().status().ready, 0);
+			assert_eq!(pool.validated_pool().status().future, 0);
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
@@ -831,13 +805,13 @@ mod tests {
 				amount: 5,
 				nonce: 0,
 			}))).unwrap();
-			assert_eq!(pool.status().ready, 1);
-			assert_eq!(pool.status().future, 0);
+			assert_eq!(pool.validated_pool().status().ready, 1);
+			assert_eq!(pool.validated_pool().status().future, 0);
 
 			// when
 			block_on(pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![2u64])).unwrap();
-			assert_eq!(pool.status().ready, 0);
-			assert_eq!(pool.status().future, 0);
+			assert_eq!(pool.validated_pool().status().ready, 0);
+			assert_eq!(pool.validated_pool().status().future, 0);
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
@@ -855,8 +829,8 @@ mod tests {
 				amount: 5,
 				nonce: 1,
 			}))).unwrap();
-			assert_eq!(pool.status().ready, 0);
-			assert_eq!(pool.status().future, 1);
+			assert_eq!(pool.validated_pool().status().ready, 0);
+			assert_eq!(pool.validated_pool().status().future, 1);
 
 			// when
 			block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
@@ -865,7 +839,7 @@ mod tests {
 				amount: 5,
 				nonce: 0,
 			}))).unwrap();
-			assert_eq!(pool.status().ready, 2);
+			assert_eq!(pool.validated_pool().status().ready, 2);
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
@@ -884,7 +858,7 @@ mod tests {
 				nonce: 0,
 			});
 			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), uxt)).unwrap();
-			assert_eq!(pool.status().ready, 1);
+			assert_eq!(pool.validated_pool().status().ready, 1);
 
 			// when
 			pool.validated_pool.remove_invalid(&[*watcher.hash()]);
@@ -908,7 +882,7 @@ mod tests {
 				nonce: 0,
 			});
 			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), uxt)).unwrap();
-			assert_eq!(pool.status().ready, 1);
+			assert_eq!(pool.validated_pool().status().ready, 1);
 
 			// when
 			let mut map = HashMap::new();
@@ -943,7 +917,7 @@ mod tests {
 				nonce: 0,
 			});
 			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), xt)).unwrap();
-			assert_eq!(pool.status().ready, 1);
+			assert_eq!(pool.validated_pool().status().ready, 1);
 
 			// when
 			let xt = uxt(Transfer {
@@ -953,7 +927,7 @@ mod tests {
 				nonce: 1,
 			});
 			block_on(pool.submit_one(&BlockId::Number(1), xt)).unwrap();
-			assert_eq!(pool.status().ready, 1);
+			assert_eq!(pool.validated_pool().status().ready, 1);
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
@@ -996,11 +970,11 @@ mod tests {
 			// The tag the above transaction provides (TestApi is using just nonce as u8)
 			let provides = vec![0_u8];
 			block_on(pool.submit_one(&BlockId::Number(0), xt)).unwrap();
-			assert_eq!(pool.status().ready, 1);
+			assert_eq!(pool.validated_pool().status().ready, 1);
 
 			// Now block import happens before the second transaction is able to finish verification.
 			block_on(pool.prune_tags(&BlockId::Number(1), vec![provides], vec![])).unwrap();
-			assert_eq!(pool.status().ready, 0);
+			assert_eq!(pool.validated_pool().status().ready, 0);
 
 
 			// so when we release the verification of the previous one it will have
@@ -1010,8 +984,8 @@ mod tests {
 
 			// then
 			is_ready.recv().unwrap(); // wait for finish
-			assert_eq!(pool.status().ready, 1);
-			assert_eq!(pool.status().future, 0);
+			assert_eq!(pool.validated_pool().status().ready, 1);
+			assert_eq!(pool.validated_pool().status().future, 0);
 		}
 	}
 
@@ -1043,7 +1017,7 @@ mod tests {
 		let tx4 = transfer(4);
 		let hash4 = pool.validated_pool.api().hash_and_length(&tx4).0;
 		let watcher4 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx4)).unwrap();
-		assert_eq!(pool.status().ready, 5);
+		assert_eq!(pool.validated_pool().status().ready, 5);
 
 		// when
 		pool.validated_pool.api().invalidate.lock().insert(hash3);
@@ -1060,7 +1034,7 @@ mod tests {
 		//
 		// events for hash3 are: Ready, Invalid
 		// events for hash4 are: Ready, Invalid
-		assert_eq!(pool.status().ready, 2);
+		assert_eq!(pool.validated_pool().status().ready, 2);
 		assert_eq!(
 			futures::executor::block_on_stream(watcher3.into_stream()).collect::<Vec<_>>(),
 			vec![TransactionStatus::Ready, TransactionStatus::Invalid],

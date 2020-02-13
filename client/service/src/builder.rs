@@ -896,30 +896,27 @@ ServiceBuilder<
 			let events = futures::stream::select(import_stream, finality_stream)
 				.for_each(move |event| {
 					// offchain worker is only interested in block import events
-					match event {
-						ChainEvent::NewBlock { ref header, is_new_best, .. } => {
-							let offchain = offchain.as_ref().and_then(|o| o.upgrade());
-							match offchain {
-								Some(offchain) if is_new_best => {
-									let future = offchain.on_block_imported(
-										&header,
-										network_state_info.clone(),
-										is_validator,
-									);
-									let _ = to_spawn_tx_.unbounded_send((
-										Box::pin(future),
-										From::from("offchain-on-block"),
-									));
-								},
-								Some(_) => log::debug!(
+					if let ChainEvent::NewBlock { ref header, is_new_best, .. } = event {
+						let offchain = offchain.as_ref().and_then(|o| o.upgrade());
+						match offchain {
+							Some(offchain) if is_new_best => {
+								let future = offchain.on_block_imported(
+									&header,
+									network_state_info.clone(),
+									is_validator,
+								);
+								let _ = to_spawn_tx_.unbounded_send((
+									Box::pin(future),
+									From::from("offchain-on-block"),
+								));
+							},
+							Some(_) => log::debug!(
 									target: "sc_offchain",
 									"Skipping offchain workers for non-canon block: {:?}",
 									header,
 								),
-								_ => {},
-							}
-						},
-						_ => {}
+							_ => {},
+						}
 					};
 
 					let txpool = txpool.upgrade();

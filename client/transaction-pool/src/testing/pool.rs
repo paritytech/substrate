@@ -133,29 +133,29 @@ fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 	let pool = Pool::new(Default::default(), api.clone());
 	let xt = uxt(Alice, 209);
 	block_on(pool.submit_one(&BlockId::number(0), xt.clone())).expect("1. Imported");
-	assert_eq!(pool.status().ready, 1);
+	assert_eq!(pool.validated_pool().status().ready, 1);
 
 	// remove the transaction that just got imported.
 	api.increment_nonce(Alice.into());
 	block_on(pool.prune_tags(&BlockId::number(1), vec![vec![209]], vec![])).expect("1. Pruned");
-	assert_eq!(pool.status().ready, 0);
+	assert_eq!(pool.validated_pool().status().ready, 0);
 	// it's re-imported to future
-	assert_eq!(pool.status().future, 1);
+	assert_eq!(pool.validated_pool().status().future, 1);
 
 	// so now let's insert another transaction that also provides the 155
 	api.increment_nonce(Alice.into());
 	let xt = uxt(Alice, 211);
 	block_on(pool.submit_one(&BlockId::number(2), xt.clone())).expect("2. Imported");
-	assert_eq!(pool.status().ready, 1);
-	assert_eq!(pool.status().future, 1);
+	assert_eq!(pool.validated_pool().status().ready, 1);
+	assert_eq!(pool.validated_pool().status().future, 1);
 	let pending: Vec<_> = pool.validated_pool().ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![211]);
 
 	// prune it and make sure the pool is empty
 	api.increment_nonce(Alice.into());
 	block_on(pool.prune_tags(&BlockId::number(3), vec![vec![155]], vec![])).expect("2. Pruned");
-	assert_eq!(pool.status().ready, 0);
-	assert_eq!(pool.status().future, 2);
+	assert_eq!(pool.validated_pool().status().ready, 0);
+	assert_eq!(pool.validated_pool().status().future, 2);
 }
 
 #[test]
@@ -288,7 +288,7 @@ fn finalization() {
 	let mut stream = futures::executor::block_on_stream(watcher);
 	assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 	assert_eq!(stream.next(), Some(TransactionStatus::InBlock(header.hash())));
-	assert_eq!(stream.next(), Some(TransactionStatus::Finalized));
+	assert_eq!(stream.next(), Some(TransactionStatus::Finalized(header.hash())));
 	assert_eq!(stream.next(), None);
 }
 
@@ -417,8 +417,8 @@ fn fork_aware_finalization() {
 	for (canon_watcher, h) in canon_watchers {
 		let mut stream = futures::executor::block_on_stream(canon_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(h)));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(h.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(h)));
 		assert_eq!(stream.next(), None);
 	}
 
@@ -426,19 +426,19 @@ fn fork_aware_finalization() {
 	{
 		let mut stream= futures::executor::block_on_stream(from_dave_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c2)));
-		assert_eq!(stream.next(), Some(TransactionStatus::Retracted));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c2.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(c2)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(e1)));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1.clone())));
 		assert_eq!(stream.next(), None);
 	}
 
 	{
 		let mut stream= futures::executor::block_on_stream(from_bob_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(d2)));
-		assert_eq!(stream.next(), Some(TransactionStatus::Retracted));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(d2.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(d2)));
 	}
 
 }

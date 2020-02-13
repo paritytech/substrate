@@ -176,7 +176,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	}
 
 	fn status(&self) -> PoolStatus {
-		self.pool.status()
+		self.pool.validated_pool().status()
 	}
 
 	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>> {
@@ -317,7 +317,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 				async move {
 					// We don't query block if we won't prune anything
-					if !pool.status().is_empty() {
+					if !pool.validated_pool().status().is_empty() {
 						let hashes = api.block_body(&id).await
 							.unwrap_or_else(|e| {
 								log::warn!("Prune known transactions: error request {:?}!", e);

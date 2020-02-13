@@ -103,7 +103,7 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	/// Transaction was pruned from the pool.
 	pub fn pruned(&mut self, block_hash: BlockHash<C>, tx: &H) {
 		debug!(target: "txpool", "[{:?}] Pruned at {:?}", tx, block_hash);
-		self.fire(tx, |s| s.in_block(block_hash.clone()));
+		self.fire(tx, |s| s.in_block(block_hash));
 		self.finality_watchers.entry(block_hash).or_default().push(tx.clone());
 	}
 
@@ -111,7 +111,7 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	pub fn retracted(&mut self, block_hash: &BlockHash<C>) {
 		if let Some(hashes) = self.finality_watchers.remove(block_hash) {
 			for hash in hashes {
-				self.fire(&hash, |s| s.retracted())
+				self.fire(&hash, |s| s.retracted(block_hash))
 			}
 		}
 	}
@@ -120,7 +120,7 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	pub fn finalized(&mut self, block_hash: &BlockHash<C>, txs: &[H]) {
 		self.finality_watchers.remove(block_hash);
 		for h in txs {
-			self.fire(h, |s| s.finalized())
+			self.fire(h, |s| s.finalized(block_hash))
 		}
 	}
 }

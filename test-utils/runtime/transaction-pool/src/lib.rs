@@ -28,12 +28,10 @@ use sp_runtime::{
 	},
 };
 use std::collections::{HashSet, HashMap};
-use sp_blockchain::{TreeRoute, HeaderMetadata, HeaderMetadataCache, CachedHeaderMetadata, tree_route};
 use substrate_test_runtime_client::{
 	runtime::{Index, AccountId, Block, BlockNumber, Extrinsic, Hash, Header, Transfer},
 	AccountKeyring::{self, *},
 };
-use sc_transaction_graph::BlockHash;
 
 /// Error type used by [`TestApi`].
 #[derive(Debug, derive_more::From, derive_more::Display)]
@@ -64,7 +62,6 @@ pub struct ChainState {
 pub struct TestApi {
 	valid_modifier: RwLock<Box<dyn Fn(&mut ValidTransaction) + Send + Sync>>,
 	chain: RwLock<ChainState>,
-	header_metadata: HeaderMetadataCache<Block>,
 	validation_requests: RwLock<Vec<Extrinsic>>,
 }
 
@@ -74,7 +71,6 @@ impl TestApi {
 		let api = TestApi {
 			valid_modifier: RwLock::new(Box::new(|_| {})),
 			chain: Default::default(),
-			header_metadata: HeaderMetadataCache::default(),
 			validation_requests: RwLock::new(Default::default()),
 		};
 
@@ -88,7 +84,6 @@ impl TestApi {
 		let api = TestApi {
 			valid_modifier: RwLock::new(Box::new(|_| {})),
 			chain: Default::default(),
-			header_metadata: HeaderMetadataCache::default(),
 			validation_requests: RwLock::new(Default::default()),
 		};
 
@@ -118,7 +113,6 @@ impl TestApi {
 		};
 		chain.block_by_hash.insert(header.hash(), xts);
 		chain.header_by_number.insert(block_number, header.clone());
-		self.header_metadata.insert_header_metadata(header.hash(), CachedHeaderMetadata::from(&header));
 		header
 	}
 
@@ -141,7 +135,6 @@ impl TestApi {
 			state_root: Default::default(),
 		};
 		chain.block_by_hash.insert(header.hash(), xts);
-		self.header_metadata.insert_header_metadata(header.hash(), CachedHeaderMetadata::from(&header));
 		header
 	}
 
@@ -252,15 +245,6 @@ impl sc_transaction_graph::ChainApi for TestApi {
 			BlockId::Number(num) => self.chain.read().block_by_number.get(num).cloned(),
 			BlockId::Hash(hash) => self.chain.read().block_by_hash.get(hash).cloned(),
 		}))
-	}
-
-	fn last_finalized(&self) -> BlockHash<Self> {
-		self.chain.read().block_by_hash.keys().nth(0).cloned().or_else(|| Some(Default::default())).unwrap()
-	}
-
-	fn tree_route(&self, from: BlockHash<Self>, to: BlockHash<Self>) -> Result<TreeRoute<Self::Block>, Self::Error> {
-		tree_route(&self.header_metadata, from, to)
-			.map_err(|_| Error(sp_transaction_pool::error::Error::NoTagsProvided))
 	}
 }
 

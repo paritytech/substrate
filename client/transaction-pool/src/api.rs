@@ -27,8 +27,6 @@ use sc_client_api::{
 	light::{Fetcher, RemoteCallRequest, RemoteBodyRequest},
 	BlockBody,
 };
-use sc_transaction_graph::BlockHash;
-use sp_blockchain::{TreeRoute, tree_route, HeaderMetadata};
 use sp_core::Hasher;
 use sp_runtime::{
 	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
@@ -66,10 +64,9 @@ impl<Client, Block> FullChainApi<Client, Block> where
 
 impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block> where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBody<Block> + HeaderBackend<Block> + HeaderMetadata<Block>
-	+ BlockIdTo<Block> + Send + Sync + 'static,
+	Client: ProvideRuntimeApi<Block> + BlockBody<Block> + HeaderBackend<Block> + BlockIdTo<Block>,
+	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	<Client as HeaderMetadata<Block>>::Error: Into<sp_blockchain::Error>,
 	sp_api::ApiErrorFor<Client, Block>: Send,
 {
 	type Block = Block;
@@ -126,15 +123,6 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 			(traits::HasherFor::<Block>::hash(x), x.len())
 		})
 	}
-
-	fn last_finalized(&self) -> BlockHash<Self> {
-		self.client.info().finalized_hash
-	}
-
-	fn tree_route(&self, from: BlockHash<Self>, to: BlockHash<Self>) -> Result<TreeRoute<Self::Block>, Self::Error> {
-		tree_route::<_, _>(&*self.client, from, to)
-			.map_err(|e| error::Error::from(e.into()))
-	}
 }
 
 /// The transaction pool logic for light client.
@@ -146,7 +134,7 @@ pub struct LightChainApi<Client, F, Block> {
 
 impl<Client, F, Block> LightChainApi<Client, F, Block> where
 	Block: BlockT,
-	Client: HeaderBackend<Block> + HeaderMetadata<Block>,
+	Client: HeaderBackend<Block>,
 	F: Fetcher<Block>,
 {
 	/// Create new transaction pool logic.
@@ -161,8 +149,7 @@ impl<Client, F, Block> LightChainApi<Client, F, Block> where
 
 impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, F, Block> where
 	Block: BlockT,
-	Client: HeaderBackend<Block> + HeaderMetadata<Block> + 'static,
-	<Client as HeaderMetadata<Block>>::Error: Into<sp_blockchain::Error>,
+	Client: HeaderBackend<Block> + 'static,
 	F: Fetcher<Block> + 'static,
 {
 	type Block = Block;
@@ -246,14 +233,5 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 
 			Ok(Some(transactions))
 		}.boxed()
-	}
-
-	fn last_finalized(&self) -> BlockHash<Self> {
-		self.client.info().finalized_hash
-	}
-
-	fn tree_route(&self, from: BlockHash<Self>, to: BlockHash<Self>) -> Result<TreeRoute<Self::Block>, Self::Error> {
-		tree_route::<_, _>(&*self.client, from, to)
-			.map_err(|e| error::Error::from(e.into()))
 	}
 }
