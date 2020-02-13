@@ -3384,6 +3384,7 @@ dependencies = [
  "sc-tracing",
  "sc-transaction-pool",
  "serde",
+ "serde_json",
  "sp-authority-discovery",
  "sp-consensus",
  "sp-consensus-babe",
