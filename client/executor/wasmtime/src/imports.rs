@@ -77,7 +77,7 @@ fn resolve_memory_import(
 	import_ty: &ImportType,
 	heap_pages: u32,
 ) -> Result<Extern, WasmError> {
-	let memory_ty = match import_ty.ty() {
+	let requested_memory_ty = match import_ty.ty() {
 		ExternType::Memory(memory_ty) => memory_ty,
 		_ => {
 			return Err(WasmError::Other(format!(
@@ -88,19 +88,25 @@ fn resolve_memory_import(
 		}
 	};
 
-	let at_least = memory_ty.limits().min().saturating_add(heap_pages);
-	if let Some(max) = memory_ty.limits().max() {
-		if at_least > max {
+	// Increment the min (a.k.a initial) number of pages by `heap_pages` and check if it exceeds the
+	// maximum specified by the import.
+	let initial = requested_memory_ty
+		.limits()
+		.min()
+		.saturating_add(heap_pages);
+	if let Some(max) = requested_memory_ty.limits().max() {
+		if initial > max {
 			return Err(WasmError::Other(format!(
 				"incremented number of pages by heap_pages (total={}) is more than maximum requested\
 				by the runtime wasm module {}",
-				at_least,
+				initial,
 				max,
 			)));
 		}
 	}
-	let limits = Limits::at_least(at_least);
-	let memory = Memory::new(module.store(), MemoryType::new(limits));
+
+	let memory_ty = MemoryType::new(Limits::new(initial, requested_memory_ty.limits().max()));
+	let memory = Memory::new(module.store(), memory_ty);
 	Ok(Extern::Memory(memory))
 }
 
