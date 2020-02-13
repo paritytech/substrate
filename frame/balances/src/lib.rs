@@ -1250,17 +1250,22 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 
 	/// Move the reserved balance of one account into the balance of another, according to `status`.
 	///
-	/// Is a no-op if the value to be moved is zero.
+	/// Is a no-op if:
+	/// - the value to be moved is zero; or
+	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
 	fn repatriate_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
 		status: Status,
 	) -> Result<Self::Balance, DispatchError> {
-		if value.is_zero() { return Ok (Zero::zero()) }
+		if value.is_zero() { return Ok(Zero::zero()) }
 
 		if slashed == beneficiary {
-			return Ok(Self::unreserve(slashed, value));
+			return match status {
+				Status::Free => Ok(Self::unreserve(slashed, value)),
+				Status::Reserved => Ok(Self::reserved_balance(slashed)),
+			};
 		}
 
 		Self::try_mutate_account(beneficiary, |to_account| -> Result<Self::Balance, DispatchError> {
