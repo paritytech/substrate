@@ -1314,14 +1314,68 @@ pub trait BlockIdTo<Block: self::Block> {
 }
 
 /// The pallet benchmarking trait.
-pub trait Benchmarking<T> {
+pub trait Benchmarking<T, C: crate::traits::Dispatchable, R>
+where <C as crate::traits::Dispatchable>::Origin: From<R>,
+{
+	/// Benchmarking setup for an extrinsic.
+	type Setup: BenchmarkingSetup<T, C, R>;
+
 	/// Run the benchmarks for this pallet.
 	///
 	/// Parameters
 	/// - `extrinsic`: The name of extrinsic function you want to benchmark encoded as bytes.
-	/// - `steps`: The number of sample points you want to take across the range of parameters.
+	/// - `steps`:  The number of sample points you want to take across the range of parameters.
 	/// - `repeat`: The number of times you want to repeat a benchmark.
-	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<T>, &'static str>;
+	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<(Vec<(BenchmarkParameter, u32)>, u128)>, &'static str> {
+		let benchmark = Self::select_benchmark(extrinsic)?;
+
+		// Warm up the DB
+		sp_io::benchmarking::commit_db();
+		sp_io::benchmarking::wipe_db();
+
+		let components = <Self::Setup as BenchmarkingSetup<T, C, R>>::components(&benchmark);
+		let mut results: Vec<crate::BenchmarkResults> = Vec::new();
+
+		// Select the component we will be benchmarking. Each component will be benchmarked.
+		for (name, low, high) in components.iter() {
+			// Create up to `STEPS` steps for that component between high and low.
+			let step_size = ((high - low) / steps).max(1);
+			let num_of_steps = (high - low) / step_size;
+
+			for s in 0..num_of_steps {
+				// This is the value we will be testing for component `name`
+				let component_value = low + step_size * s;
+
+				// Select the mid value for all the other components.
+				let c: Vec<(BenchmarkParameter, u32)> = components.iter()
+					.map(|(n, l, h)|
+						(*n, if n == name { component_value } else { (h - l) / 2 + l })
+					).collect();
+
+				// Run the benchmark `repeat` times.
+				for _ in 0..repeat {
+					// Set up the externalities environment for the setup we want to benchmark.
+					let (call, caller) = <Self::Setup as BenchmarkingSetup<T, C, R>>::instance(&benchmark, &c)?;
+					// Commit the externalities to the database, flushing the DB cache.
+					// This will enable worst case scenario for reading from the database.
+					sp_io::benchmarking::commit_db();
+					// Run the benchmark.
+					let start = sp_io::benchmarking::current_time();
+					call.dispatch(caller.into())?;
+					let finish = sp_io::benchmarking::current_time();
+					let elapsed = finish - start;
+					results.push((c.clone(), elapsed));
+					// Wipe the DB back to the genesis state.
+					sp_io::benchmarking::wipe_db();
+				}
+			}
+		}
+
+		return Ok(results);
+	}
+
+	/// Return the benchmarking setup corresponding to `extrinsic`.
+	fn select_benchmark(extrinsic: Vec<u8>) -> Result<Self::Setup, &'static str>;
 }
 
 /// The required setup for creating a benchmark.
@@ -1345,18 +1399,23 @@ pub trait BenchmarkingSetup<T, Call, RawOrigin> {
 /// struct SetBalance;
 /// impl BenchmarkingSetup for SetBalance { ... }
 ///
-/// selected_benchmark!(Transfer, SetBalance);
+/// selected_benchmarks!(Transfer, SetBalance);
 /// ```
 #[macro_export]
-macro_rules! selected_benchmark {
+macro_rules! selected_benchmarks {
 	($($bench:ident),*) => {
 		// The list of available benchmarks for this pallet.
-		enum SelectedBenchmark {
+		#[derive(Debug)]
+		pub enum SelectedBenchmark {
 			$( $bench, )*
 		}
 
 		// Allow us to select a benchmark from the list of available benchmarks.
-		impl<T: Trait> $crate::traits::BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
+		impl<T: Trait> $crate::traits::BenchmarkingSetup<
+			T,
+			Call<T>,
+			RawOrigin<T::AccountId>,
+		> for SelectedBenchmark {
 			fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 				match self {
 					$( Self::$bench => <$bench as $crate::traits::BenchmarkingSetup<
@@ -1376,6 +1435,21 @@ macro_rules! selected_benchmark {
 						Call<T>,
 						RawOrigin<T::AccountId>,
 					>>::instance(&$bench, components), )*
+				}
+			}
+		}
+
+		impl<T: Trait> $crate::traits::Benchmarking<
+			T,
+			Call<T>,
+			RawOrigin<T::AccountId>,
+		> for Module<T> {
+			type Setup = SelectedBenchmark;
+
+			fn select_benchmark(extrinsic: Vec<u8>) -> Result<Self::Setup, &'static str> {
+				match extrinsic.as_slice() {
+					$( e @ _ if e == stringify!($bench).as_bytes() => Ok(Self::Setup::$bench), )*
+					_ => Err("Could not find extrinsic."),
 				}
 			}
 		}
