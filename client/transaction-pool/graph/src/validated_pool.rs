@@ -417,7 +417,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let header_hash = self.api.block_id_to_hash(at)?
 			.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?;
 		let mut listener = self.listener.write();
-		let mut set = HashSet::new();
+		let mut set = HashSet::with_capacity(hashes.size_hint().0);
 		for h in hashes {
 			// `hashes` has possibly duplicate hashes.
 			// we'd like to send out the `InBlock` notification only once.
@@ -543,7 +543,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 		if route.enacted().is_empty() {
 			hashes.extend_from_slice(
-				&vec![route.common_block().clone().hash, block_hash.clone()]
+				&[route.common_block().hash.clone(), block_hash.clone()]
 			);
 		} else {
 			hashes.extend_from_slice(

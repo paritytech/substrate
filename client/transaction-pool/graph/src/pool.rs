@@ -91,10 +91,12 @@ pub trait ChainApi: Send + Sync {
 	/// Returns a block body given the block id.
 	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
 
-	/// Returns the hash of the last finalized block
+	/// Returns the hash of the last finalized block.
 	fn last_finalized(&self) -> BlockHash<Self>;
 
-	/// returns a list of blocks that exists between `from` and `to`
+	/// Returns a tree route between `from` and `to`.
+	///
+    /// This includes a list of blocks between them, or a path through a shared common ancestor.
 	fn tree_route(&self, from: BlockHash<Self>, to: BlockHash<Self>) -> Result<TreeRoute<Self::Block>, Self::Error>;
 }
 
@@ -439,7 +441,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Notify all watchers that transactions in the block with given hash have been finalized
-	pub fn validated_pool(&self) ->  &Arc<ValidatedPool<B>> {
+	pub fn validated_pool(&self) ->  &ValidatedPool<B> {
 		&self.validated_pool
 	}
 }
