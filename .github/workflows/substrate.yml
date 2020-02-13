@@ -35,7 +35,8 @@ jobs:
       - name: Install wam-gc
         uses: actions-rs/cargo@v1
         with:
-          command: +nightly install
+          command: install
+          toolchain: nightly
           args: --git https://github.com/alexcrichton/wasm-gc
       - name: Cache cargo registry
         uses: actions/cache@v1
