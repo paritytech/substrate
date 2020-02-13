@@ -22,7 +22,8 @@
 use sp_std::prelude::*;
 use codec::Codec;
 use sp_runtime::traits::{
-	SimpleArithmetic, StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash, Saturating
+	SimpleArithmetic, StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash, Saturating,
+	AtLeast32Bit
 };
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
 use frame_support::dispatch::DispatchResult;
@@ -42,7 +43,7 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trai
 pub trait Trait: frame_system::Trait {
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Codec + Default + SimpleArithmetic + Copy;
+	type AccountIndex: Parameter + Member + Codec + Default + AtLeast32Bit + Copy;
 
 	/// The currency trait.
 	type Currency: ReservableCurrency<Self::AccountId>;

@@ -154,7 +154,9 @@ mod tests {
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill, traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup}, testing::Header,
+		Perbill,
+		testing::Header,
+		traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup},
 	};
 	use frame_support::{impl_outer_origin, parameter_types, weights::Weight, traits::Randomness};
 

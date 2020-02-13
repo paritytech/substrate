@@ -172,7 +172,7 @@ use frame_support::{
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
-		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
+		Zero, AtLeast32Bit, StaticLookup, Member, CheckedAdd, CheckedSub,
 		MaybeSerializeDeserialize, Saturating, Bounded,
 	},
 };
@@ -185,7 +185,7 @@ pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
+	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
 	/// The minimum amount required to keep an account open.
@@ -197,7 +197,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
+	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
 	/// Handler for the unbalanced reduction when removing a dust account.
