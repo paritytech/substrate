@@ -37,9 +37,15 @@ pub trait BaseArithmetic:
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
-	Saturating + PartialOrd<Self> + Ord + Bounded +
-	HasCompact + Sized
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Saturating +
+	PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
+	TryFrom<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
+	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
+	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
+	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
+	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
+	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
 {}
 
 impl<T:
@@ -50,9 +56,15 @@ impl<T:
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
-	Saturating + PartialOrd<Self> + Ord + Bounded +
-	HasCompact + Sized
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Saturating +
+	PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
+	TryFrom<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
+	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
+	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
+	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
+	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
+	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
 > BaseArithmetic for T {}
 
 /// A meta trait for arithmetic.
@@ -60,47 +72,15 @@ impl<T:
 /// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
 /// be able to represent at least `u32` values without loss, hence the trait implies `From<u32>`
 /// and smaller ints. All other conversions are fallible.
-pub trait RuntimeArithmetic:
-	BaseArithmetic +
-	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> + TryFrom<u64> +
-	TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> +
-	UniqueSaturatedInto<u128>
-{}
+pub trait RuntimeArithmetic:BaseArithmetic + From<u8> + From<u16> + From<u32> {}
 
-impl<T:
-	BaseArithmetic +
-	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> + TryFrom<u64> +
-	TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> +
-	UniqueSaturatedInto<u128>
-> RuntimeArithmetic for T {}
+impl<T: BaseArithmetic + From<u8> + From<u16> + From<u32>> RuntimeArithmetic for T {}
 
 /// Same as [`RuntimeArithmetic`] for integer types of any size, without any assumption of their size
 /// being at least `u32`.
-pub trait AnyArithmetic:
-	BaseArithmetic +
-	From<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
-	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
-	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
-	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
-{}
+pub trait AnyArithmetic: BaseArithmetic + From<u8> {}
 
-impl<T:
-	BaseArithmetic +
-	From<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
-	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
-	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
-	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
-> AnyArithmetic for T {}
+impl<T:BaseArithmetic + From<u8>> AnyArithmetic for T {}
 
 
 /// Just like `From` except that if the source value is too big to fit into the destination type
