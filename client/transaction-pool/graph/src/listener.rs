@@ -18,6 +18,7 @@
 use std::{
 	collections::HashMap, hash,
 };
+use linked_hash_map::LinkedHashMap;
 use serde::Serialize;
 use crate::{watcher, ChainApi, BlockHash};
 use log::{debug, trace, warn};
@@ -26,8 +27,11 @@ use sp_runtime::traits;
 /// Extrinsic pool default listener.
 pub struct Listener<H: hash::Hash + Eq, C: ChainApi> {
 	watchers: HashMap<H, watcher::Sender<H, BlockHash<C>>>,
-	finality_watchers: HashMap<BlockHash<C>, Vec<H>>,
+	finality_watchers: LinkedHashMap<BlockHash<C>, Vec<H>>,
 }
+
+/// Maximum number of watchers awaiting finality at any time.
+const MAX_FINALITY_WATCHERS: usize = 512;
 
 impl<H: hash::Hash + Eq, C: ChainApi> Default for Listener<H, C> {
 	fn default() -> Self {
@@ -104,7 +108,15 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	pub fn pruned(&mut self, block_hash: BlockHash<C>, tx: &H) {
 		debug!(target: "txpool", "[{:?}] Pruned at {:?}", tx, block_hash);
 		self.fire(tx, |s| s.in_block(block_hash));
-		self.finality_watchers.entry(block_hash).or_default().push(tx.clone());
+		self.finality_watchers.entry(block_hash).or_insert(vec![]).push(tx.clone());
+
+		while self.finality_watchers.len() > MAX_FINALITY_WATCHERS {
+			if let Some((hash, txs)) = self.finality_watchers.pop_front() {
+				for tx in txs {
+					self.fire(&tx, |s| s.finality_timeout(&hash));
+				}
+			}
+		}
 	}
 
 	/// The block this transaction was included in has been retracted.

@@ -100,6 +100,11 @@ impl<H: Clone, BH: Clone> Sender<H, BH> {
 	}
 
 	/// The block this extrinsic was included in has been retracted
+	pub fn finality_timeout(&mut self, hash: &BH) {
+		self.send(TransactionStatus::FinalityTimeout(hash.clone()));
+	}
+
+	/// The block this extrinsic was included in has been retracted
 	pub fn retracted(&mut self, hash: &BH) {
 		self.send(TransactionStatus::Retracted(hash.clone()));
 	}

@@ -6384,6 +6384,7 @@ dependencies = [
  "criterion 0.3.1",
  "derive_more",
  "futures 0.3.4",
+ "linked-hash-map",
  "log 0.4.8",
  "parity-scale-codec",
  "parity-util-mem",

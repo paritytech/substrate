@@ -102,6 +102,9 @@ pub enum TransactionStatus<Hash, BlockHash> {
 	InBlock(BlockHash),
 	/// The block this transaction was included in has been retracted.
 	Retracted(BlockHash),
+	/// Maximum number of finality watchers has been reached,
+	/// old watchers are being removed.
+	FinalityTimeout(BlockHash),
 	/// Transaction has been finalized by a finality-gadget, e.g GRANDPA
 	Finalized(BlockHash),
 	/// Transaction has been replaced in the pool, by another transaction
