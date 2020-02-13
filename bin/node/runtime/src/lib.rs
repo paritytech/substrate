@@ -828,7 +828,10 @@ impl_runtime_apis! {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
-				_ => None,
+				b"pallet-authorship" | b"authorship" => Authorship::run_benchmark(extrinsic, steps, repeat).ok(),
+				b"pallet-im-online" | b"im-online" => ImOnline::run_benchmark(extrinsic, steps, repeat).ok(),
+				b"pallet-utility" | b"utility" => Utility::run_benchmark(extrinsic, steps, repeat).ok(),
+				_ => return None,
 			}
 		}
 	}

@@ -178,6 +178,7 @@ impl Encode for Data {
 		}
 	}
 }
+
 impl codec::EncodeLike for Data {}
 
 impl Default for Data {

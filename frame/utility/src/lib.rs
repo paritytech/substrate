@@ -72,6 +72,8 @@ use frame_support::{traits::{Get, ReservableCurrency, Currency},
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
 
+pub mod benchmarking;
+
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 /// Configuration trait.
