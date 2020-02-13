@@ -2703,8 +2703,8 @@ mod offchain_phragmen {
 
 	type DummyT = dummy_sr25519::AuthorityId;
 
-	fn percent(x: u32) -> Perbill {
-		Perbill::from_percent(x)
+	fn percent(x: u8) -> OffchainAccuracy {
+		OffchainAccuracy::from_percent(x)
 	}
 
 	/// setup a new set of validators and nominator storage items independent of the parent mock

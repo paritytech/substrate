@@ -20,8 +20,8 @@
 
 use crate::{elect, PhragmenResult, Assignment};
 use sp_runtime::{
-	assert_eq_error_rate, Perbill,
-	traits::{Convert, Member, SaturatedConversion}
+	assert_eq_error_rate, Perbill, PerThing,
+	traits::{Convert, Member, SaturatedConversion, Zero}
 };
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -320,10 +320,11 @@ pub(crate) fn create_stake_of(stakes: &[(AccountId, Balance)])
 }
 
 
-pub fn check_assignments_sum(assignments: Vec<Assignment<AccountId>>) {
+pub fn check_assignments_sum<T: PerThing>(assignments: Vec<Assignment<AccountId, T>>) {
 	for Assignment { distribution, .. } in assignments {
-		let sum: u32 = distribution.iter().map(|(_, p)| p.deconstruct()).sum();
-		assert_eq_error_rate!(sum, Perbill::accuracy(), 1);
+		let mut sum: u128 = Zero::zero();
+		distribution.iter().for_each(|(_, p)| sum += p.deconstruct().saturated_into());
+		assert_eq_error_rate!(sum, T::ACCURACY.saturated_into(), 1);
 	}
 }
 
@@ -335,7 +336,7 @@ pub(crate) fn run_and_compare(
 	min_to_elect: usize,
 ) {
 	// run fixed point code.
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Perbill>(
 		to_elect,
 		min_to_elect,
 		candidates.clone(),

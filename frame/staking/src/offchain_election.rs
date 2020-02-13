@@ -16,11 +16,15 @@
 
 //! Helpers for offchain worker election.
 
-use crate::{Call, Module, Trait, BalanceOf, ValidatorIndex, NominatorIndex, CompactOf};
+use crate::{
+	Call, Module, Trait, BalanceOf, ValidatorIndex, NominatorIndex, CompactOf, OffchainAccuracy,
+};
 use codec::Encode;
 use frame_system::offchain::{SubmitUnsignedTransaction};
 use frame_support::debug;
-use sp_phragmen::{reduce, ExtendedBalance, PhragmenResult, StakedAssignment, Assignment, PhragmenScore};
+use sp_phragmen::{
+	reduce, ExtendedBalance, PhragmenResult, StakedAssignment, Assignment, PhragmenScore,
+};
 use sp_std::{prelude::*, convert::TryInto};
 use sp_runtime::{RuntimeAppPublic, RuntimeDebug};
 use sp_runtime::offchain::storage::StorageValueRef;
@@ -105,7 +109,8 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		let PhragmenResult {
 			winners,
 			assignments,
-		} = <Module<T>>::do_phragmen().ok_or(OffchainElectionError::ElectionFailed)?;
+		} = <Module<T>>::do_phragmen::<OffchainAccuracy>()
+			.ok_or(OffchainElectionError::ElectionFailed)?;
 
 		// convert winners into just account ids.
 		let winners: Vec<T::AccountId> = winners.into_iter().map(|(w, _)| w).collect();
@@ -141,7 +146,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		};
 
 		// convert back to ratio assignment. This takes less space.
-		let assignments_reduced: Vec<Assignment<T::AccountId>> = staked
+		let assignments_reduced: Vec<Assignment<T::AccountId, OffchainAccuracy>> = staked
 			.into_iter()
 			.map(|sa| sa.into_assignment(true))
 			.collect();

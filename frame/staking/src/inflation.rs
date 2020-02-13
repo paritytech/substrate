@@ -19,7 +19,7 @@
 //! The staking rate in NPoS is the total amount of tokens staked by nominators and validators,
 //! divided by the total token supply.
 
-use sp_runtime::{Perbill, traits::SimpleArithmetic, curve::PiecewiseLinear};
+use sp_runtime::{Perbill, PerThing, traits::AtLeast32Bit, curve::PiecewiseLinear};
 
 /// The total payout to all validators (and their nominators) per era.
 ///
@@ -32,7 +32,7 @@ pub fn compute_total_payout<N>(
 	npos_token_staked: N,
 	total_tokens: N,
 	era_duration: u64
-) -> (N, N) where N: SimpleArithmetic + Clone {
+) -> (N, N) where N: AtLeast32Bit + Clone {
 	// Milliseconds per year for the Julian year (365.25 days).
 	const MILLISECONDS_PER_YEAR: u64 = 1000 * 3600 * 24 * 36525 / 100;
 

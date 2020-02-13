@@ -33,9 +33,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering};
-use sp_runtime::{helpers_128bit::multiply_by_rational, Perbill, Rational128, RuntimeDebug};
-use sp_runtime::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
+use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering, convert::TryFrom};
+use sp_runtime::{helpers_128bit::multiply_by_rational, PerThing, Rational128, RuntimeDebug, SaturatedConversion};
+use sp_runtime::traits::{Zero, Convert, Member, AtLeast32Bit, Saturating, Bounded};
 
 #[cfg(test)]
 mod mock;
@@ -133,26 +133,28 @@ struct Edge<AccountId> {
 
 /// Final result of the phragmen election.
 #[derive(RuntimeDebug)]
-pub struct PhragmenResult<AccountId> {
+pub struct PhragmenResult<AccountId, T: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
 	pub winners: Vec<(AccountId, ExtendedBalance)>,
 	/// Individual assignments. for each tuple, the first elements is a voter and the second
 	/// is the list of candidates that it supports.
-	pub assignments: Vec<Assignment<AccountId>>
+	pub assignments: Vec<Assignment<AccountId, T>>
 }
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
-#[derive(RuntimeDebug, Clone)]
+#[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
-pub struct Assignment<AccountId> {
+pub struct Assignment<AccountId, T: PerThing> {
 	/// Voter's identifier
 	pub who: AccountId,
 	/// The distribution of the voter's stake.
-	pub distribution: Vec<(AccountId, Perbill)>,
+	pub distribution: Vec<(AccountId, T)>,
 }
 
-impl<AccountId> Assignment<AccountId> {
+impl<AccountId, T: PerThing> Assignment<AccountId, T>
+	where T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>
+{
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
 	/// It needs `stake` which is the total budget of the voter. If `fill` is set to true,
@@ -185,7 +187,7 @@ impl<AccountId> Assignment<AccountId> {
 
 /// A voter's stake assignment among a set of targets, represented as absolute values in the scale
 /// of [`ExtendedBalance`].
-#[derive(RuntimeDebug, Clone)]
+#[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct StakedAssignment<AccountId> {
 	/// Voter's identifier
@@ -196,22 +198,22 @@ pub struct StakedAssignment<AccountId> {
 
 impl<AccountId> StakedAssignment<AccountId> {
 	/// Converts self into the normal [`Assignment`] type.
-	pub fn into_assignment(self, fill: bool) -> Assignment<AccountId> {
-		let accuracy = Perbill::accuracy() as u128;
+	pub fn into_assignment<T: PerThing>(self, fill: bool) -> Assignment<AccountId, T> {
+		let accuracy: u128 = T::ACCURACY.saturated_into();
 		let mut sum: u128 = Zero::zero();
 
 		let stake = self.distribution.iter().map(|x| x.1).sum();
 		let mut distribution = self.distribution.into_iter().map(|(target, w)| {
 			let portion = multiply_by_rational(w, accuracy, stake).unwrap_or(Bounded::max_value());
 			sum += portion;
-			let per_thing = Perbill::from_parts(portion as u32);
+			let per_thing = T::from_parts(portion.saturated_into());
 			(target, per_thing)
-		}).collect::<Vec<(AccountId, Perbill)>>();
+		}).collect::<Vec<(AccountId, T)>>();
 
 		if fill {
 			if let Some(leftover) = accuracy.checked_sub(sum) {
 				if let Some(last) = distribution.last_mut() {
-					last.1 = last.1.saturating_add(Perbill::from_parts(leftover as u32));
+					last.1 = last.1.saturating_add(T::from_parts(leftover.saturated_into()));
 				}
 			}
 		}
@@ -258,23 +260,24 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 /// responsibility of the caller to make sure only those candidates who have a sensible economic
 /// value are passed in. From the perspective of this function, a candidate can easily be among the
 /// winner with no backing stake.
-pub fn elect<AccountId, Balance, FS, C>(
+pub fn elect<AccountId, Balance, FS, C, R>(
 	candidate_count: usize,
 	minimum_candidate_count: usize,
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, Vec<AccountId>)>,
 	stake_of: FS,
-) -> Option<PhragmenResult<AccountId>> where
+) -> Option<PhragmenResult<AccountId, R>> where
 	AccountId: Default + Ord + Member,
-	Balance: Default + Copy + SimpleArithmetic,
+	Balance: Default + Copy + AtLeast32Bit,
 	for<'r> FS: Fn(&'r AccountId) -> Balance,
 	C: Convert<Balance, u64> + Convert<u128, Balance>,
+	R: PerThing,
 {
 	let to_votes = |b: Balance| <C as Convert<Balance, u64>>::convert(b) as ExtendedBalance;
 
 	// return structures
 	let mut elected_candidates: Vec<(AccountId, ExtendedBalance)>;
-	let mut assigned: Vec<Assignment<AccountId>>;
+	let mut assigned: Vec<Assignment<AccountId, R>>;
 
 	// used to cache and access candidates index.
 	let mut c_idx_cache = BTreeMap::<AccountId, usize>::new();
@@ -384,24 +387,33 @@ pub fn elect<AccountId, Balance, FS, C>(
 	for n in &mut voters {
 		let mut assignment = Assignment {
 			who: n.who.clone(),
-			distribution: vec![],
+			..Default::default()
 		};
 		for e in &mut n.edges {
 			if elected_candidates.iter().position(|(ref c, _)| *c == e.who).is_some() {
-				let per_bill_parts =
+				let per_bill_parts: R::Inner =
 				{
 					if n.load == e.load {
 						// Full support. No need to calculate.
-						Perbill::accuracy().into()
+						R::ACCURACY
 					} else {
 						if e.load.d() == n.load.d() {
 							// return e.load / n.load.
-							let desired_scale: u128 = Perbill::accuracy().into();
-							multiply_by_rational(
+							let desired_scale: u128 = R::ACCURACY.saturated_into();
+							let parts = multiply_by_rational(
 								desired_scale,
 								e.load.n(),
 								n.load.n(),
-							).unwrap_or(Bounded::max_value())
+							)
+							// If result cannot fit in u128. Not much we can do about it.
+							.unwrap_or(Bounded::max_value());
+
+							TryFrom::try_from(parts)
+								// If the result cannot fit into R::Inner. Defensive only. This can
+								// never happen. `desired_scale * e / n`, where `e / n < 1` always
+								// yields a value smaller than `desired_scale`, which will fit into
+								// R::Inner.
+								.unwrap_or(Bounded::max_value())
 						} else {
 							// defensive only. Both edge and voter loads are built from
 							// scores, hence MUST have the same denominator.
@@ -409,10 +421,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 						}
 					}
 				};
-				// safer to .min() inside as well to argue as u32 is safe.
-				let per_thing = Perbill::from_parts(
-					per_bill_parts.min(Perbill::accuracy().into()) as u32
-				);
+				let per_thing = R::from_parts(per_bill_parts);
 				assignment.distribution.push((e.who.clone(), per_thing));
 			}
 		}
@@ -420,20 +429,20 @@ pub fn elect<AccountId, Balance, FS, C>(
 		if assignment.distribution.len() > 0 {
 			// To ensure an assertion indicating: no stake from the voter going to waste,
 			// we add a minimal post-processing to equally assign all of the leftover stake ratios.
-			let vote_count = assignment.distribution.len() as u32;
+			let vote_count: R::Inner = assignment.distribution.len().saturated_into();
+			let accuracy = R::ACCURACY;
 			let len = assignment.distribution.len();
-			let sum = assignment.distribution.iter()
-				.map(|a| a.1.deconstruct())
-				.sum::<u32>();
-			let accuracy = Perbill::accuracy();
-			let diff = accuracy.checked_sub(sum).unwrap_or(0);
+			let mut sum: R::Inner = Zero::zero();
+			assignment.distribution.iter().for_each(|a| sum = sum.saturating_add(a.1.deconstruct()));
+
+			let diff = accuracy.saturating_sub(sum);
 			let diff_per_vote = (diff / vote_count).min(accuracy);
 
-			if diff_per_vote > 0 {
+			if !diff_per_vote.is_zero() {
 				for i in 0..len {
 					let current_ratio = assignment.distribution[i % len].1;
 					let next_ratio = current_ratio
-						.saturating_add(Perbill::from_parts(diff_per_vote));
+						.saturating_add(R::from_parts(diff_per_vote));
 					assignment.distribution[i % len].1 = next_ratio;
 				}
 			}
@@ -441,9 +450,9 @@ pub fn elect<AccountId, Balance, FS, C>(
 			// `remainder` is set to be less than maximum votes of a voter (currently 16).
 			// safe to cast it to usize.
 			let remainder = diff - diff_per_vote * vote_count;
-			for i in 0..remainder as usize {
+			for i in 0..remainder.saturated_into::<usize>() {
 				let current_ratio = assignment.distribution[i % len].1;
-				let next_ratio = current_ratio.saturating_add(Perbill::from_parts(1));
+				let next_ratio = current_ratio.saturating_add(R::from_parts(1u8.into()));
 				assignment.distribution[i % len].1 = next_ratio;
 			}
 			assigned.push(assignment);

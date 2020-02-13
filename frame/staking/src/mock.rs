@@ -299,6 +299,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 }
+
 impl Trait for Test {
 	type Currency = pallet_balances::Module<Self>;
 	type Time = pallet_timestamp::Module<Self>;
@@ -745,7 +746,9 @@ pub fn on_offence_now(
 }
 
 /// convert a vector of staked assignments into ratio
-pub fn assignment_to_staked(assignments: Vec<Assignment<AccountId>>) -> Vec<StakedAssignment<AccountId>> {
+pub fn assignment_to_staked<T: PerThing + sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>>(
+	assignments: Vec<Assignment<AccountId, T>>
+) -> Vec<StakedAssignment<AccountId>> {
 	assignments
 		.into_iter()
 		.map(|a| {
@@ -758,7 +761,9 @@ pub fn assignment_to_staked(assignments: Vec<Assignment<AccountId>>) -> Vec<Stak
 }
 
 /// convert a vector of assignments into staked
-pub fn staked_to_assignment(staked: Vec<StakedAssignment<AccountId>>) -> Vec<Assignment<AccountId>> {
+pub fn staked_to_assignment<T: PerThing>(
+	staked: Vec<StakedAssignment<AccountId>>,
+) -> Vec<Assignment<AccountId, T>> {
 	staked
 		.into_iter()
 		.map(|sa| sa.into_assignment(true))
@@ -866,7 +871,7 @@ pub fn horrible_phragmen_with_post_processing(
 	};
 
 	// convert back to ratio assignment. This takes less space.
-	let assignments_reduced = staked_to_assignment(staked_assignment);
+	let assignments_reduced = staked_to_assignment::<OffchainAccuracy>(staked_assignment);
 
 	let compact = <CompactOf<Test>>::from_assignment(
 		assignments_reduced,
@@ -892,10 +897,10 @@ pub fn do_phragmen_with_post_processing(
 	let sp_phragmen::PhragmenResult {
 		winners,
 		assignments,
-	} = Staking::do_phragmen().unwrap();
+	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
 	let winners = winners.into_iter().map(|(w, _)| w).collect();
 
-	let mut staked = assignment_to_staked(assignments);
+	let mut staked = assignment_to_staked::<OffchainAccuracy>(assignments);
 
 	// apply custom tweaks. awesome for testing.
 	tweak(&mut staked);
@@ -918,7 +923,7 @@ pub fn do_phragmen_with_post_processing(
 		snapshot_validators.iter().position(|x| x == a).map(|i| i as ValidatorIndex)
 	};
 
-	let assignments_reduced: Vec<Assignment<AccountId>> = staked
+	let assignments_reduced: Vec<Assignment<AccountId, OffchainAccuracy>> = staked
 		.into_iter()
 		.map(|sa| sa.into_assignment(true))
 		.collect();

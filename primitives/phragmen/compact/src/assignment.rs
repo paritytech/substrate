@@ -75,7 +75,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 				assignments.push(_phragmen::Assignment {
 					who: voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?,
 					distribution: vec![
-						(target_at(target_index).ok_or(_phragmen::Error::CompactInvalidIndex)?, _phragmen::sp_runtime::Perbill::one())
+						(target_at(target_index).ok_or(_phragmen::Error::CompactInvalidIndex)?, Accuracy::one())
 					],
 				})
 			}
@@ -86,13 +86,13 @@ fn into_impl(count: usize) -> TokenStream2 {
 		let name = field_name_for(2);
 		quote!(
 			for (voter_index, (t1_idx, p1), t2_idx) in self.#name {
-				if p1 >= _phragmen::sp_runtime::Perbill::one() {
+				if p1 >= Accuracy::one() {
 					return Err(_phragmen::Error::CompactStakeOverflow);
 				}
 
-				// defensive only. Since perbill doesn't have `Sub`.
+				// defensive only. Since Percent doesn't have `Sub`.
 				let p2 = _phragmen::sp_runtime::traits::Saturating::saturating_sub(
-					_phragmen::sp_runtime::Perbill::one(),
+					Accuracy::one(),
 					p1,
 				);
 
@@ -111,7 +111,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 		let name = field_name_for(c);
 		quote!(
 			for (voter_index, inners, t_last_idx) in self.#name {
-				let mut sum = _phragmen::sp_runtime::Perbill::zero();
+				let mut sum = Accuracy::zero();
 				let mut inners_parsed = inners
 					.iter()
 					.map(|(ref t_idx, p)| {
@@ -119,15 +119,15 @@ fn into_impl(count: usize) -> TokenStream2 {
 						let target = target_at(*t_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?;
 						Ok((target, *p))
 					})
-					.collect::<Result<Vec<(A, _phragmen::sp_runtime::Perbill)>, _phragmen::Error>>()?;
+					.collect::<Result<Vec<(A, Accuracy)>, _phragmen::Error>>()?;
 
-				if sum >= _phragmen::sp_runtime::Perbill::one() {
+				if sum >= Accuracy::one() {
 					return Err(_phragmen::Error::CompactStakeOverflow);
 				}
 
-				// defensive only. Since perbill doesn't have `Sub`.
+				// defensive only. Since Percent doesn't have `Sub`.
 				let p_last = _phragmen::sp_runtime::traits::Saturating::saturating_sub(
-					_phragmen::sp_runtime::Perbill::one(),
+					Accuracy::one(),
 					sum,
 				);
 
@@ -163,11 +163,14 @@ pub(crate) fn assignment(
 			#voter_type: _phragmen::codec::Codec + Default + Copy,
 			#target_type: _phragmen::codec::Codec + Default + Copy,
 			A: _phragmen::codec::Codec + Default + Clone,
+			Accuracy:
+				_phragmen::codec::Codec + Default + Clone + _phragmen::sp_runtime::PerThing +
+				PartialOrd,
 		>
-		#ident<#voter_type, #target_type, _phragmen::sp_runtime::Perbill, A>
+		#ident<#voter_type, #target_type, Accuracy, A>
 		{
 			pub fn from_assignment<FV, FT>(
-				assignments: Vec<_phragmen::Assignment<A>>,
+				assignments: Vec<_phragmen::Assignment<A, Accuracy>>,
 				index_of_voter: FV,
 				index_of_target: FT,
 			) -> Result<Self, _phragmen::Error>
@@ -178,7 +181,7 @@ pub(crate) fn assignment(
 				let mut compact: #ident<
 					#voter_type,
 					#target_type,
-					_phragmen::sp_runtime::Perbill,
+					Accuracy,
 					A,
 				> = Default::default();
 
@@ -197,8 +200,8 @@ pub(crate) fn assignment(
 				self,
 				voter_at: impl Fn(#voter_type) -> Option<A>,
 				target_at: impl Fn(#target_type) -> Option<A>,
-			) -> Result<Vec<_phragmen::Assignment<A>>, _phragmen::Error> {
-				let mut assignments: Vec<_phragmen::Assignment<A>> = Default::default();
+			) -> Result<Vec<_phragmen::Assignment<A, Accuracy>>, _phragmen::Error> {
+				let mut assignments: Vec<_phragmen::Assignment<A, Accuracy>> = Default::default();
 				#into_impl
 				Ok(assignments)
 			}

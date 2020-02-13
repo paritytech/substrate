@@ -69,8 +69,8 @@ pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	Perquintill, Perbill, Permill, Percent, Rational128, Fixed64,
-	traits::Saturating,
+	Perquintill, Perbill, Permill, Percent, Rational128, Fixed64, PerThing,
+	traits::SaturatedConversion,
 };
 /// Re-export 128 bit helpers.
 pub use sp_arithmetic::helpers_128bit;

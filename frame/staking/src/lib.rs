@@ -269,11 +269,11 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Perbill, RuntimeDebug, RuntimeAppPublic,
+	Perbill, PerThing, Percent, RuntimeDebug, RuntimeAppPublic,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin, Member, SignedExtension,
+		AtLeast32Bit, EnsureOrigin, Member, SignedExtension,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
@@ -316,6 +316,12 @@ pub type EraIndex = u32;
 
 /// Counter for the number of "reward" points earned by a given validator.
 pub type Points = u32;
+
+/// Accuracy used for on-chain phragmen
+pub type ChainAccuracy = Perbill;
+
+/// Accuracy used for off-chain phragmen. This better be small.
+pub type OffchainAccuracy = Percent;
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -433,7 +439,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 
 impl<
 	AccountId,
-	Balance: HasCompact + Copy + Saturating + SimpleArithmetic,
+	Balance: HasCompact + Copy + Saturating + AtLeast32Bit,
 > StakingLedger<AccountId, Balance> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
@@ -477,7 +483,7 @@ impl<
 }
 
 impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
-	Balance: SimpleArithmetic + Saturating + Copy,
+	Balance: AtLeast32Bit + Saturating + Copy,
 {
 	/// Slash the validator for a given amount of balance. This can grow the value
 	/// of the slash in the case that the validator has less than `minimum_balance`
@@ -626,7 +632,7 @@ pub type BalanceOf<T> =
 pub type CompactOf<T> = CompactAssignments<
 	NominatorIndex,
 	ValidatorIndex,
-	Perbill,
+	OffchainAccuracy,
 	<T as frame_system::Trait>::AccountId,
 >;
 
@@ -1853,7 +1859,7 @@ impl<T: Trait> Module<T> {
 				// defensive only. A compact assignment of length one does NOT encode the weight and
 				// it is always created to be 100%.
 				ensure!(
-					distribution[0].1 == Perbill::one(),
+					distribution[0].1 == OffchainAccuracy::one(),
 					Error::<T>::PhragmenBogusSelfVote,
 				);
 			}
@@ -2088,7 +2094,7 @@ impl<T: Trait> Module<T> {
 	fn try_do_phragmen() -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
 		// a phragmen result from either a stored submission or locally executed one.
 		let next_result = <QueuedElected<T>>::take().or_else(||
-			Self::do_phragmen_with_post_processing(ElectionCompute::OnChain)
+			Self::do_phragmen_with_post_processing::<ChainAccuracy>(ElectionCompute::OnChain)
 		);
 
 		// either way, kill this
@@ -2101,8 +2107,12 @@ impl<T: Trait> Module<T> {
 	/// values.
 	///
 	/// No storage item is updated.
-	fn do_phragmen_with_post_processing(compute: ElectionCompute) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
-		if let Some(phragmen_result) = Self::do_phragmen() {
+	fn do_phragmen_with_post_processing<
+		Accuracy: PerThing + sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
+	>(
+		compute: ElectionCompute,
+	) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
+		if let Some(phragmen_result) = Self::do_phragmen::<Accuracy>() {
 			let elected_stashes = phragmen_result.winners.iter()
 				.map(|(s, _)| s.clone())
 				.collect::<Vec<T::AccountId>>();
@@ -2110,7 +2120,7 @@ impl<T: Trait> Module<T> {
 
 			let staked_assignments: Vec<StakedAssignment<T::AccountId>> = assignments
 				.into_iter()
-				.map(|a| {
+				.map(|a: Assignment<T::AccountId, Accuracy>| {
 					let stake = <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
 						Self::slashable_balance_of(&a.who)
 					) as ExtendedBalance;
@@ -2190,7 +2200,7 @@ impl<T: Trait> Module<T> {
 	/// weights are returned.
 	///
 	/// No storage item is updated.
-	fn do_phragmen() -> Option<PhragmenResult<T::AccountId>> {
+	fn do_phragmen<Accuracy: PerThing>() -> Option<PhragmenResult<T::AccountId, Accuracy>> {
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let all_validator_candidates_iter = <Validators<T>>::enumerate();
 		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
@@ -2217,7 +2227,7 @@ impl<T: Trait> Module<T> {
 		});
 		all_nominators.extend(nominator_votes);
 
-		elect::<_, _, _, T::CurrencyToVote>(
+		elect::<_, _, _, T::CurrencyToVote, Accuracy>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,

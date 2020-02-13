@@ -21,7 +21,7 @@ use codec::Encode;
 use super::{Trait, Module, GenesisConfig, CurrentSlot};
 use sp_consensus_babe::AuthorityId;
 use sp_runtime::{
-	Perbill, impl_opaque_keys,
+	Perbill, PerThing, impl_opaque_keys,
 	testing::{Header, UintAuthorityId, Digest, DigestItem},
 	traits::{IdentityLookup, OnInitialize},
 };

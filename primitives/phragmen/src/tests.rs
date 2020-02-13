@@ -26,6 +26,8 @@ use crate::{
 use substrate_test_utils::assert_eq_uvec;
 use sp_runtime::{Perbill, traits::Convert};
 
+type Output = Perbill;
+
 #[test]
 fn float_phragmen_poc_works() {
 	let candidates = vec![1, 2, 3];
@@ -81,7 +83,7 @@ fn phragmen_poc_works() {
 		(30, vec![2, 3]),
 	];
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates,
@@ -162,7 +164,7 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 		(5, (u64::max_value() - 2).into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates.clone(),
@@ -193,7 +195,7 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 		(14, u64::max_value().into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates,
@@ -237,7 +239,7 @@ fn phragmen_accuracy_on_small_scale_self_vote() {
 		(30, 1),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Output>(
 		3,
 		3,
 		candidates,
@@ -268,7 +270,7 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 		(3, 1),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Output>(
 		3,
 		3,
 		candidates,
@@ -302,7 +304,7 @@ fn phragmen_large_scale_test() {
 		(50, 990000000000000000),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates,
@@ -329,7 +331,7 @@ fn phragmen_large_scale_test_2() {
 		(50, nom_budget.into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates,
@@ -406,7 +408,7 @@ fn elect_has_no_entry_barrier() {
 		(2, 10),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Output>(
 		3,
 		3,
 		candidates,
@@ -434,7 +436,7 @@ fn minimum_to_elect_is_respected() {
 		(2, 10),
 	]);
 
-	let maybe_result = elect::<_, _, _, TestCurrencyToVote>(
+	let maybe_result = elect::<_, _, _, TestCurrencyToVote, Output>(
 		10,
 		10,
 		candidates,
@@ -461,7 +463,7 @@ fn self_votes_should_be_kept() {
 		(1, 8),
 	]);
 
-	let result = elect::<_, _, _, TestCurrencyToVote>(
+	let result = elect::<_, _, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates,
@@ -585,7 +587,9 @@ mod compact {
 	// these need to come from the same dev-dependency `sp-phragmen`, not from the crate.
 	use sp_phragmen::{Assignment, StakedAssignment, Error as PhragmenError};
 	use sp_std::{convert::{TryInto, TryFrom}, fmt::Debug};
-	use sp_runtime::Perbill;
+	use sp_runtime::Percent;
+
+	type Accuracy = Percent;
 
 	generate_compact_solution_type!(TestCompact, 16);
 
@@ -594,8 +598,8 @@ mod compact {
 		let compact = TestCompact::<_, _, _, u64> {
 			votes1: vec![(2u64, 20), (4, 40)],
 			votes2: vec![
-				(1, (10, Perbill::from_percent(80)), 11),
-				(5, (50, Perbill::from_percent(85)), 51),
+				(1, (10, Accuracy::from_percent(80)), 11),
+				(5, (50, Accuracy::from_percent(85)), 51),
 			],
 			..Default::default()
 		};
@@ -638,32 +642,32 @@ mod compact {
 		let assignments = vec![
 			Assignment {
 				who: 2 as AccountId,
-				distribution: vec![(20u64, Perbill::from_percent(100))]
+				distribution: vec![(20u64, Accuracy::from_percent(100))]
 			},
 			Assignment {
 				who: 4,
-				distribution: vec![(40, Perbill::from_percent(100))],
+				distribution: vec![(40, Accuracy::from_percent(100))],
 			},
 			Assignment {
 				who: 1,
 				distribution: vec![
-					(10, Perbill::from_percent(80)),
-					(11, Perbill::from_percent(20))
+					(10, Accuracy::from_percent(80)),
+					(11, Accuracy::from_percent(20))
 				],
 			},
 			Assignment {
 				who: 5,
 				distribution: vec![
-					(50, Perbill::from_percent(85)),
-					(51, Perbill::from_percent(15)),
+					(50, Accuracy::from_percent(85)),
+					(51, Accuracy::from_percent(15)),
 				]
 			},
 			Assignment {
 				who: 3,
 				distribution: vec![
-					(30, Perbill::from_percent(50)),
-					(31, Perbill::from_percent(25)),
-					(32, Perbill::from_percent(25)),
+					(30, Accuracy::from_percent(50)),
+					(31, Accuracy::from_percent(25)),
+					(32, Accuracy::from_percent(25)),
 				],
 			},
 		];
@@ -675,7 +679,7 @@ mod compact {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = <TestCompact<V, T, Perbill, AccountId>>::from_assignment(
+		let compacted = <TestCompact<V, T, Percent, AccountId>>::from_assignment(
 			assignments.clone(),
 			voter_index,
 			target_index,
@@ -686,13 +690,13 @@ mod compact {
 			TestCompact {
 				votes1: vec![(V::from(0u8), T::from(2u8)), (V::from(1u8), T::from(6u8))],
 				votes2: vec![
-					(V::from(2u8), (T::from(0u8), Perbill::from_percent(80)), T::from(1u8)),
-					(V::from(3u8), (T::from(7u8), Perbill::from_percent(85)), T::from(8u8)),
+					(V::from(2u8), (T::from(0u8), Accuracy::from_percent(80)), T::from(1u8)),
+					(V::from(3u8), (T::from(7u8), Accuracy::from_percent(85)), T::from(8u8)),
 				],
 				votes3: vec![
 					(
 						V::from(4),
-						[(T::from(3u8), Perbill::from_percent(50)), (T::from(4u8), Perbill::from_percent(25))],
+						[(T::from(3u8), Accuracy::from_percent(50)), (T::from(4u8), Accuracy::from_percent(25))],
 						T::from(5u8),
 					),
 				],
@@ -857,9 +861,9 @@ mod compact {
 	#[test]
 	fn compact_into_assignment_must_report_overflow() {
 		// in votes2
-		let compact = TestCompact::<u16, u16, Perbill, AccountId> {
+		let compact = TestCompact::<u16, u16, Accuracy, AccountId> {
 			votes1: Default::default(),
-			votes2: vec![(0, (1, Perbill::from_percent(100)), 2)],
+			votes2: vec![(0, (1, Accuracy::from_percent(100)), 2)],
 			..Default::default()
 		};
 
@@ -871,10 +875,10 @@ mod compact {
 		);
 
 		// in votes3 onwards
-		let compact = TestCompact::<u16, u16, Perbill, AccountId> {
+		let compact = TestCompact::<u16, u16, Accuracy, AccountId> {
 			votes1: Default::default(),
 			votes2: Default::default(),
-			votes3: vec![(0, [(1, Perbill::from_percent(70)), (2, Perbill::from_percent(80))], 3)],
+			votes3: vec![(0, [(1, Accuracy::from_percent(70)), (2, Accuracy::from_percent(80))], 3)],
 			..Default::default()
 		};
 
