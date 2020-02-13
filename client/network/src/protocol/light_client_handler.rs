@@ -512,7 +512,7 @@ where
 
 		let proof =
 			if let Some(info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
-				match self.chain.read_child_proof(&block, &request.storage_key, info, &request.keys) {
+				match self.chain.read_child_proof(&block, &request.storage_key, &info, &request.keys) {
 					Ok(proof) => proof,
 					Err(error) => {
 						log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",
@@ -1141,7 +1141,7 @@ mod tests {
 	use super::{Event, LightClientHandler, Request, OutboundProtocol, PeerStatus};
 	use void::Void;
 
-	const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"foobarbaz");
+	const CHILD_UUID: &[u8] = b"foobarbaz";
 
 	type Block = sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
 	type Handler = LightClientHandler<SubstreamRef<Arc<StreamMuxerBox>>, Block>;
@@ -1636,7 +1636,8 @@ mod tests {
 
 	#[test]
 	fn receives_remote_read_child_response() {
-		let info = CHILD_INFO.info();
+		let child_info = ChildInfo::new_default(CHILD_UUID);
+		let info = child_info.info();
 		let mut chan = oneshot::channel();
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
@@ -1739,7 +1740,8 @@ mod tests {
 
 	#[test]
 	fn send_receive_read_child() {
-		let info = CHILD_INFO.info();
+		let child_info = ChildInfo::new_default(CHILD_UUID);
+		let info = child_info.info();
 		let chan = oneshot::channel();
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
