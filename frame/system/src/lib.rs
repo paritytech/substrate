@@ -413,7 +413,8 @@ decl_module! {
 		type Error = Error<T>;
 
 		/// A big dispatch that will disallow any other transaction to be included.
-		// TODO: this must be preferable available for testing really (not possible at the moment).
+		// TODO: This should only be available for testing, rather than in general usage, but
+		// that's not possible at present (since it's within the decl_module macro).
 		#[weight = SimpleDispatchInfo::MaxOperational]
 		fn fill_block(origin) {
 			ensure_root(origin)?;

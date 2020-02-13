@@ -22,7 +22,7 @@
 use sp_std::prelude::*;
 use codec::Codec;
 use sp_runtime::traits::{
-	SimpleArithmetic, StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash
+	SimpleArithmetic, StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash, Saturating
 };
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
 use frame_support::dispatch::DispatchResult;
@@ -152,8 +152,8 @@ decl_module! {
 			Accounts::<T>::try_mutate(index, |maybe_value| {
 				let (account, amount) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
 				ensure!(&account == &who, Error::<T>::NotOwner);
-				*maybe_value = Some((new.clone(), amount));
-				T::Currency::repatriate_reserved(&who, &new, amount, Reserved).map(|_| ())
+				let lost = T::Currency::repatriate_reserved(&who, &new, amount, Reserved)?;
+				*maybe_value = Some((new.clone(), amount.saturating_sub(lost)));
 			})?;
 			Self::deposit_event(RawEvent::IndexAssigned(new, index));
 		}

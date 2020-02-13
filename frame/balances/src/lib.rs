@@ -1264,7 +1264,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 		if slashed == beneficiary {
 			return match status {
 				Status::Free => Ok(Self::unreserve(slashed, value)),
-				Status::Reserved => Ok(Self::reserved_balance(slashed)),
+				Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
 			};
 		}
 
