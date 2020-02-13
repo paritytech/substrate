@@ -309,6 +309,7 @@ decl_storage! {
 
 		/// Map of block numbers to block hashes.
 		// TODO: should be hasher(twox64_concat) - will need one-off migration
+		// https://github.com/paritytech/substrate/issues/4917
 		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
 			map hasher(blake2_256) T::BlockNumber => T::Hash;
 
