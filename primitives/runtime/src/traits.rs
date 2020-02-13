@@ -1329,7 +1329,7 @@ where <C as crate::traits::Dispatchable>::Origin: From<R>,
 	///
 	/// Parameters
 	/// - `extrinsic`: The name of extrinsic function you want to benchmark encoded as bytes.
-	/// - `steps`:  The number of sample points you want to take across the range of parameters.
+	/// - `steps`: The number of sample points you want to take across the range of parameters.
 	/// - `repeat`: The number of times you want to repeat a benchmark.
 	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<(Vec<(BenchmarkParameter, u32)>, u128)>, &'static str>;
 	/// Return the benchmarking setup corresponding to `extrinsic`.
