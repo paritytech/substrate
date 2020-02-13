@@ -18,6 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
@@ -190,7 +191,7 @@ impl<'a> ChildStorageKey<'a> {
 
 
 /// Information related to a child state.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode)]
 pub enum ChildInfo {
 	Default(ChildTrie),
 }
@@ -287,7 +288,7 @@ impl ChildType {
 /// It share its trie node storage with any kind of key,
 /// and its unique id needs to be collision free (eg strong
 /// crypto hash).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode)]
 pub struct ChildTrie {
 	/// Data containing unique id.
 	/// Unique id must but unique and free of any possible key collision
@@ -306,7 +307,7 @@ impl ChildTrie {
 }
 
 #[cfg(feature = "std")]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 /// Type for storing a map of child trie related information.
 /// A few utilities methods are defined.
 pub struct ChildrenMap<T>(pub BTreeMap<ChildInfo, T>);

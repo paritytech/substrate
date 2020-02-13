@@ -28,7 +28,7 @@ use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	for_keys_in_trie, TrieDBIterator};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildrenMap};
 use codec::Encode;
 
 /// Patricia trie-based storage trait.
@@ -429,6 +429,7 @@ impl<H: Hasher, S: TrieBackendStorageRef<H>> TrieBackendStorageRef<H> for &S {
 }
 
 // This implementation is used by test storage trie clients.
+// TODO try to remove this implementation!!! (use a ChildrenMap variant)
 impl<H: Hasher> TrieBackendStorageRef<H> for PrefixedMemoryDB<H> {
 	type Overlay = PrefixedMemoryDB<H>;
 
@@ -453,9 +454,26 @@ impl<H: Hasher> TrieBackendStorageRef<H> for MemoryDB<H> {
 		prefix: Prefix,
 	) -> Result<Option<DBValue>, String> {
 		// No need to use keyspace for in memory db, ignoring child_info parameter.
+		// TODO try to remove this implementation!!!
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
 }
+
+impl<H: Hasher> TrieBackendStorageRef<H> for ChildrenMap<MemoryDB<H>> {
+	type Overlay = MemoryDB<H>;
+
+	fn get(
+		&self,
+		child_info: &ChildInfo,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
+		Ok(self.deref().get(child_info).and_then(|s|
+			hash_db::HashDB::get(s, key, prefix)
+		))
+	}
+}
+
 
 #[cfg(test)]
 mod test {

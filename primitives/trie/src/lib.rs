@@ -269,6 +269,34 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 	Ok(())
 }
 
+/// Pack proof.
+pub fn pack_proof<L: TrieConfiguration>(root: &TrieHash<L>, input: &[Vec<u8>])
+	-> Result<Vec<Vec<u8>>, Box<TrieError<L>>> {
+	let mut memory_db = MemoryDB::<<L as TrieLayout>::Hash>::default();
+	for i in input.as_ref() {
+		memory_db.insert(EMPTY_PREFIX, i.as_ref());
+	}
+	let trie = TrieDB::<L>::new(&memory_db, root)?;
+	trie_db::encode_compact(&trie)
+}
+
+/// Unpack packed proof.
+pub fn unpack_proof<L: TrieConfiguration>(input: &[Vec<u8>])
+	-> Result<(TrieHash<L>, Vec<Vec<u8>>), Box<TrieError<L>>> {
+	let mut memory_db = MemoryDB::<<L as TrieLayout>::Hash>::default();
+	let root = trie_db::decode_compact::<L, _, _>(&mut memory_db, input)?;
+	Ok((root.0, memory_db.drain().into_iter().map(|(_k, (v, _rc))| v).collect()))
+}
+
+/// Unpack packed proof.
+/// This is faster than `unpack_proof`.
+pub fn unpack_proof_to_memdb<L: TrieConfiguration>(input: &[Vec<u8>])
+	-> Result<(TrieHash<L>, MemoryDB::<<L as TrieLayout>::Hash>), Box<TrieError<L>>> {
+	let mut memory_db = MemoryDB::<<L as TrieLayout>::Hash>::default();
+	let root = trie_db::decode_compact::<L, _, _>(&mut memory_db, input)?;
+	Ok((root.0, memory_db))
+}
+
 /// Constants used into trie simplification codec.
 mod trie_constants {
 	pub const EMPTY_TRIE: u8 = 0;

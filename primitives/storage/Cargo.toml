@@ -7,6 +7,7 @@ description = "Storage related primitives"
 license = "GPL-3.0"
 
 [dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 impl-serde = { version = "0.2.3", optional = true }
@@ -14,4 +15,4 @@ sp-debug-derive = { version = "2.0.0", path = "../debug-derive" }
 
 [features]
 default = [ "std" ]
-std = [ "sp-std/std", "serde", "impl-serde" ]
+std = [ "sp-std/std", "serde", "impl-serde", "codec/std" ]
