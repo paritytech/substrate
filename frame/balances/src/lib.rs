@@ -728,6 +728,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 impl<T: Trait<I>, I: Instance> OnReapAccount<T::AccountId> for Module<T, I> {
 	fn on_reap_account(who: &T::AccountId) {
 		Locks::<T, I>::remove(who);
+		Account::<T, I>::remove(who);
 	}
 }
 
