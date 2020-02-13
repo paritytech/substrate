@@ -590,7 +590,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Remove any non-members of `Tippers` from a `tips` vectr. `O(T)`.
+	/// Remove any non-members of `Tippers` from a `tips` vector. `O(T)`.
 	fn retain_active_tips(tips: &mut Vec<(T::AccountId, BalanceOf<T>)>) {
 		let members = T::Tippers::sorted_members();
 		let mut members_iter = members.iter();
@@ -724,7 +724,9 @@ mod tests {
 	use frame_support::traits::Contains;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, OnFinalize, IdentityLookup, BadOrigin}, testing::Header, Perbill
+		Perbill,
+		testing::Header,
+		traits::{BlakeTwo256, OnFinalize, IdentityLookup, BadOrigin},
 	};
 
 	impl_outer_origin! {

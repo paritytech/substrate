@@ -31,8 +31,8 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str,
-	BenchmarkResults,
+	Permill, Perbill, Percent, ApplyExtrinsicResult, BenchmarkResults,
+	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::TransactionValidity;
@@ -83,7 +83,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 216,
-	impl_version: 2,
+	impl_version: 3,
 	apis: RUNTIME_API_VERSIONS,
 };
 

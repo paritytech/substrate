@@ -156,7 +156,7 @@ use codec::{Decode, Encode, HasCompact, Input, Output, Error as CodecError};
 
 use sp_runtime::{RuntimeDebug, DispatchResult, DispatchError};
 use sp_runtime::traits::{
-	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic,
+	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, AtLeast32Bit,
 	Zero, Bounded,
 };
 
@@ -180,24 +180,24 @@ pub use self::imbalances::{NegativeImbalance, PositiveImbalance};
 pub trait Trait: frame_system::Trait {
 	type Balance: Parameter
 		+ Member
-		+ SimpleArithmetic
+		+ AtLeast32Bit
 		+ Default
 		+ Copy
 		+ MaybeSerializeDeserialize
 		+ Debug;
-	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
+	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
 pub trait Subtrait: frame_system::Trait {
 	type Balance: Parameter
 		+ Member
-		+ SimpleArithmetic
+		+ AtLeast32Bit
 		+ Default
 		+ Copy
 		+ MaybeSerializeDeserialize
 		+ Debug;
-	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
+	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 }
 
 impl<T: Trait> Subtrait for T {
