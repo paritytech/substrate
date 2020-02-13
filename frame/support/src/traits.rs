@@ -620,6 +620,10 @@ pub trait VestingSchedule<AccountId> {
 	///
 	/// If there already exists a vesting schedule for the given account, an `Err` is returned
 	/// and nothing is updated.
+	///
+	/// Is a no-op if the amount to be vested is zero.
+	///
+	/// NOTE: This doesn't alter the free balance of the account.
 	fn add_vesting_schedule(
 		who: &AccountId,
 		locked: <Self::Currency as Currency<AccountId>>::Balance,
@@ -628,6 +632,8 @@ pub trait VestingSchedule<AccountId> {
 	) -> DispatchResult;
 
 	/// Remove a vesting schedule for a given account.
+	///
+	/// NOTE: This doesn't alter the free balance of the account.
 	fn remove_vesting_schedule(who: &AccountId);
 }
 
@@ -761,7 +767,10 @@ pub trait Randomness<Output> {
 	/// Get a "random" value
 	///
 	/// Being a deterministic blockchain, real randomness is difficult to come by. This gives you
-	/// something that approximates it. `subject` is a context identifier and allows you to get a
+	/// something that approximates it. At best, this will be randomness which was
+	/// hard to predict a long time ago, but that has become easy to predict recently.
+	///
+	/// `subject` is a context identifier and allows you to get a
 	/// different result to other callers of this function; use it like
 	/// `random(&b"my context"[..])`.
 	fn random(subject: &[u8]) -> Output;
@@ -813,12 +822,18 @@ pub struct CallMetadata {
 
 /// Gets the function name of the Call.
 pub trait GetCallName {
+	/// Return all function names.
+	fn get_call_names() -> &'static [&'static str];
 	/// Return the function name of the Call.
 	fn get_call_name(&self) -> &'static str;
 }
 
 /// Gets the metadata for the Call - function name and pallet name.
 pub trait GetCallMetadata {
+	/// Return all module names.
+	fn get_module_names() -> &'static [&'static str];
+	/// Return all function names for the given `module`.
+	fn get_call_names(module: &str) -> &'static [&'static str];
 	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
 	fn get_call_metadata(&self) -> CallMetadata;
 }

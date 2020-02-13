@@ -21,7 +21,8 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use std::time::{Instant, Duration};
+use std::time::Duration;
+use wasm_timer::Instant;
 use log::{trace, info};
 use futures::channel::oneshot::{Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};
@@ -40,7 +41,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 /// Default request retry count.
 const RETRY_COUNT: usize = 1;
 /// Reputation change for a peer when a request timed out.
-const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
+pub(crate) const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
 
 /// Trait used by the `LightDispatch` service to communicate messages back to the network.
 pub trait LightDispatchNetwork<B: BlockT> {
@@ -691,17 +692,26 @@ pub mod tests {
 	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
-	use sp_test_primitives::{Block, Extrinsic, Header};
+	use sp_test_primitives::{Block, Header};
 
-	struct DummyFetchChecker { ok: bool }
+	pub(crate) struct DummyFetchChecker<B> {
+		pub(crate) ok: bool,
+		_mark: std::marker::PhantomData<B>
+	}
 
-	impl FetchChecker<Block> for DummyFetchChecker {
+	impl<B> DummyFetchChecker<B> {
+		pub(crate) fn new(ok: bool) -> Self {
+			DummyFetchChecker { ok, _mark: std::marker::PhantomData }
+		}
+	}
+
+	impl<B: BlockT> FetchChecker<B> for DummyFetchChecker<B> {
 		fn check_header_proof(
 			&self,
-			_request: &RemoteHeaderRequest<Header>,
-			header: Option<Header>,
+			_request: &RemoteHeaderRequest<B::Header>,
+			header: Option<B::Header>,
 			_remote_proof: StorageProof,
-		) -> ClientResult<Header> {
+		) -> ClientResult<B::Header> {
 			match self.ok {
 				true if header.is_some() => Ok(header.unwrap()),
 				_ => Err(ClientError::Backend("Test error".into())),
@@ -710,7 +720,7 @@ pub mod tests {
 
 		fn check_read_proof(
 			&self,
-			request: &RemoteReadRequest<Header>,
+			request: &RemoteReadRequest<B::Header>,
 			_: StorageProof,
 		) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
 			match self.ok {
@@ -726,7 +736,7 @@ pub mod tests {
 
 		fn check_read_child_proof(
 			&self,
-			request: &RemoteReadChildRequest<Header>,
+			request: &RemoteReadChildRequest<B::Header>,
 			_: StorageProof,
 		) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
 			match self.ok {
@@ -740,7 +750,7 @@ pub mod tests {
 			}
 		}
 
-		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: StorageProof) -> ClientResult<Vec<u8>> {
+		fn check_execution_proof(&self, _: &RemoteCallRequest<B::Header>, _: StorageProof) -> ClientResult<Vec<u8>> {
 			match self.ok {
 				true => Ok(vec![42]),
 				false => Err(ClientError::Backend("Test error".into())),
@@ -749,20 +759,20 @@ pub mod tests {
 
 		fn check_changes_proof(
 			&self,
-			_: &RemoteChangesRequest<Header>,
-			_: ChangesProof<Header>
-		) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
+			_: &RemoteChangesRequest<B::Header>,
+			_: ChangesProof<B::Header>
+		) -> ClientResult<Vec<(NumberFor<B>, u32)>> {
 			match self.ok {
-				true => Ok(vec![(100, 2)]),
+				true => Ok(vec![(100.into(), 2)]),
 				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 
 		fn check_body_proof(
 			&self,
-			_: &RemoteBodyRequest<Header>,
-			body: Vec<Extrinsic>
-		) -> ClientResult<Vec<Extrinsic>> {
+			_: &RemoteBodyRequest<B::Header>,
+			body: Vec<B::Extrinsic>
+		) -> ClientResult<Vec<B::Extrinsic>> {
 			match self.ok {
 				true => Ok(body),
 				false => Err(ClientError::Backend("Test error".into())),
@@ -771,7 +781,7 @@ pub mod tests {
 	}
 
 	fn dummy(ok: bool) -> LightDispatch<Block> {
-		LightDispatch::new(Arc::new(DummyFetchChecker { ok }))
+		LightDispatch::new(Arc::new(DummyFetchChecker::new(ok)))
 	}
 
 	fn total_peers(light_dispatch: &LightDispatch<Block>) -> usize {
@@ -790,7 +800,7 @@ pub mod tests {
 		});
 	}
 
-	fn dummy_header() -> Header {
+	pub(crate) fn dummy_header() -> Header {
 		Header {
 			parent_hash: Default::default(),
 			number: 0,

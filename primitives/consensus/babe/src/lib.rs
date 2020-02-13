@@ -19,21 +19,21 @@
 #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod digest;
+pub mod digests;
 pub mod inherents;
 
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
-
-#[cfg(feature = "std")]
-pub use digest::{BabePreDigest, CompatibleDigestItem};
-pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest, NextEpochDescriptor};
+use crate::digests::NextEpochDescriptor;
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
 	app_crypto!(sr25519, BABE);
 }
+
+/// The prefix used by BABE for its VRF keys.
+pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
 
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
@@ -77,40 +77,6 @@ pub type BabeAuthorityWeight = u64;
 
 /// The weight of a BABE block.
 pub type BabeBlockWeight = u32;
-
-/// BABE epoch information
-#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, RuntimeDebug)]
-pub struct Epoch {
-	/// The epoch index
-	pub epoch_index: u64,
-	/// The starting slot of the epoch,
-	pub start_slot: SlotNumber,
-	/// The duration of this epoch
-	pub duration: SlotNumber,
-	/// The authorities and their weights
-	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
-	/// Randomness for this epoch
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
-}
-
-impl Epoch {
-	/// "increment" the epoch, with given descriptor for the next.
-	pub fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
-		Epoch {
-			epoch_index: self.epoch_index + 1,
-			start_slot: self.start_slot + self.duration,
-			duration: self.duration,
-			authorities: descriptor.authorities,
-			randomness: descriptor.randomness,
-		}
-	}
-
-	/// Produce the "end slot" of the epoch. This is NOT inclusive to the epoch,
-	// i.e. the slots covered by the epoch are `self.start_slot .. self.end_slot()`.
-	pub fn end_slot(&self) -> SlotNumber {
-		self.start_slot + self.duration
-	}
-}
 
 /// An consensus log item for BABE.
 #[derive(Decode, Encode, Clone, PartialEq, Eq)]

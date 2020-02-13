@@ -30,12 +30,14 @@ use sp_core::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str
+	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str,
+	BenchmarkResults,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::TransactionValidity;
 use sp_runtime::traits::{
-	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion, ConvertInto, OpaqueKeys,
+	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
+	ConvertInto, OpaqueKeys, Benchmarking,
 };
 use sp_version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
@@ -79,8 +81,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 213,
-	impl_version: 1,
+	spec_version: 216,
+	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -476,7 +478,7 @@ parameter_types! {
 }
 
 impl pallet_finality_tracker::Trait for Runtime {
-	type OnFinalizationStalled = Grandpa;
+	type OnFinalizationStalled = ();
 	type WindowSize = WindowSize;
 	type ReportLatency = ReportLatency;
 }
@@ -803,6 +805,27 @@ impl_runtime_apis! {
 		) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
 			SessionKeys::decode_into_raw_public_keys(&encoded)
 		}
+	}
+
+	impl crate::Benchmark<Block> for Runtime {
+		fn dispatch_benchmark(module: Vec<u8>, extrinsic: Vec<u8>, steps: u32, repeat: u32)
+			-> Option<Vec<BenchmarkResults>>
+		{
+			match module.as_slice() {
+				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
+				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
+				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
+				_ => return None,
+			}
+		}
+	}
+}
+
+sp_api::decl_runtime_apis! {
+	pub trait Benchmark
+	{
+		fn dispatch_benchmark(module: Vec<u8>, extrinsic: Vec<u8>, steps: u32, repeat: u32)
+			-> Option<Vec<BenchmarkResults>>;
 	}
 }
 

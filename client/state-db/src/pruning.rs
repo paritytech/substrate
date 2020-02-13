@@ -26,21 +26,16 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use codec::{Encode, Decode};
 use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
 use log::{trace, warn};
-use sp_core::storage::{ChildInfo, ChildrenVec, ChildrenMap};
-use super::ChangeSet;
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
-const OLD_PRUNING_JOURNAL: &[u8] = b"pruning_journal";
-const PRUNING_JOURNAL_V1: &[u8] = b"v1_pruning_journal";
-
-type Keys<Key> = ChildrenVec<Vec<Key>>;
+const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
 
 /// See module documentation.
 pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	/// A queue of keys that should be deleted for each block in the pruning window.
 	death_rows: VecDeque<DeathRow<BlockHash, Key>>,
 	/// An index that maps each key from `death_rows` to block number.
-	death_index: ChildrenMap<HashMap<Key, u64>>,
+	death_index: HashMap<Key, u64>,
 	/// Block number that corresponts to the front of `death_rows`
 	pending_number: u64,
 	/// Number of call of `note_canonical` after
@@ -55,49 +50,18 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 struct DeathRow<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,
-	deleted: ChildrenMap<HashSet<Key>>,
-}
-
-impl<BlockHash: Hash, Key: Hash> DeathRow<BlockHash, Key> {
-	fn remove_deleted(&mut self, child_info: &ChildInfo, key: &Key) -> bool {
-		if let Some(child_index) = self.deleted.get_mut(child_info) {
-			child_index.remove(key)
-		} else {
-			false
-		}
-	}
+	deleted: HashSet<Key>,
 }
 
 #[derive(Encode, Decode)]
-struct JournalRecordCompat<BlockHash: Hash, Key: Hash> {
+struct JournalRecord<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	inserted: Vec<Key>,
 	deleted: Vec<Key>,
 }
 
-#[derive(Encode, Decode)]
-struct JournalRecordV1<BlockHash: Hash, Key: Hash> {
-	hash: BlockHash,
-	inserted: Keys<Key>,
-	deleted: Keys<Key>,
-}
-
-fn to_old_journal_key(block: u64) -> Vec<u8> {
-	to_meta_key(OLD_PRUNING_JOURNAL, &block)
-}
-
-fn to_journal_key_v1(block: u64) -> Vec<u8> {
-	to_meta_key(PRUNING_JOURNAL_V1, &block)
-}
-
-impl<BlockHash: Hash, Key: Hash> From<JournalRecordCompat<BlockHash, Key>> for JournalRecordV1<BlockHash, Key> {
-	fn from(old: JournalRecordCompat<BlockHash, Key>) -> Self {
-		JournalRecordV1 {
-			hash: old.hash,
-			inserted: vec![(ChildInfo::top_trie(), old.inserted)],
-			deleted: vec![(ChildInfo::top_trie(), old.deleted)],
-		}
-	}
+fn to_journal_key(block: u64) -> Vec<u8> {
+	to_meta_key(PRUNING_JOURNAL, &block)
 }
 
 impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
@@ -119,67 +83,37 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		// read the journal
 		trace!(target: "state-db", "Reading pruning journal. Pending #{}", pending_number);
 		loop {
-			let journal_key = to_journal_key_v1(block);
-			let record: JournalRecordV1<BlockHash, Key> = match db.get_meta(&journal_key)
-				.map_err(|e| Error::Db(e))? {
-				Some(record) => Decode::decode(&mut record.as_slice())?,
-				None => {
-					let journal_key = to_old_journal_key(block);
-					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
-						Some(record) => JournalRecordCompat::decode(&mut record.as_slice())?.into(),
-						None => break,
-					}
+			let journal_key = to_journal_key(block);
+			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+				Some(record) => {
+					let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
+					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
+					pruning.import(&record.hash, journal_key, record.inserted.into_iter(), record.deleted);
 				},
-			};
-			trace!(
-				target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)",
-				block,
-				record.inserted.len(),
-				record.deleted.len(),
-			);
-			pruning.import(&record.hash, journal_key, record.inserted.into_iter(), record.deleted);
+				None => break,
+			}
 			block += 1;
 		}
 		Ok(pruning)
 	}
 
-	fn import<I: IntoIterator<Item=(ChildInfo, Vec<Key>)>>(
-		&mut self,
-		hash: &BlockHash,
-		journal_key: Vec<u8>,
-		inserted: I,
-		deleted: Keys<Key>,
-	) {
+	fn import<I: IntoIterator<Item=Key>>(&mut self, hash: &BlockHash, journal_key: Vec<u8>, inserted: I, deleted: Vec<Key>) {
 		// remove all re-inserted keys from death rows
-		for (child_info, inserted) in inserted {
-			if let Some(child_index) = self.death_index.get_mut(&child_info) {
-				for k in inserted {
-					if let Some(block) = child_index.remove(&k) {
-						self.death_rows[(block - self.pending_number) as usize]
-							.remove_deleted(&child_info, &k);
-					}
-				}
+		for k in inserted {
+			if let Some(block) = self.death_index.remove(&k) {
+				self.death_rows[(block - self.pending_number) as usize].deleted.remove(&k);
 			}
 		}
 
 		// add new keys
 		let imported_block = self.pending_number + self.death_rows.len() as u64;
-		for (child_info, deleted) in deleted.iter() {
-			let entry = self.death_index.entry(child_info.clone()).or_default();
-			for k in deleted.iter() {
-				entry.insert(k.clone(), imported_block);
-			}
+		for k in deleted.iter() {
+			self.death_index.insert(k.clone(), imported_block);
 		}
-		let mut deleted_death_row = ChildrenMap::<HashSet<Key>>::default();
-		for (child_info, deleted) in deleted.into_iter() {
-			let entry = deleted_death_row.entry(child_info).or_default();
-			entry.extend(deleted);
-		}
-
 		self.death_rows.push_back(
 			DeathRow {
 				hash: hash.clone(),
-				deleted: deleted_death_row,
+				deleted: deleted.into_iter().collect(),
 				journal_key: journal_key,
 			}
 		);
@@ -210,16 +144,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		if let Some(pruned) = self.death_rows.get(self.pending_prunings) {
 			trace!(target: "state-db", "Pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
 			let index = self.pending_number + self.pending_prunings as u64;
-
-			commit.data.extend_with(pruned.deleted.iter()
-				.map(|(child_info, keys)| (
-					child_info.clone(),
-					ChangeSet {
-						inserted: Vec::new(),
-						deleted: keys.iter().cloned().collect(),
-					},
-				)), ChangeSet::merge);
-
+			commit.data.deleted.extend(pruned.deleted.iter().cloned());
 			commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), index.encode()));
 			commit.meta.deleted.push(pruned.journal_key.clone());
 			self.pending_prunings += 1;
@@ -230,29 +155,16 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 
 	/// Add a change set to the window. Creates a journal record and pushes it to `commit`
 	pub fn note_canonical(&mut self, hash: &BlockHash, commit: &mut CommitSet<Key>) {
-		trace!(
-			target: "state-db",
-			"Adding to pruning window: {:?} ({} inserted, {} deleted)",
-			hash,
-			commit.inserted_len(),
-			commit.deleted_len(),
-		);
-		let inserted = commit.data.iter().map(|changeset| (
-			changeset.0.clone(),
-			changeset.1.inserted.iter().map(|(k, _)| k.clone()).collect(),
-		)).collect();
-		let deleted = commit.data.iter_mut().map(|changeset| (
-			changeset.0.clone(),
-			::std::mem::replace(&mut changeset.1.deleted, Vec::new()),
-		)).collect();
-
-		let journal_record = JournalRecordV1 {
+		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
+		let inserted = commit.data.inserted.iter().map(|(k, _)| k.clone()).collect();
+		let deleted = ::std::mem::replace(&mut commit.data.deleted, Vec::new());
+		let journal_record = JournalRecord {
 			hash: hash.clone(),
 			inserted,
 			deleted,
 		};
 		let block = self.pending_number + self.death_rows.len() as u64;
-		let journal_key = to_journal_key_v1(block);
+		let journal_key = to_journal_key(block);
 		commit.meta.inserted.push((journal_key.clone(), journal_record.encode()));
 		self.import(&journal_record.hash, journal_key, journal_record.inserted.into_iter(), journal_record.deleted);
 		self.pending_canonicalizations += 1;
@@ -264,12 +176,8 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		for _ in 0 .. self.pending_prunings {
 			let pruned = self.death_rows.pop_front().expect("pending_prunings is always < death_rows.len()");
 			trace!(target: "state-db", "Applying pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
-			for (child_info, deleted) in pruned.deleted.iter() {
-				if let Some(child_index) = self.death_index.get_mut(child_info) {
-					for key in deleted.iter() {
-						child_index.remove(key);
-					}
-				}
+			for k in pruned.deleted.iter() {
+				self.death_index.remove(&k);
 			}
 			self.pending_number += 1;
 		}
@@ -284,11 +192,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		// deleted in case transaction fails and `revert_pending` is called.
 		self.death_rows.truncate(self.death_rows.len() - self.pending_canonicalizations);
 		let new_max_block = self.death_rows.len() as u64 + self.pending_number;
-
-		self.death_index.retain(|_ct, child_index| {
-			child_index.retain(|_, block| *block < new_max_block);
-			!child_index.is_empty()
-		});
+		self.death_index.retain(|_, block| *block < new_max_block);
 		self.pending_canonicalizations = 0;
 		self.pending_prunings = 0;
 	}
@@ -341,10 +245,9 @@ mod tests {
 		assert!(pruning.have_block(&h));
 		pruning.apply_pending();
 		assert!(pruning.have_block(&h));
-		assert_eq!(commit.deleted_len(), 0);
+		assert!(commit.data.deleted.is_empty());
 		assert_eq!(pruning.death_rows.len(), 1);
-		let death_index_len: usize = pruning.death_index.iter().map(|(_ct, map)| map.len()).sum();
-		assert_eq!(death_index_len, 2);
+		assert_eq!(pruning.death_index.len(), 2);
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
 		check_journal(&pruning, &db);
 
@@ -356,8 +259,7 @@ mod tests {
 		assert!(!pruning.have_block(&h));
 		assert!(db.data_eq(&make_db(&[2, 4, 5])));
 		assert!(pruning.death_rows.is_empty());
-		let death_index_len: usize = pruning.death_index.iter().map(|(_ct, map)| map.len()).sum();
-		assert!(death_index_len == 0);
+		assert!(pruning.death_index.is_empty());
 		assert_eq!(pruning.pending_number, 1);
 	}
 

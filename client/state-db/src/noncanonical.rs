@@ -22,18 +22,12 @@
 
 use std::fmt;
 use std::collections::{HashMap, VecDeque, hash_map::Entry};
-use super::{Error, DBValue, ChildTrieChangeSets, CommitSet, MetaDb, Hash, to_meta_key, ChangeSet};
+use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
 use codec::{Encode, Decode};
 use log::trace;
-use sp_core::storage::{ChildInfo, ChildrenMap, ChildrenVec};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
-const NON_CANONICAL_JOURNAL_V1: &[u8] = b"v1_non_canonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
-
-type Keys<Key> = ChildrenVec<Vec<Key>>;
-type KeyVals<Key> = ChildrenVec<Vec<(Key, DBValue)>>;
-type ChildKeyVals<Key> = ChildrenMap<HashMap<Key, (u32, DBValue)>>;
 
 /// See module documentation.
 pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
@@ -42,86 +36,52 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	parents: HashMap<BlockHash, BlockHash>,
 	pending_canonicalizations: Vec<BlockHash>,
 	pending_insertions: Vec<BlockHash>,
-	values: ChildKeyVals<Key>, //ref counted
+	values: HashMap<Key, (u32, DBValue)>, //ref counted
 	//would be deleted but kept around because block is pinned, ref counted.
 	pinned: HashMap<BlockHash, u32>,
-	pinned_insertions: HashMap<BlockHash, Keys<Key>>,
+	pinned_insertions: HashMap<BlockHash, Vec<Key>>,
 }
 
 #[derive(Encode, Decode)]
-struct JournalRecordCompat<BlockHash: Hash, Key: Hash> {
+struct JournalRecord<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	parent_hash: BlockHash,
 	inserted: Vec<(Key, DBValue)>,
 	deleted: Vec<Key>,
 }
 
-#[derive(Encode, Decode)]
-struct JournalRecordV1<BlockHash: Hash, Key: Hash> {
-	hash: BlockHash,
-	parent_hash: BlockHash,
-	inserted: KeyVals<Key>,
-	deleted: Keys<Key>,
-}
-
-impl<BlockHash: Hash, Key: Hash> From<JournalRecordCompat<BlockHash, Key>> for JournalRecordV1<BlockHash, Key> {
-	// Note that this compatibility only works as long as the backend
-	// child storage format is the same in both case. 
-	fn from(old: JournalRecordCompat<BlockHash, Key>) -> Self {
-		JournalRecordV1 {
-			hash: old.hash,
-			parent_hash: old.parent_hash,
-			inserted: vec![(ChildInfo::top_trie(), old.inserted)],
-			deleted: vec![(ChildInfo::top_trie(), old.deleted)],
-		}
-	}
-}
-
-fn to_old_journal_key(block: u64, index: u64) -> Vec<u8> {
+fn to_journal_key(block: u64, index: u64) -> Vec<u8> {
 	to_meta_key(NON_CANONICAL_JOURNAL, &(block, index))
-}
-
-fn to_journal_key_v1(block: u64, index: u64) -> Vec<u8> {
-	to_meta_key(NON_CANONICAL_JOURNAL_V1, &(block, index))
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
 struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,
-	inserted: Keys<Key>,
-	deleted: Keys<Key>,
+	inserted: Vec<Key>,
+	deleted: Vec<Key>,
 }
 
-fn insert_values<Key: Hash>(
-	values: &mut ChildKeyVals<Key>,
-	inserted: KeyVals<Key>,
-) {
-	for (child_info, inserted) in inserted {
-		let values = values.entry(child_info).or_default();
-		for (k, v) in inserted {
-			debug_assert!(values.get(&k).map_or(true, |(_, value)| *value == v));
-			let (ref mut counter, _) = values.entry(k).or_insert_with(|| (0, v));
-			*counter += 1;
-		}
+fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted: Vec<(Key, DBValue)>) {
+	for (k, v) in inserted {
+		debug_assert!(values.get(&k).map_or(true, |(_, value)| *value == v));
+		let (ref mut counter, _) = values.entry(k).or_insert_with(|| (0, v));
+		*counter += 1;
 	}
 }
 
-fn discard_values<Key: Hash>(values: &mut ChildKeyVals<Key>, inserted: Keys<Key>) {
-	for (child_info, inserted) in inserted {
-		let values = values.entry(child_info).or_default();
-		for k in inserted {
-			match values.entry(k) {
-				Entry::Occupied(mut e) => {
-					let (ref mut counter, _) = e.get_mut();
-					*counter -= 1;
-					if *counter == 0 {
-						e.remove_entry();
-					}
-				},
-				Entry::Vacant(_) => {
-					debug_assert!(false, "Trying to discard missing value");
+fn discard_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted: Vec<Key>) {
+	for k in inserted {
+		match values.entry(k) {
+			Entry::Occupied(mut e) => {
+				let (ref mut counter, _) = e.get_mut();
+				*counter -= 1;
+				if *counter == 0 {
+					e.remove_entry();
 				}
+			},
+			Entry::Vacant(_) => {
+				debug_assert!(false, "Trying to discard missing value");
 			}
 		}
 	}
@@ -129,11 +89,11 @@ fn discard_values<Key: Hash>(values: &mut ChildKeyVals<Key>, inserted: Keys<Key>
 
 fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	levels: &mut VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
-	mut values: &mut ChildKeyVals<Key>,
+	mut values: &mut HashMap<Key, (u32, DBValue)>,
 	index: usize,
 	parents: &mut HashMap<BlockHash, BlockHash>,
 	pinned: &HashMap<BlockHash, u32>,
-	pinned_insertions: &mut HashMap<BlockHash, Keys<Key>>,
+	pinned_insertions: &mut HashMap<BlockHash, Vec<Key>>,
 	hash: &BlockHash,
 ) {
 	let mut discarded = Vec::new();
@@ -172,7 +132,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 		let mut levels = VecDeque::new();
 		let mut parents = HashMap::new();
-		let mut values = ChildrenMap::default();
+		let mut values = HashMap::new();
 		if let Some((ref hash, mut block)) = last_canonicalized {
 			// read the journal
 			trace!(target: "state-db", "Reading uncanonicalized journal. Last canonicalized #{} ({:?})", block, hash);
@@ -182,35 +142,26 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				let mut index: u64 = 0;
 				let mut level = Vec::new();
 				loop {
-					let journal_key = to_journal_key_v1(block, index);
-					let record: JournalRecordV1<BlockHash, Key> = match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
-						Some(record) =>  Decode::decode(&mut record.as_slice())?,
-						None => {
-							let journal_key = to_old_journal_key(block, index);
-							match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
-								Some(record) => {
-									let record: JournalRecordCompat<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
-									record.into()
-								},
-								None => break,
-							}
+					let journal_key = to_journal_key(block, index);
+					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+						Some(record) => {
+							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
+							let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();
+							let overlay = BlockOverlay {
+								hash: record.hash.clone(),
+								journal_key,
+								inserted: inserted,
+								deleted: record.deleted,
+							};
+							insert_values(&mut values, record.inserted);
+							trace!(target: "state-db", "Uncanonicalized journal entry {}.{} ({} inserted, {} deleted)", block, index, overlay.inserted.len(), overlay.deleted.len());
+							level.push(overlay);
+							parents.insert(record.hash, record.parent_hash);
+							index += 1;
+							total += 1;
 						},
-					};
-					let inserted = record.inserted.iter().map(|(child_info, rec)|
-						(child_info.clone(), rec.iter().map(|(k, _)| k.clone()).collect())
-					).collect();
-					let overlay = BlockOverlay {
-						hash: record.hash.clone(),
-						journal_key,
-						inserted,
-						deleted: record.deleted,
-					};
-					insert_values(&mut values, record.inserted);
-					trace!(target: "state-db", "Uncanonicalized journal entry {}.{} ({} inserted, {} deleted)", block, index, overlay.inserted.len(), overlay.deleted.len());
-					level.push(overlay);
-					parents.insert(record.hash, record.parent_hash);
-					index += 1;
-					total += 1;
+						None => break,
+					}
 				}
 				if level.is_empty() {
 					break;
@@ -233,13 +184,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Insert a new block into the overlay. If inserted on the second level or lover expects parent to be present in the window.
-	pub fn insert<E: fmt::Debug>(
-		&mut self,
-		hash: &BlockHash,
-		number: u64,
-		parent_hash: &BlockHash,
-		changeset: ChildTrieChangeSets<Key>,
-	) -> Result<CommitSet<Key>, Error<E>> {
+	pub fn insert<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
 		let mut commit = CommitSet::default();
 		let front_block_number = self.front_block_number();
 		if self.levels.is_empty() && self.last_canonicalized.is_none() && number > 0 {
@@ -274,39 +219,22 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 
 		let index = level.len() as u64;
-		let journal_key = to_journal_key_v1(number, index);
+		let journal_key = to_journal_key(number, index);
 
-		let mut inserted = Vec::with_capacity(changeset.len());
-		let mut inserted_block = Vec::with_capacity(changeset.len());
-		let mut deleted = Vec::with_capacity(changeset.len());
-		for changeset in changeset.into_iter() {
-			inserted_block.push((
-				changeset.0.clone(),
-				changeset.1.inserted.iter().map(|(k, _)| k.clone()).collect(),
-			));
-			inserted.push((
-				changeset.0.clone(),
-				changeset.1.inserted,
-			));
-			deleted.push((
-				changeset.0,
-				changeset.1.deleted,
-			));
-		}
-
+		let inserted = changeset.inserted.iter().map(|(k, _)| k.clone()).collect();
 		let overlay = BlockOverlay {
 			hash: hash.clone(),
 			journal_key: journal_key.clone(),
-			inserted: inserted_block,
-			deleted: deleted.clone(),
+			inserted: inserted,
+			deleted: changeset.deleted.clone(),
 		};
 		level.push(overlay);
 		self.parents.insert(hash.clone(), parent_hash.clone());
-		let journal_record = JournalRecordV1 {
+		let journal_record = JournalRecord {
 			hash: hash.clone(),
 			parent_hash: parent_hash.clone(),
-			inserted,
-			deleted,
+			inserted: changeset.inserted,
+			deleted: changeset.deleted,
 		};
 		commit.meta.inserted.push((journal_key, journal_record.encode()));
 		trace!(target: "state-db", "Inserted uncanonicalized changeset {}.{} ({} inserted, {} deleted)", number, index, journal_record.inserted.len(), journal_record.deleted.len());
@@ -389,29 +317,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 		// get the one we need to canonicalize
 		let overlay = &level[index];
-		commit.data.extend_with(overlay.inserted.iter()
-			.map(|(ct, keys)| (
-				ct.clone(),
-				ChangeSet {
-					inserted: keys.iter().map(|k| (
-						k.clone(),
-						self.values
-							.get(ct)
-							.expect("For each key in overlays there's a value in values")
-							.get(k)
-							.expect("For each key in overlays there's a value in values").1.clone(),
-					)).collect(),
-					deleted: Vec::new(),
-				},
-			)), ChangeSet::merge);
-		commit.data.extend_with(overlay.deleted.iter().cloned()
-			.map(|(ct, keys)| (
-				ct,
-				ChangeSet {
-					inserted: Vec::new(),
-					deleted: keys,
-				},
-			)), ChangeSet::merge);
+		commit.data.inserted.extend(overlay.inserted.iter()
+			.map(|k| (k.clone(), self.values.get(k).expect("For each key in overlays there's a value in values").1.clone())));
+		commit.data.deleted.extend(overlay.deleted.clone());
 
 		commit.meta.deleted.append(&mut discarded_journals);
 		let canonicalized = (hash.clone(), self.front_block_number() + self.pending_canonicalizations.len() as u64);
@@ -460,11 +368,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Get a value from the node overlay. This searches in every existing changeset.
-	pub fn get(&self, child_info: &ChildInfo, key: &Key) -> Option<DBValue> {
-		if let Some(values) = self.values.get(child_info) {
-			if let Some((_, value)) = values.get(&key) {
-				return Some(value.clone());
-			}
+	pub fn get(&self, key: &Key) -> Option<DBValue> {
+		if let Some((_, value)) = self.values.get(&key) {
+			return Some(value.clone());
 		}
 		None
 	}
@@ -565,14 +471,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 mod tests {
 	use std::io;
 	use sp_core::H256;
-	use sp_core::storage::ChildInfo;
-	use super::{NonCanonicalOverlay, to_journal_key_v1};
-	use crate::CommitSet;
-	use crate::test::{make_db, make_childchangeset};
+	use super::{NonCanonicalOverlay, to_journal_key};
+	use crate::{ChangeSet, CommitSet};
+	use crate::test::{make_db, make_changeset};
 
 	fn contains(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
-		overlay.get(&ChildInfo::top_trie(), &H256::from_low_u64_be(key))
-			== Some(H256::from_low_u64_be(key).as_bytes().to_vec())
+		overlay.get(&H256::from_low_u64_be(key)) == Some(H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 
 	#[test]
@@ -600,8 +504,8 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay.insert::<io::Error>(&h1, 2, &H256::default(), Default::default()).unwrap();
-		overlay.insert::<io::Error>(&h2, 1, &h1, Default::default()).unwrap();
+		overlay.insert::<io::Error>(&h1, 2, &H256::default(), ChangeSet::default()).unwrap();
+		overlay.insert::<io::Error>(&h2, 1, &h1, ChangeSet::default()).unwrap();
 	}
 
 	#[test]
@@ -611,8 +515,8 @@ mod tests {
 		let h2 = H256::random();
 		let db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay.insert::<io::Error>(&h1, 1, &H256::default(), Default::default()).unwrap();
-		overlay.insert::<io::Error>(&h2, 3, &h1, Default::default()).unwrap();
+		overlay.insert::<io::Error>(&h1, 1, &H256::default(), ChangeSet::default()).unwrap();
+		overlay.insert::<io::Error>(&h2, 3, &h1, ChangeSet::default()).unwrap();
 	}
 
 	#[test]
@@ -622,8 +526,8 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay.insert::<io::Error>(&h1, 1, &H256::default(), Default::default()).unwrap();
-		overlay.insert::<io::Error>(&h2, 2, &H256::default(), Default::default()).unwrap();
+		overlay.insert::<io::Error>(&h1, 1, &H256::default(), ChangeSet::default()).unwrap();
+		overlay.insert::<io::Error>(&h2, 2, &H256::default(), ChangeSet::default()).unwrap();
 	}
 
 	#[test]
@@ -633,7 +537,7 @@ mod tests {
 		let h2 = H256::random();
 		let db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay.insert::<io::Error>(&h1, 1, &H256::default(), Default::default()).unwrap();
+		overlay.insert::<io::Error>(&h1, 1, &H256::default(), ChangeSet::default()).unwrap();
 		let mut commit = CommitSet::default();
 		overlay.canonicalize::<io::Error>(&h2, &mut commit).unwrap();
 	}
@@ -643,19 +547,17 @@ mod tests {
 		let h1 = H256::random();
 		let mut db = make_db(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		let changeset = make_childchangeset(&[3, 4], &[2]);
+		let changeset = make_changeset(&[3, 4], &[2]);
 		let insertion = overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset.clone()).unwrap();
-		assert_eq!(insertion.inserted_len(), 0);
-		assert_eq!(insertion.deleted_len(), 0);
+		assert_eq!(insertion.data.inserted.len(), 0);
+		assert_eq!(insertion.data.deleted.len(), 0);
 		assert_eq!(insertion.meta.inserted.len(), 2);
 		assert_eq!(insertion.meta.deleted.len(), 0);
 		db.commit(&insertion);
 		let mut finalization = CommitSet::default();
 		overlay.canonicalize::<io::Error>(&h1, &mut finalization).unwrap();
-		let inserted_len = changeset.iter().map(|set| set.1.inserted.len()).sum();
-		let deleted_len = changeset.iter().map(|set| set.1.deleted.len()).sum();
-		assert_eq!(finalization.inserted_len(), inserted_len);
-		assert_eq!(finalization.deleted_len(), deleted_len);
+		assert_eq!(finalization.data.inserted.len(), changeset.inserted.len());
+		assert_eq!(finalization.data.deleted.len(), changeset.deleted.len());
 		assert_eq!(finalization.meta.inserted.len(), 1);
 		assert_eq!(finalization.meta.deleted.len(), 1);
 		db.commit(&finalization);
@@ -668,8 +570,8 @@ mod tests {
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(&overlay.insert::<io::Error>(&h1, 10, &H256::default(), make_childchangeset(&[3, 4], &[2])).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h2, 11, &h1, make_childchangeset(&[5], &[3])).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2])).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
 		assert_eq!(db.meta.len(), 3);
 
 		let overlay2 = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
@@ -684,8 +586,8 @@ mod tests {
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(&overlay.insert::<io::Error>(&h1, 10, &H256::default(), make_childchangeset(&[3, 4], &[2])).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h2, 11, &h1, make_childchangeset(&[5], &[3])).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2])).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
 		let mut commit = CommitSet::default();
 		overlay.canonicalize::<io::Error>(&h1, &mut commit).unwrap();
 		db.commit(&commit);
@@ -704,8 +606,8 @@ mod tests {
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2, 3, 4]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		let changeset1 = make_childchangeset(&[5, 6], &[2]);
-		let changeset2 = make_childchangeset(&[7, 8], &[5, 3]);
+		let changeset1 = make_changeset(&[5, 6], &[2]);
+		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
 		db.commit(&overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset1).unwrap());
 		assert!(contains(&overlay, 5));
 		db.commit(&overlay.insert::<io::Error>(&h2, 2, &h1, changeset2).unwrap());
@@ -736,8 +638,8 @@ mod tests {
 	#[test]
 	fn insert_same_key() {
 		let mut db = make_db(&[]);
-		let (h_1, c_1) = (H256::random(), make_childchangeset(&[1], &[]));
-		let (h_2, c_2) = (H256::random(), make_childchangeset(&[1], &[]));
+		let (h_1, c_1) = (H256::random(), make_changeset(&[1], &[]));
+		let (h_2, c_2) = (H256::random(), make_changeset(&[1], &[]));
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
@@ -758,7 +660,7 @@ mod tests {
 		let h3 = H256::random();
 		let mut db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		let changeset = make_childchangeset(&[], &[]);
+		let changeset = make_changeset(&[], &[]);
 		db.commit(&overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset.clone()).unwrap());
 		db.commit(&overlay.insert::<io::Error>(&h2, 2, &h1, changeset.clone()).unwrap());
 		overlay.apply_pending();
@@ -786,19 +688,19 @@ mod tests {
 		//
 		// 1_2_2 is the winner
 
-		let (h_1, c_1) = (H256::random(), make_childchangeset(&[1], &[]));
-		let (h_2, c_2) = (H256::random(), make_childchangeset(&[2], &[]));
+		let (h_1, c_1) = (H256::random(), make_changeset(&[1], &[]));
+		let (h_2, c_2) = (H256::random(), make_changeset(&[2], &[]));
 
-		let (h_1_1, c_1_1) = (H256::random(), make_childchangeset(&[11], &[]));
-		let (h_1_2, c_1_2) = (H256::random(), make_childchangeset(&[12], &[]));
-		let (h_2_1, c_2_1) = (H256::random(), make_childchangeset(&[21], &[]));
-		let (h_2_2, c_2_2) = (H256::random(), make_childchangeset(&[22], &[]));
+		let (h_1_1, c_1_1) = (H256::random(), make_changeset(&[11], &[]));
+		let (h_1_2, c_1_2) = (H256::random(), make_changeset(&[12], &[]));
+		let (h_2_1, c_2_1) = (H256::random(), make_changeset(&[21], &[]));
+		let (h_2_2, c_2_2) = (H256::random(), make_changeset(&[22], &[]));
 
-		let (h_1_1_1, c_1_1_1) = (H256::random(), make_childchangeset(&[111], &[]));
-		let (h_1_2_1, c_1_2_1) = (H256::random(), make_childchangeset(&[121], &[]));
-		let (h_1_2_2, c_1_2_2) = (H256::random(), make_childchangeset(&[122], &[]));
-		let (h_1_2_3, c_1_2_3) = (H256::random(), make_childchangeset(&[123], &[]));
-		let (h_2_1_1, c_2_1_1) = (H256::random(), make_childchangeset(&[211], &[]));
+		let (h_1_1_1, c_1_1_1) = (H256::random(), make_changeset(&[111], &[]));
+		let (h_1_2_1, c_1_2_1) = (H256::random(), make_changeset(&[121], &[]));
+		let (h_1_2_2, c_1_2_2) = (H256::random(), make_changeset(&[122], &[]));
+		let (h_1_2_3, c_1_2_3) = (H256::random(), make_changeset(&[123], &[]));
+		let (h_2_1_1, c_2_1_1) = (H256::random(), make_changeset(&[211], &[]));
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
@@ -848,11 +750,11 @@ mod tests {
 		assert!(contains(&overlay, 111));
 		assert!(!contains(&overlay, 211));
 		// check that journals are deleted
-		assert!(db.get_meta(&to_journal_key_v1(1, 0)).unwrap().is_none());
-		assert!(db.get_meta(&to_journal_key_v1(1, 1)).unwrap().is_none());
-		assert!(db.get_meta(&to_journal_key_v1(2, 1)).unwrap().is_some());
-		assert!(db.get_meta(&to_journal_key_v1(2, 2)).unwrap().is_none());
-		assert!(db.get_meta(&to_journal_key_v1(2, 3)).unwrap().is_none());
+		assert!(db.get_meta(&to_journal_key(1, 0)).unwrap().is_none());
+		assert!(db.get_meta(&to_journal_key(1, 1)).unwrap().is_none());
+		assert!(db.get_meta(&to_journal_key(2, 1)).unwrap().is_some());
+		assert!(db.get_meta(&to_journal_key(2, 2)).unwrap().is_none());
+		assert!(db.get_meta(&to_journal_key(2, 3)).unwrap().is_none());
 
 		// canonicalize 1_2. 1_1 and all its children should be discarded
 		let mut commit = CommitSet::default();
@@ -889,8 +791,8 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3, 4]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		assert!(overlay.revert_one().is_none());
-		let changeset1 = make_childchangeset(&[5, 6], &[2]);
-		let changeset2 = make_childchangeset(&[7, 8], &[5, 3]);
+		let changeset1 = make_changeset(&[5, 6], &[2]);
+		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
 		db.commit(&overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset1).unwrap());
 		db.commit(&overlay.insert::<io::Error>(&h2, 2, &h1, changeset2).unwrap());
 		assert!(contains(&overlay, 7));
@@ -911,9 +813,9 @@ mod tests {
 		let h2_2 = H256::random();
 		let db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		let changeset1 = make_childchangeset(&[5, 6], &[2]);
-		let changeset2 = make_childchangeset(&[7, 8], &[5, 3]);
-		let changeset3 = make_childchangeset(&[9], &[]);
+		let changeset1 = make_changeset(&[5, 6], &[2]);
+		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
+		let changeset3 = make_changeset(&[9], &[]);
 		overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset1).unwrap();
 		assert!(contains(&overlay, 5));
 		overlay.insert::<io::Error>(&h2_1, 2, &h1, changeset2).unwrap();
@@ -936,8 +838,8 @@ mod tests {
 		// - 0 - 1_1
 		//     \ 1_2
 
-		let (h_1, c_1) = (H256::random(), make_childchangeset(&[1], &[]));
-		let (h_2, c_2) = (H256::random(), make_childchangeset(&[2], &[]));
+		let (h_1, c_1) = (H256::random(), make_changeset(&[1], &[]));
+		let (h_2, c_2) = (H256::random(), make_changeset(&[2], &[]));
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
@@ -964,9 +866,9 @@ mod tests {
 		//     \ 1_3
 
 		// 1_1 and 1_2 both make the same change
-		let (h_1, c_1) = (H256::random(), make_childchangeset(&[1], &[]));
-		let (h_2, c_2) = (H256::random(), make_childchangeset(&[1], &[]));
-		let (h_3, c_3) = (H256::random(), make_childchangeset(&[], &[]));
+		let (h_1, c_1) = (H256::random(), make_changeset(&[1], &[]));
+		let (h_2, c_2) = (H256::random(), make_changeset(&[1], &[]));
+		let (h_3, c_3) = (H256::random(), make_changeset(&[], &[]));
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
@@ -993,9 +895,9 @@ mod tests {
 		// - 0 - 1_1 - 2_1
 		//     \ 1_2
 
-		let (h_11, c_11) = (H256::random(), make_childchangeset(&[1], &[]));
-		let (h_12, c_12) = (H256::random(), make_childchangeset(&[], &[]));
-		let (h_21, c_21) = (H256::random(), make_childchangeset(&[], &[]));
+		let (h_11, c_11) = (H256::random(), make_changeset(&[1], &[]));
+		let (h_12, c_12) = (H256::random(), make_changeset(&[], &[]));
+		let (h_21, c_21) = (H256::random(), make_changeset(&[], &[]));
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(&h_11, 1, &H256::default(), c_11).unwrap());

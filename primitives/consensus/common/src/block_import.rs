@@ -228,15 +228,14 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 
 	/// Take interemdiate by given key, and remove it from the processing list.
 	pub fn take_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<Box<T>, Error> {
-		if self.intermediates.contains_key(key) {
-			self.intermediates.remove(key)
-				.ok_or(Error::NoIntermediate)
-				.and_then(|value| {
-					value.downcast::<T>()
-						.map_err(|_| Error::InvalidIntermediate)
-				})
-		} else {
-			Err(Error::NoIntermediate)
+		let (k, v) = self.intermediates.remove_entry(key).ok_or(Error::NoIntermediate)?;
+
+		match v.downcast::<T>() {
+			Ok(v) => Ok(v),
+			Err(v) => {
+				self.intermediates.insert(k, v);
+				Err(Error::InvalidIntermediate)
+			},
 		}
 	}
 

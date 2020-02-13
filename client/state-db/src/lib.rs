@@ -40,7 +40,6 @@ use std::collections::{HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
-use sp_core::storage::{ChildInfo, ChildrenMap};
 
 const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
@@ -68,7 +67,7 @@ pub trait NodeDb {
 	type Error: fmt::Debug;
 
 	/// Get state trie node.
-	fn get(&self, child_info: &ChildInfo, key: &Self::Key) -> Result<Option<DBValue>, Self::Error>;
+	fn get(&self, key: &Self::Key) -> Result<Option<DBValue>, Self::Error>;
 }
 
 /// Error type.
@@ -114,42 +113,21 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 
 /// A set of state node changes.
 #[derive(Default, Debug, Clone)]
-pub struct ChangeSet<H> {
+pub struct ChangeSet<H: Hash> {
 	/// Inserted nodes.
 	pub inserted: Vec<(H, DBValue)>,
 	/// Deleted nodes.
 	pub deleted: Vec<H>,
 }
 
-impl<H> ChangeSet<H> {
-	fn merge(&mut self, other: ChangeSet<H>) {
-		self.inserted.extend(other.inserted.into_iter());
-		self.deleted.extend(other.deleted.into_iter());
-	}
-}
-
-/// Change sets of all child trie (top is key None).
-pub type ChildTrieChangeSets<H> = ChildrenMap<ChangeSet<H>>;
 
 /// A set of changes to the backing database.
 #[derive(Default, Debug, Clone)]
-pub struct CommitSet<H> {
+pub struct CommitSet<H: Hash> {
 	/// State node changes.
-	pub data: ChildTrieChangeSets<H>,
+	pub data: ChangeSet<H>,
 	/// Metadata changes.
 	pub meta: ChangeSet<Vec<u8>>,
-}
-
-impl<H> CommitSet<H> {
-	/// Number of inserted key value elements in the set.
-	pub fn inserted_len(&self) -> usize {
-		self.data.iter().map(|set| set.1.inserted.len()).sum()
-	}
-
-	/// Number of deleted key value elements in the set.
-	pub fn deleted_len(&self) -> usize {
-		self.data.iter().map(|set| set.1.deleted.len()).sum()
-	}
 }
 
 /// Pruning constraints. If none are specified pruning is
@@ -256,13 +234,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn insert_block<E: fmt::Debug>(
-		&mut self,
-		hash: &BlockHash,
-		number: u64,
-		parent_hash: &BlockHash,
-		mut changesets: ChildTrieChangeSets<Key>,
-	) -> Result<CommitSet<Key>, Error<E>> {
+	pub fn insert_block<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
 		let mut meta = ChangeSet::default();
 		if number == 0 {
 			// Save pruning mode when writing first block.
@@ -271,17 +243,15 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 
 		match self.mode {
 			PruningMode::ArchiveAll => {
-				for changeset in changesets.iter_mut() {
-					changeset.1.deleted.clear();
-				}
+				changeset.deleted.clear();
 				// write changes immediately
 				Ok(CommitSet {
-					data: changesets,
+					data: changeset,
 					meta: meta,
 				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				let commit = self.non_canonical.insert(hash, number, parent_hash, changesets);
+				let commit = self.non_canonical.insert(hash, number, parent_hash, changeset);
 				commit.map(|mut c| {
 					c.meta.inserted.extend(meta.inserted);
 					c
@@ -298,9 +268,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		match self.non_canonical.canonicalize(&hash, &mut commit) {
 			Ok(()) => {
 				if self.mode == PruningMode::ArchiveCanonical {
-					for commit in commit.data.iter_mut() {
-						commit.1.deleted.clear();
-					}
+					commit.data.deleted.clear();
 				}
 			}
 			Err(e) => return Err(e),
@@ -400,18 +368,13 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn get<D: NodeDb>(
-		&self,
-		child_info: &ChildInfo,
-		key: &Key,
-		db: &D,
-	) -> Result<Option<DBValue>, Error<D::Error>>
+	pub fn get<D: NodeDb>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>>
 		where Key: AsRef<D::Key>
 	{
-		if let Some(value) = self.non_canonical.get(child_info, key) {
+		if let Some(value) = self.non_canonical.get(key) {
 			return Ok(Some(value));
 		}
-		db.get(child_info, key.as_ref()).map_err(|e| Error::Db(e))
+		db.get(key.as_ref()).map_err(|e| Error::Db(e))
 	}
 
 	pub fn apply_pending(&mut self) {
@@ -451,14 +414,8 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Add a new non-canonical block.
-	pub fn insert_block<E: fmt::Debug>(
-		&self,
-		hash: &BlockHash,
-		number: u64,
-		parent_hash: &BlockHash,
-		changesets: ChildTrieChangeSets<Key>,
-	) -> Result<CommitSet<Key>, Error<E>> {
-		self.db.write().insert_block(hash, number, parent_hash, changesets)
+	pub fn insert_block<E: fmt::Debug>(&self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
+		self.db.write().insert_block(hash, number, parent_hash, changeset)
 	}
 
 	/// Finalize a previously inserted block.
@@ -477,15 +434,10 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Get a value from non-canonical/pruning overlay or the backing DB.
-	pub fn get<D: NodeDb>(
-		&self,
-		child_info: &ChildInfo,
-		key: &Key,
-		db: &D,
-	) -> Result<Option<DBValue>, Error<D::Error>>
+	pub fn get<D: NodeDb>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>>
 		where Key: AsRef<D::Key>
 	{
-		self.db.read().get(child_info, key, db)
+		self.db.read().get(key, db)
 	}
 
 	/// Revert all non-canonical blocks with the best block number.
@@ -521,7 +473,7 @@ mod tests {
 	use std::io;
 	use sp_core::H256;
 	use crate::{StateDb, PruningMode, Constraints};
-	use crate::test::{make_db, make_childchangeset, TestDb};
+	use crate::test::{make_db, make_changeset, TestDb};
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
@@ -533,7 +485,7 @@ mod tests {
 					&H256::from_low_u64_be(1),
 					1,
 					&H256::from_low_u64_be(0),
-					make_childchangeset(&[1], &[91]),
+					make_changeset(&[1], &[91]),
 				)
 				.unwrap(),
 		);
@@ -543,7 +495,7 @@ mod tests {
 					&H256::from_low_u64_be(21),
 					2,
 					&H256::from_low_u64_be(1),
-					make_childchangeset(&[21], &[921, 1]),
+					make_changeset(&[21], &[921, 1]),
 				)
 				.unwrap(),
 		);
@@ -553,7 +505,7 @@ mod tests {
 					&H256::from_low_u64_be(22),
 					2,
 					&H256::from_low_u64_be(1),
-					make_childchangeset(&[22], &[922]),
+					make_changeset(&[22], &[922]),
 				)
 				.unwrap(),
 		);
@@ -563,7 +515,7 @@ mod tests {
 					&H256::from_low_u64_be(3),
 					3,
 					&H256::from_low_u64_be(21),
-					make_childchangeset(&[3], &[93]),
+					make_changeset(&[3], &[93]),
 				)
 				.unwrap(),
 		);
@@ -576,7 +528,7 @@ mod tests {
 					&H256::from_low_u64_be(4),
 					4,
 					&H256::from_low_u64_be(3),
-					make_childchangeset(&[4], &[94]),
+					make_changeset(&[4], &[94]),
 				)
 				.unwrap(),
 		);
@@ -647,7 +599,7 @@ mod tests {
 				&H256::from_low_u64_be(0),
 				0,
 				&H256::from_low_u64_be(0),
-				make_childchangeset(&[], &[]),
+				make_changeset(&[], &[]),
 			)
 			.unwrap(),
 		);

@@ -254,6 +254,17 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 				.map_err(client_err)))
 	}
 
+	fn storage_pairs(
+		&self,
+		block: Option<Block::Hash>,
+		prefix: StorageKey,
+	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
+		Box::new(result(
+			self.block_or_best(block)
+				.and_then(|block| self.client.storage_pairs(&BlockId::Hash(block), &prefix))
+				.map_err(client_err)))
+	}
+
 	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,

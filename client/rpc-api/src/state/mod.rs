@@ -44,6 +44,10 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_getKeys")]
 	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<StorageKey>>;
 
+	/// Returns the keys with prefix, leave empty to get all the keys
+	#[rpc(name = "state_getPairs")]
+	fn storage_pairs(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<(StorageKey, StorageData)>>;
+
 	/// Returns the keys with prefix with pagination support.
 	/// Up to `count` keys will be returned.
 	/// If `start_key` is passed, return next keys in storage in lexicographic order.

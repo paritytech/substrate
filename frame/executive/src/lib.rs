@@ -357,7 +357,7 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
-		traits::{Bounded, Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
+		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
 		transaction_validity::{InvalidTransaction, UnknownTransaction, TransactionValidityError},
 	};
 	use frame_support::{
@@ -453,7 +453,7 @@ mod tests {
 		type ModuleToIndex = ();
 	}
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Runtime {

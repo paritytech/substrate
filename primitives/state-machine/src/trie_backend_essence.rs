@@ -25,7 +25,7 @@ use sp_core::Hasher;
 use hash_db::{self, EMPTY_PREFIX, Prefix};
 use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	read_trie_value, check_if_empty_root,
-	for_keys_in_trie};
+	for_keys_in_trie, TrieDBIterator};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
 use sp_core::storage::ChildInfo;
@@ -148,16 +148,11 @@ impl<S: TrieBackendStorageRef<H>, H: Hasher> TrieBackendEssence<S, H> where H::O
 
 		let mut iter = move |db| -> Result<(), Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(db, root)?;
-			let mut iter = trie.iter()?;
 
-			iter.seek(prefix)?;
-
-			for x in iter {
+			for x in TrieDBIterator::new_prefixed(&trie, prefix)? {
 				let (key, value) = x?;
 
-				if !key.starts_with(prefix) {
-					break;
-				}
+				debug_assert!(key.starts_with(prefix));
 
 				f(&key, &value);
 			}

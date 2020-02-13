@@ -216,7 +216,6 @@ macro_rules! new_full {
 					grandpa_link,
 					service.network(),
 					service.on_exit(),
-					service.spawn_task_handle(),
 				)?);
 			},
 			(true, false) => {
@@ -229,7 +228,6 @@ macro_rules! new_full {
 					on_exit: service.on_exit(),
 					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 					voting_rule: grandpa::VotingRulesBuilder::default().build(),
-					executor: service.spawn_task_handle(),
 				};
 				// the GRANDPA voter task is considered infallible, i.e.
 				// if it fails we take down the service with it.
@@ -371,8 +369,11 @@ pub fn new_light(config: NodeConfiguration)
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
-	use sc_consensus_babe::CompatibleDigestItem;
+	use std::{sync::Arc, collections::HashMap, borrow::Cow, any::Any};
+	use sc_consensus_babe::{
+		CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY
+	};
+	use sc_consensus_epochs::descendent_query;
 	use sp_consensus::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
 		RecordProof,
@@ -384,7 +385,7 @@ mod tests {
 	use sp_core::{crypto::Pair as CryptoPair, H256};
 	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},
-		traits::Block as BlockT,
+		traits::{Block as BlockT, Header as HeaderT},
 		traits::Verify,
 		OpaqueExtrinsic,
 	};
@@ -499,10 +500,20 @@ mod tests {
 
 				let parent_id = BlockId::number(service.client().chain_info().best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
+				let parent_hash = parent_header.hash();
+				let parent_number = *parent_header.number();
 				let mut proposer_factory = sc_basic_authorship::ProposerFactory {
 					client: service.client(),
 					transaction_pool: service.transaction_pool(),
 				};
+
+				let epoch = babe_link.epoch_changes().lock().epoch_for_child_of(
+					descendent_query(&*service.client()),
+					&parent_hash,
+					parent_number,
+					slot_num,
+					|slot| babe_link.config().genesis_epoch(slot)
+				).unwrap().unwrap();
 
 				let mut digest = Digest::<H256>::default();
 
@@ -555,7 +566,14 @@ mod tests {
 					storage_changes: None,
 					finalized: false,
 					auxiliary: Vec::new(),
-					intermediates: Default::default(),
+					intermediates: {
+						let mut intermediates = HashMap::new();
+						intermediates.insert(
+							Cow::from(INTERMEDIATE_KEY),
+							Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+						);
+						intermediates
+					},
 					fork_choice: Some(ForkChoiceStrategy::LongestChain),
 					allow_missing_state: false,
 					import_existing: false,

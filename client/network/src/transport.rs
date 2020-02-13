@@ -17,12 +17,10 @@
 use futures::prelude::*;
 use libp2p::{
 	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
-	mplex, identity, secio, yamux, bandwidth, wasm_ext
+	mplex, identity, bandwidth, wasm_ext
 };
 #[cfg(not(target_os = "unknown"))]
 use libp2p::{tcp, dns, websocket, noise};
-#[cfg(not(target_os = "unknown"))]
-use libp2p::core::{either::EitherError, either::EitherOutput};
 use libp2p::core::{self, upgrade, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
 use std::{io, sync::Arc, time::Duration, usize};
 
@@ -38,7 +36,8 @@ pub use self::bandwidth::BandwidthSinks;
 pub fn build_transport(
 	keypair: identity::Keypair,
 	memory_only: bool,
-	wasm_external_transport: Option<wasm_ext::ExtTransport>
+	wasm_external_transport: Option<wasm_ext::ExtTransport>,
+	use_yamux_flow_control: bool
 ) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
 	// Build configuration objects for encryption mechanisms.
 	#[cfg(not(target_os = "unknown"))]
@@ -52,13 +51,23 @@ pub fn build_transport(
 				rare panic here is basically zero");
 		noise::NoiseConfig::ix(noise_keypair)
 	};
-	let secio_config = secio::SecioConfig::new(keypair);
 
 	// Build configuration objects for multiplexing mechanisms.
 	let mut mplex_config = mplex::MplexConfig::new();
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
-	let yamux_config = yamux::Config::default();
+
+	let yamux_config = {
+		let mut c = yamux::Config::default();
+		// Only set SYN flag on first data frame sent to the remote.
+		c.set_lazy_open(true);
+		if use_yamux_flow_control {
+			// Enable proper flow-control: window updates are only sent when
+			// buffered data has been consumed.
+			c.set_window_update_mode(yamux::WindowUpdateMode::OnRead);
+		}
+		libp2p::yamux::Config::new(c)
+	};
 
 	// Build the base layer of the transport.
 	let transport = if let Some(t) = wasm_external_transport {
@@ -93,28 +102,23 @@ pub fn build_transport(
 	// For non-WASM, we support both secio and noise.
 	#[cfg(not(target_os = "unknown"))]
 	let transport = transport.and_then(move |stream, endpoint| {
-		let upgrade = core::upgrade::SelectUpgrade::new(noise_config, secio_config);
-		core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
-			.map(|out| match out? {
-				// We negotiated noise
-				EitherOutput::First((remote_id, out)) => {
-					let remote_key = match remote_id {
-						noise::RemoteIdentity::IdentityKey(key) => key,
-						_ => return Err(upgrade::UpgradeError::Apply(EitherError::A(noise::NoiseError::InvalidKey)))
-					};
-					Ok((EitherOutput::First(out), remote_key.into_peer_id()))
-				}
-				// We negotiated secio
-				EitherOutput::Second((remote_id, out)) =>
-					Ok((EitherOutput::Second(out), remote_id))
+		core::upgrade::apply(stream, noise_config, endpoint, upgrade::Version::V1)
+			.and_then(|(remote_id, out)| async move {
+				let remote_key = match remote_id {
+					noise::RemoteIdentity::IdentityKey(key) => key,
+					_ => return Err(upgrade::UpgradeError::Apply(noise::NoiseError::InvalidKey))
+				};
+				Ok((out, remote_key.into_peer_id()))
 			})
 	});
 
-	// For WASM, we only support secio for now.
+	// We refuse all WASM connections for now. It is intended that we negotiate noise in the
+	// future. See https://github.com/libp2p/rust-libp2p/issues/1414
 	#[cfg(target_os = "unknown")]
-	let transport = transport.and_then(move |stream, endpoint| {
-		core::upgrade::apply(stream, secio_config, endpoint, upgrade::Version::V1)
-			.map_ok(|(id, stream)| ((stream, id)))
+	let transport = transport.and_then(move |_, _| async move {
+		let r: Result<(wasm_ext::Connection, PeerId), _> =
+			Err(io::Error::new(io::ErrorKind::Other, format!("No encryption protocol supported")));
+		r
 	});
 
 	// Multiplexing
@@ -126,11 +130,18 @@ pub fn build_transport(
 
 			core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
 				.map_ok(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
-		})
+		});
 
-		.timeout(Duration::from_secs(20))
-		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-		.boxed();
+	let transport = if cfg!(not(target_os = "unknown")) {
+		transport
+			.timeout(Duration::from_secs(20))
+			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+			.boxed()
+	} else {
+		transport
+			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+			.boxed()
+	};
 
 	(transport, sinks)
 }

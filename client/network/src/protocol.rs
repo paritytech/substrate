@@ -52,15 +52,31 @@ use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
+use wasm_timer::Instant;
+
+// Include sources generated from protobuf definitions.
+pub mod api {
+	pub mod v1 {
+		include!(concat!(env!("OUT_DIR"), "/api.v1.rs"));
+		pub mod light {
+			include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
+		}
+	}
+}
 
 mod legacy_proto;
 mod util;
 
+pub mod block_requests;
 pub mod message;
 pub mod event;
+pub mod light_client_handler;
 pub mod light_dispatch;
 pub mod specialization;
 pub mod sync;
+
+pub use block_requests::BlockRequests;
+pub use light_client_handler::LightClientHandler;
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 /// Interval at which we perform time based maintenance
@@ -158,7 +174,7 @@ struct PacketStats {
 /// A peer that we are connected to
 /// and from whom we have not yet received a Status message.
 struct HandshakingPeer {
-	timestamp: time::Instant,
+	timestamp: Instant,
 }
 
 /// Peer information
@@ -166,9 +182,9 @@ struct HandshakingPeer {
 struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
-	block_request: Option<(time::Instant, message::BlockRequest<B>)>,
+	block_request: Option<(Instant, message::BlockRequest<B>)>,
 	/// Requests we are no longer insterested in.
-	obsolete_requests: HashMap<message::RequestId, time::Instant>,
+	obsolete_requests: HashMap<message::RequestId, Instant>,
 	/// Holds a set of transactions known to this peer.
 	known_extrinsics: LruHashSet<H>,
 	/// Holds a set of blocks known to this peer.
@@ -701,7 +717,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Called when a new peer is connected
 	pub fn on_peer_connected(&mut self, who: PeerId) {
 		trace!(target: "sync", "Connecting {}", who);
-		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: time::Instant::now() });
+		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: Instant::now() });
 		self.send_status(who);
 	}
 
@@ -890,7 +906,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	fn maintain_peers(&mut self) {
-		let tick = time::Instant::now();
+		let tick = Instant::now();
 		let mut aborting = Vec::new();
 		{
 			for (who, peer) in self.context_data.peers.iter() {
@@ -1833,7 +1849,7 @@ fn send_request<B: BlockT, H: ExHashT>(
 				trace!(target: "sync", "Request {} for {} is now obsolete.", request.id, who);
 				peer.obsolete_requests.insert(request.id, timestamp);
 			}
-			peer.block_request = Some((time::Instant::now(), r.clone()));
+			peer.block_request = Some((Instant::now(), r.clone()));
 		}
 	}
 	send_message::<B>(behaviour, stats, who, message)

@@ -153,6 +153,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod migration;
+mod benchmarking;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
@@ -394,6 +395,10 @@ decl_storage! {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
 		// ^^ begin, length, amount liquid at genesis
 		build(|config: &GenesisConfig<T, I>| {
+			assert!(
+				<T as Trait<I>>::ExistentialDeposit::get() > Zero::zero(),
+				"The existential deposit should be greater than zero."
+			);
 			for (_, balance) in &config.balances {
 				assert!(
 					*balance >= <T as Trait<I>>::ExistentialDeposit::get(),
@@ -1381,6 +1386,6 @@ where
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		// this should always be exactly equivalent to `Self::account(who).total().is_zero()`
-		!Account::<T, I>::exists(who)
+		!Account::<T, I>::contains_key(who)
 	}
 }

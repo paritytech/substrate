@@ -27,7 +27,7 @@ use sp_core::{ChangesTrieConfiguration, RuntimeDebug};
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, parity_util_mem::MallocSizeOf))]
 pub struct Digest<Hash: Encode + Decode> {
 	/// A list of logs in the digest.
 	pub logs: Vec<DigestItem<Hash>>,
@@ -74,6 +74,7 @@ impl<Hash: Encode + Decode> Digest<Hash> {
 /// Digest item that is able to encode/decode 'system' digest items and
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
 pub enum DigestItem<Hash> {
 	/// System digest item that contains the root of changes trie at given
 	/// block. It is created for every block iff runtime supports changes
@@ -86,6 +87,12 @@ pub enum DigestItem<Hash> {
 	/// the consensus engine can (and should) read them itself to avoid
 	/// code and state duplication. It is erroneous for a runtime to produce
 	/// these, but this is not (yet) checked.
+	///
+	/// NOTE: the runtime is not allowed to panic or fail in an `on_initialize`
+	/// call if an expected `PreRuntime` digest is not present. It is the
+	/// responsibility of a external block verifier to check this. Runtime API calls
+	/// will initialize the block without pre-runtime digests, so initialization
+	/// cannot fail when they are missing.
 	PreRuntime(ConsensusEngineId, Vec<u8>),
 
 	/// A message from the runtime to the consensus engine. This should *never*
@@ -107,7 +114,7 @@ pub enum DigestItem<Hash> {
 
 /// Available changes trie signals.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, parity_util_mem::MallocSizeOf))]
 pub enum ChangesTrieSignal {
 	/// New changes trie configuration is enacted, starting from **next block**.
 	///

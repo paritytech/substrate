@@ -148,7 +148,7 @@ pub type DigestItem = generic::DigestItem<H256>;
 pub type Digest = generic::Digest<H256>;
 
 /// Block Header
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, Default)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, Default, parity_util_mem::MallocSizeOf)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
@@ -220,10 +220,12 @@ impl<'a> Deserialize<'a> for Header {
 }
 
 /// An opaque extrinsic wrapper type.
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
-impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
+impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt>
+where Xt: parity_util_mem::MallocSizeOf
+{
 	type Call = ();
 	type SignaturePayload = ();
 
@@ -253,7 +255,7 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 }
 
 /// Testing block
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
 pub struct Block<Xt> {
 	/// Block header
 	pub header: Header,
@@ -299,6 +301,9 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 /// If sender is some then the transaction is signed otherwise it is unsigned.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct TestXt<Call, Extra>(pub Option<(u64, Extra)>, pub Call);
+
+// Non-opaque extrinsics always 0.
+parity_util_mem::malloc_size_of_is_0!(any: TestXt<Call, Extra>);
 
 impl<Call, Extra> Serialize for TestXt<Call, Extra> where TestXt<Call, Extra>: Encode {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: Serializer {

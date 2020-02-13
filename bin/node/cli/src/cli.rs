@@ -52,34 +52,13 @@ pub enum Subcommand {
 /// Please note: this command currently only works on an empty database!
 #[derive(Debug, StructOpt, Clone)]
 pub struct FactoryCmd {
-	/// How often to repeat. This option only has an effect in mode `MasterToNToM`.
-	#[structopt(long="rounds", default_value = "1")]
-	pub rounds: u64,
+	/// Number of blocks to generate.
+	#[structopt(long="blocks", default_value = "1")]
+	pub blocks: u32,
 
-	/// MasterToN: Manufacture `num` transactions from the master account
-	///            to `num` randomly created accounts, one each.
-	///
-	/// MasterTo1: Manufacture `num` transactions from the master account
-	///            to exactly one other randomly created account.
-	///
-	/// MasterToNToM: Manufacture `num` transactions from the master account
-	///               to `num` randomly created accounts.
-	///               From each of these randomly created accounts manufacture
-	///               a transaction to another randomly created account.
-	///               Repeat this `rounds` times. If `rounds` = 1 the behavior
-	///               is the same as `MasterToN`.{n}
-	///               A -> B, A -> C, A -> D, ... x `num`{n}
-	///               B -> E, C -> F, D -> G, ...{n}
-	///               ... x `rounds`
-	///
-	/// These three modes control manufacturing.
-	#[structopt(long="mode", default_value = "MasterToN")]
-	pub mode: node_transaction_factory::Mode,
-
-	/// Number of transactions to generate. In mode `MasterNToNToM` this is
-	/// the number of transactions per round.
-	#[structopt(long="num", default_value = "8")]
-	pub num: u64,
+	/// Number of transactions to push per block.
+	#[structopt(long="transactions", default_value = "8")]
+	pub transactions: u32,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
