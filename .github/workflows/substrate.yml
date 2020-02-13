@@ -4,7 +4,7 @@ on: [push]
 jobs:
   check:
     name: Test
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -32,7 +32,7 @@ jobs:
         with:
           command: install
           args: cargo-audit cargo-web wasm-pack
-      - name: Install wam-gc
+      - name: Install wasm-gc
         uses: actions-rs/cargo@v1
         with:
           command: install
@@ -99,9 +99,104 @@ jobs:
           args: --manifest-path "client/executor/Cargo.toml" --release --verbose --features wasmtime
         env: 
           RUSTFLAGS: "-Cdebug-assertions=y"
+      - name: Test linux stable int
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: -p node-cli --release --verbose --locked -- --ignored
+      - name: Test full crypto feature core
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          toolchain: nigthly
+          args: --manifest-path "primitives/core/Cargo.toml" --verbose --no-default-features --features full_crypto
+      - name: Test full crypto feature app
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          toolchain: nigthly
+          args: --manifest-path "primitives/application-crypto/Cargo.toml" --verbose --no-default-features --features full_crypto
+      - name: Prepare build directory for cache
+        run: |
+          find ./target/debug -maxdepth 1 -type f -delete \
+          && rm -fr ./target/debug/{deps,.fingerprint}/*{substrate}* \
+          && rm -f  ./target/.rustc_info.json
+  check-wasm:
+    name: Check web wasm
+    strategy:
+      matrix:
+        crate:
+          - sp-io
+          - sp-runtime
+          - sp-std
+          - sc-client
+          - sc-consensus-aura
+          - sc-consensus-babe
+          - sp-consensus
+          - sc-telemetry
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - name: Checkout submodules
+        shell: bash
+        run: git submodule update --init --recursive
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          profile: minimal
+          override: true
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          target: wasm32-unknown-unknown
+          profile: minimal
+          override: true
+      - name: Install cargo-audit, cargo-web, wasm-pack
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-audit cargo-web wasm-pack
+      - name: Install wasm-gc
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          toolchain: nightly
+          args: --git https://github.com/alexcrichton/wasm-gc
+      - name: Cache cargo registry
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache cargo index
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache cargo build
+        uses: actions/cache@v1
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      - name: Check ${{ matrix.crate }}
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --target=wasm32-unknown-unknown -p ${{ matrix.crate }}
+      - name: Check browser
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
       - name: Prepare build directory for cache
         run: |
           find ./target/debug -maxdepth 1 -type f -delete \
           && rm -fr ./target/debug/{deps,.fingerprint}/*{substrate}* \
           && rm -f  ./target/.rustc_info.json
         
+      
