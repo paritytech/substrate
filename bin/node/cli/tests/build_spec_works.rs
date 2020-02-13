@@ -27,7 +27,6 @@ fn build_spec_works() {
 
 	let _ = fs::remove_dir_all(base_path);
 	let output = Command::new(cargo_bin("substrate"))
-		.stdout(Stdio::null())
 		.args(&["build-spec", "--dev", "-d", base_path])
 		.output()
 		.unwrap();
@@ -37,5 +36,5 @@ fn build_spec_works() {
 	assert!(PathBuf::from(base_path).join("chains/dev/").exists());
 	assert!(!PathBuf::from(base_path).join("chains/dev/db").exists());
 
-	serde_json::from_slice(output.stdout.as_slice()).unwrap();
+	let _value: serde_json::Value = serde_json::from_slice(output.stdout.as_slice()).unwrap();
 }
