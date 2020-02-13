@@ -193,6 +193,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		let local_peer_id = local_public.clone().into_peer_id();
 		info!(target: "sub-libp2p", "Local node identity is: {}", local_peer_id.to_base58());
 
+		let checker = params.on_demand.as_ref()
+			.map(|od| od.checker().clone())
+			.unwrap_or(Arc::new(AlwaysBadChecker));
+
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let (protocol, peerset_handle) = Protocol::new(
@@ -200,14 +204,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 				roles: params.roles,
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
 			},
-			params.chain,
-			params.on_demand.as_ref().map(|od| od.checker().clone())
-				.unwrap_or(Arc::new(AlwaysBadChecker)),
+			params.chain.clone(),
+			checker.clone(),
 			params.specialization,
 			params.transaction_pool,
-			params.finality_proof_provider,
+			params.finality_proof_provider.clone(),
 			params.finality_proof_request_builder,
-			params.protocol_id,
+			params.protocol_id.clone(),
 			peerset_config,
 			params.block_announce_validator
 		)?;
@@ -219,6 +222,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 				params.network_config.client_version,
 				params.network_config.node_name
 			);
+			let block_requests = {
+				let config = protocol::block_requests::Config::new(&params.protocol_id);
+				protocol::BlockRequests::new(config, params.chain.clone())
+			};
+			let light_client_handler = {
+				let config = protocol::light_client_handler::Config::new(&params.protocol_id);
+				protocol::LightClientHandler::new(config, params.chain, checker, peerset_handle.clone())
+			};
 			let behaviour = futures::executor::block_on(Behaviour::new(
 				protocol,
 				user_agent,
@@ -232,14 +243,17 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 					TransportConfig::MemoryOnly => false,
 					TransportConfig::Normal { allow_private_ipv4, .. } => allow_private_ipv4,
 				},
+				u64::from(params.network_config.out_peers) + 15,
+				block_requests,
+				light_client_handler
 			));
 			let (transport, bandwidth) = {
-				let (config_mem, config_wasm) = match params.network_config.transport {
-					TransportConfig::MemoryOnly => (true, None),
-					TransportConfig::Normal { wasm_external_transport, .. } =>
-						(false, wasm_external_transport)
+				let (config_mem, config_wasm, flowctrl) = match params.network_config.transport {
+					TransportConfig::MemoryOnly => (true, None, false),
+					TransportConfig::Normal { wasm_external_transport, use_yamux_flow_control, .. } =>
+						(false, wasm_external_transport, use_yamux_flow_control)
 				};
-				transport::build_transport(local_identity, config_mem, config_wasm)
+				transport::build_transport(local_identity, config_mem, config_wasm, flowctrl)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone());
 			if let Some(spawner) = params.executor {

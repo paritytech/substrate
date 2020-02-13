@@ -238,6 +238,10 @@ pub struct NetworkConfigurationParams {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
+
+	/// Experimental feature flag.
+	#[structopt(long = "use-yamux-flow-control")]
+	pub use_yamux_flow_control: bool,
 }
 
 arg_enum! {
