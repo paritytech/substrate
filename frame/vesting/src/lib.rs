@@ -50,7 +50,7 @@ use sp_std::prelude::*;
 use sp_std::fmt::Debug;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
-	StaticLookup, Zero, AtLeast32Bit, SimpleArithmetic, MaybeSerializeDeserialize, Saturating, Convert
+	StaticLookup, Zero, AtLeast32Bit, MaybeSerializeDeserialize, Convert
 }};
 use frame_support::{decl_module, decl_event, decl_storage, decl_error};
 use frame_support::traits::{

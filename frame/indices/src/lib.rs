@@ -22,8 +22,7 @@
 use sp_std::prelude::*;
 use codec::Codec;
 use sp_runtime::traits::{
-	SimpleArithmetic, StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash, Saturating,
-	AtLeast32Bit
+	StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash, Saturating, AtLeast32Bit
 };
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
 use frame_support::dispatch::DispatchResult;
