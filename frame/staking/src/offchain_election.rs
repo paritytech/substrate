@@ -170,13 +170,13 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 			signature,
 		).into();
 
-		let ok = T::SubmitTransaction::submit_unsigned(call).map_err(|_|
+		let ok = T::SubmitTransaction::submit_unsigned(call).map_err(|_| {
 			debug::native::warn!(
 				target: "staking",
 				"failed to submit offchain solution with key {:?}",
 				pubkey,
-			)
-		).is_ok();
+			);
+		}).is_ok();
 		if ok { return Ok(()) }
 	}
 

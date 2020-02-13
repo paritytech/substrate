@@ -141,7 +141,7 @@ fn generate_authority_keys_and_store(
 			None,
 		).map_err(|err| err.to_string())?;
 
-		let (_, _, grandpa, babe, im_online, authority_discovery) =
+		let (_, _, grandpa, babe, im_online, authority_discovery, staking) =
 			chain_spec::get_authority_keys_from_seed(seed);
 
 		let insert_key = |key_type, public| {
@@ -170,6 +170,11 @@ fn generate_authority_keys_and_store(
 		insert_key(
 			sp_core::crypto::key_types::AUTHORITY_DISCOVERY,
 			authority_discovery.as_slice(),
+		)?;
+
+		insert_key(
+			sp_core::crypto::key_types::STAKING,
+			staking.as_slice(),
 		)?;
 	}
 

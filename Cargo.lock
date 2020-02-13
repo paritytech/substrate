@@ -3360,6 +3360,7 @@ dependencies = [
  "pallet-contracts",
  "pallet-im-online",
  "pallet-indices",
+ "pallet-staking",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",

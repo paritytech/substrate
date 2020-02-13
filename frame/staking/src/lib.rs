@@ -1051,25 +1051,27 @@ decl_module! {
 		/// to open. If so, it runs the offchain worker code.
 		fn offchain_worker(now: T::BlockNumber) {
 			debug::RuntimeLogger::init();
+			use offchain_election::{set_check_offchain_execution_status, compute_offchain_election};
 
-			let offchain_status = offchain_election::set_check_offchain_execution_status::<T>(now);
-			let window_open = Self::era_election_status() == ElectionStatus::<T::BlockNumber>::Open(now);
+			let window_open =
+				Self::era_election_status() == ElectionStatus::<T::BlockNumber>::Open(now);
 
-			if window_open && offchain_status.is_ok() {
-				if let Err(e) = offchain_election::compute_offchain_election::<T>() {
-					debug::native::warn!(
-						target: "staking",
-						"Error in phragmen offchain worker call: {:?}",
-						e,
-					);
-				};
-			} else if window_open {
+			if window_open {
+				let offchain_status = set_check_offchain_execution_status::<T>(now);
 				if let Err(why) = offchain_status {
-					debug::native::debug!(
+					debug::native::warn!(
 						target: "staking",
 						"skipping offchain call in open election window due to [{}]",
 						why,
 					);
+				} else {
+					if let Err(e) = compute_offchain_election::<T>() {
+						debug::native::warn!(
+							target: "staking",
+							"Error in phragmen offchain worker call: {:?}",
+							e,
+						);
+					};
 				}
 			}
 		}
@@ -2064,6 +2066,13 @@ impl<T: Trait> Module<T> {
 
 			// emit event
 			Self::deposit_event(RawEvent::StakingElection(compute));
+
+			debug::native::info!(
+				target: "staking",
+				"new validator set of size {:?} has been elected via {:?}",
+				elected_stashes.len(),
+				compute,
+			);
 
 			Some(elected_stashes)
 		} else {
