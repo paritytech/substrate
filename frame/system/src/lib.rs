@@ -295,6 +295,7 @@ decl_storage! {
 		/// The full account information for a particular account ID.
 		// TODO: should be hasher(twox64_concat) - will need staged migration
 		// TODO: should not including T::Index (the nonce)
+		// https://github.com/paritytech/substrate/issues/4917
 		pub Account get(fn account): map hasher(blake2_256) T::AccountId => (T::Index, T::AccountData);
 
 		/// Total extrinsics count for the current block.
