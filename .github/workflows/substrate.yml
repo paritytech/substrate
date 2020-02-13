@@ -79,7 +79,7 @@ jobs:
           args: -p node-cli --release --verbose --locked -- --ignored
       - name: Check wasm crates
         run: |
-          time cargo build --target=wasm32-unknown-unknown -p sp-io && \
+          cargo build --target=wasm32-unknown-unknown -p sp-io && \
           cargo build --target=wasm32-unknown-unknown -p sp-runtime && \
           cargo build --target=wasm32-unknown-unknown -p sp-std && \
           cargo build --target=wasm32-unknown-unknown -p sc-client && \
