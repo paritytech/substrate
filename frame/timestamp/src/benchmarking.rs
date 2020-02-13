@@ -21,8 +21,8 @@ use super::*;
 use sp_std::prelude::*;
 
 use frame_system::RawOrigin;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter, selected_benchmark};
-use sp_runtime::traits::{Benchmarking, BenchmarkingSetup, Dispatchable};
+use sp_runtime::{BenchmarkResults, BenchmarkParameter, selected_benchmarks};
+use sp_runtime::traits::{BenchmarkingSetup, Dispatchable};
 
 /// Benchmark `set` extrinsic.
 struct Set;
@@ -45,4 +45,4 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Set {
 	}
 }
 
-selected_benchmarks!(Set);
+selected_benchmarks!([Set]);

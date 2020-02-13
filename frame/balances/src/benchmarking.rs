@@ -20,8 +20,8 @@ use super::*;
 
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter};
-use sp_runtime::traits::{Bounded, Benchmarking, BenchmarkingSetup, Dispatchable};
+use sp_runtime::{BenchmarkResults, BenchmarkParameter, selected_benchmarks};
+use sp_runtime::traits::{Bounded, BenchmarkingSetup, Dispatchable};
 
 use crate::Module as Balances;
 
@@ -226,97 +226,34 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 }
 
 // The list of available benchmarks for this pallet.
-enum SelectedBenchmark {
+selected_benchmarks!([
 	Transfer,
 	TransferBestCase,
 	TransferKeepAlive,
 	SetBalance,
-	SetBalanceKilling,
-}
-
-// Allow us to select a benchmark from the list of available benchmarks.
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-		match self {
-			Self::Transfer => <Transfer as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&Transfer),
-			Self::TransferBestCase => <TransferBestCase as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&TransferBestCase),
-			Self::TransferKeepAlive => <TransferKeepAlive as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&TransferKeepAlive),
-			Self::SetBalance => <SetBalance as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&SetBalance),
-			Self::SetBalanceKilling => <SetBalanceKilling as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&SetBalanceKilling),
-		}
-	}
-
-	fn instance(&self, components: &[(BenchmarkParameter, u32)])
-		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{
-		match self {
-			Self::Transfer => <Transfer as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&Transfer, components),
-			Self::TransferBestCase => <TransferBestCase as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&TransferBestCase, components),
-			Self::TransferKeepAlive => <TransferKeepAlive as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&TransferKeepAlive, components),
-			Self::SetBalance => <SetBalance as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&SetBalance, components),
-			Self::SetBalanceKilling => <SetBalanceKilling as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&SetBalanceKilling, components),
-		}
-	}
-}
-
-impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
-	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
-		// Map the input to the selected benchmark.
-		let selected_benchmark = match extrinsic.as_slice() {
-			b"transfer" => SelectedBenchmark::Transfer,
-			b"transfer_best_case" => SelectedBenchmark::TransferBestCase,
-			b"transfer_keep_alive" => SelectedBenchmark::TransferKeepAlive,
-			b"set_balance" => SelectedBenchmark::SetBalance,
-			b"set_balance_killing" => SelectedBenchmark::SetBalanceKilling,
-			_ => return Err("Could not find extrinsic."),
-		};
-
-		// Warm up the DB
+	SetBalanceKilling
+],
+	|
+		call: Call<T>,
+		caller: RawOrigin<T::AccountId>,
+		c: Vec<(BenchmarkParameter, u32)>,
+		results: &mut Vec<BenchmarkResults>,
+	| -> Result<(), &'static str> {
 		sp_io::benchmarking::commit_db();
-		sp_io::benchmarking::wipe_db();
-
-		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);		
-		// results go here
-		let mut results: Vec<BenchmarkResults> = Vec::new();
-		// Select the component we will be benchmarking. Each component will be benchmarked.
-		for (name, low, high) in components.iter() {
-			// Create up to `STEPS` steps for that component between high and low.
-			let step_size = ((high - low) / steps).max(1);
-			let num_of_steps = (high - low) / step_size;
-			for s in 0..num_of_steps {
-				// This is the value we will be testing for component `name`
-				let component_value = low + step_size * s;
-
-				// Select the mid value for all the other components.
-				let c: Vec<(BenchmarkParameter, u32)> = components.iter()
-					.map(|(n, l, h)|
-						(*n, if n == name { component_value } else { (h - l) / 2 + l })
-					).collect();
-
-				// Run the benchmark `repeat` times.
-				for _r in 0..repeat {
-					// Set up the externalities environment for the setup we want to benchmark.
-					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
-					// Commit the externalities to the database, flushing the DB cache.
-					// This will enable worst case scenario for reading from the database.
-					sp_io::benchmarking::commit_db();
-					// Run the benchmark.
-					let start = sp_io::benchmarking::current_time();
-					call.dispatch(caller.clone().into())?;
-					let finish = sp_io::benchmarking::current_time();
-					let elapsed = finish - start;
-					sp_std::if_std!{
-						if let RawOrigin::Signed(who) = caller.clone() {
-							let balance = Account::<T>::get(&who).free;
-							println!("Free Balance {:?}", balance);
-						}
-					}
-					results.push((c.clone(), elapsed));
-					// Wipe the DB back to the genesis state.
-					sp_io::benchmarking::wipe_db();
-				}
+		// Run the benchmark.
+		let start = sp_io::benchmarking::current_time();
+		call.dispatch(caller.clone().into())?;
+		let finish = sp_io::benchmarking::current_time();
+		let elapsed = finish - start;
+		sp_std::if_std!{
+			if let RawOrigin::Signed(who) = caller.clone() {
+				let balance = Account::<T>::get(&who).free;
+				println!("Free Balance {:?}", balance);
 			}
 		}
-		return Ok(results);
+		results.push((c.clone(), elapsed));
+		// Wipe the DB back to the genesis state.
+		sp_io::benchmarking::wipe_db();
+		Ok(())
 	}
-}
+);

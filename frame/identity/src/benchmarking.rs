@@ -20,8 +20,8 @@ use super::*;
 
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter, selected_benchmark};
-use sp_runtime::traits::{Bounded, Benchmarking, BenchmarkingSetup, Dispatchable};
+use sp_runtime::{BenchmarkResults, BenchmarkParameter, selected_benchmarks};
+use sp_runtime::traits::{Bounded, BenchmarkingSetup, Dispatchable};
 
 use crate::Module as Identity;
 
@@ -514,7 +514,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 }
 
 // The list of available benchmarks for this pallet.
-selected_benchmarks!(
+selected_benchmarks!([
 	AddRegistrar,
 	SetIdentity,
 	SetSubs,
@@ -526,4 +526,4 @@ selected_benchmarks!(
 	SetFields,
 	ProvideJudgement,
 	KillIdentity
-);
+]);
