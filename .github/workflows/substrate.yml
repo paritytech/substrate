@@ -5,6 +5,7 @@ jobs:
   check:
     name: Test
     runs-on: ubuntu-latest
+    container: parity/rust-builder:latest
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -129,6 +130,7 @@ jobs:
       matrix:
         crate: [" -p sp-io"," -p sp-runtime"," -p sp-std"," -p sc-client"," -p sc-consensus-aura"," -p sc-consensus-babe"," -p sp-consensus"," -p sc-telemetry"," --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features browser"]
     runs-on: ubuntu-latest
+    container: parity/rust-builder:latest
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
