@@ -339,7 +339,12 @@ define_env!(Env, <E: Ext>,
 	//
 	// - amount: How much gas is used.
 	gas(ctx, amount: u32) => {
-		charge_gas(&mut ctx.gas_meter, ctx.schedule, &mut ctx.special_trap, RuntimeToken::Explicit(amount))?;
+		charge_gas(
+			&mut ctx.gas_meter,
+			ctx.schedule,
+			&mut ctx.special_trap,
+			RuntimeToken::Explicit(amount)
+		)?;
 		Ok(())
 	},
 
@@ -559,7 +564,12 @@ define_env!(Env, <E: Ext>,
 	//
 	// This is the only way to return a data buffer to the caller.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
-		charge_gas(ctx.gas_meter, ctx.schedule, &mut ctx.special_trap, RuntimeToken::ReturnData(data_len))?;
+		charge_gas(
+			ctx.gas_meter,
+			ctx.schedule,
+			&mut ctx.special_trap,
+			RuntimeToken::ReturnData(data_len)
+		)?;
 
 		read_sandbox_memory_into_scratch(ctx, data_ptr, data_len)?;
 		let output_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
@@ -691,7 +701,12 @@ define_env!(Env, <E: Ext>,
 			let balance_fee = <<E as Ext>::T as Trait>::ComputeDispatchFee::compute_dispatch_fee(&call);
 			approx_gas_for_balance(ctx.gas_meter.gas_price(), balance_fee)
 		};
-		charge_gas(&mut ctx.gas_meter, ctx.schedule, &mut ctx.special_trap, RuntimeToken::ComputedDispatchFee(fee))?;
+		charge_gas(
+			&mut ctx.gas_meter,
+			ctx.schedule,
+			&mut ctx.special_trap,
+			RuntimeToken::ComputedDispatchFee(fee)
+		)?;
 
 		ctx.ext.note_dispatch_call(call);
 
