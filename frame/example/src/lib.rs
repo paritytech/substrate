@@ -25,7 +25,7 @@
 //! ### Documentation Guidelines:
 //!
 //! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs addressing issues with -->
-//! <!-- label 'S3-SRML' in https://github.com/paritytech/substrate-developer-hub/issues -->
+//! <!-- label 'S3-FRAME' in https://github.com/paritytech/substrate-developer-hub/issues -->
 //! <ul>
 //!     <li>Documentation comments (i.e. <code>/// comment</code>) - should
 //!         accompany module functions and be restricted to the module interface,
@@ -217,7 +217,7 @@
 //!
 //! // Show a simple example (e.g. how to query a public getter function of <INSERT_CUSTOM_MODULE_NAME>)
 //!
-//! \### Example from SRML
+//! \### Example from FRAME
 //!
 //! // Show a usage example in an actual runtime
 //!
@@ -231,7 +231,7 @@
 //!
 //! \## Dependencies
 //!
-//! // Dependencies on other SRML modules and the genesis config should be mentioned,
+//! // Dependencies on other FRAME modules and the genesis config should be mentioned,
 //! // but not the Rust Standard Library.
 //! // Genesis configuration modifications that may be made to incorporate this module
 //! // Interaction with other modules
@@ -558,7 +558,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-// Similar to other SRML modules, your module can also define a signed extension and perform some
+// Similar to other FRAME modules, your module can also define a signed extension and perform some
 // checks and [pre/post]processing [before/after] the transaction. A signed extension can be any
 // decodable type that implements `SignedExtension`. See the trait definition for the full list of
 // bounds. As a convention, you can follow this approach to create an extension for your module:

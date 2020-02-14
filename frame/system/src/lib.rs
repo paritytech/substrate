@@ -17,7 +17,7 @@
 //! # System Module
 //!
 //! The System module provides low-level access to core types and cross-cutting utilities.
-//! It acts as the base layer for other SRML modules to interact with the Substrate framework components.
+//! It acts as the base layer for other FRAME modules to interact with the Substrate framework components.
 //!
 //! - [`system::Trait`](./trait.Trait.html)
 //!

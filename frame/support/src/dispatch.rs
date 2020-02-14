@@ -62,14 +62,14 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
 /// 		// Private functions are dispatchable, but not available to other
-/// 		// SRML modules.
+/// 		// FRAME modules.
 /// 		fn my_function(origin, var: u64) -> dispatch::DispatchResult {
 ///				// Your implementation
 ///				Ok(())
 /// 		}
 ///
 ///			// Public functions are both dispatchable and available to other
-/// 		// SRML modules.
+/// 		// FRAME modules.
 ///			pub fn my_public_function(origin) -> dispatch::DispatchResult {
 /// 			// Your implementation
 ///				Ok(())

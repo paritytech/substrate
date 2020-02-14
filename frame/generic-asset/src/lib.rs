@@ -1092,7 +1092,7 @@ mod imbalances {
 // types (basically for charging fees).
 // This should eventually be refactored so that the two type items that do
 // depend on the Imbalance type (TransactionPayment, DustRemoval)
-// are placed in their own SRML module.
+// are placed in their own FRAME module.
 struct ElevatedTrait<T: Subtrait>(T);
 impl<T: Subtrait> Clone for ElevatedTrait<T> {
 	fn clone(&self) -> Self {
