@@ -121,7 +121,7 @@ mod aux_schema;
 mod verification;
 pub mod authorship;
 #[cfg(test)]
-pub mod tests;
+mod tests;
 
 /// BABE epoch information
 #[derive(Decode, Encode, Default, PartialEq, Eq, Clone, Debug)]
