@@ -33,7 +33,6 @@ decl_storage! {
 		MyValue: u32;
 		MyMap: map hasher(blake2_256) u32 => u32;
 		MyDoubleMap: double_map hasher(blake2_256) u32, hasher(blake2_256) u32 => u32;
-		MyHashMap: map hasher(blake2_256) u128 => u32;
 	}
 }
 
@@ -128,20 +127,6 @@ decl_module! {
 			for r in 0..repeat {
 				MyDoubleMap::remove_prefix(r);
 			}
-		}
-
-		/// Read a value from storage map `repeat` number of times.
-		pub fn read_hash_map(_origin, keys: Vec<u128>) {
-			keys.iter().for_each(|key| {
-				MyHashMap::get(key);
-			});
-		}
-
-		/// Insert a value into a map.
-		pub fn contains_key_hash_map(_origin, keys: Vec<u128>) {
-			keys.iter().for_each(|key| {
-				MyHashMap::contains_key(key);
-			});
 		}
 
 		// Add user to the list.
