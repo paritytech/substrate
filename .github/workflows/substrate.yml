@@ -92,7 +92,6 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          toolchain: nigthly
           args: --manifest-path "primitives/core/Cargo.toml" --verbose --no-default-features --features full_crypto
       - name: Test full crypto feature app
         uses: actions-rs/cargo@v1
