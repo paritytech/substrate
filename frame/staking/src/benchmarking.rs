@@ -298,10 +298,14 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Submit
 {
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
-			// number of validator candidates
-			(BenchmarkParameter::V, 100, 1_000),
 			// number of nominators
-			(BenchmarkParameter::N, 100, 10_000),
+			(BenchmarkParameter::N, 100, 20_000),
+			// number of validator candidates
+			(BenchmarkParameter::V, 100, 2_000),
+			// num to elect
+			(BenchmarkParameter::E, 100, 1000),
+			// edge per vote
+			(BenchmarkParameter::Z, 2, 16),
 		]
 	}
 
@@ -310,10 +314,24 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Submit
 	{
 		let num_validators = components.iter().find(|&c| c.0 == BenchmarkParameter::V).unwrap().1;
 		let num_nominators = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
-		let edge_per_voter = 12;
-		let mode: BenchmarkingMode = BenchmarkingMode::InitialSubmission;
+		let edge_per_voter = components.iter().find(|&c| c.0 == BenchmarkParameter::Z).unwrap().1;
+		let mode: BenchmarkingMode = BenchmarkingMode::WeakerSubmission;
 		let do_reduce: bool = true;
-		let to_elect: u32 = 100;
+		let to_elect: u32 = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
+
+		sp_std::if_std! {
+			println!("++ instance with params {} / {} / {} / {:?} / {}",
+				num_nominators,
+				num_validators,
+				edge_per_voter,
+				mode,
+				to_elect,
+			);
+		}
+
+		if num_validators < to_elect {
+			return Err("invalid setup. too few candidates");
+		}
 
 		// setup
 		ValidatorCount::put(to_elect);
@@ -383,20 +401,22 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where T::Lookup: Sta
 			_ => return Err("Could not find extrinsic."),
 		};
 
-		// return data
+		// get components and params
 		let components = <
 			SubmitElectionSolution
 			as
 			BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>
 		>::components(&selected_benchmark);
-		let mut results: Vec<BenchmarkResults> = Vec::new();
+		let mode = BenchmarkingMode::WeakerSubmission;
 
+		let mut results: Vec<BenchmarkResults> = Vec::new();
 		for (name, low, high) in components.iter() {
 			// Create up to `STEPS` steps for that component between high and low.
 			let step_size = ((high - low) / steps).max(1);
 			let num_of_steps = (high - low) / step_size;
+
 			for s in 0..num_of_steps {
-				// This is the value we will be testing for component `name`
+				// final component value.
 				let component_value = low + step_size * s;
 
 				// Select the mid value for all the other components.
@@ -406,31 +426,34 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where T::Lookup: Sta
 					).collect();
 
 				for _ in 0..repeat {
-					let (call, caller) = <SubmitElectionSolution as BenchmarkingSetup<
+					if let Ok((call, caller)) = <SubmitElectionSolution as BenchmarkingSetup<
 						T,
 						Call<T>,
 						RawOrigin<T::AccountId>,
-					>>::instance(&selected_benchmark, &c)?;
+					>>::instance(&selected_benchmark, &c) {
+						#[cfg(not(test))]
+						sp_io::benchmarking::commit_db();
 
-					#[cfg(not(test))]
-					sp_io::benchmarking::commit_db();
+						let start = sp_io::benchmarking::current_time();
 
-					let start = sp_io::benchmarking::current_time();
-					call.dispatch(caller.into())?;
-					// match mode {
-					// 	BenchmarkingMode::WeakerSubmission => {
-					// 		// todo check the correct error is coming.
-					// 		let _ = call.dispatch(signed_account::<T>(USER)).unwrap_err();
-					// 	},
-					// 	_ => assert_ok!(call.dispatch(signed_account::<T>(USER)))
-					// };
-					let finish = sp_io::benchmarking::current_time();
+						match mode {
+							BenchmarkingMode::WeakerSubmission => {
+								// todo check the correct error is coming.
+								let _ = call.dispatch(caller.into()).unwrap_err();
+							},
+							_ => call.dispatch(caller.into())?,
+						};
+						let finish = sp_io::benchmarking::current_time();
 
-					let elapsed = finish - start;
-					results.push((c.clone(), elapsed));
+						let elapsed = finish - start;
+						results.push((c.clone(), elapsed));
 
-					#[cfg(not(test))]
-					sp_io::benchmarking::wipe_db();
+						#[cfg(not(test))]
+						sp_io::benchmarking::wipe_db();
+					} else {
+						results.push((c.clone(), 0));
+					}
+
 				}
 			}
 		}
