@@ -12,6 +12,7 @@
 use frame_support::{decl_module, decl_storage, decl_event, decl_error};
 use frame_support::traits::Currency;
 use frame_system::{self as system, ensure_signed};
+use codec::{Encode, Decode};
 use sp_std::prelude::Vec;
 
 pub mod benchmarking;
@@ -139,6 +140,16 @@ decl_module! {
 		pub fn append_member_list(origin) {
 			let who = ensure_signed(origin)?;
 			MyMemberList::<T>::append(&[who])?;
+		}
+
+		// Append user to the list.
+		pub fn encode_accounts(_origin, accounts: Vec<T::AccountId>) {
+			let _bytes = accounts.encode();
+		}
+
+		// Append user to the list.
+		pub fn decode_accounts(_origin, bytes: Vec<u8>) {
+			let _accounts: Vec<T::AccountId> = Decode::decode(&mut bytes.as_slice()).map_err(|_| "Could not decode")?;
 		}
 	}
 }

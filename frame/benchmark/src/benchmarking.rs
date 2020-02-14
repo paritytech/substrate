@@ -318,6 +318,56 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
+struct EncodeAccounts;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for EncodeAccounts {
+
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Number of accounts
+			(BenchmarkParameter::A, 1, 1000),
+		]
+	}
+
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	{
+		let a = components.iter().find(|&c| c.0 == BenchmarkParameter::A).unwrap().1;
+
+		let mut accounts = Vec::new();
+		for _ in 0..a {
+			accounts.push(account::<T>(a));
+		}
+
+		// Return `encode_accounts`
+		Ok((crate::Call::<T>::encode_accounts(accounts), RawOrigin::Signed(account::<T>(0))))
+	}
+}
+
+struct DecodeAccounts;
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for DecodeAccounts {
+
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// Number of accounts
+			(BenchmarkParameter::A, 1, 1000),
+		]
+	}
+
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+	{
+		let a = components.iter().find(|&c| c.0 == BenchmarkParameter::A).unwrap().1;
+
+		let mut accounts = Vec::new();
+		for _ in 0..a {
+			accounts.push(account::<T>(a));
+		}
+
+		let bytes = accounts.encode();
+
+		// Return `decode_accounts`
+		Ok((crate::Call::<T>::decode_accounts(bytes), RawOrigin::Signed(account::<T>(0))))
+	}
+}
+
 selected_benchmark! {
 	DoNothing,
 	ReadValue,
@@ -329,7 +379,9 @@ selected_benchmark! {
 	ContainsKeyMap,
 	RemovePrefix,
 	AddMemberList,
-	AppendMemberList
+	AppendMemberList,
+	EncodeAccounts,
+	DecodeAccounts
 }
 
 impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
@@ -348,6 +400,8 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 			b"remove_prefix" => SelectedBenchmark::RemovePrefix,
 			b"add_member_list" => SelectedBenchmark::AddMemberList,
 			b"append_member_list" => SelectedBenchmark::AppendMemberList,
+			b"encode_accounts" => SelectedBenchmark::EncodeAccounts,
+			b"decode_accounts" => SelectedBenchmark::DecodeAccounts,
 			_ => return Err("Extrinsic not found."),
 		};
 
