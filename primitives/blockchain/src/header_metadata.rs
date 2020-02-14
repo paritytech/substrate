@@ -151,7 +151,7 @@ pub fn tree_route<Block: BlockT, T: HeaderMetadata<Block>>(
 }
 
 /// Hash and number of a block.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HashAndNumber<Block: BlockT> {
 	/// The number of the block.
 	pub number: NumberFor<Block>,

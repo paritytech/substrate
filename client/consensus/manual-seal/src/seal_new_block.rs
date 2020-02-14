@@ -92,7 +92,7 @@ pub async fn seal_new_block<B, SC, CB, E, T, P>(
 		SC: SelectChain<B>,
 {
 	let future = async {
-		if pool.status().ready == 0 && !create_empty {
+		if pool.validated_pool().status().ready == 0 && !create_empty {
 			return Err(Error::EmptyTransactionPool)
 		}
 
