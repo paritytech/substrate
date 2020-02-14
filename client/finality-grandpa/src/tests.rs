@@ -30,7 +30,9 @@ use sp_keyring::Ed25519Keyring;
 use sc_client::LongestChain;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
-use sp_api::{ApiRef, ApiErrorExt, Core, RuntimeVersion, ApiExt, StorageProof, ProvideRuntimeApi};
+use sp_api::{ApiRef, ApiErrorExt, Core, RuntimeVersion, ApiExt, StorageProof,
+	StorageProofKind, ProvideRuntimeApi,
+};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
@@ -330,7 +332,7 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 		let backend = <InMemoryBackend<HasherFor<Block>>>::from(vec![
 			(None, vec![(b"authorities".to_vec(), Some(authorities.encode()))])
 		]);
-		let proof = prove_read(backend, vec![b"authorities"])
+		let proof = prove_read(backend, vec![b"authorities"], StorageProofKind::Flatten)
 			.expect("failure proving read from in-memory storage backend");
 		Ok(proof)
 	}

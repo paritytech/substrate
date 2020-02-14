@@ -835,8 +835,8 @@ pub(crate) mod tests {
 					_ => unreachable!("no other authorities should be fetched: {:?}", block_id),
 				},
 				|block_id| match block_id {
-					BlockId::Number(5) => Ok(StorageProof::new(vec![vec![50]])),
-					BlockId::Number(7) => Ok(StorageProof::new(vec![vec![70]])),
+					BlockId::Number(5) => Ok(StorageProof::Flatten(vec![vec![50]])),
+					BlockId::Number(7) => Ok(StorageProof::Flatten(vec![vec![70]])),
 					_ => unreachable!("no other authorities should be proved: {:?}", block_id),
 				},
 			),
@@ -852,14 +852,14 @@ pub(crate) mod tests {
 				block: header(5).hash(),
 				justification: just5,
 				unknown_headers: Vec::new(),
-				authorities_proof: Some(StorageProof::new(vec![vec![50]])),
+				authorities_proof: Some(StorageProof::Flatten(vec![vec![50]])),
 			},
 			// last fragment provides justification for #7 && unknown#7
 			FinalityProofFragment {
 				block: header(7).hash(),
 				justification: just7.clone(),
 				unknown_headers: vec![header(7)],
-				authorities_proof: Some(StorageProof::new(vec![vec![70]])),
+				authorities_proof: Some(StorageProof::Flatten(vec![vec![70]])),
 			},
 		]);
 
@@ -934,7 +934,7 @@ pub(crate) mod tests {
 				block: header(4).hash(),
 				justification: TestJustification((0, authorities.clone()), vec![7]).encode(),
 				unknown_headers: vec![header(4)],
-				authorities_proof: Some(StorageProof::new(vec![vec![42]])),
+				authorities_proof: Some(StorageProof::Flatten(vec![vec![42]])),
 			}, FinalityProofFragment {
 				block: header(5).hash(),
 				justification: TestJustification((0, authorities), vec![8]).encode(),
@@ -984,7 +984,7 @@ pub(crate) mod tests {
 				block: header(2).hash(),
 				justification: TestJustification((1, initial_authorities.clone()), vec![7]).encode(),
 				unknown_headers: Vec::new(),
-				authorities_proof: Some(StorageProof::new(vec![vec![42]])),
+				authorities_proof: Some(StorageProof::Flatten(vec![vec![42]])),
 			}, FinalityProofFragment {
 				block: header(4).hash(),
 				justification: TestJustification((2, next_authorities.clone()), vec![8]).encode(),
