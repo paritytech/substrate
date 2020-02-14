@@ -1356,6 +1356,7 @@ pub trait BenchmarkingSetup<T, Call, RawOrigin> {
 macro_rules! selected_benchmark {
 	($($bench:ident),*) => {
 		// The list of available benchmarks for this pallet.
+		#[allow(non_camel_case_types)]
 		enum SelectedBenchmark {
 			$( $bench, )*
 		}

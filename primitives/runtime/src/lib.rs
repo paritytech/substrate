@@ -688,8 +688,9 @@ pub fn print(print: impl traits::Printable) {
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
 #[allow(missing_docs)]
+#[allow(non_camel_case_types)]
 pub enum BenchmarkParameter {
-	A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+	a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z,
 }
 
 /// Results from running benchmarks on a FRAME pallet.
