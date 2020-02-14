@@ -401,9 +401,6 @@ pub trait Trait: frame_system::Trait {
 	/// to removal of a contract.
 	type SurchargeReward: Get<BalanceOf<Self>>;
 
-	/// The fee required to create an account.
-	type CreationFee: Get<BalanceOf<Self>>;
-
 	/// The fee to be paid for making a transaction; the base.
 	type TransactionBaseFee: Get<BalanceOf<Self>>;
 
@@ -516,9 +513,6 @@ decl_module! {
 		/// Reward that is received by the party whose touch has led
 		/// to removal of a contract.
 		const SurchargeReward: BalanceOf<T> = T::SurchargeReward::get();
-
-		/// The fee required to create an account.
-		const CreationFee: BalanceOf<T> = T::CreationFee::get();
 
 		/// The fee to be paid for making a transaction; the base.
 		const TransactionBaseFee: BalanceOf<T> = T::TransactionBaseFee::get();
@@ -966,7 +960,6 @@ pub struct Config<T: Trait> {
 	pub max_depth: u32,
 	pub max_value_size: u32,
 	pub contract_account_instantiate_fee: BalanceOf<T>,
-	pub account_create_fee: BalanceOf<T>,
 }
 
 impl<T: Trait> Config<T> {
@@ -978,7 +971,6 @@ impl<T: Trait> Config<T> {
 			max_depth: T::MaxDepth::get(),
 			max_value_size: T::MaxValueSize::get(),
 			contract_account_instantiate_fee: T::ContractFee::get(),
-			account_create_fee: T::CreationFee::get(),
 		}
 	}
 }

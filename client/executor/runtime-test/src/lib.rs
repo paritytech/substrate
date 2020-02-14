@@ -275,6 +275,20 @@ sp_core::wasm_export_functions! {
 
 		data.to_vec()
 	}
+
+	// Check that the heap at `heap_base + offset` don't contains the test message.
+	// After the check succeeds the test message is written into the heap.
+	//
+	// It is expected that the given pointer is not allocated.
+	fn check_and_set_in_heap(heap_base: u32, offset: u32) {
+		let test_message = b"Hello invalid heap memory";
+		let ptr = unsafe { (heap_base + offset) as *mut u8 };
+
+		let message_slice = unsafe { sp_std::slice::from_raw_parts_mut(ptr, test_message.len()) };
+
+		assert_ne!(test_message, message_slice);
+		message_slice.copy_from_slice(test_message);
+	}
  }
 
 #[cfg(not(feature = "std"))]
