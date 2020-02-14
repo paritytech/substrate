@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Implementations of the `IntoProtocolsHandler` and `ProtocolsHandler` traits for both ingoing
+//! Implementations of the `IntoProtocolsHandler` and `ProtocolsHandler` traits for both incoming
 //! and outgoing substreams for all gossiping protocols together.
 //!
 //! This is the main implementation of `ProtocolsHandler` in this crate, that handles all the

@@ -383,7 +383,7 @@ impl<TSubstream> GenericProto<TSubstream> {
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.
 	///
-	/// Also note that even we have a valid open substream, it may in fact be already closed
+	/// Also note that even if we have a valid open substream, it may in fact be already closed
 	/// without us knowing, in which case the packet will not be received.
 	///
 	/// > **Note**: Ideally the `engine_id` parameter wouldn't be necessary. See the documentation
