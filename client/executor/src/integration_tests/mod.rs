@@ -565,3 +565,26 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	let res = instance.call("allocates_huge_stack_array", &false.encode());
 	assert!(res.is_ok());
 }
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
+	let mut instance = crate::wasm_runtime::create_wasm_runtime_with_code(
+		wasm_method,
+		1024,
+		&WASM_BINARY[..],
+		HostFunctions::host_functions(),
+		true,
+	).expect("Creates instance");
+
+	let heap_base = instance.get_global_val("__heap_base")
+		.expect("`__heap_base` is valid")
+		.expect("`__heap_base` exists")
+		.as_i32()
+		.expect("`__heap_base` is an `i32`");
+
+	let params = (heap_base as u32, 512u32 * 64 * 1024).encode();
+	instance.call("check_and_set_in_heap", &params).unwrap();
+
+	// Cal it a second time to check that the heap was freed.
+	instance.call("check_and_set_in_heap", &params).unwrap();
+}

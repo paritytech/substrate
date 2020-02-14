@@ -21,10 +21,10 @@ use crate::util;
 use crate::imports::Imports;
 
 use sc_executor_common::error::{Error, Result};
-use sp_wasm_interface::{Pointer, WordSize};
+use sp_wasm_interface::{Pointer, WordSize, Value};
 use std::slice;
 use std::marker;
-use wasmtime::{Instance, Module, Memory, Table};
+use wasmtime::{Instance, Module, Memory, Table, Val};
 
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
 ///
@@ -126,6 +126,24 @@ impl InstanceWrapper {
 			.ok_or_else(|| Error::from("__heap_base is not a i32"))?;
 
 		Ok(heap_base as u32)
+	}
+
+	/// Get the value from a global with the given `name`.
+	pub fn get_global_val(&self, name: &str) -> Result<Option<Value>> {
+		let global = match self.instance.get_export(name) {
+			Some(global) => global,
+			None => return Ok(None),
+		};
+
+		let global = global.global().ok_or_else(|| format!("`{}` is not a global", name))?;
+
+		match global.get() {
+			Val::I32(val) => Ok(Some(Value::I32(val))),
+			Val::I64(val) => Ok(Some(Value::I64(val))),
+			Val::F32(val) => Ok(Some(Value::F32(val))),
+			Val::F64(val) => Ok(Some(Value::F64(val))),
+			_ => Err("Unknow value type".into()),
+		}
 	}
 }
 
