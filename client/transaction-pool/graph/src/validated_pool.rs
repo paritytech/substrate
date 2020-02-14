@@ -534,20 +534,19 @@ impl<B: ChainApi> ValidatedPool<B> {
 	pub async fn on_block_finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
 		debug!(target: "txpool", "Attempting to notify watchers of finalization for {}", block_hash);
 		// fetch all extrinsic hashes
-		let tx_hashes = self.api.block_body(&BlockId::Hash(block_hash.clone())).await?
-			.expect("fetched block header should have block body; qed")
-			.into_iter()
-			.map(|tx| self.api.hash_and_length(&tx).0)
-			.collect::<Vec<_>>();
-
-		// notify the watcher that these extrinsics have been finalized
-		self.listener.write().finalized(&block_hash, &tx_hashes);
+		if let Some(txs) = self.api.block_body(&BlockId::Hash(block_hash.clone())).await? {
+			let tx_hashes = txs.into_iter()
+				.map(|tx| self.api.hash_and_length(&tx).0)
+				.collect::<Vec<_>>();
+			// notify the watcher that these extrinsics have been finalized
+			self.listener.write().finalized(block_hash, tx_hashes);
+		}
 
 		Ok(())
 	}
 
 	/// Notify the listener of retracted blocks
-	pub fn on_block_retracted(&self, block_hash: &BlockHash<B>) {
+	pub fn on_block_retracted(&self, block_hash: BlockHash<B>) {
 		self.listener.write().retracted(block_hash)
 	}
 }

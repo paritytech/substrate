@@ -94,19 +94,20 @@ impl<H: Clone, BH: Clone> Sender<H, BH> {
 	}
 
 	/// Extrinsic has been finalized by a finality gadget.
-	pub fn finalized(&mut self, hash: &BH) {
-		self.send(TransactionStatus::Finalized(hash.clone()));
+	pub fn finalized(&mut self, hash: BH) {
+		self.send(TransactionStatus::Finalized(hash));
 		self.is_finalized = true;
 	}
 
 	/// The block this extrinsic was included in has been retracted
-	pub fn finality_timeout(&mut self, hash: &BH) {
-		self.send(TransactionStatus::FinalityTimeout(hash.clone()));
+	pub fn finality_timeout(&mut self, hash: BH) {
+		self.send(TransactionStatus::FinalityTimeout(hash));
+		self.is_finalized = true;
 	}
 
 	/// The block this extrinsic was included in has been retracted
-	pub fn retracted(&mut self, hash: &BH) {
-		self.send(TransactionStatus::Retracted(hash.clone()));
+	pub fn retracted(&mut self, hash: BH) {
+		self.send(TransactionStatus::Retracted(hash));
 	}
 
 	/// Extrinsic has been marked as invalid by the block builder.

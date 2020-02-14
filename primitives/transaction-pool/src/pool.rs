@@ -241,7 +241,7 @@ pub enum ChainEvent<B: BlockT> {
 	Finalized {
 		/// Hash of just finalized block
 		hash: B::Hash,
-	}
+	},
 }
 
 /// Trait for transaction pool maintenance.

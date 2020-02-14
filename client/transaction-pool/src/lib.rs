@@ -338,7 +338,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 						for retracted_hash in retracted {
 							// notify txs awaiting finality that it has been retracted
-							pool.validated_pool().on_block_retracted(&retracted_hash);
+							pool.validated_pool().on_block_retracted(retracted_hash.clone());
 
 							let block_transactions = api.block_body(&BlockId::hash(retracted_hash.clone())).await
 								.unwrap_or_else(|e| {

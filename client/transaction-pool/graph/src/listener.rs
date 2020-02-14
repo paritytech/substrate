@@ -30,7 +30,7 @@ pub struct Listener<H: hash::Hash + Eq, C: ChainApi> {
 	finality_watchers: LinkedHashMap<BlockHash<C>, Vec<H>>,
 }
 
-/// Maximum number of watchers awaiting finality at any time.
+/// Maximum number of blocks awaiting finality at any time.
 const MAX_FINALITY_WATCHERS: usize = 512;
 
 impl<H: hash::Hash + Eq, C: ChainApi> Default for Listener<H, C> {
@@ -113,15 +113,15 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 		while self.finality_watchers.len() > MAX_FINALITY_WATCHERS {
 			if let Some((hash, txs)) = self.finality_watchers.pop_front() {
 				for tx in txs {
-					self.fire(&tx, |s| s.finality_timeout(&hash));
+					self.fire(&tx, |s| s.finality_timeout(hash.clone()));
 				}
 			}
 		}
 	}
 
 	/// The block this transaction was included in has been retracted.
-	pub fn retracted(&mut self, block_hash: &BlockHash<C>) {
-		if let Some(hashes) = self.finality_watchers.remove(block_hash) {
+	pub fn retracted(&mut self, block_hash: BlockHash<C>) {
+		if let Some(hashes) = self.finality_watchers.remove(&block_hash) {
 			for hash in hashes {
 				self.fire(&hash, |s| s.retracted(block_hash))
 			}
@@ -129,10 +129,10 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	}
 
 	/// Notify all watchers that transactions have been finalized
-	pub fn finalized(&mut self, block_hash: &BlockHash<C>, txs: &[H]) {
-		self.finality_watchers.remove(block_hash);
+	pub fn finalized(&mut self, block_hash: BlockHash<C>, txs: Vec<H>) {
+		self.finality_watchers.remove(&block_hash);
 		for h in txs {
-			self.fire(h, |s| s.finalized(block_hash))
+			self.fire(&h, |s| s.finalized(block_hash.clone()))
 		}
 	}
 }
