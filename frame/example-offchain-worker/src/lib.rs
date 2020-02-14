@@ -427,15 +427,26 @@ impl<T: Trait> Module<T> {
 		// Note that since the request is being driven by the host, we don't have to wait
 		// for the request to have it complete, we will just not read the response.
 		let response = pending.try_wait(deadline)
-			.map_err(|e| http::Error::DeadlineReached)??;
+			.map_err(|_| http::Error::DeadlineReached)??;
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
 			debug::warn!("Unexpected status code: {}", response.code);
 			return Err(http::Error::Unknown);
 		}
 
+		// Next we want to fully read the response body and collect it to a vector of bytes.
+		// Note that the return object allows you to read the body in chunks as well
+		// with a way to control the deadline.
 		let body = response.body().collect::<Vec<u8>>();
+		// Next we parse the response using `serde_json`. Even though it's possible to
+		// use `serde_derive` and deserialize to a struct it's not recommended due to
+		// blob size overhead introduced by such code. Deserializing to `json::Value`
+		// is much more lightweight and should be preferred, especially if we only
+		// care about a small number of properties from the response.
 		let val: Result<json::Value, _> = json::from_slice(&body);
+		// Let's parse the price as float value. Note that you should avoid using
+		// floats in the runtime, it's fine to do that in the offchain worker,
+		// but we do convert it to an integer before submitting on-chain.
 		let price = val.ok().and_then(|v| v.get("USD").and_then(|v| v.as_f64()));
 		let price = match price {
 			Some(pricef) => Ok((pricef * 100.) as u32),
