@@ -332,6 +332,8 @@ fn fork_aware_finalization() {
 		};
 		b1 = header.hash();
 		block_on(pool.maintain(event));
+		let event = ChainEvent::Finalized { hash: b1 };
+		block_on(pool.maintain(event));
 	}
 
 	// block C2
@@ -377,6 +379,8 @@ fn fork_aware_finalization() {
 			retracted: vec![c2, d2],
 		};
 		block_on(pool.maintain(event));
+		let event = ChainEvent::Finalized { hash: header.hash() };
+		block_on(pool.maintain(event));
 	}
 
 	// block D1
@@ -394,12 +398,13 @@ fn fork_aware_finalization() {
 		};
 		d1 = header.hash();
 		block_on(pool.maintain(event));
+		let event = ChainEvent::Finalized { hash: d1 };
+		block_on(pool.maintain(event));
 	}
 
-	let event = ChainEvent::Finalized { hash: d1 };
-	block_on(pool.maintain(event));
 	let e1;
 
+	// block e1
 	{
 		let header = pool.api.push_block(5, vec![from_dave]);
 		e1 = header.hash();
