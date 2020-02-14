@@ -47,11 +47,10 @@ pub struct BasicQueue<B: BlockT, Transaction> {
 
 impl<B: BlockT, Transaction> Drop for BasicQueue<B, Transaction> {
 	fn drop(&mut self) {
-		drop(self.pool.take());
+		self.pool = None;
 		// Flush the queue and close the receiver to terminate the future.
 		let _ = self.sender.unbounded_send(ToWorkerMsg::Shutdown);
-		let (_, closed) = buffered_link::buffered_link();
-		drop(std::mem::replace(&mut self.result_port, closed));
+		self.result_port.close();
 
 		// Make sure all pool threads terminate.
 		// https://github.com/rust-lang/futures-rs/issues/1470
@@ -90,7 +89,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 
 		let mut pool = futures::executor::ThreadPool::builder()
 			.name_prefix("import-queue-worker-")
-			.pool_size(2)
+			.pool_size(1)
 			.after_start(move |_| *guard_start.0.lock() += 1)
 			.before_stop(move |_| {
 				let (ref mutex, ref condvar) = *guard_end;
