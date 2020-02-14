@@ -16,14 +16,7 @@ sp-runtime-interface = { version = "2.0.0", path = "../../../primitives/runtime-
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-allocator = { version = "2.0.0", path = "../../../primitives/allocator" }
 
-cranelift-codegen = "0.50"
-cranelift-entity = "0.50"
-cranelift-frontend = "0.50"
-cranelift-native = "0.50"
-cranelift-wasm = "0.50"
-wasmtime-environ = "0.8"
-wasmtime-jit = "0.8"
-wasmtime-runtime = "0.8"
+wasmtime = "0.11"
 
 [dev-dependencies]
 assert_matches = "1.3.0"

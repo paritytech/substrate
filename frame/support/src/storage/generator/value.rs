@@ -66,6 +66,10 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		G::from_optional_value_to_query(value)
 	}
 
+	fn try_get() -> Result<T, ()> {
+		unhashed::get(&Self::storage_value_final_key()).ok_or(())
+	}
+
 	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()> {
 		let key = Self::storage_value_final_key();
 

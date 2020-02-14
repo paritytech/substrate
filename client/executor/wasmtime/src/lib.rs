@@ -16,10 +16,11 @@
 
 ///! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
 
-mod function_executor;
+mod host;
 mod runtime;
-mod trampoline;
+mod state_holder;
+mod imports;
+mod instance_wrapper;
 mod util;
 
 pub use runtime::create_instance;
-
