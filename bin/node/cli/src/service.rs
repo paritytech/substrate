@@ -369,7 +369,7 @@ pub fn new_light(config: NodeConfiguration)
 
 #[cfg(test)]
 mod tests {
-	use std::{sync::Arc, collections::HashMap, borrow::Cow, any::Any};
+	use std::{sync::Arc, borrow::Cow, any::Any};
 	use sc_consensus_babe::{
 		CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY
 	};
@@ -557,27 +557,14 @@ mod tests {
 				);
 				slot_num += 1;
 
-				let params = BlockImportParams {
-					origin: BlockOrigin::File,
-					header: new_header,
-					justification: None,
-					post_digests: vec![item],
-					body: Some(new_body),
-					storage_changes: None,
-					finalized: false,
-					auxiliary: Vec::new(),
-					intermediates: {
-						let mut intermediates = HashMap::new();
-						intermediates.insert(
-							Cow::from(INTERMEDIATE_KEY),
-							Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
-						);
-						intermediates
-					},
-					fork_choice: Some(ForkChoiceStrategy::LongestChain),
-					allow_missing_state: false,
-					import_existing: false,
-				};
+				let mut params = BlockImportParams::new(BlockOrigin::File, new_header);
+				params.post_digests.push(item);
+				params.body = Some(new_body);
+				params.intermediates.insert(
+					Cow::from(INTERMEDIATE_KEY),
+					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+				);
+				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 				block_import.import_block(params, Default::default())
 					.expect("error importing test block");

@@ -113,6 +113,7 @@ pub struct BlockCheckParams<Block: BlockT> {
 }
 
 /// Data required to import a Block.
+#[non_exhaustive]
 pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// Origin of the Block
 	pub origin: BlockOrigin,
@@ -162,46 +163,47 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	pub allow_missing_state: bool,
 	/// Re-validate existing block.
 	pub import_existing: bool,
+	/// Cached full header hash (with post-digests applied).
+	pub post_hash: Option<Block::Hash>,
 }
 
 impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
-	/// Deconstruct the justified header into parts.
-	pub fn into_inner(self)
-		-> (
-			BlockOrigin,
-			<Block as BlockT>::Header,
-			Option<Justification>,
-			Vec<DigestItemFor<Block>>,
-			Option<Vec<Block::Extrinsic>>,
-			Option<sp_state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>>,
-			bool,
-			Vec<(Vec<u8>, Option<Vec<u8>>)>,
-		) {
-		(
-			self.origin,
-			self.header,
-			self.justification,
-			self.post_digests,
-			self.body,
-			self.storage_changes,
-			self.finalized,
-			self.auxiliary,
-		)
+	/// Create a new block import params.
+	pub fn new(
+		origin: BlockOrigin,
+		header: Block::Header,
+	) -> Self {
+		Self {
+			origin, header,
+			justification: None,
+			post_digests: Vec::new(),
+			body: None,
+			storage_changes: None,
+			finalized: false,
+			intermediates: HashMap::new(),
+			auxiliary: Vec::new(),
+			fork_choice: None,
+			allow_missing_state: false,
+			import_existing: false,
+			post_hash: None,
+		}
 	}
 
-	/// Get a handle to full header (with post-digests applied).
-	pub fn post_header(&self) -> Cow<Block::Header> {
-		if self.post_digests.is_empty() {
-			Cow::Borrowed(&self.header)
+	/// Get the full header hash (with post-digests applied).
+	pub fn post_hash(&self) -> Block::Hash {
+		if let Some(hash) = self.post_hash {
+			hash
 		} else {
-			Cow::Owned({
+			if self.post_digests.is_empty() {
+				self.header.hash()
+			} else {
 				let mut hdr = self.header.clone();
 				for digest_item in &self.post_digests {
 					hdr.digest_mut().push(digest_item.clone());
 				}
 
-				hdr
-			})
+				hdr.hash()
+			}
 		}
 	}
 
@@ -223,6 +225,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			allow_missing_state: self.allow_missing_state,
 			fork_choice: self.fork_choice,
 			import_existing: self.import_existing,
+			post_hash: self.post_hash,
 		}
 	}
 
