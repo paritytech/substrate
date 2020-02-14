@@ -742,9 +742,9 @@ fn run_out_of_gas() {
 		.execute_with(|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
 
-			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
 
-			assert_ok!(Contract::instantiate(
+			assert_ok!(Contracts::instantiate(
 				Origin::signed(ALICE),
 				100,
 				100_000,
@@ -755,7 +755,7 @@ fn run_out_of_gas() {
 			// Call the contract with a fixed gas limit. It must run out of gas because it just
 			// loops forever.
 			assert_err!(
-				Contract::call(
+				Contracts::call(
 					Origin::signed(ALICE),
 					BOB, // newly created account
 					0,
