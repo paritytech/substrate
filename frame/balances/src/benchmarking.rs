@@ -39,9 +39,9 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Existential Deposit Multiplier
-			(BenchmarkParameter::E, 2, 1000),
+			(BenchmarkParameter::e, 2, 1000),
 			// User Seed
-			(BenchmarkParameter::U, 1, 1000),
+			(BenchmarkParameter::u, 1, 1000),
 		]
 	}
 
@@ -52,12 +52,12 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		let ed = T::ExistentialDeposit::get();
 
 		// Select an account
-		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
+		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::u).unwrap().1;
 		let user = account::<T>("user", u);
 		let user_origin = RawOrigin::Signed(user.clone());
 
 		// Give some multiple of the existential deposit + creation fee + transfer fee
-		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
+		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::e).unwrap().1;
 		let balance = ed.saturating_mul(e.into());
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, balance);
 
@@ -78,9 +78,9 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Existential Deposit Multiplier
-			(BenchmarkParameter::E, 2, 1000),
+			(BenchmarkParameter::e, 2, 1000),
 			// User Seed
-			(BenchmarkParameter::U, 1, 1000),
+			(BenchmarkParameter::u, 1, 1000),
 		]
 	}
 
@@ -91,7 +91,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		let ed = T::ExistentialDeposit::get();
 
 		// Select a sender
-		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
+		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::u).unwrap().1;
 		let user = account::<T>("user", u);
 		let user_origin = RawOrigin::Signed(user.clone());
 
@@ -100,7 +100,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 
 		// Get the existential deposit multiplier
-		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
+		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::e).unwrap().1;
 
 		// Give the sender account max funds for transfer (their account will never reasonably be killed).
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, T::Balance::max_value());
@@ -123,9 +123,9 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Existential Deposit Multiplier
-			(BenchmarkParameter::E, 2, 1000),
+			(BenchmarkParameter::e, 2, 1000),
 			// User Seed
-			(BenchmarkParameter::U, 1, 1000),
+			(BenchmarkParameter::u, 1, 1000),
 		]
 	}
 
@@ -136,7 +136,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		let ed = T::ExistentialDeposit::get();
 
 		// Select a sender
-		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
+		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::u).unwrap().1;
 		let user = account::<T>("user", u);
 		let user_origin = RawOrigin::Signed(user.clone());
 
@@ -145,7 +145,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 
 		// Get the existential deposit multiplier
-		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
+		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::e).unwrap().1;
 
 		// Give the sender account max funds, thus a transfer will not kill account.
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, T::Balance::max_value());
@@ -164,9 +164,9 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Existential Deposit Multiplier
-			(BenchmarkParameter::E, 2, 1000),
+			(BenchmarkParameter::e, 2, 1000),
 			// User Seed
-			(BenchmarkParameter::U, 1, 1000),
+			(BenchmarkParameter::u, 1, 1000),
 		]
 	}
 
@@ -177,12 +177,12 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		let ed = T::ExistentialDeposit::get();
 
 		// Select a sender
-		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
+		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::u).unwrap().1;
 		let user = account::<T>("user", u);
 		let user_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(user.clone());
 
 		// Get the existential deposit multiplier for free and reserved
-		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
+		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::e).unwrap().1;
 		let balance_amt = ed.saturating_mul(e.into());
 
 		// Return the `set_balance` call
@@ -196,9 +196,9 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Existential Deposit Multiplier
-			(BenchmarkParameter::E, 2, 1000),
+			(BenchmarkParameter::e, 2, 1000),
 			// User Seed
-			(BenchmarkParameter::U, 1, 1000),
+			(BenchmarkParameter::u, 1, 1000),
 		]
 	}
 
@@ -209,12 +209,12 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		let ed = T::ExistentialDeposit::get();
 
 		// Select a sender
-		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
+		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::u).unwrap().1;
 		let user = account::<T>("user", u);
 		let user_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(user.clone());
 
 		// Get the existential deposit multiplier for free and reserved
-		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
+		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::e).unwrap().1;
 		// Give the user some initial balance
 		let balance_amt = ed.saturating_mul(e.into());
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, balance_amt);

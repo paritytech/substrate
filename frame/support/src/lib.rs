@@ -65,6 +65,8 @@ pub mod unsigned;
 pub mod error;
 pub mod traits;
 pub mod weights;
+#[macro_use]
+pub mod weighing;
 
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Blake2_128Concat, Hashable,
@@ -74,7 +76,10 @@ pub use self::storage::{
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap
 };
 pub use self::dispatch::{Parameter, Callable, IsSubType};
-pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
+pub use sp_runtime::{
+	self, ConsensusEngineId, print, traits::Printable, selected_benchmark
+};
+
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
