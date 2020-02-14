@@ -30,8 +30,8 @@ type Balances = pallet_balances::Module<Test>;
 fn query_membership_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(ScoredPool::members(), vec![20, 40]);
-		assert_eq!(Balances::reserved_balance(&31), CandidateDeposit::get());
-		assert_eq!(Balances::reserved_balance(&40), CandidateDeposit::get());
+		assert_eq!(Balances::reserved_balance(31), CandidateDeposit::get());
+		assert_eq!(Balances::reserved_balance(40), CandidateDeposit::get());
 		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), vec![20, 40]);
 	});
 }
@@ -61,7 +61,7 @@ fn submit_candidacy_works() {
 		assert_eq!(fetch_from_pool(15), Some((who, None)));
 
 		// then
-		assert_eq!(Balances::reserved_balance(&who), CandidateDeposit::get());
+		assert_eq!(Balances::reserved_balance(who), CandidateDeposit::get());
 	});
 }
 
@@ -117,7 +117,7 @@ fn kicking_works() {
 	new_test_ext().execute_with(|| {
 		// given
 		let who = 40;
-		assert_eq!(Balances::reserved_balance(&who), CandidateDeposit::get());
+		assert_eq!(Balances::reserved_balance(who), CandidateDeposit::get());
 		assert_eq!(find_in_pool(who), Some(0));
 
 		// when
@@ -128,7 +128,7 @@ fn kicking_works() {
 		assert_eq!(find_in_pool(who), None);
 		assert_eq!(ScoredPool::members(), vec![20, 31]);
 		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), ScoredPool::members());
-		assert_eq!(Balances::reserved_balance(&who), 0); // deposit must have been returned
+		assert_eq!(Balances::reserved_balance(who), 0); // deposit must have been returned
 	});
 }
 
@@ -246,7 +246,7 @@ fn withdraw_scored_candidacy_must_work() {
 	new_test_ext().execute_with(|| {
 		// given
 		let who = 40;
-		assert_eq!(Balances::reserved_balance(&who), CandidateDeposit::get());
+		assert_eq!(Balances::reserved_balance(who), CandidateDeposit::get());
 
 		// when
 		let index = find_in_pool(who).expect("entity must be in pool") as u32;
@@ -255,7 +255,7 @@ fn withdraw_scored_candidacy_must_work() {
 		// then
 		assert_eq!(fetch_from_pool(who), None);
 		assert_eq!(ScoredPool::members(), vec![20, 31]);
-		assert_eq!(Balances::reserved_balance(&who), 0);
+		assert_eq!(Balances::reserved_balance(who), 0);
 	});
 }
 

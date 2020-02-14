@@ -35,6 +35,9 @@ pub type Client = sc_client::Client<
 	node_runtime::RuntimeApi,
 >;
 
+/// Transaction for node-runtime.
+pub type Transaction = sc_client_api::backend::TransactionFor<Backend, node_primitives::Block>;
+
 /// Genesis configuration parameters for `TestClient`.
 #[derive(Default)]
 pub struct GenesisParameters {
@@ -57,6 +60,7 @@ pub trait TestClientBuilderExt: Sized {
 }
 
 impl TestClientBuilderExt for substrate_test_client::TestClientBuilder<
+	node_primitives::Block,
 	sc_client::LocalCallExecutor<Backend, Executor>,
 	Backend,
 	GenesisParameters,

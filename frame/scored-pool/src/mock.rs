@@ -46,9 +46,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 
-	pub const ExistentialDeposit: u64 = 0;
-	pub const TransferFee: u64 = 0;
-	pub const CreationFee: u64 = 0;
+	pub const ExistentialDeposit: u64 = 1;
 }
 ord_parameter_types! {
 	pub const KickOrigin: u64 = 2;
@@ -72,19 +70,17 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = pallet_balances::AccountData<u64>;
+	type OnNewAccount = ();
+	type OnReapAccount = Balances;
 }
 
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnFreeBalanceZero = ();
-	type OnReapAccount = System;
-	type OnNewAccount = ();
 	type Event = ();
-	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
-	type CreationFee = CreationFee;
+	type AccountStore = System;
 }
 
 thread_local! {
@@ -144,7 +140,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(40, 500_000),
 			(99, 1),
 		],
-		vesting: vec![],
 	}.assimilate_storage(&mut t).unwrap();
 	GenesisConfig::<Test>{
 		pool: vec![

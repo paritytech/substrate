@@ -3,6 +3,7 @@ name = "pallet-indices"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true }
@@ -14,6 +15,9 @@ sp-runtime = { version = "2.0.0", default-features = false, path = "../../primit
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+
+[dev-dependencies]
+pallet-balances = { version = "2.0.0", path = "../balances" }
 
 [features]
 default = ["std"]

@@ -42,7 +42,7 @@ pub enum Error {
 	SelectChainRequired,
 	/// Tasks executor is missing.
 	#[display(fmt="Tasks executor hasn't been provided.")]
-	TasksExecutorRequired,
+	TaskExecutorRequired,
 	/// Other error.
 	Other(String),
 }

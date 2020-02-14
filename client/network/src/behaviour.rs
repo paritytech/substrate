@@ -19,13 +19,13 @@ use crate::{
 	Event, protocol::event::DhtEvent
 };
 use crate::{ExHashT, specialization::NetworkSpecialization};
-use crate::protocol::{CustomMessageOutcome, Protocol};
+use crate::protocol::{self, light_client_handler, CustomMessageOutcome, Protocol};
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
-use log::{debug, warn};
+use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, Justification};
 use std::{iter, task::Context, task::Poll};
@@ -42,7 +42,10 @@ pub struct Behaviour<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	debug_info: debug_info::DebugInfoBehaviour<Substream<StreamMuxerBox>>,
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour<Substream<StreamMuxerBox>>,
-
+	/// Block request handling.
+	block_requests: protocol::BlockRequests<Substream<StreamMuxerBox>, B>,
+	/// Light client request handling.
+	light_client_handler: protocol::LightClientHandler<Substream<StreamMuxerBox>, B>,
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
 	events: Vec<BehaviourOut<B>>,
@@ -65,6 +68,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 		allow_private_ipv4: bool,
+		discovery_only_if_under_num: u64,
+		block_requests: protocol::BlockRequests<Substream<StreamMuxerBox>, B>,
+		light_client_handler: protocol::LightClientHandler<Substream<StreamMuxerBox>, B>,
 	) -> Self {
 		Behaviour {
 			substrate,
@@ -73,9 +79,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 				local_public_key,
 				known_addresses,
 				enable_mdns,
-				allow_private_ipv4
+				allow_private_ipv4,
+				discovery_only_if_under_num,
 			).await,
-			events: Vec::new(),
+			block_requests,
+			light_client_handler,
+			events: Vec::new()
 		}
 	}
 
@@ -117,6 +126,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
 		self.discovery.put_value(key, value);
 	}
+
+	/// Issue a light client request.
+	#[allow(unused)]
+	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::Error> {
+		self.light_client_handler.request(r)
+	}
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<void::Void> for
@@ -144,9 +159,9 @@ Behaviour<B, S, H> {
 						roles,
 					}));
 				},
-			CustomMessageOutcome::NotificationsStreamClosed { remote, protocols } =>
+			CustomMessageOutcome::NotificationStreamClosed { remote, protocols } =>
 				for engine_id in protocols {
-					self.events.push(BehaviourOut::Event(Event::NotificationsStreamClosed {
+					self.events.push(BehaviourOut::Event(Event::NotificationStreamClosed {
 						remote: remote.clone(),
 						engine_id,
 					}));
@@ -164,9 +179,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 	for Behaviour<B, S, H> {
 	fn inject_event(&mut self, event: debug_info::DebugInfoEvent) {
 		let debug_info::DebugInfoEvent::Identified { peer_id, mut info } = event;
-		if !info.protocol_version.contains("substrate") {
-			warn!(target: "sub-libp2p", "Connected to a non-Substrate node: {:?}", info);
-		}
 		if info.listen_addrs.len() > 30 {
 			debug!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
 				it is identified by {:?} and {:?}", peer_id, info.protocol_version,

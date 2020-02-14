@@ -34,7 +34,7 @@ use sp_std::prelude::*;
 use codec::{self as codec, Encode, Decode};
 use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
 use sp_runtime::{
-	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
+	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill, PerThing,
 };
 use sp_staking::{
 	SessionIndex,
@@ -175,7 +175,7 @@ decl_storage! {
 		CurrentSetId get(fn current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
 
 		/// A mapping from grandpa set ID to the index of the *most recent* session for which its members were responsible.
-		SetIdSession get(fn session_for_set): map SetId => Option<SessionIndex>;
+		SetIdSession get(fn session_for_set): map hasher(blake2_256) SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
 		config(authorities): AuthorityList;

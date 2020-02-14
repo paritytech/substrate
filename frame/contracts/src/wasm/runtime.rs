@@ -23,9 +23,7 @@ use crate::exec::{
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sp_sandbox;
 use frame_system;
-use sp_std::prelude::*;
-use sp_std::convert::TryInto;
-use sp_std::mem;
+use sp_std::{prelude::*, mem, convert::TryInto};
 use codec::{Decode, Encode};
 use sp_runtime::traits::{Bounded, SaturatedConversion};
 
@@ -89,7 +87,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 			buffer.clear();
 			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: buffer })
 		}
-		Ok(sp_sandbox::ReturnValue::Value(sp_sandbox::TypedValue::I32(exit_code))) => {
+		Ok(sp_sandbox::ReturnValue::Value(sp_sandbox::Value::I32(exit_code))) => {
 			let status = (exit_code & 0xFF).try_into()
 				.expect("exit_code is masked into the range of a u8; qed");
 			Ok(ExecReturnValue { status, data: runtime.scratch_buf })
@@ -620,6 +618,23 @@ define_env!(Env, <E: Ext>,
 	ext_minimum_balance(ctx) => {
 		ctx.scratch_buf.clear();
 		ctx.ext.minimum_balance().encode_to(&mut ctx.scratch_buf);
+		Ok(())
+	},
+
+	// Stores the tombstone deposit into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch
+	// buffer are overwritten.
+	//
+	// # Note
+	//
+	// The tombstone deposit is on top of the existential deposit. So in order for
+	// a contract to leave a tombstone the balance of the contract must not go
+	// below the sum of existential deposit and the tombstone deposit. The sum
+	// is commonly referred as subsistence threshold in code.
+	ext_tombstone_deposit(ctx) => {
+		ctx.scratch_buf.clear();
+		ctx.ext.tombstone_deposit().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 

@@ -167,18 +167,6 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 				);
 
 				quote!(
-					impl<#impl_trait> #scrate::storage::StoragePrefixedMap<#value_type>
-						for #storage_struct #optional_storage_where_clause
-					{
-						fn module_prefix() -> &'static [u8] {
-							#instance_or_inherent::PREFIX.as_bytes()
-						}
-
-						fn storage_prefix() -> &'static [u8] {
-							#storage_name_str.as_bytes()
-						}
-					}
-
 					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
 					#optional_storage_where_clause
 					{

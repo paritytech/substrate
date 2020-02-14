@@ -84,7 +84,7 @@ pub struct PruneStatus<Hash, Ex> {
 
 /// Immutable transaction
 #[cfg_attr(test, derive(Clone))]
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, parity_util_mem::MallocSizeOf)]
 pub struct Transaction<Hash, Extrinsic> {
 	/// Raw extrinsic representing that transaction.
 	pub data: Extrinsic,
@@ -210,6 +210,7 @@ const RECENTLY_PRUNED_TAGS: usize = 2;
 /// Most likely it is required to revalidate them and recompute set of
 /// required tags.
 #[derive(Debug)]
+#[cfg_attr(not(target_os = "unknown"), derive(parity_util_mem::MallocSizeOf))]
 pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 	reject_future_transactions: bool,
 	future: FutureTransactions<Hash, Ex>,
@@ -374,15 +375,20 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 	///
 	/// Includes both ready and future pool. For every hash in the `hashes`
 	/// iterator an `Option` is produced (so the resulting `Vec` always have the same length).
-	pub fn by_hash(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
-		let ready = self.ready.by_hash(hashes);
-		let future = self.future.by_hash(hashes);
+	pub fn by_hashes(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
+		let ready = self.ready.by_hashes(hashes);
+		let future = self.future.by_hashes(hashes);
 
 		ready
 			.into_iter()
 			.zip(future)
 			.map(|(a, b)| a.or(b))
 			.collect()
+	}
+
+	/// Returns pool transaction by hash.
+	pub fn ready_by_hash(&self, hash: &Hash) -> Option<Arc<Transaction<Hash, Ex>>> {
+		self.ready.by_hash(hash)
 	}
 
 	/// Makes sure that the transactions in the queues stay within provided limits.
@@ -839,6 +845,33 @@ mod tests {
 		} else {
 			assert!(false, "Invalid error kind: {:?}", err);
 		}
+	}
+
+	#[test]
+	fn can_track_heap_size() {
+		let mut pool = pool();
+		pool.import(Transaction {
+			data: vec![5u8; 1024],
+			bytes: 1,
+			hash: 5,
+			priority: 5u64,
+			valid_till: 64u64,
+			requires: vec![],
+			provides: vec![vec![0], vec![4]],
+			propagate: true,
+		}).expect("import 1 should be ok");
+		pool.import(Transaction {
+			data: vec![3u8; 1024],
+			bytes: 1,
+			hash: 7,
+			priority: 5u64,
+			valid_till: 64u64,
+			requires: vec![],
+			provides: vec![vec![2], vec![7]],
+			propagate: true,
+		}).expect("import 2 should be ok");
+
+		assert!(parity_util_mem::malloc_size(&pool) > 5000);
 	}
 
 	#[test]

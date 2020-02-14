@@ -55,11 +55,14 @@ pub trait Trait: super::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// Mapping from historical session indices to session-data root hash and validator count.
-		HistoricalSessions get(fn historical_root): map SessionIndex => Option<(T::Hash, ValidatorCount)>;
+		HistoricalSessions get(fn historical_root):
+			map hasher(blake2_256) SessionIndex => Option<(T::Hash, ValidatorCount)>;
 		/// The range of historical sessions we store. [first, last)
 		StoredRange: Option<(SessionIndex, SessionIndex)>;
 		/// Deprecated.
-		CachedObsolete: map SessionIndex => Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
+		CachedObsolete:
+			map hasher(blake2_256) SessionIndex
+			=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
 	}
 }
 

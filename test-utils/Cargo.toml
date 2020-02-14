@@ -3,3 +3,4 @@ name = "substrate-test-utils"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"

@@ -19,17 +19,18 @@
 
 mod peersstate;
 
-use std::{collections::{HashSet, HashMap}, collections::VecDeque, time::Instant};
+use std::{collections::{HashSet, HashMap}, collections::VecDeque};
 use futures::{prelude::*, channel::mpsc};
 use libp2p::PeerId;
 use log::{debug, error, trace};
 use serde_json::json;
 use std::{pin::Pin, task::Context, task::Poll};
+use wasm_timer::Instant;
 
 /// We don't accept nodes whose reputation is under this value.
 const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
 /// Reputation change for a node when we get disconnected from it.
-const DISCONNECT_REPUTATION_CHANGE: i32 = -10;
+const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// Reserved peers group ID
 const RESERVED_NODES: &'static str = "reserved";
 

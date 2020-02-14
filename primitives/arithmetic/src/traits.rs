@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Primitives for the runtime modules.
+//! Primitive traits for the runtime arithmetic.
 
 use sp_std::{self, convert::{TryFrom, TryInto}};
 use codec::HasCompact;
@@ -28,44 +28,55 @@ use sp_std::ops::{
 	RemAssign, Shl, Shr
 };
 
+/// A meta trait for arithmetic type operations, regardless of any limitation on size.
+pub trait BaseArithmetic:
+	From<u8> +
+	Zero + One + IntegerSquareRoot +
+	Add<Self, Output = Self> + AddAssign<Self> +
+	Sub<Self, Output = Self> + SubAssign<Self> +
+	Mul<Self, Output = Self> + MulAssign<Self> +
+	Div<Self, Output = Self> + DivAssign<Self> +
+	Rem<Self, Output = Self> + RemAssign<Self> +
+	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Saturating +
+	PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
+	TryFrom<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
+	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
+	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
+	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
+	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
+	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
+{}
+
+impl<T:
+	From<u8> +
+	Zero + One + IntegerSquareRoot +
+	Add<Self, Output = Self> + AddAssign<Self> +
+	Sub<Self, Output = Self> + SubAssign<Self> +
+	Mul<Self, Output = Self> + MulAssign<Self> +
+	Div<Self, Output = Self> + DivAssign<Self> +
+	Rem<Self, Output = Self> + RemAssign<Self> +
+	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Saturating +
+	PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
+	TryFrom<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
+	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
+	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
+	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
+	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
+	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
+> BaseArithmetic for T {}
+
 /// A meta trait for arithmetic.
 ///
 /// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
 /// be able to represent at least `u32` values without loss, hence the trait implies `From<u32>`
-/// and smaller ints. All other conversions are fallible.
-pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot +
-	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128> +
-	Add<Self, Output = Self> + AddAssign<Self> +
-	Sub<Self, Output = Self> + SubAssign<Self> +
-	Mul<Self, Output = Self> + MulAssign<Self> +
-	Div<Self, Output = Self> + DivAssign<Self> +
-	Rem<Self, Output = Self> + RemAssign<Self> +
-	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
-	Saturating + PartialOrd<Self> + Ord + Bounded +
-	HasCompact + Sized
-{}
-impl<T:
-	Zero + One + IntegerSquareRoot +
-	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> +
-	UniqueSaturatedInto<u128> + UniqueSaturatedFrom<usize> + UniqueSaturatedInto<usize> +
-	Add<Self, Output = Self> + AddAssign<Self> +
-	Sub<Self, Output = Self> + SubAssign<Self> +
-	Mul<Self, Output = Self> + MulAssign<Self> +
-	Div<Self, Output = Self> + DivAssign<Self> +
-	Rem<Self, Output = Self> + RemAssign<Self> +
-	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
-	Saturating + PartialOrd<Self> + Ord + Bounded +
-	HasCompact + Sized
-> SimpleArithmetic for T {}
+/// and smaller integers. All other conversions are fallible.
+pub trait AtLeast32Bit: BaseArithmetic + From<u16> + From<u32> {}
+
+impl<T: BaseArithmetic + From<u16> + From<u32>> AtLeast32Bit for T {}
 
 /// Just like `From` except that if the source value is too big to fit into the destination type
 /// then it'll saturate the destination.
