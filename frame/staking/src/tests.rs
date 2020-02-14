@@ -18,15 +18,10 @@
 
 use super::*;
 use mock::*;
-<<<<<<< HEAD
-use codec::Encode;
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{OnInitialize, BadOrigin},
 };
-=======
-use sp_runtime::{assert_eq_error_rate, traits::{OnInitialize, BadOrigin}};
->>>>>>> 29454c30501ccf3a09fe82b965dd50e1a9e5aa24
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
 	assert_ok, assert_noop,
@@ -2681,13 +2676,6 @@ fn remove_multi_deferred() {
 	})
 }
 
-#[test]
-fn version_initialized() {
-	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(<Staking as Store>::StorageVersion::get(), crate::migration::CURRENT_VERSION);
-	});
-}
-
 mod offchain_phragmen {
 	use crate::*;
 	use mock::*;
@@ -2832,20 +2820,70 @@ mod offchain_phragmen {
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 			// some election must have happened by now.
 			assert_eq!(
-				System::events()[4].event,
-				MetaEvent::staking(RawEvent::StakingElection(ElectionCompute::OnChain)),
+				System::events().into_iter().map(|r| r.event).filter_map(|e| {
+					if let MetaEvent::staking(inner) = e {
+						Some(inner)
+					} else {
+						None
+					}
+				}).last().unwrap(),
+				RawEvent::StakingElection(ElectionCompute::OnChain),
 			);
 		})
 	}
 
 	#[test]
+	#[ignore] // This takes a few mins
 	fn offchain_wont_work_if_snapshot_fails() {
-		unimplemented!();
+		ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.election_lookahead(3)
+			.build()
+			.execute_with(
+		|| {
+			run_to_block(12);
+			assert!(Staking::snapshot_validators().is_some());
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
+
+			// nominate more than the limit
+			let limit: NominatorIndex = ValidatorIndex::max_value() as NominatorIndex + 1;
+			let ctrl = 1_000_000;
+			for i in 0..limit {
+				bond_validator((1000 + i).into(), (1000 + i + ctrl).into(), 100);
+			}
+
+			run_to_block(27);
+			assert!(Staking::snapshot_validators().is_none());
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
+		})
 	}
 
 	#[test]
 	fn staking_is_locked_when_election_window_open() {
-		unimplemented!();
+		ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.election_lookahead(3)
+			.build()
+			.execute_with(
+		|| {
+			run_to_block(12);
+			assert!(Staking::snapshot_validators().is_some());
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
+
+			let call = crate::Call::bond(999, 998, Default::default());
+			let outer: mock::Call = call.into();
+
+			let lock_staking: LockStakingStatus<Test> = Default::default();
+			assert_eq!(
+				lock_staking.validate(
+					&10,
+					&outer,
+					Default::default(),
+					Default::default(),
+				),
+				TransactionValidity::Err(InvalidTransaction::Stale.into()),
+			)
+		})
 	}
 
 	#[test]
@@ -2876,8 +2914,14 @@ mod offchain_phragmen {
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 
 			assert_eq!(
-				System::events()[3].event,
-				MetaEvent::staking(RawEvent::StakingElection(ElectionCompute::Signed)),
+				System::events().into_iter().map(|r| r.event).filter_map(|e| {
+					if let MetaEvent::staking(inner) = e {
+						Some(inner)
+					} else {
+						None
+					}
+				}).last().unwrap(),
+				RawEvent::StakingElection(ElectionCompute::Signed),
 			);
 		})
 	}
@@ -2910,8 +2954,14 @@ mod offchain_phragmen {
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 
 			assert_eq!(
-				System::events()[3].event,
-				MetaEvent::staking(RawEvent::StakingElection(ElectionCompute::Signed)),
+				System::events().into_iter().map(|r| r.event).filter_map(|e| {
+					if let MetaEvent::staking(inner) = e {
+						Some(inner)
+					} else {
+						None
+					}
+				}).last().unwrap(),
+				RawEvent::StakingElection(ElectionCompute::Signed),
 			);
 		})
 	}

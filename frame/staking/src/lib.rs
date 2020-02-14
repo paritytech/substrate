@@ -250,7 +250,6 @@
 mod mock;
 #[cfg(test)]
 mod tests;
-mod slashing;
 
 pub mod slashing;
 pub mod offchain_election;
@@ -1207,7 +1206,7 @@ decl_module! {
 		fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
-			payee: RewardDestination
+			payee: RewardDestination,
 		) {
 			let stash = ensure_signed(origin)?;
 

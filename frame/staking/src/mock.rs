@@ -161,6 +161,7 @@ impl_outer_dispatch! {
 }
 
 mod staking {
+	// Re-export needed for `impl_outer_event!`.
 	pub use super::super::*;
 }
 use frame_system as system;
@@ -169,7 +170,10 @@ use pallet_session as session;
 
 impl_outer_event! {
 	pub enum MetaEvent for Test {
-		staking<T>, balances<T>, session,
+		system<T>,
+		balances<T>,
+		session,
+		staking<T>,
 	}
 }
 
@@ -228,7 +232,7 @@ impl frame_system::Trait for Test {
 }
 impl pallet_balances::Trait for Test {
 	type Balance = Balance;
-	type Event = ();
+	type Event = MetaEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
