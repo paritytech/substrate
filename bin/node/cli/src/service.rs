@@ -98,12 +98,12 @@ macro_rules! new_full_start {
 			})?
 			.with_rpc_extensions(|builder| -> Result<RpcExtension, _> {
 				let babe_link = import_setup.as_ref().map(|s| &s.2)
-					.expect("Link is present or set up failed; qed.");
+					.expect("BabeLink is present for full services or set up failed; qed.");
 				let deps = node_rpc::FullDeps {
 					client: builder.client().clone(),
 					pool: builder.pool(),
 					select_chain: builder.select_chain().cloned()
-						.expect("SelectChain is present or set up failed; qed."),
+						.expect("SelectChain is present for full services or set up failed; qed."),
 					babe: node_rpc::BabeDeps {
 						keystore: builder.keystore(),
 						babe_config: sc_consensus_babe::BabeLink::config(babe_link).clone(),

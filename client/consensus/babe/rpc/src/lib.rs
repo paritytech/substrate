@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! rpc api for babe.
+//! RPC api for babe.
 
-use crate::{Epoch, SharedEpochChanges, authorship, Config};
+use sc_consensus_babe::{Epoch, authorship, Config};
 use futures::{FutureExt as _, TryFutureExt as _};
 use jsonrpc_core::{
 	Error as RpcError,
 	futures::future as rpc_future,
 };
 use jsonrpc_derive::rpc;
-use sc_consensus_epochs::{descendent_query, Epoch as EpochT};
+use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
 use sp_consensus_babe::{
 	AuthorityId,
 	BabeApi as BabeRuntimeApi,
@@ -192,4 +192,57 @@ fn epoch_data<B, C, SC>(
 		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(format!("{:?}", e))))?
 		.map(|e| e.into_inner())
 		.ok_or(Error::Consensus(ConsensusError::InvalidAuthoritiesSet))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use substrate_test_runtime_client::{
+		DefaultTestClientBuilderExt,
+		TestClientBuilderExt,
+		TestClientBuilder,
+	};
+	use sp_application_crypto::AppPair;
+	use sp_keyring::Ed25519Keyring;
+	use sc_keystore::Store;
+
+	use std::sync::Arc;
+	use sc_consensus_babe::{Config, block_import, AuthorityPair};
+	use jsonrpc_core::IoHandler;
+
+	/// creates keystore backed by a temp file
+	fn create_temp_keystore<P: AppPair>(authority: Ed25519Keyring) -> (KeyStorePtr, tempfile::TempDir) {
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore = Store::open(keystore_path.path(), None).expect("Creates keystore");
+		keystore.write().insert_ephemeral_from_seed::<P>(&authority.to_seed())
+			.expect("Creates authority key");
+
+		(keystore, keystore_path)
+	}
+
+	#[test]
+	fn rpc() {
+		let builder = TestClientBuilder::new();
+		let (client, longest_chain) = builder.build_with_longest_chain();
+		let client = Arc::new(client);
+		let config = Config::get_or_compute(&*client).expect("config available");
+		let (_, link) = block_import(
+			config.clone(),
+			client.clone(),
+			client.clone(),
+			client.clone(),
+		).expect("can initialize block-import");
+
+		let epoch_changes = link.epoch_changes().clone();
+		let select_chain = longest_chain;
+		let keystore = create_temp_keystore::<AuthorityPair>(Ed25519Keyring::Alice).0;
+		let handler = BabeRPCHandler::new(client.clone(), epoch_changes, keystore, config, select_chain);
+		let mut io = IoHandler::new();
+
+		io.extend_with(BabeApi::to_delegate(handler));
+		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
+		let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4]}},"id":1}"#;
+
+		assert_eq!(Some(response.into()), io.handle_request_sync(request));
+	}
 }

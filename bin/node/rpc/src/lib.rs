@@ -40,7 +40,8 @@ use sp_consensus::SelectChain;
 use sc_keystore::KeyStorePtr;
 use sp_consensus_babe::BabeApi;
 use sc_consensus_epochs::SharedEpochChanges;
-use sc_consensus_babe::{Config, Epoch, rpc::{self as sc_consensus_babe_rpc, BabeRPCHandler}};
+use sc_consensus_babe::{Config, Epoch};
+use sc_consensus_babe_rpc::BabeRPCHandler;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
