@@ -6343,7 +6343,6 @@ dependencies = [
  "sysinfo",
  "target_info",
  "tokio 0.2.11",
- "tokio-executor 0.1.10",
  "tracing",
  "wasm-timer",
 ]
