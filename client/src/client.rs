@@ -42,7 +42,7 @@ use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProof,
-	merge_storage_proofs,
+	merge_storage_proofs, StorageProofKind,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo};
 use sp_consensus::{
@@ -396,8 +396,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
+		// TODO keep flatten proof here?? or move choice to caller?
 		self.state_at(id)
-			.and_then(|state| prove_read(state, keys)
+			.and_then(|state| prove_read(state, keys, StorageProofKind::Flatten)
 				.map_err(Into::into))
 	}
 
@@ -413,8 +414,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
+		// TODO keep flatten proof here??
 		self.state_at(id)
-			.and_then(|state| prove_child_read(state, storage_key, child_info, keys)
+			.and_then(|state| prove_child_read(state, storage_key, child_info, keys, StorageProofKind::Flatten)
 				.map_err(Into::into))
 	}
 
@@ -718,7 +720,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Ok(())
 		}, ())?;
 
-		Ok(merge_storage_proofs(proofs))
+		Ok(merge_storage_proofs::<HasherFor<Block>, _>(proofs)?)
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).

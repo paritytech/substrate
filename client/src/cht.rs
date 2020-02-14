@@ -30,7 +30,8 @@ use sp_core::{H256, convert_hash};
 use sp_runtime::traits::{Header as HeaderT, SimpleArithmetic, Zero, One};
 use sp_state_machine::{
 	MemoryDB, TrieBackend, Backend as StateBackend, StorageProof, InMemoryBackend,
-	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend
+	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_flat_proving_backend,
+	StorageProofKind,
 };
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -119,6 +120,8 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 	prove_read_on_trie_backend(
 		trie_storage,
 		blocks.into_iter().map(|number| encode_cht_key(number)),
+		// TODO consider Flatten compact here?
+		StorageProofKind::Flatten,
 	).map_err(ClientError::Execution)
 }
 
@@ -168,7 +171,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 		local_number,
 		remote_hash,
 		|_, local_cht_key|
-			read_proof_check_on_proving_backend::<Hasher>(
+			read_proof_check_on_flat_proving_backend::<Hasher>(
 				proving_backend,
 				local_cht_key,
 			).map_err(|e| ClientError::from(e)),

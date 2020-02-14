@@ -329,6 +329,9 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 			.collect()
 	}
 
+	// TODO instead of changing mutabliity of the returned value, we could wrap the trie
+	// backend in a new backend that register roots -> would be cleaner and still allow
+	// caching.
 	fn as_trie_backend(&mut self)-> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		let mut mdb = MemoryDB::default();
 		let mut new_child_roots = Vec::new();

@@ -201,12 +201,12 @@ pub fn prove_execution<Block, S, E>(
 
 	// execute method + record execution proof
 	let (result, exec_proof) = executor.prove_at_trie_state(
-		&trie_state,
+		trie_state,
 		&mut changes,
 		method,
 		call_data,
 	)?;
-	let total_proof = merge_storage_proofs(vec![init_proof, exec_proof]);
+	let total_proof = merge_storage_proofs::<HasherFor<Block>, _>(vec![init_proof, exec_proof])?;
 
 	Ok((result, total_proof))
 }

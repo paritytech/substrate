@@ -21,7 +21,7 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, StorageProof,
+	backend::Backend as _, StorageProof, StorageProofKind,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
@@ -212,12 +212,15 @@ where
 		method: &str,
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
+		// TODO this switch execution proof to full compact, should we move the choice to
+		// caller??
 		sp_state_machine::prove_execution_on_trie_backend::<_, _, NumberFor<Block>, _>(
 			trie_state,
 			overlay,
 			&self.executor,
 			method,
 			call_data,
+			StorageProofKind::FullCompact,
 		)
 		.map_err(Into::into)
 	}

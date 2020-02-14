@@ -20,11 +20,13 @@ use sp_core::Hasher;
 use sp_trie::{Trie, delta_trie_root, default_child_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use sp_core::storage::{ChildInfo, ChildrenMap};
-use codec::{Codec, Decode};
+use codec::{Codec, Decode, Encode};
 use crate::{
 	StorageKey, StorageValue, Backend,
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral, BackendStorageDBRef},
 };
+use std::sync::Arc;
+use parking_lot::RwLock;
 
 /// Patricia trie-based backend. Transaction type is overlays of changes to commit
 /// for this trie and child tries.
@@ -33,14 +35,44 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	// storing child_info of top trie even if it is in
 	// theory a bit useless (no heap alloc on empty vec).
 	top_trie: ChildInfo,
+	/// If defined, we store encoded visited roots for top_trie and child trie in this
+	/// map. It also act as a cache.
+	register_roots: Option<Arc<RwLock<ChildrenMap<Option<H::Out>>>>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
 	/// Create new trie-based backend.
+	/// TODO check if still used
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root),
 			top_trie: ChildInfo::top_trie(),
+			register_roots: None,
+		}
+	}
+
+	/// Activate storage of roots (can be use
+	/// to pack proofs and does small caching of child trie root)).
+	pub fn new_with_roots(storage: S, root: H::Out) -> Self {
+		TrieBackend {
+			essence: TrieBackendEssence::new(storage, root),
+			top_trie: ChildInfo::top_trie(),
+			register_roots: Some(Arc::new(RwLock::new(Default::default()))),
+		}
+	}
+
+	/// Get registered roots
+	pub fn extract_registered_roots(&self) -> Option<ChildrenMap<Vec<u8>>> {
+		if let Some(register_roots) = self.register_roots.as_ref() {
+			let mut dest = ChildrenMap::default();
+			dest.insert(ChildInfo::top_trie(), self.essence.root().encode());
+			let read_lock = register_roots.read();
+			for (child_info, root) in read_lock.iter() {
+				dest.insert(child_info.clone(), root.encode());
+			}
+			Some(dest)
+		} else {
+			None
 		}
 	}
 
@@ -88,7 +120,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
-		if let Some(essence) = self.child_essence(storage_key)? {
+		if let Some(essence) = self.child_essence(storage_key, child_info)? {
 			essence.storage(child_info, key)
 		} else {
 			Ok(None)
@@ -105,7 +137,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
-		if let Some(essence) = self.child_essence(storage_key)? {
+		if let Some(essence) = self.child_essence(storage_key, child_info)? {
 			essence.next_storage_key(child_info, key)
 		} else {
 			Ok(None)
@@ -126,7 +158,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		if let Ok(Some(essence)) = self.child_essence(storage_key) {
+		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info) {
 			essence.for_keys(child_info, f)
 		}
 	}
@@ -138,7 +170,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		prefix: &[u8],
 		f: F,
 	) {
-		if let Ok(Some(essence)) = self.child_essence(storage_key) {
+		if let Ok(Some(essence)) = self.child_essence(storage_key, child_info) {
 			essence.for_keys_with_prefix(child_info, prefix, f)
 		}
 	}
@@ -267,9 +299,23 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where
 	fn child_essence<'a>(
 		&'a self,
 		storage_key: &[u8],
+		child_info: &ChildInfo,
 	) -> Result<Option<TrieBackendEssence<&'a S, H>>, <Self as Backend<H>>::Error> {
+		if let Some(cache) = self.register_roots.as_ref() {
+			if let Some(result) = cache.read().get(child_info) {
+				return Ok(result.map(|root|
+					TrieBackendEssence::new(self.essence.backend_storage(), root.clone())
+				));
+			}
+		}
+
 		let root: Option<H::Out> = self.storage(storage_key)?
 			.and_then(|encoded_root| Decode::decode(&mut &encoded_root[..]).ok());
+
+		if let Some(cache) = self.register_roots.as_ref() {
+			cache.write().insert(child_info.clone(), root.clone());
+		}
+
 		Ok(if let Some(root) = root {
 			Some(TrieBackendEssence::new(self.essence.backend_storage(), root))
 		} else {
