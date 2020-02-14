@@ -17,6 +17,7 @@ log = "0.4.8"
 parking_lot = "0.10.0"
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-version = { version = "2.0.0", path = "../../primitives/version" }
+sp-runtime = { path = "../../primitives/runtime" }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }

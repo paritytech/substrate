@@ -51,7 +51,7 @@ use std::{
 use wasm_timer::SystemTime;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::MaintainedTransactionPool;
+use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
@@ -882,40 +882,50 @@ ServiceBuilder<
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 			let is_validator = config.roles.is_authority();
 
-			let events = client.import_notification_stream()
-				.for_each(move |notification| {
-					let txpool = txpool.upgrade();
+			let (import_stream, finality_stream) = (
+				client.import_notification_stream().map(|n| ChainEvent::NewBlock {
+					id: BlockId::Hash(n.hash),
+					header: n.header,
+					retracted: n.retracted,
+					is_new_best: n.is_new_best,
+				}),
+				client.finality_notification_stream().map(|n| ChainEvent::Finalized {
+					hash: n.hash
+				})
+			);
+			let events = futures::stream::select(import_stream, finality_stream)
+				.for_each(move |event| {
+					// offchain worker is only interested in block import events
+					if let ChainEvent::NewBlock { ref header, is_new_best, .. } = event {
+						let offchain = offchain.as_ref().and_then(|o| o.upgrade());
+						match offchain {
+							Some(offchain) if is_new_best => {
+								let future = offchain.on_block_imported(
+									&header,
+									network_state_info.clone(),
+									is_validator,
+								);
+								let _ = to_spawn_tx_.unbounded_send((
+									Box::pin(future),
+									From::from("offchain-on-block"),
+								));
+							},
+							Some(_) => log::debug!(
+									target: "sc_offchain",
+									"Skipping offchain workers for non-canon block: {:?}",
+									header,
+								),
+							_ => {},
+						}
+					};
 
+					let txpool = txpool.upgrade();
 					if let Some(txpool) = txpool.as_ref() {
-						let future = txpool.maintain(
-							&BlockId::hash(notification.hash),
-							&notification.retracted,
-						);
+						let future = txpool.maintain(event);
 						let _ = to_spawn_tx_.unbounded_send((
 							Box::pin(future),
 							From::from("txpool-maintain")
 						));
-					}
-
-					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
-					match offchain {
-						Some(offchain) if notification.is_new_best => {
-							let future = offchain.on_block_imported(
-								&notification.header,
-								network_state_info.clone(),
-								is_validator,
-							);
-							let _ = to_spawn_tx_.unbounded_send((
-									Box::pin(future),
-									From::from("offchain-on-block"),
-							));
-						},
-						Some(_) => log::debug!(
-							target: "sc_offchain",
-							"Skipping offchain workers for non-canon block: {:?}",
-							notification.header,
-						),
-						_ => {},
 					}
 
 					ready(())

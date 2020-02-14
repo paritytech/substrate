@@ -67,9 +67,8 @@ where
 			}
 
 			let factory_state = FactoryState::new(
-				cli_args.mode.clone(),
-				cli_args.num,
-				cli_args.rounds,
+				cli_args.blocks,
+				cli_args.transactions,
 			);
 
 			let service_builder = new_full_start!(config).0;
