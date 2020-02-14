@@ -98,7 +98,6 @@ pub enum TransactionStatus<Hash, BlockHash> {
 	/// The transaction has been broadcast to the given peers.
 	Broadcast(Vec<String>),
 	/// Transaction has been included in block with given hash.
-	#[serde(rename = "finalized")] // See #4438
 	InBlock(BlockHash),
 	/// The block this transaction was included in has been retracted.
 	Retracted(BlockHash),
