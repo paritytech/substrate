@@ -18,8 +18,9 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use frame_support::{StorageHasher, Twox128};
+use crate::{StorageHasher, Twox128};
 
+/// Utility to iterate through raw items in storage.
 pub struct StorageIterator<T> {
 	prefix: [u8; 32],
 	previous_key: Vec<u8>,
@@ -28,12 +29,14 @@ pub struct StorageIterator<T> {
 }
 
 impl<T> StorageIterator<T> {
+	/// Construct iterator to iterate over map items in `module` for the map called `item`.
 	pub fn new(module: &[u8], item: &[u8]) -> Self {
 		let mut prefix = [0u8; 32];
 		prefix[0..16].copy_from_slice(&Twox128::hash(module));
 		prefix[16..32].copy_from_slice(&Twox128::hash(item));
 		Self { prefix, previous_key: prefix[..].to_vec(), drain: false, _phantom: Default::default() }
 	}
+	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
 	pub fn drain(mut self) -> Self {
 		self.drain = true;
 		self
@@ -67,6 +70,7 @@ impl<T: Decode + Sized> Iterator for StorageIterator<T> {
 	}
 }
 
+/// Get a particular value in storage by the `module`, the map's `item` name and the key `hash`.
 pub fn get_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &[u8]) -> Option<T> {
 	let mut key = vec![0u8; 32 + hash.len()];
 	key[0..16].copy_from_slice(&Twox128::hash(module));
@@ -75,6 +79,16 @@ pub fn get_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &[
 	frame_support::storage::unhashed::get::<T>(&key)
 }
 
+/// Get a particular value in storage by the `module`, the map's `item` name and the key `hash`.
+pub fn take_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &[u8]) -> Option<T> {
+	let mut key = vec![0u8; 32 + hash.len()];
+	key[0..16].copy_from_slice(&Twox128::hash(module));
+	key[16..32].copy_from_slice(&Twox128::hash(item));
+	key[32..].copy_from_slice(hash);
+	frame_support::storage::unhashed::take::<T>(&key)
+}
+
+/// Put a particular value into storage by the `module`, the map's `item` name and the key `hash`.
 pub fn put_storage_value<T: Encode>(module: &[u8], item: &[u8], hash: &[u8], value: T) {
 	let mut key = vec![0u8; 32 + hash.len()];
 	key[0..16].copy_from_slice(&Twox128::hash(module));
