@@ -21,21 +21,21 @@ use codec::{Codec, Decode};
 use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, UniqueSaturatedInto}};
+use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay, MaybeFromStr}};
 use sp_api::ProvideRuntimeApi;
 use sp_core::Bytes;
-use pallet_transaction_payment_rpc_runtime_api::CappedDispatchInfo;
+use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;
 
 #[rpc]
-pub trait TransactionPaymentApi<BlockHash, Balance> {
+pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 	#[rpc(name = "payment_queryInfo")]
 	fn query_info(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>
-	) -> Result<CappedDispatchInfo>;
+	) -> Result<ResponseType>;
 }
 
 /// A struct that implements the [`TransactionPaymentApi`].
@@ -68,20 +68,20 @@ impl From<Error> for i64 {
 	}
 }
 
-impl<C, Block, Balance, Extrinsic> TransactionPaymentApi<<Block as BlockT>::Hash, Balance>
+impl<C, Block, Balance, Extrinsic> TransactionPaymentApi<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
 	for TransactionPayment<C, (Block, Extrinsic)>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance, Extrinsic>,
-	Balance: Codec + UniqueSaturatedInto<u64>,
+	Balance: Codec + MaybeDisplay + MaybeFromStr,
 	Extrinsic: Codec + Send + Sync + 'static,
 {
 	fn query_info(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<<Block as BlockT>::Hash>
-	) -> Result<CappedDispatchInfo> {
+	) -> Result<RuntimeDispatchInfo<Balance>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -99,6 +99,6 @@ where
 			code: ErrorCode::ServerError(Error::RuntimeError.into()),
 			message: "Unable to query dispatch info.".into(),
 			data: Some(format!("{:?}", e).into()),
-		}).map(CappedDispatchInfo::new)
+		})
 	}
 }
