@@ -29,3 +29,6 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 ]
+full_crypto = [
+	"app-crypto/full_crypto"
+]

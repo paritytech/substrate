@@ -70,9 +70,6 @@ mod changes_trie;
 pub mod traits;
 pub mod testing;
 
-#[cfg(test)]
-mod tests;
-
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
 pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};

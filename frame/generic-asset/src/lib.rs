@@ -156,7 +156,7 @@ use codec::{Decode, Encode, HasCompact, Input, Output, Error as CodecError};
 
 use sp_runtime::{RuntimeDebug, DispatchResult, DispatchError};
 use sp_runtime::traits::{
-	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic,
+	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, AtLeast32Bit,
 	Zero, Bounded,
 };
 
@@ -166,7 +166,7 @@ use frame_support::{
 	decl_event, decl_module, decl_storage, ensure, decl_error,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
-		SignedImbalance, UpdateBalanceOutcome, WithdrawReason, WithdrawReasons, TryDrop,
+		SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop, BalanceStatus,
 	},
 	Parameter, StorageMap,
 };
@@ -180,24 +180,24 @@ pub use self::imbalances::{NegativeImbalance, PositiveImbalance};
 pub trait Trait: frame_system::Trait {
 	type Balance: Parameter
 		+ Member
-		+ SimpleArithmetic
+		+ AtLeast32Bit
 		+ Default
 		+ Copy
 		+ MaybeSerializeDeserialize
 		+ Debug;
-	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
+	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
 pub trait Subtrait: frame_system::Trait {
 	type Balance: Parameter
 		+ Member
-		+ SimpleArithmetic
+		+ AtLeast32Bit
 		+ Default
 		+ Copy
 		+ MaybeSerializeDeserialize
 		+ Debug;
-	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
+	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 }
 
 impl<T: Trait> Subtrait for T {
@@ -427,10 +427,9 @@ decl_module! {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct BalanceLock<Balance, BlockNumber> {
+pub struct BalanceLock<Balance> {
 	pub id: LockIdentifier,
 	pub amount: Balance,
-	pub until: BlockNumber,
 	pub reasons: WithdrawReasons,
 }
 
@@ -459,7 +458,7 @@ decl_storage! {
 
 		/// Any liquidity locks on some account balances.
 		pub Locks get(fn locks):
-			map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
+			map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// The identity of the asset which is the one that is designated for the chain's staking system.
 		pub StakingAssetId get(fn staking_asset_id) config(): T::AssetId;
@@ -581,7 +580,7 @@ impl<T: Trait> Module<T> {
 		options: AssetOptions<T::Balance, T::AccountId>,
 	) -> DispatchResult {
 		let asset_id = if let Some(asset_id) = asset_id {
-			ensure!(!<TotalIssuance<T>>::exists(&asset_id), Error::<T>::IdAlreadyTaken);
+			ensure!(!<TotalIssuance<T>>::contains_key(&asset_id), Error::<T>::IdAlreadyTaken);
 			ensure!(asset_id < Self::next_asset_id(), Error::<T>::IdUnavailable);
 			asset_id
 		} else {
@@ -715,8 +714,8 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Move up to `amount` from reserved balance of account `who` to free balance of account
-	/// `beneficiary`.
+	/// Move up to `amount` from reserved balance of account `who` to balance of account
+	/// `beneficiary`, either free or reserved depending on `status`.
 	///
 	/// As much funds up to `amount` will be moved as possible. If this is less than `amount`, then
 	/// the `remaining` would be returned, else `Zero::zero()`.
@@ -727,13 +726,23 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 		beneficiary: &T::AccountId,
 		amount: T::Balance,
+		status: BalanceStatus,
 	) -> T::Balance {
 		let b = Self::reserved_balance(asset_id, who);
 		let slash = sp_std::cmp::min(b, amount);
 
-		let original_free_balance = Self::free_balance(asset_id, beneficiary);
-		let new_free_balance = original_free_balance + slash;
-		Self::set_free_balance(asset_id, beneficiary, new_free_balance);
+		match status {
+			BalanceStatus::Free => {
+				let original_free_balance = Self::free_balance(asset_id, beneficiary);
+				let new_free_balance = original_free_balance + slash;
+				Self::set_free_balance(asset_id, beneficiary, new_free_balance);
+			}
+			BalanceStatus::Reserved => {
+				let original_reserved_balance = Self::reserved_balance(asset_id, beneficiary);
+				let new_reserved_balance = original_reserved_balance + slash;
+				Self::set_reserved_balance(asset_id, beneficiary, new_reserved_balance);
+			}
+		}
 
 		let new_reserve_balance = b - slash;
 		Self::set_reserved_balance(asset_id, who, new_reserve_balance);
@@ -796,10 +805,8 @@ impl<T: Trait> Module<T> {
 		if locks.is_empty() {
 			return Ok(());
 		}
-		let now = <frame_system::Module<T>>::block_number();
 		if Self::locks(who)
-			.into_iter()
-			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.intersects(reasons))
+			.into_iter().all(|l| new_balance >= l.amount || !l.reasons.intersects(reasons))
 		{
 			Ok(())
 		} else {
@@ -825,14 +832,11 @@ impl<T: Trait> Module<T> {
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
-		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		let now = <frame_system::Module<T>>::block_number();
 		let mut new_lock = Some(BalanceLock {
 			id,
 			amount,
-			until,
 			reasons,
 		});
 		let mut locks = <Module<T>>::locks(who)
@@ -840,10 +844,8 @@ impl<T: Trait> Module<T> {
 			.filter_map(|l| {
 				if l.id == id {
 					new_lock.take()
-				} else if l.until > now {
-					Some(l)
 				} else {
-					None
+					Some(l)
 				}
 			})
 			.collect::<Vec<_>>();
@@ -857,14 +859,11 @@ impl<T: Trait> Module<T> {
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
-		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		let now = <frame_system::Module<T>>::block_number();
 		let mut new_lock = Some(BalanceLock {
 			id,
 			amount,
-			until,
 			reasons,
 		});
 		let mut locks = <Module<T>>::locks(who)
@@ -874,13 +873,10 @@ impl<T: Trait> Module<T> {
 					new_lock.take().map(|nl| BalanceLock {
 						id: l.id,
 						amount: l.amount.max(nl.amount),
-						until: l.until.max(nl.until),
 						reasons: l.reasons | nl.reasons,
 					})
-				} else if l.until > now {
-					Some(l)
 				} else {
-					None
+					Some(l)
 				}
 			})
 			.collect::<Vec<_>>();
@@ -891,11 +887,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {
-		let now = <frame_system::Module<T>>::block_number();
-		let locks = <Module<T>>::locks(who)
-			.into_iter()
-			.filter_map(|l| if l.until > now && l.id != id { Some(l) } else { None })
-			.collect::<Vec<_>>();
+		let mut locks = <Module<T>>::locks(who);
+		locks.retain(|l| l.id != id);
 		<Locks<T>>::insert(who, locks);
 	}
 }
@@ -1097,8 +1090,8 @@ mod imbalances {
 // its type declaration).
 // This works as long as `increase_total_issuance_by` doesn't use the Imbalance
 // types (basically for charging fees).
-// This should eventually be refactored so that the three type items that do
-// depend on the Imbalance type (TransactionPayment, TransferPayment, DustRemoval)
+// This should eventually be refactored so that the two type items that do
+// depend on the Imbalance type (TransactionPayment, DustRemoval)
 // are placed in their own SRML module.
 struct ElevatedTrait<T: Subtrait>(T);
 impl<T: Subtrait> Clone for ElevatedTrait<T> {
@@ -1123,12 +1116,15 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type Lookup = T::Lookup;
 	type Header = T::Header;
 	type Event = ();
+	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
-	type BlockHashCount = T::BlockHashCount;
 	type Version = T::Version;
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnReapAccount = ();
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;
@@ -1206,7 +1202,7 @@ where
 	}
 
 	fn deposit_creating(who: &T::AccountId, value: Self::Balance) -> Self::PositiveImbalance {
-		let (imbalance, _) = Self::make_free_balance_be(who, Self::free_balance(who) + value);
+		let imbalance = Self::make_free_balance_be(who, Self::free_balance(who) + value);
 		if let SignedImbalance::Positive(p) = imbalance {
 			p
 		} else {
@@ -1218,10 +1214,7 @@ where
 	fn make_free_balance_be(
 		who: &T::AccountId,
 		balance: Self::Balance,
-	) -> (
-		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
-		UpdateBalanceOutcome,
-	) {
+	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
 		let original = <Module<T>>::free_balance(&U::asset_id(), who);
 		let imbalance = if original <= balance {
 			SignedImbalance::Positive(PositiveImbalance::new(balance - original))
@@ -1229,7 +1222,7 @@ where
 			SignedImbalance::Negative(NegativeImbalance::new(original - balance))
 		};
 		<Module<T>>::set_free_balance(&U::asset_id(), who, balance);
-		(imbalance, UpdateBalanceOutcome::Updated)
+		imbalance
 	}
 
 	fn can_slash(who: &T::AccountId, value: Self::Balance) -> bool {
@@ -1305,8 +1298,9 @@ where
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
+		status: BalanceStatus,
 	) -> result::Result<Self::Balance, DispatchError> {
-		Ok(<Module<T>>::repatriate_reserved(&U::asset_id(), slashed, beneficiary, value))
+		Ok(<Module<T>>::repatriate_reserved(&U::asset_id(), slashed, beneficiary, value, status))
 	}
 }
 
@@ -1339,20 +1333,18 @@ where
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
-		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		<Module<T>>::set_lock(id, who, amount, until, reasons)
+		<Module<T>>::set_lock(id, who, amount, reasons)
 	}
 
 	fn extend_lock(
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
-		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		<Module<T>>::extend_lock(id, who, amount, until, reasons)
+		<Module<T>>::extend_lock(id, who, amount, reasons)
 	}
 
 	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {

@@ -66,31 +66,6 @@ impl<'a> FunctionExecutor<'a> {
 impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 	type SupervisorFuncRef = wasmi::FuncRef;
 
-	fn store(&self) -> &sandbox::Store<Self::SupervisorFuncRef> {
-		&self.sandbox_store
-	}
-	fn store_mut(&mut self) -> &mut sandbox::Store<Self::SupervisorFuncRef> {
-		&mut self.sandbox_store
-	}
-	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>, Error> {
-		let heap = &mut self.heap;
-		self.memory.with_direct_access_mut(|mem| {
-			heap.allocate(mem, len).map_err(Into::into)
-		})
-	}
-	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<(), Error> {
-		let heap = &mut self.heap;
-		self.memory.with_direct_access_mut(|mem| {
-			heap.deallocate(mem, ptr).map_err(Into::into)
-		})
-	}
-	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<(), Error> {
-		self.memory.set(ptr.into(), data).map_err(Into::into)
-	}
-	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>, Error> {
-		self.memory.get(ptr.into(), len as usize).map_err(Into::into)
-	}
-
 	fn invoke(
 		&mut self,
 		dispatch_thunk: &Self::SupervisorFuncRef,
@@ -98,8 +73,7 @@ impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 		invoke_args_len: WordSize,
 		state: u32,
 		func_idx: sandbox::SupervisorFuncIndex,
-	) -> Result<i64, Error>
-	{
+	) -> Result<i64, Error> {
 		let result = wasmi::FuncInstance::invoke(
 			dispatch_thunk,
 			&[
@@ -259,8 +233,15 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 				.clone()
 		};
 
+		let guest_env = match sandbox::GuestEnvironment::decode(&self.sandbox_store, raw_env_def) {
+			Ok(guest_env) => guest_env,
+			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
+		};
+
 		let instance_idx_or_err_code =
-			match sandbox::instantiate(self, dispatch_thunk, wasm, raw_env_def, state) {
+			match sandbox::instantiate(self, dispatch_thunk, wasm, guest_env, state)
+				.map(|i| i.register(&mut self.sandbox_store))
+			{
 				Ok(instance_idx) => instance_idx,
 				Err(sandbox::InstantiationError::StartTrapped) =>
 					sandbox_primitives::ERR_EXECUTION,
@@ -554,7 +535,6 @@ struct StateSnapshot {
 	data_segments: Vec<(u32, Vec<u8>)>,
 	/// The list of all global mutable variables of the module in their sequential order.
 	global_mut_values: Vec<RuntimeValue>,
-	heap_pages: u64,
 }
 
 impl StateSnapshot {
@@ -562,7 +542,6 @@ impl StateSnapshot {
 	fn take(
 		module_instance: &ModuleRef,
 		data_segments: Vec<DataSegment>,
-		heap_pages: u64,
 	) -> Option<Self> {
 		let prepared_segments = data_segments
 			.into_iter()
@@ -608,7 +587,6 @@ impl StateSnapshot {
 		Some(Self {
 			data_segments: prepared_segments,
 			global_mut_values,
-			heap_pages,
 		})
 	}
 
@@ -664,10 +642,6 @@ pub struct WasmiRuntime {
 }
 
 impl WasmRuntime for WasmiRuntime {
-	fn update_heap_pages(&mut self, heap_pages: u64) -> bool {
-		self.state_snapshot.heap_pages == heap_pages
-	}
-
 	fn host_functions(&self) -> &[&'static dyn Function] {
 		&self.host_functions
 	}
@@ -695,6 +669,19 @@ impl WasmRuntime for WasmiRuntime {
 			&self.missing_functions,
 		)
 	}
+
+	fn get_global_val(&self, name: &str) -> Result<Option<sp_wasm_interface::Value>, Error> {
+		match self.instance.export_by_name(name) {
+			Some(global) => Ok(Some(
+				global
+					 .as_global()
+					 .ok_or_else(|| format!("`{}` is not a global", name))?
+					 .get()
+					 .into()
+			)),
+			None => Ok(None),
+		}
+	}
 }
 
 pub fn create_instance(
@@ -720,7 +707,7 @@ pub fn create_instance(
 	).map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 	// Take state snapshot before executing anything.
-	let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages)
+	let state_snapshot = StateSnapshot::take(&instance, data_segments)
 		.expect(
 			"`take` returns `Err` if the module is not valid;
 				we already loaded module above, thus the `Module` is proven to be valid at this point;

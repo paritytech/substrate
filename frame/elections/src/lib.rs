@@ -26,13 +26,13 @@
 use sp_std::prelude::*;
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, print,
-	traits::{Zero, One, StaticLookup, Bounded, Saturating},
+	traits::{Zero, One, StaticLookup, Saturating},
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
 	weights::SimpleDispatchInfo,
 	traits::{
-		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
+		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
 	}
 };
@@ -501,7 +501,7 @@ decl_module! {
 			if valid {
 				// This only fails if `reporter` doesn't exist, which it clearly must do since its
 				// the origin. Still, it's no more harmful to propagate any error at this point.
-				T::Currency::repatriate_reserved(&who, &reporter, T::VotingBond::get())?;
+				T::Currency::repatriate_reserved(&who, &reporter, T::VotingBond::get(), BalanceStatus::Free)?;
 				Self::deposit_event(RawEvent::VoterReaped(who, reporter));
 			} else {
 				let imbalance = T::Currency::slash_reserved(&reporter, T::VotingBond::get()).0;
@@ -525,7 +525,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			ensure!(!Self::presentation_active(), Error::<T>::CannotRetractPresenting);
-			ensure!(<VoterInfoOf<T>>::exists(&who), Error::<T>::RetractNonVoter);
+			ensure!(<VoterInfoOf<T>>::contains_key(&who), Error::<T>::RetractNonVoter);
 			let index = index as usize;
 			let voter = Self::voter_at(index).ok_or(Error::<T>::InvalidRetractionIndex)?;
 			ensure!(voter == who, Error::<T>::InvalidRetractionIndex);
@@ -730,7 +730,7 @@ impl<T: Trait> Module<T> {
 
 	/// If `who` a candidate at the moment?
 	pub fn is_a_candidate(who: &T::AccountId) -> bool {
-		<RegisterInfoOf<T>>::exists(who)
+		<RegisterInfoOf<T>>::contains_key(who)
 	}
 
 	/// Iff the member `who` still has a seat at blocknumber `n` returns `true`.
@@ -894,7 +894,6 @@ impl<T: Trait> Module<T> {
 			MODULE_ID,
 			&who,
 			locked_balance,
-			T::BlockNumber::max_value(),
 			WithdrawReasons::all(),
 		);
 

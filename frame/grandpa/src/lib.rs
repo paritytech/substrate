@@ -45,7 +45,7 @@ use frame_support::{
 use sp_runtime::{
 	generic::{DigestItem, OpaqueDigestItemId},
 	traits::{IdentifyAccount, Zero},
-	DispatchResult, KeyTypeId, Perbill,
+	DispatchResult, KeyTypeId, Perbill, PerThing,
 };
 use sp_staking::{
 	SessionIndex,

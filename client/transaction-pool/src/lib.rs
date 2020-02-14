@@ -28,19 +28,20 @@ pub mod testing;
 pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
-use std::{collections::HashMap, sync::Arc, pin::Pin, time::Instant};
+use std::{collections::HashMap, sync::Arc, pin::Pin};
 use futures::{Future, FutureExt, future::ready};
 use parking_lot::Mutex;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, SimpleArithmetic, Extrinsic},
+	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic},
 };
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
 	TxHash, TransactionFor, TransactionStatusStreamFor, BlockHash,
 	MaintainedTransactionPool, PoolFuture,
 };
+use wasm_timer::Instant;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -51,6 +52,19 @@ pub struct BasicPool<PoolApi, Block>
 	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	api: Arc<PoolApi>,
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
+}
+
+#[cfg(not(target_os = "unknown"))]
+impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
+where
+	PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
+	PoolApi::Hash: parity_util_mem::MallocSizeOf,
+	Block: BlockT,
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		// other entries insignificant or non-primary references
+		self.pool.size_of(ops)
+	}
 }
 
 /// Type of revalidation.
@@ -193,7 +207,7 @@ enum RevalidationStatus<N> {
 	/// The revalidation has never been completed.
 	NotScheduled,
 	/// The revalidation is scheduled.
-	Scheduled(Option<std::time::Instant>, Option<N>),
+	Scheduled(Option<Instant>, Option<N>),
 	/// The revalidation is in progress.
 	InProgress,
 }
@@ -209,7 +223,7 @@ struct RevalidationAction {
 	revalidate_amount: Option<usize>,
 }
 
-impl<N: Clone + Copy + SimpleArithmetic> RevalidationStrategy<N> {
+impl<N: Clone + Copy + AtLeast32Bit> RevalidationStrategy<N> {
 	pub fn clear(&mut self) {
 		if let Self::Light(status) = self {
 			status.clear()
@@ -241,7 +255,7 @@ impl<N: Clone + Copy + SimpleArithmetic> RevalidationStrategy<N> {
 	}
 }
 
-impl<N: Clone + Copy + SimpleArithmetic> RevalidationStatus<N> {
+impl<N: Clone + Copy + AtLeast32Bit> RevalidationStatus<N> {
 	/// Called when revalidation is completed.
 	pub fn clear(&mut self) {
 		*self = Self::NotScheduled;

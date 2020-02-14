@@ -7,7 +7,7 @@ license = "GPL-3.0"
 
 [dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../client" }
-parking_lot = "0.9.0"
+parking_lot = "0.10.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }

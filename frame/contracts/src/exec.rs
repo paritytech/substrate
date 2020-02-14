@@ -554,7 +554,6 @@ where
 #[derive(Copy, Clone)]
 pub enum TransferFeeKind {
 	ContractInstantiate,
-	AccountCreate,
 	Transfer,
 }
 
@@ -572,8 +571,7 @@ impl<T: Trait> Token<T> for TransferFeeToken<BalanceOf<T>> {
 	fn calculate_amount(&self, metadata: &Config<T>) -> Gas {
 		let balance_fee = match self.kind {
 			TransferFeeKind::ContractInstantiate => metadata.contract_account_instantiate_fee,
-			TransferFeeKind::AccountCreate => metadata.account_create_fee,
-			TransferFeeKind::Transfer => metadata.transfer_fee,
+			TransferFeeKind::Transfer => return metadata.schedule.transfer_cost,
 		};
 		approx_gas_for_balance(self.gas_price, balance_fee)
 	}
@@ -612,28 +610,14 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	use self::TransferCause::*;
 	use self::TransferFeeKind::*;
 
-	let to_balance = ctx.overlay.get_balance(dest);
-
-	// `would_create` indicates whether the account will be created if this transfer gets executed.
-	// This flag is orthogonal to `cause.
-	// For example, we can instantiate a contract at the address which already has some funds. In this
-	// `would_create` will be `false`. Another example would be when this function is called from `call`,
-	// and account with the address `dest` doesn't exist yet `would_create` will be `true`.
-	let would_create = to_balance.is_zero();
-
 	let token = {
 		let kind: TransferFeeKind = match cause {
 			// If this function is called from `Instantiate` routine, then we always
 			// charge contract account creation fee.
 			Instantiate => ContractInstantiate,
 
-			// Otherwise the fee depends on whether we create a new account or transfer
-			// to an existing one.
-			Call => if would_create {
-				TransferFeeKind::AccountCreate
-			} else {
-				TransferFeeKind::Transfer
-			},
+			// Otherwise the fee is to transfer to an account.
+			Call => TransferFeeKind::Transfer,
 		};
 		TransferFeeToken {
 			kind,
@@ -651,7 +635,8 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 		Some(b) => b,
 		None => Err("balance too low to send value")?,
 	};
-	if would_create && value < ctx.config.existential_deposit {
+	let to_balance = ctx.overlay.get_balance(dest);
+	if to_balance.is_zero() && value < ctx.config.existential_deposit {
 		Err("value too low to create account")?
 	}
 	T::Currency::ensure_can_withdraw(
@@ -1009,7 +994,7 @@ mod tests {
 
 			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-			let result = ctx.instantiate(0, &mut gas_meter, &code, vec![]);
+			let result = ctx.instantiate(1, &mut gas_meter, &code, vec![]);
 			assert_matches!(result, Ok(_));
 
 			let mut toks = gas_meter.tokens().iter();
@@ -1105,7 +1090,7 @@ mod tests {
 				toks,
 				ExecFeeToken::Call,
 				TransferFeeToken {
-					kind: TransferFeeKind::AccountCreate,
+					kind: TransferFeeKind::Transfer,
 					gas_price: 1u64
 				},
 			);
@@ -1302,8 +1287,10 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
+			ctx.overlay.set_balance(&ALICE, 1);
+
 			let result = ctx.instantiate(
-				0,
+				1,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&input_data_ch,
 				vec![1, 2, 3, 4],
@@ -1348,6 +1335,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+			ctx.overlay.set_balance(&BOB, 1);
 			ctx.overlay.instantiate_contract(&BOB, recurse_ch).unwrap();
 
 			let result = ctx.call(
@@ -1661,8 +1649,10 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
+			ctx.overlay.set_balance(&ALICE, 1);
+
 			let result = ctx.instantiate(
-				0,
+				1,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&rent_allowance_ch,
 				vec![],

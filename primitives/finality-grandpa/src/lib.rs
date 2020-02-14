@@ -41,7 +41,7 @@ pub const KEY_TYPE: app_crypto::KeyTypeId =
 	app_crypto::key_types::GRANDPA;
 
 /// The grandpa crypto scheme defined via the keypair type.
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "full_crypto"))]
 pub type AuthorityPair = app::Pair;
 
 /// Identity of a Grandpa authority.

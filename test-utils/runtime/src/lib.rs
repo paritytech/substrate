@@ -115,6 +115,8 @@ pub enum Extrinsic {
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
 }
 
+parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinisic does not need this
+
 #[cfg(feature = "std")]
 impl serde::Serialize for Extrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
@@ -339,8 +341,8 @@ impl_outer_origin!{
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Event;
 
-impl From<frame_system::Event> for Event {
-	fn from(_evt: frame_system::Event) -> Self {
+impl From<frame_system::Event<Runtime>> for Event {
+	fn from(_evt: frame_system::Event<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
@@ -370,6 +372,9 @@ impl frame_system::Trait for Runtime {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnReapAccount = ();
 }
 
 impl pallet_timestamp::Trait for Runtime {

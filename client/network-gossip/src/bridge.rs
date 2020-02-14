@@ -15,16 +15,17 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Network, Validator};
-use crate::state_machine::{ConsensusGossip, TopicNotification};
+use crate::state_machine::{ConsensusGossip, TopicNotification, PERIODIC_MAINTENANCE_INTERVAL};
 
 use sc_network::message::generic::ConsensusMessage;
 use sc_network::{Event, ReputationChange};
 
-use futures::{prelude::*, channel::mpsc, compat::Compat01As03, task::SpawnExt as _};
+use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
+use futures01::stream::Stream as Stream01;
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
-use std::{sync::Arc, time::Duration};
+use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 
 /// Wraps around an implementation of the `Network` crate and provides gossiping capabilities on
 /// top of it.
@@ -36,13 +37,17 @@ pub struct GossipEngine<B: BlockT> {
 struct GossipEngineInner<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
 	network: Box<dyn Network<B> + Send>,
+	periodic_maintenance_interval: futures_timer::Delay,
+	network_event_stream: Compat01As03<Box<dyn Stream01<Error = (), Item = Event> + Send>>,
+	engine_id: ConsensusEngineId,
 }
+
+impl<B: BlockT> Unpin for GossipEngineInner<B> {}
 
 impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
 		mut network: N,
-		executor: &impl futures::task::Spawn,
 		engine_id: ConsensusEngineId,
 		validator: Arc<dyn Validator<B>>,
 	) -> Self where B: 'static {
@@ -50,7 +55,7 @@ impl<B: BlockT> GossipEngine<B> {
 
 		// We grab the event stream before registering the notifications protocol, otherwise we
 		// might miss events.
-		let event_stream = network.event_stream();
+		let network_event_stream = network.event_stream();
 
 		network.register_notifications_protocol(engine_id);
 		state_machine.register_validator(&mut network, engine_id, validator);
@@ -58,78 +63,15 @@ impl<B: BlockT> GossipEngine<B> {
 		let inner = Arc::new(Mutex::new(GossipEngineInner {
 			state_machine,
 			network: Box::new(network),
+			periodic_maintenance_interval: futures_timer::Delay::new(PERIODIC_MAINTENANCE_INTERVAL),
+			network_event_stream: Compat01As03::new(network_event_stream),
+			engine_id,
 		}));
 
 		let gossip_engine = GossipEngine {
 			inner: inner.clone(),
 			engine_id,
 		};
-
-		let res = executor.spawn({
-			let inner = Arc::downgrade(&inner);
-			async move {
-				loop {
-					let _ = futures_timer::Delay::new(Duration::from_millis(1100)).await;
-					if let Some(inner) = inner.upgrade() {
-						let mut inner = inner.lock();
-						let inner = &mut *inner;
-						inner.state_machine.tick(&mut *inner.network);
-					} else {
-						// We reach this branch if the `Arc<GossipEngineInner>` has no reference
-						// left. We can now let the task end.
-						break;
-					}
-				}
-			}
-		});
-
-		// Note: we consider the chances of an error to spawn a background task almost null.
-		if res.is_err() {
-			log::error!(target: "gossip", "Failed to spawn background task");
-		}
-
-		let res = executor.spawn(async move {
-			let mut stream = Compat01As03::new(event_stream);
-			while let Some(Ok(event)) = stream.next().await {
-				match event {
-					Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
-						if msg_engine_id != engine_id {
-							continue;
-						}
-						let mut inner = inner.lock();
-						let inner = &mut *inner;
-						inner.state_machine.new_peer(&mut *inner.network, remote, roles);
-					}
-					Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
-						if msg_engine_id != engine_id {
-							continue;
-						}
-						let mut inner = inner.lock();
-						let inner = &mut *inner;
-						inner.state_machine.peer_disconnected(&mut *inner.network, remote);
-					},
-					Event::NotificationsReceived { remote, messages } => {
-						let mut inner = inner.lock();
-						let inner = &mut *inner;
-						inner.state_machine.on_incoming(
-							&mut *inner.network,
-							remote,
-							messages.into_iter()
-								.filter_map(|(engine, data)| if engine == engine_id {
-									Some(ConsensusMessage { engine_id: engine, data: data.to_vec() })
-								} else { None })
-								.collect()
-						);
-					},
-					Event::Dht(_) => {}
-				}
-			}
-		});
-
-		// Note: we consider the chances of an error to spawn a background task almost null.
-		if res.is_err() {
-			log::error!(target: "gossip", "Failed to spawn background task");
-		}
 
 		gossip_engine
 	}
@@ -219,6 +161,59 @@ impl<B: BlockT> GossipEngine<B> {
 	/// somewhere else.
 	pub fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
 		self.inner.lock().network.announce(block, associated_data);
+	}
+}
+
+impl<B: BlockT> Future for GossipEngine<B> {
+	type Output = ();
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		self.inner.lock().poll_unpin(cx)
+	}
+}
+
+impl<B: BlockT> Future for GossipEngineInner<B> {
+	type Output = ();
+
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = &mut *self;
+
+		while let Poll::Ready(Some(Ok(event))) = this.network_event_stream.poll_next_unpin(cx) {
+			match event {
+				Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
+					if msg_engine_id != this.engine_id {
+						continue;
+					}
+					this.state_machine.new_peer(&mut *this.network, remote, roles);
+				}
+				Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
+					if msg_engine_id != this.engine_id {
+						continue;
+					}
+					this.state_machine.peer_disconnected(&mut *this.network, remote);
+				},
+				Event::NotificationsReceived { remote, messages } => {
+					let engine_id = this.engine_id.clone();
+					this.state_machine.on_incoming(
+						&mut *this.network,
+						remote,
+						messages.into_iter()
+							.filter_map(|(engine, data)| if engine == engine_id {
+								Some(ConsensusMessage { engine_id: engine, data: data.to_vec() })
+							} else { None })
+							.collect()
+					);
+				},
+				Event::Dht(_) => {}
+			}
+		}
+
+		while let Poll::Ready(()) = this.periodic_maintenance_interval.poll_unpin(cx) {
+			this.periodic_maintenance_interval.reset(PERIODIC_MAINTENANCE_INTERVAL);
+			this.state_machine.tick(&mut *this.network);
+		}
+
+		Poll::Pending
 	}
 }
 
