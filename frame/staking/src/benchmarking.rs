@@ -1,6 +1,6 @@
 use super::*;
-use sp_runtime::{BenchmarkResults};
-use sp_runtime::traits::{Dispatchable, Convert, Benchmarking, BenchmarkingSetup,};
+use sp_runtime::{BenchmarkResults, BenchmarkParameter};
+use sp_runtime::traits::{Dispatchable, Convert, Benchmarking, BenchmarkingSetup};
 use sp_io::hashing::blake2_256;
 use frame_support::StorageValue;
 use pallet_indices::address::Address;
@@ -293,30 +293,83 @@ pub enum BenchmarkingMode {
 
 /// Benchmark `set` extrinsic.
 struct SubmitElectionSolution;
-impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for SubmitElectionSolution {
+impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for SubmitElectionSolution
+	where T::Lookup: StaticLookup<Source=AddressOf<T>>
+{
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
-
-			(BenchmarkParameter::N, 1, 100),
+			// number of validator candidates
+			(BenchmarkParameter::V, 100, 1_000),
+			// number of nominators
+			(BenchmarkParameter::N, 100, 10_000),
 		]
 	}
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
-		let user_origin = RawOrigin::None;
-		let now = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
+		let num_validators = components.iter().find(|&c| c.0 == BenchmarkParameter::V).unwrap().1;
+		let num_nominators = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
+		let edge_per_voter = 12;
+		let mode: BenchmarkingMode = BenchmarkingMode::InitialSubmission;
+		let do_reduce: bool = true;
+		let to_elect: u32 = 100;
 
-		// Return the `set` call
-		Ok((Call::<T>::set(now.into()), user_origin))
+		// setup
+		ValidatorCount::put(to_elect);
+		MinimumValidatorCount::put(to_elect/2);
+		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
+
+		// stake and nominate everyone
+		setup_chain_stakers::<T>(num_validators, num_nominators, edge_per_voter);
+
+		// call data
+		let (winners, compact, score) = match mode {
+			BenchmarkingMode::InitialSubmission => {
+				/* No need to setup anything */
+				get_seq_phragmen_solution::<T>(do_reduce)
+			},
+			BenchmarkingMode::StrongerSubmission => {
+				let (winners, compact, score) = get_weak_solution::<T>(do_reduce);
+				assert_ok!(
+					<Module<T>>::submit_election_solution(
+						signed_account::<T>(USER),
+						winners,
+						compact,
+						score,
+					)
+				);
+				get_seq_phragmen_solution::<T>(do_reduce)
+			},
+			BenchmarkingMode::WeakerSubmission => {
+				let (winners, compact, score) = get_seq_phragmen_solution::<T>(do_reduce);
+				assert_ok!(
+					<Module<T>>::submit_election_solution(
+						signed_account::<T>(USER),
+						winners,
+						compact,
+						score,
+					)
+				);
+				get_weak_solution::<T>(do_reduce)
+			}
+		};
+
+		// must have chosen correct number of winners.
+		assert_eq!(winners.len() as u32, <Module<T>>::validator_count());
+
+		let call = crate::Call::<T>::submit_election_solution(
+			winners,
+			compact,
+			score,
+		);
+
+		Ok((call, RawOrigin::Signed(account::<T>(USER))))
 	}
 }
 
-
 impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where T::Lookup: StaticLookup<Source=AddressOf<T>> {
-	fn run_benchmark(_extrinsic: Vec<u8>, _steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
-		let mut results: Vec<BenchmarkResults> = Vec::new();
-
+	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
 		// warm up. why not.
 		#[cfg(not(test))]
 		{
@@ -324,92 +377,64 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where T::Lookup: Sta
 			sp_io::benchmarking::wipe_db();
 		}
 
-		sp_std::if_std! {
-			println!("{}", repeat);
-		}
-		for r in 0..repeat {
-			// TODO: These are the parameters of the benchmark.
-			let num_validators = 300;
-			let num_voters = 600;
-			let edge_per_voter = 12;
-			let mode: BenchmarkingMode = BenchmarkingMode::InitialSubmission;
-			let do_reduce: bool = true;
-			let to_elect: u32 = 150;
+		// select
+		let selected_benchmark = match extrinsic.as_slice() {
+			b"submit_election_solution" => SubmitElectionSolution,
+			_ => return Err("Could not find extrinsic."),
+		};
 
-			sp_std::if_std! {
-				println!("Setting up");
-			}
+		// return data
+		let components = <
+			SubmitElectionSolution
+			as
+			BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>
+		>::components(&selected_benchmark);
+		let mut results: Vec<BenchmarkResults> = Vec::new();
 
-			ValidatorCount::put(to_elect);
-			MinimumValidatorCount::put(to_elect/2);
-			<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
+		for (name, low, high) in components.iter() {
+			// Create up to `STEPS` steps for that component between high and low.
+			let step_size = ((high - low) / steps).max(1);
+			let num_of_steps = (high - low) / step_size;
+			for s in 0..num_of_steps {
+				// This is the value we will be testing for component `name`
+				let component_value = low + step_size * s;
 
-			// stake and nominate everyone
-			setup_chain_stakers::<T>(num_validators, num_voters, edge_per_voter);
+				// Select the mid value for all the other components.
+				let c: Vec<(BenchmarkParameter, u32)> = components.iter()
+					.map(|(n, l, h)|
+						(*n, if n == name { component_value } else { (h - l) / 2 + l })
+					).collect();
 
-			let (winners, compact, score) = match mode {
-				BenchmarkingMode::InitialSubmission => {
-					/* No need to setup anything */
-					get_seq_phragmen_solution::<T>(do_reduce)
-				},
-				BenchmarkingMode::StrongerSubmission => {
-					let (winners, compact, score) = get_weak_solution::<T>(do_reduce);
-					assert_ok!(
-						<Module<T>>::submit_election_solution(
-							signed_account::<T>(USER),
-							winners,
-							compact,
-							score,
-						)
-					);
-					get_seq_phragmen_solution::<T>(do_reduce)
-				},
-				BenchmarkingMode::WeakerSubmission => {
-					let (winners, compact, score) = get_seq_phragmen_solution::<T>(do_reduce);
-					assert_ok!(
-						<Module<T>>::submit_election_solution(
-							signed_account::<T>(USER),
-							winners,
-							compact,
-							score,
-						)
-					);
-					get_weak_solution::<T>(do_reduce)
+				for _ in 0..repeat {
+					let (call, caller) = <SubmitElectionSolution as BenchmarkingSetup<
+						T,
+						Call<T>,
+						RawOrigin<T::AccountId>,
+					>>::instance(&selected_benchmark, &c)?;
+
+					#[cfg(not(test))]
+					sp_io::benchmarking::commit_db();
+
+					let start = sp_io::benchmarking::current_time();
+					call.dispatch(caller.into())?;
+					// match mode {
+					// 	BenchmarkingMode::WeakerSubmission => {
+					// 		// todo check the correct error is coming.
+					// 		let _ = call.dispatch(signed_account::<T>(USER)).unwrap_err();
+					// 	},
+					// 	_ => assert_ok!(call.dispatch(signed_account::<T>(USER)))
+					// };
+					let finish = sp_io::benchmarking::current_time();
+
+					let elapsed = finish - start;
+					results.push((c.clone(), elapsed));
+
+					#[cfg(not(test))]
+					sp_io::benchmarking::wipe_db();
 				}
-			};
-
-			sp_std::if_std! {
-				println!("Setup is done. Mode = {:?} Submitting {:?} iter {}/{}", mode, score, r, repeat);
 			}
-
-			assert_eq!(winners.len() as u32, <Module<T>>::validator_count());
-
-			let call = crate::Call::<T>::submit_election_solution(
-				winners,
-				compact,
-				score,
-			);
-
-			#[cfg(not(test))]
-			sp_io::benchmarking::commit_db();
-			let start = sp_io::benchmarking::current_time();
-			match mode {
-				BenchmarkingMode::WeakerSubmission => {
-					// todo check the correct error is coming.
-					let _ = call.dispatch(signed_account::<T>(USER)).unwrap_err();
-				},
-				_ => assert_ok!(call.dispatch(signed_account::<T>(USER)))
-			};
-			let finish = sp_io::benchmarking::current_time();
-			let elapsed = finish - start;
-
-			#[cfg(test)]
-			clean::<T>();
-			#[cfg(not(test))]
-			sp_io::benchmarking::wipe_db();
-
-			results.push((Default::default(), elapsed));
 		}
+
 		Ok(results)
 	}
 }
