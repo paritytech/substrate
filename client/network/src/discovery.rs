@@ -55,8 +55,6 @@ use libp2p::kad::record::{self, store::MemoryStore};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::{swarm::toggle::Toggle};
 #[cfg(not(target_os = "unknown"))]
-use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
-#[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn, error};
@@ -65,15 +63,15 @@ use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
 
 /// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
-pub struct DiscoveryBehaviour<TSubstream> {
+pub struct DiscoveryBehaviour {
 	/// User-defined list of nodes and their addresses. Typically includes bootstrap nodes and
 	/// reserved nodes.
 	user_defined: Vec<(PeerId, Multiaddr)>,
 	/// Kademlia requests and answers.
-	kademlia: Kademlia<TSubstream, MemoryStore>,
+	kademlia: Kademlia<MemoryStore>,
 	/// Discovers nodes on the local network.
 	#[cfg(not(target_os = "unknown"))]
-	mdns: Toggle<Mdns<Substream<StreamMuxerBox>>>,
+	mdns: Toggle<Mdns>,
 	/// Stream that fires when we need to perform the next random Kademlia query.
 	next_kad_random_query: Delay,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
@@ -91,7 +89,7 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	discovery_only_if_under_num: u64,
 }
 
-impl<TSubstream> DiscoveryBehaviour<TSubstream> {
+impl DiscoveryBehaviour {
 	/// Builds a new `DiscoveryBehaviour`.
 	///
 	/// `user_defined` is a list of known address for nodes that never expire.
@@ -207,11 +205,8 @@ pub enum DiscoveryOut {
 	ValuePutFailed(record::Key),
 }
 
-impl<TSubstream> NetworkBehaviour for DiscoveryBehaviour<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite + Unpin,
-{
-	type ProtocolsHandler = <Kademlia<TSubstream, MemoryStore> as NetworkBehaviour>::ProtocolsHandler;
+impl NetworkBehaviour for DiscoveryBehaviour {
+	type ProtocolsHandler = <Kademlia<MemoryStore> as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = DiscoveryOut;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
