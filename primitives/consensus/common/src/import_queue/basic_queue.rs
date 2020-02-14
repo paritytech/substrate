@@ -49,7 +49,7 @@ impl<B: BlockT, Transaction> Drop for BasicQueue<B, Transaction> {
 	fn drop(&mut self) {
 		self.pool = None;
 		// Flush the queue and close the receiver to terminate the future.
-		let _ = self.sender.unbounded_send(ToWorkerMsg::Shutdown);
+		self.sender.close_channel();
 		self.result_port.close();
 
 		// Make sure all pool threads terminate.
@@ -178,7 +178,6 @@ enum ToWorkerMsg<B: BlockT> {
 	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
 	ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
 	ImportFinalityProof(Origin, B::Hash, NumberFor<B>, Vec<u8>),
-	Shutdown,
 }
 
 struct BlockImportWorker<B: BlockT, Transaction> {
@@ -274,7 +273,6 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 					ToWorkerMsg::ImportJustification(who, hash, number, justification) => {
 						worker.import_justification(who, hash, number, justification);
 					}
-					ToWorkerMsg::Shutdown => return Poll::Ready(()),
 				}
 			}
 		});
