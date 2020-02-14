@@ -391,6 +391,12 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ and be equal to the multi account ID. It can be
 		/// dispatched by a `call` from this module.
 		///
+		/// Any removed signatories that have approved multisig transactions will no longer be counted as valid
+		/// approvals. Removing a signatory that has initiated/is the owner of a multisig transaction will not
+		/// cancel the multisig transaction, but the owner can always cancel the multisig transaction, even after
+		/// leaving the signatories. Such a transaction can still be dispatched, as long as the threshold
+		/// is met by the current signatories.
+		///
 		/// - `threshold`: The total number of approvals dispatches from this multi account require before they are
 		///    executed.
 		/// - `signatories`: The accounts who can approve dispatches from this multi account. May not be empty.
@@ -454,6 +460,10 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ and be equal to the multi account ID. It can be
 		/// dispatched by a `call` from this module.
 		///
+		/// Multisig transactions from the removed account will not be automatically cancelled, but they can no
+		/// longer be approved or called. The owner can always cancel open multisig transaction, even after
+		/// the multi account has been removed.
+		///
 		/// # <weight>
 		/// - `O(1)`.
 		/// - One balance-unreserve operation.
@@ -484,6 +494,12 @@ decl_module! {
 		/// `threshold` of `signatories`, as specified in the multi account.
 		///
 		/// If there are enough approvals, then dispatch the call.
+		///
+		/// If one approving account is removed from the signatories of the multi account, it does
+		/// no longer count as a valid approval for the multisig transaction. Removing the initiator/
+		/// owner of a multisig transaction from the signatories will not cancel the multisig transaction.
+		/// It can still be dispatched, as long as the threshold is met by the current signatories.
+		/// Approvals fail if the multi account was removed.
 		///
 		/// Payment: `MultisigDepositBase` will be reserved if this is the first approval, plus
 		/// `threshold` times `MultisigDepositFactor`. It is returned once this dispatch happens or
@@ -593,6 +609,10 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ and must be one of the signatories.
 		///
+		/// Removing the initiator/owner of a multisig transaction from the multi account's signatories
+		/// will not cancel the multisig transaction. It can still be dispatched, as long as the threshold
+		/// is met by the current signatories. Approvals fail if the multi account was removed.
+		///
 		/// - `multi_account_id`: The account ID of the multi account that was created before.
 		/// - `maybe_timepoint`: If this is the first approval, then this must be `None`. If it is
 		/// not the first approval, then it must be `Some`, with the timepoint (block number and
@@ -669,7 +689,12 @@ decl_module! {
 		/// Cancel a pre-existing, on-going multisig transaction. Any deposit reserved previously
 		/// for this operation will be unreserved on success.
 		///
-		/// The dispatch origin for this call must be _Signed_ and must be the initiator of the multisig.
+		/// The dispatch origin for this call must be _Signed_ and must be the initiator (owner) of the multisig.
+		///
+		/// The multisig transaction is not automatically cancelled if the owner is removed from the multi account,
+		/// nor is it cancelled if the multi account is removed. The multisig transaction can be cancelled by the
+		/// owner even aftre being removed from the multi account, and it can also be cancelled if the multi account
+		/// has been removed.
 		///
 		/// - `multi_account_id`: The account ID of the multi account that was created before.
 		/// - `timepoint`: The timepoint (block number and transaction index) of the first approval
