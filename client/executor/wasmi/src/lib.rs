@@ -670,7 +670,7 @@ impl WasmRuntime for WasmiRuntime {
 		)
 	}
 
-	fn get_global_val(&mut self, name: &str) -> Result<Option<sp_wasm_interface::Value>, Error> {
+	fn get_global_val(&self, name: &str) -> Result<Option<sp_wasm_interface::Value>, Error> {
 		match self.instance.export_by_name(name) {
 			Some(global) => Ok(Some(
 				global

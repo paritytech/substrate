@@ -27,7 +27,7 @@ use sc_executor_common::{
 };
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
-use sp_wasm_interface::{Function, Pointer, WordSize};
+use sp_wasm_interface::{Function, Pointer, WordSize, Value};
 use wasmtime::{Config, Engine, Module, Store};
 
 /// A `WasmRuntime` implementation using wasmtime to compile the runtime module to machine code
@@ -56,22 +56,10 @@ impl WasmRuntime for WasmtimeRuntime {
 		)
 	}
 
-	fn get_global_val(&mut self, name: &str) -> Result<Option<Value>> {
+	fn get_global_val(&self, name: &str) -> Result<Option<Value>> {
 		// Yeah, there is no better way currently :(
-		let instance = self.module.instantiate().map_err(|e| Error::Other(e.to_string()))?;
-		match unsafe { instance.lookup_immutable(name) } {
-			Some(Export::Global { definition, global, .. }) => {
-				match global.ty {
-					ir::types::I32 => Ok(Some(unsafe { Value::I32(*(*definition).as_i32()) })),
-					ir::types::I64 => Ok(Some(unsafe { Value::I64(*(*definition).as_i64()) })),
-					ir::types::F32 => Ok(Some(unsafe { Value::F32(*(*definition).as_f32_bits()) })),
-					ir::types::F64 => Ok(Some(unsafe { Value::F64(*(*definition).as_f64_bits()) })),
-					_ => Err(format!("Global is of unknown type: {}", global.ty).into()),
-				}
-			},
-			None => Ok(None),
-			Some(_) => Err(format!("`{}` is not a global", name).into())
-		}
+		InstanceWrapper::new(&self.module, &self.imports, self.heap_pages)?
+			.get_global_val(name)
 	}
 }
 

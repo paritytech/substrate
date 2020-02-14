@@ -30,5 +30,5 @@ pub trait WasmRuntime {
 	fn call(&mut self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error>;
 
 	/// Get the value from a global with the given `name`.
-	fn get_global_val(&mut self, name: &str) -> Result<Option<Value>, Error>;
+	fn get_global_val(&self, name: &str) -> Result<Option<Value>, Error>;
 }
