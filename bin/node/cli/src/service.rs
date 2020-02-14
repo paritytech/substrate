@@ -96,17 +96,16 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|client, pool, _backend, _fetcher, _remote_blockchain, select_chain, keystore| ->
-				Result<RpcExtension, _>
-			{
+			.with_rpc_extensions(|builder| -> Result<RpcExtension, _> {
 				let babe_link = import_setup.as_ref().map(|s| &s.2)
 					.expect("Link is present or set up failed; qed.");
 				let deps = node_rpc::FullDeps {
-					client,
-					pool,
-					select_chain: select_chain.expect("SelectChain is present or set up failed; qed."),
+					client: builder.client().clone(),
+					pool: builder.pool(),
+					select_chain: builder.select_chain().cloned()
+						.expect("SelectChain is present or set up failed; qed."),
 					babe: node_rpc::BabeDeps {
-						keystore,
+						keystore: builder.keystore(),
 						babe_config: sc_consensus_babe::BabeLink::config(babe_link).clone(),
 						shared_epoch_changes: sc_consensus_babe::BabeLink::epoch_changes(babe_link).clone()
 					}
@@ -367,15 +366,20 @@ pub fn new_light(config: NodeConfiguration)
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
-		.with_rpc_extensions(|client, pool, _backend, fetcher, remote_blockchain, _select_chain, _keystore| ->
+		.with_rpc_extensions(|builder,| ->
 			Result<RpcExtension, _>
 		{
-			let fetcher = fetcher
+			let fetcher = builder.fetcher()
 				.ok_or_else(|| "Trying to start node RPC without active fetcher")?;
-			let remote_blockchain = remote_blockchain
+			let remote_blockchain = builder.remote_backend()
 				.ok_or_else(|| "Trying to start node RPC without active remote blockchain")?;
 
-			let light_deps = node_rpc::LightDeps { remote_blockchain, fetcher, client, pool };
+			let light_deps = node_rpc::LightDeps {
+				remote_blockchain,
+				fetcher,
+				client: builder.client().clone(),
+				pool: builder.pool(),
+			};
 			Ok(node_rpc::create_light(light_deps))
 		})?
 		.build()?;
