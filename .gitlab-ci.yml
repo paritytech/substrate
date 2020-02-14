@@ -39,6 +39,8 @@ variables:
   before_script:
     - rustup show
     - cargo --version
+    - mkdir -p ${CARGO_HOME}; touch ${CARGO_HOME}/config
+    - mkdir -p ${CARGO_TARGET_DIR}
     - sccache -s
   only:
     - master
@@ -117,14 +119,13 @@ test-linux-stable:                 &test-linux
       - $DEPLOY_TAG
   script:
     - rustup +nightly show
-    - git checkout 7b00a5cb2a80be68bcda7b68ad9b183646b6924b
-    - echo $CARGO_TARGET_DIR
+    # - git checkout 7b00a5cb2a80be68bcda7b68ad9b183646b6924b
+    # - echo $CARGO_TARGET_DIR
     - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked --no-fail-fast |
         tee output.log
-    - sccache -s
-  after_script:
-    - echo "___Collecting warnings for check_warnings job___"
-    - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
+  # after_script:
+  #   - echo "___Collecting warnings for check_warnings job___"
+  #   - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
   # artifacts:
   #   name:                          $CI_COMMIT_SHORT_SHA
   #   expire_in:                     24 hrs
