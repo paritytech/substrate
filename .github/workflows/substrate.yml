@@ -4,7 +4,7 @@ on: [push]
 jobs:
   check:
     name: Test
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     container: parity/rust-builder:latest
     steps:
       - name: Checkout sources
