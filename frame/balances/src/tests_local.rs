@@ -20,10 +20,10 @@ use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header
 use sp_core::H256;
 use sp_io;
 use frame_support::{impl_outer_origin, parameter_types};
-use frame_support::traits::Get;
+use frame_support::traits::{Get, StorageMapShim};
 use frame_support::weights::{Weight, DispatchInfo};
 use std::cell::RefCell;
-use crate::{GenesisConfig, Module, Trait};
+use crate::{GenesisConfig, Module, Trait, decl_tests};
 
 use frame_system as system;
 impl_outer_origin!{
@@ -31,18 +31,12 @@ impl_outer_origin!{
 }
 
 thread_local! {
-	pub(crate) static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
-	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
+	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 }
 
 pub struct ExistentialDeposit;
 impl Get<u64> for ExistentialDeposit {
 	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
-}
-
-pub struct CreationFee;
-impl Get<u64> for CreationFee {
-	fn get() -> u64 { CREATION_FEE.with(|v| *v.borrow()) }
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -71,6 +65,9 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = super::AccountData<u64>;
+	type OnNewAccount = ();
+	type OnReapAccount = Module<Test>;
 }
 parameter_types! {
 	pub const TransactionBaseFee: u64 = 0;
@@ -86,25 +83,25 @@ impl pallet_transaction_payment::Trait for Test {
 }
 impl Trait for Test {
 	type Balance = u64;
-	type OnReapAccount = System;
-	type OnNewAccount = ();
-	type Event = ();
 	type DustRemoval = ();
-	type TransferPayment = ();
+	type Event = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type CreationFee = CreationFee;
+	type AccountStore = StorageMapShim<
+		super::Account<Test>,
+		system::CallOnCreatedAccount<Test>,
+		system::CallKillAccount<Test>,
+		u64, super::AccountData<u64>
+	>;
 }
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
-	creation_fee: u64,
 	monied: bool,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 1,
-			creation_fee: 0,
 			monied: false,
 		}
 	}
@@ -114,17 +111,15 @@ impl ExtBuilder {
 		self.existential_deposit = existential_deposit;
 		self
 	}
-	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
-		self.creation_fee = creation_fee;
-		self
-	}
 	pub fn monied(mut self, monied: bool) -> Self {
 		self.monied = monied;
+		if self.existential_deposit == 0 {
+			self.existential_deposit = 1;
+		}
 		self
 	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
-		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
@@ -146,12 +141,4 @@ impl ExtBuilder {
 	}
 }
 
-pub type System = frame_system::Module<Test>;
-pub type Balances = Module<Test>;
-
-pub const CALL: &<Test as frame_system::Trait>::Call = &();
-
-/// create a transaction info struct from weight. Handy to avoid building the whole struct.
-pub fn info_from_weight(w: Weight) -> DispatchInfo {
-	DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
-}
+decl_tests!{ Test, ExtBuilder, EXISTENTIAL_DEPOSIT }

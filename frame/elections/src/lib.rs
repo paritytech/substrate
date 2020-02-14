@@ -32,7 +32,7 @@ use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
 	weights::SimpleDispatchInfo,
 	traits::{
-		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
+		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
 	}
 };
@@ -501,7 +501,7 @@ decl_module! {
 			if valid {
 				// This only fails if `reporter` doesn't exist, which it clearly must do since its
 				// the origin. Still, it's no more harmful to propagate any error at this point.
-				T::Currency::repatriate_reserved(&who, &reporter, T::VotingBond::get())?;
+				T::Currency::repatriate_reserved(&who, &reporter, T::VotingBond::get(), BalanceStatus::Free)?;
 				Self::deposit_event(RawEvent::VoterReaped(who, reporter));
 			} else {
 				let imbalance = T::Currency::slash_reserved(&reporter, T::VotingBond::get()).0;
