@@ -124,6 +124,6 @@ pub async fn init_prometheus(prometheus_addr: SocketAddr, registry: Registry) ->
 }
 
 #[cfg(target_os = "unknown")]
-pub async fn init_prometheus(_: SocketAddr) -> Result<(), Error> {
+pub async fn init_prometheus(_: SocketAddr, _registry: Registry) -> Result<(), Error> {
 	Ok(())
 }
