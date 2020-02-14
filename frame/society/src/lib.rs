@@ -262,7 +262,7 @@ use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
 use frame_support::weights::SimpleDispatchInfo;
 use frame_support::traits::{
-	Currency, ReservableCurrency, Randomness, Get, ChangeMembers,
+	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
 	ExistenceRequirement::AllowDeath,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -984,7 +984,7 @@ decl_module! {
 						match kind {
 							BidKind::Deposit(deposit) => {
 								// Slash deposit and move it to the society account
-								let _ = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit);
+								let _ = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit, BalanceStatus::Free);
 							}
 							BidKind::Vouch(voucher, _) => {
 								// Ban the voucher from vouching again

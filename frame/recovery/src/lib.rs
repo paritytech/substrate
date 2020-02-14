@@ -164,7 +164,7 @@ use frame_support::{
 		GetDispatchInfo, PaysFee, DispatchClass, ClassifyDispatch, Weight, WeighData,
 		SimpleDispatchInfo,
 	},
-	traits::{Currency, ReservableCurrency, Get, OnReapAccount},
+	traits::{Currency, ReservableCurrency, Get, OnReapAccount, BalanceStatus},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -587,7 +587,7 @@ decl_module! {
 			let active_recovery = <ActiveRecoveries<T>>::take(&who, &rescuer).ok_or(Error::<T>::NotStarted)?;
 			// Move the reserved funds from the rescuer to the rescued account.
 			// Acts like a slashing mechanism for those who try to maliciously recover accounts.
-			let _ = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit);
+			let _ = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit, BalanceStatus::Free);
 			Self::deposit_event(RawEvent::RecoveryClosed(who, rescuer));
 		}
 

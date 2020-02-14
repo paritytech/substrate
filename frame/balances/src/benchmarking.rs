@@ -50,7 +50,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Constants
 		let ed = T::ExistentialDeposit::get();
-		
+
 		// Select an account
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
 		let user = account::<T>("user", u);
@@ -58,8 +58,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 		// Give some multiple of the existential deposit + creation fee + transfer fee
 		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
-		let mut balance = ed.saturating_mul(e.into());
-		balance += T::CreationFee::get();
+		let balance = ed.saturating_mul(e.into());
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, balance);
 
 		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
@@ -90,7 +89,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Constants
 		let ed = T::ExistentialDeposit::get();
-		
+
 		// Select a sender
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
 		let user = account::<T>("user", u);
@@ -135,7 +134,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Constants
 		let ed = T::ExistentialDeposit::get();
-		
+
 		// Select a sender
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
 		let user = account::<T>("user", u);
@@ -176,7 +175,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Constants
 		let ed = T::ExistentialDeposit::get();
-		
+
 		// Select a sender
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
 		let user = account::<T>("user", u);
@@ -208,7 +207,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Constants
 		let ed = T::ExistentialDeposit::get();
-		
+
 		// Select a sender
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
 		let user = account::<T>("user", u);
@@ -275,7 +274,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		sp_io::benchmarking::commit_db();
 		sp_io::benchmarking::wipe_db();
 
-		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);		
+		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
 		// results go here
 		let mut results: Vec<BenchmarkResults> = Vec::new();
 		// Select the component we will be benchmarking. Each component will be benchmarked.

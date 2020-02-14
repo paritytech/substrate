@@ -149,21 +149,24 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
-mod mock;
+mod tests_local;
 #[cfg(test)]
+mod tests_composite;
+#[cfg(test)]
+#[macro_use]
 mod tests;
-mod migration;
 mod benchmarking;
 
 use sp_std::prelude::*;
-use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
+use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
-		weights::SimpleDispatchInfo, traits::{
-		UpdateBalanceOutcome, Currency, OnReapAccount, OnUnbalanced, TryDrop,
+	weights::SimpleDispatchInfo, traits::{
+		Currency, OnReapAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive
+		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
+		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status
 	}
 };
 use sp_runtime::{
@@ -173,8 +176,10 @@ use sp_runtime::{
 		MaybeSerializeDeserialize, Saturating, Bounded,
 	},
 };
-use frame_system::{self as system, IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
-use migration::{get_storage_value, put_storage_value, StorageIterator};
+use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_support::storage::migration::{
+	get_storage_value, take_storage_value, put_storage_value, StorageIterator
+};
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
@@ -183,40 +188,17 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
-	/// A function that is invoked when the free-balance and the reserved-balance has fallen below
-	/// the existential deposit and both have been reduced to zero.
-	///
-	/// All resources should be cleaned up all resources associated with the given account.
-	type OnReapAccount: OnReapAccount<Self::AccountId>;
-
-	/// Handler for when a new account is created.
-	type OnNewAccount: OnNewAccount<Self::AccountId>;
-
 	/// The minimum amount required to keep an account open.
 	type ExistentialDeposit: Get<Self::Balance>;
 
-	/// The fee required to create an account. If you're doing significant stuff with `OnNewAccount`
-	/// then you'll probably want to make this non-zero.
-	type CreationFee: Get<Self::Balance>;
+	/// The means of storing the balances of an account.
+	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
-
-	/// A function that is invoked when the free-balance and the reserved-balance has fallen below
-	/// the existential deposit and both have been reduced to zero.
-	///
-	/// All resources should be cleaned up all resources associated with the given account.
-	type OnReapAccount: OnReapAccount<Self::AccountId>;
-
-	/// Handler for when a new account is created.
-	type OnNewAccount: OnNewAccount<Self::AccountId>;
-
-	/// Handler for the unbalanced reduction when taking fees associated with balance
-	/// transfer (which may also include account creation).
-	type TransferPayment: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 	/// Handler for the unbalanced reduction when removing a dust account.
 	type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
@@ -227,16 +209,14 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The minimum amount required to keep an account open.
 	type ExistentialDeposit: Get<Self::Balance>;
 
-	/// The fee required to create an account.
-	type CreationFee: Get<Self::Balance>;
+	/// The means of storing the balances of an account.
+	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
-	type OnReapAccount = T::OnReapAccount;
-	type OnNewAccount = T::OnNewAccount;
 	type ExistentialDeposit = T::ExistentialDeposit;
-	type CreationFee = T::CreationFee;
+	type AccountStore = T::AccountStore;
 }
 
 decl_event!(
@@ -244,12 +224,13 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as Trait<I>>::Balance
 	{
-		/// A new account was created.
-		NewAccount(AccountId, Balance),
-		/// An account was reaped.
-		ReapedAccount(AccountId, Balance),
-		/// Transfer succeeded (from, to, value, fees).
-		Transfer(AccountId, AccountId, Balance, Balance),
+		/// An account was created with some free balance.
+		Endowed(AccountId, Balance),
+		/// An account was removed whose balance was non-zero but below ExistentialDeposit,
+		/// resulting in an outright loss.
+		DustLost(AccountId, Balance),
+		/// Transfer succeeded (from, to, value).
+		Transfer(AccountId, AccountId, Balance),
 		/// A balance was set by root (who, free, reserved).
 		BalanceSet(AccountId, Balance, Balance),
 		/// Some amount was deposited (e.g. for transaction fees).
@@ -376,11 +357,9 @@ decl_storage! {
 		///
 		/// NOTE: THIS MAY NEVER BE IN EXISTENCE AND YET HAVE A `total().is_zero()`. If the total
 		/// is ever zero, then the entry *MUST* be removed.
-		pub Account get(fn account)
-			build(|config: &GenesisConfig<T, I>| config.balances.iter()
-				.map(|&(ref who, free)| (who.clone(), AccountData { free, .. Default::default() }))
-				.collect::<Vec<_>>()
-			): map hasher(blake2_256) T::AccountId => AccountData<T::Balance>;
+		///
+		/// NOTE: This is only used in the case that this module is used to store balances.
+		pub Account: map hasher(blake2_256) T::AccountId => AccountData<T::Balance>;
 
 		/// Any liquidity locks on some account balances.
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
@@ -405,6 +384,9 @@ decl_storage! {
 					"the balance of any account should always be more than existential deposit.",
 				)
 			}
+			for &(ref who, free) in config.balances.iter() {
+				T::AccountStore::insert(who, AccountData { free, .. Default::default() });
+			}
 		});
 	}
 }
@@ -415,9 +397,6 @@ decl_module! {
 
 		/// The minimum amount required to keep an account open.
 		const ExistentialDeposit: T::Balance = T::ExistentialDeposit::get();
-
-		/// The fee required to create an account.
-		const CreationFee: T::Balance = T::CreationFee::get();
 
 		fn deposit_event() = default;
 
@@ -484,24 +463,25 @@ decl_module! {
 			let new_free = if wipeout { Zero::zero() } else { new_free };
 			let new_reserved = if wipeout { Zero::zero() } else { new_reserved };
 
-			let old_account = Account::<T, I>::get(&who);
+			let (free, reserved) = Self::mutate_account(&who, |account| {
+				if new_free > account.free {
+					mem::drop(PositiveImbalance::<T, I>::new(new_free - account.free));
+				} else if new_free < account.free {
+					mem::drop(NegativeImbalance::<T, I>::new(account.free - new_free));
+				}
 
-			if new_free > old_account.free {
-				mem::drop(PositiveImbalance::<T, I>::new(new_free - old_account.free));
-			} else if new_free < old_account.free {
-				mem::drop(NegativeImbalance::<T, I>::new(old_account.free - new_free));
-			}
+				if new_reserved > account.reserved {
+					mem::drop(PositiveImbalance::<T, I>::new(new_reserved - account.reserved));
+				} else if new_reserved < account.reserved {
+					mem::drop(NegativeImbalance::<T, I>::new(account.reserved - new_reserved));
+				}
 
-			if new_reserved > old_account.reserved {
-				mem::drop(PositiveImbalance::<T, I>::new(new_reserved - old_account.reserved));
-			} else if new_reserved < old_account.reserved {
-				mem::drop(NegativeImbalance::<T, I>::new(old_account.reserved - new_reserved));
-			}
+				account.free = new_free;
+				account.reserved = new_reserved;
 
-			let account = AccountData { free: new_free, reserved: new_reserved, ..old_account };
-			Self::set_account(&who, &account, &old_account);
-
-			Self::deposit_event(RawEvent::BalanceSet(who, account.free, account.reserved));
+				(account.free, account.reserved)
+			});
+			Self::deposit_event(RawEvent::BalanceSet(who, free, reserved));
 		}
 
 		/// Exactly as `transfer`, except the origin must be root and the source account may be
@@ -626,87 +606,110 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			put_storage_value(b"Balances", b"Locks", &hash, locks);
 			put_storage_value(b"Balances", b"Account", &hash, account);
 		}
+
+		for (hash, balances) in StorageIterator::<AccountData<T::Balance>>::new(b"Balances", b"Account").drain() {
+			let nonce = take_storage_value::<T::Index>(b"System", b"AccountNonce", &hash).unwrap_or_default();
+			put_storage_value(b"System", b"Account", &hash, (nonce, balances));
+		}
 	}
 
 	/// Get the free balance of an account.
 	pub fn free_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-		Account::<T, I>::get(who.borrow()).free
+		Self::account(who.borrow()).free
 	}
 
 	/// Get the balance of an account that can be used for transfers, reservations, or any other
 	/// non-locking, non-transaction-fee activity. Will be at most `free_balance`.
 	pub fn usable_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-		Account::<T, I>::get(who.borrow()).usable(Reasons::Misc)
+		Self::account(who.borrow()).usable(Reasons::Misc)
 	}
 
 	/// Get the balance of an account that can be used for paying transaction fees (not tipping,
 	/// or any other kind of fees, though). Will be at most `free_balance`.
 	pub fn usable_balance_for_fees(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-		Account::<T, I>::get(who.borrow()).usable(Reasons::Fee)
+		Self::account(who.borrow()).usable(Reasons::Fee)
 	}
 
 	/// Get the reserved balance of an account.
 	pub fn reserved_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-		Account::<T, I>::get(who.borrow()).reserved
+		Self::account(who.borrow()).reserved
 	}
 
-	/// Set both the free and reserved balance of an account to some new value. Will enforce
+	/// Get both the free and reserved balances of an account.
+	fn account(who: &T::AccountId) -> AccountData<T::Balance> {
+		T::AccountStore::get(&who)
+	}
+
+	/// Places the `free` and `reserved` parts of `new` into `account`. Also does any steps needed
+	/// after mutating an account. This includes DustRemoval unbalancing, in the case than the `new`
+	/// account's total balance is non-zero but below ED.
+	///
+	/// Returns the final free balance, iff the account was previously of total balance zero, known
+	/// as its "endowment".
+	fn post_mutation(
+		who: &T::AccountId,
+		new: AccountData<T::Balance>,
+	) -> Option<AccountData<T::Balance>> {
+		let total = new.total();
+		if total < T::ExistentialDeposit::get() {
+			if !total.is_zero() {
+				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
+				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
+			}
+			None
+		} else {
+			Some(new)
+		}
+	}
+
+	/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
 	/// `ExistentialDeposit` law, annulling the account as needed.
-	///
-	/// Will return `AccountKilled` if either reserved or free are too low.
-	///
-	/// NOTE: This assumes that `account` is the same as `Self::account(who)` except for altered
-	/// values of `free` and `balance`.
 	///
 	/// NOTE: Doesn't do any preparatory work for creating a new account, so should only be used
 	/// when it is known that the account already exists.
 	///
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn set_account(
+	fn mutate_account<R>(
 		who: &T::AccountId,
-		account: &AccountData<T::Balance>,
-		old: &AccountData<T::Balance>,
-	) -> UpdateBalanceOutcome {
-		let total = account.free + account.reserved;
-		if total < T::ExistentialDeposit::get() {
-			T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
-			if !old.total().is_zero() {
-				Self::reap_account(who, total);
-				UpdateBalanceOutcome::AccountKilled
-			} else {
-				UpdateBalanceOutcome::StillDead
-			}
-		} else {
-			if old.total().is_zero() {
-				Self::about_to_create_account(who, account.free);
-			}
-			Account::<T, I>::insert(who, account);
-			UpdateBalanceOutcome::Updated
-		}
+		f: impl FnOnce(&mut AccountData<T::Balance>) -> R
+	) -> R {
+		Self::try_mutate_account(who, |a| -> Result<R, Infallible> { Ok(f(a)) })
+			.expect("Error is infallible; qed")
 	}
 
-	/// Register a new account (with existential balance).
+	/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
+	/// `ExistentialDeposit` law, annulling the account as needed. This will do nothing if the
+	/// result of `f` is an `Err`.
 	///
-	/// This just calls appropriate hooks. It doesn't (necessarily) make any state changes.
-	fn about_to_create_account(who: &T::AccountId, balance: T::Balance) {
-		T::OnNewAccount::on_new_account(&who);
-		Self::deposit_event(RawEvent::NewAccount(who.clone(), balance.clone()));
-	}
-
-	/// Unregister an account.
+	/// NOTE: Doesn't do any preparatory work for creating a new account, so should only be used
+	/// when it is known that the account already exists.
 	///
-	/// This just removes the nonce and leaves an event.
-	fn reap_account(who: &T::AccountId, dust: T::Balance) {
-		Locks::<T, I>::remove(who);
-		Account::<T, I>::remove(who);
-		T::OnReapAccount::on_reap_account(who);
-		Self::deposit_event(RawEvent::ReapedAccount(who.clone(), dust));
+	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+	/// the caller will do this.
+	fn try_mutate_account<R, E>(
+		who: &T::AccountId,
+		f: impl FnOnce(&mut AccountData<T::Balance>) -> Result<R, E>
+	) -> Result<R, E> {
+		T::AccountStore::try_mutate_exists(who, |maybe_account| {
+			let mut account = maybe_account.take().unwrap_or_default();
+			let was_zero = account.total().is_zero();
+			f(&mut account).map(move |result| {
+				let maybe_endowed = if was_zero { Some(account.free) } else { None };
+				*maybe_account = Self::post_mutation(who, account);
+				(maybe_endowed, result)
+			})
+		}).map(|(maybe_endowed, result)| {
+			if let Some(endowed) = maybe_endowed {
+				Self::deposit_event(RawEvent::Endowed(who.clone(), endowed));
+			}
+			result
+		})
 	}
 
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
-		Account::<T, I>::mutate(who, |b| {
+		Self::mutate_account(who, |b| {
 			b.misc_frozen = Zero::zero();
 			b.fee_frozen = Zero::zero();
 			for l in locks.iter() {
@@ -719,6 +722,13 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			}
 		});
 		Locks::<T, I>::insert(who, locks);
+	}
+}
+
+impl<T: Trait<I>, I: Instance> OnReapAccount<T::AccountId> for Module<T, I> {
+	fn on_reap_account(who: &T::AccountId) {
+		Locks::<T, I>::remove(who);
+		Account::<T, I>::remove(who);
 	}
 }
 
@@ -885,9 +895,8 @@ mod imbalances {
 // its type declaration).
 // This works as long as `increase_total_issuance_by` doesn't use the Imbalance
 // types (basically for charging fees).
-// This should eventually be refactored so that the three type items that do
-// depend on the Imbalance type (TransferPayment, DustRemoval)
-// are placed in their own SRML module.
+// This should eventually be refactored so that the type item that
+// depends on the Imbalance type (DustRemoval) is placed in its own SRML module.
 struct ElevatedTrait<T: Subtrait<I>, I: Instance>(T, I);
 impl<T: Subtrait<I>, I: Instance> Clone for ElevatedTrait<T, I> {
 	fn clone(&self) -> Self { unimplemented!() }
@@ -913,16 +922,16 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
 	type ModuleToIndex = T::ModuleToIndex;
+	type OnNewAccount = T::OnNewAccount;
+	type OnReapAccount = T::OnReapAccount;
+	type AccountData = T::AccountData;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
-	type OnReapAccount = T::OnReapAccount;
-	type OnNewAccount = T::OnNewAccount;
 	type Event = ();
-	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = T::ExistentialDeposit;
-	type CreationFee = T::CreationFee;
+	type AccountStore = T::AccountStore;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
@@ -948,10 +957,6 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 
 	fn minimum_balance() -> Self::Balance {
 		T::ExistentialDeposit::get()
-	}
-
-	fn free_balance(who: &T::AccountId) -> Self::Balance {
-		Account::<T, I>::get(who).free
 	}
 
 	// Burn funds from the total issuance, returning a positive imbalance for the amount burned.
@@ -981,6 +986,10 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		NegativeImbalance::new(amount)
 	}
 
+	fn free_balance(who: &T::AccountId) -> Self::Balance {
+		Self::account(who).free
+	}
+
 	// Ensure that an account can withdraw from their free balance given any existing withdrawal
 	// restrictions like locks and vesting balance.
 	// Is a no-op if amount to be withdrawn is zero.
@@ -996,7 +1005,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		new_balance: T::Balance,
 	) -> DispatchResult {
 		if amount.is_zero() { return Ok(()) }
-		let min_balance = Account::<T, I>::get(who).frozen(reasons.into());
+		let min_balance = Self::account(who).frozen(reasons.into());
 		ensure!(new_balance >= min_balance, Error::<T, I>::LiquidityRestrictions);
 		Ok(())
 	}
@@ -1011,78 +1020,36 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> DispatchResult {
 		if value.is_zero() || transactor == dest { return Ok(()) }
 
-		let old_from_account = Self::account(transactor);
-		let mut from_account = old_from_account.clone();
-		let old_to_account = Self::account(dest);
-		let mut to_account = old_to_account.clone();
+		Self::try_mutate_account(dest, |to_account| -> DispatchResult {
+			Self::try_mutate_account(transactor, |from_account| -> DispatchResult {
+				from_account.free = from_account.free.checked_sub(&value)
+					.ok_or(Error::<T, I>::InsufficientBalance)?;
 
-		let would_create = to_account.total().is_zero();
-		let fee = if would_create { T::CreationFee::get() } else { Zero::zero() };
-		let liability = value.checked_add(&fee).ok_or(Error::<T, I>::Overflow)?;
+				// NOTE: total stake being stored in the same type means that this could never overflow
+				// but better to be safe than sorry.
+				to_account.free = to_account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 
-		from_account.free = from_account.free.checked_sub(&liability)
-			.ok_or(Error::<T, I>::InsufficientBalance)?;
+				let ed = T::ExistentialDeposit::get();
+				ensure!(to_account.total() >= ed, Error::<T, I>::ExistentialDeposit);
 
-		// NOTE: total stake being stored in the same type means that this could never overflow
-		// but better to be safe than sorry.
-		to_account.free = to_account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
+				Self::ensure_can_withdraw(
+					transactor,
+					value,
+					WithdrawReason::Transfer.into(),
+					from_account.free,
+				)?;
 
-		let ed = T::ExistentialDeposit::get();
-		ensure!(to_account.free >= ed, Error::<T, I>::ExistentialDeposit);
+				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
+				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
 
-		Self::ensure_can_withdraw(
-			transactor,
-			value,
-			WithdrawReason::Transfer.into(),
-			from_account.free,
-		)?;
-
-		let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-		ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
-
-		Self::set_account(transactor, &from_account, &old_from_account);
-
-		// Take action on the set_account call.
-		// This will emit events that _resulted_ from the transfer.
-		Self::set_account(dest, &to_account, &old_to_account);
+				Ok(())
+			})
+		})?;
 
 		// Emit transfer event.
-		Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
-
-		T::TransferPayment::on_unbalanced(NegativeImbalance::new(fee));
+		Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value));
 
 		Ok(())
-	}
-
-	// Withdraw some free balance from an account, respecting existence requirements.
-	// Is a no-op if value to be withdrawn is zero.
-	fn withdraw(
-		who: &T::AccountId,
-		value: Self::Balance,
-		reasons: WithdrawReasons,
-		liveness: ExistenceRequirement,
-	) -> result::Result<Self::NegativeImbalance, DispatchError> {
-		if value.is_zero() { return Ok(NegativeImbalance::zero()); }
-
-		let old_account = Self::account(who);
-		let mut account = old_account.clone();
-		if let Some(new_free_account) = account.free.checked_sub(&value) {
-			// if we need to keep the account alive...
-			if liveness == ExistenceRequirement::KeepAlive
-				// ...and it would be dead afterwards...
-				&& new_free_account < T::ExistentialDeposit::get()
-				// ...yet is was alive before
-				&& account.free >= T::ExistentialDeposit::get()
-			{
-				Err(Error::<T, I>::KeepAlive)?
-			}
-			Self::ensure_can_withdraw(who, value, reasons, new_free_account)?;
-			account.free = new_free_account;
-			Self::set_account(who, &account, &old_account);
-			Ok(NegativeImbalance::new(value))
-		} else {
-			Err(Error::<T, I>::InsufficientBalance)?
-		}
 	}
 
 	/// Slash a target account `who`, returning the negative imbalance created and any left over
@@ -1100,22 +1067,19 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
 
-		let old_account = Self::account(who);
-		let mut account = old_account.clone();
+		Self::mutate_account(who, |account| {
+			let free_slash = cmp::min(account.free, value);
+			account.free -= free_slash;
 
-		let free_slash = cmp::min(account.free, value);
-		account.free -= free_slash;
-
-		let remaining_slash = value - free_slash;
-		let result = if !remaining_slash.is_zero() {
-			let reserved_slash = cmp::min(account.reserved, remaining_slash);
-			account.reserved -= reserved_slash;
-			(NegativeImbalance::new(free_slash + reserved_slash), remaining_slash - reserved_slash)
-		} else {
-			(NegativeImbalance::new(value), Zero::zero())
-		};
-		Self::set_account(who, &account, &old_account);
-		result
+			let remaining_slash = value - free_slash;
+			if !remaining_slash.is_zero() {
+				let reserved_slash = cmp::min(account.reserved, remaining_slash);
+				account.reserved -= reserved_slash;
+				(NegativeImbalance::new(free_slash + reserved_slash), remaining_slash - reserved_slash)
+			} else {
+				(NegativeImbalance::new(value), Zero::zero())
+			}
+		})
 	}
 
 	/// Deposit some `value` into the free balance of an existing target account `who`.
@@ -1124,16 +1088,14 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	fn deposit_into_existing(
 		who: &T::AccountId,
 		value: Self::Balance
-	) -> result::Result<Self::PositiveImbalance, DispatchError> {
+	) -> Result<Self::PositiveImbalance, DispatchError> {
 		if value.is_zero() { return Ok(PositiveImbalance::zero()) }
 
-		let old_account = Self::account(who);
-		let mut account = old_account.clone();
-		ensure!(!account.total().is_zero(), Error::<T, I>::DeadAccount);
-		account.free = account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
-
-		Self::set_account(who, &account, &old_account);
-		Ok(PositiveImbalance::new(value))
+		Self::try_mutate_account(who, |account| -> Result<Self::PositiveImbalance, DispatchError> {
+			ensure!(!account.total().is_zero(), Error::<T, I>::DeadAccount);
+			account.free = account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
+			Ok(PositiveImbalance::new(value))
+		})
 	}
 
 	/// Deposit some `value` into the free balance of `who`, possibly creating a new account.
@@ -1148,34 +1110,58 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> Self::PositiveImbalance {
 		if value.is_zero() { return Self::PositiveImbalance::zero() }
 
-		let old_account = Self::account(who);
-		let mut account = old_account.clone();
-		let ed = T::ExistentialDeposit::get();
+		Self::try_mutate_account(who, |account| -> Result<Self::PositiveImbalance, Self::PositiveImbalance> {
+			// bail if not yet created and this operation wouldn't be enough to create it.
+			let ed = T::ExistentialDeposit::get();
+			ensure!(value >= ed || !account.total().is_zero(), Self::PositiveImbalance::zero());
 
-		// bail if not yet created and this operation wouldn't be enough to create it.
-		if value < ed && account.total().is_zero() { return Self::PositiveImbalance::zero() }
+			// defensive only: overflow should never happen, however in case it does, then this
+			// operation is a no-op.
+			account.free = account.free.checked_add(&value).ok_or(Self::PositiveImbalance::zero())?;
 
-		// defensive only: overflow should never happen, however in case it does, then this
-		// operation is a no-op.
-		account.free = match account.free.checked_add(&value) {
-			Some(f) => f,
-			None => return Self::PositiveImbalance::zero(),
-		};
+			Ok(PositiveImbalance::new(value))
+		}).unwrap_or_else(|x| x)
+	}
 
-		Self::set_account(who, &account, &old_account);
+	/// Withdraw some free balance from an account, respecting existence requirements.
+	///
+	/// Is a no-op if value to be withdrawn is zero.
+	fn withdraw(
+		who: &T::AccountId,
+		value: Self::Balance,
+		reasons: WithdrawReasons,
+		liveness: ExistenceRequirement,
+	) -> result::Result<Self::NegativeImbalance, DispatchError> {
+		if value.is_zero() { return Ok(NegativeImbalance::zero()); }
 
-		PositiveImbalance::new(value)
+		Self::try_mutate_account(who, |account|
+			-> Result<Self::NegativeImbalance, DispatchError>
+		{
+			let new_free_account = account.free.checked_sub(&value)
+				.ok_or(Error::<T, I>::InsufficientBalance)?;
+
+			// bail if we need to keep the account alive and this would kill it.
+			let ed = T::ExistentialDeposit::get();
+			let would_be_dead = new_free_account + account.reserved < ed;
+			let would_kill = would_be_dead && account.free + account.reserved >= ed;
+			ensure!(liveness == AllowDeath || !would_kill, Error::<T, I>::KeepAlive);
+
+			Self::ensure_can_withdraw(who, value, reasons, new_free_account)?;
+
+			account.free = new_free_account;
+
+			Ok(NegativeImbalance::new(value))
+		})
 	}
 
 	/// Force the new free balance of a target account `who` to some new value `balance`.
-	fn make_free_balance_be(who: &T::AccountId, value: Self::Balance) -> (
-		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
-		UpdateBalanceOutcome
-	) {
-		let old_account = Self::account(who);
-		let mut account = old_account.clone();
-
-		if value < T::ExistentialDeposit::get() && account.free.is_zero() {
+	fn make_free_balance_be(who: &T::AccountId, value: Self::Balance)
+		-> SignedImbalance<Self::Balance, Self::PositiveImbalance>
+	{
+		Self::try_mutate_account(who, |account|
+			-> Result<SignedImbalance<Self::Balance, Self::PositiveImbalance>, ()>
+		{
+			let ed = T::ExistentialDeposit::get();
 			// If we're attempting to set an existing account to less than ED, then
 			// bypass the entire operation. It's a no-op if you follow it through, but
 			// since this is an instance where we might account for a negative imbalance
@@ -1183,24 +1169,16 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			// equal and opposite cause (returned as an Imbalance), then in the
 			// instance that there's no other accounts on the system at all, we might
 			// underflow the issuance and our arithmetic will be off.
-			return (
-				SignedImbalance::Positive(Self::PositiveImbalance::zero()),
-				UpdateBalanceOutcome::AccountKilled,
-			)
-		}
-		let imbalance = if account.free <= value {
-			SignedImbalance::Positive(PositiveImbalance::new(value - account.free))
-		} else {
-			SignedImbalance::Negative(NegativeImbalance::new(account.free - value))
-		};
-		account.free = value;
+			ensure!(value + account.reserved >= ed || !account.total().is_zero(), ());
 
-		// If the balance is too low, then the account is reaped.
-		// Free balance can never be less than ED. If that happens, it gets reduced to zero
-		// and the account information relevant to this subsystem is deleted (i.e. the
-		// account is reaped).
-		let outcome = Self::set_account(who, &account, &old_account);
-		(imbalance, outcome)
+			let imbalance = if account.free <= value {
+				SignedImbalance::Positive(PositiveImbalance::new(value - account.free))
+			} else {
+				SignedImbalance::Negative(NegativeImbalance::new(account.free - value))
+			};
+			account.free = value;
+			Ok(imbalance)
+		}).unwrap_or(SignedImbalance::Positive(Self::PositiveImbalance::zero()))
 	}
 }
 
@@ -1226,18 +1204,14 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 	/// Move `value` from the free balance from `who` to their reserved balance.
 	///
 	/// Is a no-op if value to be reserved is zero.
-	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), DispatchError> {
+	fn reserve(who: &T::AccountId, value: Self::Balance) -> DispatchResult {
 		if value.is_zero() { return Ok(()) }
 
-		let old_account = Self::account(who);
-		let mut account = old_account.clone();
-
-		account.free = account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
-		account.reserved = account.reserved.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
-		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), account.free)?;
-
-		Self::set_account(who, &account, &old_account);
-		Ok(())
+		Self::try_mutate_account(who, |account| -> DispatchResult {
+			account.free = account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
+			account.reserved = account.reserved.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
+			Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), account.free)
+		})
 	}
 
 	/// Unreserve some funds, returning any amount that was unable to be unreserved.
@@ -1246,18 +1220,14 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		if value.is_zero() { return Zero::zero() }
 
-		let old_account = Self::account(who);
-		let mut account = old_account.clone();
-
-		let actual = cmp::min(account.reserved, value);
-		account.reserved -= actual;
-		// defensive only: this can never fail since total issuance which is at least free+reserved
-		// fits into the same datatype.
-		account.free = account.free.saturating_add(actual);
-
-		Self::set_account(who, &account, &old_account);
-
-		value - actual
+		Self::mutate_account(who, |account| {
+			let actual = cmp::min(account.reserved, value);
+			account.reserved -= actual;
+			// defensive only: this can never fail since total issuance which is at least free+reserved
+			// fits into the same datatype.
+			account.free = account.free.saturating_add(actual);
+			value - actual
+		})
 	}
 
 	/// Slash from reserved balance, returning the negative imbalance created,
@@ -1270,47 +1240,46 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
 
-		let old_account = Self::account(who);
-		let mut account = old_account.clone();
-
-		// underflow should never happen, but it if does, there's nothing to be done here.
-		let actual = cmp::min(account.reserved, value);
-		account.reserved -= actual;
-
-		Self::set_account(who, &account, &old_account);
-
-		(NegativeImbalance::new(actual), value - actual)
+		Self::mutate_account(who, |account| {
+			// underflow should never happen, but it if does, there's nothing to be done here.
+			let actual = cmp::min(account.reserved, value);
+			account.reserved -= actual;
+			(NegativeImbalance::new(actual), value - actual)
+		})
 	}
 
-	/// Move the reserved balance of one account into the free balance of another.
+	/// Move the reserved balance of one account into the balance of another, according to `status`.
 	///
-	/// Is a no-op if the value to be moved is zero.
+	/// Is a no-op if:
+	/// - the value to be moved is zero; or
+	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
 	fn repatriate_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
-	) -> result::Result<Self::Balance, DispatchError> {
-		if value.is_zero() { return Ok (Zero::zero()) }
+		status: Status,
+	) -> Result<Self::Balance, DispatchError> {
+		if value.is_zero() { return Ok(Zero::zero()) }
 
 		if slashed == beneficiary {
-			return Ok(Self::unreserve(slashed, value));
+			return match status {
+				Status::Free => Ok(Self::unreserve(slashed, value)),
+				Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
+			};
 		}
 
-		let old_to_account = Self::account(beneficiary);
-		let mut to_account = old_to_account.clone();
-		ensure!(!to_account.total().is_zero(), Error::<T, I>::DeadAccount);
-
-		let old_from_account = Self::account(slashed);
-		let mut from_account = old_from_account.clone();
-		let actual = cmp::min(from_account.reserved, value);
-
-		to_account.free = to_account.free.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?;
-		from_account.reserved -= actual;
-
-		Self::set_account(slashed, &from_account, &old_from_account);
-		Self::set_account(beneficiary, &to_account, &old_to_account);
-
-		Ok(value - actual)
+		Self::try_mutate_account(beneficiary, |to_account| -> Result<Self::Balance, DispatchError> {
+			ensure!(!to_account.total().is_zero(), Error::<T, I>::DeadAccount);
+			Self::try_mutate_account(slashed, |from_account| -> Result<Self::Balance, DispatchError> {
+				let actual = cmp::min(from_account.reserved, value);
+				match status {
+					Status::Free => to_account.free = to_account.free.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
+					Status::Reserved => to_account.reserved = to_account.reserved.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
+				}
+				from_account.reserved -= actual;
+				Ok(value - actual)
+			})
+		})
 	}
 }
 
@@ -1380,12 +1349,11 @@ where
 	}
 }
 
-impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I>
-where
+impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I> where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		// this should always be exactly equivalent to `Self::account(who).total().is_zero()`
-		!Account::<T, I>::contains_key(who)
+		!T::AccountStore::is_explicit(who)
 	}
 }

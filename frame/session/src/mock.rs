@@ -176,6 +176,9 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnReapAccount = Session;
 }
 
 impl pallet_timestamp::Trait for Test {

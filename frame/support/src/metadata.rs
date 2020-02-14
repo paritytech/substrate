@@ -404,6 +404,7 @@ mod tests {
 
 	impl_outer_event! {
 		pub enum TestEvent for TestRuntime {
+			system,
 			event_module<T>,
 			event_module2<T>,
 		}

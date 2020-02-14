@@ -41,7 +41,7 @@ use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
 use sp_core::storage::well_known_keys;
 use frame_system::{self as system, EventRecord, Phase};
 
-mod contract {
+mod contracts {
 	// Re-export contents of the root. This basically
 	// needs to give a name for the current crate.
 	// This hack is required for `impl_outer_event!`.
@@ -53,7 +53,9 @@ use pallet_balances as balances;
 
 impl_outer_event! {
 	pub enum MetaEvent for Test {
-		balances<T>, contract<T>,
+		system<T>,
+		balances<T>,
+		contracts<T>,
 	}
 }
 impl_outer_origin! {
@@ -62,7 +64,7 @@ impl_outer_origin! {
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
 		balances::Balances,
-		contract::Contract,
+		contracts::Contracts,
 	}
 }
 
@@ -81,11 +83,6 @@ impl Get<u64> for ExistentialDeposit {
 pub struct TransferFee;
 impl Get<u64> for TransferFee {
 	fn get() -> u64 { TRANSFER_FEE.with(|v| *v.borrow()) }
-}
-
-pub struct CreationFee;
-impl Get<u64> for CreationFee {
-	fn get() -> u64 { INSTANTIATION_FEE.with(|v| *v.borrow()) }
 }
 
 pub struct BlockGasLimit;
@@ -118,16 +115,16 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = pallet_balances::AccountData<u64>;
+	type OnNewAccount = ();
+	type OnReapAccount = (Balances, Contracts);
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnReapAccount = (System, Contract);
-	type OnNewAccount = ();
 	type Event = MetaEvent;
 	type DustRemoval = ();
-	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type CreationFee = CreationFee;
+	type AccountStore = System;
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
@@ -169,7 +166,6 @@ impl Trait for Test {
 	type RentByteFee = RentByteFee;
 	type RentDepositOffset = RentDepositOffset;
 	type SurchargeReward = SurchargeReward;
-	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type ContractFee = ContractFee;
@@ -182,7 +178,7 @@ impl Trait for Test {
 
 type Balances = pallet_balances::Module<Test>;
 type Timestamp = pallet_timestamp::Module<Test>;
-type Contract = Module<Test>;
+type Contracts = Module<Test>;
 type System = frame_system::Module<Test>;
 type Randomness = pallet_randomness_collective_flip::Module<Test>;
 
@@ -304,7 +300,7 @@ fn refunds_unused_gas() {
 	ExtBuilder::default().gas_price(2).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 100_000_000);
 
-		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, Vec::new()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, Vec::new()));
 
 		// 2 * 135 - gas price multiplied by the call base fee.
 		assert_eq!(Balances::free_balance(ALICE), 100_000_000 - (2 * 135));
@@ -413,10 +409,10 @@ fn instantiate_and_call_and_deposit_event() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 		// Check at the end to get hash on error easily
-		let creation = Contract::instantiate(
+		let creation = Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
 			100_000,
@@ -427,34 +423,44 @@ fn instantiate_and_call_and_deposit_event() {
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
+				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::system(frame_system::RawEvent::NewAccount(BOB)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::balances(
-					pallet_balances::RawEvent::NewAccount(BOB, 100)
+					pallet_balances::RawEvent::Endowed(BOB, 100)
 				),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+				event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::ContractExecution(BOB, vec![1, 2, 3, 4])),
+				event: MetaEvent::contracts(RawEvent::ContractExecution(BOB, vec![1, 2, 3, 4])),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
+				event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, BOB)),
 				topics: vec![],
 			}
 		]);
@@ -493,24 +499,29 @@ fn dispatch_call() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 		// Let's keep this assert even though it's redundant. If you ever need to update the
 		// wasm source this test will fail and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
+				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
 		]);
 
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
 			100_000,
@@ -518,7 +529,7 @@ fn dispatch_call() {
 			vec![],
 		));
 
-		assert_ok!(Contract::call(
+		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
 			BOB, // newly created account
 			0,
@@ -529,44 +540,59 @@ fn dispatch_call() {
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
+				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::system(frame_system::RawEvent::NewAccount(BOB)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::balances(
-					pallet_balances::RawEvent::NewAccount(BOB, 100)
+					pallet_balances::RawEvent::Endowed(BOB, 100)
 				),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+				event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
+				event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, BOB)),
 				topics: vec![],
 			},
 
 			// Dispatching the call.
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::system(frame_system::RawEvent::NewAccount(CHARLIE)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::balances(
-					pallet_balances::RawEvent::NewAccount(CHARLIE, 50)
+					pallet_balances::RawEvent::Endowed(CHARLIE, 50)
 				),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::balances(
-					pallet_balances::RawEvent::Transfer(BOB, CHARLIE, 50, 0)
+					pallet_balances::RawEvent::Transfer(BOB, CHARLIE, 50)
 				),
 				topics: vec![],
 			},
@@ -574,7 +600,7 @@ fn dispatch_call() {
 			// Event emited as a result of dispatch.
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Dispatched(BOB, true)),
+				event: MetaEvent::contracts(RawEvent::Dispatched(BOB, true)),
 				topics: vec![],
 			}
 		]);
@@ -611,24 +637,29 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 		// Let's keep this assert even though it's redundant. If you ever need to update the
 		// wasm source this test will fail and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
+				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
 		]);
 
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
 			100_000,
@@ -639,7 +670,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 		// Call the newly instantiated contract. The contract is expected to dispatch a call
 		// and then trap.
 		assert_err!(
-			Contract::call(
+			Contracts::call(
 				Origin::signed(ALICE),
 				BOB, // newly created account
 				0,
@@ -651,29 +682,39 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
+				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::system(frame_system::RawEvent::NewAccount(BOB)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::balances(
-					pallet_balances::RawEvent::NewAccount(BOB, 100)
+					pallet_balances::RawEvent::Endowed(BOB, 100)
 				),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+				event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
+				event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, BOB)),
 				topics: vec![],
 			},
 			// ABSENCE of events which would be caused by dispatched Balances::transfer call
@@ -810,19 +851,24 @@ fn test_set_rent_code_and_hash() {
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 		// If you ever need to update the wasm source this test will fail
 		// and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
+				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
 		]);
@@ -837,8 +883,8 @@ fn storage_size() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			30_000,
 			100_000, code_hash.into(),
@@ -847,11 +893,11 @@ fn storage_size() {
 		let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 		assert_eq!(bob_contract.storage_size, <Test as Trait>::StorageSizeOffset::get() + 4);
 
-		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::set_storage_4_byte()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::set_storage_4_byte()));
 		let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 		assert_eq!(bob_contract.storage_size, <Test as Trait>::StorageSizeOffset::get() + 4 + 4);
 
-		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::remove_storage_4_byte()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::remove_storage_4_byte()));
 		let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 		assert_eq!(bob_contract.storage_size, <Test as Trait>::StorageSizeOffset::get() + 4);
 	});
@@ -874,8 +920,8 @@ fn deduct_blocks() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			30_000,
 			100_000, code_hash.into(),
@@ -890,7 +936,7 @@ fn deduct_blocks() {
 		initialize_block(5);
 
 		// Trigger rent through call
-		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
 
 		// Check result
 		let rent = (8 + 4 - 3) // storage size = size_offset + deploy_set_storage - deposit_offset
@@ -905,7 +951,7 @@ fn deduct_blocks() {
 		initialize_block(12);
 
 		// Trigger rent through call
-		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
 
 		// Check result
 		let rent_2 = (8 + 4 - 2) // storage size = size_offset + deploy_set_storage - deposit_offset
@@ -917,7 +963,7 @@ fn deduct_blocks() {
 		assert_eq!(Balances::free_balance(BOB), 30_000 - rent - rent_2);
 
 		// Second call on same block should have no effect on rent
-		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
 
 		let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 		assert_eq!(bob_contract.rent_allowance, 1_000 - rent - rent_2);
@@ -930,34 +976,34 @@ fn deduct_blocks() {
 fn call_contract_removals() {
 	removals(|| {
 		// Call on already-removed account might fail, and this is fine.
-		Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null());
+		Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null());
 		true
 	});
 }
 
 #[test]
 fn inherent_claim_surcharge_contract_removals() {
-	removals(|| Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok());
+	removals(|| Contracts::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok());
 }
 
 #[test]
 fn signed_claim_surcharge_contract_removals() {
-	removals(|| Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok());
+	removals(|| Contracts::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok());
 }
 
 #[test]
 fn claim_surcharge_malus() {
 	// Test surcharge malus for inherent
-	claim_surcharge(4, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(3, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(2, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(1, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), false);
+	claim_surcharge(4, || Contracts::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(3, || Contracts::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(2, || Contracts::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(1, || Contracts::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), false);
 
 	// Test surcharge malus for signed
-	claim_surcharge(4, || Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), true);
-	claim_surcharge(3, || Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), false);
-	claim_surcharge(2, || Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), false);
-	claim_surcharge(1, || Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), false);
+	claim_surcharge(4, || Contracts::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), true);
+	claim_surcharge(3, || Contracts::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), false);
+	claim_surcharge(2, || Contracts::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), false);
+	claim_surcharge(1, || Contracts::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), false);
 }
 
 /// Claim surcharge with the given trigger_call at the given blocks.
@@ -968,8 +1014,8 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
 			100_000, code_hash.into(),
@@ -1001,8 +1047,8 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
 			100_000, code_hash.into(),
@@ -1037,8 +1083,8 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			1_000,
 			100_000, code_hash.into(),
@@ -1072,8 +1118,8 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			50+Balances::minimum_balance(),
 			100_000, code_hash.into(),
@@ -1086,7 +1132,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		assert_eq!(Balances::free_balance(BOB), 50 + Balances::minimum_balance());
 
 		// Transfer funds
-		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::transfer()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::transfer()));
 		assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
 		assert_eq!(Balances::free_balance(BOB), Balances::minimum_balance());
 
@@ -1116,8 +1162,8 @@ fn call_removed_contract() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
 			100_000, code_hash.into(),
@@ -1125,28 +1171,28 @@ fn call_removed_contract() {
 		));
 
 		// Calling contract should succeed.
-		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
 
 		// Advance blocks
 		initialize_block(10);
 
 		// Calling contract should remove contract and fail.
 		assert_err!(
-			Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+			Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
 			"contract has been evicted"
 		);
 		// Calling a contract that is about to evict shall emit an event.
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Evicted(BOB, true)),
+				event: MetaEvent::contracts(RawEvent::Evicted(BOB, true)),
 				topics: vec![],
 			},
 		]);
 
 		// Subsequent contract calls should also fail.
 		assert_err!(
-			Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+			Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
 			"contract has been evicted"
 		);
 	})
@@ -1209,8 +1255,8 @@ fn default_rent_allowance_on_instantiate() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			30_000,
 			100_000,
@@ -1226,7 +1272,7 @@ fn default_rent_allowance_on_instantiate() {
 		initialize_block(5);
 
 		// Trigger rent through call
-		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
 
 		// Check contract is still alive
 		let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive();
@@ -1322,32 +1368,37 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, restoration_wasm));
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, set_rent_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, restoration_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, set_rent_wasm));
 
 		// If you ever need to update the wasm source this test will fail
 		// and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::CodeStored(restoration_code_hash.into())),
+				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::CodeStored(set_rent_code_hash.into())),
+				event: MetaEvent::contracts(RawEvent::CodeStored(restoration_code_hash.into())),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contracts(RawEvent::CodeStored(set_rent_code_hash.into())),
 				topics: vec![],
 			},
 		]);
 
 		// Create an account with address `BOB` with code `CODE_SET_RENT`.
 		// The input parameter sets the rent allowance to 0.
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			30_000,
 			100_000,
@@ -1361,7 +1412,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		assert_eq!(bob_contract.rent_allowance, 0);
 
 		if test_different_storage {
-			assert_ok!(Contract::call(
+			assert_ok!(Contracts::call(
 				Origin::signed(ALICE),
 				BOB, 0, 100_000,
 				call::set_storage_4_byte())
@@ -1377,14 +1428,14 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
 		// we expect that it will get removed leaving tombstone.
 		assert_err!(
-			Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+			Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
 			"contract has been evicted"
 		);
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(
+				event: MetaEvent::contracts(
 					RawEvent::Evicted(BOB.clone(), true)
 				),
 				topics: vec![],
@@ -1396,7 +1447,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		/// Note that we can't use `ALICE` for creating `DJANGO` so we create yet another
 		/// account `CHARLIE` and create `DJANGO` with it.
 		Balances::deposit_creating(&CHARLIE, 1_000_000);
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(CHARLIE),
 			30_000,
 			100_000,
@@ -1415,7 +1466,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 		// Perform a call to `DJANGO`. This should either perform restoration successfully or
 		// fail depending on the test parameters.
-		assert_ok!(Contract::call(
+		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
 			DJANGO,
 			0,
@@ -1437,7 +1488,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 					assert_eq!(System::events(), vec![
 						EventRecord {
 							phase: Phase::ApplyExtrinsic(0),
-							event: MetaEvent::contract(
+							event: MetaEvent::contracts(
 								RawEvent::Restored(DJANGO, BOB, bob_code_hash, 50, false)
 							),
 							topics: vec![],
@@ -1448,32 +1499,42 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 					assert_eq!(System::events(), vec![
 						EventRecord {
 							phase: Phase::ApplyExtrinsic(0),
-							event: MetaEvent::contract(RawEvent::Evicted(BOB, true)),
+							event: MetaEvent::contracts(RawEvent::Evicted(BOB, true)),
 							topics: vec![],
 						},
 						EventRecord {
 							phase: Phase::ApplyExtrinsic(0),
-							event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(CHARLIE, 1_000_000)),
+							event: MetaEvent::system(frame_system::RawEvent::NewAccount(CHARLIE)),
 							topics: vec![],
 						},
 						EventRecord {
 							phase: Phase::ApplyExtrinsic(0),
-							event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(DJANGO, 30_000)),
+							event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(CHARLIE, 1_000_000)),
 							topics: vec![],
 						},
 						EventRecord {
 							phase: Phase::ApplyExtrinsic(0),
-							event: MetaEvent::contract(RawEvent::Transfer(CHARLIE, DJANGO, 30_000)),
+							event: MetaEvent::system(frame_system::RawEvent::NewAccount(DJANGO)),
 							topics: vec![],
 						},
 						EventRecord {
 							phase: Phase::ApplyExtrinsic(0),
-							event: MetaEvent::contract(RawEvent::Instantiated(CHARLIE, DJANGO)),
+							event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(DJANGO, 30_000)),
 							topics: vec![],
 						},
 						EventRecord {
 							phase: Phase::ApplyExtrinsic(0),
-							event: MetaEvent::contract(RawEvent::Restored(
+							event: MetaEvent::contracts(RawEvent::Transfer(CHARLIE, DJANGO, 30_000)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contracts(RawEvent::Instantiated(CHARLIE, DJANGO)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contracts(RawEvent::Restored(
 								DJANGO,
 								BOB,
 								bob_code_hash,
@@ -1500,12 +1561,12 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::balances(balances::RawEvent::ReapedAccount(DJANGO, 0)),
+					event: MetaEvent::system(system::RawEvent::ReapedAccount(DJANGO)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(
+					event: MetaEvent::contracts(
 						RawEvent::Restored(DJANGO, BOB, bob_contract.code_hash, 50, true)
 					),
 					topics: vec![],
@@ -1586,8 +1647,8 @@ fn storage_max_value_limit() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			30_000,
 			100_000,
@@ -1600,7 +1661,7 @@ fn storage_max_value_limit() {
 		assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
 
 		// Call contract with allowed storage value.
-		assert_ok!(Contract::call(
+		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
 			BOB,
 			0,
@@ -1610,7 +1671,7 @@ fn storage_max_value_limit() {
 
 		// Call contract with too large a storage value.
 		assert_err!(
-			Contract::call(
+			Contracts::call(
 				Origin::signed(ALICE),
 				BOB,
 				0,
@@ -1950,10 +2011,10 @@ fn deploy_and_call_other_contract() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, callee_wasm));
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, caller_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, callee_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, caller_wasm));
 
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100_000,
 			100_000,
@@ -1963,7 +2024,7 @@ fn deploy_and_call_other_contract() {
 
 		// Call BOB contract, which attempts to instantiate and call the callee contract and
 		// makes various assertions on the results from those calls.
-		assert_ok!(Contract::call(
+		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
 			BOB,
 			0,
@@ -2077,10 +2138,10 @@ fn self_destruct_by_draining_balance() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCT).unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 		// Instantiate the BOB contract.
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100_000,
 			100_000,
@@ -2095,7 +2156,7 @@ fn self_destruct_by_draining_balance() {
 		);
 
 		// Call BOB with no input data, forcing it to self-destruct.
-		assert_ok!(Contract::call(
+		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
 			BOB,
 			0,
@@ -2113,10 +2174,10 @@ fn cannot_self_destruct_while_live() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCT).unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 		// Instantiate the BOB contract.
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100_000,
 			100_000,
@@ -2133,7 +2194,7 @@ fn cannot_self_destruct_while_live() {
 		// Call BOB with input data, forcing it make a recursive call to itself to
 		// self-destruct, resulting in a trap.
 		assert_err!(
-			Contract::call(
+			Contracts::call(
 				Origin::signed(ALICE),
 				BOB,
 				0,
@@ -2313,12 +2374,12 @@ fn destroy_contract_and_transfer_funds() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, callee_wasm));
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, caller_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, callee_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, caller_wasm));
 
 		// This deploys the BOB contract, which in turn deploys the CHARLIE contract during
 		// construction.
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			200_000,
 			100_000,
@@ -2333,7 +2394,7 @@ fn destroy_contract_and_transfer_funds() {
 		);
 
 		// Call BOB, which calls CHARLIE, forcing CHARLIE to self-destruct.
-		assert_ok!(Contract::call(
+		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
 			BOB,
 			0,
@@ -2408,12 +2469,12 @@ fn cannot_self_destruct_in_constructor() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCTING_CONSTRUCTOR).unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 		// Fail to instantiate the BOB contract since its final balance is below existential
 		// deposit.
 		assert_err!(
-			Contract::instantiate(
+			Contracts::instantiate(
 				Origin::signed(ALICE),
 				100_000,
 				100_000,
@@ -2529,15 +2590,15 @@ fn get_runtime_storage() {
 			0x14144020u32.to_le_bytes().to_vec().as_ref()
 		);
 
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-		assert_ok!(Contract::instantiate(
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
 			100_000,
 			code_hash.into(),
 			vec![],
 		));
-		assert_ok!(Contract::call(
+		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
 			BOB,
 			0,
