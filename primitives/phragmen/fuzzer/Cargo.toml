@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 sp-phragmen = { version = "2.0.0", path = ".." }
-honggfuzz = { path = "../../../../honggfuzz-rs" }
+honggfuzz = "0.5"
 rand = "0.7.3"
 
 [workspace]

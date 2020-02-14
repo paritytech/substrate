@@ -650,7 +650,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	pub fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
+	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
 		<NextKeys<T>>::get(DEDUP_KEY_PREFIX, v)
 	}
 

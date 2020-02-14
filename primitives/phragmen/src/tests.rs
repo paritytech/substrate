@@ -26,8 +26,6 @@ use crate::{
 use substrate_test_utils::assert_eq_uvec;
 use sp_runtime::{Perbill, traits::Convert};
 
-type Output = Perbill;
-
 #[test]
 fn float_phragmen_poc_works() {
 	let candidates = vec![1, 2, 3];
@@ -83,7 +81,7 @@ fn phragmen_poc_works() {
 		(30, vec![2, 3]),
 	];
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Perbill>(
 		2,
 		2,
 		candidates,
@@ -134,6 +132,11 @@ fn phragmen_poc_2_works() {
 }
 
 #[test]
+fn phragmen_works_with_any_per_thing() {
+	unimplemented!();
+}
+
+#[test]
 fn phragmen_poc_3_works() {
 	let candidates = vec![10, 20, 30];
 	let voters = vec![
@@ -164,7 +167,7 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 		(5, (u64::max_value() - 2).into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Perbill>(
 		2,
 		2,
 		candidates.clone(),
@@ -195,7 +198,7 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 		(14, u64::max_value().into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Perbill>(
 		2,
 		2,
 		candidates,
@@ -239,7 +242,7 @@ fn phragmen_accuracy_on_small_scale_self_vote() {
 		(30, 1),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Perbill>(
 		3,
 		3,
 		candidates,
@@ -270,7 +273,7 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 		(3, 1),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Perbill>(
 		3,
 		3,
 		candidates,
@@ -304,7 +307,7 @@ fn phragmen_large_scale_test() {
 		(50, 990000000000000000),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Perbill>(
 		2,
 		2,
 		candidates,
@@ -331,7 +334,7 @@ fn phragmen_large_scale_test_2() {
 		(50, nom_budget.into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Perbill>(
 		2,
 		2,
 		candidates,
@@ -408,7 +411,7 @@ fn elect_has_no_entry_barrier() {
 		(2, 10),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Perbill>(
 		3,
 		3,
 		candidates,
@@ -436,7 +439,7 @@ fn minimum_to_elect_is_respected() {
 		(2, 10),
 	]);
 
-	let maybe_result = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let maybe_result = elect::<_, _, _, TestCurrencyToVote, Perbill>(
 		10,
 		10,
 		candidates,
@@ -463,7 +466,7 @@ fn self_votes_should_be_kept() {
 		(1, 8),
 	]);
 
-	let result = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let result = elect::<_, _, _, TestCurrencyToVote, Perbill>(
 		2,
 		2,
 		candidates,

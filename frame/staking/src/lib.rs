@@ -256,7 +256,7 @@ pub mod slashing;
 pub mod offchain_election;
 pub mod inflation;
 
-use sp_std::{prelude::*, result, convert::{TryInto, From}};
+use sp_std::{prelude::*, result, convert::{TryInto, From}, ops};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug, Parameter,
@@ -616,14 +616,14 @@ pub struct ElectionResult<AccountId, Balance: HasCompact> {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ElectionStatus<BlockNumber> {
 	/// Nothing has and will happen for now. submission window is not open.
-	None,
+	Close,
 	/// The submission window has been open since the contained block number.
 	Open(BlockNumber),
 }
 
 impl<BlockNumber> Default for ElectionStatus<BlockNumber> {
 	fn default() -> Self {
-		Self::None
+		Self::Close
 	}
 }
 
@@ -1020,7 +1020,7 @@ decl_module! {
 			Self::ensure_storage_upgraded();
 			if
 				// if we don't have any ongoing offchain compute.
-				Self::era_election_status() == ElectionStatus::None &&
+				Self::era_election_status() == ElectionStatus::Close &&
 				// and an era is about to be changed.
 				Self::is_current_session_final()
 			{
@@ -1761,11 +1761,10 @@ impl<T: Trait> Module<T> {
 		compact_assignments: CompactOf<T>,
 		compute: ElectionCompute,
 		claimed_score: PhragmenScore,
-		// at: T::BlockNumber,
 	) -> Result<(), Error<T>> {
 		// discard early solutions
 		match Self::era_election_status() {
-			ElectionStatus::None => Err(Error::<T>::PhragmenEarlySubmission)?,
+			ElectionStatus::Close => Err(Error::<T>::PhragmenEarlySubmission)?,
 			ElectionStatus::Open(_) => { /* Open and no solutions received. Allowed. */ },
 		}
 
@@ -2035,7 +2034,7 @@ impl<T: Trait> Module<T> {
 	/// - [`CurrentElected`]: with the new elected set.
 	/// - [`EraElectionStatus`]: with `None`
 	///
-	/// Internally, [`QueuedElected`] and [`QueuedScore`] are also consumed.
+	/// Internally, [`QueuedElected`], snapshots and [`QueuedScore`] are also consumed.
 	///
 	/// If the election has been successful, It passes the new set upwards.
 	///
@@ -2048,7 +2047,7 @@ impl<T: Trait> Module<T> {
 			compute,
 		}) = Self::try_do_phragmen() {
 			// We have chosen the new validator set. Submission is no longer allowed.
-			<EraElectionStatus<T>>::put(ElectionStatus::None);
+			<EraElectionStatus<T>>::put(ElectionStatus::Close);
 
 			// kill the snapshots.
 			Self::kill_stakers_snapshot();
@@ -2066,7 +2065,6 @@ impl<T: Trait> Module<T> {
 			// Update slot stake.
 			<SlotStake<T>>::put(&slot_stake);
 
-			// Set the new validator set in sessions.
 			// Update current elected.
 			<CurrentElected<T>>::put(&elected_stashes);
 
@@ -2108,7 +2106,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// No storage item is updated.
 	fn do_phragmen_with_post_processing<
-		Accuracy: PerThing + sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
+		Accuracy: PerThing + ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
 	>(
 		compute: ElectionCompute,
 	) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
@@ -2132,11 +2130,6 @@ impl<T: Trait> Module<T> {
 				&elected_stashes,
 				&staked_assignments,
 			);
-
-			// Clear Stakers.
-			for v in Self::current_elected().iter() {
-				<Stakers<T>>::remove(v);
-			}
 
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
@@ -2164,8 +2157,8 @@ impl<T: Trait> Module<T> {
 					others,
 					// This might reasonably saturate and we cannot do much about it. The sum of
 					// someone's stake might exceed the balance type if they have the maximum amount
-					// of balance and receive some support. This is super unlikely to happen, yet
-					// we simulate it in some tests.
+					// of balance and receive some support. This is super unlikely to happen, yet we
+					// simulate it in some tests.
 					total,
 				};
 
@@ -2175,10 +2168,10 @@ impl<T: Trait> Module<T> {
 				(validator, exposure)
 			}).collect::<Vec<(T::AccountId, Exposure<_, _>)>>();
 
-			// In order to keep the property required by `n_session_ending`
-			// that we must return the new validator set even if it's the same as the old,
-			// as long as any underlying economic conditions have changed, we don't attempt
-			// to do any optimization where we compare against the prior set.
+			// In order to keep the property required by `n_session_ending` that we must return the
+			// new validator set even if it's the same as the old, as long as any underlying
+			// economic conditions have changed, we don't attempt to do any optimization where we
+			// compare against the prior set.
 			Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
 				elected_stashes,
 				slot_stake,
@@ -2186,18 +2179,18 @@ impl<T: Trait> Module<T> {
 				compute,
 			})
 		} else {
-			// There were not enough candidates for even our minimal level of functionality.
-			// This is bad.
-			// We should probably disable all functionality except for block production
-			// and let the chain keep producing blocks until we can decide on a sufficiently
-			// substantial set.
-			// TODO: #2494
+			// There were not enough candidates for even our minimal level of functionality. This is
+			// bad. We should probably disable all functionality except for block production and let
+			// the chain keep producing blocks until we can decide on a sufficiently substantial
+			// set. TODO: #2494
 			None
 		}
 	}
 
 	/// Execute phragmen and return the new results. No post-processing is applied and the raw edge
 	/// weights are returned.
+	///
+	/// Self votes are added and nominations before the most recent slashing span are reaped.
 	///
 	/// No storage item is updated.
 	fn do_phragmen<Accuracy: PerThing>() -> Option<PhragmenResult<T::AccountId, Accuracy>> {
@@ -2549,7 +2542,7 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 	type DispatchInfo = frame_support::weights::DispatchInfo;
 	type Pre = ();
 
-	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
 		&self,
@@ -2558,19 +2551,20 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
-		// TODO: maybe do this via manual ensure!()? I don't see why it would be _better_ though.
 		if let Some(inner_call) = call.is_sub_type() {
-			match inner_call {
-				Call::<T>::bond(..) |
-				Call::<T>::validate(..) |
-				Call::<T>::nominate(..) |
-				Call::<T>::chill(..) |
-				Call::<T>::unbond(..) |
-				Call::<T>::rebond(..) |
-				Call::<T>::bond_extra(..) => {
-					return Err(InvalidTransaction::Stale.into());
+			if let ElectionStatus::Open(_) = <Module<T>>::era_election_status() {
+				match inner_call {
+					Call::<T>::bond(..) |
+					Call::<T>::unbond(..) |
+					Call::<T>::bond_extra(..) |
+					Call::<T>::rebond(..) |
+					Call::<T>::validate(..) |
+					Call::<T>::nominate(..) |
+					Call::<T>::chill(..) => {
+						return Err(InvalidTransaction::Stale.into());
+					}
+					_ => { /* no problem */ }
 				}
-				_ => { /* no problem */ }
 			}
 		}
 
@@ -2591,6 +2585,16 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		) = call {
 			use offchain_election::SignaturePayloadOf;
 
+			// discard early solution
+			if Self::era_election_status() == ElectionStatus::Close {
+				debug::native::debug!(
+					target: "staking",
+					"rejecting unsigned transaction because it is too early."
+				);
+				return InvalidTransaction::Future.into();
+			}
+
+			// discard weak solution
 			if let Some(queued_score) = Self::queued_score() {
 				if !is_score_better(queued_score, *score) {
 					debug::native::debug!(

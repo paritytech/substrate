@@ -57,11 +57,17 @@ pub(crate) type SignaturePayloadOf<'a, T> = (
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/staking-election/";
 const OFFCHAIN_REPEAT: u32 = 5;
 
-pub(crate) fn set_check_offchain_execution_status<T: Trait>(now: T::BlockNumber) -> Result<(), &'static str> {
+pub(crate) fn set_check_offchain_execution_status<T: Trait>(
+	now: T::BlockNumber
+) -> Result<(), &'static str> {
 	let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 	let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
 
-	let mutate_stat = storage.mutate::<_, &'static str, _>(|maybe_head: Option<Option<T::BlockNumber>>| {
+	let mutate_stat = storage.mutate::<
+		_,
+		&'static str,
+		_,
+	>(|maybe_head: Option<Option<T::BlockNumber>>| {
 		match maybe_head {
 			Some(Some(head)) if now < head => Err("fork."),
 			Some(Some(head)) if now >= head && now <= head + threshold => Err("recently executed."),
@@ -160,7 +166,8 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 
 		// convert winners to index as well
 		let winners = winners.into_iter().map(|w|
-			validator_index(&w).expect("winners are chosen from the snapshot list; the must have index; qed")
+			validator_index(&w)
+				.expect("winners are chosen from the snapshot list; the must have index; qed")
 		).collect::<Vec<_>>();
 
 		let signature_payload: SignaturePayloadOf<T> =

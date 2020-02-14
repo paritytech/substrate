@@ -2689,7 +2689,7 @@ mod offchain_phragmen {
 	use mock::*;
 	use frame_support::{assert_ok, assert_noop, debug};
 	use substrate_test_utils::assert_eq_uvec;
-	use sp_runtime::{traits::OffchainWorker, Perbill};
+	use sp_runtime::traits::OffchainWorker;
 	use sp_core::offchain::{
 		OffchainExt,
 		TransactionPoolExt,
@@ -2782,24 +2782,24 @@ mod offchain_phragmen {
 		|| {
 			run_to_block(10);
 			assert_session_era!(1, 0);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 			assert!(Staking::snapshot_nominators().is_none());
 			assert!(Staking::snapshot_validators().is_none());
 
 			run_to_block(18);
 			assert_session_era!(1, 0);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 			assert!(Staking::snapshot_nominators().is_none());
 			assert!(Staking::snapshot_validators().is_none());
 
 			run_to_block(40);
 			assert_session_era!(4, 0);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 			assert!(Staking::snapshot_nominators().is_none());
 			assert!(Staking::snapshot_validators().is_none());
 
 			run_to_block(46);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 			assert!(Staking::snapshot_nominators().is_none());
 			assert!(Staking::snapshot_validators().is_none());
 
@@ -2814,7 +2814,7 @@ mod offchain_phragmen {
 			assert!(Staking::snapshot_validators().is_some());
 
 			run_to_block(50);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 			assert!(Staking::snapshot_nominators().is_none());
 			assert!(Staking::snapshot_validators().is_none());
 		})
@@ -2825,13 +2825,23 @@ mod offchain_phragmen {
 		ExtBuilder::default().build().execute_with(|| {
 			start_session(1);
 			start_session(2);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 			// some election must have happened by now.
 			assert_eq!(
 				System::events()[4].event,
 				MetaEvent::staking(RawEvent::StakingElection(ElectionCompute::OnChain)),
 			);
 		})
+	}
+
+	#[test]
+	fn offchain_wont_work_if_snapshot_fails() {
+		unimplemented!();
+	}
+
+	#[test]
+	fn staking_is_locked_when_election_window_open() {
+		unimplemented!();
 	}
 
 	#[test]
@@ -2859,7 +2869,7 @@ mod offchain_phragmen {
 			assert_eq!(queued_result.compute, ElectionCompute::Signed);
 
 			run_to_block(15);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 
 			assert_eq!(
 				System::events()[3].event,
@@ -2893,7 +2903,7 @@ mod offchain_phragmen {
 			assert_eq!(queued_result.compute, ElectionCompute::Signed);
 
 			run_to_block(15);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 
 			assert_eq!(
 				System::events()[3].event,
@@ -2913,7 +2923,7 @@ mod offchain_phragmen {
 		|| {
 			run_to_block(11);
 			// submission is not yet allowed
-			assert_eq!(Staking::era_election_status(), ElectionStatus::None);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
 
 			// create all the indices just to build the solution.
 			Staking::create_stakers_snapshot();

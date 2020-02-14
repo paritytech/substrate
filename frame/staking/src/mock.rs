@@ -40,7 +40,7 @@ use sp_staking::{
 	offence::{OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
-use std::{cell::RefCell, collections::HashSet};
+use std::{cell::RefCell, collections::HashSet, ops};
 
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
@@ -326,7 +326,7 @@ pub(crate) mod dummy_sr25519 {
 
 	mod app_sr25519 {
 		use sp_application_crypto::{app_crypto, KeyTypeId, sr25519};
-		app_crypto!(sr25519, KeyTypeId(*b"ebab"));
+		app_crypto!(sr25519, KeyTypeId(*b"vali"));
 	}
 
 	pub type AuthoritySignature = app_sr25519::Signature;
@@ -637,7 +637,7 @@ pub fn bond_validator(stash: u64, ctrl: u64, val: u64) {
 		Origin::signed(stash),
 		ctrl,
 		val,
-		RewardDestination::Controller
+		RewardDestination::Controller,
 	));
 	assert_ok!(Staking::validate(
 		Origin::signed(ctrl),
@@ -651,7 +651,7 @@ pub fn bond_nominator(stash: u64, ctrl: u64, val: u64, target: Vec<u64>) {
 		Origin::signed(stash),
 		ctrl,
 		val,
-		RewardDestination::Controller
+		RewardDestination::Controller,
 	));
 	assert_ok!(Staking::nominate(Origin::signed(ctrl), target));
 }
@@ -746,7 +746,7 @@ pub fn on_offence_now(
 }
 
 /// convert a vector of staked assignments into ratio
-pub fn assignment_to_staked<T: PerThing + sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>>(
+pub fn assignment_to_staked<T: PerThing + ops::Mul<ExtendedBalance, Output=ExtendedBalance>>(
 	assignments: Vec<Assignment<AccountId, T>>
 ) -> Vec<StakedAssignment<AccountId>> {
 	assignments

@@ -17,8 +17,7 @@
 //! (very) Basic implementation of a graph node used in the reduce algorithm.
 
 use sp_runtime::RuntimeDebug;
-use sp_std::{prelude::*, cell::RefCell};
-use sp_std::rc::Rc;
+use sp_std::{prelude::*, cell::RefCell, rc::Rc, fmt};;
 
 /// The role that a node can accept.
 #[derive(PartialEq, Eq, Ord, PartialOrd, Clone, RuntimeDebug)]
@@ -58,8 +57,8 @@ impl<A: PartialEq> PartialEq for NodeId<A> {
 impl<A: PartialEq> Eq for NodeId<A> {}
 
 #[cfg(feature = "std")]
-impl<A: sp_std::fmt::Debug + Clone> sp_std::fmt::Debug for NodeId<A> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+impl<A: fmt::Debug + Clone> sp_std::fmt::Debug for NodeId<A> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(f, "Node({:?}, {:?})", self.who, if self.role == NodeRole::Voter { "V" } else { "T" })
 	}
 }
@@ -82,13 +81,13 @@ impl<A: PartialEq> PartialEq for Node<A> {
 impl<A: PartialEq> Eq for Node<A> {}
 
 #[cfg(feature = "std")]
-impl<A: sp_std::fmt::Debug + Clone> sp_std::fmt::Debug for Node<A> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+impl<A: fmt::Debug + Clone> fmt::Debug for Node<A> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "({:?} --> {:?})", self.id, self.parent.as_ref().map(|p| p.borrow().id.clone()))
 	}
 }
 
-impl<A: PartialEq + Eq + Clone + sp_std::fmt::Debug> Node<A> {
+impl<A: PartialEq + Eq + Clone + fmt::Debug> Node<A> {
 	/// Create a new [`Node`]
 	pub fn new(id: NodeId<A>) -> Node<A> {
 		Self { id, parent: None }

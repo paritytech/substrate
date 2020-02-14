@@ -30,8 +30,6 @@ mod staked;
 // prefix used for struct fields in compact.
 const PREFIX: &'static str = "votes";
 
-// TODO: what to do if additions overflow in into staked.
-
 /// Generates a struct to store the phragmen assignments in a compact way. The struct can only store
 /// distributions up to the given input count. The given count must be greater than 2.
 ///

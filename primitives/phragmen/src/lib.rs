@@ -534,7 +534,7 @@ pub fn evaluate_support<AccountId>(
 ) -> PhragmenScore {
 	let mut min_support = ExtendedBalance::max_value();
 	let mut sum: ExtendedBalance = Zero::zero();
-	// TODO: this will probably saturate but using big num makes it even slower. We'll have to see.
+	// NOTE: this will probably saturate but using big num makes it even slower. We'll have to see.
 	// This must run on chain..
 	let mut sum_squared: ExtendedBalance = Zero::zero();
 	for (_, support) in support.iter() {

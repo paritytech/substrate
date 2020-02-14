@@ -17,7 +17,7 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 
-use sp_std::{ops, prelude::*, convert::TryInto};
+use sp_std::{ops, fmt, prelude::*, convert::TryInto};
 use codec::{Encode, Decode, CompactAs};
 use crate::{
 	traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic},
@@ -26,7 +26,7 @@ use sp_debug_derive::RuntimeDebug;
 
 /// Something that implements a fixed point ration with an arbitrary granularity `X`, as _parts per
 /// `X`_.
-pub trait PerThing: Sized + Saturating + Copy + Default + sp_std::fmt::Debug {
+pub trait PerThing: Sized + Saturating + Copy + Default + fmt::Debug {
 	/// The data type used to build this per-thingy.
 	type Inner: BaseArithmetic + Copy;
 
