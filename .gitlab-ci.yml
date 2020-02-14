@@ -221,9 +221,7 @@ test-browser-node:
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
-    - curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh 
     - wasm-pack test --firefox --headless bin/node/browser-testing
-    - sccache -s
 
 check-web-wasm:
   stage:                           test
