@@ -8428,7 +8428,6 @@ checksum = "c689459fbaeb50e56c6749275f084decfd02194ac5852e6617d95d0d3cf02eaf"
 dependencies = [
  "bytes 0.5.4",
  "futures_codec",
- "tokio-util",
 ]
 
 [[package]]
