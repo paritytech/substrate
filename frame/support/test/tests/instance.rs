@@ -247,7 +247,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event},
+		System: system::{Module, Call, Event<T>},
 		Module1_1: module1::<Instance1>::{
 			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},

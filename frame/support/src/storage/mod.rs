@@ -25,6 +25,7 @@ pub mod hashed;
 pub mod child;
 #[doc(hidden)]
 pub mod generator;
+pub mod migration;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
@@ -42,6 +43,10 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query;
+
+	/// Try to get the underlying value from the provided storage instance; `Ok` if it exists,
+	/// `Err` if not.
+	fn try_get() -> Result<T, ()>;
 
 	/// Translate a value from some previous type (`O`) to the current type.
 	///
@@ -143,14 +148,28 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Mutate the value under a key.
 	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
 
+	/// Mutate the item, only if an `Ok` value is returned.
+	fn try_mutate<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
+		key: KeyArg,
+		f: F,
+	) -> Result<R, E>;
+
+	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
+	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(key: KeyArg, f: F) -> R;
+
+	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	fn try_mutate_exists<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
+		key: KeyArg,
+		f: F,
+	) -> Result<R, E>;
+
 	/// Take the value under a key.
 	fn take<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
 
 	/// Append the given items to the value in the storage.
 	///
 	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str>
-	where
+	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str> where
 		KeyArg: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
@@ -162,8 +181,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
 	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items)
-	where
+	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) where
 		KeyArg: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
