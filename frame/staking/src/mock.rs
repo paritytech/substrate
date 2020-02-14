@@ -40,7 +40,7 @@ use sp_staking::{
 	offence::{OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
-use std::{cell::RefCell, collections::HashSet, ops};
+use std::{cell::RefCell, collections::HashSet};
 
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
@@ -747,9 +747,12 @@ pub fn on_offence_now(
 }
 
 /// convert a vector of staked assignments into ratio
-pub fn assignment_to_staked<T: PerThing + ops::Mul<ExtendedBalance, Output=ExtendedBalance>>(
+pub fn assignment_to_staked<T: PerThing>(
 	assignments: Vec<Assignment<AccountId, T>>
-) -> Vec<StakedAssignment<AccountId>> {
+) -> Vec<StakedAssignment<AccountId>>
+where
+	ExtendedBalance: From<<T as PerThing>::Inner>
+{
 	assignments
 		.into_iter()
 		.map(|a| {
@@ -764,7 +767,7 @@ pub fn assignment_to_staked<T: PerThing + ops::Mul<ExtendedBalance, Output=Exten
 /// convert a vector of assignments into staked
 pub fn staked_to_assignment<T: PerThing>(
 	staked: Vec<StakedAssignment<AccountId>>,
-) -> Vec<Assignment<AccountId, T>> {
+) -> Vec<Assignment<AccountId, T>> where u128: From<<T as PerThing>::Inner>{
 	staked
 		.into_iter()
 		.map(|sa| sa.into_assignment(true))
@@ -899,7 +902,7 @@ pub fn do_phragmen_with_post_processing(
 		winners,
 		assignments,
 	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
-	let winners = winners.into_iter().map(|(w, _)| w).collect();
+	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<AccountId>>();
 
 	let mut staked = assignment_to_staked::<OffchainAccuracy>(assignments);
 

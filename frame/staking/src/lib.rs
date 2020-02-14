@@ -250,12 +250,12 @@
 mod mock;
 #[cfg(test)]
 mod tests;
-
+mod benchmarking;
 pub mod slashing;
 pub mod offchain_election;
 pub mod inflation;
 
-use sp_std::{prelude::*, result, convert::{TryInto, From}, ops};
+use sp_std::{prelude::*, result, convert::{TryInto, From}};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug, Parameter,
@@ -2100,11 +2100,12 @@ impl<T: Trait> Module<T> {
 	/// values.
 	///
 	/// No storage item is updated.
-	fn do_phragmen_with_post_processing<
-		Accuracy: PerThing + ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
-	>(
+	fn do_phragmen_with_post_processing<Accuracy: PerThing>(
 		compute: ElectionCompute,
-	) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
+	) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>>
+	where
+		ExtendedBalance: From<<Accuracy as PerThing>::Inner>
+	{
 		if let Some(phragmen_result) = Self::do_phragmen::<Accuracy>() {
 			let elected_stashes = phragmen_result.winners.iter()
 				.map(|(s, _)| s.clone())

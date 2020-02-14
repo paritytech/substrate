@@ -827,6 +827,7 @@ impl_runtime_apis! {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
+				b"pallet-staking" | b"staking" => Staking::run_benchmark(extrinsic, steps, repeat).ok(),
 				_ => return None,
 			}
 		}

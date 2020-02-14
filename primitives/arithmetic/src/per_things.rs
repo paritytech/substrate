@@ -63,8 +63,40 @@ pub trait PerThing: Sized + Saturating + Copy + Default + fmt::Debug {
 	/// The computation of this approximation is performed in the generic type `N`. Given
 	/// `M` as the data type that can hold the maximum value of this per-thing (e.g. u32 for
 	/// perbill), this can only work if `N == M` or `N: From<M> + TryInto<M>`.
+	///
+	/// Note that this always rounds _down_, i.e.
+	///
+	/// ```rust
+	/// # use sp_arithmetic::{Percent, PerThing};
+	/// # fn main () {
+	/// // 989/100 is technically closer to 99%.
+	/// assert_eq!(
+	///		Percent::from_rational_approximation(989, 1000),
+	///		Percent::from_parts(98),
+	///	);
+	/// # }
+	/// ```
 	fn from_rational_approximation<N>(p: N, q: N) -> Self
 		where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + ops::Div<N, Output=N>;
+
+	/// A mul implementation that always rounds down, whilst the standard `Mul` implementation
+	/// rounds to the nearest numbers
+	///
+	/// ```rust
+	/// # use sp_arithmetic::{Percent, PerThing};
+	/// # fn main () {
+	/// // rounds to closest
+	/// assert_eq!(Percent::from_percent(34) * 10u64, 3);
+	/// assert_eq!(Percent::from_percent(36) * 10u64, 4);
+	///
+	/// // collapse down
+	/// assert_eq!(Percent::from_percent(34).mul_collapse(10u64), 3);
+	/// assert_eq!(Percent::from_percent(36).mul_collapse(10u64), 3);
+	/// # }
+	/// ```
+	fn mul_collapse<N>(self, b: N) -> N
+	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N>
+		+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>;
 }
 
 macro_rules! implement_per_thing {
@@ -157,6 +189,38 @@ macro_rules! implement_per_thing {
 
 				$name(part as Self::Inner)
 			}
+
+			fn mul_collapse<N>(self, b: N) -> N
+			where N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N>
+				+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>
+			{
+				let maximum: N = $max.into();
+				let upper_max: $upper_type = $max.into();
+				let part: N = self.0.into();
+
+				let rem_multiplied_divided = {
+					let rem = b.clone().rem(maximum.clone());
+
+					// `rem_sized` is inferior to $max, thus it fits into $type. This is assured by
+					// a test.
+					let rem_sized = rem.saturated_into::<$type>();
+
+					// `self` and `rem_sized` are inferior to $max, thus the product is less than
+					// $max^2 and fits into $upper_type. This is assured by a test.
+					let rem_multiplied_upper = rem_sized as $upper_type * self.0 as $upper_type;
+
+					// `rem_multiplied_upper` is less than $max^2 therefore divided by $max it fits
+					// in $type. remember that $type always fits $max.
+					let rem_multiplied_divided_sized =
+						(rem_multiplied_upper / upper_max) as $type;
+
+					// `rem_multiplied_divided_sized` is inferior to b, thus it can be converted
+					// back to N type
+					rem_multiplied_divided_sized.into()
+				};
+
+				(b / maximum) * part + rem_multiplied_divided
+			}
 		}
 
 		/// Implement const functions
@@ -241,6 +305,7 @@ macro_rules! implement_per_thing {
 					// in $type. remember that $type always fits $max.
 					let mut rem_multiplied_divided_sized =
 						(rem_multiplied_upper / upper_max) as $type;
+
 					// fix a tiny rounding error
 					if rem_multiplied_upper % upper_max > upper_max / 2 {
 						rem_multiplied_divided_sized += 1;

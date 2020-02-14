@@ -24,11 +24,13 @@ use frame_system::offchain::{SubmitUnsignedTransaction};
 use frame_support::debug;
 use sp_phragmen::{
 	reduce, ExtendedBalance, PhragmenResult, StakedAssignment, Assignment, PhragmenScore,
+	build_support_map, evaluate_support,
 };
 use sp_std::{prelude::*, convert::TryInto};
 use sp_runtime::{RuntimeAppPublic, RuntimeDebug};
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::traits::Convert;
+use sp_runtime::PerThing;
 
 #[derive(RuntimeDebug)]
 pub(crate) enum OffchainElectionError {
@@ -111,69 +113,30 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 			.ok_or(OffchainElectionError::SnapshotUnavailable)?;
 		let snapshot_nominators = <Module<T>>::snapshot_nominators()
 			.ok_or(OffchainElectionError::SnapshotUnavailable)?;
-		// k is a local key who is also among the validators.
+
+		// compute raw solution.
 		let PhragmenResult {
 			winners,
 			assignments,
 		} = <Module<T>>::do_phragmen::<OffchainAccuracy>()
 			.ok_or(OffchainElectionError::ElectionFailed)?;
 
-		// convert winners into just account ids.
-		let winners: Vec<T::AccountId> = winners.into_iter().map(|(w, _)| w).collect();
+		// process and prepare it for submission.
+		let (winners, compact, score) = prepare_submission::<T>(
+			snapshot_nominators,
+			snapshot_validators,
+			assignments,
+			winners,
+			true,
+		);
 
-		// convert into staked. This is needed to be able to reduce.
-		let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
-			.into_iter()
-			.map(|a| {
-				let stake = <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
-					<Module<T>>::slashable_balance_of(&a.who)
-				) as ExtendedBalance;
-				a.into_staked(stake, true)
-			})
-			.collect();
-
-		// reduce the assignments. This will remove some additional edges.
-		reduce(&mut staked);
-
-		// get support and score.
-		let (support, _) = sp_phragmen::build_support_map::<T::AccountId>(&winners, &staked);
-		let score = sp_phragmen::evaluate_support(&support);
-
-		// helpers for building the compact
-		let nominator_index = |a: &T::AccountId| -> Option<NominatorIndex> {
-			snapshot_nominators.iter().position(|x| x == a).and_then(|i|
-				<usize as TryInto<NominatorIndex>>::try_into(i).ok()
-			)
-		};
-		let validator_index = |a: &T::AccountId| -> Option<ValidatorIndex> {
-			snapshot_validators.iter().position(|x| x == a).and_then(|i|
-				<usize as TryInto<ValidatorIndex>>::try_into(i).ok()
-			)
-		};
-
-		// convert back to ratio assignment. This takes less space.
-		let assignments_reduced: Vec<Assignment<T::AccountId, OffchainAccuracy>> = staked
-			.into_iter()
-			.map(|sa| sa.into_assignment(true))
-			.collect();
-
-		// compact encode the assignment.
-		let compact = <CompactOf<T>>::from_assignment(
-			assignments_reduced,
-			nominator_index,
-			validator_index,
-		).map_err(|_| OffchainElectionError::CompactFailed)?;
-
-		// convert winners to index as well
-		let winners = winners.into_iter().map(|w|
-			validator_index(&w)
-				.expect("winners are chosen from the snapshot list; the must have index; qed")
-		).collect::<Vec<_>>();
-
+		// sign it.
 		let signature_payload: SignaturePayloadOf<T> =
 			(&winners, &compact, &score, &(index as u32));
 		let signature = pubkey.sign(&signature_payload.encode())
 			.ok_or(OffchainElectionError::SigningFailed)?;
+
+		// send it.
 		let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
 			winners,
 			compact,
@@ -194,4 +157,92 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 
 	// no key left and no submission.
 	Err(OffchainElectionError::NoSigningKey)
+}
+
+/// Takes a phragmen result and the snapshot data and spits out some data that can be submitted to
+/// the chain.
+///
+/// This does a lot of stuff; read the inline comments.
+pub(crate) fn prepare_submission<T: Trait>(
+	snapshot_nominators: Vec<T::AccountId>,
+	snapshot_validators: Vec<T::AccountId>,
+	assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>>,
+	winners: Vec<(T::AccountId, ExtendedBalance)>,
+	do_reduce: bool,
+) -> (Vec<ValidatorIndex>, CompactOf<T>, PhragmenScore)
+where
+	ExtendedBalance: From<<OffchainAccuracy as PerThing>::Inner>,
+{
+	// all helper closures
+	let nominator_index = |a: &T::AccountId| -> Option<NominatorIndex> {
+		snapshot_nominators.iter().position(|x| x == a).and_then(|i|
+			<usize as TryInto<NominatorIndex>>::try_into(i).ok()
+		)
+	};
+	let validator_index = |a: &T::AccountId| -> Option<ValidatorIndex> {
+		snapshot_validators.iter().position(|x| x == a).and_then(|i|
+			<usize as TryInto<ValidatorIndex>>::try_into(i).ok()
+		)
+	};
+	let stake_of = |who: &T::AccountId| -> ExtendedBalance {
+		<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
+			<Module<T>>::slashable_balance_of(who)
+		) as ExtendedBalance
+	};
+
+	// clean winners
+	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<T::AccountId>>();
+
+	// convert into absolute value and to obtain the reduced version.
+	let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
+		.into_iter()
+		.map(|a| {
+			let stake = stake_of(&a.who);
+			a.into_staked(stake, true)
+		})
+		.collect();
+
+	if do_reduce {
+		reduce(&mut staked);
+	}
+
+	// convert back to ratio assignment. This takes less space.
+	let low_accuracy_assignment: Vec<Assignment<T::AccountId, OffchainAccuracy>> = staked
+		.into_iter()
+		.map(|sa| sa.into_assignment(true))
+		.collect();
+
+	// convert back to staked to compute the score in the receiver's accuracy. This can be done
+	// nicer, for now we do it as such since this code is not time-critical. This ensure that the
+	// score _predicted_ here is the same as the one computed on chain and you will not get a
+	// `PhragmenBogusScore` error. This is totally NOT needed if we don't do reduce. This whole
+	// accuracy glitch happens because reduce breaks that assumption of scale.
+	let score = {
+		let staked: Vec<StakedAssignment<T::AccountId>> = low_accuracy_assignment
+		.iter()
+		.map(|a| {
+			let stake = stake_of(&a.who);
+			a.clone().into_staked(stake, true)
+		}).collect();
+
+		let (support_map, _) = build_support_map::<T::AccountId>(
+			winners.as_slice(),
+			staked.as_slice(),
+		);
+		evaluate_support::<T::AccountId>(&support_map)
+	};
+
+	// compact encode the assignment.
+	let compact = <CompactOf<T>>::from_assignment(
+		low_accuracy_assignment,
+		nominator_index,
+		validator_index,
+	).unwrap();
+
+	// winners to index.
+	let winners = winners.into_iter().map(|w|
+		snapshot_validators.iter().position(|v| *v == w).unwrap().try_into().unwrap()
+	).collect::<Vec<ValidatorIndex>>();
+
+	(winners, compact, score)
 }
