@@ -27,7 +27,7 @@ use sc_executor_common::{
 };
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
-use sp_wasm_interface::{Function, Pointer, WordSize};
+use sp_wasm_interface::{Function, Pointer, WordSize, Value};
 use wasmtime::{Config, Engine, Module, Store};
 
 /// A `WasmRuntime` implementation using wasmtime to compile the runtime module to machine code
@@ -54,6 +54,12 @@ impl WasmRuntime for WasmtimeRuntime {
 			data,
 			self.heap_pages,
 		)
+	}
+
+	fn get_global_val(&self, name: &str) -> Result<Option<Value>> {
+		// Yeah, there is no better way currently :(
+		InstanceWrapper::new(&self.module, &self.imports, self.heap_pages)?
+			.get_global_val(name)
 	}
 }
 

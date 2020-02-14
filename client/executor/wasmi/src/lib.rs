@@ -669,6 +669,19 @@ impl WasmRuntime for WasmiRuntime {
 			&self.missing_functions,
 		)
 	}
+
+	fn get_global_val(&self, name: &str) -> Result<Option<sp_wasm_interface::Value>, Error> {
+		match self.instance.export_by_name(name) {
+			Some(global) => Ok(Some(
+				global
+					 .as_global()
+					 .ok_or_else(|| format!("`{}` is not a global", name))?
+					 .get()
+					 .into()
+			)),
+			None => Ok(None),
+		}
+	}
 }
 
 pub fn create_instance(
