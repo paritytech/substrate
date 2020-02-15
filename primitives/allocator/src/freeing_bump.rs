@@ -48,7 +48,7 @@ use crate::Error;
 use sp_std::{convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
 use sp_wasm_interface::{Pointer, WordSize};
 
-/// The minimal alignment guaranteed by this allocator. The alignment of 8 is choosen because it is
+/// The minimal alignment guaranteed by this allocator. The alignment of 8 is chosen because it is
 /// the alignment guaranteed by wasm32.
 const ALIGNMENT: u32 = 8;
 
