@@ -435,7 +435,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		// Always issue a change if `session` says that the validators have changed.
-		// Even if their session keys are the same as before, the underyling economic
+		// Even if their session keys are the same as before, the underlying economic
 		// identities have changed.
 		let current_set_id = if changed {
 			let next_authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
