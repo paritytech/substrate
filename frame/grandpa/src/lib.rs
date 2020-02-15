@@ -154,7 +154,7 @@ decl_storage! {
 		/// DEPRECATED
 		///
 		/// This used to store the current authority set, which has been migrated to the well-known
-		/// GRANDPA_AUTHORITES_KEY unhashed key.
+		/// GRANDPA_AUTHORITIES_KEY unhashed key.
 		#[cfg(feature = "migrate-authorities")]
 		pub(crate) Authorities get(fn authorities): AuthorityList;
 
