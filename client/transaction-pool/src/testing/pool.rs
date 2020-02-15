@@ -165,19 +165,19 @@ fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 
 fn block_event(id: u64) -> ChainEvent<Block> {
 	ChainEvent::NewBlock {
-		id: BlockId::number(1),
+		id: BlockId::number(id),
 		is_new_best: true,
 		retracted: vec![],
-		header: header(1),
+		header: header(id),
 	}
 }
 
 fn block_event_with_retracted(id: u64, retracted: Vec<Hash>) -> ChainEvent<Block> {
 	ChainEvent::NewBlock {
-		id: BlockId::number(1),
+		id: BlockId::number(id),
 		is_new_best: true,
 		retracted: retracted,
-		header: header(1),
+		header: header(id),
 	}
 }
 
@@ -234,7 +234,7 @@ fn should_resubmit_from_retracted_during_maintaince() {
 	pool.api.push_block(1, vec![]);
 	pool.api.push_fork_block(retracted_hash, vec![xt.clone()]);
 
-	let mut event = block_event_with_retracted(1, vec![retracted_hash]);
+	let event = block_event_with_retracted(1, vec![retracted_hash]);
 
 	block_on(pool.maintain(event));
 	assert_eq!(pool.status().ready, 1);
@@ -311,8 +311,11 @@ fn should_push_watchers_during_maintaince() {
 	);
 
 	// when
-	pool.api.push_block(1, vec![tx0, tx1, tx2]);
+	let header_hash = pool.api.push_block(1, vec![tx0, tx1, tx2]).hash();
 	block_on(pool.maintain(block_event(1)));
+
+	let event = ChainEvent::Finalized { hash: header_hash.clone() };
+	block_on(pool.maintain(event));
 
 	// then
 	// events for hash0 are: Ready, InBlock
@@ -320,15 +323,15 @@ fn should_push_watchers_during_maintaince() {
 	// events for hash2 are: Ready, InBlock
 	assert_eq!(
 		futures::executor::block_on_stream(watcher0).collect::<Vec<_>>(),
-		vec![TransactionStatus::Ready, TransactionStatus::InBlock(Hash::zero())],
+		vec![TransactionStatus::Ready, TransactionStatus::InBlock(header_hash.clone()), TransactionStatus::Finalized(header_hash.clone())],
 	);
 	assert_eq!(
 		futures::executor::block_on_stream(watcher1).collect::<Vec<_>>(),
-		vec![TransactionStatus::Ready, TransactionStatus::InBlock(Hash::zero())],
+		vec![TransactionStatus::Ready, TransactionStatus::InBlock(header_hash.clone()), TransactionStatus::Finalized(header_hash.clone())],
 	);
 	assert_eq!(
 		futures::executor::block_on_stream(watcher2).collect::<Vec<_>>(),
-		vec![TransactionStatus::Ready, TransactionStatus::InBlock(Hash::zero())],
+		vec![TransactionStatus::Ready, TransactionStatus::InBlock(header_hash.clone()), TransactionStatus::Finalized(header_hash.clone())],
 	);
 }
 

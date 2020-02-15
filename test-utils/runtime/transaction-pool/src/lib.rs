@@ -96,7 +96,6 @@ impl TestApi {
 	}
 
 	/// Push block as a part of canonical chain under given number.
-
 	pub fn push_block(&self, block_number: BlockNumber, xts: Vec<Extrinsic>) -> Header {
 		let mut chain = self.chain.write();
 		chain.block_by_number.insert(block_number, xts.clone());
