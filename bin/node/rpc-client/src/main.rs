@@ -19,7 +19,7 @@
 //! Example substrate RPC client code.
 //!
 //! This module shows how you can write a Rust RPC client that connects to a running
-//! substrate node and use staticly typed RPC wrappers.
+//! substrate node and use statically typed RPC wrappers.
 
 use futures::Future;
 use hyper::rt;
