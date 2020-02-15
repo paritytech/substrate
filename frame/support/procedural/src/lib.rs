@@ -200,7 +200,7 @@ use proc_macro::TokenStream;
 ///
 /// ```nocompile
 /// construct_runtime!(
-/// 	pub enum Runtume with ... {
+/// 	pub enum Runtime with ... {
 ///         ...,
 ///         Example: example::{Module, Storage, ..., Config<T>},
 ///         ...,
