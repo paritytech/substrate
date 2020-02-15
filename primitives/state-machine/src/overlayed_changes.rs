@@ -55,7 +55,7 @@ pub struct OverlayedChanges {
 	pub(crate) prospective: OverlayedChangeSet,
 	/// Committed changes.
 	pub(crate) committed: OverlayedChangeSet,
-	/// True if extrinsiscs stats must be collected.
+	/// True if extrinsics stats must be collected.
 	pub(crate) collect_extrinsics: bool,
 }
 

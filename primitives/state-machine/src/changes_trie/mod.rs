@@ -16,7 +16,7 @@
 
 //! Changes trie related structures and functions.
 //!
-//! Changes trie is a trie built of { storage key => extrinsiscs } pairs
+//! Changes trie is a trie built of { storage key => extrinsics } pairs
 //! at the end of each block. For every changed storage key it contains
 //! a pair, mapping key to the set of extrinsics where it has been changed.
 //!
