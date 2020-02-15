@@ -1004,7 +1004,7 @@ pub(crate) mod tests {
 	#[test]
 	fn finality_proof_is_none_if_first_justification_is_generated_by_unknown_set() {
 		// this is the case for forced change: set_id has been forcibly increased on full node
-		// and ligh node missed that
+		// and light node missed that
 		// => justification verification will fail on light node anyways, so we do not return
 		// finality proof at all
 		let blockchain = test_blockchain();
