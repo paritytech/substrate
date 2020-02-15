@@ -65,7 +65,7 @@ pub struct OverlayedChanges {
 pub struct OverlayedValue {
 	/// Current value. None if value has been deleted.
 	pub value: Option<StorageValue>,
-	/// The set of extinsic indices where the values has been changed.
+	/// The set of extrinsic indices where the values has been changed.
 	/// Is filled only if runtime has announced changes trie support.
 	pub extrinsics: Option<BTreeSet<u32>>,
 }
