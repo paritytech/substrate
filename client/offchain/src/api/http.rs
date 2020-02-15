@@ -947,7 +947,7 @@ mod tests {
 
 	#[test]
 	fn fuzzing() {
-		// Uses the API in random ways to try to trigger panicks.
+		// Uses the API in random ways to try to trigger panics.
 		// Doesn't test some paths, such as waiting for multiple requests. Also doesn't test what
 		// happens if the server force-closes our socket.
 
