@@ -2119,7 +2119,7 @@ const CODE_SELF_DESTRUCT: &str = r#"
 				;; Read own address into memory.
 				(call $ext_scratch_read
 					(i32.const 16)	;; Pointer to write address to
-					(i32.const 0)	;; Offset into scrach buffer
+					(i32.const 0)	;; Offset into scratch buffer
 					(i32.const 8)	;; Length of encoded address
 				)
 
@@ -2155,7 +2155,7 @@ const CODE_SELF_DESTRUCT: &str = r#"
 		;; Read balance into memory.
 		(call $ext_scratch_read
 			(i32.const 8)	;; Pointer to write balance to
-			(i32.const 0)	;; Offset into scrach buffer
+			(i32.const 0)	;; Offset into scratch buffer
 			(i32.const 8)	;; Length of encoded balance
 		)
 
@@ -2484,7 +2484,7 @@ const CODE_SELF_DESTRUCTING_CONSTRUCTOR: &str = r#"
 		;; Read balance into memory.
 		(call $ext_scratch_read
 			(i32.const 8)	;; Pointer to write balance to
-			(i32.const 0)	;; Offset into scrach buffer
+			(i32.const 0)	;; Offset into scratch buffer
 			(i32.const 8)	;; Length of encoded balance
 		)
 
