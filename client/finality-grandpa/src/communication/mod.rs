@@ -74,7 +74,7 @@ mod cost {
 	pub(super) const MALFORMED_CATCH_UP: Rep = Rep::new(-1000, "Grandpa: Malformed cath-up");
 	pub(super) const MALFORMED_COMMIT: Rep = Rep::new(-1000, "Grandpa: Malformed commit");
 	pub(super) const FUTURE_MESSAGE: Rep = Rep::new(-500, "Grandpa: Future message");
-	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "Grandpa: Uknown voter");
+	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "Grandpa: Unknown voter");
 
 	pub(super) const INVALID_VIEW_CHANGE: Rep = Rep::new(-500, "Grandpa: Invalid view change");
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
