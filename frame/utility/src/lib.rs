@@ -105,7 +105,7 @@ pub trait Trait: frame_system::Trait {
 /// composite was created to be uniquely identified.
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
 pub struct Timepoint<BlockNumber> {
-	/// The hieght of the chain at the point in time.
+	/// The height of the chain at the point in time.
 	height: BlockNumber,
 	/// The index of the extrinsic at the point in time.
 	index: u32,
