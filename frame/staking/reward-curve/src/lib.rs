@@ -271,7 +271,7 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 	points.push((0, inpos.i_0));
 	points.push((inpos.x_ideal, inpos.i_ideal_times_x_ideal));
 
-	// For each point p: (next_p.0 - p.0) < segment_lenght && (next_p.1 - p.1) < segment_lenght.
+	// For each point p: (next_p.0 - p.0) < segment_length && (next_p.1 - p.1) < segment_length.
 	// This ensures that the total number of segment doesn't overflow max_piece_count.
 	let max_length = (input.max_inflation - input.min_inflation + 1_000_000 - inpos.x_ideal)
 		/ (input.max_piece_count - 1);
