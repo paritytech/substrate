@@ -383,7 +383,7 @@ decl_event!(
 // - Unsigned calls that can be of two kinds:
 //   * "Inherent extrinsics" that are opinions generally held by the block
 //     authors that build child blocks.
-//   * Unsigned Transactions that are of intrinsic recognisable utility to the
+//   * Unsigned Transactions that are of intrinsic recognizable utility to the
 //     network, and are validated by the runtime.
 //
 // Information about where this dispatch initiated from is provided as the first argument
