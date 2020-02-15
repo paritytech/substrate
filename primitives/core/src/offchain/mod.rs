@@ -226,7 +226,7 @@ impl Duration {
 }
 
 impl Timestamp {
-	/// Creates new `Timestamp` given unix timestamp in miliseconds.
+	/// Creates new `Timestamp` given unix timestamp in milliseconds.
 	pub fn from_unix_millis(millis: u64) -> Self {
 		Timestamp(millis)
 	}
