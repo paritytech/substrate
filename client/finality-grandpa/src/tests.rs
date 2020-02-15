@@ -147,7 +147,7 @@ impl TestNetFactory for GrandpaTestNet {
 				use crate::light_import::tests::light_block_import_without_justifications;
 
 				let authorities_provider = Arc::new(self.test_config.clone());
-				// forbid direct finalization using justification that cames with the block
+				// forbid direct finalization using justification that came with the block
 				// => light clients will try to fetch finality proofs
 				let import = light_block_import_without_justifications(
 					client.clone(),
