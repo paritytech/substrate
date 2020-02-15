@@ -67,16 +67,22 @@ impl PoolStatus {
 /// 2. Inside `Ready` queue:
 ///		- `Broadcast`
 /// 3. Leaving the pool:
-///		- `Finalized`
+///		- `InBlock`
 ///		- `Invalid`
 ///		- `Usurped`
 ///		- `Dropped`
+///	4. Re-entering the pool:
+///		- `Retracted`
+///	5. Block finalized:
+///		- `Finalized`
+///		- `FinalityTimeout`
 ///
 /// The events will always be received in the order described above, however
 /// there might be cases where transactions alternate between `Future` and `Ready`
 /// pool, and are `Broadcast` in the meantime.
 ///
 /// There is also only single event causing the transaction to leave the pool.
+/// I.e. only one of the listed ones should be triggered.
 ///
 /// Note that there are conditions that may cause transactions to reappear in the pool.
 /// 1. Due to possible forks, the transaction that ends up being in included
@@ -86,8 +92,15 @@ impl PoolStatus {
 /// 3. `Invalid` transaction may become valid at some point in the future.
 /// (Note that runtimes are encouraged to use `UnknownValidity` to inform the pool about
 /// such case).
+/// 4. `Retracted` transactions might be included in some next block.
 ///
-/// However the user needs to re-subscribe to receive such notifications.
+/// The stream is considered finished only when either `Finalized` or `FinalityTimeout`
+/// event is triggered. You are however free to unsubscribe from notifications at any point.
+/// The first one will be emitted when the block, in which transaction was included gets
+/// finalized. The `FinalityTimeout` event will be emitted when the block did not reach finality
+/// within 512 blocks. This either indicates that finality is not available for your chain,
+/// or that finality gadget is lagging behind. If you choose to wait for finality longer, you can
+/// re-subscribe for a particular transaction hash manually again.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionStatus<Hash, BlockHash> {
@@ -98,7 +111,6 @@ pub enum TransactionStatus<Hash, BlockHash> {
 	/// The transaction has been broadcast to the given peers.
 	Broadcast(Vec<String>),
 	/// Transaction has been included in block with given hash.
-	#[serde(rename = "finalized")] // See #4438
 	InBlock(BlockHash),
 	/// The block this transaction was included in has been retracted.
 	Retracted(BlockHash),
