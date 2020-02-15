@@ -77,7 +77,7 @@ impl ExtensionsFactory for () {
 /// A producer of execution extensions for offchain calls.
 ///
 /// This crate aggregates extensions available for the offchain calls
-/// and is responsible for producing a right `Extensions` object.
+/// and is responsible for producing a correct `Extensions` object.
 /// for each call, based on required `Capabilities`.
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
