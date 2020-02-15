@@ -227,7 +227,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 impl<B: BlockT> LightDispatch<B> where
 	B::Header: HeaderT,
 {
-	/// Creates new light client requests processer.
+	/// Creates new light client requests processor.
 	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
 		LightDispatch {
 			checker,
