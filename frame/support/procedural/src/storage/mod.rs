@@ -283,7 +283,7 @@ impl StorageLineDefExt {
 			None
 		};
 
-		let storage_trait_trunkated = match &storage_def.storage_type {
+		let storage_trait_truncated = match &storage_def.storage_type {
 			StorageLineTypeDef::Simple(_) => {
 				quote!( StorageValue<#value_type> )
 			},
@@ -302,8 +302,8 @@ impl StorageLineDefExt {
 			},
 		};
 
-		let storage_trait = quote!( storage::#storage_trait_trunkated );
-		let storage_generator_trait = quote!( storage::generator::#storage_trait_trunkated );
+		let storage_trait = quote!( storage::#storage_trait_truncated );
+		let storage_generator_trait = quote!( storage::generator::#storage_trait_truncated );
 
 		let doc_attrs = storage_def.attrs.iter()
 			.filter_map(|a| a.parse_meta().ok())
