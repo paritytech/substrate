@@ -219,9 +219,9 @@ pub struct StorageLineDefExt {
 	storage_trait: proc_macro2::TokenStream,
 	/// Full trait, for example: `storage::generator::StorageMap<u32, u32>`.
 	storage_generator_trait: proc_macro2::TokenStream,
-	/// Weither the storage is generic.
+	/// Whether the storage is generic.
 	is_generic: bool,
-	/// Weither the storage value is an option.
+	/// Whether the storage value is an option.
 	is_option: bool,
 }
 
