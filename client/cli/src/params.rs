@@ -908,7 +908,7 @@ pub enum Subcommand {
 	/// Import blocks from file.
 	ImportBlocks(ImportBlocksCmd),
 
-	/// Validte a single block.
+	/// Validate a single block.
 	CheckBlock(CheckBlockCmd),
 
 	/// Revert chain to the previous state.
