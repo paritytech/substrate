@@ -97,7 +97,7 @@ pub(crate) const MIN_VERSION: u32 = 3;
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 /// When light node connects to the full node and the full node is behind light node
-/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it unuseful
+/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it not useful
 /// and disconnect to free connection slot.
 const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
