@@ -214,7 +214,7 @@ impl Default for MultiSigner {
 	}
 }
 
-/// NOTE: This implementations is required by `SimpleAddressDeterminator`,
+/// NOTE: This implementations is required by `SimpleAddressDeterminer`,
 /// we convert the hash into some AccountId, it's fine to use any scheme.
 impl<T: Into<H256>> crypto::UncheckedFrom<T> for MultiSigner {
 	fn unchecked_from(x: T) -> Self {

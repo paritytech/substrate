@@ -236,7 +236,7 @@ This function takes the code of the constructor and input data. Instantiation of
 
 **Note** that the complexity of executing the constructor code should be considered separately.
 
-**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most likely it will use some kind of hashing over the code of the constructor and input data. The default `SimpleAddressDeterminator` does precisely that.
+**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most likely it will use some kind of hashing over the code of the constructor and input data. The default `SimpleAddressDeterminer` does precisely that.
 
 **Note** that the constructor returns code in the owned form and it's obtained via return facilities, which should have take fee for the return value.
 
