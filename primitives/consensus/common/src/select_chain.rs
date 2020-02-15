@@ -22,7 +22,7 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 /// if multiple forks are present for an opaque definition of "best" in the
 /// specific chain build.
 ///
-/// The Strategy can be customised for the two use cases of authoring new blocks
+/// The Strategy can be customized for the two use cases of authoring new blocks
 /// upon the best chain or which fork to finalise. Unless implemented differently
 /// by default finalisation methods fall back to use authoring, so as a minimum
 /// `_authoring`-functions must be implemented.
