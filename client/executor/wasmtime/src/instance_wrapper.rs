@@ -142,7 +142,7 @@ impl InstanceWrapper {
 			Val::I64(val) => Ok(Some(Value::I64(val))),
 			Val::F32(val) => Ok(Some(Value::F32(val))),
 			Val::F64(val) => Ok(Some(Value::F64(val))),
-			_ => Err("Unknow value type".into()),
+			_ => Err("Unknown value type".into()),
 		}
 	}
 }
