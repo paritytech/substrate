@@ -231,7 +231,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_random_material_parital() {
+	fn test_random_material_partial() {
 		new_test_ext().execute_with(|| {
 			let genesis_hash = System::parent_hash();
 
