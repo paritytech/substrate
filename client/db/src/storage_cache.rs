@@ -338,7 +338,7 @@ impl<B: BlockT> CacheChanges<B> {
 			is_best,
 		);
 		let cache = &mut *cache;
-		// Filter out commiting block if any.
+		// Filter out committing block if any.
 		let enacted: Vec<_> = enacted
 			.iter()
 			.filter(|h| commit_hash.as_ref().map_or(true, |p| *h != p))
