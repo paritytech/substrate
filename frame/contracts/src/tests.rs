@@ -1052,7 +1052,7 @@ fn claim_surcharge_malus() {
 }
 
 /// Claim surcharge with the given trigger_call at the given blocks.
-/// if removes is true then assert that the contract is a tombstone
+/// If `removes` is true then assert that the contract is a tombstone.
 fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
