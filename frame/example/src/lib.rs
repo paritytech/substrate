@@ -32,7 +32,7 @@
 //!         not the internals of the module implementation. Only state inputs,
 //!         outputs, and a brief description that mentions whether calling it
 //!         requires root, but without repeating the source code details.
-//!         Capitalise the first word of each documentation comment and end it with
+//!         Capitalize the first word of each documentation comment and end it with
 //!         a full stop. See
 //!         <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
 //!         target="_blank"> Generic example of annotating source code with documentation comments</a></li>
