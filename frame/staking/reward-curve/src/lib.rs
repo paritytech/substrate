@@ -27,7 +27,7 @@ use syn::parse::{Parse, ParseStream};
 ///   Expressed in millionth, must be between 0_100_000 and 0_900_000.
 ///
 /// - `falloff`: Known as `decay_rate` in the literature. A co-efficient dictating the strength of
-///   the global incentivisation to get the `ideal_stake`. A higher number results in less typical
+///   the global incentivization to get the `ideal_stake`. A higher number results in less typical
 ///   inflation at the cost of greater volatility for validators.
 ///   Expressed in millionth, must be between 0 and 1_000_000.
 ///
