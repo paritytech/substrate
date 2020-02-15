@@ -1052,14 +1052,14 @@ mod tests {
 	}
 
 	#[test]
-	fn reject_non_existant_spend_proposal_fails() {
+	fn reject_non_existent_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 
 	#[test]
-	fn accept_non_existant_spend_proposal_fails() {
+	fn accept_non_existent_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
