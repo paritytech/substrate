@@ -597,7 +597,7 @@ fn dispatch_call() {
 				topics: vec![],
 			},
 
-			// Event emited as a result of dispatch.
+			// Event emitted as a result of dispatch.
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::contracts(RawEvent::Dispatched(BOB, true)),
