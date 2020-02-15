@@ -55,7 +55,7 @@ fn main() {
 /// 1. Calls the `pending_extrinsics` method to get all extrinsics in the pool.
 /// 2. Then calls `remove_extrinsic` passing the obtained raw extrinsics.
 ///
-/// As the resul of running the code the entire content of the transaction pool is going
+/// As the result of running the code the entire content of the transaction pool is going
 /// to be removed and the extrinsics are going to be temporarily banned.
 fn remove_all_extrinsics(client: AuthorClient<Hash, Hash>) -> impl Future<Item=(), Error=RpcError> {
 	client.pending_extrinsics()
