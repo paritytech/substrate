@@ -878,7 +878,7 @@ impl<Block: BlockT> Backend<Block> {
 		inmem
 	}
 
-	/// Returns total numbet of blocks (headers) in the block DB.
+	/// Returns total number of blocks (headers) in the block DB.
 	#[cfg(feature = "test-helpers")]
 	pub fn blocks_count(&self) -> u64 {
 		self.blockchain.db.iter(columns::HEADER).count() as u64
