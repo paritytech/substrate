@@ -64,7 +64,7 @@ impl Default for ExecutionStrategies {
 
 /// Generate the starting set of ExternalitiesExtensions based upon the given capabilities
 pub trait ExtensionsFactory: Send + Sync {
-	/// Make `Extensions` for given Capapbilities
+	/// Make `Extensions` for given Capabilities
 	fn extensions_for(&self, capabilities: offchain::Capabilities) -> Extensions;
 }
 
