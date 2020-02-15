@@ -61,7 +61,7 @@ impl<'a> StorageValueRef<'a> {
 			.map(|val| T::decode(&mut &*val).ok())
 	}
 
-	/// Retrieve & decode the value and set it to a new one atomicaly.
+	/// Retrieve & decode the value and set it to a new one atomically.
 	///
 	/// Function `f` should return a new value that we should attempt to write to storage.
 	/// This function returns:
