@@ -98,7 +98,7 @@ fn should_report_in_different_time_slot() {
 		});
 
 		// when
-		// reportfor the second time
+		// report for the second time
 		offence.time_slot += 1;
 		Offences::report_offence(vec![], offence);
 
