@@ -61,10 +61,10 @@ impl Default for TestSetup {
 				.set_keystore(keystore.clone())
 				.build()
 		);
-		let (pool, _) = Arc::new(BasicPool::new(
+		let pool = Arc::new(BasicPool::new(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
-		));
+		).0);
 		TestSetup {
 			runtime: runtime::Runtime::new().expect("Failed to create runtime in test setup"),
 			client,
