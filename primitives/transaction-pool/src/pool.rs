@@ -96,6 +96,11 @@ impl PoolStatus {
 ///
 /// The stream is considered finished only when either `Finalized` or `FinalityTimeout`
 /// event is triggered. You are however free to unsubscribe from notifications at any point.
+/// The first one will be emitted when the block, in which transaction was included gets
+/// finalized. The `FinalityTimeout` event will be emitted when the block did not reach finality
+/// within 512 blocks. This either indicates that finality is not available for your chain,
+/// or that finality gadget is lagging behind. If you choose to wait for finality longer, you can
+/// re-subscribe for a particular transaction hash manually again.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionStatus<Hash, BlockHash> {
