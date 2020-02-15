@@ -143,7 +143,7 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
-/// Information for managing an acocunt and its sub trie abstraction.
+/// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account
 #[derive(Encode, Decode, RuntimeDebug)]
 pub enum ContractInfo<T: Trait> {
