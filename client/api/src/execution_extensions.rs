@@ -125,7 +125,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	/// To break retain cycle between `Client` and `TransactionPool` we require this
 	/// extension to be a `Weak` reference.
 	/// That's also the reason why it's being registered lazily instead of
-	/// during initialisation.
+	/// during initialization.
 	pub fn register_transaction_pool(&self, pool: Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>) {
 		*self.transaction_pool.write() = Some(pool);
 	}
