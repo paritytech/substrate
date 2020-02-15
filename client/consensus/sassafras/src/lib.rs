@@ -19,19 +19,19 @@
 mod aux_schema;
 
 use std::{
-	sync::Arc, marker::PhantomData, time::{Duration, Instant}, collections::HashMap,
+	sync::Arc, time::{Duration, Instant}, collections::HashMap,
 };
 use log::trace;
 use codec::{Encode, Decode};
 use parking_lot::Mutex;
 use merlin::Transcript;
-use sp_core::{Blake2Hasher, H256, crypto::{Pair, Public}};
-use sp_blockchain::{Result as ClientResult, ProvideCache, HeaderMetadata};
+use sp_core::{H256, crypto::{Pair, Public}};
+use sp_blockchain::{ProvideCache, HeaderMetadata};
 use sp_inherents::InherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use sp_consensus::{
-	Error as ConsensusError, BlockImportParams, BlockOrigin, ForkChoiceStrategy,
-	ImportResult, BlockImport, BlockCheckParams,
+	Error as ConsensusError, BlockImportParams, BlockOrigin, ImportResult,
+	BlockImport, BlockCheckParams,
 };
 use sp_consensus::import_queue::{Verifier, CacheKeyId, BasicQueue};
 use sp_consensus_sassafras::{
@@ -42,7 +42,7 @@ use sp_consensus_sassafras::digest::{
 	NextEpochDescriptor, PostBlockDescriptor, PreDigest, CompatibleDigestItem
 };
 use sp_consensus_sassafras::inherents::SassafrasInherentData;
-use sp_runtime::{generic::BlockId, Justification};
+use sp_runtime::Justification;
 use sp_runtime::traits::{Block as BlockT, Header};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -50,7 +50,6 @@ use sc_client::{Client, CallExecutor};
 use sc_client_api::backend::{AuxStore, Backend};
 use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
 use sc_consensus_slots::SlotCompatible;
-use crate::aux_schema::{load_epoch_changes, write_epoch_changes};
 
 /// Validator set of a particular epoch, can be either publishing or validating.
 #[derive(Debug, Clone, Encode, Decode)]
@@ -194,18 +193,19 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 		}
 
 		let mut epoch_changes = self.epoch_changes.lock();
-		let epoch_data = {
-			epoch_changes.epoch_for_child_of_mut(
-				descendent_query(&*self.client),
-				&parent_hash,
-				parent_header_metadata.number,
-				unimplemented!(), // TODO
-				|slot| unimplemented!() // TODO
-			)
-				.map_err(|_| Error::InvalidEpochData)?
-				.ok_or(Error::InvalidEpochData)?
-		};
-		let epoch = epoch_data.as_mut();
+		let epoch_descriptor = epoch_changes.epoch_descriptor_for_child_of(
+			descendent_query(&*self.client),
+			&parent_hash,
+			parent_header_metadata.number,
+			unimplemented!(), // TODO
+		)
+			.map_err(|_| Error::InvalidEpochData)?
+			.ok_or_else(|| Error::InvalidEpochData)?;
+		let viable_epoch = epoch_changes.viable_epoch_mut(
+			&epoch_descriptor,
+			|_| unimplemented!(),
+		).ok_or_else(|| Error::InvalidEpochData)?;
+		let epoch = viable_epoch.as_mut();
 
 		// Check the signature.
 		let (author, block_weight) = epoch.validating.authorities

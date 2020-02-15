@@ -2,11 +2,6 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use codec::{Encode, Decode};
 use log::info;
-use sp_core::H256;
-use sp_consensus_sassafras::{
-	EpochNumber, SlotNumber, SassafrasBlockWeight, SassafrasAuthorityWeight,
-	VRFProof, Randomness, AuthorityId
-};
 use sp_runtime::traits::Block as BlockT;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sc_client_api::AuxStore;
