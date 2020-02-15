@@ -1472,6 +1472,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				average_transaction_size: io_stats.avg_transaction_size() as u64,
 				state_reads: state_stats.reads.ops,
 				state_reads_cache: state_stats.cache_reads.ops,
+				state_writes: state_stats.writes.ops,
 			},
 		})
 	}

@@ -592,6 +592,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				// Light client does not track those
 				state_reads: 0,
 				state_reads_cache: 0,
+				state_writes: 0,
 			}
 		})
 	}

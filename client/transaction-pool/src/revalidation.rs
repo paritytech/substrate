@@ -73,7 +73,7 @@ async fn batch_revalidate<Api: ChainApi>(
 	let mut revalidated = HashMap::new();
 
 	for ext_hash in batch {
-		let ext = match pool.ready_transaction(&ext_hash) {
+		let ext = match pool.validated_pool().ready_by_hash(&ext_hash) {
 			Some(ext) => ext,
 			None => continue,
 		};
@@ -120,7 +120,7 @@ async fn batch_revalidate<Api: ChainApi>(
 		}
 	}
 
-	pool.remove_invalid(&invalid_hashes);
+	pool.validated_pool().remove_invalid(&invalid_hashes);
 	pool.resubmit(revalidated);
 }
 
@@ -316,6 +316,6 @@ mod tests {
 		// revalidated in sync offload 2nd time
 		assert_eq!(api.validation_requests().len(), 2);
 		// number of ready
-		assert_eq!(pool.status().ready, 1);
+		assert_eq!(pool.validated_pool().status().ready, 1);
 	}
 }

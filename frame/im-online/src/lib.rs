@@ -79,7 +79,7 @@ use pallet_session::historical::IdentificationTuple;
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
 	RuntimeDebug,
-	traits::{Convert, Member, Saturating, SimpleArithmetic}, Perbill,
+	traits::{Convert, Member, Saturating, AtLeast32Bit}, Perbill, PerThing,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, InvalidTransaction,
 		TransactionPriority,
@@ -102,9 +102,10 @@ pub mod sr25519 {
 		app_crypto!(sr25519, IM_ONLINE);
 	}
 
-	/// An i'm online keypair using sr25519 as its crypto.
-	#[cfg(feature = "std")]
-	pub type AuthorityPair = app_sr25519::Pair;
+	sp_application_crypto::with_pair! {
+		/// An i'm online keypair using sr25519 as its crypto.
+		pub type AuthorityPair = app_sr25519::Pair;
+	}
 
 	/// An i'm online signature using sr25519 as its crypto.
 	pub type AuthoritySignature = app_sr25519::Signature;
@@ -119,9 +120,10 @@ pub mod ed25519 {
 		app_crypto!(ed25519, IM_ONLINE);
 	}
 
-	/// An i'm online keypair using ed25519 as its crypto.
-	#[cfg(feature = "std")]
-	pub type AuthorityPair = app_ed25519::Pair;
+	sp_application_crypto::with_pair! {
+		/// An i'm online keypair using ed25519 as its crypto.
+		pub type AuthorityPair = app_ed25519::Pair;
+	}
 
 	/// An i'm online signature using ed25519 as its crypto.
 	pub type AuthoritySignature = app_ed25519::Signature;
@@ -151,7 +153,7 @@ struct HeartbeatStatus<BlockNumber> {
 	pub sent_at: BlockNumber,
 }
 
-impl<BlockNumber: PartialEq + SimpleArithmetic + Copy> HeartbeatStatus<BlockNumber> {
+impl<BlockNumber: PartialEq + AtLeast32Bit + Copy> HeartbeatStatus<BlockNumber> {
 	/// Returns true if heartbeat has been recently sent.
 	///
 	/// Parameters:

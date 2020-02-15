@@ -67,7 +67,7 @@ impl PoolStatus {
 /// 2. Inside `Ready` queue:
 ///		- `Broadcast`
 /// 3. Leaving the pool:
-///		- `InBlock`
+///		- `Finalized`
 ///		- `Invalid`
 ///		- `Usurped`
 ///		- `Dropped`
@@ -100,6 +100,13 @@ pub enum TransactionStatus<Hash, BlockHash> {
 	/// Transaction has been included in block with given hash.
 	#[serde(rename = "finalized")] // See #4438
 	InBlock(BlockHash),
+	/// The block this transaction was included in has been retracted.
+	Retracted(BlockHash),
+	/// Maximum number of finality watchers has been reached,
+	/// old watchers are being removed.
+	FinalityTimeout(BlockHash),
+	/// Transaction has been finalized by a finality-gadget, e.g GRANDPA
+	Finalized(BlockHash),
 	/// Transaction has been replaced in the pool, by another transaction
 	/// that provides the same tags. (e.g. same (sender, nonce)).
 	Usurped(Hash),
@@ -217,11 +224,30 @@ pub trait TransactionPool: Send + Sync {
 	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>>;
 }
 
+/// Events that the transaction pool listens for.
+pub enum ChainEvent<B: BlockT> {
+	/// New blocks have been added to the chain
+	NewBlock {
+		/// Is this the new best block.
+		is_new_best: bool,
+		/// Id of the just imported block.
+		id: BlockId<B>,
+		/// Header of the just imported block
+		header: B::Header,
+		/// List of retracted blocks ordered by block number.
+		retracted: Vec<B::Hash>,
+	},
+	/// An existing block has been finalzied.
+	Finalized {
+		/// Hash of just finalized block
+		hash: B::Hash,
+	},
+}
+
 /// Trait for transaction pool maintenance.
-pub trait MaintainedTransactionPool : TransactionPool {
+pub trait MaintainedTransactionPool: TransactionPool {
 	/// Perform maintenance
-	fn maintain(&self, block: &BlockId<Self::Block>, retracted: &[BlockHash<Self>])
-		-> Pin<Box<dyn Future<Output=()> + Send>>;
+	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>>;
 }
 
 /// An abstraction for transaction pool.

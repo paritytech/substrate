@@ -198,7 +198,7 @@ pub async fn run_instant_seal<B, CB, E, A, C, T>(
 {
 	// instant-seal creates blocks as soon as transactions are imported
 	// into the transaction pool.
-	let seal_block_channel = pool.import_notification_stream()
+	let seal_block_channel = pool.validated_pool().import_notification_stream()
 		.map(|_| {
 			EngineCommand::SealNewBlock {
 				create_empty: false,
@@ -260,7 +260,7 @@ mod tests {
 		// this test checks that blocks are created as soon as transactions are imported into the pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
 		let mut sender = Arc::new(Some(sender));
-		let stream = pool.pool().import_notification_stream()
+		let stream = pool.pool().validated_pool().import_notification_stream()
 			.map(move |_| {
 				// we're only going to submit one tx so this fn will only be called once.
 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
