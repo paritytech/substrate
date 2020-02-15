@@ -1453,7 +1453,7 @@ mod qc {
 
 							self.head_state(
 								self.canon.last()
-								.expect("wasn't forking to emptiness so there shoud be one!")
+								.expect("wasn't forking to emptiness so there should be one!")
 								.hash
 							)
 						},
