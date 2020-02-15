@@ -1135,7 +1135,7 @@ mod tests {
 	}
 
 	// In case treasury account is not existing then it works fine.
-	// This is usefull for chain that will just update runtime.
+	// This is useful for chain that will just update runtime.
 	#[test]
 	fn inexisting_account_works() {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
