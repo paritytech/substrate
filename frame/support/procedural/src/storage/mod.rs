@@ -29,7 +29,7 @@ use frame_support_procedural_tools::{
 	generate_crate_access, generate_hidden_includes, syn_ext as ext
 };
 
-/// All informations contained in input of decl_storage
+/// All information contained in input of decl_storage
 pub struct DeclStorageDef {
 	/// Name of the module used to import hidden imports.
 	hidden_crate: Option<syn::Ident>,
