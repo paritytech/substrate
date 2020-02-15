@@ -249,7 +249,7 @@ pub enum ChainEvent<B: BlockT> {
 		/// List of retracted blocks ordered by block number.
 		retracted: Vec<B::Hash>,
 	},
-	/// An existing block has been finalzied.
+	/// An existing block has been finalized.
 	Finalized {
 		/// Hash of just finalized block
 		hash: B::Hash,
