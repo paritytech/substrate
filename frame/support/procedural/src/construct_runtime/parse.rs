@@ -83,7 +83,7 @@ impl Parse for WhereSection {
 		}) = definitions.first()
 		{
 			let msg = format!(
-				"`{:?}` was declared above. Please use exactly one delcataion for `{:?}`.",
+				"`{:?}` was declared above. Please use exactly one declaration for `{:?}`.",
 				kind, kind
 			);
 			return Err(Error::new(*kind_span, msg));
