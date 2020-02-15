@@ -283,7 +283,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 			.map(|position| self.finalize_root_at(position))
 	}
 
-	/// Finalize root at given positiion. See `finalize_root` comment for details.
+	/// Finalize root at given position. See `finalize_root` comment for details.
 	fn finalize_root_at(&mut self, position: usize) -> V {
 		let node = self.roots.swap_remove(position);
 		self.roots = node.children;
