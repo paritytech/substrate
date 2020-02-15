@@ -440,7 +440,7 @@ fn reserve_should_not_moves_amount_from_balance_to_reserved_balance() {
 // Then
 // - unreserved should return 20.
 #[test]
-fn unreserve_should_return_substratced_value_from_unreserved_amount_by_actual_acount_balance() {
+fn unreserve_should_return_substratced_value_from_unreserved_amount_by_actual_account_balance() {
 	ExtBuilder::default().free_balance((1, 0, 100)).build().execute_with(|| {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		assert_eq!(GenericAsset::unreserve(&1, &0, 120), 20);
