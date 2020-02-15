@@ -135,7 +135,7 @@ pub enum HttpRequestStatus {
 	/// Note the deadline is controlled by the calling part, it not necessarily
 	/// means that the request has timed out.
 	DeadlineReached,
-	/// An error has occured during the request, for example a timeout or the
+	/// An error has occurred during the request, for example a timeout or the
 	/// remote has closed our socket.
 	///
 	/// The request is now considered destroyed. To retry the request you need

@@ -23,7 +23,7 @@ use std::cmp::Reverse;
 use std::fmt;
 use codec::{Decode, Encode};
 
-/// Error occured when iterating with the tree.
+/// Error occurred when iterating with the tree.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error<E> {
 	/// Adding duplicate node to tree.
