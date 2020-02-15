@@ -3041,7 +3041,7 @@ pub(crate) mod tests {
 			.unwrap().build().unwrap().block;
 
 		// we will finalize A2 which should make it impossible to import a new
-		// B3 at the same height but that doesnt't include it
+		// B3 at the same height but that doesn't include it
 		ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
 
 		let import_err = client.import(BlockOrigin::Own, b3).err().unwrap();
