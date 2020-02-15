@@ -1456,6 +1456,9 @@ fn on_free_balance_zero_stash_removes_validator() {
 		// Check total balance of stash
 		assert_eq!(Balances::total_balance(&11), 0);
 
+		// Reap the stash
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
+
 		// Check storage items do not exist
 		assert!(!<Ledger<Test>>::contains_key(&10));
 		assert!(!<Bonded<Test>>::contains_key(&11));
@@ -1508,6 +1511,9 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		let _ = Balances::slash(&11, u64::max_value());
 		// Check total balance of stash
 		assert_eq!(Balances::total_balance(&11), 0);
+
+		// Reap the stash
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
 
 		// Check storage items do not exist
 		assert!(!<Ledger<Test>>::contains_key(&10));
@@ -2303,6 +2309,10 @@ fn garbage_collection_after_slashing() {
 		// so we don't test those here.
 
 		assert_eq!(Balances::free_balance(11), 0);
+		assert_eq!(Balances::total_balance(&11), 0);
+
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
+
 		assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
 		assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &0);
 	})
