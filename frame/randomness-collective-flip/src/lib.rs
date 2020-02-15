@@ -135,7 +135,7 @@ impl<T: Trait> Randomness<T::Hash> for Module<T> {
 
 		let hash_series = <RandomMaterial<T>>::get();
 		if !hash_series.is_empty() {
-			// Always the case after block 1 is initialised.
+			// Always the case after block 1 is initialized.
 			hash_series.iter()
 				.cycle()
 				.skip(index)

@@ -1360,7 +1360,7 @@ impl<T: Trait> Module<T> {
 		Self::new_era(session_index)
 	}
 
-	/// Initialise the first session (and consequently the first era)
+	/// Initialize the first session (and consequently the first era)
 	fn initial_session() -> Option<Vec<T::AccountId>> {
 		// note: `CurrentEraStart` is set in `on_finalize` of the first block because now is not
 		// available yet.

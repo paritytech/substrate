@@ -720,7 +720,7 @@ impl<T: Trait> Module<T> {
 	/// Even more dangerous is to note that this function does NOT take any action, if the new sum
 	/// of block weight is more than the block weight limit. This is what the _unchecked_.
 	///
-	/// Another potential use-case could be for the `on_initialise` and `on_finalize` hooks.
+	/// Another potential use-case could be for the `on_initialize` and `on_finalize` hooks.
 	///
 	/// If no previous weight exists, the function initializes the weight to zero.
 	pub fn register_extra_weight_unchecked(weight: Weight) {
