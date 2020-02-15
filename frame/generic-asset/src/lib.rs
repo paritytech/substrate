@@ -898,7 +898,7 @@ pub trait AssetIdProvider {
 	fn asset_id() -> Self::AssetId;
 }
 
-// wrapping these imbalanes in a private module is necessary to ensure absolute privacy
+// wrapping these imbalances in a private module is necessary to ensure absolute privacy
 // of the inner member.
 mod imbalances {
 	use super::{
