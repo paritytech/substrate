@@ -719,7 +719,7 @@ define_env!(Env, <E: Ext>,
 	// contract are commited, this function will compute a tombstone hash from the caller's
 	// storage and the given code hash and if the hash matches the hash found in the tombstone at
 	// the specified address - kill the caller contract and restore the destination contract and set
-	// the specified `rent_allowance`. All caller's funds are transfered to the destination.
+	// the specified `rent_allowance`. All caller's funds are transferred to the destination.
 	//
 	// This function doesn't perform restoration right away but defers it to the end of the
 	// transaction. If there is no tombstone in the destination address or if the hashes don't match
