@@ -1126,7 +1126,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 	}
 
 	#[test]
-	fn should_accept_future_transactions_when_explcitly_asked_to() {
+	fn should_accept_future_transactions_when_explicitly_asked_to() {
 		// given
 		let mut pool = pool();
 		pool.reject_future_transactions = true;
