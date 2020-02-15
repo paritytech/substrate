@@ -348,7 +348,7 @@ mod tests {
 	}
 
 	#[test]
-	fn reinserted_survivew_pending() {
+	fn reinserted_survive_pending() {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
 		let mut commit = make_commit(&[], &[2]);
