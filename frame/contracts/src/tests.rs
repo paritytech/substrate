@@ -2123,7 +2123,7 @@ const CODE_SELF_DESTRUCT: &str = r#"
 					(i32.const 8)	;; Length of encoded address
 				)
 
-				;; Recursively call self with empty imput data.
+				;; Recursively call self with empty input data.
 				(call $assert
 					(i32.eq
 						(call $ext_call
