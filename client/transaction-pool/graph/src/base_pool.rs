@@ -138,7 +138,7 @@ impl<Hash, Extrinsic> InPoolTransaction for Transaction<Hash, Extrinsic> {
 		&self.provides
 	}
 
-	fn is_propagatable(&self) -> bool {
+	fn is_propagable(&self) -> bool {
 		self.propagate
 	}
 }
@@ -1058,7 +1058,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 				requires: vec![vec![3], vec![2]],
 				provides: vec![vec![4]],
 				propagate: true,
-		}.is_propagatable(), true);
+		}.is_propagable(), true);
 
 		assert_eq!(Transaction {
 				data: vec![4u8],
@@ -1069,7 +1069,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 				requires: vec![vec![3], vec![2]],
 				provides: vec![vec![4]],
 				propagate: false,
-		}.is_propagatable(), false);
+		}.is_propagable(), false);
 	}
 
 	#[test]

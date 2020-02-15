@@ -217,6 +217,6 @@ mod tests {
 
 		// then
 		assert_eq!(pool.0.status().ready, 1);
-		assert_eq!(pool.0.ready().next().unwrap().is_propagatable(), false);
+		assert_eq!(pool.0.ready().next().unwrap().is_propagable(), false);
 	}
 }
