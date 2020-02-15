@@ -233,7 +233,7 @@ pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
 	/// An expected duration of the session.
 	///
 	/// This parameter is used to determine the longevity of `heartbeat` transaction
-	/// and a rough time when we should start considering sending hearbeats,
+	/// and a rough time when we should start considering sending heartbeats,
 	/// since the workers avoids sending them at the very beginning of the session, assuming
 	/// there is a chance the authority will produce a block and they won't be necessary.
 	type SessionDuration: Get<Self::BlockNumber>;
