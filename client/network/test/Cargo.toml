@@ -12,7 +12,7 @@ log = "0.4.8"
 parking_lot = "0.10.0"
 futures = "0.1.29"
 futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
-futures-timer = "0.4.0"
+futures-timer = "3.0.1"
 rand = "0.7.2"
 libp2p = { version = "0.15.0", default-features = false, features = ["libp2p-websocket"] }
 sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }

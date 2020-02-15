@@ -26,7 +26,8 @@ use log::{debug, error, trace, warn};
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use wasm_timer::Instant;
 use std::task::{Context, Poll};
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
@@ -387,7 +388,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", occ_entry.key(), until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
-					timer: futures_timer::Delay::new_at(until.clone()),
+					timer: futures_timer::Delay::new(until.clone() - Instant::now()),
 					timer_deadline: until.clone(),
 				};
 			},
@@ -406,7 +407,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
 					connected_point: connected_point.clone(),
 					open,
-					timer: futures_timer::Delay::new_at(banned.clone()),
+					timer: futures_timer::Delay::new(banned.clone() - Instant::now()),
 					timer_deadline: banned.clone(),
 				};
 			},

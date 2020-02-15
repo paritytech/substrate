@@ -93,41 +93,77 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// node. Otherwise the tree remains unchanged. The given function
 	/// `is_descendent_of` should return `true` if the second hash (target) is a
 	/// descendent of the first hash (base).
+	///
+	/// Returns all pruned node data.
 	pub fn prune<F, E, P>(
 		&mut self,
 		hash: &H,
 		number: &N,
 		is_descendent_of: &F,
 		predicate: &P,
-	) -> Result<(), Error<E>>
+	) -> Result<Vec<(H, N, V)>, Error<E>>
 		where E: std::error::Error,
 			  F: Fn(&H, &H) -> Result<bool, E>,
 			  P: Fn(&V) -> bool,
 	{
-		let new_root = self.find_node_where(
+		let mut removed = Vec::new();
+
+		let new_root_index = self.find_node_index_where(
 			hash,
 			number,
 			is_descendent_of,
 			predicate,
 		)?;
 
-		if let Some(root) = new_root {
-			let mut root = root.clone();
+		if let Some(mut root_index) = new_root_index {
+			let old_roots = std::mem::replace(&mut self.roots, Vec::new());
+
+			let mut root = None;
+			let mut cur_children = Some(old_roots);
+
+			while let Some(cur_index) = root_index.pop() {
+				if let Some(children) = cur_children.take() {
+					for (index, child) in children.into_iter().enumerate() {
+						if index == cur_index {
+							if root_index.is_empty() {
+								root = Some(child);
+							} else {
+								cur_children = Some(child.children);
+							}
+						} else {
+							removed.push((child.hash, child.number, child.data));
+						}
+					}
+				}
+			}
+
+			let mut root = root
+				.expect("find_node_index_where will return array with at least one index; \
+                         this results in at least one item in removed; qed");
 
 			// we found the deepest ancestor of the finalized block, so we prune
 			// out any children that don't include the finalized block.
-			let children = std::mem::replace(&mut root.children, Vec::new());
-			root.children = children.into_iter().filter(|node| {
-				node.number == *number && node.hash == *hash ||
-					node.number < *number && is_descendent_of(&node.hash, hash).unwrap_or(false)
-			}).take(1).collect();
+			let root_children = std::mem::replace(&mut root.children, Vec::new());
+			let mut is_first = true;
+
+			for child in root_children {
+				if is_first &&
+					(child.number == *number && child.hash == *hash ||
+					 child.number < *number && is_descendent_of(&child.hash, hash).unwrap_or(false))
+				{
+					root.children.push(child);
+					is_first = false;
+				} else {
+					removed.push((child.hash, child.number, child.data));
+				}
+			}
 
 			self.roots = vec![root];
 		}
 
 		self.rebalance();
 
-		Ok(())
+		Ok(removed)
 	}
 }
 
@@ -268,6 +304,32 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 			// found the node, early exit
 			if let FindOutcome::Found(node) = node {
+				return Ok(Some(node));
+			}
+		}
+
+		Ok(None)
+	}
+
+	/// Same as [`find_node_where`](Self::find_node_where), but returns indexes.
+	pub fn find_node_index_where<F, E, P>(
+		&self,
+		hash: &H,
+		number: &N,
+		is_descendent_of: &F,
+		predicate: &P,
+	) -> Result<Option<Vec<usize>>, Error<E>> where
+		E: std::error::Error,
+		F: Fn(&H, &H) -> Result<bool, E>,
+		P: Fn(&V) -> bool,
+	{
+		// search for node starting from all roots
+		for (index, root) in self.roots.iter().enumerate() {
+			let node = root.find_node_index_where(hash, number, is_descendent_of, predicate)?;
+
+			// found the node, early exit
+			if let FindOutcome::Found(mut node) = node {
+				node.push(index);
 				return Ok(Some(node));
 			}
 		}

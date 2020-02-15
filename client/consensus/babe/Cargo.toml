@@ -32,7 +32,7 @@ sc-consensus-slots = { version = "0.8", path = "../slots" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 fork-tree = { version = "2.0.0", path = "../../../utils/fork-tree" }
 futures = "0.3.1"
-futures-timer = "0.4.0"
+futures-timer = "3.0.1"
 parking_lot = "0.10.0"
 log = "0.4.8"
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"] }
