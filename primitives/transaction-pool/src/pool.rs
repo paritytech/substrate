@@ -169,7 +169,7 @@ pub trait InPoolTransaction {
 	/// Get tags that transaction provides.
 	fn provides(&self) -> &[TransactionTag];
 	/// Return a flag indicating if the transaction should be propagated to other peers.
-	fn is_propagateable(&self) -> bool;
+	fn is_propagatable(&self) -> bool;
 }
 
 /// Transaction pool interface.
