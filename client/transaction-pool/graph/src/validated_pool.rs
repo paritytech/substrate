@@ -16,12 +16,11 @@
 
 use std::{
 	collections::{HashSet, HashMap},
-	fmt,
 	hash,
 	sync::Arc,
 };
 
-use crate::base_pool as base;
+use crate::{base_pool as base, BlockHash};
 use crate::listener::Listener;
 use crate::rotator::PoolRotator;
 use crate::watcher::Watcher;
@@ -39,7 +38,7 @@ use sp_transaction_pool::{error, PoolStatus};
 use wasm_timer::Instant;
 
 use crate::base_pool::PruneStatus;
-use crate::pool::{EventStream, Options, ChainApi, BlockHash, ExHash, ExtrinsicFor, TransactionFor};
+use crate::pool::{EventStream, Options, ChainApi, ExHash, ExtrinsicFor, TransactionFor};
 
 /// Pre-validated transaction. Validated pool only accepts transactions wrapped in this enum.
 #[derive(Debug)]
@@ -62,10 +61,10 @@ pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 >;
 
 /// Pool that deals with validated transactions.
-pub(crate) struct ValidatedPool<B: ChainApi> {
+pub struct ValidatedPool<B: ChainApi> {
 	api: Arc<B>,
 	options: Options,
-	listener: RwLock<Listener<ExHash<B>, BlockHash<B>>>,
+	listener: RwLock<Listener<ExHash<B>, B>>,
 	pool: RwLock<base::BasePool<
 		ExHash<B>,
 		ExtrinsicFor<B>,
@@ -91,9 +90,9 @@ impl<B: ChainApi> ValidatedPool<B> {
 	pub fn new(options: Options, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
 		ValidatedPool {
-			api,
 			options,
 			listener: Default::default(),
+			api,
 			pool: RwLock::new(base_pool),
 			import_notification_sinks: Default::default(),
 			rotator: Default::default(),
@@ -138,13 +137,14 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let imported = self.pool.write().import(tx)?;
 
 				if let base::Imported::Ready { ref hash, .. } = imported {
-					self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(hash.clone()).is_ok());
+					self.import_notification_sinks.lock()
+						.retain(|sink| sink.unbounded_send(hash.clone()).is_ok());
 				}
 
 				let mut listener = self.listener.write();
 				fire_events(&mut *listener, &imported);
 				Ok(imported.hash().clone())
-			}
+			},
 			ValidatedTransaction::Invalid(hash, err) => {
 				self.rotator.ban(&Instant::now(), std::iter::once(hash));
 				Err(err.into())
@@ -152,7 +152,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 			ValidatedTransaction::Unknown(hash, err) => {
 				self.listener.write().invalid(&hash, false);
 				Err(err.into())
-			}
+			},
 		}
 	}
 
@@ -343,8 +343,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		self.pool.read().by_hashes(&hashes)
 			.into_iter()
 			.map(|existing_in_pool| existing_in_pool
-				.map(|transaction| transaction.provides.iter().cloned()
-				.collect()))
+				.map(|transaction| transaction.provides.iter().cloned().collect()))
 			.collect()
 	}
 
@@ -416,8 +415,14 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let header_hash = self.api.block_id_to_hash(at)?
 			.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?;
 		let mut listener = self.listener.write();
+		let mut set = HashSet::with_capacity(hashes.size_hint().0);
 		for h in hashes {
-			listener.pruned(header_hash, &h);
+			// `hashes` has possibly duplicate hashes.
+			// we'd like to send out the `InBlock` notification only once.
+			if !set.contains(&h) {
+				listener.pruned(header_hash, &h);
+				set.insert(h);
+			}
 		}
 		Ok(())
 	}
@@ -468,7 +473,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 		&self.api
 	}
 
-	/// Return an event stream of transactions imported to the pool.
+	/// Return an event stream of notifications for when transactions are imported to the pool.
+	///
+	/// Consumers of this stream should use the `ready` method to actually get the
+	/// pending transactions in the right order.
 	pub fn import_notification_stream(&self) -> EventStream<ExHash<B>> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
@@ -492,7 +500,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<TransactionFor<B>> {
 		// early exit in case there is no invalid transactions.
 		if hashes.is_empty() {
-			return vec![]
+			return vec![];
 		}
 
 		debug!(target: "txpool", "Removing invalid transactions: {:?}", hashes);
@@ -521,14 +529,34 @@ impl<B: ChainApi> ValidatedPool<B> {
 	pub fn status(&self) -> PoolStatus {
 		self.pool.read().status()
 	}
+
+	/// Notify all watchers that transactions in the block with hash have been finalized
+	pub async fn on_block_finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
+		debug!(target: "txpool", "Attempting to notify watchers of finalization for {}", block_hash);
+		// fetch all extrinsic hashes
+		if let Some(txs) = self.api.block_body(&BlockId::Hash(block_hash.clone())).await? {
+			let tx_hashes = txs.into_iter()
+				.map(|tx| self.api.hash_and_length(&tx).0)
+				.collect::<Vec<_>>();
+			// notify the watcher that these extrinsics have been finalized
+			self.listener.write().finalized(block_hash, tx_hashes);
+		}
+
+		Ok(())
+	}
+
+	/// Notify the listener of retracted blocks
+	pub fn on_block_retracted(&self, block_hash: BlockHash<B>) {
+		self.listener.write().retracted(block_hash)
+	}
 }
 
-fn fire_events<H, H2, Ex>(
-	listener: &mut Listener<H, H2>,
+fn fire_events<H, B, Ex>(
+	listener: &mut Listener<H, B>,
 	imported: &base::Imported<H, Ex>,
 ) where
 	H: hash::Hash + Eq + traits::Member + Serialize,
-	H2: Clone + fmt::Debug,
+	B: ChainApi,
 {
 	match *imported {
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
