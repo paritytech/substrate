@@ -183,7 +183,7 @@ struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
 	block_request: Option<(Instant, message::BlockRequest<B>)>,
-	/// Requests we are no longer insterested in.
+	/// Requests we are no longer interested in.
 	obsolete_requests: HashMap<message::RequestId, Instant>,
 	/// Holds a set of transactions known to this peer.
 	known_extrinsics: LruHashSet<H>,
