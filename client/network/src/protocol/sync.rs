@@ -751,7 +751,7 @@ impl<B: BlockT> ChainSync<B> {
 						| PeerSyncState::DownloadingFinalityProof(..) => Vec::new()
 					}
 				} else {
-					// When request.is_none() just acccept blocks
+					// When request.is_none() just accept blocks
 					blocks.into_iter().map(|b| {
 						IncomingBlock {
 							hash: b.hash,
