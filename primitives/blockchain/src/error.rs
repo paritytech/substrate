@@ -37,7 +37,7 @@ pub enum ApplyExtrinsicFailed {
 	/// unappliable onto the current block.
 	#[display(fmt = "Extrinsic is not valid: {:?}", _0)]
 	Validity(TransactionValidityError),
-	/// This is used for miscelanious errors that can be represented by string and not handleable.
+	/// This is used for miscellaneous errors that can be represented by string and not handleable.
 	///
 	/// This will become obsolete with complete migration to v4 APIs.
 	#[display(fmt = "Extrinsic failed: {:?}", _0)]
