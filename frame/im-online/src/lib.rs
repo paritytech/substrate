@@ -369,7 +369,7 @@ decl_module! {
 type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Trait>::BlockNumber>>;
 
 /// Keep track of number of authored blocks per authority, uncles are counted as
-/// well since they're a valid proof of onlineness.
+/// well since they're a valid proof of being online.
 impl<T: Trait + pallet_authorship::Trait> pallet_authorship::EventHandler<T::ValidatorId, T::BlockNumber> for Module<T> {
 	fn note_author(author: T::ValidatorId) {
 		Self::note_authorship(author);
