@@ -55,7 +55,7 @@ use sp_core::storage::ChildType;
 pub use sp_consensus_babe::AuthorityId;
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
-// Inlucde the WASM binary
+// Include the WASM binary
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
