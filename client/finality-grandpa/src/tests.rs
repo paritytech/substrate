@@ -982,7 +982,7 @@ fn force_change_to_new_set() {
 
 	// it will only finalize if the forced transition happens.
 	// we add_blocks after the voters are spawned because otherwise
-	// the link-halfs have the wrong AuthoritySet
+	// the link-halveshave the wrong AuthoritySet
 	run_to_completion(&mut runtime, 25, net, peers_a);
 }
 
