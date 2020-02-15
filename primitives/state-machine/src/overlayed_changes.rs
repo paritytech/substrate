@@ -371,7 +371,7 @@ impl OverlayedChanges {
 		}
 
 		if let Some((child_committed, _child_info)) = self.committed.children.get(storage_key) {
-			// Then do the same with keys from commited changes.
+			// Then do the same with keys from committed changes.
 			// NOTE that we are making changes in the prospective change set.
 			for key in child_committed.keys() {
 				if key.starts_with(prefix) {
