@@ -38,7 +38,7 @@
 //! should be paid.
 //!
 //! A group of `Tippers` is determined through the config `Trait`. After half of these have declared
-//! some amount that they believe a particular reported reason deserves, then a countfown period is
+//! some amount that they believe a particular reported reason deserves, then a countdown period is
 //! entered where any remaining members can declare their tip amounts also. After the close of the
 //! countdown period, the median of all declared tips is paid to the reported beneficiary, along
 //! with any finders fee, in case of a public (and bonded) original report.
