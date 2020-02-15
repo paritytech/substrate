@@ -718,7 +718,7 @@ pub struct BuildSpecCmd {
 	pub node_key_params: NodeKeyParams,
 }
 
-/// Wrapper type of `String` which holds an arbitary sized unsigned integer formatted as decimal.
+/// Wrapper type of `String` which holds an arbitrary sized unsigned integer formatted as decimal.
 #[derive(Debug, Clone)]
 pub struct BlockNumber(String);
 
