@@ -572,7 +572,7 @@ impl<T: Trait> Module<T> {
 // method. This example will not cover this type of extension. See `CheckRuntime` in system module
 // for an example.
 //
-// Using the extension, you can add some hooks to the lifecycle of each transaction. Note that by
+// Using the extension, you can add some hooks to the life cycle of each transaction. Note that by
 // default, an extension is applied to all `Call` functions (i.e. all transactions). the `Call` enum
 // variant is given to each function of `SignedExtension`. Hence, you can filter based on module or
 // a particular call if needed.

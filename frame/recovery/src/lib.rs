@@ -44,9 +44,9 @@
 //! the number of friends chosen. This deposit is returned in full when the account
 //! owner removes their recovery configuration.
 //!
-//! ### Recovery Lifecycle
+//! ### Recovery Life Cycle
 //!
-//! The intended lifecycle of a successful recovery takes the following steps:
+//! The intended life cycle of a successful recovery takes the following steps:
 //! 1. The account owner calls `create_recovery` to set up a recovery configuration
 //!    for their account.
 //! 2. At some later time, the account owner loses access to their account and wants
