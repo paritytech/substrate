@@ -346,7 +346,7 @@ impl_runtime_apis! {
 				genesis_authorities: Sassafras::authorities(),
 				genesis_proofs: Vec::new(),
 				randomness: Sassafras::randomness(),
-				secondary_slot: true,
+				secondary_slots: true,
 			}
 		}
 	}

@@ -110,7 +110,7 @@ pub struct SassafrasConfiguration {
 	pub randomness: Randomness,
 
 	/// Whether secondary pre-digest is accepted.
-	pub secondary_slot: bool,
+	pub secondary_slots: bool,
 }
 
 #[cfg(feature = "std")]
