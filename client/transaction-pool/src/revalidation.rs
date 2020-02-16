@@ -18,7 +18,7 @@
 
 use std::{sync::Arc, pin::Pin, collections::{HashMap, HashSet, BTreeMap}};
 
-use sc_transaction_graph::{ChainApi, Pool, ExHash, NumberFor, ValidatedTransaction, Transaction};
+use sc_transaction_graph::{ChainApi, Pool, ExHash, NumberFor, ValidatedTransaction};
 use sp_runtime::traits::{Zero, SaturatedConversion};
 use sp_runtime::generic::BlockId;
 use sp_runtime::transaction_validity::TransactionValidityError;
@@ -89,23 +89,15 @@ async fn batch_revalidate<Api: ChainApi>(
 				log::trace!(target: "txpool", "[{:?}]: Unknown during revalidation: {:?}", ext_hash, err);
 			},
 			Ok(Ok(validity)) => {
-				let data = ext.data.clone();
-				let (_, bytes) = api.hash_and_length(&data);
 				revalidated.insert(
 					ext_hash.clone(),
-					ValidatedTransaction::Valid(
-						Transaction {
-							data: ext.data.clone(),
-							bytes,
-							hash: ext_hash.clone(),
-							priority: validity.priority,
-							requires: validity.requires,
-							provides: validity.provides,
-							propagate: validity.propagate,
-							valid_till: at
-								.saturated_into::<u64>()
-								.saturating_add(validity.longevity),
-					}),
+					ValidatedTransaction::valid_at(
+						at.saturated_into::<u64>(),
+						ext_hash,
+						ext.data.clone(),
+						api.hash_and_length(&ext.data).1,
+						validity,
+					)
 				);
 			},
 			Err(validation_err) => {

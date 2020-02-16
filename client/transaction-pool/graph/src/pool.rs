@@ -383,21 +383,15 @@ impl<B: ChainApi> Pool<B> {
 				if validity.provides.is_empty() {
 					ValidatedTransaction::Invalid(hash.clone(), error::Error::NoTagsProvided.into())
 				} else {
-					ValidatedTransaction::Valid(base::Transaction {
-						data: xt,
+					ValidatedTransaction::valid_at(
+						block_number.saturated_into::<u64>(),
+						hash.clone(),
+						xt,
 						bytes,
-						hash: hash.clone(),
-						priority: validity.priority,
-						requires: validity.requires,
-						provides: validity.provides,
-						propagate: validity.propagate,
-						valid_till: block_number
-							.saturated_into::<u64>()
-							.saturating_add(validity.longevity),
-					})
+						validity,
+					)
 				}
 			},
-
 			Err(TransactionValidityError::Invalid(e)) =>
 				ValidatedTransaction::Invalid(hash.clone(), error::Error::InvalidTransaction(e).into()),
 			Err(TransactionValidityError::Unknown(e)) =>
