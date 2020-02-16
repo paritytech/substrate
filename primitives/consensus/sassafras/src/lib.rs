@@ -120,8 +120,5 @@ sp_api::decl_runtime_apis! {
 	pub trait SassafrasApi {
 		/// Return the configuration for Sassafras.
 		fn configuration() -> SassafrasConfiguration;
-
-		/// Return the proofs appended at the current block.
-		fn proofs() -> Vec<RawVRFProof>;
 	}
 }
