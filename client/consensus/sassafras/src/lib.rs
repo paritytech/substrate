@@ -19,15 +19,15 @@
 pub use sp_consensus_sassafras::{
 	SassafrasApi, ConsensusLog, SASSAFRAS_ENGINE_ID, SlotNumber, SassafrasConfiguration,
 	AuthorityId, AuthorityPair, AuthoritySignature,
-	SassafrasAuthorityWeight, VRF_OUTPUT_LENGTH,
+	SassafrasAuthorityWeight, VRF_OUTPUT_LENGTH, VRFProof, Randomness,
 	digests::{PreDigest, CompatibleDigestItem, NextEpochDescriptor},
 };
 pub use sp_consensus::SyncOracle;
+
 use std::{
 	collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration},
-	any::Any, borrow::Cow
+	any::Any, borrow::Cow, convert::TryInto,
 };
-use sp_consensus_sassafras;
 use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
@@ -45,11 +45,10 @@ use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sp_consensus::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
-	SelectChain, SlotData,
+	SelectChain, SlotData, import_queue::{Verifier, BasicQueue, CacheKeyId},
 };
-use sp_consensus_sassafras::inherents::SassafrasInherentData;
+use sp_consensus_sassafras::{self, inherents::SassafrasInherentData};
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
-use sp_consensus::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
 	call_executor::CallExecutor,
@@ -222,15 +221,28 @@ impl Config {
 		}
 	}
 
-	/// Create the genesis epoch (epoch #0). This is defined to start at the slot of
-	/// the first block, so that has to be provided.
+	/// Create the genesis epoch (epoch #0)
 	pub fn genesis_epoch(&self, slot_number: SlotNumber) -> Epoch {
+		let proofs = self.genesis_proofs.clone()
+			.into_iter()
+			.map(|p| p.try_into().expect("Genesis proofs are invalid"))
+			.collect::<Vec<VRFProof>>();
+
 		Epoch {
 			epoch_index: 0,
 			start_slot: slot_number,
 			duration: self.epoch_length,
-			authorities: self.genesis_authorities.clone(),
-			randomness: self.randomness.clone(),
+
+			validating: ValidatorSet {
+				proofs: proofs.clone(),
+				authorities: self.genesis_authorities.clone(),
+				randomness: self.randomness.clone(),
+			},
+			publishing: ValidatorSet {
+				proofs,
+				authorities: self.genesis_authorities.clone(),
+				randomness: self.randomness.clone(),
+			},
 		}
 	}
 }
@@ -397,7 +409,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Sassafra
 	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
 		self.epoch_changes.lock()
 			.viable_epoch(&epoch_descriptor, |slot| self.config.genesis_epoch(slot))
-			.map(|epoch| epoch.as_ref().authorities.len())
+			.map(|epoch| epoch.as_ref().validating.authorities.len())
 	}
 
 	fn claim_slot(
@@ -554,7 +566,7 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 		return Ok(PreDigest::Secondary {
 			slot_number: 0,
 			authority_index: 0,
-		});
+		})
 	}
 
 	let mut pre_digest: Option<_> = None;

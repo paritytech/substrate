@@ -16,16 +16,10 @@
 
 //! Sassafras authority selection and slot claiming.
 
-use merlin::Transcript;
 use sp_consensus_sassafras::{
-	AuthorityId, SassafrasAuthorityWeight, SASSAFRAS_ENGINE_ID,
 	SlotNumber, AuthorityPair, SassafrasConfiguration
 };
 use sp_consensus_sassafras::digests::PreDigest;
-use sp_core::{U256, blake2_256};
-use codec::Encode;
-use schnorrkel::vrf::VRFInOut;
-use sp_core::Pair;
 use sc_keystore::KeyStorePtr;
 use super::Epoch;
 

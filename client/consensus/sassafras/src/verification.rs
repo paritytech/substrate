@@ -15,14 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Verification for Sassafras headers.
-use schnorrkel::vrf::{VRFOutput, VRFProof};
-use sp_runtime::{traits::Header, traits::DigestItemFor};
-use sp_core::{Pair, Public};
-use sp_consensus_sassafras::{AuthoritySignature, SlotNumber, AuthorityIndex, AuthorityPair, AuthorityId};
+use sp_runtime::traits::DigestItemFor;
+use sp_consensus_sassafras::{SlotNumber, AuthorityId};
 use sp_consensus_sassafras::digests::{PreDigest, CompatibleDigestItem};
 use sc_consensus_slots::CheckedHeader;
-use log::{debug, trace};
-use super::{find_pre_digest, Epoch, BlockT, Error};
+use super::{Epoch, BlockT, Error};
 
 /// Sassafras verification parameters
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
@@ -56,20 +53,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, Error<B>> where
 	DigestItemFor<B>: CompatibleDigestItem,
 {
-	let VerificationParams {
-		mut header,
-		pre_digest,
-		slot_now,
-		epoch,
-		config,
-	} = params;
-
-	let info = VerifiedHeaderInfo {
-		pre_digest: CompatibleDigestItem::sassafras_pre_digest(pre_digest),
-		seal,
-		author: Default::default(),
-	};
-	Ok(CheckedHeader::Checked(header, info))
+	unimplemented!()
 }
 
 pub(super) struct VerifiedHeaderInfo<B: BlockT> {
