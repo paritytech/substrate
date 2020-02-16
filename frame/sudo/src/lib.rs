@@ -90,7 +90,9 @@ use sp_runtime::{traits::{StaticLookup, Dispatchable}, DispatchError};
 
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
-	weights::SimpleDispatchInfo,
+};
+use frame_support::weights::{
+	GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee,
 };
 use frame_system::{self as system, ensure_signed};
 
@@ -99,7 +101,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// A sudo-able call.
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
 }
 
 decl_module! {
@@ -117,15 +119,15 @@ decl_module! {
 		/// - O(1).
 		/// - Limited storage reads.
 		/// - One DB write (event).
-		/// - Unknown weight of derivative `proposal` execution.
+		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn sudo(origin, proposal: Box<T::Proposal>) {
+		#[weight = <SudoPassthrough<<T as Trait>::Call>>::new()]
+		fn sudo(origin, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
-			let res = match proposal.dispatch(frame_system::RawOrigin::Root.into()) {
+			let res = match call.dispatch(frame_system::RawOrigin::Root.into()) {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();
@@ -165,17 +167,17 @@ decl_module! {
 		/// - O(1).
 		/// - Limited storage reads.
 		/// - One DB write (event).
-		/// - Unknown weight of derivative `proposal` execution.
+		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(0)]
-		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, proposal: Box<T::Proposal>) {
+		#[weight = <SudoAsPassthrough<<T::Lookup as StaticLookup>::Source, <T as Trait>::Call>>::new()]
+		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let who = T::Lookup::lookup(who)?;
 
-			let res = match proposal.dispatch(frame_system::RawOrigin::Signed(who).into()) {
+			let res = match call.dispatch(frame_system::RawOrigin::Signed(who).into()) {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();
@@ -212,5 +214,51 @@ decl_error! {
 	pub enum Error for Module<T: Trait> {
 		/// Sender must be the Sudo account
 		RequireSudo,
+	}
+}
+
+/// Simple pass through for the weight function, but fee isn't paid because it is Sudo.
+struct SudoPassthrough<Call>(sp_std::marker::PhantomData<Call>);
+
+impl<Call> SudoPassthrough<Call> {
+	fn new() -> Self { Self(Default::default()) }
+}
+impl<Call: GetDispatchInfo> WeighData<(&Box<Call>,)> for SudoPassthrough<Call> {
+	fn weigh_data(&self, (call,): (&Box<Call>,)) -> Weight {
+		call.get_dispatch_info().weight + 10_000
+	}
+}
+impl<Call: GetDispatchInfo> ClassifyDispatch<(&Box<Call>,)> for SudoPassthrough<Call> {
+	fn classify_dispatch(&self, (call,): (&Box<Call>,)) -> DispatchClass {
+		call.get_dispatch_info().class
+	}
+}
+impl<Call: GetDispatchInfo> PaysFee<(&Box<Call>,)> for SudoPassthrough<Call> {
+	fn pays_fee(&self, (_call,): (&Box<Call>,)) -> bool {
+		// Sudo calls do not pay a fee.
+		false
+	}
+}
+
+/// Simple pass through for the weight function, but fee isn't paid because it is Sudo.
+struct SudoAsPassthrough<Lookup, Call>(sp_std::marker::PhantomData<(Lookup, Call)>);
+
+impl<Lookup, Call> SudoAsPassthrough<Lookup, Call> {
+	fn new() -> Self { Self(Default::default()) }
+}
+impl<Lookup, Call: GetDispatchInfo> WeighData<(&Lookup, &Box<Call>)> for SudoAsPassthrough<Lookup, Call> {
+	fn weigh_data(&self, (_who, call): (&Lookup, &Box<Call>)) -> Weight {
+		call.get_dispatch_info().weight + 10_000
+	}
+}
+impl<Lookup, Call: GetDispatchInfo> ClassifyDispatch<(&Lookup, &Box<Call>)> for SudoAsPassthrough<Lookup, Call> {
+	fn classify_dispatch(&self, (_who, call): (&Lookup, &Box<Call>)) -> DispatchClass {
+		call.get_dispatch_info().class
+	}
+}
+impl<Lookup, Call: GetDispatchInfo> PaysFee<(&Lookup, &Box<Call>)> for SudoAsPassthrough<Lookup, Call> {
+	fn pays_fee(&self, (_who, _call): (&Lookup, &Box<Call>)) -> bool {
+		// Sudo calls do not pay a fee.
+		false
 	}
 }
