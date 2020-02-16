@@ -1,10 +1,13 @@
+use core::convert::TryFrom;
 use codec::{Encode, Decode, EncodeLike};
 use schnorrkel::{SignatureError, errors::MultiSignatureStage};
 use sp_std::ops::{Deref, DerefMut};
+use sp_runtime::RuntimeDebug;
 
 pub use schnorrkel::vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH};
 
-pub type RawVRFOutput = [u8; VRF_OUTPUT_LENGTH];
+#[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
+pub struct RawVRFOutput(pub [u8; VRF_OUTPUT_LENGTH]);
 
 #[cfg(feature = "std")]
 #[derive(Clone, Debug)]
@@ -42,7 +45,39 @@ impl Decode for VRFOutput {
 	}
 }
 
-pub type RawVRFProof = [u8; VRF_PROOF_LENGTH];
+#[cfg(feature = "std")]
+impl TryFrom<RawVRFOutput> for VRFOutput {
+	type Error = SignatureError;
+
+	fn try_from(raw: RawVRFOutput) -> Result<VRFOutput, Self::Error> {
+		schnorrkel::vrf::VRFOutput::from_bytes(&raw.0).map(VRFOutput)
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<VRFOutput> for RawVRFOutput {
+	fn from(output: VRFOutput) -> RawVRFOutput {
+		RawVRFOutput(output.to_bytes())
+	}
+}
+
+#[derive(Clone, Encode, Decode)]
+pub struct RawVRFProof(pub [u8; VRF_PROOF_LENGTH]);
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for RawVRFProof {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{:?}", &self)
+	}
+}
+
+impl core::cmp::PartialEq for RawVRFProof {
+	fn eq(&self, other: &Self) -> bool {
+		self == other
+	}
+}
+
+impl core::cmp::Eq for RawVRFProof { }
 
 #[cfg(feature = "std")]
 #[derive(Clone, Debug)]
@@ -77,6 +112,22 @@ impl Decode for VRFProof {
 	fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
 		let decoded = <[u8; VRF_PROOF_LENGTH]>::decode(i)?;
 		Ok(Self(schnorrkel::vrf::VRFProof::from_bytes(&decoded).map_err(convert_error)?))
+	}
+}
+
+#[cfg(feature = "std")]
+impl TryFrom<RawVRFProof> for VRFProof {
+	type Error = SignatureError;
+
+	fn try_from(raw: RawVRFProof) -> Result<VRFProof, Self::Error> {
+		schnorrkel::vrf::VRFProof::from_bytes(&raw.0).map(VRFProof)
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<VRFProof> for RawVRFProof {
+	fn from(output: VRFProof) -> RawVRFProof {
+		RawVRFProof(output.to_bytes())
 	}
 }
 

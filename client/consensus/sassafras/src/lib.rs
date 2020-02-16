@@ -19,14 +19,14 @@
 mod aux_schema;
 
 use std::{
-	sync::Arc, time::{Duration, Instant}, collections::HashMap,
+	sync::Arc, time::{Duration, Instant}, collections::HashMap, convert::TryInto,
 };
 use log::trace;
 use codec::{Encode, Decode};
 use parking_lot::Mutex;
 use merlin::Transcript;
 use sp_core::{H256, crypto::{Pair, Public}};
-use sp_blockchain::{ProvideCache, HeaderMetadata};
+use sp_blockchain::{ProvideCache, HeaderMetadata, Result as ClientResult};
 use sp_inherents::InherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use sp_consensus::{
@@ -36,19 +36,22 @@ use sp_consensus::{
 use sp_consensus::import_queue::{Verifier, CacheKeyId, BasicQueue};
 use sp_consensus_sassafras::{
 	SASSAFRAS_ENGINE_ID, AuthorityPair, AuthorityId, Randomness, VRFProof,
-	SassafrasAuthorityWeight, SlotNumber,
+	SassafrasAuthorityWeight, SlotNumber, SassafrasConfiguration,
+	SassafrasApi,
 };
-use sp_consensus_sassafras::digest::{
+use sp_consensus_sassafras::digests::{
 	NextEpochDescriptor, PostBlockDescriptor, PreDigest, CompatibleDigestItem
 };
 use sp_consensus_sassafras::inherents::SassafrasInherentData;
 use sp_runtime::Justification;
 use sp_runtime::traits::{Block as BlockT, Header};
-use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_api::{ApiExt, ProvideRuntimeApi, NumberFor};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sc_client::{Client, CallExecutor};
 use sc_client_api::backend::{AuxStore, Backend};
-use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
+use sc_consensus_epochs::{
+	descendent_query, Epoch as EpochT, SharedEpochChanges, ViableEpochDescriptor
+};
 use sc_consensus_slots::SlotCompatible;
 
 /// Validator set of a particular epoch, can be either publishing or validating.
@@ -139,12 +142,176 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 	}
 }
 
+/// Intermediate value passed to block importer.
+pub struct SassafrasIntermediate<B: BlockT> {
+	/// The epoch descriptor.
+	pub epoch_descriptor: ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+}
+
+/// Intermediate key for Sassafras engine.
+pub static INTERMEDIATE_KEY: &[u8] = b"sassafras1";
+
+/// Configuration for Sassafras.
+#[derive(Clone)]
+pub struct Config(sc_consensus_slots::SlotDuration<SassafrasConfiguration>);
+
+impl Config {
+	/// Either fetch the slot duration from disk or compute it from the genesis
+	/// state.
+	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
+		C: AuxStore + ProvideRuntimeApi<B>, C::Api: SassafrasApi<B, Error = sp_blockchain::Error>,
+	{
+		sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self)
+	}
+
+	/// Create the genesis epoch (epoch #0)
+	pub fn genesis_epoch(&self, slot_number: SlotNumber) -> Epoch {
+		let proofs = self.genesis_proofs.clone()
+			.into_iter()
+			.map(|p| p.try_into().expect("Genesis proofs are invalid"))
+			.collect::<Vec<VRFProof>>();
+
+		Epoch {
+			epoch_index: 0,
+			start_slot: slot_number,
+			duration: self.epoch_length,
+
+			validating: ValidatorSet {
+				proofs: proofs.clone(),
+				authorities: self.genesis_authorities.clone(),
+				randomness: self.randomness.clone(),
+			},
+			publishing: ValidatorSet {
+				proofs,
+				authorities: self.genesis_authorities.clone(),
+				randomness: self.randomness.clone(),
+			},
+		}
+	}
+}
+
+impl std::ops::Deref for Config {
+	type Target = SassafrasConfiguration;
+
+	fn deref(&self) -> &SassafrasConfiguration {
+		&*self.0
+	}
+}
+
+#[derive(Default, Clone)]
+struct TimeSource(Arc<Mutex<(Option<Duration>, Vec<(Instant, u64)>)>>);
+
+impl SlotCompatible for TimeSource {
+	fn extract_timestamp_and_slot(
+		&self,
+		data: &InherentData,
+	) -> Result<(TimestampInherent, u64, std::time::Duration), sp_consensus::Error> {
+		trace!(target: "sassafras", "extract timestamp");
+		data.timestamp_inherent_data()
+			.and_then(|t| data.sassafras_inherent_data().map(|a| (t, a)))
+			.map_err(Into::into)
+			.map_err(sp_consensus::Error::InherentData)
+			.map(|(x, y)| (x, y, self.0.lock().0.take().unwrap_or_default()))
+	}
+}
+
+/// State that must be shared between the import queue and the authoring logic.
+#[derive(Clone)]
+pub struct SassafrasLink<Block: BlockT> {
+	time_source: TimeSource,
+	epoch_changes: SharedEpochChanges<Block, Epoch>,
+	config: Config,
+}
+
+impl<Block: BlockT> SassafrasLink<Block> {
+	/// Get the epoch changes of this link.
+	pub fn epoch_changes(&self) -> &SharedEpochChanges<Block, Epoch> {
+		&self.epoch_changes
+	}
+
+	/// Get the config of this link.
+	pub fn config(&self) -> &Config {
+		&self.config
+	}
+}
+
 pub struct SassafrasVerifier<B, E, Block: BlockT, RA, PRA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
-	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
-	time_source: TimeSource,
+	link: SassafrasLink<Block>,
+}
+
+impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
+	fn check_inherents(
+		&self,
+		block: Block,
+		block_id: BlockId<Block>,
+		inherent_data: InherentData,
+	) -> Result<(), Error<Block>>
+		where
+			PRA: ProvideRuntimeApi<Block>,
+			PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
+	{
+		let inherent_res = self.api.runtime_api().check_inherents(
+			&block_id,
+			block,
+			inherent_data,
+		).map_err(Error::Client)?;
+
+		if !inherent_res.ok() {
+			inherent_res
+				.into_errors()
+				.try_for_each(|(i, e)| {
+					Err(Error::CheckInherents(self.inherent_data_providers.error_to_string(&i, &e)))
+				})
+		} else {
+			Ok(())
+		}
+	}
+}
+
+#[allow(dead_code)]
+fn median_algorithm(
+	median_required_blocks: u64,
+	slot_duration: u64,
+	slot_number: u64,
+	slot_now: u64,
+	time_source: &mut (Option<Duration>, Vec<(Instant, u64)>),
+) {
+	let num_timestamps = time_source.1.len();
+	if num_timestamps as u64 >= median_required_blocks && median_required_blocks > 0 {
+		let mut new_list: Vec<_> = time_source.1.iter().map(|&(t, sl)| {
+			let offset: u128 = u128::from(slot_duration)
+				.checked_mul(1_000_000u128) // self.config.slot_duration returns milliseconds
+				.and_then(|x| {
+					x.checked_mul(u128::from(slot_number).saturating_sub(u128::from(sl)))
+				})
+				.expect("we cannot have timespans long enough for this to overflow; qed");
+
+			const NANOS_PER_SEC: u32 = 1_000_000_000;
+			let nanos = (offset % u128::from(NANOS_PER_SEC)) as u32;
+			let secs = (offset / u128::from(NANOS_PER_SEC)) as u64;
+
+			t + Duration::new(secs, nanos)
+		}).collect();
+
+		// Use a partial sort to move the median timestamp to the middle of the list
+		pdqselect::select(&mut new_list, num_timestamps / 2);
+
+		let &median = new_list
+			.get(num_timestamps / 2)
+			.expect("we have at least one timestamp, so this is a valid index; qed");
+
+		let now = Instant::now();
+		if now >= median {
+			time_source.0.replace(now - median);
+		}
+
+		time_source.1.clear();
+	} else {
+		time_source.1.push((Instant::now(), slot_now))
+	}
 }
 
 impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
@@ -153,12 +320,12 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi<Block> + Send + Sync + AuxStore + ProvideCache<Block>,
-	PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+	PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error> + SassafrasApi<Block, Error = sp_blockchain::Error>,
 {
 	fn verify(
 		&mut self,
 		origin: BlockOrigin,
-		mut header: Block::Header,
+		header: Block::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<Block::Extrinsic>>,
 	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), Error<Block>> {
@@ -187,107 +354,111 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 
 		// First, Verify pre-runtime digest.
 		let pre_digest = find_pre_digest::<Block>(&header)?;
-
-		if pre_digest.slot > slot_now {
-			return Err(Error::SlotInFuture.into())
-		}
-
 		let mut epoch_changes = self.epoch_changes.lock();
 		let epoch_descriptor = epoch_changes.epoch_descriptor_for_child_of(
 			descendent_query(&*self.client),
 			&parent_hash,
 			parent_header_metadata.number,
-			unimplemented!(), // TODO
+			pre_digest.slot_number(),
 		)
-			.map_err(|_| Error::InvalidEpochData)?
-			.ok_or_else(|| Error::InvalidEpochData)?;
+			.map_err(|e| Error::ForkTree(Box::new(e)))?
+			.ok_or_else(|| Error::FetchEpoch(parent_hash))?;
 		let viable_epoch = epoch_changes.viable_epoch_mut(
 			&epoch_descriptor,
-			|_| unimplemented!(),
-		).ok_or_else(|| Error::InvalidEpochData)?;
-		let epoch = viable_epoch.as_mut();
+			|slot| self.link.config.genesis_epoch(slot),
+		).ok_or_else(|| Error::FetchEpoch(parent_hash))?;
 
-		// Check the signature.
-		let (author, block_weight) = epoch.validating.authorities
-			.get(pre_digest.authority_index as usize)
-			.cloned()
-			.ok_or(Error::InvalidAuthorityId)?;
-		let seal = header.digest_mut().pop()
-			.ok_or(Error::HeaderUnsealed(header.hash()))?;
-		let signature = seal.as_sassafras_seal().ok_or(Error::InvalidSeal)?;
-		let pre_hash = header.hash();
-		if !AuthorityPair::verify(&signature, pre_hash, &author) {
-			return Err(Error::InvalidSeal.into())
-		}
-
-		// Check that the ticket VRF is of a valid index in auxiliary.validating.
-		let ticket_vrf_proof = epoch.validating.proofs
-			.get(pre_digest.ticket_vrf_index as usize)
-			.cloned()
-			.ok_or(Error::InvalidTicketVRFIndex)?;
-
-		// Check that the ticket VRF is valid.
-		let ticket_transcript = make_ticket_transcript(
-			&epoch.validating.randomness,
-			pre_digest.slot,
-			epoch.epoch_index,
-		);
-		schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
-			p.vrf_verify(ticket_transcript, &pre_digest.ticket_vrf_output, &ticket_vrf_proof)
-		}).map_err(|_| Error::TicketVRFVerificationFailed)?;
-
-		// Check that the post-block VRF is valid.
-		let post_transcript = make_post_transcript(
-			&epoch.validating.randomness,
-			pre_digest.slot,
-			epoch.epoch_index,
-		);
-		schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
-			p.vrf_verify(post_transcript, &pre_digest.post_vrf_output, &pre_digest.post_vrf_proof)
-		}).map_err(|_| Error::PostVRFVerificationFailed)?;
-
-		// Second, push in any commitments of ticket VRF.
-		if let Some(post_block_desc) = find_post_block_descriptor::<Block>(&header)? {
-			// TODO: verify that proofs are below threshold.
-
-			epoch.publishing.proofs.append(&mut post_block_desc.commitments.clone());
-		}
-
-		// Finally, if we are switching epoch, move publishing to validating, and sort the proofs.
-		if let Some(next_epoch_desc) = find_next_epoch_descriptor::<Block>(&header)? {
-			// TODO: check descriptor validity.
-
-			std::mem::swap(&mut epoch.publishing, &mut epoch.validating);
-			epoch.publishing = ValidatorSet {
-				proofs: Vec::new(),
-				authorities: next_epoch_desc.authorities,
-				randomness: next_epoch_desc.randomness,
-			};
-
-			// TODO: sort the validating proofs in "outside-in" order.
-		}
-
-		let mut block_import_params = BlockImportParams {
-			origin,
-			header,
-			post_digests: vec![seal],
-			body,
-			finalized: false,
-			justification,
-			auxiliary: vec![],
-			fork_choice: None,
-			intermediates: Default::default(),
-			storage_changes: None,
-			allow_missing_state: false,
-			import_existing: false,
+		let v_params = verification::VerificationParams {
+			header: header.clone(),
+			pre_digest: Some(pre_digest.clone()),
+			slot_now: slot_now + 1,
+			epoch: viable_epoch.as_ref(),
+			config: &self.config,
 		};
 
-		crate::aux_schema::write_epoch_changes::<Block, _, _>(
-			&*epoch_changes,
-			|insert| block_import_params.auxiliary.extend(
-				insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
-			)
-		);
+		match verification::check_header::<Block>(v_params)? {
+			CheckedHeader::Checked(pre_header, verified_info) => {
+				let babe_pre_digest = verified_info.pre_digest.as_babe_pre_digest()
+					.expect("check_header always returns a pre-digest digest item; qed");
+
+				let slot_number = babe_pre_digest.slot_number();
+
+				let author = verified_info.author;
+
+				// the header is valid but let's check if there was something else already
+				// proposed at the same slot by the given author
+				if let Some(equivocation_proof) = check_equivocation(
+					&*self.api,
+					slot_now,
+					babe_pre_digest.slot_number(),
+					&header,
+					&author,
+				).map_err(|e| e.to_string())? {
+					info!(
+						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+						author,
+						babe_pre_digest.slot_number(),
+						equivocation_proof.fst_header().hash(),
+						equivocation_proof.snd_header().hash(),
+					);
+				}
+
+				// if the body is passed through, we need to use the runtime
+				// to check that the internally-set timestamp in the inherents
+				// actually matches the slot set in the seal.
+				if let Some(inner_body) = body.take() {
+					inherent_data.babe_replace_inherent_data(slot_number);
+					let block = Block::new(pre_header.clone(), inner_body);
+
+					self.check_inherents(
+						block.clone(),
+						BlockId::Hash(parent_hash),
+						inherent_data,
+					)?;
+
+					let (_, inner_body) = block.deconstruct();
+					body = Some(inner_body);
+				}
+
+				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
+				telemetry!(
+					CONSENSUS_TRACE;
+					"babe.checked_and_importing";
+					"pre_header" => ?pre_header);
+
+				let mut intermediates = HashMap::new();
+				intermediates.insert(
+					Cow::from(INTERMEDIATE_KEY),
+					Box::new(BabeIntermediate::<Block> {
+						epoch_descriptor,
+					}) as Box<dyn Any>,
+				);
+
+				let block_import_params = BlockImportParams {
+					origin,
+					header: pre_header,
+					post_digests: vec![verified_info.seal],
+					body,
+					storage_changes: None,
+					finalized: false,
+					justification,
+					auxiliary: Vec::new(),
+					intermediates,
+					fork_choice: None,
+					allow_missing_state: false,
+					import_existing: false,
+				};
+
+				Ok((block_import_params, Default::default()))
+			}
+			CheckedHeader::Deferred(a, b) => {
+				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				telemetry!(CONSENSUS_DEBUG; "babe.header_too_far_in_future";
+					"hash" => ?hash, "a" => ?a, "b" => ?b
+				);
+				Err(Error::<Block>::TooFarInFuture(hash).into())
+			}
+		}
 
 		Ok((block_import_params, Default::default()))
 	}
@@ -314,10 +485,27 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 
 pub type SassafrasImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 
+/// Register the Sassafras inherent data provider, if not registered already.
+fn register_sassafras_inherent_data_provider(
+	inherent_data_providers: &InherentDataProviders,
+	slot_duration: u64,
+) -> Result<(), sp_consensus::Error> {
+	debug!(target: "sassafras", "Registering");
+	if !inherent_data_providers.has_provider(&sp_consensus_sassafras::inherents::INHERENT_IDENTIFIER) {
+		inherent_data_providers
+			.register_provider(sp_consensus_sassafras::inherents::InherentDataProvider::new(slot_duration))
+			.map_err(Into::into)
+			.map_err(sp_consensus::Error::InherentData)
+	} else {
+		Ok(())
+	}
+}
+
 pub struct SassafrasBlockImport<B, E, Block: BlockT, I, RA, PRA> {
 	inner: I,
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
+	link:
 }
 
 impl<B, E, Block: BlockT, I, RA, PRA> BlockImport<Block> for
@@ -357,23 +545,6 @@ where
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		self.inner.check_block(block).map_err(Into::into)
-	}
-}
-
-#[derive(Default, Clone)]
-struct TimeSource(Arc<Mutex<(Option<Duration>, Vec<(Instant, u64)>)>>);
-
-impl SlotCompatible for TimeSource {
-	fn extract_timestamp_and_slot(
-		&self,
-		data: &InherentData,
-	) -> Result<(TimestampInherent, u64, std::time::Duration), sp_consensus::Error> {
-		trace!(target: "babe", "extract timestamp");
-		data.timestamp_inherent_data()
-			.and_then(|t| data.sassafras_inherent_data().map(|a| (t, a)))
-			.map_err(Into::into)
-			.map_err(sp_consensus::Error::InherentData)
-			.map(|(x, y)| (x, y, self.0.lock().0.take().unwrap_or_default()))
 	}
 }
 

@@ -10,6 +10,8 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], optional = true }
 sp-std = { path = "../../std", default-features = false }
 sp-core = { path = "../../core", default-features = false }
+sp-api = { version = "2.0.0", default-features = false, path = "../../api" }
+sp-consensus = { version = "0.8", optional = true, path = "../common" }
 sp-inherents = { path = "../../inherents", default-features = false }
 sp-timestamp = { path = "../../timestamp", default-features = false }
 sp-runtime = {  path = "../../runtime", default-features = false }
@@ -22,6 +24,8 @@ std = [
 	"schnorrkel",
 	"sp-std/std",
 	"sp-core/std",
+	"sp-api/std",
+	"sp-consensus",
 	"sp-inherents/std",
 	"sp-timestamp/std",
 	"sp-runtime/std",

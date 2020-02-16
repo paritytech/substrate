@@ -6986,7 +6986,9 @@ version = "2.0.0"
 dependencies = [
  "parity-scale-codec",
  "schnorrkel",
+ "sp-api",
  "sp-application-crypto",
+ "sp-consensus",
  "sp-core",
  "sp-inherents",
  "sp-runtime",

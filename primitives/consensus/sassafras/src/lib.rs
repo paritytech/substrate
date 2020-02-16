@@ -20,7 +20,7 @@
 // #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod digest;
+pub mod digests;
 pub mod inherents;
 mod vrf;
 
@@ -29,7 +29,8 @@ pub use crate::vrf::{
 	RawVRFProof, VRFProof, Randomness,
 };
 
-use sp_runtime::ConsensusEngineId;
+use sp_runtime::{ConsensusEngineId, RuntimeDebug};
+use codec::{Encode, Decode};
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::SASSAFRAS, sr25519};
@@ -74,3 +75,42 @@ pub type SassafrasAuthorityWeight = u64;
 
 /// The weight of a Sassafras block.
 pub type SassafrasBlockWeight = u32;
+
+/// Configuration data used by the Sassafras consensus engine.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+pub struct SassafrasConfiguration {
+	/// The slot duration in milliseconds for Sassafras.
+	pub slot_duration: u64,
+
+	/// The duration of epochs in slots.
+	pub epoch_length: SlotNumber,
+
+	/// The authorities for the genesis epoch.
+	pub genesis_authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+
+	/// The proofs for genesis epoch.
+	pub genesis_proofs: Vec<RawVRFProof>,
+
+	/// The randomness for the genesis epoch.
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+}
+
+#[cfg(feature = "std")]
+impl sp_consensus::SlotData for SassafrasConfiguration {
+	fn slot_duration(&self) -> u64 {
+		self.slot_duration
+	}
+
+	const SLOT_KEY: &'static [u8] = b"sassafras_configuration";
+}
+
+sp_api::decl_runtime_apis! {
+	/// API necessary for block authorship with Sassafras.
+	pub trait SassafrasApi {
+		/// Return the configuration for Sassafras.
+		fn configuration() -> SassafrasConfiguration;
+
+		/// Return the proofs appended at the current block.
+		fn proofs() -> Vec<RawVRFProof>;
+	}
+}
