@@ -229,7 +229,7 @@ impl Verifier<TestBlock> for TestVerifier {
 	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut header, Stage::PostSeal);
-		Ok(self.inner.verify(origin, header, justification, body).expect("verification failed!"))
+		self.inner.verify(origin, header, justification, body)
 	}
 }
 
@@ -423,7 +423,14 @@ fn run_one_test(
 	}
 
 	runtime.spawn(futures01::future::poll_fn(move || {
-		net.lock().poll();
+		let mut net = net.lock();
+		net.poll();
+		for p in net.peers() {
+			for (h, e) in p.failed_verifications() {
+				panic!("Verification failed for {:?}: {}", h, e);
+			}
+		}
+
 		Ok::<_, ()>(futures01::Async::NotReady::<()>)
 	}));
 
