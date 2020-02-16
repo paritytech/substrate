@@ -81,32 +81,49 @@ mod authorship;
 #[cfg(test)]
 mod tests;
 
-/// Sassafras epoch information
-#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, Debug)]
-pub struct Epoch {
-	/// The epoch index
-	pub epoch_index: u64,
-	/// The starting slot of the epoch,
-	pub start_slot: SlotNumber,
-	/// The duration of this epoch
-	pub duration: SlotNumber,
-	/// The authorities and their weights
+/// Validator set of a particular epoch, can be either publishing or validating.
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct ValidatorSet {
+	/// Proofs of all VRFs collected.
+	pub proofs: Vec<VRFProof>,
+	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
-	/// Randomness for this epoch
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// Randomness for this epoch.
+	pub randomness: Randomness,
+}
+
+/// Epoch data for Sassafras
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct Epoch {
+	/// Start slot of the epoch.
+	pub start_slot: SlotNumber,
+	/// Duration of this epoch.
+	pub duration: SlotNumber,
+	/// Epoch index.
+	pub epoch_index: u64,
+
+	/// Publishing validator set. The set will start validating block in the next epoch.
+	pub publishing: ValidatorSet,
+	/// Validating validator set. The set validates block in the current epoch.
+	pub validating: ValidatorSet,
 }
 
 impl EpochT for Epoch {
-	type NextEpochDescriptor = NextEpochDescriptor;
 	type SlotNumber = SlotNumber;
+	type NextEpochDescriptor = NextEpochDescriptor;
 
 	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
 		Epoch {
 			epoch_index: self.epoch_index + 1,
 			start_slot: self.start_slot + self.duration,
 			duration: self.duration,
-			authorities: descriptor.authorities,
-			randomness: descriptor.randomness,
+
+			validating: self.publishing.clone(),
+			publishing: ValidatorSet {
+				proofs: Vec::new(),
+				authorities: descriptor.authorities,
+				randomness: descriptor.randomness,
+			},
 		}
 	}
 
