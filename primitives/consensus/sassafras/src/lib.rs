@@ -76,6 +76,17 @@ pub type SassafrasAuthorityWeight = u64;
 /// The weight of a Sassafras block.
 pub type SassafrasBlockWeight = u32;
 
+/// An consensus log item for Sassafras.
+#[derive(Decode, Encode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum ConsensusLog {
+	/// The epoch has changed.
+	NextEpochData(digests::NextEpochDescriptor),
+	/// Commitments to be included in the current block.
+	PostBlockData(digests::PostBlockDescriptor),
+	/// Disable the authority with given index.
+	OnDisabled(AuthorityIndex),
+}
+
 /// Configuration data used by the Sassafras consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct SassafrasConfiguration {

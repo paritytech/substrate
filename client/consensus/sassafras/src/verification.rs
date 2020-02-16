@@ -23,7 +23,6 @@ use sp_consensus_sassafras::digests::{PreDigest, CompatibleDigestItem};
 use sc_consensus_slots::CheckedHeader;
 use log::{debug, trace};
 use super::{find_pre_digest, Epoch, BlockT, Error};
-use super::authorship::{make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
 
 /// Sassafras verification parameters
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {

@@ -5839,27 +5839,52 @@ dependencies = [
 
 [[package]]
 name = "sc-consensus-sassafras"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "derive_more",
+ "env_logger 0.7.1",
+ "fork-tree",
+ "futures 0.1.29",
+ "futures 0.3.4",
+ "futures-timer 3.0.1",
  "log 0.4.8",
  "merlin",
+ "num-bigint",
+ "num-rational",
+ "num-traits",
  "parity-scale-codec",
  "parking_lot 0.10.0",
+ "pdqselect",
+ "rand 0.7.3",
+ "sc-block-builder",
  "sc-client",
  "sc-client-api",
  "sc-consensus-epochs",
  "sc-consensus-slots",
+ "sc-consensus-uncles",
+ "sc-executor",
+ "sc-keystore",
+ "sc-network",
+ "sc-network-test",
+ "sc-service",
+ "sc-telemetry",
  "schnorrkel",
  "sp-api",
+ "sp-application-crypto",
  "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-sassafras",
  "sp-core",
  "sp-inherents",
+ "sp-io",
+ "sp-keyring",
  "sp-runtime",
  "sp-timestamp",
+ "sp-version",
+ "substrate-test-runtime-client",
+ "tempfile",
+ "tokio 0.1.22",
 ]
 
 [[package]]
@@ -6982,7 +7007,7 @@ dependencies = [
 
 [[package]]
 name = "sp-consensus-sassafras"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "parity-scale-codec",
  "schnorrkel",

@@ -10,7 +10,7 @@ pub use schnorrkel::vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH};
 pub struct RawVRFOutput(pub [u8; VRF_OUTPUT_LENGTH]);
 
 #[cfg(feature = "std")]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VRFOutput(pub schnorrkel::vrf::VRFOutput);
 
 #[cfg(not(feature = "std"))]
@@ -80,7 +80,7 @@ impl core::cmp::PartialEq for RawVRFProof {
 impl core::cmp::Eq for RawVRFProof { }
 
 #[cfg(feature = "std")]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VRFProof(pub schnorrkel::vrf::VRFProof);
 
 #[cfg(not(feature = "std"))]

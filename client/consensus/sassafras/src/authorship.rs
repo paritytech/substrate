@@ -18,7 +18,7 @@
 
 use merlin::Transcript;
 use sp_consensus_sassafras::{
-	AuthorityId, SassafrasAuthorityWeight, SASSAFRAS_ENGINE_ID, SASSAFRAS_VRF_PREFIX,
+	AuthorityId, SassafrasAuthorityWeight, SASSAFRAS_ENGINE_ID,
 	SlotNumber, AuthorityPair, SassafrasConfiguration
 };
 use sp_consensus_sassafras::digests::PreDigest;
