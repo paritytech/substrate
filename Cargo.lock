@@ -4264,6 +4264,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-sassafras"
+version = "0.8.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "hex-literal",
+ "pallet-session",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "serde",
+ "sp-consensus-sassafras",
+ "sp-inherents",
+ "sp-io",
+ "sp-runtime",
+ "sp-staking",
+ "sp-std",
+ "sp-timestamp",
+]
+
+[[package]]
 name = "pallet-scored-pool"
 version = "2.0.0"
 dependencies = [
@@ -5471,12 +5491,14 @@ dependencies = [
  "sc-client",
  "sc-consensus-sassafras",
  "sc-executor",
+ "sc-finality-grandpa",
  "sc-network",
  "sc-service",
  "sc-transaction-pool",
  "sp-consensus",
  "sp-consensus-sassafras",
  "sp-core",
+ "sp-finality-grandpa",
  "sp-inherents",
  "sp-runtime",
  "sp-transaction-pool",
@@ -5493,8 +5515,10 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-grandpa",
  "pallet-indices",
  "pallet-randomness-collective-flip",
+ "pallet-sassafras",
  "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",

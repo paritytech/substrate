@@ -34,7 +34,7 @@ std = [
 	"pallet-timestamp/std",
 	"sp-timestamp/std",
 	"sp-inherents/std",
-	"sp-consensus-babe/std",
+	"sp-consensus-sassafras/std",
 	"pallet-session/std",
 	"sp-io/std",
 ]

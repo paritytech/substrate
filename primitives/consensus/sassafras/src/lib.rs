@@ -44,6 +44,9 @@ pub const SASSAFRAS_TICKET_VRF_PREFIX: &[u8] = b"substrate-sassafras-ticket-vrf"
 /// The prefix used by Sassafras for its post-block VRF keys.
 pub const SASSAFRAS_POST_VRF_PREFIX: &[u8] = b"substrate-sassafras-post-vrf";
 
+/// The length of the public key
+pub const PUBLIC_KEY_LENGTH: usize = 32;
+
 /// A slot number.
 pub type SlotNumber = u64;
 
@@ -105,6 +108,9 @@ pub struct SassafrasConfiguration {
 
 	/// The randomness for the genesis epoch.
 	pub randomness: Randomness,
+
+	/// Whether secondary pre-digest is accepted.
+	pub secondary_slot: bool,
 }
 
 #[cfg(feature = "std")]

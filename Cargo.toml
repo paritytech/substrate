@@ -63,6 +63,7 @@ members = [
 	"frame/authority-discovery",
 	"frame/authorship",
 	"frame/babe",
+	"frame/sassafras",
 	"frame/balances",
 	"frame/collective",
 	"frame/contracts",

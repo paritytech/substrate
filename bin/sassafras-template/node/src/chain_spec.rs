@@ -1,8 +1,9 @@
 use sp_core::{Pair, Public, sr25519};
 use sassafras_template_runtime::{
-	AccountId, BalancesConfig, GenesisConfig,
+	AccountId, BalancesConfig, GenesisConfig, GrandpaConfig, SassafrasConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, Signature
 };
+use grandpa_primitives::AuthorityId as GrandpaId;
 use sp_consensus_sassafras::AuthorityId as SassafrasId;
 use sc_service;
 use sp_runtime::traits::{Verify, IdentifyAccount};
@@ -40,9 +41,9 @@ pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId where
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
-/// Helper function to generate an authority key for Aura
-pub fn get_authority_keys_from_seed(s: &str) -> SassafrasId {
-	get_from_seed::<SassafrasId>(s)
+/// Helper function to generate an authority key for Sassafras and Grandpa.
+pub fn get_authority_keys_from_seed(s: &str) -> (SassafrasId, GrandpaId) {
+	(get_from_seed::<SassafrasId>(s), get_from_seed::<GrandpaId>(s))
 }
 
 impl Alternative {
@@ -114,7 +115,7 @@ impl Alternative {
 	}
 }
 
-fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
+fn testnet_genesis(initial_authorities: Vec<(SassafrasId, GrandpaId)>,
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool) -> GenesisConfig {
@@ -132,8 +133,8 @@ fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
-		aura: Some(AuraConfig {
-			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
+		sassafras: Some(SassafrasConfig {
+			authorities: initial_authorities.iter().map(|x| (x.0.clone(), 1)).collect(),
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),

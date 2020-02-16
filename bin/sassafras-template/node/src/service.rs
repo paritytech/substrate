@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use sc_client::LongestChain;
 use sassafras_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
@@ -42,38 +43,34 @@ macro_rules! new_full_start {
 				let pool = sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api));
 				Ok(pool)
 			})?
-			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
+			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
+				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
+					client.clone(),
+					&*client,
+					select_chain,
+				)?;
+				let justification_import = grandpa_block_import.clone();
 
 				let (block_import, sassafras_link) = sc_consensus_sassafras::block_import(
 					sc_consensus_sassafras::Config::get_or_compute(&*client)?,
-					client.clone(),
+					grandpa_block_import,
 					client.clone(),
 					client.clone(),
 				)?;
 
 				let import_queue = sc_consensus_sassafras::import_queue(
 					sassafras_link.clone(),
-					block_import.clone(,
-
-
-				let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
-					grandpa_block_import.clone(), client.clone(),
-				);
-
-				let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
-					sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
-					aura_block_import,
-					Some(Box::new(grandpa_block_import.clone())),
+					block_import.clone(),
+					Some(Box::new(justification_import)),
 					None,
+					client.clone(),
 					client,
 					inherent_data_providers.clone(),
-					Some(transaction_pool),
 				)?;
 
-				import_setup = Some((grandpa_block_import, grandpa_link));
-
+				import_setup = Some((block_import, grandpa_link, sassafras_link));
 				Ok(import_queue)
 			})?;
 
@@ -97,7 +94,7 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 
 	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
 
-	let (block_import, grandpa_link) =
+	let (block_import, grandpa_link, sassafras_link) =
 		import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
@@ -120,22 +117,21 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 		let can_author_with =
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
-		let aura = sc_consensus_aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
-			sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
+		let sassafras_config = sc_consensus_sassafras::SassafrasParams {
+			keystore: service.keystore(),
 			client,
 			select_chain,
+			env: proposer,
 			block_import,
-			proposer,
-			service.network(),
-			inherent_data_providers.clone(),
+			sync_oracle: service.network(),
+			inherent_data_providers: inherent_data_providers.clone(),
 			force_authoring,
-			service.keystore(),
+			sassafras_link,
 			can_author_with,
-		)?;
+		};
 
-		// the AURA authoring task is considered essential, i.e. if it
-		// fails we take down the service with it.
-		service.spawn_essential_task("aura", aura);
+		let sassafras = sc_consensus_sassafras::start_sassafras(sassafras_config)?;
+		service.spawn_essential_task("sassafras", sassafras);
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
@@ -223,18 +219,26 @@ pub fn new_light(config: Configuration<GenesisConfig>)
 			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi>(
 				client.clone(), backend, &*client.clone(), Arc::new(fetch_checker),
 			)?;
+
 			let finality_proof_import = grandpa_block_import.clone();
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, ()>(
-				sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
+			let (sassafras_block_import, sassafras_link) = sc_consensus_sassafras::block_import(
+				sc_consensus_sassafras::Config::get_or_compute(&*client)?,
 				grandpa_block_import,
+				client.clone(),
+				client.clone(),
+			)?;
+
+			let import_queue = sc_consensus_sassafras::import_queue(
+				sassafras_link,
+				sassafras_block_import,
 				None,
 				Some(Box::new(finality_proof_import)),
+				client.clone(),
 				client,
 				inherent_data_providers.clone(),
-				None,
 			)?;
 
 			Ok((import_queue, finality_proof_request_builder))

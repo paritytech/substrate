@@ -172,5 +172,4 @@ fn convert_error(e: SignatureError) -> codec::Error {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct Randomness(pub [u8; VRF_OUTPUT_LENGTH]);
+pub type Randomness = [u8; VRF_OUTPUT_LENGTH];

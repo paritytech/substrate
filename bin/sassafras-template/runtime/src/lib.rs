@@ -18,6 +18,8 @@ use sp_runtime::traits::{
 	BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto, IdentifyAccount
 };
 use sp_api::impl_runtime_apis;
+use grandpa::AuthorityList as GrandpaAuthorityList;
+use grandpa::fg_primitives;
 use sp_version::RuntimeVersion;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -77,7 +79,10 @@ pub mod opaque {
 	pub type BlockId = generic::BlockId<Block>;
 
 	impl_opaque_keys! {
-		pub struct SessionKeys { }
+		pub struct SessionKeys {
+			pub grandpa: Grandpa,
+			pub sassafras: Sassafras,
+		}
 	}
 }
 
@@ -154,6 +159,21 @@ impl system::Trait for Runtime {
 	type ModuleToIndex = ModuleToIndex;
 }
 
+parameter_types! {
+	pub const EpochDuration: u64 = 4;
+	pub const ExpectedBlockTime: u64 = 2000;
+}
+
+impl sassafras::Trait for Runtime {
+	type EpochDuration = EpochDuration;
+	type ExpectedBlockTime = ExpectedBlockTime;
+	type EpochChangeTrigger = sassafras::SameAuthoritiesForever;
+}
+
+impl grandpa::Trait for Runtime {
+	type Event = Event;
+}
+
 impl indices::Trait for Runtime {
 	/// The type for recording indexing into the account enumeration. If this ever overflows, there
 	/// will be problems!
@@ -173,7 +193,7 @@ parameter_types! {
 impl timestamp::Trait for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
-	type OnTimestampSet = ();
+	type OnTimestampSet = Sassafras;
 	type MinimumPeriod = MinimumPeriod;
 }
 
@@ -224,6 +244,8 @@ construct_runtime!(
 	{
 		System: system::{Module, Call, Storage, Config, Event},
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
+		Sassafras: sassafras::{Module, Call, Storage, Config, Inherent(Timestamp)},
+		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Indices: indices,
 		Balances: balances,
 		TransactionPayment: transaction_payment::{Module, Storage},
@@ -319,11 +341,12 @@ impl_runtime_apis! {
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
 		fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
 			sp_consensus_sassafras::SassafrasConfiguration {
-				slot_duration: 2,
-				epoch_length: 4,
-				genesis_authorities: Vec::new(),
+				slot_duration: Sassafras::slot_duration(),
+				epoch_length: EpochDuration::get(),
+				genesis_authorities: Sassafras::authorities(),
 				genesis_proofs: Vec::new(),
-				randomness: sp_consensus_sassafras::Randomness([0u8; 32]),
+				randomness: Sassafras::randomness(),
+				secondary_slot: true,
 			}
 		}
 	}
@@ -337,6 +360,12 @@ impl_runtime_apis! {
 			encoded: Vec<u8>,
 		) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
 			opaque::SessionKeys::decode_into_raw_public_keys(&encoded)
+		}
+	}
+
+	impl fg_primitives::GrandpaApi<Block> for Runtime {
+		fn grandpa_authorities() -> GrandpaAuthorityList {
+			Grandpa::grandpa_authorities()
 		}
 	}
 }

@@ -7,8 +7,11 @@ license = "Unlicense"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+
+sassafras = { version = "0.8.0", default-features = false, package = "pallet-sassafras", path = "../../../frame/sassafras" }
 balances = { version = "2.0.0", default-features = false, package = "pallet-balances", path = "../../../frame/balances" }
 frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }
+grandpa = { version = "2.0.0", default-features = false, package = "pallet-grandpa", path = "../../../frame/grandpa" }
 indices = { version = "2.0.0", default-features = false, package = "pallet-indices", path = "../../../frame/indices" }
 randomness-collective-flip = { version = "2.0.0", default-features = false, package = "pallet-randomness-collective-flip", path = "../../../frame/randomness-collective-flip" }
 sudo = { version = "2.0.0", default-features = false, package = "pallet-sudo", path = "../../../frame/sudo" }
@@ -36,10 +39,12 @@ wasm-builder-runner = { version = "1.0.4", package = "substrate-wasm-builder-run
 [features]
 default = ["std"]
 std = [
+	"sassafras/std",
 	"balances/std",
 	"codec/std",
 	"frame-executive/std",
 	"frame-support/std",
+	"grandpa/std",
 	"indices/std",
 	"randomness-collective-flip/std",
 	"serde",
