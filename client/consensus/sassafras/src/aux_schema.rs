@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Schema for BABE epoch changes in the aux-db.
+//! Schema for Sassafras epoch changes in the aux-db.
 
 use std::sync::Arc;
 use parking_lot::Mutex;
@@ -24,11 +24,11 @@ use codec::{Decode, Encode};
 use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sp_runtime::traits::Block as BlockT;
-use sp_consensus_babe::BabeBlockWeight;
+use sp_consensus_sassafras::SassafrasBlockWeight;
 use sc_consensus_epochs::{EpochChangesFor, SharedEpochChanges};
 use crate::Epoch;
 
-const BABE_EPOCH_CHANGES: &[u8] = b"babe_epoch_changes";
+const SASSAFRAS_EPOCH_CHANGES: &[u8] = b"sassafras_epoch_changes";
 
 fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> {
 	(b"block_weight", block_hash).encode()
@@ -40,7 +40,7 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 		T: Decode,
 {
 	let corrupt = |e: codec::Error| {
-		ClientError::Backend(format!("BABE DB is corrupted. Decode error: {}", e.what()))
+		ClientError::Backend(format!("Sassafras DB is corrupted. Decode error: {}", e.what()))
 	};
 	match backend.get_aux(key)? {
 		None => Ok(None),
@@ -52,11 +52,11 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
 ) -> ClientResult<SharedEpochChanges<Block, Epoch>> {
-	let epoch_changes = load_decode::<_, EpochChangesFor<Block, Epoch>>(backend, BABE_EPOCH_CHANGES)?
+	let epoch_changes = load_decode::<_, EpochChangesFor<Block, Epoch>>(backend, SASSAFRAS_EPOCH_CHANGES)?
 		.map(|v| Arc::new(Mutex::new(v)))
 		.unwrap_or_else(|| {
-			info!(target: "babe",
-				"Creating empty BABE epoch changes on what appears to be first startup."
+			info!(target: "sassafras",
+				"Creating empty Sassafras epoch changes on what appears to be first startup."
 			);
 			SharedEpochChanges::<Block, Epoch>::default()
 		});
@@ -79,14 +79,14 @@ pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
 {
 	let encoded_epoch_changes = epoch_changes.encode();
 	write_aux(
-		&[(BABE_EPOCH_CHANGES, encoded_epoch_changes.as_slice())],
+		&[(SASSAFRAS_EPOCH_CHANGES, encoded_epoch_changes.as_slice())],
 	)
 }
 
 /// Write the cumulative chain-weight of a block ot aux storage.
 pub(crate) fn write_block_weight<H: Encode, F, R>(
 	block_hash: H,
-	block_weight: &BabeBlockWeight,
+	block_weight: &SassafrasBlockWeight,
 	write_aux: F,
 ) -> R where
 	F: FnOnce(&[(Vec<u8>, &[u8])]) -> R,
@@ -104,6 +104,6 @@ pub(crate) fn write_block_weight<H: Encode, F, R>(
 pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
 	backend: &B,
 	block_hash: H,
-) -> ClientResult<Option<BabeBlockWeight>> {
+) -> ClientResult<Option<SassafrasBlockWeight>> {
 	load_decode(backend, block_weight_key(block_hash).as_slice())
 }

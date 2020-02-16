@@ -14,54 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! # BABE (Blind Assignment for Blockchain Extension)
-//!
-//! BABE is a slot-based block production mechanism which uses a VRF PRNG to
-//! randomly perform the slot allocation. On every slot, all the authorities
-//! generate a new random number with the VRF function and if it is lower than a
-//! given threshold (which is proportional to their weight/stake) they have a
-//! right to produce a block. The proof of the VRF function execution will be
-//! used by other peer to validate the legitimacy of the slot claim.
-//!
-//! The engine is also responsible for collecting entropy on-chain which will be
-//! used to seed the given VRF PRNG. An epoch is a contiguous number of slots
-//! under which we will be using the same authority set. During an epoch all VRF
-//! outputs produced as a result of block production will be collected on an
-//! on-chain randomness pool. Epoch changes are announced one epoch in advance,
-//! i.e. when ending epoch N, we announce the parameters (randomness,
-//! authorities, etc.) for epoch N+2.
-//!
-//! Since the slot assignment is randomized, it is possible that a slot is
-//! assigned to multiple validators in which case we will have a temporary fork,
-//! or that a slot is assigned to no validator in which case no block is
-//! produced. Which means that block times are not deterministic.
-//!
-//! The protocol has a parameter `c` [0, 1] for which `1 - c` is the probability
-//! of a slot being empty. The choice of this parameter affects the security of
-//! the protocol relating to maximum tolerable network delays.
-//!
-//! In addition to the VRF-based slot assignment described above, which we will
-//! call primary slots, the engine also supports a deterministic secondary slot
-//! assignment. Primary slots take precedence over secondary slots, when
-//! authoring the node starts by trying to claim a primary slot and falls back
-//! to a secondary slot claim attempt. The secondary slot assignment is done
-//! by picking the authority at index:
-//!
-//! `blake2_256(epoch_randomness ++ slot_number) % authorities_len`.
-//!
-//! The fork choice rule is weight-based, where weight equals the number of
-//! primary blocks in the chain. We will pick the heaviest chain (more primary
-//! blocks) and will go with the longest one in case of a tie.
-//!
-//! An in-depth description and analysis of the protocol can be found here:
-//! <https://research.web3.foundation/en/latest/polkadot/BABE/Babe.html>
+//! # Sassafras
 
-#![forbid(unsafe_code)]
-#![warn(missing_docs)]
-pub use sp_consensus_babe::{
-	BabeApi, ConsensusLog, BABE_ENGINE_ID, SlotNumber, BabeConfiguration,
+pub use sp_consensus_sassafras::{
+	SassafrasApi, ConsensusLog, SASSAFRAS_ENGINE_ID, SlotNumber, SassafrasConfiguration,
 	AuthorityId, AuthorityPair, AuthoritySignature,
-	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
+	SassafrasAuthorityWeight, VRF_OUTPUT_LENGTH,
 	digests::{PreDigest, CompatibleDigestItem, NextEpochDescriptor},
 };
 pub use sp_consensus::SyncOracle;
@@ -69,7 +27,7 @@ use std::{
 	collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration},
 	any::Any, borrow::Cow
 };
-use sp_consensus_babe;
+use sp_consensus_sassafras;
 use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
@@ -89,7 +47,7 @@ use sp_consensus::{
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 	SelectChain, SlotData,
 };
-use sp_consensus_babe::inherents::BabeInherentData;
+use sp_consensus_sassafras::inherents::SassafrasInherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use sp_consensus::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use sc_client_api::{
@@ -123,7 +81,7 @@ mod authorship;
 #[cfg(test)]
 mod tests;
 
-/// BABE epoch information
+/// Sassafras epoch information
 #[derive(Decode, Encode, Default, PartialEq, Eq, Clone, Debug)]
 pub struct Epoch {
 	/// The epoch index
@@ -133,7 +91,7 @@ pub struct Epoch {
 	/// The duration of this epoch
 	pub duration: SlotNumber,
 	/// The authorities and their weights
-	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	/// Randomness for this epoch
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 }
@@ -163,11 +121,11 @@ impl EpochT for Epoch {
 
 #[derive(derive_more::Display, Debug)]
 enum Error<B: BlockT> {
-	#[display(fmt = "Multiple BABE pre-runtime digests, rejecting!")]
+	#[display(fmt = "Multiple Sassafras pre-runtime digests, rejecting!")]
 	MultiplePreRuntimeDigests,
-	#[display(fmt = "No BABE pre-runtime digest found")]
+	#[display(fmt = "No Sassafras pre-runtime digest found")]
 	NoPreRuntimeDigest,
-	#[display(fmt = "Multiple BABE epoch change digests, rejecting!")]
+	#[display(fmt = "Multiple Sassafras epoch change digests, rejecting!")]
 	MultipleEpochChangeDigests,
 	#[display(fmt = "Could not extract timestamp and slot: {:?}", _0)]
 	Extraction(sp_consensus::Error),
@@ -218,48 +176,30 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 	}
 }
 
-fn babe_err<B: BlockT>(error: Error<B>) -> Error<B> {
-	debug!(target: "babe", "{}", error);
-	error
-}
-
-macro_rules! babe_info {
-	($($i: expr),+) => {
-		{
-			info!(target: "babe", $($i),+);
-			format!($($i),+)
-		}
-	};
-}
-
-
 /// Intermediate value passed to block importer.
-pub struct BabeIntermediate<B: BlockT> {
+pub struct SassafrasIntermediate<B: BlockT> {
 	/// The epoch descriptor.
 	pub epoch_descriptor: ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 }
 
-/// Intermediate key for Babe engine.
-pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
+/// Intermediate key for Sassafras engine.
+pub static INTERMEDIATE_KEY: &[u8] = b"sassafras1";
 
 /// A slot duration. Create with `get_or_compute`.
-// FIXME: Once Rust has higher-kinded types, the duplication between this
-// and `super::babe::Config` can be eliminated.
-// https://github.com/paritytech/substrate/issues/2434
 #[derive(Clone)]
-pub struct Config(sc_consensus_slots::SlotDuration<BabeConfiguration>);
+pub struct Config(sc_consensus_slots::SlotDuration<SassafrasConfiguration>);
 
 impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
-		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
+		C: AuxStore + ProvideRuntimeApi<B>, C::Api: SassafrasApi<B, Error = sp_blockchain::Error>,
 	{
-		trace!(target: "babe", "Getting slot duration");
+		trace!(target: "sassafras", "Getting slot duration");
 		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
 			Ok(s) => Ok(s),
 			Err(s) => {
-				warn!(target: "babe", "Failed to get slot duration");
+				warn!(target: "sassafras", "Failed to get slot duration");
 				Err(s)
 			}
 		}
@@ -279,15 +219,15 @@ impl Config {
 }
 
 impl std::ops::Deref for Config {
-	type Target = BabeConfiguration;
+	type Target = SassafrasConfiguration;
 
-	fn deref(&self) -> &BabeConfiguration {
+	fn deref(&self) -> &SassafrasConfiguration {
 		&*self.0
 	}
 }
 
-/// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
+/// Parameters for Sassafras.
+pub struct SassafrasParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: KeyStorePtr,
 
@@ -301,7 +241,7 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	pub env: E,
 
 	/// The underlying block-import object to supply our produced blocks to.
-	/// This must be a `BabeBlockImport` or a wrapper of it, otherwise
+	/// This must be a `SassafrasBlockImport` or a wrapper of it, otherwise
 	/// critical consensus logic will be omitted.
 	pub block_import: I,
 
@@ -315,14 +255,14 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	pub force_authoring: bool,
 
 	/// The source of timestamps for relative slots
-	pub babe_link: BabeLink<B>,
+	pub sassafras_link: SassafrasLink<B>,
 
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
 }
 
-/// Start the babe worker. The returned future should be run in a tokio runtime.
-pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
+/// Start the sassafras worker. The returned future should be run in a tokio runtime.
+pub fn start_sassafras<B, C, SC, E, I, SO, CAW, Error>(SassafrasParams {
 	keystore,
 	client,
 	select_chain,
@@ -331,16 +271,16 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	sync_oracle,
 	inherent_data_providers,
 	force_authoring,
-	babe_link,
+	sassafras_link,
 	can_author_with,
-}: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
+}: SassafrasParams<B, C, E, I, SO, SC, CAW>) -> Result<
 	impl futures::Future<Output=()>,
 	sp_consensus::Error,
 > where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
 		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
-	C::Api: BabeApi<B>,
+	C::Api: SassafrasApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -350,38 +290,38 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	SO: SyncOracle + Send + Sync + Clone,
 	CAW: CanAuthorWith<B> + Send,
 {
-	let config = babe_link.config;
-	let worker = BabeWorker {
+	let config = sassafras_link.config;
+	let worker = SassafrasWorker {
 		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		keystore,
-		epoch_changes: babe_link.epoch_changes.clone(),
+		epoch_changes: sassafras_link.epoch_changes.clone(),
 		config: config.clone(),
 	};
 
-	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
+	register_sassafras_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
 	sc_consensus_uncles::register_uncles_inherent_data_provider(
 		client.clone(),
 		select_chain.clone(),
 		&inherent_data_providers,
 	)?;
 
-	babe_info!("Starting BABE Authorship worker");
+	info!(target: "sassafras", "Starting Sassafras authorship worker");
 	Ok(sc_consensus_slots::start_slot_worker(
 		config.0,
 		select_chain,
 		worker,
 		sync_oracle,
 		inherent_data_providers,
-		babe_link.time_source,
+		sassafras_link.time_source,
 		can_author_with,
 	))
 }
 
-struct BabeWorker<B: BlockT, C, E, I, SO> {
+struct SassafrasWorker<B: BlockT, C, E, I, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
@@ -392,13 +332,13 @@ struct BabeWorker<B: BlockT, C, E, I, SO> {
 	config: Config,
 }
 
-impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
+impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for SassafrasWorker<B, C, E, I, SO> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> +
 		ProvideCache<B> +
 		HeaderBackend<B> +
 		HeaderMetadata<B, Error = ClientError>,
-	C::Api: BabeApi<B>,
+	C::Api: SassafrasApi<B>,
 	E: Environment<B, Error = Error>,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
@@ -415,7 +355,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	type BlockImport = I;
 
 	fn logging_target(&self) -> &'static str {
-		"babe"
+		"sassafras"
 	}
 
 	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>> {
@@ -449,7 +389,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		slot_number: SlotNumber,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
-		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
+		debug!(target: "sassafras", "Attempting to claim slot {}", slot_number);
 		let s = authorship::claim_slot(
 			slot_number,
 			self.epoch_changes.lock().viable_epoch(
@@ -461,7 +401,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		);
 
 		if let Some(_) = s {
-			debug!(target: "babe", "Claimed slot {}", slot_number);
+			debug!(target: "sassafras", "Claimed slot {}", slot_number);
 		}
 
 		s
@@ -473,7 +413,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		claim: &Self::Claim,
 	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
-			<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(claim.0.clone()),
+			<DigestItemFor<B> as CompatibleDigestItem>::sassafras_pre_digest(claim.0.clone()),
 		]
 	}
 
@@ -489,7 +429,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let signature = pair.sign(header_hash.as_ref());
-			let digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
+			let digest_item = <DigestItemFor<B> as CompatibleDigestItem>::sassafras_seal(signature);
 
 			BlockImportParams {
 				origin: BlockOrigin::Own,
@@ -504,7 +444,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 					let mut intermediates = HashMap::new();
 					intermediates.insert(
 						Cow::from(INTERMEDIATE_KEY),
-						Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<dyn Any>,
+						Box::new(SassafrasIntermediate::<B> { epoch_descriptor }) as Box<dyn Any>,
 					);
 					intermediates
 				},
@@ -558,7 +498,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		let slot_duration = slot_info.duration << (slot_lenience / BACKOFF_STEP);
 
 		if slot_lenience >= 1 {
-			debug!(target: "babe", "No block for {} slots. Applying 2^({}/{}) lenience",
+			debug!(target: "sassafras", "No block for {} slots. Applying 2^({}/{}) lenience",
 				slot_lenience, slot_lenience, BACKOFF_STEP);
 		}
 
@@ -567,13 +507,13 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	}
 }
 
-impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
+impl<B, C, E, I, Error, SO> SlotWorker<B> for SassafrasWorker<B, C, E, I, SO> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> +
 		ProvideCache<B> +
 		HeaderBackend<B> +
 		HeaderMetadata<B, Error = ClientError> + Send + Sync,
-	C::Api: BabeApi<B>,
+	C::Api: SassafrasApi<B>,
 	E: Environment<B, Error = Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
@@ -587,7 +527,7 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 	}
 }
 
-/// Extract the BABE pre digest from the given header. Pre-runtime digests are
+/// Extract the Sassafras pre digest from the given header. Pre-runtime digests are
 /// mandatory, the function will return `Err` if none is found.
 fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 {
@@ -602,29 +542,29 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 
 	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "babe", "Checking log {:?}, looking for pre runtime digest", log);
-		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
-			(Some(_), true) => return Err(babe_err(Error::MultiplePreRuntimeDigests)),
-			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
+		trace!(target: "sassafras", "Checking log {:?}, looking for pre runtime digest", log);
+		match (log.as_sassafras_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => return Err(Error::MultiplePreRuntimeDigests),
+			(None, _) => trace!(target: "sassafras", "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
 	}
-	pre_digest.ok_or_else(|| babe_err(Error::NoPreRuntimeDigest))
+	pre_digest.ok_or_else(|| Error::NoPreRuntimeDigest)
 }
 
-/// Extract the BABE epoch change digest from the given header, if it exists.
+/// Extract the Sassafras epoch change digest from the given header, if it exists.
 fn find_next_epoch_digest<B: BlockT>(header: &B::Header)
 	-> Result<Option<NextEpochDescriptor>, Error<B>>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	let mut epoch_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "babe", "Checking log {:?}, looking for epoch change digest.", log);
-		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID));
+		trace!(target: "sassafras", "Checking log {:?}, looking for epoch change digest.", log);
+		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&SASSAFRAS_ENGINE_ID));
 		match (log, epoch_digest.is_some()) {
-			(Some(ConsensusLog::NextEpochData(_)), true) => return Err(babe_err(Error::MultipleEpochChangeDigests)),
+			(Some(ConsensusLog::NextEpochData(_)), true) => return Err(Error::MultipleEpochChangeDigests),
 			(Some(ConsensusLog::NextEpochData(epoch)), false) => epoch_digest = Some(epoch),
-			_ => trace!(target: "babe", "Ignoring digest not meant for us"),
+			_ => trace!(target: "sassafras", "Ignoring digest not meant for us"),
 		}
 	}
 
@@ -640,9 +580,9 @@ impl SlotCompatible for TimeSource {
 		&self,
 		data: &InherentData,
 	) -> Result<(TimestampInherent, u64, std::time::Duration), sp_consensus::Error> {
-		trace!(target: "babe", "extract timestamp");
+		trace!(target: "sassafras", "extract timestamp");
 		data.timestamp_inherent_data()
-			.and_then(|t| data.babe_inherent_data().map(|a| (t, a)))
+			.and_then(|t| data.sassafras_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
 			.map_err(sp_consensus::Error::InherentData)
 			.map(|(x, y)| (x, y, self.0.lock().0.take().unwrap_or_default()))
@@ -651,13 +591,13 @@ impl SlotCompatible for TimeSource {
 
 /// State that must be shared between the import queue and the authoring logic.
 #[derive(Clone)]
-pub struct BabeLink<Block: BlockT> {
+pub struct SassafrasLink<Block: BlockT> {
 	time_source: TimeSource,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	config: Config,
 }
 
-impl<Block: BlockT> BabeLink<Block> {
+impl<Block: BlockT> SassafrasLink<Block> {
 	/// Get the epoch changes of this link.
 	pub fn epoch_changes(&self) -> &SharedEpochChanges<Block, Epoch> {
 		&self.epoch_changes
@@ -669,8 +609,8 @@ impl<Block: BlockT> BabeLink<Block> {
 	}
 }
 
-/// A verifier for Babe blocks.
-pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA> {
+/// A verifier for Sassafras blocks.
+pub struct SassafrasVerifier<B, E, Block: BlockT, RA, PRA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
@@ -679,7 +619,7 @@ pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA> {
 	time_source: TimeSource,
 }
 
-impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
+impl<B, E, Block: BlockT, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> {
 	fn check_inherents(
 		&self,
 		block: Block,
@@ -751,14 +691,14 @@ fn median_algorithm(
 	}
 }
 
-impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA> where
+impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA, PRA> where
 	Block: BlockT,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi<Block> + Send + Sync + AuxStore + ProvideCache<Block>,
 	PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
-		+ BabeApi<Block, Error = sp_blockchain::Error>,
+		+ SassafrasApi<Block, Error = sp_blockchain::Error>,
 {
 	fn verify(
 		&mut self,
@@ -768,7 +708,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 		mut body: Option<Vec<Block::Extrinsic>>,
 	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(
-			target: "babe",
+			target: "sassafras",
 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
 			origin,
 			header,
@@ -776,7 +716,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 			body,
 		);
 
-		debug!(target: "babe", "We have {:?} logs in this header", header.digest().logs().len());
+		debug!(target: "sassafras", "We have {:?} logs in this header", header.digest().logs().len());
 		let mut inherent_data = self
 			.inherent_data_providers
 			.create_inherent_data()
@@ -818,10 +758,10 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 
 		match verification::check_header::<Block>(v_params)? {
 			CheckedHeader::Checked(pre_header, verified_info) => {
-				let babe_pre_digest = verified_info.pre_digest.as_babe_pre_digest()
+				let sassafras_pre_digest = verified_info.pre_digest.as_sassafras_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
 
-				let slot_number = babe_pre_digest.slot_number();
+				let slot_number = sassafras_pre_digest.slot_number();
 
 				let author = verified_info.author;
 
@@ -830,14 +770,14 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 				if let Some(equivocation_proof) = check_equivocation(
 					&*self.api,
 					slot_now,
-					babe_pre_digest.slot_number(),
+					sassafras_pre_digest.slot_number(),
 					&header,
 					&author,
 				).map_err(|e| e.to_string())? {
 					info!(
 						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 						author,
-						babe_pre_digest.slot_number(),
+						sassafras_pre_digest.slot_number(),
 						equivocation_proof.fst_header().hash(),
 						equivocation_proof.snd_header().hash(),
 					);
@@ -847,7 +787,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
-					inherent_data.babe_replace_inherent_data(slot_number);
+					inherent_data.sassafras_replace_inherent_data(slot_number);
 					let block = Block::new(pre_header.clone(), inner_body);
 
 					self.check_inherents(
@@ -860,16 +800,16 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					body = Some(inner_body);
 				}
 
-				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
+				trace!(target: "sassafras", "Checked {:?}; importing.", pre_header);
 				telemetry!(
 					CONSENSUS_TRACE;
-					"babe.checked_and_importing";
+					"sassafras.checked_and_importing";
 					"pre_header" => ?pre_header);
 
 				let mut intermediates = HashMap::new();
 				intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate::<Block> {
+					Box::new(SassafrasIntermediate::<Block> {
 						epoch_descriptor,
 					}) as Box<dyn Any>,
 				);
@@ -892,8 +832,8 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 				Ok((block_import_params, Default::default()))
 			}
 			CheckedHeader::Deferred(a, b) => {
-				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
-				telemetry!(CONSENSUS_DEBUG; "babe.header_too_far_in_future";
+				debug!(target: "sassafras", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				telemetry!(CONSENSUS_DEBUG; "sassafras.header_too_far_in_future";
 					"hash" => ?hash, "a" => ?a, "b" => ?b
 				);
 				Err(Error::<Block>::TooFarInFuture(hash).into())
@@ -902,18 +842,18 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 	}
 }
 
-/// The BABE import queue type.
-pub type BabeImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
+/// The Sassafras import queue type.
+pub type SassafrasImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 
-/// Register the babe inherent data provider, if not registered already.
-fn register_babe_inherent_data_provider(
+/// Register the Sassafras inherent data provider, if not registered already.
+fn register_sassafras_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 	slot_duration: u64,
 ) -> Result<(), sp_consensus::Error> {
-	debug!(target: "babe", "Registering");
-	if !inherent_data_providers.has_provider(&sp_consensus_babe::inherents::INHERENT_IDENTIFIER) {
+	debug!(target: "sassafras", "Registering");
+	if !inherent_data_providers.has_provider(&sp_consensus_sassafras::inherents::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(sp_consensus_babe::inherents::InherentDataProvider::new(slot_duration))
+			.register_provider(sp_consensus_sassafras::inherents::InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)
 			.map_err(sp_consensus::Error::InherentData)
 	} else {
@@ -921,7 +861,7 @@ fn register_babe_inherent_data_provider(
 	}
 }
 
-/// A block-import handler for BABE.
+/// A block-import handler for Sassafras.
 ///
 /// This scans each imported block for epoch change signals. The signals are
 /// tracked in a tree (of all forks), and the import logic validates all epoch
@@ -929,7 +869,7 @@ fn register_babe_inherent_data_provider(
 /// it is missing.
 ///
 /// The epoch change tree should be pruned as blocks are finalized.
-pub struct BabeBlockImport<B, E, Block: BlockT, I, RA, PRA> {
+pub struct SassafrasBlockImport<B, E, Block: BlockT, I, RA, PRA> {
 	inner: I,
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
@@ -937,9 +877,9 @@ pub struct BabeBlockImport<B, E, Block: BlockT, I, RA, PRA> {
 	config: Config,
 }
 
-impl<B, E, Block: BlockT, I: Clone, RA, PRA> Clone for BabeBlockImport<B, E, Block, I, RA, PRA> {
+impl<B, E, Block: BlockT, I: Clone, RA, PRA> Clone for SassafrasBlockImport<B, E, Block, I, RA, PRA> {
 	fn clone(&self) -> Self {
-		BabeBlockImport {
+		SassafrasBlockImport {
 			inner: self.inner.clone(),
 			client: self.client.clone(),
 			api: self.api.clone(),
@@ -949,7 +889,7 @@ impl<B, E, Block: BlockT, I: Clone, RA, PRA> Clone for BabeBlockImport<B, E, Blo
 	}
 }
 
-impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
+impl<B, E, Block: BlockT, I, RA, PRA> SassafrasBlockImport<B, E, Block, I, RA, PRA> {
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
 		api: Arc<PRA>,
@@ -957,7 +897,7 @@ impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 		block_import: I,
 		config: Config,
 	) -> Self {
-		BabeBlockImport {
+		SassafrasBlockImport {
 			client,
 			api,
 			inner: block_import,
@@ -967,7 +907,7 @@ impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 	}
 }
 
-impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, RA, PRA> where
+impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, Block, I, RA, PRA> where
 	Block: BlockT,
 	I: BlockImport<Block, Transaction = sp_api::TransactionFor<PRA, Block>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
@@ -976,7 +916,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 	Client<B, E, Block, RA>: AuxStore,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block>,
-	PRA::Api: BabeApi<Block> + ApiExt<Block, StateBackend = B::State>,
+	PRA::Api: SassafrasApi<Block> + ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<PRA, Block>;
@@ -998,28 +938,28 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		}
 
 		let pre_digest = find_pre_digest::<Block>(&block.header)
-			.expect("valid babe headers must contain a predigest; \
+			.expect("valid sassafras headers must contain a predigest; \
 					 header has been already verified; qed");
 		let slot_number = pre_digest.slot_number();
 
 		let parent_hash = *block.header.parent_hash();
 		let parent_header = self.client.header(&BlockId::Hash(parent_hash))
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
-			.ok_or_else(|| ConsensusError::ChainLookup(babe_err(
-				Error::<Block>::ParentUnavailable(parent_hash, hash)
-			).into()))?;
+			.ok_or_else(|| ConsensusError::ChainLookup(
+				Error::<Block>::ParentUnavailable(parent_hash, hash).into()
+			))?;
 
 		let parent_slot = find_pre_digest::<Block>(&parent_header)
 			.map(|d| d.slot_number())
-			.expect("parent is non-genesis; valid BABE headers contain a pre-digest; \
+			.expect("parent is non-genesis; valid Sassafras headers contain a pre-digest; \
 					header has already been verified; qed");
 
 		// make sure that slot number is strictly increasing
 		if slot_number <= parent_slot {
 			return Err(
-				ConsensusError::ClientImport(babe_err(
-					Error::<Block>::SlotNumberMustIncrease(parent_slot, slot_number)
-				).into())
+				ConsensusError::ClientImport(
+					Error::<Block>::SlotNumberMustIncrease(parent_slot, slot_number).into()
+				)
 			);
 		}
 
@@ -1037,11 +977,11 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				aux_schema::load_block_weight(&*self.client, parent_hash)
 					.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 					.ok_or_else(|| ConsensusError::ClientImport(
-						babe_err(Error::<Block>::ParentBlockNoAssociatedWeight(hash)).into()
+						Error::<Block>::ParentBlockNoAssociatedWeight(hash).into()
 					))?
 			};
 
-			let intermediate = block.take_intermediate::<BabeIntermediate<Block>>(
+			let intermediate = block.take_intermediate::<SassafrasIntermediate<Block>>(
 				INTERMEDIATE_KEY
 			)?;
 
@@ -1062,7 +1002,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			(true, false) => {
 				return Err(
 					ConsensusError::ClientImport(
-						babe_err(Error::<Block>::ExpectedEpochChange(hash, slot_number)).into(),
+						Error::<Block>::ExpectedEpochChange(hash, slot_number).into(),
 					)
 				);
 			},
@@ -1087,15 +1027,18 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 			})?;
 
-			babe_info!("New epoch {} launching at block {} (block slot {} >= start slot {}).",
-					   viable_epoch.as_ref().epoch_index,
-					   hash,
-					   slot_number,
-					   viable_epoch.as_ref().start_slot);
+			info!(target: "sassafras",
+				  "New epoch {} launching at block {} (block slot {} >= start slot {}).",
+				  viable_epoch.as_ref().epoch_index,
+				  hash,
+				  slot_number,
+				  viable_epoch.as_ref().start_slot);
 
 			let next_epoch = viable_epoch.increment(next_epoch_descriptor);
 
-			babe_info!("Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
+			info!(target: "sassafras",
+				  "Next epoch starts at slot {}",
+				  next_epoch.as_ref().start_slot);
 
 			// prune the tree of epochs not part of the finalized chain or
 			// that are not live anymore, and then track the given epoch change
@@ -1122,7 +1065,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			};
 
 			if let Err(e) = prune_and_import() {
-				debug!(target: "babe", "Failed to launch next epoch: {:?}", e);
+				debug!(target: "sassafras", "Failed to launch next epoch: {:?}", e);
 				*epoch_changes = old_epoch_changes.expect("set `Some` above and not taken; qed");
 				return Err(e);
 			}
@@ -1225,7 +1168,7 @@ fn prune_finalized<B, E, Block, RA>(
 	Ok(())
 }
 
-/// Produce a BABE block-import object to be used later on in the construction of
+/// Produce a Sassafras block-import object to be used later on in the construction of
 /// an import-queue.
 ///
 /// Also returns a link object used to correctly instantiate the import queue
@@ -1235,14 +1178,14 @@ pub fn block_import<B, E, Block: BlockT, I, RA, PRA>(
 	wrapped_block_import: I,
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
-) -> ClientResult<(BabeBlockImport<B, E, Block, I, RA, PRA>, BabeLink<Block>)> where
+) -> ClientResult<(SassafrasBlockImport<B, E, Block, I, RA, PRA>, SassafrasLink<Block>)> where
 	B: Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
 	Client<B, E, Block, RA>: AuxStore,
 {
 	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client)?;
-	let link = BabeLink {
+	let link = SassafrasLink {
 		epoch_changes: epoch_changes.clone(),
 		time_source: Default::default(),
 		config: config.clone(),
@@ -1256,7 +1199,7 @@ pub fn block_import<B, E, Block: BlockT, I, RA, PRA>(
 		&mut epoch_changes.lock(),
 	)?;
 
-	let import = BabeBlockImport::new(
+	let import = SassafrasBlockImport::new(
 		client,
 		api,
 		epoch_changes,
@@ -1267,41 +1210,41 @@ pub fn block_import<B, E, Block: BlockT, I, RA, PRA>(
 	Ok((import, link))
 }
 
-/// Start an import queue for the BABE consensus algorithm.
+/// Start an import queue for the Sassafras consensus algorithm.
 ///
 /// This method returns the import queue, some data that needs to be passed to the block authoring
-/// logic (`BabeLink`), and a future that must be run to
+/// logic (`SassafrasLink`), and a future that must be run to
 /// completion and is responsible for listening to finality notifications and
 /// pruning the epoch changes tree.
 ///
-/// The block import object provided must be the `BabeBlockImport` or a wrapper
+/// The block import object provided must be the `SassafrasBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
 pub fn import_queue<B, E, Block: BlockT, I, RA, PRA>(
-	babe_link: BabeLink<Block>,
+	sassafras_link: SassafrasLink<Block>,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<Block>>,
 	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	inherent_data_providers: InherentDataProviders,
-) -> ClientResult<BabeImportQueue<Block, sp_api::TransactionFor<PRA, Block>>> where
+) -> ClientResult<SassafrasImportQueue<Block, sp_api::TransactionFor<PRA, Block>>> where
 	B: Backend<Block> + 'static,
 	I: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<PRA, Block>>
 		+ Send + Sync + 'static,
 	E: CallExecutor<Block> + Clone + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
-	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
+	PRA::Api: BlockBuilderApi<Block> + SassafrasApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
 {
-	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
+	register_sassafras_inherent_data_provider(&inherent_data_providers, sassafras_link.config.slot_duration)?;
 
-	let verifier = BabeVerifier {
+	let verifier = SassafrasVerifier {
 		client: client.clone(),
 		api,
 		inherent_data_providers,
-		config: babe_link.config,
-		epoch_changes: babe_link.epoch_changes,
-		time_source: babe_link.time_source,
+		config: sassafras_link.config,
+		epoch_changes: sassafras_link.epoch_changes,
+		time_source: sassafras_link.time_source,
 	};
 
 	Ok(BasicQueue::new(
@@ -1310,43 +1253,4 @@ pub fn import_queue<B, E, Block: BlockT, I, RA, PRA>(
 		justification_import,
 		finality_proof_import,
 	))
-}
-
-/// BABE test helpers. Utility methods for manually authoring blocks.
-#[cfg(feature = "test-helpers")]
-pub mod test_helpers {
-	use super::*;
-
-	/// Try to claim the given slot and return a `BabePreDigest` if
-	/// successful.
-	pub fn claim_slot<B, C>(
-		slot_number: u64,
-		parent: &B::Header,
-		client: &C,
-		keystore: &KeyStorePtr,
-		link: &BabeLink<B>,
-	) -> Option<PreDigest> where
-		B: BlockT,
-		C: ProvideRuntimeApi<B> +
-			ProvideCache<B> +
-			HeaderBackend<B> +
-			HeaderMetadata<B, Error = ClientError>,
-		C::Api: BabeApi<B>,
-	{
-		let epoch_changes = link.epoch_changes.lock();
-		let epoch = epoch_changes.epoch_data_for_child_of(
-			descendent_query(client),
-			&parent.hash(),
-			parent.number().clone(),
-			slot_number,
-			|slot| link.config.genesis_epoch(slot),
-		).unwrap().unwrap();
-
-		authorship::claim_slot(
-			slot_number,
-			&epoch,
-			&link.config,
-			keystore,
-		).map(|(digest, _)| digest)
-	}
 }
