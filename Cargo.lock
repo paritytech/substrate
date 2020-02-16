@@ -5460,6 +5460,66 @@ dependencies = [
 ]
 
 [[package]]
+name = "sassafras-template"
+version = "2.0.0"
+dependencies = [
+ "futures 0.3.4",
+ "log 0.4.8",
+ "sassafras-template-runtime",
+ "sc-basic-authorship",
+ "sc-cli",
+ "sc-client",
+ "sc-consensus-aura",
+ "sc-executor",
+ "sc-finality-grandpa",
+ "sc-network",
+ "sc-service",
+ "sc-transaction-pool",
+ "sp-consensus",
+ "sp-consensus-aura",
+ "sp-core",
+ "sp-finality-grandpa",
+ "sp-inherents",
+ "sp-runtime",
+ "sp-transaction-pool",
+ "structopt",
+ "substrate-build-script-utils",
+ "vergen",
+]
+
+[[package]]
+name = "sassafras-template-runtime"
+version = "2.0.0"
+dependencies = [
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "pallet-aura",
+ "pallet-balances",
+ "pallet-grandpa",
+ "pallet-indices",
+ "pallet-randomness-collective-flip",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-block-builder",
+ "sp-consensus-aura",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+ "substrate-wasm-builder-runner",
+]
+
+[[package]]
 name = "sc-authority-discovery"
 version = "0.8.0"
 dependencies = [
