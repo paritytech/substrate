@@ -14,15 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use codec::{Encode, Decode, Codec};
+use codec::{Encode, Decode};
+use sp_std::vec::Vec;
 use sp_core::RuntimeDebug;
+use crate::{
+	Randomness, VRFProof, VRFOutput, VRFIndex,
+	AuthorityIndex, SlotNumber, AuthorityId, SassafrasAuthorityWeight,
+};
+#[cfg(feature = "std")]
+use codec::Codec;
 #[cfg(feature = "std")]
 use sp_runtime::{DigestItem, generic::OpaqueDigestItemId};
-use crate::{
-	SASSAFRAS_ENGINE_ID, Randomness, VRFProof, VRFOutput, VRFIndex,
-	AuthorityIndex, SlotNumber, AuthorityId, SassafrasAuthorityWeight,
-	AuthoritySignature,
-};
+#[cfg(feature = "std")]
+use crate::{SASSAFRAS_ENGINE_ID, AuthoritySignature};
 
 /// A digest item which is usable with Sassafras consensus.
 #[cfg(feature = "std")]

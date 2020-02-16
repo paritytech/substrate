@@ -29,6 +29,7 @@ pub use crate::vrf::{
 	RawVRFProof, VRFProof, Randomness,
 };
 
+use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use codec::{Encode, Decode};
 
@@ -103,7 +104,7 @@ pub struct SassafrasConfiguration {
 	pub genesis_proofs: Vec<RawVRFProof>,
 
 	/// The randomness for the genesis epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: Randomness,
 }
 
 #[cfg(feature = "std")]

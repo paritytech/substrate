@@ -1,10 +1,20 @@
-use core::convert::TryFrom;
-use codec::{Encode, Decode, EncodeLike};
-use schnorrkel::{SignatureError, errors::MultiSignatureStage};
-use sp_std::ops::{Deref, DerefMut};
+use codec::{Encode, Decode};
 use sp_runtime::RuntimeDebug;
+#[cfg(feature = "std")]
+use std::{ops::{Deref, DerefMut}, convert::TryFrom};
+#[cfg(feature = "std")]
+use codec::EncodeLike;
+#[cfg(feature = "std")]
+use schnorrkel::{SignatureError, errors::MultiSignatureStage};
 
+#[cfg(feature = "std")]
 pub use schnorrkel::vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH};
+
+#[cfg(not(feature = "std"))]
+pub const VRF_PROOF_LENGTH: usize = 64;
+
+#[cfg(not(feature = "std"))]
+pub const VRF_OUTPUT_LENGTH: usize = 32;
 
 #[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
 pub struct RawVRFOutput(pub [u8; VRF_OUTPUT_LENGTH]);
@@ -162,4 +172,5 @@ fn convert_error(e: SignatureError) -> codec::Error {
 	}
 }
 
-pub type Randomness = [u8; VRF_OUTPUT_LENGTH];
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct Randomness(pub [u8; VRF_OUTPUT_LENGTH]);

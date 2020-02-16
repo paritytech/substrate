@@ -7,11 +7,8 @@ license = "Unlicense"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-
-aura = { version = "2.0.0", default-features = false, package = "pallet-aura", path = "../../../frame/aura" }
 balances = { version = "2.0.0", default-features = false, package = "pallet-balances", path = "../../../frame/balances" }
 frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }
-grandpa = { version = "2.0.0", default-features = false, package = "pallet-grandpa", path = "../../../frame/grandpa" }
 indices = { version = "2.0.0", default-features = false, package = "pallet-indices", path = "../../../frame/indices" }
 randomness-collective-flip = { version = "2.0.0", default-features = false, package = "pallet-randomness-collective-flip", path = "../../../frame/randomness-collective-flip" }
 sudo = { version = "2.0.0", default-features = false, package = "pallet-sudo", path = "../../../frame/sudo" }
@@ -22,7 +19,7 @@ frame-executive = { version = "2.0.0", default-features = false, path = "../../.
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-api = { version = "2.0.0", default-features = false, path = "../../../primitives/api" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false}
-sp-consensus-aura = { version = "0.8", default-features = false, path = "../../../primitives/consensus/aura" }
+sp-consensus-sassafras = { version = "0.8", default-features = false, path = "../../../primitives/consensus/sassafras" }
 sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
 sp-inherents = { path = "../../../primitives/inherents", default-features = false}
 sp-io = { version = "2.0.0", default-features = false, path = "../../../primitives/io" }
@@ -39,18 +36,16 @@ wasm-builder-runner = { version = "1.0.4", package = "substrate-wasm-builder-run
 [features]
 default = ["std"]
 std = [
-	"aura/std",
 	"balances/std",
 	"codec/std",
 	"frame-executive/std",
 	"frame-support/std",
-	"grandpa/std",
 	"indices/std",
 	"randomness-collective-flip/std",
 	"serde",
 	"sp-api/std",
 	"sp-block-builder/std",
-	"sp-consensus-aura/std",
+	"sp-consensus-sassafras/std",
 	"sp-core/std",
 	"sp-inherents/std",
 	"sp-io/std",

@@ -9,8 +9,6 @@ use sp_inherents::InherentDataProviders;
 use sc_network::{construct_simple_protocol};
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
-use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
-use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 
 // Our native executor instance.
 native_executor_instance!(
@@ -48,10 +46,17 @@ macro_rules! new_full_start {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 
-				let (grandpa_block_import, grandpa_link) =
-					grandpa::block_import::<_, _, _, sassafras_template_runtime::RuntimeApi, _>(
-						client.clone(), &*client, select_chain
-					)?;
+				let (block_import, sassafras_link) = sc_consensus_sassafras::block_import(
+					sc_consensus_sassafras::Config::get_or_compute(&*client)?,
+					client.clone(),
+					client.clone(),
+					client.clone(),
+				)?;
+
+				let import_queue = sc_consensus_sassafras::import_queue(
+					sassafras_link.clone(),
+					block_import.clone(,
+
 
 				let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
 					grandpa_block_import.clone(), client.clone(),

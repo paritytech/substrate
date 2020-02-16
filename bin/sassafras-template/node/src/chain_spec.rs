@@ -1,10 +1,9 @@
 use sp_core::{Pair, Public, sr25519};
 use sassafras_template_runtime::{
-	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
+	AccountId, BalancesConfig, GenesisConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, Signature
 };
-use sp_consensus_aura::sr25519::{AuthorityId as AuraId};
-use grandpa_primitives::{AuthorityId as GrandpaId};
+use sp_consensus_sassafras::AuthorityId as SassafrasId;
 use sc_service;
 use sp_runtime::traits::{Verify, IdentifyAccount};
 
@@ -42,11 +41,8 @@ pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId where
 }
 
 /// Helper function to generate an authority key for Aura
-pub fn get_authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
-	(
-		get_from_seed::<AuraId>(s),
-		get_from_seed::<GrandpaId>(s),
-	)
+pub fn get_authority_keys_from_seed(s: &str) -> SassafrasId {
+	get_from_seed::<SassafrasId>(s)
 }
 
 impl Alternative {
