@@ -103,6 +103,8 @@ pub enum PreDigest {
 		post_vrf_proof: VRFProof,
 		/// Secondary "Post Block VRF" output.
 		post_vrf_output: VRFOutput,
+		/// Additional commitments posted directly at pre-digest.
+		commitments: Vec<VRFProof>,
 	},
 	/// A secondary deterministic slot assignment.
 	Secondary {
@@ -110,6 +112,8 @@ pub enum PreDigest {
 		authority_index: AuthorityIndex,
 		/// Slot number.
 		slot_number: SlotNumber,
+		/// Additional commitments posted directly at pre-digest.
+		commitments: Vec<VRFProof>,
 	},
 }
 

@@ -566,6 +566,7 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 		return Ok(PreDigest::Secondary {
 			slot_number: 0,
 			authority_index: 0,
+			commitments: Vec::new(),
 		})
 	}
 
