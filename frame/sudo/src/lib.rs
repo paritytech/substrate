@@ -234,9 +234,8 @@ impl<Call: GetDispatchInfo> ClassifyDispatch<(&Box<Call>,)> for SudoPassthrough<
 	}
 }
 impl<Call: GetDispatchInfo> PaysFee<(&Box<Call>,)> for SudoPassthrough<Call> {
-	fn pays_fee(&self, (_call,): (&Box<Call>,)) -> bool {
-		// Sudo calls do not pay a fee.
-		false
+	fn pays_fee(&self, (call,): (&Box<Call>,)) -> bool {
+		call.get_dispatch_info().pays_fee
 	}
 }
 
@@ -257,8 +256,7 @@ impl<Lookup, Call: GetDispatchInfo> ClassifyDispatch<(&Lookup, &Box<Call>)> for 
 	}
 }
 impl<Lookup, Call: GetDispatchInfo> PaysFee<(&Lookup, &Box<Call>)> for SudoAsPassthrough<Lookup, Call> {
-	fn pays_fee(&self, (_who, _call): (&Lookup, &Box<Call>)) -> bool {
-		// Sudo calls do not pay a fee.
-		false
+	fn pays_fee(&self, (_who, call): (&Lookup, &Box<Call>)) -> bool {
+		call.get_dispatch_info().pays_fee
 	}
 }
