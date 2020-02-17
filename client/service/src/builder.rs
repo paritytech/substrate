@@ -746,6 +746,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 			prometheus_registry: Some(registry),
 		}

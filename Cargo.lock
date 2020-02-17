@@ -2684,7 +2684,7 @@ dependencies = [
  "sha2",
  "smallvec 1.2.0",
  "thiserror",
- "unsigned-varint",
+ "unsigned-varint 0.3.0",
  "void",
  "zeroize 1.1.0",
 ]
@@ -4531,6 +4531,24 @@ checksum = "0c276d76c5333b8c2579e02d49a06733a55b8282d2d9b13e8d53b6406bd7e30a"
 
 [[package]]
 name = "parity-multiaddr"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "045b3c7af871285146300da35b1932bb6e4639b66c7c98e85d06a32cbc4e8fa7"
+dependencies = [
+ "arrayref",
+ "bs58 0.2.5",
+ "byteorder 1.3.4",
+ "bytes 0.4.12",
+ "data-encoding",
+ "parity-multihash 0.1.3",
+ "percent-encoding 1.0.1",
+ "serde",
+ "unsigned-varint 0.2.3",
+ "url 1.7.2",
+]
+
+[[package]]
+name = "parity-multiaddr"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26df883298bc3f4e92528b4c5cc9f806b791955b136da3e5e939ed9de0fd958b"
@@ -4545,6 +4563,21 @@ dependencies = [
  "static_assertions",
  "unsigned-varint 0.3.0",
  "url 2.1.1",
+]
+
+[[package]]
+name = "parity-multihash"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df3a17dc27848fd99e4f87eb0f8c9baba6ede0a6d555400c850ca45254ef4ce3"
+dependencies = [
+ "blake2",
+ "bytes 0.4.12",
+ "rand 0.6.5",
+ "sha-1",
+ "sha2",
+ "sha3",
+ "unsigned-varint 0.2.3",
 ]
 
 [[package]]
