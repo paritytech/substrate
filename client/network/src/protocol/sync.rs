@@ -751,7 +751,7 @@ impl<B: BlockT> ChainSync<B> {
 						| PeerSyncState::DownloadingFinalityProof(..) => Vec::new()
 					}
 				} else {
-					// When request.is_none() just acccept blocks
+					// When request.is_none() just accept blocks
 					blocks.into_iter().map(|b| {
 						IncomingBlock {
 							hash: b.hash,
@@ -955,7 +955,7 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				Err(BlockImportError::MissingState) => {
 					// This may happen if the chain we were requesting upon has been discarded
-					// in the meantime becasue other chain has been finalized.
+					// in the meantime because other chain has been finalized.
 					// Don't mark it as bad as it still may be synced if explicitly requested.
 					trace!(target: "sync", "Obsolete block");
 				},

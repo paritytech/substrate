@@ -836,10 +836,10 @@ where
 			};
 			if let Some(peer) = available_peer {
 				let id = self.next_request_id();
-				let rq = serialise_request(id, &request.request);
+				let rq = serialize_request(id, &request.request);
 				let mut buf = Vec::with_capacity(rq.encoded_len());
 				if let Err(e) = rq.encode(&mut buf) {
-					log::debug!("failed to serialise request {}: {}", id, e);
+					log::debug!("failed to serialize request {}: {}", id, e);
 					send_reply(Err(ClientError::RemoteFetchFailed), request.request)
 				} else {
 					log::trace!("sending request {} to peer {}", id, peer);
@@ -917,7 +917,7 @@ fn retries<B: Block>(request: &Request<B>) -> usize {
 	rc.unwrap_or(0)
 }
 
-fn serialise_request<B: Block>(id: u64, request: &Request<B>) -> api::v1::light::Request {
+fn serialize_request<B: Block>(id: u64, request: &Request<B>) -> api::v1::light::Request {
 	let request = match request {
 		Request::Header { request, .. } => {
 			let r = api::v1::light::RemoteHeaderRequest { block: request.block.encode() };
@@ -1051,7 +1051,7 @@ where
 /// Sends a request to remote and awaits the response.
 #[derive(Debug, Clone)]
 pub struct OutboundProtocol {
-	/// The serialised protobuf request.
+	/// The serialized protobuf request.
 	request: Vec<u8>,
 	/// The max. request length in bytes.
 	max_data_size: usize,
