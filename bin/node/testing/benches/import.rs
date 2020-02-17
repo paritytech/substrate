@@ -137,7 +137,6 @@ impl Clone for BenchDb {
 }
 
 impl BenchDb {
-
 	fn new(random_space: usize) -> Self {
 		let keyring = BenchKeyring::new(random_space);
 
