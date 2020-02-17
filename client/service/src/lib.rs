@@ -625,7 +625,7 @@ where
 	E: IntoPoolError + From<sp_transaction_pool::error::Error>,
 {
 	pool.ready()
-		.filter(|t| t.is_propagateable())
+		.filter(|t| t.is_propagable())
 		.map(|t| {
 			let hash = t.hash().clone();
 			let ex: B::Extrinsic = t.data().clone();
@@ -716,7 +716,7 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
-		));
+		).0);
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,

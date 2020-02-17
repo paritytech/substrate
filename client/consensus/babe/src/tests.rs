@@ -316,12 +316,12 @@ impl TestNetFactory for BabeTestNet {
 	}
 
 	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, DummySpecialization> {
-		trace!(target: "babe", "Retreiving a peer");
+		trace!(target: "babe", "Retrieving a peer");
 		&mut self.peers[i]
 	}
 
 	fn peers(&self) -> &Vec<Peer<Self::PeerData, DummySpecialization>> {
-		trace!(target: "babe", "Retreiving peers");
+		trace!(target: "babe", "Retrieving peers");
 		&self.peers
 	}
 

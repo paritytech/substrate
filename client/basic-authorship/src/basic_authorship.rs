@@ -308,7 +308,7 @@ mod tests {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())))
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
 		);
 
 		futures::executor::block_on(
@@ -350,7 +350,7 @@ mod tests {
 			.build_with_backend();
 		let client = Arc::new(client);
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())))
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
 		);
 		let genesis_hash = client.info().best_hash;
 		let block_id = BlockId::Hash(genesis_hash);
