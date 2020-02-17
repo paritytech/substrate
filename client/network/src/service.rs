@@ -35,7 +35,6 @@ use sp_consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, channel::mpsc};
 use log::{warn, error, info, trace};
 use libp2p::{PeerId, Multiaddr, kad::record};
-use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent};
 use parking_lot::Mutex;
 use sc_peerset::PeersetHandle;
@@ -854,7 +853,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Unpin for Net
 
 /// The libp2p swarm, customized for our needs.
 type Swarm<B, S, H> = libp2p::swarm::Swarm<
-	Boxed<(PeerId, StreamMuxerBox), io::Error>,
 	Behaviour<B, S, H>
 >;
 

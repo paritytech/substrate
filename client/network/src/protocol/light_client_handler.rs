@@ -40,7 +40,14 @@ use libp2p::{
 		upgrade::{InboundUpgrade, ReadOneError, UpgradeInfo, Negotiated},
 		upgrade::{OutboundUpgrade, read_one, write_one}
 	},
-	swarm::{NetworkBehaviour, NetworkBehaviourAction, OneShotHandler, PollParameters, SubstreamProtocol}
+	swarm::{
+		NegotiatedSubstream,
+		NetworkBehaviour,
+		NetworkBehaviourAction,
+		OneShotHandler,
+		PollParameters,
+		SubstreamProtocol
+	}
 };
 use nohash_hasher::IntMap;
 use prost::Message;
@@ -220,7 +227,7 @@ enum PeerStatus {
 }
 
 /// The light client handler behaviour.
-pub struct LightClientHandler<T, B: Block> {
+pub struct LightClientHandler<B: Block> {
 	/// This behaviour's configuration.
 	config: Config,
 	/// Blockchain client.
@@ -239,13 +246,10 @@ pub struct LightClientHandler<T, B: Block> {
 	next_request_id: u64,
 	/// Handle to use for reporting misbehaviour of peers.
 	peerset: sc_peerset::PeersetHandle,
-	/// Type witness term.
-	_marker: std::marker::PhantomData<T>
 }
 
-impl<T, B> LightClientHandler<T, B>
+impl<B> LightClientHandler<B>
 where
-	T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	B: Block,
 {
 	/// Construct a new light client handler.
@@ -266,7 +270,6 @@ where
 			outstanding: IntMap::default(),
 			next_request_id: 1,
 			peerset,
-			_marker: std::marker::PhantomData
 		}
 	}
 
@@ -646,12 +649,11 @@ where
 	}
 }
 
-impl<T, B> NetworkBehaviour for LightClientHandler<T, B>
+impl<B> NetworkBehaviour for LightClientHandler<B>
 where
-	T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	B: Block
 {
-	type ProtocolsHandler = OneShotHandler<T, InboundProtocol, OutboundProtocol, Event<Negotiated<T>>>;
+	type ProtocolsHandler = OneShotHandler<InboundProtocol, OutboundProtocol, Event<NegotiatedSubstream>>;
 	type OutEvent = Void;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
@@ -690,7 +692,7 @@ where
 		self.remove_peer(peer)
 	}
 
-	fn inject_node_event(&mut self, peer: PeerId, event: Event<Negotiated<T>>) {
+	fn inject_node_event(&mut self, peer: PeerId, event: Event<NegotiatedSubstream>) {
 		match event {
 			// An incoming request from remote has been received.
 			Event::Request(request, mut stream) => {
@@ -1144,8 +1146,8 @@ mod tests {
 	const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"foobarbaz");
 
 	type Block = sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
-	type Handler = LightClientHandler<SubstreamRef<Arc<StreamMuxerBox>>, Block>;
-	type Swarm = libp2p::swarm::Swarm<Boxed<(PeerId, StreamMuxerBox), io::Error>, Handler>;
+	type Handler = LightClientHandler<Block>;
+	type Swarm = libp2p::swarm::Swarm<Handler>;
 
 	fn empty_proof() -> Vec<u8> {
 		StorageProof::empty().encode()
@@ -1210,7 +1212,7 @@ mod tests {
 		( ok: bool
 		, ps: sc_peerset::PeersetHandle
 		, cf: super::Config
-		) -> LightClientHandler<futures::io::Cursor<Vec<u8>>, Block>
+		) -> LightClientHandler<Block>
 	{
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let checker = Arc::new(DummyFetchChecker::new(ok));
@@ -1221,10 +1223,7 @@ mod tests {
 		ConnectedPoint::Dialer { address: Multiaddr::empty() }
 	}
 
-	fn poll<T>(mut b: &mut LightClientHandler<T, Block>) -> Poll<NetworkBehaviourAction<OutboundProtocol, Void>>
-	where
-		T: AsyncRead + AsyncWrite + Unpin + Send + 'static
-	{
+	fn poll(mut b: &mut LightClientHandler<Block>) -> Poll<NetworkBehaviourAction<OutboundProtocol, Void>> {
 		let mut p = EmptyPollParams(PeerId::random());
 		match future::poll_fn(|cx| Pin::new(&mut b).poll(cx, &mut p)).now_or_never() {
 			Some(a) => Poll::Ready(a),
