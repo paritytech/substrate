@@ -23,6 +23,7 @@ members = [
 	"client/cli",
 	"client/consensus/aura",
 	"client/consensus/babe",
+	"client/consensus/babe/rpc",
 	"client/consensus/manual-seal",
 	"client/consensus/pow",
 	"client/consensus/uncles",
