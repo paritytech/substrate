@@ -12,7 +12,7 @@ futures = { version = "0.3.1", features = ["compat"] }
 wasm-timer = "0.2"
 futures-timer = "3.0.1"
 futures01 = { package = "futures", version = "0.1.29" }
-libp2p = { version = "0.15.0", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { version = "0.16.0", default-features = false, features = ["libp2p-websocket"] }
 lru = "0.1.2"
 parking_lot = "0.10.0"
 sc-network = { version = "0.8", path = "../network" }
