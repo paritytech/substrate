@@ -766,7 +766,7 @@ pub trait TestNetFactory: Sized {
 
 	/// Blocks the current thread until we are sync'ed.
 	///
-	/// Calls `poll_until_sync` repeatidely with the runtime passed as parameter.
+	/// Calls `poll_until_sync` repeatedly with the runtime passed as parameter.
 	fn block_until_sync(&mut self, runtime: &mut tokio::runtime::current_thread::Runtime) {
 		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(self.poll_until_sync()))).unwrap();
 	}

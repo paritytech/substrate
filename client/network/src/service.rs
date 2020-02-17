@@ -367,7 +367,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 
 	/// Get network state.
 	///
-	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literaly
+	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literally
 	/// everywhere about this. Please don't use this function to retrieve actual information.
 	pub fn network_state(&mut self) -> NetworkState {
 		let swarm = &mut self.network_service;

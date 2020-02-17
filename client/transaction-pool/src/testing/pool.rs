@@ -222,7 +222,7 @@ fn should_revalidate_during_maintenance() {
 }
 
 #[test]
-fn should_resubmit_from_retracted_during_maintaince() {
+fn should_resubmit_from_retracted_during_maintenance() {
 	let xt = uxt(Alice, 209);
 	let retracted_hash = Hash::random();
 

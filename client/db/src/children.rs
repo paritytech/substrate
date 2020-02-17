@@ -100,7 +100,7 @@ mod tests {
 		children2.push(1_6);
 		write_children(&mut tx, 0, PREFIX, 1_2, children2);
 
-		db.write(tx.clone()).expect("(2) Commiting transaction failed");
+		db.write(tx.clone()).expect("(2) Committing transaction failed");
 
 		let r1: Vec<u32> = read_children(&db, 0, PREFIX, 1_1).expect("(1) Getting r1 failed");
 		let r2: Vec<u32> = read_children(&db, 0, PREFIX, 1_2).expect("(1) Getting r2 failed");
@@ -109,7 +109,7 @@ mod tests {
 		assert_eq!(r2, vec![1_4, 1_6]);
 
 		remove_children(&mut tx, 0, PREFIX, 1_2);
-		db.write(tx).expect("(2) Commiting transaction failed");
+		db.write(tx).expect("(2) Committing transaction failed");
 
 		let r1: Vec<u32> = read_children(&db, 0, PREFIX, 1_1).expect("(2) Getting r1 failed");
 		let r2: Vec<u32> = read_children(&db, 0, PREFIX, 1_2).expect("(2) Getting r2 failed");

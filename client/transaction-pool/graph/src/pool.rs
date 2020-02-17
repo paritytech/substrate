@@ -308,7 +308,7 @@ impl<B: ChainApi> Pool<B> {
 
 		let reverified_transactions = self.verify(at, pruned_transactions, false).await?;
 
-		log::trace!(target: "txpool", "Prunning at {:?}. Resubmitting transactions.", at);
+		log::trace!(target: "txpool", "Pruning at {:?}. Resubmitting transactions.", at);
 		// And finally - submit reverified transactions back to the pool
 
 		self.validated_pool.resubmit_pruned(

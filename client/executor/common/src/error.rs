@@ -27,7 +27,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
 	/// Unserializable Data
 	InvalidData(sp_serializer::Error),
-	/// Trap occured during execution
+	/// Trap occurred during execution
 	Trap(wasmi::Trap),
 	/// Wasmi loading/instantiating error
 	Wasmi(wasmi::Error),
