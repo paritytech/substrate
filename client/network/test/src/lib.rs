@@ -85,21 +85,13 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 				.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
 			)
 			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
+		let mut import = BlockImportParams::new(origin, header);
+		import.body = body;
+		import.finalized = self.0;
+		import.justification = justification;
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		Ok((BlockImportParams {
-			origin,
-			header,
-			body,
-			storage_changes: None,
-			finalized: self.0,
-			justification,
-			post_digests: vec![],
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		}, maybe_keys))
+		Ok((import, maybe_keys))
 	}
 }
 
