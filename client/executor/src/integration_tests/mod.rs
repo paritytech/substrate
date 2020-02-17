@@ -53,6 +53,7 @@ fn call_in_wasm<E: Externalities>(
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn returning_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -68,6 +69,7 @@ fn returning_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -90,6 +92,11 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 					&format!("{:?}", e),
 					"Other(\"Wasm execution trapped: call to a missing function env:missing_external\")"
 				),
+				#[cfg(feature = "wasmer")]
+				WasmExecutionMethod::Compiled2 => assert_eq!(
+					&format!("{:?}", e),
+					"Other(\"Wasm execution trapped: call to a missing function env:missing_external\")"
+				),
 			}
 		}
 	}
@@ -97,6 +104,7 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -119,6 +127,11 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 					&format!("{:?}", e),
 					"Other(\"Wasm execution trapped: call to a missing function env:yet_another_missing_external\")"
 				),
+				#[cfg(feature = "wasmer")]
+				WasmExecutionMethod::Compiled2 => assert_eq!(
+					&format!("{:?}", e),
+					"Other(\"Wasm execution trapped: call to a missing function env:yet_another_missing_external\")"
+				),
 			}
 		}
 	}
@@ -126,6 +139,7 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn panicking_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -157,6 +171,7 @@ fn panicking_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn storage_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 
@@ -187,6 +202,7 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	{
@@ -221,6 +237,7 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn blake2_256_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -246,6 +263,7 @@ fn blake2_256_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn blake2_128_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -271,6 +289,7 @@ fn blake2_128_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn sha2_256_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -302,6 +321,7 @@ fn sha2_256_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn twox_256_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -331,6 +351,7 @@ fn twox_256_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn twox_128_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -356,6 +377,7 @@ fn twox_128_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn ed25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -393,6 +415,7 @@ fn ed25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn sr25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -430,6 +453,7 @@ fn sr25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
@@ -446,6 +470,7 @@ fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
 	use sp_core::offchain::OffchainStorage;
 
@@ -466,6 +491,7 @@ fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();
@@ -497,6 +523,7 @@ fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 #[should_panic(expected = "Allocator ran out of space")]
 fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
@@ -515,6 +542,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 	let mut instance = crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
@@ -540,6 +568,7 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 // See https://github.com/paritytech/substrate/issues/2967 for details
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[cfg_attr(feature = "wasmer", test_case(WasmExecutionMethod::Compiled2))]
 fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	// Allocate 32 pages (of 65536 bytes) which gives the runtime 2048KB of heap to operate on
 	// (plus some additional space unused from the initial pages requested by the wasm runtime

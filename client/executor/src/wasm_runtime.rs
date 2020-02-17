@@ -37,6 +37,8 @@ pub enum WasmExecutionMethod {
 	/// Uses the Wasmtime compiled runtime.
 	#[cfg(feature = "wasmtime")]
 	Compiled,
+	#[cfg(feature = "wasmer")]
+	Compiled2,
 }
 
 /// A Wasm runtime object along with its cached runtime version.
@@ -202,6 +204,10 @@ pub fn create_wasm_runtime_with_code(
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled =>
 			sc_executor_wasmtime::create_instance(code, heap_pages, host_functions, allow_missing_func_imports)
+				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
+		#[cfg(feature = "wasmer")]
+		WasmExecutionMethod::Compiled2 =>
+			sc_executor_wasmer::create_instance(code, heap_pages, host_functions, allow_missing_func_imports)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }

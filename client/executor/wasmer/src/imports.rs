@@ -113,7 +113,7 @@ fn resolve_memory_import(import: &ImportEntry, heap_pages: u32) -> Memory {
 unsafe extern "C" fn stub(ctx: *const OpaqueCallContext, raw_args: *const u64) -> u64 {
 	let ctx = ctx as *const CallCtx;
 	let (host_func, state_holder) = match *ctx {
-		CallCtx::Missing => return 1,
+		CallCtx::Missing => return 0,
 		CallCtx::Resolved {
 			ref host_func,
 			ref state_holder,
@@ -150,16 +150,22 @@ unsafe extern "C" fn stub(ctx: *const OpaqueCallContext, raw_args: *const u64) -
 	// TODO: How to Trap?
 	let execution_result = match unwind_result {
 		Ok(execution_result) => execution_result,
-		Err(_err) => return 1,
+		Err(_err) => return 0,
 	};
 
 	match execution_result {
-		Ok(Some(_ret_val)) => {
-			todo!();
-			0
+		Ok(Some(ret_val)) => {
+			let raw_args = raw_args as *mut u64;
+			match ret_val {
+				Value::I32(v) => raw_args.write(v as u32 as u64),
+				Value::I64(v) => raw_args.write(v as u64),
+				Value::F32(v) => raw_args.write(v as u64),
+				Value::F64(v) => raw_args.write(v),
+			}
+			1
 		}
-		Ok(None) => 0,
-		Err(_msg) => 1,
+		Ok(None) => 1,
+		Err(_msg) => 0,
 	}
 }
 
