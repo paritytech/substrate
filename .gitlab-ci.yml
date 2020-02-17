@@ -128,6 +128,7 @@ test-linux-stable:                 &test-linux
   script:
     - rustup +nightly show
     - cargo clean
+    - rm -rf $CARGO_HOME/*
     # - git checkout 7b00a5cb2a80be68bcda7b68ad9b183646b6924b
     # - echo $CARGO_TARGET_DIR
     - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked --no-fail-fast |
