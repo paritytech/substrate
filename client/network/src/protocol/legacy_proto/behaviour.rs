@@ -379,12 +379,14 @@ impl LegacyProto {
 			}
 		};
 
+		let now = Instant::now();
+
 		match mem::replace(occ_entry.get_mut(), PeerState::Poisoned) {
-			PeerState::Banned { ref until } if *until > Instant::now() => {
+			PeerState::Banned { ref until } if *until > now => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", occ_entry.key(), until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
-					timer: futures_timer::Delay::new(until.clone() - Instant::now()),
+					timer: futures_timer::Delay::new(until.clone() - now),
 					timer_deadline: until.clone(),
 				};
 			},
@@ -397,13 +399,13 @@ impl LegacyProto {
 			},
 
 			PeerState::Disabled { open, ref connected_point, banned_until: Some(ref banned) }
-				if *banned > Instant::now() => {
+				if *banned > now => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Has idle connection through \
 					{:?} but node is banned until {:?}", occ_entry.key(), connected_point, banned);
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
 					connected_point: connected_point.clone(),
 					open,
-					timer: futures_timer::Delay::new(banned.clone() - Instant::now()),
+					timer: futures_timer::Delay::new(banned.clone() - now),
 					timer_deadline: banned.clone(),
 				};
 			},
