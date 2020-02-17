@@ -593,30 +593,15 @@ fn propose_and_import_block<Transaction>(
 		h
 	};
 
-	let import_result = block_import.import_block(
-		BlockImportParams {
-			origin: BlockOrigin::Own,
-			header: block.header,
-			justification: None,
-			post_digests: vec![seal],
-			body: Some(block.extrinsics),
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: {
-				let mut intermediates = HashMap::new();
-				intermediates.insert(
-					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
-				);
-				intermediates
-			},
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		},
-		Default::default(),
-	).unwrap();
+	let mut import = BlockImportParams::new(BlockOrigin::Own, block.header);
+	import.post_digests.push(seal);
+	import.body = Some(block.extrinsics);
+	import.intermediates.insert(
+		Cow::from(INTERMEDIATE_KEY),
+		Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+	);
+	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+	let import_result = block_import.import_block(import, Default::default()).unwrap();
 
 	match import_result {
 		ImportResult::Imported(_) => {},
