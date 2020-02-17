@@ -21,7 +21,8 @@
 use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 
 use sp_core::{
-	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::BareCryptoStore,
+	crypto::{IsWrappedBy, KeyKindId, KeyTypeId, Pair as PairT, Protected, Public},
+	traits::BareCryptoStore,
 };
 
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
@@ -276,11 +277,59 @@ impl Store {
 		buf.push(key_type + key.as_str());
 		Some(buf)
 	}
+
+	/// Signs a message with the private key that matches
+	/// the public key passed.
+	fn _sign_with(
+		&self,
+		kind: KeyKindId,
+		id: KeyTypeId,
+		msg: &[u8],
+	) -> std::result::Result<Vec<u8>, String> {
+		match kind {
+			ed25519::ED25519_KIND_ID => {
+				let public_key = self
+					.ed25519_public_keys(id)
+					.pop()
+					.ok_or(String::from("ed25519 key not found"))?;
+
+				let key_pair: ed25519::Pair = self
+					.key_pair_by_type::<ed25519::Pair>(&public_key, id)
+					.map(Into::into)
+					.map_err(|e| e.to_string())?;
+				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
+			}
+			sr25519::SR25519_KIND_ID => {
+				let public_key = self
+					.sr25519_public_keys(id)
+					.pop()
+					.ok_or(String::from("sr25519 key not found"))?;
+				let key_pair: sr25519::Pair = self
+					.key_pair_by_type::<sr25519::Pair>(&public_key, id)
+					.map(Into::into)
+					.map_err(|e| e.to_string())?;
+				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
+			}
+			_ => Err(String::from("Key kind invalid")),
+		}
+	}
 }
 
 impl BareCryptoStore for Store {
+	/// Signs a message with the private key that matches
+	/// the public key passed.
+	fn sign_with(
+		&self,
+		kind: KeyKindId,
+		id: KeyTypeId,
+		msg: &[u8],
+	) -> std::result::Result<Vec<u8>, String> {
+		self._sign_with(kind, id, msg)
+	}
+
 	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
-		self.public_keys_by_type::<sr25519::Public>(key_type).unwrap_or_default()
+		self.public_keys_by_type::<sr25519::Public>(key_type)
+			.unwrap_or_default()
 	}
 
 	fn sr25519_generate_new(
