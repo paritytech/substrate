@@ -190,7 +190,7 @@ where
 		) as ExtendedBalance
 	};
 
-	// clean winners
+	// Clean winners.
 	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<T::AccountId>>();
 
 	// convert into absolute value and to obtain the reduced version.
@@ -206,7 +206,7 @@ where
 		reduce(&mut staked);
 	}
 
-	// convert back to ratio assignment. This takes less space.
+	// Convert back to ratio assignment. This takes less space.
 	let low_accuracy_assignment: Vec<Assignment<T::AccountId, OffchainAccuracy>> = staked
 		.into_iter()
 		.map(|sa| sa.into_assignment(true))
