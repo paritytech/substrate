@@ -38,7 +38,7 @@
 //! should be paid.
 //!
 //! A group of `Tippers` is determined through the config `Trait`. After half of these have declared
-//! some amount that they believe a particular reported reason deserves, then a countfown period is
+//! some amount that they believe a particular reported reason deserves, then a countdown period is
 //! entered where any remaining members can declare their tip amounts also. After the close of the
 //! countdown period, the median of all declared tips is paid to the reported beneficiary, along
 //! with any finders fee, in case of a public (and bonded) original report.
@@ -1052,14 +1052,14 @@ mod tests {
 	}
 
 	#[test]
-	fn reject_non_existant_spend_proposal_fails() {
+	fn reject_non_existent_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 
 	#[test]
-	fn accept_non_existant_spend_proposal_fails() {
+	fn accept_non_existent_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
@@ -1135,9 +1135,9 @@ mod tests {
 	}
 
 	// In case treasury account is not existing then it works fine.
-	// This is usefull for chain that will just update runtime.
+	// This is useful for chain that will just update runtime.
 	#[test]
-	fn inexisting_account_works() {
+	fn inexistent_account_works() {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],

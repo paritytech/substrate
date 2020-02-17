@@ -180,7 +180,7 @@ pub fn extract_type_option(typ: &syn::Type) -> Option<syn::Type> {
 	None
 }
 
-/// Auxialary structure to check if a given `Ident` is contained in an ast.
+/// Auxiliary structure to check if a given `Ident` is contained in an ast.
 struct ContainsIdent<'a> {
 	ident: &'a Ident,
 	result: bool,

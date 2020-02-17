@@ -436,7 +436,7 @@ mod tests {
 	}
 
 	#[test]
-	fn passes_throgh_backend_calls() {
+	fn passes_through_backend_calls() {
 		let trie_backend = test_trie();
 		let proving_backend = test_proving(&trie_backend);
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());

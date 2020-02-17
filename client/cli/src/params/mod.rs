@@ -29,7 +29,7 @@ pub use crate::params::shared_params::*;
 pub use crate::params::node_key_params::*;
 pub use crate::params::network_configuration_params::*;
 
-/// Wrapper type of `String` which holds an arbitary sized unsigned integer formatted as decimal.
+/// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a decimal.
 #[derive(Debug, Clone)]
 pub struct BlockNumber(String);
 

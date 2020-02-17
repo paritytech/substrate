@@ -192,7 +192,7 @@ pub enum DiscoveryOut {
 	/// e.g. obtained through the `identify` protocol.
 	UnroutablePeer(PeerId),
 
-	/// The DHT yeided results for the record request, grouped in (key, value) pairs.
+	/// The DHT yielded results for the record request, grouped in (key, value) pairs.
 	ValueFound(Vec<(record::Key, Vec<u8>)>),
 
 	/// The record requested was not found in the DHT.

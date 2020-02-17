@@ -834,7 +834,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
 
-		/// Anull the founding of the society.
+		/// Annul the founding of the society.
 		///
 		/// The dispatch origin for this call must be Signed, and the signing account must be both
 		/// the `Founder` and the `Head`. This implies that it may only be done when there is one

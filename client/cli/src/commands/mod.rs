@@ -65,7 +65,7 @@ pub enum Subcommand {
 	/// Import blocks from file.
 	ImportBlocks(import_blocks_cmd::ImportBlocksCmd),
 
-	/// Validte a single block.
+	/// Validate a single block.
 	CheckBlock(check_block_cmd::CheckBlockCmd),
 
 	/// Revert chain to the previous state.
