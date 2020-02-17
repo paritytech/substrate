@@ -17,10 +17,11 @@
 //! Sassafras authority selection and slot claiming.
 
 use codec::Encode;
+use merlin::Transcript;
 use sp_core::{blake2_256, U256, crypto::Pair};
 use sp_consensus_sassafras::{
 	SlotNumber, AuthorityPair, SassafrasConfiguration, AuthorityId,
-	SassafrasAuthorityWeight, digests::PreDigest,
+	SassafrasAuthorityWeight, SASSAFRAS_ENGINE_ID, digests::PreDigest,
 };
 use sc_keystore::KeyStorePtr;
 use super::Epoch;
@@ -35,7 +36,7 @@ pub(super) fn claim_slot(
 	config: &SassafrasConfiguration,
 	keystore: &KeyStorePtr,
 ) -> Option<(PreDigest, AuthorityPair)> {
-	None.or_else(|| {
+	claim_primary_slot(slot_number, epoch, keystore).or_else(|| {
 		if config.secondary_slots {
 			claim_secondary_slot(
 				slot_number,
@@ -47,6 +48,14 @@ pub(super) fn claim_slot(
 			None
 		}
 	})
+}
+
+fn claim_primary_slot(
+	slot_number: SlotNumber,
+	epoch: &Epoch,
+	keystore: &KeyStorePtr,
+) -> Option<(PreDigest, AuthorityPair)> {
+	unimplemented!()
 }
 
 /// Claim a secondary slot if it is our turn to propose, returning the
@@ -112,4 +121,32 @@ fn secondary_slot_author(
 				this is a valid index; qed");
 
 	Some(&expected_author.0)
+}
+
+#[allow(deprecated)]
+pub fn make_ticket_transcript(
+	randomness: &[u8],
+	slot_number: u64,
+	epoch: u64,
+) -> Transcript {
+	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
+	transcript.commit_bytes(b"type", b"ticket");
+	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
+	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
+	transcript.commit_bytes(b"chain randomness", randomness);
+	transcript
+}
+
+#[allow(deprecated)]
+pub fn make_post_transcript(
+	randomness: &[u8],
+	slot_number: u64,
+	epoch: u64,
+) -> Transcript {
+	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
+	transcript.commit_bytes(b"type", b"post");
+	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
+	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
+	transcript.commit_bytes(b"chain randomness", randomness);
+	transcript
 }
