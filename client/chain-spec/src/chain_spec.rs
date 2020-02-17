@@ -33,7 +33,7 @@ enum GenesisSource<G>
 {
 	File(PathBuf),
 	Binary(Cow<'static, [u8]>),
-	Factory(Arc<dyn Sync + Send + Fn() -> G + Sync>),
+	Factory(Arc<dyn Sync + Send + Fn() -> G + Sync + Send>),
 }
 
 impl<G> Clone for GenesisSource<G> {
@@ -216,7 +216,7 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Create hardcoded spec.
-	pub fn from_genesis<F: Send + Sync + Fn() -> G + 'static + Sync>(
+	pub fn from_genesis<F: Send + Sync + Fn() -> G + 'static + Sync + Send>(
 		name: &str,
 		id: &str,
 		constructor: F,
