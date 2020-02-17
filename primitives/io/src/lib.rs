@@ -410,8 +410,9 @@ pub trait Crypto {
 		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
 			.read()
-			.ed25519_key_pair(id, &pub_key)
-			.map(|k| k.sign(msg))
+			.sign_with(ed25519::ED25519_KIND_ID, id, msg)
+			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
+			.ok()
 	}
 
 	/// Verify an `ed25519` signature.
@@ -462,8 +463,9 @@ pub trait Crypto {
 		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
 			.read()
-			.sr25519_key_pair(id, &pub_key)
-			.map(|k| k.sign(msg))
+			.sign_with(sr25519::SR25519_KIND_ID, id, msg)
+			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
+			.ok()
 	}
 
 	/// Verify an `sr25519` signature.
