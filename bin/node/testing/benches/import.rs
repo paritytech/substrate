@@ -69,7 +69,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 
 criterion_group!(
 	name = benches;
-	config = Criterion::default().sample_size(10);
+	config = Criterion::default().sample_size(50).warm_up_time(std::time::Duration::from_secs(20));
 	targets = bench_block_import
 );
 criterion_group!(
