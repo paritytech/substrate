@@ -81,7 +81,7 @@ trait Crypto: Sized {
 	{
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
-			
+
 			match output {
 				OutputType::Json => {
 					let json = json!({
@@ -135,7 +135,7 @@ trait Crypto: Sized {
 					);
 				},
 			}
-			
+
 		} else if let Ok((public_key, v)) =
 			<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{

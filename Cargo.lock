@@ -5604,7 +5604,9 @@ dependencies = [
  "env_logger 0.7.1",
  "fdlimit",
  "futures 0.3.4",
+ "hex-literal",
  "lazy_static",
+ "libp2p",
  "log 0.4.8",
  "names",
  "parity-util-mem",
@@ -5626,6 +5628,7 @@ dependencies = [
  "structopt",
  "tempfile",
  "time",
+ "tiny-bip39",
  "tokio 0.2.11",
 ]
 
