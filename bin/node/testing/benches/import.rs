@@ -157,7 +157,7 @@ impl BenchDb {
 		let (client, _backend) = bench_client(
 			self.directory_guard.path(),
 			Profile::Wasm,
-			&self.keyring
+			&self.keyring,
 		);
 
 		let version = client.runtime_version_at(&BlockId::number(0))
