@@ -16,7 +16,10 @@
 
 //! Shareable Substrate traits.
 
-use crate::{crypto::KeyTypeId, ed25519, sr25519};
+use crate::{
+	crypto::{KeyKindId, KeyTypeId},
+	ed25519, sr25519,
+};
 
 use std::{
 	fmt::{Debug, Display},
@@ -74,6 +77,15 @@ pub trait BareCryptoStore: Send + Sync {
 	///
 	/// Returns `true` iff all private keys could be found.
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
+
+	/// Signs a message with the private key that matches
+	/// the public key passed.
+	fn sign_with(
+		&self,
+		kind: KeyKindId,
+		id: KeyTypeId,
+		msg: &[u8],
+	) -> std::result::Result<Vec<u8>, String>;
 }
 
 /// A pointer to the key store.

@@ -54,6 +54,11 @@ use sp_runtime_interface::pass_by::PassByInner;
 #[cfg(feature = "full_crypto")]
 const SIGNING_CTX: &[u8] = b"substrate";
 
+/// A value which is passed along with the public key
+/// to define which cryptographic algorithm that key
+/// belongs to.
+pub const SR25519_KIND_ID: &str = "sr25519";
+
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner)]
@@ -379,6 +384,8 @@ impl Public {
 }
 
 impl TraitPublic for Public {
+	const KEY_KIND_ID: &'static str = SR25519_KIND_ID;
+
 	/// A new instance from the given slice that should be 32 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if

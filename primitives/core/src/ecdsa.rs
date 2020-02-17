@@ -95,6 +95,7 @@ impl Public {
 }
 
 impl TraitPublic for Public {
+	const KEY_KIND_ID: &'static str = "sr25519";
 	/// A new instance from the given slice that should be 33 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if

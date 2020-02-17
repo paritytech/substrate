@@ -42,6 +42,11 @@ use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::ops::Deref;
 
+/// A value which is passed along with the public key
+/// to define which cryptographic algorithm that key
+/// belongs to.
+pub const ED25519_KIND_ID: &str = "ed25519";
+
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
 /// will need it later (such as for HDKD).
@@ -365,6 +370,8 @@ impl Public {
 }
 
 impl TraitPublic for Public {
+	const KEY_KIND_ID: &'static str = ED25519_KIND_ID;
+
 	/// A new instance from the given slice that should be 32 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if

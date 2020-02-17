@@ -38,6 +38,9 @@ use zeroize::Zeroize;
 pub use sp_std::ops::Deref;
 use sp_runtime_interface::pass_by::PassByInner;
 
+/// Shorthand type for declaring the public key kind identifier
+pub type KeyKindId = &'static str;
+
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
@@ -515,7 +518,11 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
+pub trait Public:
+	AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync
+{
+	/// Each implementation of Public should define its Kind identifier
+	const KEY_KIND_ID: &'static str = "";
 	/// A new instance from the given slice.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if

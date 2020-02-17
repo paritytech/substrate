@@ -16,9 +16,12 @@
 
 //! Types that should only be used for testing!
 
+use crate::crypto::{KeyKindId, KeyTypeId};
 #[cfg(feature = "std")]
-use crate::{ed25519, sr25519, crypto::{Public, Pair}};
-use crate::crypto::KeyTypeId;
+use crate::{
+	crypto::{Pair, Public},
+	ed25519, sr25519,
+};
 
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
@@ -130,6 +133,34 @@ impl crate::traits::BareCryptoStore for KeyStore {
 
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys.iter().all(|(k, t)| self.keys.get(&t).and_then(|s| s.get(k)).is_some())
+	}
+
+	fn sign_with(&self, kind: KeyKindId, id: KeyTypeId, msg: &[u8]) -> Result<Vec<u8>, String> {
+		match kind {
+			"ed25519" => {
+				let ed_public_key = self
+					.ed25519_public_keys(id)
+					.pop()
+					.ok_or(String::from("ed25519 key not found"))?;
+				let key_pair: ed25519::Pair = self
+					.ed25519_key_pair(id, &ed_public_key)
+					.map(Into::into)
+					.ok_or(String::from("ed25519 pair not found"))?;
+				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
+			}
+			"sr25519" => {
+				let sr_public_key = self
+					.sr25519_public_keys(id)
+					.pop()
+					.ok_or(String::from("sr25519 key not found"))?;
+				let key_pair: sr25519::Pair = self
+					.sr25519_key_pair(id, &sr_public_key)
+					.map(Into::into)
+					.ok_or(String::from("sr25519 pair not found"))?;
+				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
+			}
+			_ => Err(String::from("Key kind invalid")),
+		}
 	}
 }
 
