@@ -234,9 +234,12 @@ impl SimpleDispatchInfo {
 /// A struct to represent a weight which is a function of the input arguments. The given items have
 /// the following types:
 ///
-/// - `F`: a closure with the same argument list as the dispatched, wrapped in a tuple.
-/// - `DispatchClass`: class of the dispatch.
-/// - `bool`: whether this dispatch pays fee or not.
+/// - `WD`: a raw `Weight` value or a closure that returns a `Weight` with the same
+///   argument list as the dispatched, wrapped in a tuple.
+/// - `CD`: a raw `DispatchClass` value or a closure that returns a `DispatchClass`
+///   with the same argument list as the dispatched, wrapped in a tuple.
+/// - `PF`: a `bool` for whether this dispatch pays fee or not or a closure that
+///   returns a bool with the same argument list as the dispatched, wrapped in a tuple.
 pub struct FunctionOf<WD, CD, PF>(pub WD, pub CD, pub PF);
 
 // `WeighData` as a raw value
