@@ -152,9 +152,11 @@ impl EpochT for Epoch {
 	type NextEpochDescriptor = NextEpochDescriptor;
 
 	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
+		let start_slot = self.validating.start_slot + self.validating.duration;
+
 		Epoch {
 			validating: ValidatingSet {
-				start_slot: self.validating.start_slot + self.validating.duration,
+				start_slot,
 				duration: self.validating.duration,
 				epoch_index: self.publishing.epoch_index,
 				authorities: self.publishing.authorities.clone(),
@@ -162,7 +164,7 @@ impl EpochT for Epoch {
 				proofs: self.publishing.proofs.clone()
 					.into_iter()
 					.enumerate()
-					.map(|(i, p)| (i as u64, p))
+					.map(|(i, p)| (start_slot + i as u64, p))
 					.collect(),
 				pending: self.publishing.pending.clone(),
 			},
@@ -286,7 +288,7 @@ impl Config {
 		let validating_proofs = self.genesis_proofs.clone()
 			.into_iter()
 			.enumerate()
-			.map(|(i, p)| (i as u64, p.try_into().expect("Genesis proofs are invalid")))
+			.map(|(i, p)| (slot_number + i as u64, p.try_into().expect("Genesis proofs are invalid")))
 			.collect::<Vec<(u64, VRFProof)>>();
 
 		Epoch {
@@ -489,6 +491,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Sassafra
 		)?;
 
 		if viable_epoch.as_ref().publishing.pending.is_empty() {
+			trace!(target: "sassafras", "Pending proof set is empty, generating a new one.");
 			viable_epoch.as_mut().publishing.append_to_pending(&self.keystore);
 		}
 
@@ -1148,6 +1151,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, 
 			PreDigest::Primary { commitments, .. } => {
 				let epoch = viable_epoch.as_mut();
 
+				trace!(target: "sassafras", "Importing commitments of length: {}", commitments.len());
 				for proof in commitments {
 					if epoch.publishing.proofs.iter().position(|p| *p == proof).is_none() {
 						epoch.publishing.proofs.push(proof);
@@ -1157,6 +1161,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, 
 			PreDigest::Secondary { commitments, .. } => {
 				let epoch = viable_epoch.as_mut();
 
+				trace!(target: "sassafras", "Importing commitments of length: {}", commitments.len());
 				for proof in commitments {
 					if epoch.publishing.proofs.iter().position(|p| *p == proof).is_none() {
 						epoch.publishing.proofs.push(proof);

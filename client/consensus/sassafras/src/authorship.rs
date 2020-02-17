@@ -99,9 +99,6 @@ fn claim_primary_slot(
 	epoch: &Epoch,
 	keystore: &KeyStorePtr,
 ) -> Option<(PreDigest, AuthorityPair)> {
-	trace!(target: "sassafras", "Claiming a primary slot with slot number: {:?}", slot_number);
-	trace!(target: "sassafras", "Epoch data as of now: {:?}", epoch);
-
 	let ticket_vrf_index = epoch.validating.proofs.iter().position(|(s, _)| *s == slot_number)? as u32;
 	let ticket_vrf_proof = epoch.validating.proofs[ticket_vrf_index as usize].clone().1;
 	let pending_index = epoch.validating.pending.iter()
@@ -125,17 +122,21 @@ fn claim_primary_slot(
 	let mut commitments = Vec::new();
 	for (_, _, _, proof) in &epoch.publishing.pending {
 		if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS &&
-			!epoch.publishing.proofs.iter().position(|p| p == proof).is_some()
+			epoch.publishing.proofs.iter().position(|p| p == proof).is_none()
 		{
 			commitments.push(proof.clone());
 		}
 	}
+	trace!(target: "sassafras", "Appending commitment length: {}", commitments.len());
 
 	let claim = PreDigest::Primary {
 		ticket_vrf_index, ticket_vrf_attempt, ticket_vrf_output,
 		authority_index, slot_number, post_vrf_proof, post_vrf_output,
 		commitments,
 	};
+
+	trace!(target: "sassafras", "Claimed a primary slot with slot number: {:?}", slot_number);
+	trace!(target: "sassafras", "Epoch data as of now: {:?}", epoch);
 
 	Some((claim, pair))
 }
@@ -151,7 +152,6 @@ impl PublishingSet {
 		&mut self,
 		keystore: &KeyStorePtr
 	) {
-		let mut pending = Vec::new();
 		let keystore = keystore.read();
 
 		for (pair, authority_index) in self.authorities.iter()
@@ -178,7 +178,12 @@ impl PublishingSet {
 						check_primary_threshold(inout, threshold)
 					})
 				{
-					pending.push((attempt, VRFOutput(inout.to_output()), VRFProof(proof)));
+					self.pending.push((
+						attempt,
+						authority_index as u32,
+						VRFOutput(inout.to_output()),
+						VRFProof(proof)
+					));
 				}
 			}
 
@@ -221,16 +226,17 @@ fn claim_secondary_slot(
 			let mut commitments = Vec::new();
 			for (_, _, _, proof) in &epoch.publishing.pending {
 				if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS &&
-					!epoch.publishing.proofs.iter().position(|p| p == proof).is_some()
+					epoch.publishing.proofs.iter().position(|p| p == proof).is_none()
 				{
 					commitments.push(proof.clone());
 				}
 			}
+			trace!(target: "sassafras", "Appending commitment length: {}", commitments.len());
 
 			let pre_digest = PreDigest::Secondary {
 				slot_number,
 				authority_index: authority_index as u32,
-				commitments: Vec::new(),
+				commitments,
 			};
 
 			return Some((pre_digest, pair));
