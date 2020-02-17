@@ -135,7 +135,6 @@ impl Clone for BenchDb {
 }
 
 impl BenchDb {
-
 	fn new(keyring_length: usize) -> Self {
 		let keyring = BenchKeyring::new(keyring_length);
 
@@ -155,7 +154,7 @@ impl BenchDb {
 		let (client, _backend) = bench_client(
 			self.directory_guard.path(),
 			Profile::Wasm,
-			&self.keyring
+			&self.keyring,
 		);
 
 		let version = client.runtime_version_at(&BlockId::number(0))
@@ -433,7 +432,7 @@ fn bench_block_import(c: &mut Criterion) {
 	log::trace!(
 		target: "bench-logistics",
 		"Seed database directory: {}",
-		bench_db.path().to_string_lossy(),
+		bench_db.path().display(),
 	);
 
 	c.bench_function_over_inputs("import block",
