@@ -864,8 +864,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			blocks_range
 		);
 
-		// TODO [andre]: move this logic to the import queue so that
-		// justifications are imported asynchronously (#1482)
 		if request.fields == message::BlockAttributes::JUSTIFICATION {
 			match self.sync.on_block_justification(peer, response) {
 				Ok(sync::OnBlockJustification::Nothing) => CustomMessageOutcome::None,
