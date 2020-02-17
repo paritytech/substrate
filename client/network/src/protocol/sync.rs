@@ -1362,3 +1362,93 @@ fn fork_sync_request<B: BlockT>(
 	}
 	None
 }
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use super::message::FromBlock;
+	use substrate_test_runtime_client::{
+		runtime::Block,
+		DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
+	};
+	use sp_blockchain::HeaderBackend;
+	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
+
+	#[test]
+	fn processes_empty_response_on_justification_request_for_unknown_block() {
+		// if we ask for a justification for a given block to a peer that doesn't know that block
+		// (different from not having a justification), the peer will reply with an empty response.
+		// internally we should process the response as the justification not being available.
+
+		let client = Arc::new(TestClientBuilder::new().build());
+		let info = client.info();
+		let block_announce_validator = Box::new(DefaultBlockAnnounceValidator::new(client.clone()));
+		let peer_id = PeerId::random();
+
+		let mut sync = ChainSync::new(
+			Roles::AUTHORITY,
+			client.clone(),
+			&info,
+			None,
+			block_announce_validator,
+			1,
+		);
+
+		let (a1_hash, a1_number) = {
+			let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+			(a1.hash(), *a1.header.number())
+		};
+
+		// add a new peer with the same best block
+		sync.new_peer(peer_id.clone(), a1_hash, a1_number).unwrap();
+
+		// and request a justification for the block
+		sync.request_justification(&a1_hash, a1_number);
+
+		// the justification request should be scheduled to that peer
+		assert!(
+			sync.justification_requests().any(|(who, request)| {
+				who == peer_id && request.from == FromBlock::Hash(a1_hash)
+			})
+		);
+
+		// there are no extra pending requests
+		assert_eq!(
+			sync.extra_justifications.pending_requests().count(),
+			0,
+		);
+
+		// there's one in-flight extra request to the expected peer
+		assert!(
+			sync.extra_justifications.active_requests().any(|(who, (hash, number))| {
+				*who == peer_id && *hash == a1_hash && *number == a1_number
+			})
+		);
+
+		// if the peer replies with an empty response (i.e. it doesn't know the block),
+		// the active request should be cleared.
+		assert_eq!(
+			sync.on_block_justification(
+				peer_id.clone(),
+				BlockResponse::<Block> {
+					id: 0,
+					blocks: vec![],
+				}
+			),
+			Ok(OnBlockJustification::Nothing),
+		);
+
+		// there should be no in-flight requests
+		assert_eq!(
+			sync.extra_justifications.active_requests().count(),
+			0,
+		);
+
+		// and the request should now be pending again, waiting for reschedule
+		assert!(
+			sync.extra_justifications.pending_requests().any(|(hash, number)| {
+				*hash == a1_hash && *number == a1_number
+			})
+		);
+	}
+}

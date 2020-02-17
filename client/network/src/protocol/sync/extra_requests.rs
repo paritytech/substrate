@@ -228,6 +228,18 @@ impl<B: BlockT> ExtraRequests<B> {
 
 		true
 	}
+
+	/// Returns an iterator over all active (in-flight) requests and associated peer id.
+	#[cfg(test)]
+	pub(crate) fn active_requests(&self) -> impl Iterator<Item = (&PeerId, &ExtraRequest<B>)> {
+		self.active_requests.iter()
+	}
+
+	/// Returns an iterator over all scheduled pending requests.
+	#[cfg(test)]
+	pub(crate) fn pending_requests(&self) -> impl Iterator<Item = &ExtraRequest<B>> {
+		self.pending_requests.iter()
+	}
 }
 
 /// Matches peers with pending extra requests.
