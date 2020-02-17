@@ -257,7 +257,7 @@ impl BenchKeyring {
 	fn new(length: usize) -> Self {
 		let mut accounts = BTreeMap::new();
 
-		for n in 0..num {
+		for n in 0..length {
 			let seed = format!("//endowed-user/{}", n);
 			let pair = sr25519::Pair::from_string(&seed, None).expect("failed to generate pair");
 			let account_id = AccountPublic::from(pair.public()).into_account();
