@@ -81,7 +81,7 @@ pub use light_client_handler::LightClientHandler;
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
-/// Interval at which we propagate exstrinsics;
+/// Interval at which we propagate extrinsics;
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 
 /// Maximim number of known block hashes to keep for a peer.
@@ -97,7 +97,7 @@ pub(crate) const MIN_VERSION: u32 = 3;
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 /// When light node connects to the full node and the full node is behind light node
-/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it unuseful
+/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it not useful
 /// and disconnect to free connection slot.
 const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
@@ -183,7 +183,7 @@ struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
 	block_request: Option<(Instant, message::BlockRequest<B>)>,
-	/// Requests we are no longer insterested in.
+	/// Requests we are no longer interested in.
 	obsolete_requests: HashMap<message::RequestId, Instant>,
 	/// Holds a set of transactions known to this peer.
 	known_extrinsics: LruHashSet<H>,

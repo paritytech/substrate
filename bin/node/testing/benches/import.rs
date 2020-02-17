@@ -174,7 +174,7 @@ impl BenchDb {
 
 		let mut inherent_data = InherentData::new();
 		inherent_data.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
-			.expect("Put timestamb failed");
+			.expect("Put timestamp failed");
 		inherent_data.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &0)
 			.expect("Put finality tracker failed");
 

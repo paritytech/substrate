@@ -105,7 +105,7 @@ pub trait Trait: frame_system::Trait {
 /// composite was created to be uniquely identified.
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
 pub struct Timepoint<BlockNumber> {
-	/// The hieght of the chain at the point in time.
+	/// The height of the chain at the point in time.
 	height: BlockNumber,
 	/// The index of the extrinsic at the point in time.
 	index: u32,
@@ -210,7 +210,7 @@ impl<Call: GetDispatchInfo> PaysFee<(&u16, &Box<Call>)> for Passthrough<Call> {
 	}
 }
 
-/// Sumation pass-through for the weight function of the batch call.
+/// Summation pass-through for the weight function of the batch call.
 ///
 /// This just adds all of the weights together of all of the calls.
 struct BatchPassthrough<Call>(sp_std::marker::PhantomData<Call>);

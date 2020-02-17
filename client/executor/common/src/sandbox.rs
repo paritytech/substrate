@@ -498,7 +498,7 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 ///
 /// This is generic over a supervisor function reference type.
 pub struct Store<FR> {
-	// Memories and instances are `Some` untill torndown.
+	// Memories and instances are `Some` until torn down.
 	instances: Vec<Option<Rc<SandboxInstance<FR>>>>,
 	memories: Vec<Option<MemoryRef>>,
 }
