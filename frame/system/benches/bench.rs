@@ -18,7 +18,7 @@ use criterion::{Criterion, criterion_group, criterion_main, black_box};
 use frame_system as system;
 use frame_support::{decl_module, decl_event, impl_outer_origin, impl_outer_event, weights::Weight};
 use sp_core::H256;
-use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sp_runtime::{Perbill, PerThing, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 mod module {
 	use super::*;
@@ -46,6 +46,7 @@ impl_outer_origin!{
 
 impl_outer_event! {
 	pub enum Event for Runtime {
+		system<T>,
 		module,
 	}
 }
@@ -75,6 +76,9 @@ impl system::Trait for Runtime {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnReapAccount = ();
 }
 
 impl module::Trait for Runtime {

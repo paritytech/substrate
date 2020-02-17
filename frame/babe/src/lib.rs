@@ -23,10 +23,10 @@
 pub use pallet_timestamp;
 
 use sp_std::{result, prelude::*};
-use frame_support::{decl_storage, decl_module, traits::FindAuthor, traits::Get};
+use frame_support::{decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT}};
 use sp_timestamp::OnTimestampSet;
-use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
-use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
+use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill, PerThing};
+use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash};
 use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
@@ -191,9 +191,13 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> RandomnessBeacon for Module<T> {
-	fn random() -> [u8; VRF_OUTPUT_LENGTH] {
-		Self::randomness()
+impl<T: Trait> RandomnessT<<T as frame_system::Trait>::Hash> for Module<T> {
+	fn random(subject: &[u8]) -> T::Hash {
+		let mut subject = subject.to_vec();
+		subject.reserve(VRF_OUTPUT_LENGTH);
+		subject.extend_from_slice(&Self::randomness()[..]);
+
+		<T as frame_system::Trait>::Hashing::hash(&subject[..])
 	}
 }
 

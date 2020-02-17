@@ -24,10 +24,119 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	RuntimeDebug,
 	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, TrailingZeroInput},
+	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput},
 };
 
 use crate::dispatch::Parameter;
+use crate::storage::StorageMap;
+
+/// An abstraction of a value stored within storage, but possibly as part of a larger composite
+/// item.
+pub trait StoredMap<K, T> {
+	/// Get the item, or its default if it doesn't yet exist; we make no distinction between the
+	/// two.
+	fn get(k: &K) -> T;
+	/// Get whether the item takes up any storage. If this is `false`, then `get` will certainly
+	/// return the `T::default()`. If `true`, then there is no implication for `get` (i.e. it
+	/// may return any value, including the default).
+	///
+	/// NOTE: This may still be `true`, even after `remove` is called. This is the case where
+	/// a single storage entry is shared between multiple `StoredMap` items single, without
+	/// additional logic to enforce it, deletion of any one them doesn't automatically imply
+	/// deletion of them all.
+	fn is_explicit(k: &K) -> bool;
+	/// Mutate the item.
+	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R;
+	/// Mutate the item, removing or resetting to default value if it has been mutated to `None`.
+	fn mutate_exists<R>(k: &K, f: impl FnOnce(&mut Option<T>) -> R) -> R;
+	/// Maybe mutate the item only if an `Ok` value is returned from `f`. Do nothing if an `Err` is
+	/// returned. It is removed or reset to default value if it has been mutated to `None`
+	fn try_mutate_exists<R, E>(k: &K, f: impl FnOnce(&mut Option<T>) -> Result<R, E>) -> Result<R, E>;
+	/// Set the item to something new.
+	fn insert(k: &K, t: T) { Self::mutate(k, |i| *i = t); }
+	/// Remove the item or otherwise replace it with its default value; we don't care which.
+	fn remove(k: &K);
+}
+
+/// A simple, generic one-parameter event notifier/handler.
+pub trait Happened<T> {
+	/// The thing happened.
+	fn happened(t: &T);
+}
+
+/// A shim for placing around a storage item in order to use it as a `StoredValue`. Ideally this
+/// wouldn't be needed as `StorageValue`s should blanket implement `StoredValue`s, however this
+/// would break the ability to have custom impls of `StoredValue`. The other workaround is to
+/// implement it directly in the macro.
+///
+/// This form has the advantage that two additional types are provides, `Created` and `Removed`,
+/// which are both generic events that can be tied to handlers to do something in the case of being
+/// about to create an account where one didn't previously exist (at all; not just where it used to
+/// be the default value), or where the account is being removed or reset back to the default value
+/// where previously it did exist (though may have been in a default state). This works well with
+/// system module's `CallOnCreatedAccount` and `CallKillAccount`.
+pub struct StorageMapShim<
+	S,
+	Created,
+	Removed,
+	K,
+	T
+>(sp_std::marker::PhantomData<(S, Created, Removed, K, T)>);
+impl<
+	S: StorageMap<K, T, Query=T>,
+	Created: Happened<K>,
+	Removed: Happened<K>,
+	K: FullCodec,
+	T: FullCodec
+> StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
+	fn get(k: &K) -> T { S::get(k) }
+	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
+	fn insert(k: &K, t: T) {
+		S::insert(k, t);
+		if !S::contains_key(&k) {
+			Created::happened(k);
+		}
+	}
+	fn remove(k: &K) {
+		if S::contains_key(&k) {
+			Removed::happened(&k);
+		}
+		S::remove(k);
+	}
+	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R {
+		let r = S::mutate(k, f);
+		if !S::contains_key(&k) {
+			Created::happened(k);
+		}
+		r
+	}
+	fn mutate_exists<R>(k: &K, f: impl FnOnce(&mut Option<T>) -> R) -> R {
+		let (existed, exists, r) = S::mutate_exists(k, |maybe_value| {
+			let existed = maybe_value.is_some();
+			let r = f(maybe_value);
+			(existed, maybe_value.is_some(), r)
+		});
+		if !existed && exists {
+			Created::happened(k);
+		} else if existed && !exists {
+			Removed::happened(k);
+		}
+		r
+	}
+	fn try_mutate_exists<R, E>(k: &K, f: impl FnOnce(&mut Option<T>) -> Result<R, E>) -> Result<R, E> {
+		S::try_mutate_exists(k, |maybe_value| {
+			let existed = maybe_value.is_some();
+			f(maybe_value).map(|v| (existed, maybe_value.is_some(), v))
+		}).map(|(existed, exists, v)| {
+			if !existed && exists {
+				Created::happened(k);
+			} else if existed && !exists {
+				Removed::happened(k);
+			}
+			v
+		})
+	}
+}
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -65,25 +174,30 @@ pub trait Contains<T: Ord> {
 	fn count() -> usize { Self::sorted_members().len() }
 }
 
+/// Determiner to say whether a given account is unused.
+pub trait IsDeadAccount<AccountId> {
+	/// Is the given account dead?
+	fn is_dead_account(who: &AccountId) -> bool;
+}
+
+impl<AccountId> IsDeadAccount<AccountId> for () {
+	fn is_dead_account(_who: &AccountId) -> bool {
+		true
+	}
+}
+
+/// Handler for when a new account has been created.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+pub trait OnNewAccount<AccountId> {
+	/// A new account `who` has been registered.
+	fn on_new_account(who: &AccountId);
+}
+
 /// The account with the given id was reaped.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnReapAccount<AccountId> {
 	/// The account with the given id was reaped.
 	fn on_reap_account(who: &AccountId);
-}
-
-/// Outcome of a balance update.
-pub enum UpdateBalanceOutcome {
-	/// Account balance was simply updated.
-	Updated,
-	/// The update led to killing the account.
-	AccountKilled,
-	/// Free balance became zero as a result of this update.
-	FreeBalanceZero,
-	/// Reserved balance became zero as a result of this update.
-	ReservedBalanceZero,
-	/// The account started and ended non-existent.
-	StillDead,
 }
 
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained
@@ -267,7 +381,7 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 impl<
 	P: Imbalance<B, Opposite=N>,
 	N: Imbalance<B, Opposite=P>,
-	B: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
+	B: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
 > SignedImbalance<B, P> {
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
@@ -330,7 +444,7 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+	type Balance: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
@@ -494,10 +608,15 @@ pub trait Currency<AccountId> {
 	fn make_free_balance_be(
 		who: &AccountId,
 		balance: Self::Balance,
-	) -> (
-		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
-		UpdateBalanceOutcome,
-	);
+	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance>;
+}
+
+/// Status of funds.
+pub enum BalanceStatus {
+	/// Funds are free, as corresponding to `free` item in Balances.
+	Free,
+	/// Funds are reserved, as corresponding to `reserved` item in Balances.
+	Reserved,
 }
 
 /// A currency where funds can be reserved from the user.
@@ -528,7 +647,6 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 	fn reserved_balance(who: &AccountId) -> Self::Balance;
 
-
 	/// Moves `value` from balance to reserved balance.
 	///
 	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
@@ -547,16 +665,18 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	/// invoke `on_reserved_too_low` and could reap the account.
 	fn unreserve(who: &AccountId, value: Self::Balance) -> Self::Balance;
 
-	/// Moves up to `value` from reserved balance of account `slashed` to free balance of account
+	/// Moves up to `value` from reserved balance of account `slashed` to balance of account
 	/// `beneficiary`. `beneficiary` must exist for this to succeed. If it does not, `Err` will be
-	/// returned.
+	/// returned. Funds will be placed in either the `free` balance or the `reserved` balance,
+	/// depending on the `status`.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then `Ok(non_zero)` will be returned.
 	fn repatriate_reserved(
 		slashed: &AccountId,
 		beneficiary: &AccountId,
-		value: Self::Balance
+		value: Self::Balance,
+		status: BalanceStatus,
 	) -> result::Result<Self::Balance, DispatchError>;
 }
 
@@ -620,6 +740,10 @@ pub trait VestingSchedule<AccountId> {
 	///
 	/// If there already exists a vesting schedule for the given account, an `Err` is returned
 	/// and nothing is updated.
+	///
+	/// Is a no-op if the amount to be vested is zero.
+	///
+	/// NOTE: This doesn't alter the free balance of the account.
 	fn add_vesting_schedule(
 		who: &AccountId,
 		locked: <Self::Currency as Currency<AccountId>>::Balance,
@@ -628,6 +752,8 @@ pub trait VestingSchedule<AccountId> {
 	) -> DispatchResult;
 
 	/// Remove a vesting schedule for a given account.
+	///
+	/// NOTE: This doesn't alter the free balance of the account.
 	fn remove_vesting_schedule(who: &AccountId);
 }
 
@@ -653,7 +779,7 @@ bitmask! {
 }
 
 pub trait Time {
-	type Moment: SimpleArithmetic + Parameter + Default + Copy;
+	type Moment: AtLeast32Bit + Parameter + Default + Copy;
 
 	fn now() -> Self::Moment;
 }
@@ -761,7 +887,10 @@ pub trait Randomness<Output> {
 	/// Get a "random" value
 	///
 	/// Being a deterministic blockchain, real randomness is difficult to come by. This gives you
-	/// something that approximates it. `subject` is a context identifier and allows you to get a
+	/// something that approximates it. At best, this will be randomness which was
+	/// hard to predict a long time ago, but that has become easy to predict recently.
+	///
+	/// `subject` is a context identifier and allows you to get a
 	/// different result to other callers of this function; use it like
 	/// `random(&b"my context"[..])`.
 	fn random(subject: &[u8]) -> Output;
@@ -813,12 +942,18 @@ pub struct CallMetadata {
 
 /// Gets the function name of the Call.
 pub trait GetCallName {
+	/// Return all function names.
+	fn get_call_names() -> &'static [&'static str];
 	/// Return the function name of the Call.
 	fn get_call_name(&self) -> &'static str;
 }
 
 /// Gets the metadata for the Call - function name and pallet name.
 pub trait GetCallMetadata {
+	/// Return all module names.
+	fn get_module_names() -> &'static [&'static str];
+	/// Return all function names for the given `module`.
+	fn get_call_names(module: &str) -> &'static [&'static str];
 	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
 	fn get_call_metadata(&self) -> CallMetadata;
 }

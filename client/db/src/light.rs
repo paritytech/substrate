@@ -102,7 +102,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
 			header_metadata_cache: HeaderMetadataCache::default(),
 			#[cfg(not(target_os = "unknown"))]
-			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1), kvdb::IoStats::empty()),
+			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 		})
 	}
 
@@ -592,6 +592,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				// Light client does not track those
 				state_reads: 0,
 				state_reads_cache: 0,
+				state_writes: 0,
 			}
 		})
 	}

@@ -129,10 +129,12 @@ pub mod native {
 #[macro_export]
 macro_rules! runtime_print {
 	($($arg:tt)+) => {
-		use core::fmt::Write;
-		let mut w = $crate::debug::Writer::default();
-		let _ = core::write!(&mut w, $($arg)+);
-		w.print();
+		{
+			use core::fmt::Write;
+			let mut w = $crate::debug::Writer::default();
+			let _ = core::write!(&mut w, $($arg)+);
+			w.print();
+		}
 	}
 }
 

@@ -164,7 +164,7 @@ use frame_support::{
 		GetDispatchInfo, PaysFee, DispatchClass, ClassifyDispatch, Weight, WeighData,
 		SimpleDispatchInfo,
 	},
-	traits::{Currency, ReservableCurrency, Get, OnReapAccount},
+	traits::{Currency, ReservableCurrency, Get, OnReapAccount, BalanceStatus},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -401,7 +401,7 @@ decl_module! {
 		) {
 			let who = ensure_signed(origin)?;
 			// Check account is not already set up for recovery
-			ensure!(!<Recoverable<T>>::exists(&who), Error::<T>::AlreadyRecoverable);
+			ensure!(!<Recoverable<T>>::contains_key(&who), Error::<T>::AlreadyRecoverable);
 			// Check user input is valid
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			ensure!(!friends.is_empty(), Error::<T>::NotEnoughFriends);
@@ -456,9 +456,9 @@ decl_module! {
 		fn initiate_recovery(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Check that the account is recoverable
-			ensure!(<Recoverable<T>>::exists(&account), Error::<T>::NotRecoverable);
+			ensure!(<Recoverable<T>>::contains_key(&account), Error::<T>::NotRecoverable);
 			// Check that the recovery process has not already been started
-			ensure!(!<ActiveRecoveries<T>>::exists(&account, &who), Error::<T>::AlreadyStarted);
+			ensure!(!<ActiveRecoveries<T>>::contains_key(&account, &who), Error::<T>::AlreadyStarted);
 			// Take recovery deposit
 			let recovery_deposit = T::RecoveryDeposit::get();
 			T::Currency::reserve(&who, recovery_deposit)?;
@@ -587,7 +587,7 @@ decl_module! {
 			let active_recovery = <ActiveRecoveries<T>>::take(&who, &rescuer).ok_or(Error::<T>::NotStarted)?;
 			// Move the reserved funds from the rescuer to the rescued account.
 			// Acts like a slashing mechanism for those who try to maliciously recover accounts.
-			let _ = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit);
+			let _ = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit, BalanceStatus::Free);
 			Self::deposit_event(RawEvent::RecoveryClosed(who, rescuer));
 		}
 

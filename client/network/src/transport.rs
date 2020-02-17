@@ -17,7 +17,7 @@
 use futures::prelude::*;
 use libp2p::{
 	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
-	mplex, identity, yamux, bandwidth, wasm_ext
+	mplex, identity, bandwidth, wasm_ext
 };
 #[cfg(not(target_os = "unknown"))]
 use libp2p::{tcp, dns, websocket, noise};
@@ -36,7 +36,8 @@ pub use self::bandwidth::BandwidthSinks;
 pub fn build_transport(
 	keypair: identity::Keypair,
 	memory_only: bool,
-	wasm_external_transport: Option<wasm_ext::ExtTransport>
+	wasm_external_transport: Option<wasm_ext::ExtTransport>,
+	use_yamux_flow_control: bool
 ) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
 	// Build configuration objects for encryption mechanisms.
 	#[cfg(not(target_os = "unknown"))]
@@ -55,7 +56,18 @@ pub fn build_transport(
 	let mut mplex_config = mplex::MplexConfig::new();
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
-	let yamux_config = yamux::Config::default();
+
+	let yamux_config = {
+		let mut c = yamux::Config::default();
+		// Only set SYN flag on first data frame sent to the remote.
+		c.set_lazy_open(true);
+		if use_yamux_flow_control {
+			// Enable proper flow-control: window updates are only sent when
+			// buffered data has been consumed.
+			c.set_window_update_mode(yamux::WindowUpdateMode::OnRead);
+		}
+		libp2p::yamux::Config::new(c)
+	};
 
 	// Build the base layer of the transport.
 	let transport = if let Some(t) = wasm_external_transport {
@@ -118,11 +130,18 @@ pub fn build_transport(
 
 			core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
 				.map_ok(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
-		})
+		});
 
-		.timeout(Duration::from_secs(20))
-		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-		.boxed();
+	let transport = if cfg!(not(target_os = "unknown")) {
+		transport
+			.timeout(Duration::from_secs(20))
+			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+			.boxed()
+	} else {
+		transport
+			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+			.boxed()
+	};
 
 	(transport, sinks)
 }

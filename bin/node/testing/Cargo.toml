@@ -9,6 +9,8 @@ license = "GPL-3.0"
 [dependencies]
 pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
 sc-client = { version = "0.8", path = "../../../client/" }
+sc-client-db = { version = "0.8", path = "../../../client/db/", features = ["kvdb-rocksdb"] }
+sc-client-api = { version = "2.0", path = "../../../client/api/" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
 pallet-grandpa = { version = "2.0.0", path = "../../../frame/grandpa" }
@@ -24,10 +26,30 @@ pallet-session = { version = "2.0.0", path = "../../../frame/session" }
 pallet-society = { version = "2.0.0", path = "../../../frame/society" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 pallet-staking = { version = "2.0.0", path = "../../../frame/staking" }
-sc-executor = { version = "0.8", path = "../../../client/executor" }
+sc-executor = { version = "0.8", path = "../../../client/executor", features = ["wasmtime"] }
+sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
 frame-system = { version = "2.0.0", path = "../../../frame/system" }
 substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
 pallet-timestamp = { version = "2.0.0", path = "../../../frame/timestamp" }
 pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
 pallet-treasury = { version = "2.0.0", path = "../../../frame/treasury" }
 wabt = "0.9.2"
+sp-api = { version = "2.0.0", path = "../../../primitives/api" }
+sp-finality-tracker = { version = "2.0.0", default-features = false, path = "../../../primitives/finality-tracker" }
+sp-timestamp = { version = "2.0.0", default-features = false, path = "../../../primitives/timestamp" }
+sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
+sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
+sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
+log = "0.4.8"
+
+[dev-dependencies]
+criterion = "0.3.0"
+tempdir = "0.3"
+fs_extra = "1"
+hex-literal = "0.2.1"
+sc-cli = { version = "0.8.0", path = "../../../client/cli" }
+sc-service = { version = "0.8.0", path = "../../../client/service", features = ["rocksdb"] }
+
+[[bench]]
+name = "import"
+harness = false

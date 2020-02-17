@@ -29,13 +29,14 @@ use sp_std::borrow::Cow;
 use sp_std::vec::Vec;
 
 mod app {
-	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
+	use sp_application_crypto::{app_crypto, key_types::GRANDPA, ed25519};
 	app_crypto!(ed25519, GRANDPA);
 }
 
-/// The grandpa crypto scheme defined via the keypair type.
-#[cfg(feature = "std")]
-pub type AuthorityPair = app::Pair;
+sp_application_crypto::with_pair! {
+	/// The grandpa crypto scheme defined via the keypair type.
+	pub type AuthorityPair = app::Pair;
+}
 
 /// Identity of a Grandpa authority.
 pub type AuthorityId = app::Public;

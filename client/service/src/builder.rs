@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID};
+use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
 use crate::config::{Configuration, DatabaseConfig, KeystoreConfig};
@@ -46,11 +46,12 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	borrow::Cow,
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, time::SystemTime, pin::Pin
+	marker::PhantomData, sync::Arc, pin::Pin
 };
+use wasm_timer::SystemTime;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::MaintainedTransactionPool;
+use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
@@ -673,6 +674,8 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 pub trait ServiceBuilderCommand {
 	/// Block type this API operates on.
 	type Block: BlockT;
+	/// Native execution dispatch required by some commands.
+	type NativeDispatch: NativeExecutionDispatch + 'static;
 	/// Starts the process of importing blocks.
 	fn import_blocks(
 		self,
@@ -736,7 +739,7 @@ ServiceBuilder<
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TNetP: NetworkSpecialization<TBl>,
-	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
+	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + MallocSizeOfWasm + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata> + Clone,
 {
 
@@ -879,31 +882,49 @@ ServiceBuilder<
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 			let is_validator = config.roles.is_authority();
 
-			let events = client.import_notification_stream()
-				.for_each(move |notification| {
-					let txpool = txpool.upgrade();
+			let (import_stream, finality_stream) = (
+				client.import_notification_stream().map(|n| ChainEvent::NewBlock {
+					id: BlockId::Hash(n.hash),
+					header: n.header,
+					retracted: n.retracted,
+					is_new_best: n.is_new_best,
+				}),
+				client.finality_notification_stream().map(|n| ChainEvent::Finalized {
+					hash: n.hash
+				})
+			);
+			let events = futures::stream::select(import_stream, finality_stream)
+				.for_each(move |event| {
+					// offchain worker is only interested in block import events
+					if let ChainEvent::NewBlock { ref header, is_new_best, .. } = event {
+						let offchain = offchain.as_ref().and_then(|o| o.upgrade());
+						match offchain {
+							Some(offchain) if is_new_best => {
+								let future = offchain.on_block_imported(
+									&header,
+									network_state_info.clone(),
+									is_validator,
+								);
+								let _ = to_spawn_tx_.unbounded_send((
+									Box::pin(future),
+									From::from("offchain-on-block"),
+								));
+							},
+							Some(_) => log::debug!(
+									target: "sc_offchain",
+									"Skipping offchain workers for non-canon block: {:?}",
+									header,
+								),
+							_ => {},
+						}
+					};
 
+					let txpool = txpool.upgrade();
 					if let Some(txpool) = txpool.as_ref() {
-						let future = txpool.maintain(
-							&BlockId::hash(notification.hash),
-							&notification.retracted,
-						);
+						let future = txpool.maintain(event);
 						let _ = to_spawn_tx_.unbounded_send((
 							Box::pin(future),
 							From::from("txpool-maintain")
-						));
-					}
-
-					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
-					if let Some(offchain) = offchain {
-						let future = offchain.on_block_imported(
-							&notification.header,
-							network_state_info.clone(),
-							is_validator
-						);
-						let _ = to_spawn_tx_.unbounded_send((
-							Box::pin(future),
-							From::from("offchain-on-block")
 						));
 					}
 
@@ -982,6 +1003,10 @@ ServiceBuilder<
 				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
 				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
+			#[cfg(not(target_os = "unknown"))]
+			let memory_transaction_pool = parity_util_mem::malloc_size(&*transaction_pool_);
+			#[cfg(target_os = "unknown")]
+			let memory_transaction_pool = 0;
 			let _ = record_metrics!(
 				"peers" => num_peers,
 				"height" => best_number,
@@ -995,7 +1020,7 @@ ServiceBuilder<
 				"used_db_cache_size" => info.usage.as_ref().map(|usage| usage.memory.database_cache).unwrap_or(0),
 				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
 				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
-				"memory_transaction_pool" => parity_util_mem::malloc_size(&*transaction_pool_),
+				"memory_transaction_pool" => memory_transaction_pool,
 			);
 
 			ready(())

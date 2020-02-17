@@ -150,12 +150,11 @@ fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 /// listening for and validating GRANDPA commits instead of following the full
 /// protocol. Provide configuration and a link to a block import worker that has
 /// already been instantiated with `block_import`.
-pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
+pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
 	on_exit: impl futures::Future<Output=()> + Clone + Send + Unpin + 'static,
-	executor: Sp,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -163,7 +162,6 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
-	Sp: futures::task::Spawn + 'static,
 	Client<B, E, Block, RA>: AuxStore,
 {
 	let LinkHalf {
@@ -177,7 +175,6 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
-		&executor,
 	);
 
 	let observer_work = ObserverWork::new(
@@ -392,10 +389,8 @@ mod tests {
 	/// network.
 	#[test]
 	fn observer_work_polls_underlying_network_bridge() {
-		let thread_pool = ThreadPool::new().unwrap();
-
 		// Create a test network.
-		let (tester_fut, _network) = make_test_network(&thread_pool);
+		let (tester_fut, _network) = make_test_network();
 		let mut tester = executor::block_on(tester_fut);
 
 		// Create an observer.

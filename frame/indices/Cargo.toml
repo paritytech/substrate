@@ -16,6 +16,9 @@ sp-core = { version = "2.0.0", default-features = false, path = "../../primitive
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 
+[dev-dependencies]
+pallet-balances = { version = "2.0.0", path = "../balances" }
+
 [features]
 default = ["std"]
 std = [

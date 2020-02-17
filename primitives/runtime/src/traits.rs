@@ -22,15 +22,18 @@ use sp_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
+use std::str::FromStr;
+#[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
+use crate::BenchmarkParameter;
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
 use crate::generic::{Digest, DigestItem};
 pub use sp_arithmetic::traits::{
-	SimpleArithmetic, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
+	AtLeast32Bit, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
 	CheckedShl, CheckedShr, IntegerSquareRoot
 };
@@ -462,6 +465,9 @@ sp_core::impl_maybe_marker!(
 	/// A type that implements Display when in std environment.
 	trait MaybeDisplay: Display;
 
+	/// A type that implements FromStr when in std environment.
+	trait MaybeFromStr: FromStr;
+
 	/// A type that implements Hash when in std environment.
 	trait MaybeHash: sp_std::hash::Hash;
 
@@ -474,22 +480,6 @@ sp_core::impl_maybe_marker!(
 	/// A type that implements MallocSizeOf.
 	trait MaybeMallocSizeOf: parity_util_mem::MallocSizeOf;
 );
-
-/// A type that provides a randomness beacon.
-pub trait RandomnessBeacon {
-	/// Returns 32 bytes of random data. The output will change eventually, but
-	/// is not guaranteed to be different between any two calls.
-	///
-	/// # Security
-	///
-	/// This MUST NOT be used for gambling, as it can be influenced by a
-	/// malicious validator in the short term. It MAY be used in many
-	/// cryptographic protocols, however, so long as one remembers that this
-	/// (like everything else on-chain) is public. For example, it can be
-	/// used where a number is needed that cannot have been chosen by an
-	/// adversary, for purposes such as public-coin zero-knowledge proofs.
-	fn random() -> [u8; 32];
-}
 
 /// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static {}
@@ -512,7 +502,7 @@ pub trait Header:
 {
 	/// Header number.
 	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr
+		+ Copy + MaybeDisplay + AtLeast32Bit + Codec + sp_std::str::FromStr
 		+ MaybeMallocSizeOf;
 	/// Header hash type
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
@@ -1326,6 +1316,75 @@ pub trait BlockIdTo<Block: self::Block> {
 		&self,
 		block_id: &crate::generic::BlockId<Block>,
 	) -> Result<Option<NumberFor<Block>>, Self::Error>;
+}
+
+/// The pallet benchmarking trait.
+pub trait Benchmarking<T> {
+	/// Run the benchmarks for this pallet.
+	///
+	/// Parameters
+	/// - `extrinsic`: The name of extrinsic function you want to benchmark encoded as bytes.
+	/// - `steps`: The number of sample points you want to take across the range of parameters.
+	/// - `repeat`: The number of times you want to repeat a benchmark.
+	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<T>, &'static str>;
+}
+
+/// The required setup for creating a benchmark.
+pub trait BenchmarkingSetup<T, Call, RawOrigin> {
+	/// Return the components and their ranges which should be tested in this benchmark.
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
+
+	/// Set up the storage, and prepare a call and caller to test in a single run of the benchmark.
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(Call, RawOrigin), &'static str>;
+}
+
+/// Creates a `SelectedBenchmark` enum implementing `BenchmarkingSetup`.
+///
+/// Every variant must implement [`BenchmarkingSetup`](crate::traits::BenchmarkingSetup).
+///
+/// ```nocompile
+///
+/// struct Transfer;
+/// impl BenchmarkingSetup for Transfer { ... }
+///
+/// struct SetBalance;
+/// impl BenchmarkingSetup for SetBalance { ... }
+///
+/// selected_benchmark!(Transfer, SetBalance);
+/// ```
+#[macro_export]
+macro_rules! selected_benchmark {
+	($($bench:ident),*) => {
+		// The list of available benchmarks for this pallet.
+		enum SelectedBenchmark {
+			$( $bench, )*
+		}
+
+		// Allow us to select a benchmark from the list of available benchmarks.
+		impl<T: Trait> $crate::traits::BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
+			fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+				match self {
+					$( Self::$bench => <$bench as $crate::traits::BenchmarkingSetup<
+						T,
+						Call<T>,
+						RawOrigin<T::AccountId>,
+					>>::components(&$bench), )*
+				}
+			}
+
+			fn instance(&self, components: &[(BenchmarkParameter, u32)])
+				-> Result<(Call<T>, RawOrigin<T::AccountId>), &'static str>
+			{
+				match self {
+					$( Self::$bench => <$bench as $crate::traits::BenchmarkingSetup<
+						T,
+						Call<T>,
+						RawOrigin<T::AccountId>,
+					>>::instance(&$bench, components), )*
+				}
+			}
+		}
+	};
 }
 
 #[cfg(test)]

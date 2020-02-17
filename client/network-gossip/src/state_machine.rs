@@ -28,11 +28,14 @@ use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use sp_runtime::ConsensusEngineId;
 pub use sc_network::message::generic::{Message, ConsensusMessage};
 use sc_network::config::Roles;
+use wasm_timer::Instant;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
 
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
+
+pub(crate) const PERIODIC_MAINTENANCE_INTERVAL: time::Duration = time::Duration::from_millis(1100);
 
 mod rep {
 	use sc_network::ReputationChange as Rep;
@@ -165,7 +168,7 @@ pub struct ConsensusGossip<B: BlockT> {
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
 	validators: HashMap<ConsensusEngineId, Arc<dyn Validator<B>>>,
-	next_broadcast: time::Instant,
+	next_broadcast: Instant,
 }
 
 impl<B: BlockT> ConsensusGossip<B> {
@@ -177,7 +180,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			messages: Default::default(),
 			known_messages: LruCache::new(KNOWN_MESSAGES_CACHE_SIZE),
 			validators: Default::default(),
-			next_broadcast: time::Instant::now() + REBROADCAST_INTERVAL,
+			next_broadcast: Instant::now() + REBROADCAST_INTERVAL,
 		}
 	}
 
@@ -260,9 +263,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Perform periodic maintenance
 	pub fn tick(&mut self, network: &mut dyn Network<B>) {
 		self.collect_garbage();
-		if time::Instant::now() >= self.next_broadcast {
+		if Instant::now() >= self.next_broadcast {
 			self.rebroadcast(network);
-			self.next_broadcast = time::Instant::now() + REBROADCAST_INTERVAL;
+			self.next_broadcast = Instant::now() + REBROADCAST_INTERVAL;
 		}
 	}
 

@@ -108,6 +108,7 @@ pub trait TestApi {
 /// Two random external functions from the old runtime interface.
 /// This ensures that we still inherently export these functions from the host and that we are still
 /// compatible with old wasm runtimes.
+#[cfg(not(feature = "std"))]
 extern "C" {
 	pub fn ext_clear_storage(key_data: *const u8, key_len: u32);
 	pub fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
@@ -115,6 +116,7 @@ extern "C" {
 
 /// Make sure the old runtime interface needs to be imported.
 #[no_mangle]
+#[cfg(not(feature = "std"))]
 pub fn force_old_runtime_interface_import() {
 	unsafe { ext_clear_storage(sp_std::ptr::null(), 0); }
 	unsafe { ext_keccak_256(sp_std::ptr::null(), 0, sp_std::ptr::null_mut()); }

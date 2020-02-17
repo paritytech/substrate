@@ -68,7 +68,7 @@ pub use sp_application_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
-pub use sp_arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64};
+pub use sp_arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64, PerThing};
 /// Re-export 128 bit helpers.
 pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
@@ -684,6 +684,18 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 pub fn print(print: impl traits::Printable) {
 	print.print();
 }
+
+/// An alphabet of possible parameters to use for benchmarking.
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
+#[allow(missing_docs)]
+pub enum BenchmarkParameter {
+	A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+}
+
+/// Results from running benchmarks on a FRAME pallet.
+/// Contains duration of the function call in nanoseconds along with the benchmark parameters
+/// used for that benchmark result.
+pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128);
 
 #[cfg(test)]
 mod tests {
