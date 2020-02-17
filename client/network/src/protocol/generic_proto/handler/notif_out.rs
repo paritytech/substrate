@@ -23,7 +23,7 @@
 
 use crate::protocol::generic_proto::upgrade::{NotificationsOut, NotificationsOutSubstream};
 use futures::prelude::*;
-use libp2p::core::{ConnectedPoint, Negotiated, PeerId};
+use libp2p::core::{ConnectedPoint, PeerId};
 use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, ReadOneError, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
@@ -31,10 +31,11 @@ use libp2p::swarm::{
 	KeepAlive,
 	ProtocolsHandlerUpgrErr,
 	SubstreamProtocol,
+	NegotiatedSubstream,
 };
 use log::error;
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, marker::PhantomData, mem, pin::Pin, task::{Context, Poll}, time::Duration};
+use std::{borrow::Cow, fmt, mem, pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
 
 /// Maximum duration to open a substream and receive the handshake message. After that, we
@@ -52,30 +53,23 @@ const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 /// it is turned into a [`NotifsOutHandler`].
 ///
 /// See the documentation of [`NotifsOutHandler`] for more information.
-pub struct NotifsOutHandlerProto<TSubstream> {
+pub struct NotifsOutHandlerProto {
 	/// Name of the protocol to negotiate.
 	proto_name: Cow<'static, [u8]>,
-
-	/// Marker to pin the generic type.
-	marker: PhantomData<TSubstream>,
 }
 
-impl<TSubstream> NotifsOutHandlerProto<TSubstream> {
+impl NotifsOutHandlerProto {
 	/// Builds a new [`NotifsOutHandlerProto`]. Will use the given protocol name for the
 	/// notifications substream.
 	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {
 		NotifsOutHandlerProto {
 			proto_name: proto_name.into(),
-			marker: PhantomData,
 		}
 	}
 }
 
-impl<TSubstream> IntoProtocolsHandler for NotifsOutHandlerProto<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-{
-	type Handler = NotifsOutHandler<TSubstream>;
+impl IntoProtocolsHandler for NotifsOutHandlerProto {
+	type Handler = NotifsOutHandler;
 
 	fn inbound_protocol(&self) -> DeniedUpgrade {
 		DeniedUpgrade
@@ -99,12 +93,12 @@ where
 /// One can try open a substream by sending an [`NotifsOutHandlerIn::Enable`] message to the
 /// handler. Once done, the handler will try to establish then maintain an outbound substream with
 /// the remote for the purpose of sending notifications to it.
-pub struct NotifsOutHandler<TSubstream> {
+pub struct NotifsOutHandler {
 	/// Name of the protocol to negotiate.
 	proto_name: Cow<'static, [u8]>,
 
 	/// Relationship with the node we're connected to.
-	state: State<TSubstream>,
+	state: State,
 
 	/// When the connection with the remote has been successfully established.
 	when_connection_open: Instant,
@@ -117,7 +111,7 @@ pub struct NotifsOutHandler<TSubstream> {
 }
 
 /// Our relationship with the node we're connected to.
-enum State<TSubstream> {
+enum State {
 	/// The handler is disabled and idle. No substream is open.
 	Disabled,
 
@@ -127,7 +121,7 @@ enum State<TSubstream> {
 	/// >				 but the `Sink` API is unclear about whether or not the stream can then
 	/// >				 be recovered. Because of that, we must never switch from the
 	/// >				 `DisabledOpen` state to the `Open` state while keeping the same substream.
-	DisabledOpen(NotificationsOutSubstream<Negotiated<TSubstream>>),
+	DisabledOpen(NotificationsOutSubstream<NegotiatedSubstream>),
 
 	/// The handler is disabled but we are still trying to open a substream with the remote.
 	///
@@ -147,7 +141,7 @@ enum State<TSubstream> {
 	/// The handler is enabled and substream is open.
 	Open {
 		/// Substream that is currently open.
-		substream: NotificationsOutSubstream<Negotiated<TSubstream>>,
+		substream: NotificationsOutSubstream<NegotiatedSubstream>,
 		/// The initial message that we sent. Necessary if we need to re-open a substream.
 		initial_message: Vec<u8>,
 	},
@@ -193,7 +187,7 @@ pub enum NotifsOutHandlerOut {
 	Refused,
 }
 
-impl<TSubstream> NotifsOutHandler<TSubstream> {
+impl NotifsOutHandler {
 	/// Returns true if the substream is currently open.
 	pub fn is_open(&self) -> bool {
 		match &self.state {
@@ -213,11 +207,9 @@ impl<TSubstream> NotifsOutHandler<TSubstream> {
 	}
 }
 
-impl<TSubstream> ProtocolsHandler for NotifsOutHandler<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
+impl ProtocolsHandler for NotifsOutHandler {
 	type InEvent = NotifsOutHandlerIn;
 	type OutEvent = NotifsOutHandlerOut;
-	type Substream = TSubstream;
 	type Error = void::Void;
 	type InboundProtocol = DeniedUpgrade;
 	type OutboundProtocol = NotificationsOut;
@@ -229,7 +221,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		proto: <Self::InboundProtocol as InboundUpgrade<Negotiated<TSubstream>>>::Output
+		proto: <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
 	) {
 		// We should never reach here. `proto` is a `Void`.
 		void::unreachable(proto)
@@ -237,7 +229,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		(handshake_msg, substream): <Self::OutboundProtocol as OutboundUpgrade<Negotiated<TSubstream>>>::Output,
+		(handshake_msg, substream): <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
 		_: ()
 	) {
 		match mem::replace(&mut self.state, State::Poisoned) {
@@ -394,7 +386,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	}
 }
 
-impl<TSubstream> fmt::Debug for NotifsOutHandler<TSubstream> {
+impl fmt::Debug for NotifsOutHandler {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		f.debug_struct("NotifsOutHandler")
 			.field("open", &self.is_open())

@@ -134,16 +134,15 @@ fn transaction_fee_is_correct_ultimate() {
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 		top: map![
-			<pallet_balances::Account<Runtime>>::hashed_key_for(alice()) => {
-				(100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
+				(0u32, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
 			},
-			<pallet_balances::Account<Runtime>>::hashed_key_for(bob()) => {
-				(10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+			<frame_system::Account<Runtime>>::hashed_key_for(bob()) => {
+				(0u32, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
 			},
 			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-				(110 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+				(110 * DOLLARS).encode()
 			},
-			<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
 		children: map![],

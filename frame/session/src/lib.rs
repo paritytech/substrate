@@ -168,7 +168,7 @@ impl<A> SessionManager<A> for () {
 	fn end_session(_: SessionIndex) {}
 }
 
-/// Handler for session lifecycle events.
+/// Handler for session life cycle events.
 pub trait SessionHandler<ValidatorId> {
 	/// All the key type ids this session handler can process.
 	///

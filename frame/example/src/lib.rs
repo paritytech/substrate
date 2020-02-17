@@ -32,7 +32,7 @@
 //!         not the internals of the module implementation. Only state inputs,
 //!         outputs, and a brief description that mentions whether calling it
 //!         requires root, but without repeating the source code details.
-//!         Capitalise the first word of each documentation comment and end it with
+//!         Capitalize the first word of each documentation comment and end it with
 //!         a full stop. See
 //!         <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
 //!         target="_blank"> Generic example of annotating source code with documentation comments</a></li>
@@ -383,7 +383,7 @@ decl_event!(
 // - Unsigned calls that can be of two kinds:
 //   * "Inherent extrinsics" that are opinions generally held by the block
 //     authors that build child blocks.
-//   * Unsigned Transactions that are of intrinsic recognisable utility to the
+//   * Unsigned Transactions that are of intrinsic recognizable utility to the
 //     network, and are validated by the runtime.
 //
 // Information about where this dispatch initiated from is provided as the first argument
@@ -572,7 +572,7 @@ impl<T: Trait> Module<T> {
 // method. This example will not cover this type of extension. See `CheckRuntime` in system module
 // for an example.
 //
-// Using the extension, you can add some hooks to the lifecycle of each transaction. Note that by
+// Using the extension, you can add some hooks to the life cycle of each transaction. Note that by
 // default, an extension is applied to all `Call` functions (i.e. all transactions). the `Call` enum
 // variant is given to each function of `SignedExtension`. Hence, you can filter based on module or
 // a particular call if needed.
@@ -651,7 +651,8 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
-		Perbill, testing::Header,
+		Perbill,
+		testing::Header,
 		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
 	};
 
@@ -687,20 +688,19 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnReapAccount = pallet_balances::Module<Test>;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
-		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
+		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 	impl Trait for Test {
 		type Event = ();

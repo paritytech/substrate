@@ -30,7 +30,7 @@ use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use sp_runtime::ConsensusEngineId;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp};
-use std::{error, marker::PhantomData, mem, pin::Pin, str, time::Duration};
+use std::{error, mem, pin::Pin, str, time::Duration};
 use std::task::{Context, Poll};
 use wasm_timer::Instant;
 
@@ -79,7 +79,7 @@ use wasm_timer::Instant;
 /// Note that this "banning" system is not an actual ban. If a "banned" node tries to connect to
 /// us, we accept the connection. The "banning" system is only about delaying dialing attempts.
 ///
-pub struct GenericProto<TSubstream> {
+pub struct GenericProto {
 	/// Legacy protocol to open with peers. Never modified.
 	legacy_protocol: RegisteredProtocol,
 
@@ -102,9 +102,6 @@ pub struct GenericProto<TSubstream> {
 
 	/// Events to produce from `poll()`.
 	events: SmallVec<[NetworkBehaviourAction<NotifsHandlerIn, GenericProtoOut>; 4]>,
-
-	/// Marker to pin the generics.
-	marker: PhantomData<TSubstream>,
 }
 
 /// State of a peer we're connected to.
@@ -247,7 +244,7 @@ pub enum GenericProtoOut {
 	},
 }
 
-impl<TSubstream> GenericProto<TSubstream> {
+impl GenericProto {
 	/// Creates a `CustomProtos`.
 	pub fn new(
 		protocol: impl Into<ProtocolId>,
@@ -264,7 +261,6 @@ impl<TSubstream> GenericProto<TSubstream> {
 			incoming: SmallVec::new(),
 			next_incoming_index: sc_peerset::IncomingIndex(0),
 			events: SmallVec::new(),
-			marker: PhantomData,
 		}
 	}
 
@@ -679,7 +675,7 @@ impl<TSubstream> GenericProto<TSubstream> {
 	}
 }
 
-impl<TSubstream> DiscoveryNetBehaviour for GenericProto<TSubstream> {
+impl DiscoveryNetBehaviour for GenericProto {
 	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
 			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
@@ -688,11 +684,8 @@ impl<TSubstream> DiscoveryNetBehaviour for GenericProto<TSubstream> {
 	}
 }
 
-impl<TSubstream> NetworkBehaviour for GenericProto<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-{
-	type ProtocolsHandler = NotifsHandlerProto<TSubstream>;
+impl NetworkBehaviour for GenericProto {
+	type ProtocolsHandler = NotifsHandlerProto;
 	type OutEvent = GenericProtoOut;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {

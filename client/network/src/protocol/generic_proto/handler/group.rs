@@ -55,8 +55,7 @@ use crate::protocol::message::generic::{Message as GenericMessage, ConsensusMess
 
 use bytes::BytesMut;
 use codec::Encode as _;
-use futures::prelude::*;
-use libp2p::core::{either::{EitherError, EitherOutput}, ConnectedPoint, Negotiated, PeerId};
+use libp2p::core::{either::{EitherError, EitherOutput}, ConnectedPoint, PeerId};
 use libp2p::core::upgrade::{EitherUpgrade, ReadOneError, UpgradeError, SelectUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
@@ -64,6 +63,7 @@ use libp2p::swarm::{
 	KeepAlive,
 	ProtocolsHandlerUpgrErr,
 	SubstreamProtocol,
+	NegotiatedSubstream,
 };
 use log::error;
 use sp_runtime::ConsensusEngineId;
@@ -76,29 +76,29 @@ use std::{borrow::Cow, error, io, task::{Context, Poll}};
 /// it is turned into a [`NotifsHandler`].
 ///
 /// See the documentation at the module level for more information.
-pub struct NotifsHandlerProto<TSubstream> {
+pub struct NotifsHandlerProto {
 	/// Prototypes for handlers for ingoing substreams.
-	in_handlers: Vec<(NotifsInHandlerProto<TSubstream>, ConsensusEngineId)>,
+	in_handlers: Vec<(NotifsInHandlerProto, ConsensusEngineId)>,
 
 	/// Prototypes for handlers for outgoing substreams.
-	out_handlers: Vec<(NotifsOutHandlerProto<TSubstream>, ConsensusEngineId)>,
+	out_handlers: Vec<(NotifsOutHandlerProto, ConsensusEngineId)>,
 
 	/// Prototype for handler for backwards-compatibility.
-	legacy: LegacyProtoHandlerProto<TSubstream>,
+	legacy: LegacyProtoHandlerProto,
 }
 
 /// The actual handler once the connection has been established.
 ///
 /// See the documentation at the module level for more information.
-pub struct NotifsHandler<TSubstream> {
+pub struct NotifsHandler {
 	/// Handlers for ingoing substreams.
-	in_handlers: Vec<(NotifsInHandler<TSubstream>, ConsensusEngineId)>,
+	in_handlers: Vec<(NotifsInHandler, ConsensusEngineId)>,
 
 	/// Handlers for outgoing substreams.
-	out_handlers: Vec<(NotifsOutHandler<TSubstream>, ConsensusEngineId)>,
+	out_handlers: Vec<(NotifsOutHandler, ConsensusEngineId)>,
 
 	/// Handler for backwards-compatibility.
-	legacy: LegacyProtoHandler<TSubstream>,
+	legacy: LegacyProtoHandler,
 
 	/// State of this handler.
 	enabled: EnabledState,
@@ -116,11 +116,8 @@ enum EnabledState {
 	Disabled,
 }
 
-impl<TSubstream> IntoProtocolsHandler for NotifsHandlerProto<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-{
-	type Handler = NotifsHandler<TSubstream>;
+impl IntoProtocolsHandler for NotifsHandlerProto {
+	type Handler = NotifsHandler;
 
 	fn inbound_protocol(&self) -> SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol> {
 		let in_handlers = self.in_handlers.iter()
@@ -239,8 +236,7 @@ pub enum NotifsHandlerOut {
 	},
 }
 
-impl<TSubstream> NotifsHandlerProto<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
+impl NotifsHandlerProto {
 	/// Builds a new handler.
 	pub fn new(legacy: RegisteredProtocol, list: impl Into<Vec<(Cow<'static, [u8]>, ConsensusEngineId, Vec<u8>)>>) -> Self {
 		let list = list.into();
@@ -253,17 +249,15 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	}
 }
 
-impl<TSubstream> ProtocolsHandler for NotifsHandler<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
+impl ProtocolsHandler for NotifsHandler {
 	type InEvent = NotifsHandlerIn;
 	type OutEvent = NotifsHandlerOut;
-	type Substream = TSubstream;
 	type Error = EitherError<
 		EitherError<
-			<NotifsInHandler<Negotiated<TSubstream>> as ProtocolsHandler>::Error,
-			<NotifsOutHandler<Negotiated<TSubstream>> as ProtocolsHandler>::Error,
+			<NotifsInHandler as ProtocolsHandler>::Error,
+			<NotifsOutHandler as ProtocolsHandler>::Error,
 		>,
-		<LegacyProtoHandler<Negotiated<TSubstream>> as ProtocolsHandler>::Error,
+		<LegacyProtoHandler as ProtocolsHandler>::Error,
 	>;
 	type InboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol>;
 	type OutboundProtocol = EitherUpgrade<NotificationsOut, RegisteredProtocol>;
@@ -281,7 +275,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		out: <Self::InboundProtocol as InboundUpgrade<Negotiated<TSubstream>>>::Output
+		out: <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
 	) {
 		match out {
 			EitherOutput::First((out, num)) =>
@@ -293,7 +287,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		out: <Self::OutboundProtocol as OutboundUpgrade<Negotiated<TSubstream>>>::Output,
+		out: <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
 		num: Self::OutboundOpenInfo
 	) {
 		match (out, num) {

@@ -44,9 +44,9 @@
 //! the number of friends chosen. This deposit is returned in full when the account
 //! owner removes their recovery configuration.
 //!
-//! ### Recovery Lifecycle
+//! ### Recovery Life Cycle
 //!
-//! The intended lifecycle of a successful recovery takes the following steps:
+//! The intended life cycle of a successful recovery takes the following steps:
 //! 1. The account owner calls `create_recovery` to set up a recovery configuration
 //!    for their account.
 //! 2. At some later time, the account owner loses access to their account and wants
@@ -164,7 +164,7 @@ use frame_support::{
 		GetDispatchInfo, PaysFee, DispatchClass, ClassifyDispatch, Weight, WeighData,
 		SimpleDispatchInfo,
 	},
-	traits::{Currency, ReservableCurrency, Get, OnReapAccount},
+	traits::{Currency, ReservableCurrency, Get, OnReapAccount, BalanceStatus},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -587,7 +587,7 @@ decl_module! {
 			let active_recovery = <ActiveRecoveries<T>>::take(&who, &rescuer).ok_or(Error::<T>::NotStarted)?;
 			// Move the reserved funds from the rescuer to the rescued account.
 			// Acts like a slashing mechanism for those who try to maliciously recover accounts.
-			let _ = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit);
+			let _ = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit, BalanceStatus::Free);
 			Self::deposit_event(RawEvent::RecoveryClosed(who, rescuer));
 		}
 

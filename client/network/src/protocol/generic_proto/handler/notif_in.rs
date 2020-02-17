@@ -24,7 +24,7 @@
 use crate::protocol::generic_proto::upgrade::{NotificationsIn, NotificationsInSubstream};
 use bytes::BytesMut;
 use futures::prelude::*;
-use libp2p::core::{ConnectedPoint, Negotiated, PeerId};
+use libp2p::core::{ConnectedPoint, PeerId};
 use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
@@ -32,31 +32,29 @@ use libp2p::swarm::{
 	KeepAlive,
 	ProtocolsHandlerUpgrErr,
 	SubstreamProtocol,
+	NegotiatedSubstream,
 };
 use log::{error, warn};
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, marker::PhantomData, pin::Pin, str, task::{Context, Poll}};
+use std::{borrow::Cow, fmt, pin::Pin, str, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
 /// Every time a connection with a remote starts, an instance of this struct is created and
 /// sent to a background task dedicated to this connection. Once the connection is established,
 /// it is turned into a [`NotifsInHandler`].
-pub struct NotifsInHandlerProto<TSubstream> {
+pub struct NotifsInHandlerProto {
 	/// Configuration for the protocol upgrade to negotiate.
 	in_protocol: NotificationsIn,
-
-	/// Marker to pin the generic type.
-	marker: PhantomData<TSubstream>,
 }
 
 /// The actual handler once the connection has been established.
-pub struct NotifsInHandler<TSubstream> {
+pub struct NotifsInHandler {
 	/// Configuration for the protocol upgrade to negotiate for inbound substreams.
 	in_protocol: NotificationsIn,
 
 	/// Substream that is open with the remote.
-	substream: Option<NotificationsInSubstream<Negotiated<TSubstream>>>,
+	substream: Option<NotificationsInSubstream<NegotiatedSubstream>>,
 
 	/// If the substream is opened and closed rapidly, we can emit several `OpenRequest` and
 	/// `Closed` messages in a row without the handler having time to respond with `Accept` or
@@ -107,23 +105,19 @@ pub enum NotifsInHandlerOut {
 	Notif(BytesMut),
 }
 
-impl<TSubstream> NotifsInHandlerProto<TSubstream> {
+impl NotifsInHandlerProto {
 	/// Builds a new `NotifsInHandlerProto`.
 	pub fn new(
 		proto_name: impl Into<Cow<'static, [u8]>>
 	) -> Self {
 		NotifsInHandlerProto {
 			in_protocol: NotificationsIn::new(proto_name),
-			marker: PhantomData,
 		}
 	}
 }
 
-impl<TSubstream> IntoProtocolsHandler for NotifsInHandlerProto<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-{
-	type Handler = NotifsInHandler<TSubstream>;
+impl IntoProtocolsHandler for NotifsInHandlerProto {
+	type Handler = NotifsInHandler;
 
 	fn inbound_protocol(&self) -> NotificationsIn {
 		self.in_protocol.clone()
@@ -139,18 +133,16 @@ where
 	}
 }
 
-impl<TSubstream> NotifsInHandler<TSubstream> {
+impl NotifsInHandler {
 	/// Returns the name of the protocol that we accept.
 	pub fn protocol_name(&self) -> &[u8] {
 		self.in_protocol.protocol_name()
 	}
 }
 
-impl<TSubstream> ProtocolsHandler for NotifsInHandler<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
+impl ProtocolsHandler for NotifsInHandler {
 	type InEvent = NotifsInHandlerIn;
 	type OutEvent = NotifsInHandlerOut;
-	type Substream = TSubstream;
 	type Error = void::Void;
 	type InboundProtocol = NotificationsIn;
 	type OutboundProtocol = DeniedUpgrade;
@@ -162,7 +154,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		(msg, proto): <Self::InboundProtocol as InboundUpgrade<Negotiated<TSubstream>>>::Output
+		(msg, proto): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
 	) {
 		if self.substream.is_some() {
 			warn!(
@@ -185,7 +177,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		out: <Self::OutboundProtocol as OutboundUpgrade<Negotiated<TSubstream>>>::Output,
+		out: <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
 		_: Self::OutboundOpenInfo
 	) {
 		// We never emit any outgoing substream.
@@ -255,7 +247,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	}
 }
 
-impl<TSubstream> fmt::Debug for NotifsInHandler<TSubstream> {
+impl fmt::Debug for NotifsInHandler {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		f.debug_struct("NotifsInHandler")
 			.field("substream_open", &self.substream.is_some())
