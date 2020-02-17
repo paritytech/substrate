@@ -28,7 +28,7 @@ use sp_debug_derive::RuntimeDebug;
 /// `X`_.
 pub trait PerThing: Sized + Saturating + Copy + Default + fmt::Debug {
 	/// The data type used to build this per-thingy.
-	type Inner: BaseArithmetic + Copy;
+	type Inner: BaseArithmetic + Copy + fmt::Debug;
 
 	/// accuracy of this type
 	const ACCURACY: Self::Inner;

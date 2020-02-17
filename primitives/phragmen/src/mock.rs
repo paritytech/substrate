@@ -20,8 +20,8 @@
 
 use crate::{elect, PhragmenResult, Assignment};
 use sp_runtime::{
-	assert_eq_error_rate, Perbill, PerThing,
-	traits::{Convert, Member, SaturatedConversion, Zero}
+	assert_eq_error_rate, PerThing,
+	traits::{Convert, Member, SaturatedConversion, Zero, One}
 };
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -328,15 +328,15 @@ pub fn check_assignments_sum<T: PerThing>(assignments: Vec<Assignment<AccountId,
 	}
 }
 
-pub(crate) fn run_and_compare(
+pub(crate) fn run_and_compare<Output: PerThing>(
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, Vec<AccountId>)>,
-	stake_of: Box<dyn Fn(&AccountId) -> Balance>,
+	stake_of: &Box<dyn Fn(&AccountId) -> Balance>,
 	to_elect: usize,
 	min_to_elect: usize,
 ) {
 	// run fixed point code.
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Perbill>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
 		to_elect,
 		min_to_elect,
 		candidates.clone(),
@@ -360,9 +360,9 @@ pub(crate) fn run_and_compare(
 			for (candidate, per_thingy) in distribution {
 				if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == candidate ) {
 					assert_eq_error_rate!(
-						Perbill::from_fraction(float_assignment.1).deconstruct(),
+						Output::from_fraction(float_assignment.1).deconstruct(),
 						per_thingy.deconstruct(),
-						1,
+						Output::Inner::one(),
 					);
 				} else {
 					panic!("candidate mismatch. This should never happen.")

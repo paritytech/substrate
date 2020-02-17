@@ -641,11 +641,11 @@ mod tests {
 	#[test]
 	fn benchmarking_setup_should_work() {
 		new_test_ext().execute_with(|| {
-			let res = <Staking as Benchmarking<BenchmarkResults>>::run_benchmark(
+			assert!(<Staking as Benchmarking<BenchmarkResults>>::run_benchmark(
 				b"submit_election_solution".to_vec(),
 				1,
 				1,
-			);
+			).is_ok())
 		})
 	}
 }
