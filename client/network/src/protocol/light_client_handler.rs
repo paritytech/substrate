@@ -511,7 +511,11 @@ where
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
 		let proof =
-			if let Some(info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
+			if let Some(info) = ChildInfo::resolve_child_info(
+				request.child_type,
+				&request.child_info[..],
+				&request.storage_key[..],
+			) {
 				match self.chain.read_child_proof(&block, &request.storage_key, info, &request.keys) {
 					Ok(proof) => proof,
 					Err(error) => {
