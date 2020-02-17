@@ -40,6 +40,11 @@ use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive};
 #[cfg(feature = "full_crypto")]
 use secp256k1::{PublicKey, SecretKey};
 
+/// A value which is passed along with the public key
+/// to define which cryptographic algorithm that key
+/// belongs to.
+pub const ECDSA_KIND_ID: &str = "ecdsa";
+
 /// A secret seed (which is bytewise essentially equivalent to a SecretKey).
 ///
 /// We need it as a different type because `Seed` is expected to be AsRef<[u8]>.
@@ -95,7 +100,7 @@ impl Public {
 }
 
 impl TraitPublic for Public {
-	const KEY_KIND_ID: &'static str = "sr25519";
+	const KEY_KIND_ID: &'static str = ECDCA_KIND_ID;
 	/// A new instance from the given slice that should be 33 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if

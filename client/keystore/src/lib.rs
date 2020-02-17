@@ -310,14 +310,12 @@ impl Store {
 					.map_err(|e| e.to_string())?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			_ => Err(String::from("Key kind invalid")),
+			_ => Err(String::from("Key kind invalid"))
 		}
 	}
 }
 
 impl BareCryptoStore for Store {
-	/// Signs a message with the private key that matches
-	/// the public key passed.
 	fn sign_with(
 		&self,
 		kind: KeyKindId,

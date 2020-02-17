@@ -137,7 +137,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 
 	fn sign_with(&self, kind: KeyKindId, id: KeyTypeId, msg: &[u8]) -> Result<Vec<u8>, String> {
 		match kind {
-			"ed25519" => {
+			ed25519::ED25519_KIND_ID => {
 				let ed_public_key = self
 					.ed25519_public_keys(id)
 					.pop()
@@ -148,7 +148,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 					.ok_or(String::from("ed25519 pair not found"))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			"sr25519" => {
+			sr25519::SR25519_KIND_ID => {
 				let sr_public_key = self
 					.sr25519_public_keys(id)
 					.pop()
