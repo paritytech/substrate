@@ -482,12 +482,19 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Sassafra
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
 		debug!(target: "sassafras", "Attempting to claim slot {}", slot_number);
+		let mut epoch_changes = self.epoch_changes.lock();
+		let mut viable_epoch = epoch_changes.viable_epoch_mut(
+			&epoch_descriptor,
+			|slot| self.config.genesis_epoch(slot)
+		)?;
+
+		if viable_epoch.as_ref().publishing.pending.is_empty() {
+			viable_epoch.as_mut().publishing.append_to_pending(&self.keystore);
+		}
+
 		let s = authorship::claim_slot(
 			slot_number,
-			self.epoch_changes.lock().viable_epoch(
-				&epoch_descriptor,
-				|slot| self.config.genesis_epoch(slot)
-			)?.as_ref(),
+			viable_epoch.as_ref(),
 			&*self.config,
 			&self.keystore,
 		);
