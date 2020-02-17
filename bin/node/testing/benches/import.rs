@@ -100,14 +100,12 @@ struct BenchKeyring {
 // This is prepared database with genesis and keyring
 // that can be cloned and then used for any benchmarking.
 struct BenchDb {
-	random_space: usize,
 	keyring: BenchKeyring,
 	directory_guard: Guard,
 }
 
 impl Clone for BenchDb {
 	fn clone(&self) -> Self {
-		let random_space = self.random_space;
 		let keyring = self.keyring.clone();
 		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
 
@@ -132,14 +130,14 @@ impl Clone for BenchDb {
 			&fs_extra::dir::CopyOptions::new(),
 		).expect("Copy of seed database is ok");
 
-		BenchDb { keyring, directory_guard: Guard(dir), random_space }
+		BenchDb { keyring, directory_guard: Guard(dir) }
 	}
 }
 
 impl BenchDb {
 
-	fn new(random_space: usize) -> Self {
-		let keyring = BenchKeyring::new(random_space);
+	fn new(keyring_length: usize) -> Self {
+		let keyring = BenchKeyring::new(keyring_length);
 
 		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
 		log::trace!(
@@ -150,7 +148,7 @@ impl BenchDb {
 		let (_client, _backend) = bench_client(dir.path(), Profile::Native, &keyring);
 		let directory_guard = Guard(dir);
 
-		BenchDb { keyring, random_space, directory_guard }
+		BenchDb { keyring, directory_guard }
 	}
 
 	fn generate_block(&mut self) -> Block {
@@ -246,7 +244,7 @@ impl BenchDb {
 	}
 
 	fn create_context(&self, profile: Profile) -> BenchContext {
-		let BenchDb { directory_guard, keyring, .. } = self.clone();
+		let BenchDb { directory_guard, keyring } = self.clone();
 		let (client, backend) = bench_client(directory_guard.path(), profile, &keyring);
 
 		BenchContext {
@@ -256,7 +254,8 @@ impl BenchDb {
 }
 
 impl BenchKeyring {
-	fn new(num: usize) -> Self {
+	// `length` is the number of random accounts generated.
+	fn new(length: usize) -> Self {
 		let mut accounts = BTreeMap::new();
 
 		for n in 0..num {
