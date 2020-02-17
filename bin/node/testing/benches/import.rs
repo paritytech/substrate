@@ -92,15 +92,172 @@ fn genesis(keyring: &BenchKeyring) -> node_runtime::GenesisConfig {
 //     //endowed-user//01
 //      ...
 //     //endowed-user//N
+#[derive(Clone)]
 struct BenchKeyring {
 	accounts: BTreeMap<AccountId, sr25519::Pair>,
 }
 
+// This is prepared database with genesis and keyring
+// that can be cloned and then used for any benchmarking.
+struct BenchDb {
+	keyring: BenchKeyring,
+	directory_guard: Guard,
+}
+
+impl Clone for BenchDb {
+	fn clone(&self) -> Self {
+		let keyring = self.keyring.clone();
+		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
+
+		let seed_dir = self.directory_guard.0.path();
+
+		log::trace!(
+			target: "bench-logistics",
+			"Copying seed db from {} to {}",
+			seed_dir.to_string_lossy(),
+			dir.path().to_string_lossy(),
+		);
+		let seed_db_files = std::fs::read_dir(seed_dir)
+			.expect("failed to list file in seed dir")
+			.map(|f_result|
+				f_result.expect("failed to read file in seed db")
+					.path()
+					.clone()
+			).collect();
+		fs_extra::copy_items(
+			&seed_db_files,
+			dir.path(),
+			&fs_extra::dir::CopyOptions::new(),
+		).expect("Copy of seed database is ok");
+
+		BenchDb { keyring, directory_guard: Guard(dir) }
+	}
+}
+
+impl BenchDb {
+	fn new(keyring_length: usize) -> Self {
+		let keyring = BenchKeyring::new(keyring_length);
+
+		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
+		log::trace!(
+			target: "bench-logistics",
+			"Created seed db at {}",
+			dir.path().to_string_lossy(),
+		);
+		let (_client, _backend) = bench_client(dir.path(), Profile::Native, &keyring);
+		let directory_guard = Guard(dir);
+
+		BenchDb { keyring, directory_guard }
+	}
+
+	fn generate_block(&mut self) -> Block {
+		let (client, _backend) = bench_client(
+			self.directory_guard.path(),
+			Profile::Wasm,
+			&self.keyring,
+		);
+
+		let version = client.runtime_version_at(&BlockId::number(0))
+			.expect("There should be runtime version at 0")
+			.spec_version;
+
+		let genesis_hash = client.block_hash(Zero::zero())
+			.expect("Database error?")
+			.expect("Genesis block always exists; qed")
+			.into();
+
+		let mut block = client
+			.new_block(Default::default())
+			.expect("Block creation failed");
+
+		let timestamp = 1 * MinimumPeriod::get();
+
+		let mut inherent_data = InherentData::new();
+		inherent_data.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
+			.expect("Put timestamb failed");
+		inherent_data.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &0)
+			.expect("Put finality tracker failed");
+
+		for extrinsic in client.runtime_api()
+			.inherent_extrinsics_with_context(
+				&BlockId::number(0),
+				ExecutionContext::BlockConstruction,
+				inherent_data,
+			).expect("Get inherents failed")
+		{
+			block.push(extrinsic).expect("Push inherent failed");
+		}
+
+		let mut iteration = 0;
+		let start = std::time::Instant::now();
+		for _ in 0..100 {
+
+			let sender = self.keyring.at(iteration);
+			let receiver = get_account_id_from_seed::<sr25519::Public>(
+				&format!("random-user//{}", iteration)
+			);
+
+			let signed = self.keyring.sign(
+				CheckedExtrinsic {
+					signed: Some((sender, signed_extra(0, 1*DOLLARS))),
+					function: Call::Balances(
+						BalancesCall::transfer(
+							pallet_indices::address::Address::Id(receiver),
+							1*DOLLARS
+						)
+					),
+				},
+				version,
+				genesis_hash,
+			);
+
+			let encoded = Encode::encode(&signed);
+
+			let opaque = OpaqueExtrinsic::decode(&mut &encoded[..])
+				.expect("Failed  to decode opaque");
+
+			match block.push(opaque) {
+				Err(sp_blockchain::Error::ApplyExtrinsicFailed(
+						sp_blockchain::ApplyExtrinsicFailed::Validity(e)
+				)) if e.exhausted_resources() => {
+					break;
+				},
+				Err(err) => panic!("Error pushing transaction: {:?}", err),
+				Ok(_) => {},
+			}
+			iteration += 1;
+		}
+		let block = block.build().expect("Block build failed").block;
+
+		log::info!(
+			target: "bench-logistics",
+			"Block construction: {:#?} ({} tx)",
+			start.elapsed(), block.extrinsics.len()
+		);
+
+		block
+	}
+
+	fn path(&self) -> &Path {
+		self.directory_guard.path()
+	}
+
+	fn create_context(&self, profile: Profile) -> BenchContext {
+		let BenchDb { directory_guard, keyring } = self.clone();
+		let (client, backend) = bench_client(directory_guard.path(), profile, &keyring);
+
+		BenchContext {
+			client, backend, db_guard: directory_guard,
+		}
+	}
+}
+
 impl BenchKeyring {
-	fn new(num: usize) -> Self {
+	// `length` is the number of random accounts generated.
+	fn new(length: usize) -> Self {
 		let mut accounts = BTreeMap::new();
 
-		for n in 0..num {
+		for n in 0..length {
 			let seed = format!("//endowed-user/{}", n);
 			let pair = sr25519::Pair::from_string(&seed, None).expect("failed to generate pair");
 			let account_id = AccountPublic::from(pair.public()).into_account();
@@ -200,63 +357,16 @@ fn bench_client(dir: &std::path::Path, profile: Profile, keyring: &BenchKeyring)
 
 struct Guard(tempdir::TempDir);
 
+impl Guard {
+	fn path(&self) -> &Path {
+		self.0.path()
+	}
+}
+
 struct BenchContext {
 	client: Client,
 	backend: Arc<Backend>,
 	db_guard: Guard,
-	keyring: BenchKeyring,
-}
-
-impl BenchContext {
-	fn new(profile: Profile) -> BenchContext {
-		let keyring = BenchKeyring::new(128);
-
-		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
-		log::trace!(
-			target: "bench-logistics",
-			"Created seed db at {}",
-			dir.path().to_string_lossy(),
-		);
-		let (client, backend) = bench_client(dir.path(), profile, &keyring);
-		let db_guard = Guard(dir);
-
-
-		BenchContext { client, backend, db_guard, keyring }
-	}
-
-	fn new_from_seed(profile: Profile, seed_dir: &Path) -> BenchContext {
-		let keyring = BenchKeyring::new(128);
-
-		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
-
-		log::trace!(
-			target: "bench-logistics",
-			"Copying seed db from {} to {}",
-			seed_dir.to_string_lossy(),
-			dir.path().to_string_lossy(),
-		);
-		let seed_db_files = std::fs::read_dir(seed_dir)
-			.expect("failed to list file in seed dir")
-			.map(|f_result|
-				f_result.expect("failed to read file in seed db")
-					.path()
-					.clone()
-			).collect();
-		fs_extra::copy_items(
-			&seed_db_files,
-			dir.path(),
-			&fs_extra::dir::CopyOptions::new(),
-		).expect("Copy of seed database is ok");
-
-		let (client, backend) = bench_client(dir.path(), profile, &keyring);
-		let db_guard = Guard(dir);
-
-		BenchContext { client, backend, db_guard, keyring }
-	}
-
-	fn keep_db(self) -> Guard {
-		self.db_guard
-	}
 }
 
 type AccountPublic = <Signature as Verify>::Signer;
@@ -272,88 +382,6 @@ where
 	AccountPublic: From<<TPublic::Pair as Pair>::Public>
 {
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
-}
-
-// Block generation.
-fn generate_block_import(client: &Client, keyring: &BenchKeyring) -> Block {
-	let version = client.runtime_version_at(&BlockId::number(0))
-		.expect("There should be runtime version at 0")
-		.spec_version;
-	let genesis_hash = client.block_hash(Zero::zero())
-		.expect("Database error?")
-		.expect("Genesis block always exists; qed")
-		.into();
-
-	let mut block = client
-		.new_block(Default::default())
-		.expect("Block creation failed");
-
-	let timestamp = 1 * MinimumPeriod::get();
-
-	let mut inherent_data = InherentData::new();
-	inherent_data.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
-		.expect("Put timestamb failed");
-	inherent_data.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &0)
-		.expect("Put finality tracker failed");
-
-	for extrinsic in client.runtime_api()
-		.inherent_extrinsics_with_context(
-			&BlockId::number(0),
-			ExecutionContext::BlockConstruction,
-			inherent_data,
-		).expect("Get inherents failed")
-	{
-		block.push(extrinsic).expect("Push inherent failed");
-	}
-
-	let mut iteration = 0;
-	let start = std::time::Instant::now();
-	for _ in 0..100 {
-
-		let sender = keyring.at(iteration);
-		let receiver = get_account_id_from_seed::<sr25519::Public>(
-			&format!("random-user//{}", iteration)
-		);
-
-		let signed = keyring.sign(
-			CheckedExtrinsic {
-				signed: Some((sender, signed_extra(0, 1*DOLLARS))),
-				function: Call::Balances(
-					BalancesCall::transfer(
-						pallet_indices::address::Address::Id(receiver),
-						1*DOLLARS
-					)
-				),
-			},
-			version,
-			genesis_hash,
-		);
-
-		let encoded = Encode::encode(&signed);
-
-		let opaque = OpaqueExtrinsic::decode(&mut &encoded[..])
-			.expect("Failed  to decode opaque");
-
-		match block.push(opaque) {
-			Err(sp_blockchain::Error::ApplyExtrinsicFailed(
-					sp_blockchain::ApplyExtrinsicFailed::Validity(e)
-			)) if e.exhausted_resources() => {
-				break;
-			},
-			Err(err) => panic!("Error pushing transaction: {:?}", err),
-			Ok(_) => {},
-		}
-		iteration += 1;
-	}
-	let block = block.build().expect("Block build failed").block;
-
-	log::info!(
-		target: "bench-logistics",
-		"Block construction: {:#?} ({} tx)",
-		start.elapsed(), block.extrinsics.len()
-	);
-
-	block
 }
 
 // Import generated block.
@@ -387,26 +415,20 @@ fn bench_block_import(c: &mut Criterion) {
 	// for future uses, uncomment if something wrong.
 	// sc_cli::init_logger("sc_client=debug");
 
-	let (block, guard) = {
-		let context = BenchContext::new(Profile::Wasm);
-		let block = generate_block_import(&context.client, &context.keyring);
-		(block, context.keep_db())
-	};
+	let mut bench_db = BenchDb::new(128);
+	let block = bench_db.generate_block();
 
 	log::trace!(
 		target: "bench-logistics",
 		"Seed database directory: {}",
-		guard.0.path().to_string_lossy(),
+		bench_db.path().display(),
 	);
 
 	c.bench_function_over_inputs("import block",
 		move |bencher, profile| {
 			bencher.iter_batched(
 				|| {
-					let context = BenchContext::new_from_seed(
-						*profile,
-						guard.0.path(),
-					);
+					let context = bench_db.create_context(*profile);
 
 					// mostly to just launch compiler before benching!
 					let version = context.client.runtime_version_at(&BlockId::Number(0))
@@ -454,21 +476,14 @@ fn bench_block_import(c: &mut Criterion) {
 fn profile_block_import(c: &mut Criterion) {
 	sc_cli::init_logger("");
 
-	let (block, guard) = {
-		let context = BenchContext::new(Profile::Wasm);
-		let block = generate_block_import(&context.client, &context.keyring);
-		(block, context.keep_db())
-	};
+	let mut bench_db = BenchDb::new(128);
+	let block = bench_db.generate_block();
 
 	c.bench_function("profile block",
 		move |bencher| {
 			bencher.iter_batched(
 				|| {
-					let context = BenchContext::new_from_seed(
-						Profile::Native,
-						guard.0.path(),
-					);
-					context
+					bench_db.create_context(Profile::Native)
 				},
 				|mut context| {
 					// until better osx signpost/callgrind signal is possible to use
