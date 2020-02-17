@@ -89,20 +89,11 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let import_params = BlockImportParams {
-			origin,
-			header,
-			justification,
-			post_digests: Vec::new(),
-			body,
-			storage_changes: None,
-			finalized: true,
-			auxiliary: Vec::new(),
-			intermediates: HashMap::new(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import_params = BlockImportParams::new(origin, header);
+		import_params.justification = justification;
+		import_params.body = body;
+		import_params.finalized = true;
+		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		Ok((import_params, None))
 	}
