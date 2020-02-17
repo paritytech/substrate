@@ -128,9 +128,9 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 
 		self.overlay.committed.children.clone().into_iter()
 			.chain(self.overlay.prospective.children.clone().into_iter())
-			.for_each(|(keyspace, (map, child_info))| {
+			.for_each(|(_storage_key, (map, child_info))| {
 				transaction.push((
-					Some((keyspace, child_info)),
+					Some(child_info),
 					map.into_iter()
 						.map(|(k, v)| (k, v.value))
 						.collect::<Vec<_>>(),

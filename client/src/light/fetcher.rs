@@ -23,6 +23,7 @@ use std::marker::PhantomData;
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
 use sp_core::{convert_hash, traits::CodeExecutor};
+use sp_core::storage::OwnedChildInfo;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	AtLeast32Bit, CheckedConversion,
@@ -240,10 +241,11 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
+		let child_trie = OwnedChildInfo::new_default(request.storage_key.clone());
 		read_child_proof_check::<H, _>(
 			convert_hash(request.header.state_root()),
 			remote_proof,
-			&request.storage_key,
+			child_trie.as_ref(),
 			request.keys.iter(),
 		).map_err(Into::into)
 	}
@@ -345,12 +347,10 @@ pub mod tests {
 	use crate::light::fetcher::{FetchChecker, LightDataChecker, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use sp_core::{blake2_256, Blake2Hasher, ChangesTrieConfiguration, H256};
-	use sp_core::storage::{well_known_keys, StorageKey, ChildInfo};
+	use sp_core::storage::{well_known_keys, StorageKey, OwnedChildInfo};
 	use sp_runtime::generic::BlockId;
 	use sp_state_machine::Backend;
 	use super::*;
-
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
 	type TestChecker = LightDataChecker<
 		NativeExecutor<substrate_test_runtime_client::LocalExecutor>,
@@ -400,11 +400,12 @@ pub mod tests {
 	fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, Vec<u8>) {
 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
 		use substrate_test_runtime_client::TestClientBuilderExt;
+		let child_info = OwnedChildInfo::new_default(b"child1".to_vec());
+		let child_info = child_info.as_ref();
 		// prepare remote client
 		let remote_client = substrate_test_runtime_client::TestClientBuilder::new()
 			.add_extra_child_storage(
-				b"child1".to_vec(),
-				CHILD_INFO_1,
+				child_info,
 				b"key1".to_vec(),
 				b"value1".to_vec(),
 			).build();
@@ -417,15 +418,13 @@ pub mod tests {
 		// 'fetch' child read proof from remote node
 		let child_value = remote_client.child_storage(
 			&remote_block_id,
-			&StorageKey(b"child1".to_vec()),
-			CHILD_INFO_1,
+			child_info,
 			&StorageKey(b"key1".to_vec()),
 		).unwrap().unwrap().0;
 		assert_eq!(b"value1"[..], child_value[..]);
 		let remote_read_proof = remote_client.read_child_proof(
 			&remote_block_id,
-			b"child1",
-			CHILD_INFO_1,
+			child_info,
 			&[b"key1"],
 		).unwrap();
 
@@ -503,14 +502,11 @@ pub mod tests {
 			remote_read_proof,
 			result,
 		) = prepare_for_read_child_proof_check();
-		let child_infos = CHILD_INFO_1.info();
 		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_child_proof(
 			&RemoteReadChildRequest::<Header> {
 				block: remote_block_header.hash(),
 				header: remote_block_header,
 				storage_key: b"child1".to_vec(),
-				child_info: child_infos.0.to_vec(),
-				child_type: child_infos.1,
 				keys: vec![b"key1".to_vec()],
 				retry_count: None,
 			},

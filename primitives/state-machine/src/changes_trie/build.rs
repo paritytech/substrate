@@ -158,7 +158,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					if let Some(sk) = storage_key.as_ref() {
 						if !changes.child_storage(sk, k).map(|v| v.is_some()).unwrap_or_default() {
 							if let Some(child_info) = child_info.as_ref() {
-								if !backend.exists_child_storage(sk, child_info.as_ref(), k)
+								if !backend.exists_child_storage(child_info.as_ref(), k)
 									.map_err(|e| format!("{}", e))? {
 									return Ok(map);
 								}
@@ -351,8 +351,8 @@ mod test {
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use super::*;
 
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
-	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::default_unchecked(b":child_storage:default:unique_id_1");
+	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::default_unchecked(b":child_storage:default:unique_id_2");
 
 	fn prepare_for_build(zero: u64) -> (
 		InMemoryBackend<Blake2Hasher>,

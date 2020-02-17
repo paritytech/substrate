@@ -20,7 +20,7 @@ use log::{warn, debug};
 use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildType};
 use codec::{Codec, Decode};
 use crate::{
 	StorageKey, StorageValue, Backend,
@@ -80,11 +80,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn child_storage(
 		&self,
-		storage_key: &[u8],
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
-		self.essence.child_storage(storage_key, child_info, key)
+		self.essence.child_storage(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
@@ -93,11 +92,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn next_child_storage_key(
 		&self,
-		storage_key: &[u8],
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
-		self.essence.next_child_storage_key(storage_key, child_info, key)
+		self.essence.next_child_storage_key(child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -110,21 +108,19 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
 		child_info: ChildInfo,
 		f: F,
 	) {
-		self.essence.for_keys_in_child_storage(storage_key, child_info, f)
+		self.essence.for_keys_in_child_storage(child_info, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
 		child_info: ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
-		self.essence.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+		self.essence.for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
@@ -194,7 +190,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn child_storage_root<I>(
 		&self,
-		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
@@ -202,12 +197,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		H::Out: Ord,
 	{
-		let default_root = default_child_trie_root::<Layout<H>>(child_info.parent_prefix(None));
+		let default_root = match child_info.child_type() {
+			ChildType::ParentKeyId => default_child_trie_root::<Layout<H>>()
+		};
 
 		let mut write_overlay = S::Overlay::default();
-		let mut prefixed_storage_key = storage_key.to_vec();
-		child_info.do_prefix_key(&mut prefixed_storage_key, None);
-		let mut root = match self.storage(prefixed_storage_key.as_slice()) {
+		let storage_key = child_info.storage_key();
+		let mut root = match self.storage(storage_key) {
 			Ok(value) =>
 				value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or(default_root.clone()),
 			Err(e) => {
@@ -223,7 +219,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			);
 
 			match child_delta_trie_root::<Layout<H>, _, _, _, _, _>(
-				storage_key,
 				child_info.keyspace(),
 				&mut eph,
 				root,
@@ -252,15 +247,15 @@ pub mod tests {
 	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
 	use super::*;
 
-	const CHILD_KEY_1: &[u8] = b"sub1";
-	const CHILD_UUID_1: &[u8] = b"unique_id_1";
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_UUID_1);
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::default_unchecked(
+		b":child_storage:default:sub1"
+	);
 
 	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 		{
-			let mut mdb = KeySpacedDBMut::new(&mut mdb, CHILD_UUID_1);
+			let mut mdb = KeySpacedDBMut::new(&mut mdb, CHILD_INFO_1.keyspace());
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
 			trie.insert(b"value3", &[142]).expect("insert failed");
 			trie.insert(b"value4", &[124]).expect("insert failed");
@@ -270,9 +265,7 @@ pub mod tests {
 			let mut sub_root = Vec::new();
 			root.encode_to(&mut sub_root);
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			let mut prefixed_storage_key = CHILD_KEY_1.to_vec();
-			CHILD_INFO_1.do_prefix_key(&mut prefixed_storage_key, None);
-			trie.insert(prefixed_storage_key.as_slice(), &sub_root[..]).expect("insert failed");
+			trie.insert(CHILD_INFO_1.storage_key(), &sub_root[..]).expect("insert failed");
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
@@ -298,7 +291,7 @@ pub mod tests {
 	fn read_from_child_storage_returns_some() {
 		let test_trie = test_trie();
 		assert_eq!(
-			test_trie.child_storage(CHILD_KEY_1, CHILD_INFO_1, b"value3").unwrap(),
+			test_trie.child_storage(CHILD_INFO_1, b"value3").unwrap(),
 			Some(vec![142u8]),
 		);
 	}

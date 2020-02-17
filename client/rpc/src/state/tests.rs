@@ -30,26 +30,26 @@ use substrate_test_runtime_client::{
 	runtime,
 };
 
-const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"unique_id");
+const STORAGE_KEY: &[u8] = b"child";
+const CHILD_INFO: ChildInfo<'static> = ChildInfo::default_unchecked(
+	b":child_storage:default:child"
+);
 
 #[test]
 fn should_return_storage() {
 	const KEY: &[u8] = b":mock";
 	const VALUE: &[u8] = b"hello world";
-	const STORAGE_KEY: &[u8] = b"child";
 	const CHILD_VALUE: &[u8] = b"hello world !";
 
 	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let client = TestClientBuilder::new()
 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
-		.add_extra_child_storage(STORAGE_KEY.to_vec(), CHILD_INFO, KEY.to_vec(), CHILD_VALUE.to_vec())
+		.add_extra_child_storage(CHILD_INFO, KEY.to_vec(), CHILD_VALUE.to_vec())
 		.build();
 	let genesis_hash = client.genesis_hash();
 	let client = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
 	let key = StorageKey(KEY.to_vec());
 	let storage_key = StorageKey(STORAGE_KEY.to_vec());
-	let (child_info, child_type) = CHILD_INFO.info();
-	let child_info = StorageKey(child_info.to_vec());
 
 	assert_eq!(
 		client.storage(key.clone(), Some(genesis_hash).into()).wait()
@@ -67,7 +67,7 @@ fn should_return_storage() {
 	);
 	assert_eq!(
 		core.block_on(
-			client.child_storage(storage_key, child_info, child_type, key, Some(genesis_hash).into())
+			client.child_storage(storage_key, key, Some(genesis_hash).into())
 				.map(|x| x.map(|x| x.0.len()))
 		).unwrap().unwrap() as usize,
 		CHILD_VALUE.len(),
@@ -77,8 +77,6 @@ fn should_return_storage() {
 
 #[test]
 fn should_return_child_storage() {
-	let (child_info, child_type) = CHILD_INFO.info();
-	let child_info = StorageKey(child_info.to_vec());
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new()
 		.add_child_storage("test", "key", CHILD_INFO, vec![42_u8])
@@ -92,8 +90,6 @@ fn should_return_child_storage() {
 	assert_matches!(
 		client.child_storage(
 			child_key.clone(),
-			child_info.clone(),
-			child_type,
 			key.clone(),
 			Some(genesis_hash).into(),
 		).wait(),
@@ -102,8 +98,6 @@ fn should_return_child_storage() {
 	assert_matches!(
 		client.child_storage_hash(
 			child_key.clone(),
-			child_info.clone(),
-			child_type,
 			key.clone(),
 			Some(genesis_hash).into(),
 		).wait().map(|x| x.is_some()),
@@ -112,8 +106,6 @@ fn should_return_child_storage() {
 	assert_matches!(
 		client.child_storage_size(
 			child_key.clone(),
-			child_info.clone(),
-			child_type,
 			key.clone(),
 			None,
 		).wait(),

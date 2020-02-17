@@ -33,7 +33,7 @@ use sc_client::{
 	Client, CallExecutor, BlockchainEvents
 };
 use sp_core::{
-	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
+	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, OwnedChildInfo},
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{
@@ -42,7 +42,7 @@ use sp_runtime::{
 
 use sp_api::{Metadata, ProvideRuntimeApi};
 
-use super::{StateBackend, error::{FutureResult, Error, Result}, client_err, child_resolution_error};
+use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -309,19 +309,18 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.child_storage_keys(
-					&BlockId::Hash(block),
-					&storage_key,
-					ChildInfo::resolve_child_info(child_type, &child_info.0[..], &storage_key.0[..])
-						.ok_or_else(child_resolution_error)?,
-					&prefix,
-				))
+				.and_then(|block| {
+					let child_info = OwnedChildInfo::new_default(storage_key.0); 
+					self.client.child_storage_keys(
+						&BlockId::Hash(block),
+						child_info.as_ref(),
+						&prefix,
+					)
+				})
 				.map_err(client_err)))
 	}
 
@@ -329,19 +328,18 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.child_storage(
-					&BlockId::Hash(block),
-					&storage_key,
-					ChildInfo::resolve_child_info(child_type, &child_info.0[..], &storage_key.0[..])
-						.ok_or_else(child_resolution_error)?,
-					&key,
-				))
+				.and_then(|block| {
+					let child_info = OwnedChildInfo::new_default(storage_key.0); 
+					self.client.child_storage(
+						&BlockId::Hash(block),
+						child_info.as_ref(),
+						&key,
+					)
+				})
 				.map_err(client_err)))
 	}
 
@@ -349,19 +347,18 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.child_storage_hash(
-					&BlockId::Hash(block),
-					&storage_key,
-					ChildInfo::resolve_child_info(child_type, &child_info.0[..], &storage_key.0[..])
-						.ok_or_else(child_resolution_error)?,
-					&key,
-				))
+				.and_then(|block| {
+					let child_info = OwnedChildInfo::new_default(storage_key.0); 
+					self.client.child_storage_hash(
+						&BlockId::Hash(block),
+						child_info.as_ref(),
+						&key,
+					)
+				})
 				.map_err(client_err)))
 	}
 

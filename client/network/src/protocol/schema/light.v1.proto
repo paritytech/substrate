@@ -73,13 +73,8 @@ message RemoteReadChildRequest {
 	bytes block = 2;
 	// Child Storage key.
 	bytes storage_key = 3;
-	// Child trie source information.
-	bytes child_info = 4;
-	/// Child type, its required to resolve `child_info`
-	/// content and choose child implementation.
-	uint32 child_type = 5;
 	// Storage keys.
-	repeated bytes keys = 6;
+	repeated bytes keys = 4;
 }
 
 // Remote header request.

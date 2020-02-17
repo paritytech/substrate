@@ -62,7 +62,7 @@ pub struct StorageChild {
 pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
-	/// Children trie storage data by storage key.
+	/// Children trie storage data.
 	/// Note that the key is not including child prefix, this will
 	/// not be possible if a different kind of trie than `default`
 	/// get in use.
@@ -133,7 +133,6 @@ pub mod well_known_keys {
 /// Information related to a child state.
 pub enum ChildInfo<'a> {
 	ParentKeyId(ChildTrie<'a>),
-	Default(ChildTrie<'a>),
 }
 
 /// Owned version of `ChildInfo`.
@@ -142,50 +141,50 @@ pub enum ChildInfo<'a> {
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub enum OwnedChildInfo {
 	ParentKeyId(OwnedChildTrie),
-	Default(OwnedChildTrie),
 }
 
 impl<'a> ChildInfo<'a> {
 	/// Instantiates information for a default child trie.
-	pub const fn new_uid_parent_key(storage_key: &'a[u8]) -> Self {
+	/// This is a rather unsafe method and requires to be
+	/// use from a valid payload such as:
+	/// ```
+	/// use sp_storage::{ChildInfo, ChildType, OwnedChildInfo};
+	///
+	/// let info1 = ChildInfo::default_unchecked(
+	///		b":child_storage:default:stor_key",
+	///	);
+	/// let info2 = OwnedChildInfo::new_default(
+	///		b"stor_key".to_vec(),
+	///	);
+	///
+	/// assert!(info1.info() == info2.as_ref().info());
+	/// ```
+	pub const fn default_unchecked(encoded: &'a[u8]) -> Self {
 		ChildInfo::ParentKeyId(ChildTrie {
-			data: storage_key,
+			data: encoded,
 		})
 	}
 
-	/// Instantiates information for a default child trie.
-	pub const fn new_default(unique_id: &'a[u8]) -> Self {
-		ChildInfo::Default(ChildTrie {
-			data: unique_id,
-		})
+	/// Create child info from a linear byte packed value and a given type. 
+	pub fn resolve_child_info(child_type: u32, info: &'a [u8]) -> Option<Self> {
+		match child_type {
+			x if x == ChildType::ParentKeyId as u32 => {
+				debug_assert!(
+					info.starts_with(ChildType::ParentKeyId.parent_prefix())
+				);
+				Some(Self::default_unchecked(info))
+			},
+			_ => None,
+		}
 	}
 
 	/// Instantiates a owned version of this child info.
 	pub fn to_owned(&self) -> OwnedChildInfo {
 		match self {
-			ChildInfo::Default(ChildTrie { data })
-				=> OwnedChildInfo::Default(OwnedChildTrie {
-					data: data.to_vec(),
-				}),
 			ChildInfo::ParentKeyId(ChildTrie { data })
 				=> OwnedChildInfo::ParentKeyId(OwnedChildTrie {
 					data: data.to_vec(),
 				}),
-		}
-	}
-
-	/// Create child info from a linear byte packed value and a given type. 
-	pub fn resolve_child_info(child_type: u32, data: &'a[u8], storage_key: &'a[u8]) -> Option<Self> {
-		match child_type {
-			x if x == ChildType::ParentKeyId as u32 => {
-				if !data.len() == 0 {
-					// do not allow anything for additional data.
-					return None;
-				}
-				Some(ChildInfo::new_uid_parent_key(storage_key))
-			},
-			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data)),
-			_ => None,
 		}
 	}
 
@@ -196,9 +195,6 @@ impl<'a> ChildInfo<'a> {
 			ChildInfo::ParentKeyId(ChildTrie {
 				data,
 			}) => (data, ChildType::ParentKeyId as u32),
-			ChildInfo::Default(ChildTrie {
-				data,
-			}) => (data, ChildType::CryptoUniqueId as u32),
 		}
 	}
 
@@ -207,32 +203,42 @@ impl<'a> ChildInfo<'a> {
 	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
+			ChildInfo::ParentKeyId(..) => self.unprefixed_storage_key(),
+		}
+	}
+
+	/// Return a reference to the full location in the direct parent of
+	/// this trie.
+	///	If the trie got no parent this returns the empty slice,
+	/// so by nature an empty slice is not a valid parent location.
+	/// This does not include child type related prefix.
+	pub fn storage_key(&self) -> &[u8] {
+		match self {
 			ChildInfo::ParentKeyId(ChildTrie {
 				data,
 			}) => &data[..],
-			ChildInfo::Default(ChildTrie {
-				data,
-			}) => &data[..],
 		}
 	}
 
-	/// Return the location reserved for this child trie in their parent trie if there
-	/// is one.
-	pub fn parent_prefix(&self, _parent: Option<&'a ChildInfo>) -> &'a [u8] {
+	/// Return a reference to the location in the direct parent of
+	/// this trie.
+	/// The static part of the storage key is omitted.
+	pub fn unprefixed_storage_key(&self) -> &[u8] {
 		match self {
-			ChildInfo::ParentKeyId(..)
-			| ChildInfo::Default(..) => DEFAULT_CHILD_TYPE_PARENT_PREFIX,
+			ChildInfo::ParentKeyId(ChildTrie {
+				data,
+			}) => if data.len() != 0 {
+				&data[ChildType::ParentKeyId.parent_prefix().len()..]
+			} else {
+				&[]
+			},
 		}
 	}
 
-	/// Change a key to get prefixed with the parent prefix.
-	pub fn do_prefix_key(&self, key: &mut Vec<u8>, parent: Option<&ChildInfo>) {
-		let parent_prefix = self.parent_prefix(parent);
-		let key_len = key.len();
-		if parent_prefix.len() > 0 {
-			key.resize(key_len + parent_prefix.len(), 0);
-			key.copy_within(..key_len, parent_prefix.len());
-			key[..parent_prefix.len()].copy_from_slice(parent_prefix);
+	/// Return the type for this child info.
+	pub fn child_type(&self) -> ChildType {
+		match self {
+			ChildInfo::ParentKeyId(..) => ChildType::ParentKeyId,
 		}
 	}
 }
@@ -244,17 +250,37 @@ impl<'a> ChildInfo<'a> {
 pub enum ChildType {
 	/// If runtime module ensures that the child key is a unique id that will
 	/// only be used once, this parent key is used as a child trie unique id.
-	ParentKeyId = 0,
-	/// Default, this uses a cryptographic strong unique id as input, this id
-	/// is used as a unique child trie identifier.
-	CryptoUniqueId = 1,
+	ParentKeyId = 1,
+}
+
+impl ChildType {
+	/// Change a key to get prefixed with the parent prefix.
+	/// TODO try to make this method non public
+	pub fn do_prefix_key(&self, key: &mut Vec<u8>) {
+		let parent_prefix = self.parent_prefix();
+		let key_len = key.len();
+		if parent_prefix.len() > 0 {
+			key.resize(key_len + parent_prefix.len(), 0);
+			key.copy_within(..key_len, parent_prefix.len());
+			key[..parent_prefix.len()].copy_from_slice(parent_prefix);
+		}
+	}
+
+	/// Return the location reserved for this child trie in their parent trie if there
+	/// is one.
+	fn parent_prefix(&self) -> &'static [u8] {
+		match self {
+			&ChildType::ParentKeyId => DEFAULT_CHILD_TYPE_PARENT_PREFIX,
+		}
+	}
 }
 
 impl OwnedChildInfo {
-	/// Instantiates info for a default child trie.
-	pub fn new_default(unique_id: Vec<u8>) -> Self {
-		OwnedChildInfo::Default(OwnedChildTrie {
-			data: unique_id,
+	/// Instantiates info for a default child trie with a default parent.
+	pub fn new_default(mut storage_key: Vec<u8>) -> Self {
+		ChildType::ParentKeyId.do_prefix_key(&mut storage_key);
+		OwnedChildInfo::ParentKeyId(OwnedChildTrie {
+			data: storage_key,
 		})
 	}
 
@@ -262,18 +288,32 @@ impl OwnedChildInfo {
 	/// are not compatible.
 	pub fn try_update(&mut self, other: ChildInfo) -> bool {
 		match self {
-			OwnedChildInfo::Default(owned_child_trie) => owned_child_trie.try_update(other),
 			OwnedChildInfo::ParentKeyId(owned_child_trie) => owned_child_trie.try_update(other),
+		}
+	}
+
+	/// Owned variant of `info`.
+	pub fn owned_info(self) -> (Vec<u8>, u32) {
+		match self {
+			OwnedChildInfo::ParentKeyId(OwnedChildTrie {
+				data,
+			}) => (data, ChildType::ParentKeyId as u32),
+		}
+	}
+
+	/// Return a reference to the full location in the direct parent of
+	/// this trie.
+	pub fn storage_key(self) -> Vec<u8> {
+		match self {
+			OwnedChildInfo::ParentKeyId(OwnedChildTrie {
+				data,
+			}) => data,
 		}
 	}
 
 	/// Get `ChildInfo` reference to this owned child info.
 	pub fn as_ref(&self) -> ChildInfo {
 		match self {
-			OwnedChildInfo::Default(OwnedChildTrie { data })
-				=> ChildInfo::Default(ChildTrie {
-					data: data.as_slice(),
-				}),
 			OwnedChildInfo::ParentKeyId(OwnedChildTrie { data })
 				=> ChildInfo::ParentKeyId(ChildTrie {
 					data: data.as_slice(),
@@ -309,7 +349,6 @@ impl OwnedChildTrie {
 	/// are not compatible.
 	fn try_update(&mut self, other: ChildInfo) -> bool {
 		match other {
-			ChildInfo::Default(other) => self.data[..] == other.data[..],
 			ChildInfo::ParentKeyId(other) => self.data[..] == other.data[..],
 		}
 	}
@@ -319,17 +358,8 @@ const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default
 
 #[test]
 fn assert_default_trie_in_child_trie() {
-	let child_info = ChildInfo::new_default(b"any key");
-	let prefix = child_info.parent_prefix(None);
+	let child_info = OwnedChildInfo::new_default(b"any key".to_vec());
+	let child_info = child_info.as_ref();
+	let prefix = child_info.child_type().parent_prefix();
 	assert!(prefix.starts_with(well_known_keys::CHILD_STORAGE_KEY_PREFIX));
-}
-
-#[test]
-fn test_do_prefix() {
-	let child_info = ChildInfo::new_default(b"any key");
-	let mut prefixed_1 = b"key".to_vec();
-	child_info.do_prefix_key(&mut prefixed_1, None);
-	let mut prefixed_2 = DEFAULT_CHILD_TYPE_PARENT_PREFIX.to_vec();
-	prefixed_2.extend_from_slice(b"key");
-	assert_eq!(prefixed_1, prefixed_2);
 }

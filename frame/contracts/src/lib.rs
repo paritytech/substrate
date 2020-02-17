@@ -121,9 +121,9 @@ use sp_runtime::{
 };
 use frame_support::dispatch::{DispatchResult, Dispatchable};
 use frame_support::{
-	Parameter, decl_module, decl_event, decl_storage, decl_error, storage::child,
-	parameter_types, IsSubType,
-	weights::DispatchInfo,
+	Parameter, decl_module, decl_event, decl_storage, decl_error,
+	parameter_types, IsSubType, weights::DispatchInfo,
+	storage::child::{self, ChildInfo, OwnedChildInfo},
 };
 use frame_support::traits::{OnReapAccount, OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
@@ -225,16 +225,14 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 
 impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Associated child trie unique id is built from the hash part of the trie id.
-	pub fn child_trie_unique_id(&self) -> child::ChildInfo {
+	pub fn child_trie_unique_id(&self) -> ChildInfo {
 		trie_unique_id(&self.trie_id[..])
 	}
 }
 
 /// Associated child trie unique id is built from the hash part of the trie id.
-pub(crate) fn trie_unique_id(trie_id: &[u8]) -> child::ChildInfo {
-	// Every new contract uses a new trie id and trie id results from
-	// hashing, so we can use child storage key (trie id) for child info.
-	child::ChildInfo::new_uid_parent_key(trie_id)
+pub(crate) fn trie_unique_id(trie_id: &[u8]) -> ChildInfo {
+	ChildInfo::default_unchecked(trie_id)
 }
 
 pub type TombstoneContractInfo<T> =
@@ -267,6 +265,10 @@ pub trait TrieIdGenerator<AccountId> {
 	///
 	/// The implementation must ensure every new trie id is unique: two consecutive calls with the
 	/// same parameter needs to return different trie id values.
+	///
+	/// Also, the implementation is responsible for ensuring that `TrieId` starts with
+	/// `:child_storage:`.
+	/// TODO: We want to change this, see https://github.com/paritytech/substrate/issues/2325
 	fn trie_id(account_id: &AccountId) -> TrieId;
 }
 
@@ -290,8 +292,9 @@ where
 		let mut buf = Vec::new();
 		buf.extend_from_slice(account_id.as_ref());
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
-
-		T::Hashing::hash(&buf[..]).as_ref().to_vec()
+		let buf = T::Hashing::hash(&buf[..]);
+		// TODO: see https://github.com/paritytech/substrate/issues/2325
+		OwnedChildInfo::new_default(buf.as_ref().to_vec()).owned_info().0
 	}
 }
 
@@ -807,12 +810,10 @@ impl<T: Trait> Module<T> {
 		let key_values_taken = delta.iter()
 			.filter_map(|key| {
 				child::get_raw(
-					&origin_contract.trie_id,
 					origin_contract.child_trie_unique_id(),
 					&blake2_256(key),
 				).map(|value| {
 					child::kill(
-						&origin_contract.trie_id,
 						origin_contract.child_trie_unique_id(),
 						&blake2_256(key),
 					);
@@ -825,8 +826,8 @@ impl<T: Trait> Module<T> {
 		let tombstone = <TombstoneContractInfo<T>>::new(
 			// This operation is cheap enough because last_write (delta not included)
 			// is not this block as it has been checked earlier.
-			&child::child_root(
-				&origin_contract.trie_id,
+			&child::root(
+				origin_contract.child_trie_unique_id(),
 			)[..],
 			code_hash,
 		);
@@ -834,7 +835,6 @@ impl<T: Trait> Module<T> {
 		if tombstone != dest_tombstone {
 			for (key, value) in key_values_taken {
 				child::put_raw(
-					&origin_contract.trie_id,
 					origin_contract.child_trie_unique_id(),
 					&blake2_256(key),
 					&value,
@@ -935,7 +935,7 @@ decl_storage! {
 impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
 	fn on_reap_account(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
-			child::kill_storage(&info.trie_id, info.child_trie_unique_id());
+			child::kill_storage(info.child_trie_unique_id());
 		}
 	}
 }

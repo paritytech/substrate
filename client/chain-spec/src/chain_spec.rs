@@ -80,7 +80,6 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 					let child_info = ChildInfo::resolve_child_info(
 						child_content.child_type,
 						child_content.child_info.as_slice(),
-						storage_key.0.as_slice(),
 					).expect("chain spec contains correct content").to_owned();
 					(
 						storage_key.0,

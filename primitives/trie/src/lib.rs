@@ -212,7 +212,6 @@ pub fn read_trie_value_with<
 
 /// Determine the default child trie root.
 pub fn default_child_trie_root<L: TrieConfiguration>(
-	_storage_key: &[u8],
 ) -> <L::Hash as Hasher>::Out {
 	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
 }
@@ -220,7 +219,6 @@ pub fn default_child_trie_root<L: TrieConfiguration>(
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher,
 /// but a generic implementation may ignore this type parameter and use other hashers.
 pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
-	_storage_key: &[u8],
 	input: I,
 ) -> <L::Hash as Hasher>::Out
 	where
@@ -234,7 +232,6 @@ pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher,
 /// but a generic implementation may ignore this type parameter and use other hashers.
 pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
-	_storage_key: &[u8],
 	keyspace: &[u8],
 	db: &mut DB,
 	root_data: RD,
@@ -269,7 +266,6 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
 
 /// Call `f` for all keys in a child trie.
 pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
-	_storage_key: &[u8],
 	keyspace: &[u8],
 	db: &DB,
 	root_slice: &[u8],
@@ -320,7 +316,6 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 
 /// Read a value from the child trie.
 pub fn read_child_trie_value<L: TrieConfiguration, DB>(
-	_storage_key: &[u8],
 	keyspace: &[u8],
 	db: &DB,
 	root_slice: &[u8],
@@ -340,7 +335,6 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 
 /// Read a value from the child trie with given query.
 pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=DBValue>, DB>(
-	_storage_key: &[u8],
 	keyspace: &[u8],
 	db: &DB,
 	root_slice: &[u8],

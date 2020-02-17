@@ -202,7 +202,7 @@ impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 		let mut res = vec![];
 		res.extend_from_slice(&new_seed.to_le_bytes());
 		res.extend_from_slice(&account_id.to_le_bytes());
-		res
+		child::OwnedChildInfo::new_default(res).owned_info().0
 	}
 }
 

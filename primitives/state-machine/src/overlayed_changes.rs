@@ -247,12 +247,12 @@ impl OverlayedChanges {
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_child_storage(
 		&mut self,
-		storage_key: StorageKey,
 		child_info: ChildInfo,
 		key: StorageKey,
 		val: Option<StorageValue>,
 	) {
 		let extrinsic_index = self.extrinsic_index();
+		let storage_key = child_info.storage_key().to_vec();
 		let map_entry = self.prospective.children.entry(storage_key)
 			.or_insert_with(|| (Default::default(), child_info.to_owned()));
 		let updatable = map_entry.1.try_update(child_info);
@@ -275,10 +275,10 @@ impl OverlayedChanges {
 	/// [`discard_prospective`]: #method.discard_prospective
 	pub(crate) fn clear_child_storage(
 		&mut self,
-		storage_key: &[u8],
 		child_info: ChildInfo,
 	) {
 		let extrinsic_index = self.extrinsic_index();
+		let storage_key = child_info.storage_key();
 		let map_entry = self.prospective.children.entry(storage_key.to_vec())
 			.or_insert_with(|| (Default::default(), child_info.to_owned()));
 		let updatable = map_entry.1.try_update(child_info);
@@ -349,11 +349,11 @@ impl OverlayedChanges {
 
 	pub(crate) fn clear_child_prefix(
 		&mut self,
-		storage_key: &[u8],
 		child_info: ChildInfo,
 		prefix: &[u8],
 	) {
 		let extrinsic_index = self.extrinsic_index();
+		let storage_key = child_info.storage_key();
 		let map_entry = self.prospective.children.entry(storage_key.to_vec())
 			.or_insert_with(|| (Default::default(), child_info.to_owned()));
 		let updatable = map_entry.1.try_update(child_info);
@@ -538,7 +538,8 @@ impl OverlayedChanges {
 				.chain(self.committed.children.keys());
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(
-				storage_key.clone(),
+				self.child_info(storage_key).cloned()
+					.expect("child info initialized in either committed or prospective"),
 				self.committed.children.get(storage_key)
 					.into_iter()
 					.flat_map(|(map, _)| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
@@ -547,8 +548,6 @@ impl OverlayedChanges {
 							.into_iter()
 							.flat_map(|(map, _)| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 					),
-				self.child_info(storage_key).cloned()
-					.expect("child info initialized in either committed or prospective"),
 			)
 		);
 
@@ -852,38 +851,40 @@ mod tests {
 	#[test]
 	fn next_child_storage_key_change_works() {
 		let child = b"Child1".to_vec();
-		let child_info = ChildInfo::new_default(b"uniqueid");
+		let child_info = OwnedChildInfo::new_default(child.clone());
+		let child_info = child_info.as_ref();
+		let child = child_info.storage_key();
 		let mut overlay = OverlayedChanges::default();
-		overlay.set_child_storage(child.clone(), child_info, vec![20], Some(vec![20]));
-		overlay.set_child_storage(child.clone(), child_info, vec![30], Some(vec![30]));
-		overlay.set_child_storage(child.clone(), child_info, vec![40], Some(vec![40]));
+		overlay.set_child_storage(child_info, vec![20], Some(vec![20]));
+		overlay.set_child_storage(child_info, vec![30], Some(vec![30]));
+		overlay.set_child_storage(child_info, vec![40], Some(vec![40]));
 		overlay.commit_prospective();
-		overlay.set_child_storage(child.clone(), child_info, vec![10], Some(vec![10]));
-		overlay.set_child_storage(child.clone(), child_info, vec![30], None);
+		overlay.set_child_storage(child_info, vec![10], Some(vec![10]));
+		overlay.set_child_storage(child_info, vec![30], None);
 
 		// next_prospective < next_committed
-		let next_to_5 = overlay.next_child_storage_key_change(&child, &[5]).unwrap();
+		let next_to_5 = overlay.next_child_storage_key_change(child, &[5]).unwrap();
 		assert_eq!(next_to_5.0.to_vec(), vec![10]);
 		assert_eq!(next_to_5.1.value, Some(vec![10]));
 
 		// next_committed < next_prospective
-		let next_to_10 = overlay.next_child_storage_key_change(&child, &[10]).unwrap();
+		let next_to_10 = overlay.next_child_storage_key_change(child, &[10]).unwrap();
 		assert_eq!(next_to_10.0.to_vec(), vec![20]);
 		assert_eq!(next_to_10.1.value, Some(vec![20]));
 
 		// next_committed == next_prospective
-		let next_to_20 = overlay.next_child_storage_key_change(&child, &[20]).unwrap();
+		let next_to_20 = overlay.next_child_storage_key_change(child, &[20]).unwrap();
 		assert_eq!(next_to_20.0.to_vec(), vec![30]);
 		assert_eq!(next_to_20.1.value, None);
 
 		// next_committed, no next_prospective
-		let next_to_30 = overlay.next_child_storage_key_change(&child, &[30]).unwrap();
+		let next_to_30 = overlay.next_child_storage_key_change(child, &[30]).unwrap();
 		assert_eq!(next_to_30.0.to_vec(), vec![40]);
 		assert_eq!(next_to_30.1.value, Some(vec![40]));
 
-		overlay.set_child_storage(child.clone(), child_info, vec![50], Some(vec![50]));
+		overlay.set_child_storage(child_info, vec![50], Some(vec![50]));
 		// next_prospective, no next_committed
-		let next_to_40 = overlay.next_child_storage_key_change(&child, &[40]).unwrap();
+		let next_to_40 = overlay.next_child_storage_key_change(child, &[40]).unwrap();
 		assert_eq!(next_to_40.0.to_vec(), vec![50]);
 		assert_eq!(next_to_40.1.value, Some(vec![50]));
 	}

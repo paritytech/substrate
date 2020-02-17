@@ -334,12 +334,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_storage_keys(
 		&self,
 		id: &BlockId<Block>,
-		child_storage_key: &StorageKey,
 		child_info: ChildInfo,
 		key_prefix: &StorageKey
 	) -> sp_blockchain::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?
-			.child_keys(&child_storage_key.0, child_info, &key_prefix.0)
+			.child_keys(child_info, &key_prefix.0)
 			.into_iter()
 			.map(StorageKey)
 			.collect();
@@ -350,12 +349,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_storage(
 		&self,
 		id: &BlockId<Block>,
-		storage_key: &StorageKey,
 		child_info: ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
-			.child_storage(&storage_key.0, child_info, &key.0)
+			.child_storage(child_info, &key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 			.map(StorageData))
 	}
@@ -364,12 +362,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_storage_hash(
 		&self,
 		id: &BlockId<Block>,
-		storage_key: &StorageKey,
 		child_info: ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		Ok(self.state_at(id)?
-			.child_storage_hash(&storage_key.0, child_info, &key.0)
+			.child_storage_hash(child_info, &key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 		)
 	}
@@ -406,7 +403,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn read_child_proof<I>(
 		&self,
 		id: &BlockId<Block>,
-		storage_key: &[u8],
 		child_info: ChildInfo,
 		keys: I,
 	) -> sp_blockchain::Result<StorageProof> where
@@ -414,7 +410,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		I::Item: AsRef<[u8]>,
 	{
 		self.state_at(id)
-			.and_then(|state| prove_child_read(state, storage_key, child_info, keys)
+			.and_then(|state| prove_child_read(state, child_info, keys)
 				.map_err(Into::into))
 	}
 

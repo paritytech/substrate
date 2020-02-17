@@ -123,13 +123,13 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 
 		let mut storage = self.genesis_config().genesis_map();
 
-		let child_roots = storage.children.iter().map(|(sk, child_content)| {
+		let child_roots = storage.children.iter().map(|(_sk, child_content)| {
 			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 				child_content.data.clone().into_iter().collect()
 			);
-			let mut prefixed_storage_key = sk.clone();
-			child_content.child_info.as_ref().do_prefix_key(&mut prefixed_storage_key, None);
-			(prefixed_storage_key, state_root.encode())
+			let child_info = child_content.child_info.as_ref();
+			let storage_key = child_info.storage_key().to_vec();
+			(storage_key, state_root.encode())
 		});
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			storage.top.clone().into_iter().chain(child_roots).collect()
@@ -194,14 +194,13 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// # Panics
 	///
 	/// Panics if the key is empty.
-	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
+	fn add_extra_child_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		mut self,
-		storage_key: SK,
 		child_info: ChildInfo,
 		key: K,
 		value: V,
 	) -> Self {
-		let storage_key = storage_key.into();
+		let storage_key = child_info.storage_key().to_vec();
 		let key = key.into();
 		assert!(!storage_key.is_empty());
 		assert!(!key.is_empty());

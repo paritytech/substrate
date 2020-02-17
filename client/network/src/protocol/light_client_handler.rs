@@ -48,7 +48,7 @@ use rustc_hex::ToHex;
 use sc_client::light::fetcher;
 use sc_client_api::StorageProof;
 use sc_peerset::ReputationChange;
-use sp_core::storage::{ChildInfo, StorageKey};
+use sp_core::storage::{ChildInfo, OwnedChildInfo, StorageKey};
 use sp_blockchain::{Error as ClientError};
 use sp_runtime::traits::{Block, Header, NumberFor, Zero};
 use std::{
@@ -510,36 +510,20 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof =
-			if let Some(info) = ChildInfo::resolve_child_info(
-				request.child_type,
-				&request.child_info[..],
-				&request.storage_key[..],
-			) {
-				match self.chain.read_child_proof(&block, &request.storage_key, info, &request.keys) {
-					Ok(proof) => proof,
-					Err(error) => {
-						log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",
-							request_id,
-							peer,
-							request.storage_key.to_hex::<String>(),
-							fmt_keys(request.keys.first(), request.keys.last()),
-							request.block,
-							error);
-						StorageProof::empty()
-					}
-				}
-			} else {
+		let child_info = OwnedChildInfo::new_default(request.storage_key.clone());
+		let proof =	match self.chain.read_child_proof(&block, child_info.as_ref(), &request.keys) {
+			Ok(proof) => proof,
+			Err(error) => {
 				log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",
 					request_id,
 					peer,
 					request.storage_key.to_hex::<String>(),
 					fmt_keys(request.keys.first(), request.keys.last()),
 					request.block,
-					"invalid child info and type"
-				);
+					error);
 				StorageProof::empty()
-			};
+			}
+		};
 
 		let response = {
 			let r = api::v1::light::RemoteReadResponse { proof: proof.encode() };
@@ -936,8 +920,6 @@ fn serialise_request<B: Block>(id: u64, request: &Request<B>) -> api::v1::light:
 			let r = api::v1::light::RemoteReadChildRequest {
 				block: request.block.encode(),
 				storage_key: request.storage_key.clone(),
-				child_type: request.child_type.clone(),
-				child_info: request.child_info.clone(),
 				keys: request.keys.clone(),
 			};
 			api::v1::light::request::Request::RemoteReadChildRequest(r)
@@ -1144,8 +1126,6 @@ mod tests {
 	use sp_runtime::{generic::Header, traits::BlakeTwo256};
 	use super::{Event, LightClientHandler, Request, OutboundProtocol, PeerStatus};
 	use void::Void;
-
-	const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"foobarbaz");
 
 	type Block = sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
 	type Handler = LightClientHandler<SubstreamRef<Arc<StreamMuxerBox>>, Block>;
@@ -1640,15 +1620,12 @@ mod tests {
 
 	#[test]
 	fn receives_remote_read_child_response() {
-		let info = CHILD_INFO.info();
 		let mut chan = oneshot::channel();
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			storage_key: b":child_storage:sub".to_vec(),
 			keys: vec![b":key".to_vec()],
-			child_info: info.0.to_vec(),
-			child_type: info.1,
 			retry_count: None,
 		};
 		issue_request(Request::ReadChild { request, sender: chan.0 });
@@ -1743,15 +1720,12 @@ mod tests {
 
 	#[test]
 	fn send_receive_read_child() {
-		let info = CHILD_INFO.info();
 		let chan = oneshot::channel();
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b":child_storage:sub".to_vec(),
+			storage_key: b"sub".to_vec(),
 			keys: vec![b":key".to_vec()],
-			child_info: info.0.to_vec(),
-			child_type: info.1,
 			retry_count: None,
 		};
 		send_receive(Request::ReadChild { request, sender: chan.0 });
