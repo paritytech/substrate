@@ -3501,7 +3501,14 @@ dependencies = [
  "pallet-contracts-rpc",
  "pallet-transaction-payment-rpc",
  "sc-client",
+ "sc-consensus-babe",
+ "sc-consensus-babe-rpc",
+ "sc-consensus-epochs",
+ "sc-keystore",
  "sp-api",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-babe",
  "sp-runtime",
  "sp-transaction-pool",
  "substrate-frame-rpc-system",
@@ -5840,6 +5847,7 @@ dependencies = [
  "sc-service",
  "sc-telemetry",
  "schnorrkel",
+ "serde",
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
@@ -5856,6 +5864,31 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.1.22",
+]
+
+[[package]]
+name = "sc-consensus-babe-rpc"
+version = "0.8.0"
+dependencies = [
+ "derive_more",
+ "futures 0.3.4",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "sc-consensus-babe",
+ "sc-consensus-epochs",
+ "sc-keystore",
+ "serde",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-babe",
+ "sp-core",
+ "sp-keyring",
+ "sp-runtime",
+ "substrate-test-runtime-client",
+ "tempfile",
 ]
 
 [[package]]
