@@ -92,7 +92,7 @@ use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
 use frame_support::weights::{
-	GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee,
+	GetDispatchInfo, DispatchClass, FunctionOf,
 };
 use frame_system::{self as system, ensure_signed};
 
@@ -121,7 +121,11 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = <SudoPassthrough<<T as Trait>::Call>>::new()]
+		#[weight = FunctionOf(
+			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().weight + 10_000, 
+			DispatchClass::Normal,
+			true
+		)]
 		fn sudo(origin, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -169,7 +173,13 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = <SudoAsPassthrough<<T::Lookup as StaticLookup>::Source, <T as Trait>::Call>>::new()]
+		#[weight = FunctionOf(
+			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
+				args.1.get_dispatch_info().weight + 10_000
+			}, 
+			DispatchClass::Normal,
+			true
+		)]
 		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -214,49 +224,5 @@ decl_error! {
 	pub enum Error for Module<T: Trait> {
 		/// Sender must be the Sudo account
 		RequireSudo,
-	}
-}
-
-/// Simple pass through for the weight function, but fee isn't paid because it is Sudo.
-struct SudoPassthrough<Call>(sp_std::marker::PhantomData<Call>);
-
-impl<Call> SudoPassthrough<Call> {
-	fn new() -> Self { Self(Default::default()) }
-}
-impl<Call: GetDispatchInfo> WeighData<(&Box<Call>,)> for SudoPassthrough<Call> {
-	fn weigh_data(&self, (call,): (&Box<Call>,)) -> Weight {
-		call.get_dispatch_info().weight + 10_000
-	}
-}
-impl<Call: GetDispatchInfo> ClassifyDispatch<(&Box<Call>,)> for SudoPassthrough<Call> {
-	fn classify_dispatch(&self, (call,): (&Box<Call>,)) -> DispatchClass {
-		call.get_dispatch_info().class
-	}
-}
-impl<Call: GetDispatchInfo> PaysFee<(&Box<Call>,)> for SudoPassthrough<Call> {
-	fn pays_fee(&self, (call,): (&Box<Call>,)) -> bool {
-		true
-	}
-}
-
-/// Simple pass through for the weight function, but fee isn't paid because it is Sudo.
-struct SudoAsPassthrough<Lookup, Call>(sp_std::marker::PhantomData<(Lookup, Call)>);
-
-impl<Lookup, Call> SudoAsPassthrough<Lookup, Call> {
-	fn new() -> Self { Self(Default::default()) }
-}
-impl<Lookup, Call: GetDispatchInfo> WeighData<(&Lookup, &Box<Call>)> for SudoAsPassthrough<Lookup, Call> {
-	fn weigh_data(&self, (_who, call): (&Lookup, &Box<Call>)) -> Weight {
-		call.get_dispatch_info().weight + 10_000
-	}
-}
-impl<Lookup, Call: GetDispatchInfo> ClassifyDispatch<(&Lookup, &Box<Call>)> for SudoAsPassthrough<Lookup, Call> {
-	fn classify_dispatch(&self, (_who, call): (&Lookup, &Box<Call>)) -> DispatchClass {
-		call.get_dispatch_info().class
-	}
-}
-impl<Lookup, Call: GetDispatchInfo> PaysFee<(&Lookup, &Box<Call>)> for SudoAsPassthrough<Lookup, Call> {
-	fn pays_fee(&self, (_who, call): (&Lookup, &Box<Call>)) -> bool {
-		true
 	}
 }
