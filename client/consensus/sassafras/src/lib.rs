@@ -1154,7 +1154,15 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, 
 					}
 				}
 			},
-			PreDigest::Secondary { .. } => (),
+			PreDigest::Secondary { commitments, .. } => {
+				let epoch = viable_epoch.as_mut();
+
+				for proof in commitments {
+					if epoch.publishing.proofs.iter().position(|p| *p == proof).is_none() {
+						epoch.publishing.proofs.push(proof);
+					}
+				}
+			},
 		}
 
 		if let Some(post_block_descriptor) = post_block_digest {

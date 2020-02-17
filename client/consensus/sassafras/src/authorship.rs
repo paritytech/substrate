@@ -30,6 +30,7 @@ use sp_consensus_sassafras::{
 };
 use sc_consensus_epochs::ViableEpochDescriptor;
 use sc_keystore::KeyStorePtr;
+use log::trace;
 use super::{Epoch, PublishingSet};
 
 /// Calculates the primary selection threshold for a given authority, taking
@@ -79,6 +80,7 @@ pub(super) fn claim_slot(
 		if config.secondary_slots {
 			claim_secondary_slot(
 				slot_number,
+				epoch,
 				&epoch.validating.authorities,
 				keystore,
 				epoch.validating.randomness,
@@ -89,13 +91,16 @@ pub(super) fn claim_slot(
 	})
 }
 
+const MAX_PRE_DIGEST_COMMITMENTS: usize = 4;
+
 /// Claim a primary slot.
 fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keystore: &KeyStorePtr,
 ) -> Option<(PreDigest, AuthorityPair)> {
-	const MAX_PRE_DIGEST_COMMITMENTS: usize = 4;
+	trace!(target: "sassafras", "Claiming a primary slot with slot number: {:?}", slot_number);
+	trace!(target: "sassafras", "Epoch data as of now: {:?}", epoch);
 
 	let ticket_vrf_index = epoch.validating.proofs.iter().position(|(s, _)| *s == slot_number)? as u32;
 	let ticket_vrf_proof = epoch.validating.proofs[ticket_vrf_index as usize].clone().1;
@@ -186,6 +191,7 @@ impl PublishingSet {
 /// to propose.
 fn claim_secondary_slot(
 	slot_number: SlotNumber,
+	epoch: &Epoch,
 	authorities: &[(AuthorityId, SassafrasAuthorityWeight)],
 	keystore: &KeyStorePtr,
 	randomness: [u8; 32],
@@ -193,6 +199,9 @@ fn claim_secondary_slot(
 	if authorities.is_empty() {
 		return None;
 	}
+
+	trace!(target: "sassafras", "Claiming a secondary slot with slot number: {:?}", slot_number);
+	trace!(target: "sassafras", "Epoch data as of now: {:?}", epoch);
 
 	let expected_author = secondary_slot_author(
 		slot_number,
@@ -209,6 +218,15 @@ fn claim_secondary_slot(
 		})
 	{
 		if pair.public() == *expected_author {
+			let mut commitments = Vec::new();
+			for (_, _, _, proof) in &epoch.publishing.pending {
+				if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS &&
+					!epoch.publishing.proofs.iter().position(|p| p == proof).is_some()
+				{
+					commitments.push(proof.clone());
+				}
+			}
+
 			let pre_digest = PreDigest::Secondary {
 				slot_number,
 				authority_index: authority_index as u32,
