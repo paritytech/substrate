@@ -18,7 +18,7 @@ use super::upgrade::{RegisteredProtocol, RegisteredProtocolEvent, RegisteredProt
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures_timer::Delay;
-use libp2p::core::{ConnectedPoint, Negotiated, PeerId, Endpoint};
+use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
 use libp2p::core::upgrade::{InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
@@ -26,10 +26,11 @@ use libp2p::swarm::{
 	KeepAlive,
 	ProtocolsHandlerUpgrErr,
 	SubstreamProtocol,
+	NegotiatedSubstream,
 };
 use log::{debug, error};
 use smallvec::{smallvec, SmallVec};
-use std::{borrow::Cow, error, fmt, io, marker::PhantomData, mem, time::Duration};
+use std::{borrow::Cow, error, fmt, io, mem, time::Duration};
 use std::{pin::Pin, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
@@ -86,32 +87,22 @@ use std::{pin::Pin, task::{Context, Poll}};
 /// We consider that we are now "closed" if the remote closes all the existing substreams.
 /// Re-opening it can then be performed by closing all active substream and re-opening one.
 ///
-pub struct CustomProtoHandlerProto<TSubstream> {
+pub struct CustomProtoHandlerProto {
 	/// Configuration for the protocol upgrade to negotiate.
 	protocol: RegisteredProtocol,
-
-	/// Marker to pin the generic type.
-	marker: PhantomData<TSubstream>,
 }
 
-impl<TSubstream> CustomProtoHandlerProto<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite + Unpin,
-{
+impl CustomProtoHandlerProto {
 	/// Builds a new `CustomProtoHandlerProto`.
 	pub fn new(protocol: RegisteredProtocol) -> Self {
 		CustomProtoHandlerProto {
 			protocol,
-			marker: PhantomData,
 		}
 	}
 }
 
-impl<TSubstream> IntoProtocolsHandler for CustomProtoHandlerProto<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite + Unpin,
-{
-	type Handler = CustomProtoHandler<TSubstream>;
+impl IntoProtocolsHandler for CustomProtoHandlerProto {
+	type Handler = CustomProtoHandler;
 
 	fn inbound_protocol(&self) -> RegisteredProtocol {
 		self.protocol.clone()
@@ -132,12 +123,12 @@ where
 }
 
 /// The actual handler once the connection has been established.
-pub struct CustomProtoHandler<TSubstream> {
+pub struct CustomProtoHandler {
 	/// Configuration for the protocol upgrade to negotiate.
 	protocol: RegisteredProtocol,
 
 	/// State of the communications with the remote.
-	state: ProtocolState<TSubstream>,
+	state: ProtocolState,
 
 	/// Identifier of the node we're talking to. Used only for logging purposes and shouldn't have
 	/// any influence on the behaviour.
@@ -155,11 +146,11 @@ pub struct CustomProtoHandler<TSubstream> {
 }
 
 /// State of the handler.
-enum ProtocolState<TSubstream> {
+enum ProtocolState {
 	/// Waiting for the behaviour to tell the handler whether it is enabled or disabled.
 	Init {
 		/// List of substreams opened by the remote but that haven't been processed yet.
-		substreams: SmallVec<[RegisteredProtocolSubstream<Negotiated<TSubstream>>; 6]>,
+		substreams: SmallVec<[RegisteredProtocolSubstream<NegotiatedSubstream>; 6]>,
 		/// Deadline after which the initialization is abnormally long.
 		init_deadline: Delay,
 	},
@@ -175,9 +166,9 @@ enum ProtocolState<TSubstream> {
 	/// If we are in this state, we have sent a `CustomProtocolOpen` message to the outside.
 	Normal {
 		/// The substreams where bidirectional communications happen.
-		substreams: SmallVec<[RegisteredProtocolSubstream<Negotiated<TSubstream>>; 4]>,
+		substreams: SmallVec<[RegisteredProtocolSubstream<NegotiatedSubstream>; 4]>,
 		/// Contains substreams which are being shut down.
-		shutdown: SmallVec<[RegisteredProtocolSubstream<Negotiated<TSubstream>>; 4]>,
+		shutdown: SmallVec<[RegisteredProtocolSubstream<NegotiatedSubstream>; 4]>,
 	},
 
 	/// We are disabled. Contains substreams that are being closed.
@@ -185,7 +176,7 @@ enum ProtocolState<TSubstream> {
 	/// outside or we have never sent any `CustomProtocolOpen` in the first place.
 	Disabled {
 		/// List of substreams to shut down.
-		shutdown: SmallVec<[RegisteredProtocolSubstream<Negotiated<TSubstream>>; 6]>,
+		shutdown: SmallVec<[RegisteredProtocolSubstream<NegotiatedSubstream>; 6]>,
 
 		/// If true, we should reactivate the handler after all the substreams in `shutdown` have
 		/// been closed.
@@ -257,10 +248,7 @@ pub enum CustomProtoHandlerOut {
 	},
 }
 
-impl<TSubstream> CustomProtoHandler<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite + Unpin,
-{
+impl CustomProtoHandler {
 	/// Enables the handler.
 	fn enable(&mut self) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
@@ -459,7 +447,7 @@ where
 	/// Called by `inject_fully_negotiated_inbound` and `inject_fully_negotiated_outbound`.
 	fn inject_fully_negotiated(
 		&mut self,
-		mut substream: RegisteredProtocolSubstream<Negotiated<TSubstream>>
+		mut substream: RegisteredProtocolSubstream<NegotiatedSubstream>
 	) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
@@ -515,11 +503,9 @@ where
 	}
 }
 
-impl<TSubstream> ProtocolsHandler for CustomProtoHandler<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + Unpin {
+impl ProtocolsHandler for CustomProtoHandler {
 	type InEvent = CustomProtoHandlerIn;
 	type OutEvent = CustomProtoHandlerOut;
-	type Substream = TSubstream;
 	type Error = ConnectionKillError;
 	type InboundProtocol = RegisteredProtocol;
 	type OutboundProtocol = RegisteredProtocol;
@@ -531,14 +517,14 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		proto: <Self::InboundProtocol as InboundUpgrade<Negotiated<TSubstream>>>::Output
+		proto: <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
 	) {
 		self.inject_fully_negotiated(proto);
 	}
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		proto: <Self::OutboundProtocol as OutboundUpgrade<Negotiated<TSubstream>>>::Output,
+		proto: <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
 		_: Self::OutboundOpenInfo
 	) {
 		self.inject_fully_negotiated(proto);
@@ -601,10 +587,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 	}
 }
 
-impl<TSubstream> fmt::Debug for CustomProtoHandler<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite + Unpin,
-{
+impl fmt::Debug for CustomProtoHandler {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		f.debug_struct("CustomProtoHandler")
 			.finish()
@@ -613,10 +596,10 @@ where
 
 /// Given a list of substreams, tries to shut them down. The substreams that have been successfully
 /// shut down are removed from the list.
-fn shutdown_list<TSubstream>
-	(list: &mut SmallVec<impl smallvec::Array<Item = RegisteredProtocolSubstream<Negotiated<TSubstream>>>>,
+fn shutdown_list
+	(list: &mut SmallVec<impl smallvec::Array<Item = RegisteredProtocolSubstream<NegotiatedSubstream>>>,
 	cx: &mut Context)
-where TSubstream: AsyncRead + AsyncWrite + Unpin {
+{
 	'outer: for n in (0..list.len()).rev() {
 		let mut substream = list.swap_remove(n);
 		loop {
