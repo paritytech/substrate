@@ -737,6 +737,10 @@ impl_runtime_apis! {
 				secondary_slots: true,
 			}
 		}
+
+		fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
+			Babe::current_epoch_start()
+		}
 	}
 
 	impl sp_authority_discovery::AuthorityDiscoveryApi<Block> for Runtime {
