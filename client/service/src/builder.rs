@@ -1033,7 +1033,7 @@ ServiceBuilder<
 
 			let _ = to_spawn_tx.unbounded_send((
 				Box::pin(future),
-				From::from("prometheus-on-block")
+				From::from("prometheus-endpoint")
 			));
 
 			Some(metrics)
