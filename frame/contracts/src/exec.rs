@@ -1122,7 +1122,7 @@ mod tests {
 			);
 		});
 
-		// This test sends 50 units of currency as an endownment to a newly
+		// This test sends 50 units of currency as an endowment to a newly
 		// instantiated contract.
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let mut loader = MockLoader::empty();

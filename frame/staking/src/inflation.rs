@@ -24,7 +24,7 @@ use sp_runtime::{Perbill, PerThing, traits::AtLeast32Bit, curve::PiecewiseLinear
 /// The total payout to all validators (and their nominators) per era.
 ///
 /// Defined as such:
-/// `payout = yearly_inflation(npos_token_staked / total_tokens) * total_tokans / era_per_year`
+/// `payout = yearly_inflation(npos_token_staked / total_tokens) * total_tokens / era_per_year`
 ///
 /// `era_duration` is expressed in millisecond.
 pub fn compute_total_payout<N>(

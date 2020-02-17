@@ -55,7 +55,7 @@ use sp_core::storage::ChildType;
 pub use sp_consensus_babe::AuthorityId;
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
-// Inlucde the WASM binary
+// Include the WASM binary
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
@@ -114,7 +114,7 @@ pub enum Extrinsic {
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
 }
 
-parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinisic does not need this
+parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
 
 #[cfg(feature = "std")]
 impl serde::Serialize for Extrinsic {

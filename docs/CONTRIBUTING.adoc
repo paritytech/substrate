@@ -52,7 +52,7 @@ If your PR changes the external APIs or interfaces used by Polkadot, **a corresp
 
 To update a corresponding Polkadot PR:
 
-0. Pull lastet Polkadot master (or clone it, if you haven't yet).
+0. Pull latest Polkadot master (or clone it, if you haven't yet).
 1. Replace `polkadot-master` in all `Cargo.toml` with the name of the PR-branch - e.g. by running `find . -name "Cargo.toml" -exec sed -i "s/polkadot-master/PR_BRANCH/g" {}` (and to your repo, if the branch is not on mainline); Commit this change.
 2. Make the changes required to pass the build again.
 3. Submit all this as a PR against the Polkadot Repo, link that new PR in the existing substrate PR for reference

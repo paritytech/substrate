@@ -722,7 +722,7 @@ pub struct BuildSpecCmd {
 	pub node_key_params: NodeKeyParams,
 }
 
-/// Wrapper type of `String` which holds an arbitary sized unsigned integer formatted as decimal.
+/// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a decimal.
 #[derive(Debug, Clone)]
 pub struct BlockNumber(String);
 
@@ -912,7 +912,7 @@ pub enum Subcommand {
 	/// Import blocks from file.
 	ImportBlocks(ImportBlocksCmd),
 
-	/// Validte a single block.
+	/// Validate a single block.
 	CheckBlock(CheckBlockCmd),
 
 	/// Revert chain to the previous state.
@@ -1270,4 +1270,3 @@ impl BenchmarkCmd {
 		Ok(())
 	}
 }
-
