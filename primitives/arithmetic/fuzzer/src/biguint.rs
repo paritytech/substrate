@@ -22,7 +22,7 @@
 //! Once a panic is found, it can be debugged with
 //! `cargo hfuzz run-debug biguint hfuzz_workspace/biguint/*.fuzz`.
 //!
-//! # More infomation
+//! # More information
 //! More information about `honggfuzz` can be found
 //! [here](https://docs.rs/honggfuzz/).
 

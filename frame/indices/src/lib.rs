@@ -130,7 +130,7 @@ decl_module! {
 		}
 
 		/// Assign an index already owned by the sender to another account. The balance reservation
-		/// is effectively transfered to the new account.
+		/// is effectively transferred to the new account.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///

@@ -83,7 +83,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 219,
-	impl_version: 0,
+	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -419,7 +419,7 @@ impl pallet_contracts::Trait for Runtime {
 	type Randomness = RandomnessCollectiveFlip;
 	type Call = Call;
 	type Event = Event;
-	type DetermineContractAddress = pallet_contracts::SimpleAddressDeterminator<Runtime>;
+	type DetermineContractAddress = pallet_contracts::SimpleAddressDeterminer<Runtime>;
 	type ComputeDispatchFee = pallet_contracts::DefaultDispatchFeeComputor<Runtime>;
 	type TrieIdGenerator = pallet_contracts::TrieIdFromParentCounter<Runtime>;
 	type GasPayment = ();
@@ -608,7 +608,7 @@ construct_runtime!(
 		Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
-		Staking: pallet_staking,
+		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		Democracy: pallet_democracy::{Module, Call, Storage, Config, Event<T>},
 		Council: pallet_collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
@@ -618,8 +618,8 @@ construct_runtime!(
 		FinalityTracker: pallet_finality_tracker::{Module, Call, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Treasury: pallet_treasury::{Module, Call, Storage, Config, Event<T>},
-		Contracts: pallet_contracts,
-		Sudo: pallet_sudo,
+		Contracts: pallet_contracts::{Module, Call, Config<T>, Storage, Event<T>},
+		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		ImOnline: pallet_im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		AuthorityDiscovery: pallet_authority_discovery::{Module, Call, Config},
 		Offences: pallet_offences::{Module, Call, Storage, Event},

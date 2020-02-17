@@ -106,7 +106,7 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 					// save to be discarded later.
 					pinned_insertions.insert(overlay.hash.clone(), overlay.inserted);
 				} else {
-					// discard immediatelly.
+					// discard immediately.
 					parents.remove(&overlay.hash);
 					discard_values(&mut values, overlay.inserted);
 				}
