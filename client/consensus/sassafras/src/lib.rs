@@ -18,9 +18,9 @@
 
 pub use sp_consensus_sassafras::{
 	SassafrasApi, ConsensusLog, SASSAFRAS_ENGINE_ID, SlotNumber, SassafrasConfiguration,
-	AuthorityId, AuthorityPair, AuthoritySignature,
+	AuthorityId, AuthorityPair, AuthoritySignature, VRFOutput,
 	SassafrasAuthorityWeight, VRF_OUTPUT_LENGTH, VRFProof, Randomness,
-	digests::{PreDigest, CompatibleDigestItem, NextEpochDescriptor},
+	digests::{PreDigest, CompatibleDigestItem, NextEpochDescriptor, PostBlockDescriptor},
 };
 pub use sp_consensus::SyncOracle;
 
@@ -39,7 +39,7 @@ use sp_runtime::{
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use sc_keystore::KeyStorePtr;
 use parking_lot::Mutex;
-use sp_core::Pair;
+use sp_core::{U512, Pair};
 use sp_inherents::{InherentDataProviders, InherentData};
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sp_consensus::{
@@ -80,31 +80,71 @@ mod authorship;
 #[cfg(test)]
 mod tests;
 
-/// Validator set of a particular epoch, can be either publishing or validating.
+/// Set that are publishing.
 #[derive(Debug, Clone, Encode, Decode)]
-pub struct ValidatorSet {
-	/// Proofs of all VRFs collected.
-	pub proofs: Vec<VRFProof>,
+pub struct PublishingSet {
+	/// Epoch index of validating.
+	pub epoch_index: u64,
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	/// Randomness for this epoch.
 	pub randomness: Randomness,
+	/// Proofs of all VRFs collected.
+	pub proofs: Vec<VRFProof>,
+	/// Local pending proofs collected.
+	pub pending: Vec<(u64, u32, VRFOutput, VRFProof)>,
+}
+
+impl PublishingSet {
+	/// Maximum attempts for proof generation.
+	pub fn max_attempts(&self) -> u64 {
+		64
+	}
+
+	/// Difficulty where the attempts are valid.
+	pub fn threshold(&self) -> (u64, u64) {
+		(1, 4)
+	}
+}
+
+/// Set that are validating.
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct ValidatingSet {
+	/// Start slot of the epoch.
+	pub start_slot: SlotNumber,
+	/// Duration of this epoch.
+	pub duration: SlotNumber,
+	/// Epoch index of validating.
+	pub epoch_index: u64,
+	/// The authorities and their weights.
+	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+	/// Randomness for this epoch.
+	pub randomness: Randomness,
+	/// Proofs as ordered by slot numbers.
+	pub proofs: Vec<(SlotNumber, VRFProof)>,
+	/// Pending local proofs.
+	pub pending: Vec<(u64, u32, VRFOutput, VRFProof)>,
+}
+
+impl ValidatingSet {
+	/// Maximum attempts for proof generation.
+	pub fn max_attempts(&self) -> u64 {
+		64
+	}
+
+	/// Difficulty where the attempts are valid.
+	pub fn threshold(&self) -> (u64, u64) {
+		(1, 4)
+	}
 }
 
 /// Epoch data for Sassafras
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct Epoch {
-	/// Start slot of the epoch.
-	pub start_slot: SlotNumber,
-	/// Duration of this epoch.
-	pub duration: SlotNumber,
-	/// Epoch index.
-	pub epoch_index: u64,
-
 	/// Publishing validator set. The set will start validating block in the next epoch.
-	pub publishing: ValidatorSet,
+	pub publishing: PublishingSet,
 	/// Validating validator set. The set validates block in the current epoch.
-	pub validating: ValidatorSet,
+	pub validating: ValidatingSet,
 }
 
 impl EpochT for Epoch {
@@ -113,25 +153,41 @@ impl EpochT for Epoch {
 
 	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
 		Epoch {
-			epoch_index: self.epoch_index + 1,
-			start_slot: self.start_slot + self.duration,
-			duration: self.duration,
-
-			validating: self.publishing.clone(),
-			publishing: ValidatorSet {
-				proofs: Vec::new(),
+			validating: ValidatingSet {
+				start_slot: self.validating.start_slot + self.validating.duration,
+				duration: self.validating.duration,
+				epoch_index: self.publishing.epoch_index,
+				authorities: self.publishing.authorities.clone(),
+				randomness: self.publishing.randomness,
+				proofs: self.publishing.proofs.clone()
+					.into_iter()
+					.enumerate()
+					.map(|(i, p)| (i as u64, p))
+					.collect(),
+				pending: self.publishing.pending.clone(),
+			},
+			publishing: PublishingSet {
+				epoch_index: self.publishing.epoch_index + 1,
 				authorities: descriptor.authorities,
 				randomness: descriptor.randomness,
+				proofs: Vec::new(),
+				pending: Vec::new(),
 			},
 		}
 	}
 
 	fn start_slot(&self) -> SlotNumber {
-		self.start_slot
+		self.validating.start_slot
 	}
 
 	fn end_slot(&self) -> SlotNumber {
-		self.start_slot + self.duration
+		self.validating.start_slot + self.validating.duration
+	}
+}
+
+impl Epoch {
+	pub fn epoch_index(&self) -> u64 {
+		self.validating.epoch_index
 	}
 }
 
@@ -223,25 +279,32 @@ impl Config {
 
 	/// Create the genesis epoch (epoch #0)
 	pub fn genesis_epoch(&self, slot_number: SlotNumber) -> Epoch {
-		let proofs = self.genesis_proofs.clone()
+		let publishing_proofs = self.genesis_proofs.clone()
 			.into_iter()
 			.map(|p| p.try_into().expect("Genesis proofs are invalid"))
 			.collect::<Vec<VRFProof>>();
+		let validating_proofs = self.genesis_proofs.clone()
+			.into_iter()
+			.enumerate()
+			.map(|(i, p)| (i as u64, p.try_into().expect("Genesis proofs are invalid")))
+			.collect::<Vec<(u64, VRFProof)>>();
 
 		Epoch {
-			epoch_index: 0,
-			start_slot: slot_number,
-			duration: self.epoch_length,
-
-			validating: ValidatorSet {
-				proofs: proofs.clone(),
+			validating: ValidatingSet {
+				start_slot: slot_number,
+				duration: self.epoch_length,
+				epoch_index: 0,
+				proofs: validating_proofs,
 				authorities: self.genesis_authorities.clone(),
 				randomness: self.randomness.clone(),
+				pending: Vec::new(),
 			},
-			publishing: ValidatorSet {
-				proofs,
+			publishing: PublishingSet {
+				epoch_index: 1,
+				proofs: publishing_proofs,
 				authorities: self.genesis_authorities.clone(),
 				randomness: self.randomness.clone(),
+				pending: Vec::new(),
 			},
 		}
 	}
@@ -601,6 +664,24 @@ fn find_next_epoch_digest<B: BlockT>(header: &B::Header)
 	Ok(epoch_digest)
 }
 
+/// Extract the Sassafras epoch change digest from the given header, if it exists.
+fn find_post_block_digest<B: BlockT>(header: &B::Header)
+	-> Result<Option<PostBlockDescriptor>, Error<B>>
+	where DigestItemFor<B>: CompatibleDigestItem,
+{
+	let mut post_digest: Option<_> = None;
+	for log in header.digest().logs() {
+		trace!(target: "sassafras", "Checking log {:?}, looking for epoch change digest.", log);
+		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&SASSAFRAS_ENGINE_ID));
+		match (log, post_digest.is_some()) {
+			(Some(ConsensusLog::PostBlockData(_)), true) => return Err(Error::MultipleEpochChangeDigests),
+			(Some(ConsensusLog::PostBlockData(epoch)), false) => post_digest = Some(epoch),
+			_ => trace!(target: "sassafras", "Ignoring digest not meant for us"),
+		}
+	}
+
+	Ok(post_digest)
+}
 
 #[derive(Default, Clone)]
 struct TimeSource(Arc<Mutex<(Option<Duration>, Vec<(Instant, u64)>)>>);
@@ -1025,6 +1106,8 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, 
 		// search for this all the time so we can reject unexpected announcements.
 		let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
+		let post_block_digest = find_post_block_digest::<Block>(&block.header)
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 
 		match (first_in_epoch, next_epoch_digest.is_some()) {
 			(true, true) => {},
@@ -1045,30 +1128,53 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, 
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
+		old_epoch_changes = Some(epoch_changes.clone());
+
+		let mut viable_epoch = epoch_changes.viable_epoch_mut(
+			&epoch_descriptor,
+			|slot| self.config.genesis_epoch(slot),
+		).ok_or_else(|| {
+			ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
+		})?;
+
+		match pre_digest {
+			PreDigest::Primary { commitments, .. } => {
+				let epoch = viable_epoch.as_mut();
+
+				for proof in commitments {
+					if epoch.publishing.proofs.iter().position(|p| *p == proof).is_none() {
+						epoch.publishing.proofs.push(proof);
+					}
+				}
+			},
+			PreDigest::Secondary { .. } => (),
+		}
+
+		if let Some(post_block_descriptor) = post_block_digest {
+			let epoch = viable_epoch.as_mut();
+
+			for proof in post_block_descriptor.commitments {
+				if epoch.publishing.proofs.iter().position(|p| *p == proof).is_none() {
+					epoch.publishing.proofs.push(proof);
+				}
+			}
+		}
+
 		let info = self.client.chain_info();
 
 		if let Some(next_epoch_descriptor) = next_epoch_digest {
-			old_epoch_changes = Some(epoch_changes.clone());
-
-			let viable_epoch = epoch_changes.viable_epoch(
-				&epoch_descriptor,
-				|slot| self.config.genesis_epoch(slot),
-			).ok_or_else(|| {
-				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
-			})?;
-
 			info!(target: "sassafras",
 				  "New epoch {} launching at block {} (block slot {} >= start slot {}).",
-				  viable_epoch.as_ref().epoch_index,
+				  viable_epoch.as_ref().epoch_index(),
 				  hash,
 				  slot_number,
-				  viable_epoch.as_ref().start_slot);
+				  viable_epoch.as_ref().start_slot());
 
 			let next_epoch = viable_epoch.increment(next_epoch_descriptor);
 
 			info!(target: "sassafras",
 				  "Next epoch starts at slot {}",
-				  next_epoch.as_ref().start_slot);
+				  next_epoch.as_ref().start_slot());
 
 			// prune the tree of epochs not part of the finalized chain or
 			// that are not live anymore, and then track the given epoch change

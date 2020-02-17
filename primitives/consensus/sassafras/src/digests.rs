@@ -97,6 +97,8 @@ pub enum PreDigest {
 	Primary {
 		/// Index of ticket VRF proof that has been previously committed.
 		ticket_vrf_index: VRFIndex,
+		/// Attempt number of the ticket VRF proof.
+		ticket_vrf_attempt: u64,
 		/// Reveal of tocket VRF output.
 		ticket_vrf_output: VRFOutput,
 		/// Validator index.

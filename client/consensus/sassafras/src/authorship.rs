@@ -16,15 +16,54 @@
 
 //! Sassafras authority selection and slot claiming.
 
+use std::{hash::Hash, collections::HashMap};
 use codec::Encode;
 use merlin::Transcript;
+use schnorrkel::vrf;
 use sp_core::{blake2_256, U256, crypto::Pair};
+use sp_api::NumberFor;
+use sp_runtime::traits::Block as BlockT;
 use sp_consensus_sassafras::{
 	SlotNumber, AuthorityPair, SassafrasConfiguration, AuthorityId,
 	SassafrasAuthorityWeight, SASSAFRAS_ENGINE_ID, digests::PreDigest,
+	VRFProof, SASSAFRAS_TICKET_VRF_PREFIX, VRFOutput,
 };
+use sc_consensus_epochs::ViableEpochDescriptor;
 use sc_keystore::KeyStorePtr;
-use super::Epoch;
+use super::{Epoch, PublishingSet};
+
+/// Calculates the primary selection threshold for a given authority, taking
+/// into account `c` (`1 - c` represents the probability of a slot being empty).
+pub fn calculate_primary_threshold(
+	c: (u64, u64),
+	authorities: &[(AuthorityId, SassafrasAuthorityWeight)],
+	authority_index: usize,
+) -> u128 {
+	use num_bigint::BigUint;
+	use num_rational::BigRational;
+	use num_traits::{cast::ToPrimitive, identities::One};
+
+	let c = c.0 as f64 / c.1 as f64;
+
+	let theta =
+		authorities[authority_index].1 as f64 /
+		authorities.iter().map(|(_, weight)| weight).sum::<u64>() as f64;
+
+	let calc = || {
+		let p = BigRational::from_float(1f64 - (1f64 - c).powf(theta))?;
+		let numer = p.numer().to_biguint()?;
+		let denom = p.denom().to_biguint()?;
+		((BigUint::one() << 128) * numer / denom).to_u128()
+	};
+
+	calc().unwrap_or(u128::max_value())
+}
+
+/// Returns true if the given VRF output is lower than the given threshold,
+/// false otherwise.
+pub fn check_primary_threshold(inout: &vrf::VRFInOut, threshold: u128) -> bool {
+	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(SASSAFRAS_TICKET_VRF_PREFIX)) < threshold
+}
 
 /// Tries to claim the given slot number. This method starts by trying to claim
 /// a primary VRF based slot. If we are not able to claim it, then if we have
@@ -50,12 +89,96 @@ pub(super) fn claim_slot(
 	})
 }
 
+/// Claim a primary slot.
 fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keystore: &KeyStorePtr,
 ) -> Option<(PreDigest, AuthorityPair)> {
-	unimplemented!()
+	const MAX_PRE_DIGEST_COMMITMENTS: usize = 4;
+
+	let ticket_vrf_index = epoch.validating.proofs.iter().position(|(s, _)| *s == slot_number)? as u32;
+	let ticket_vrf_proof = epoch.validating.proofs[ticket_vrf_index as usize].clone().1;
+	let pending_index = epoch.validating.pending.iter()
+		.position(|(_, _, _, p)| *p == ticket_vrf_proof)?;
+	let (ticket_vrf_attempt, authority_index, ticket_vrf_output, _) =
+		epoch.validating.pending[pending_index].clone();
+
+	let keystore = keystore.read();
+	let pair = keystore.key_pair::<AuthorityPair>(
+		&epoch.validating.authorities[authority_index as usize].0
+	).ok()?;
+	let post_transcript = make_post_transcript(
+		&epoch.validating.randomness,
+		slot_number,
+		epoch.validating.epoch_index,
+	);
+	let (post_vrf_inout, post_vrf_proof, _) = get_keypair(&pair).vrf_sign(post_transcript);
+	let post_vrf_output = VRFOutput(post_vrf_inout.to_output());
+	let post_vrf_proof = VRFProof(post_vrf_proof);
+
+	let mut commitments = Vec::new();
+	for (_, _, _, proof) in &epoch.publishing.pending {
+		if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS &&
+			!epoch.publishing.proofs.iter().position(|p| p == proof).is_some()
+		{
+			commitments.push(proof.clone());
+		}
+	}
+
+	let claim = PreDigest::Primary {
+		ticket_vrf_index, ticket_vrf_attempt, ticket_vrf_output,
+		authority_index, slot_number, post_vrf_proof, post_vrf_output,
+		commitments,
+	};
+
+	Some((claim, pair))
+}
+
+fn get_keypair(q: &AuthorityPair) -> &schnorrkel::Keypair {
+	use sp_core::crypto::IsWrappedBy;
+	sp_core::sr25519::Pair::from_ref(q).as_ref()
+}
+
+impl PublishingSet {
+	/// Get or generate pending proofs for current epoch, given keystore.
+	pub fn append_to_pending(
+		&mut self,
+		keystore: &KeyStorePtr
+	) {
+		let mut pending = Vec::new();
+		let keystore = keystore.read();
+
+		for (pair, authority_index) in self.authorities.iter()
+			.enumerate()
+			.flat_map(|(i, a)| {
+				keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
+			})
+		{
+			for attempt in 0..self.max_attempts() {
+				let transcript = make_ticket_transcript(
+					&self.randomness,
+					attempt,
+					self.epoch_index
+				);
+
+				let threshold = calculate_primary_threshold(
+					self.threshold(),
+					&self.authorities,
+					authority_index
+				);
+
+				if let Some((inout, proof, _)) = get_keypair(&pair)
+					.vrf_sign_after_check(transcript, |inout| {
+						check_primary_threshold(inout, threshold)
+					})
+				{
+					pending.push((attempt, VRFOutput(inout.to_output()), VRFProof(proof)));
+				}
+			}
+
+		}
+	}
 }
 
 /// Claim a secondary slot if it is our turn to propose, returning the
@@ -126,12 +249,12 @@ fn secondary_slot_author(
 #[allow(deprecated)]
 pub fn make_ticket_transcript(
 	randomness: &[u8],
-	slot_number: u64,
+	attempt: u64,
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
 	transcript.commit_bytes(b"type", b"ticket");
-	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
+	transcript.commit_bytes(b"attempt", &attempt.to_le_bytes());
 	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
 	transcript.commit_bytes(b"chain randomness", randomness);
 	transcript
