@@ -141,7 +141,7 @@ impl<Epoch> ViableEpoch<Epoch> where
 	}
 }
 
-/// The datatype encoded on disk.
+/// The data type encoded on disk.
 #[derive(Clone, Encode, Decode)]
 pub enum PersistedEpoch<Epoch> {
 	/// Genesis persisted epoch data. epoch_0, epoch_1.

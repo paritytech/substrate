@@ -39,11 +39,11 @@ const GARBAGE_COLLECT_INTERVAL: Duration = Duration::from_secs(2 * 60);
 
 /// Implementation of `NetworkBehaviour` that holds information about nodes in cache for diagnostic
 /// purposes.
-pub struct DebugInfoBehaviour<TSubstream> {
+pub struct DebugInfoBehaviour {
 	/// Periodically ping nodes, and close the connection if it's unresponsive.
-	ping: Ping<TSubstream>,
+	ping: Ping,
 	/// Periodically identifies the remote and responds to incoming requests.
-	identify: Identify<TSubstream>,
+	identify: Identify,
 	/// Information that we know about all nodes.
 	nodes_info: FnvHashMap<PeerId, NodeInfo>,
 	/// Interval at which we perform garbage collection in `nodes_info`.
@@ -64,7 +64,7 @@ struct NodeInfo {
 	latest_ping: Option<Duration>,
 }
 
-impl<TSubstream> DebugInfoBehaviour<TSubstream> {
+impl DebugInfoBehaviour {
 	/// Builds a new `DebugInfoBehaviour`.
 	pub fn new(
 		user_agent: String,
@@ -151,11 +151,10 @@ pub enum DebugInfoEvent {
 	},
 }
 
-impl<TSubstream> NetworkBehaviour for DebugInfoBehaviour<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
+impl NetworkBehaviour for DebugInfoBehaviour {
 	type ProtocolsHandler = IntoProtocolsHandlerSelect<
-		<Ping<TSubstream> as NetworkBehaviour>::ProtocolsHandler,
-		<Identify<TSubstream> as NetworkBehaviour>::ProtocolsHandler
+		<Ping as NetworkBehaviour>::ProtocolsHandler,
+		<Identify as NetworkBehaviour>::ProtocolsHandler
 	>;
 	type OutEvent = DebugInfoEvent;
 

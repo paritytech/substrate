@@ -260,7 +260,7 @@ impl Store {
 	/// Get public keys of all stored keys that match the key type.
 	///
 	/// This will just use the type of the public key (a list of which to be returned) in order
-	/// to determine the key type. Unless you use a specialised application-type public key, then
+	/// to determine the key type. Unless you use a specialized application-type public key, then
 	/// this only give you keys registered under generic cryptography, and will not return keys
 	/// registered under the application type.
 	pub fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {

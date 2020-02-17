@@ -336,7 +336,7 @@ mod tests {
 	type TestSpec = ChainSpec<Genesis>;
 
 	#[test]
-	fn should_deserailize_example_chain_spec() {
+	fn should_deserialize_example_chain_spec() {
 		let spec1 = TestSpec::from_json_bytes(Cow::Owned(
 			include_bytes!("../res/chain_spec.json").to_vec()
 		)).unwrap();

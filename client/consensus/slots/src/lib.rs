@@ -287,13 +287,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			info!(
 				"Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 				header_num,
-				block_import_params.post_header().hash(),
+				block_import_params.post_hash(),
 				header_hash,
 			);
 
 			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";
 				"header_num" => ?header_num,
-				"hash_now" => ?block_import_params.post_header().hash(),
+				"hash_now" => ?block_import_params.post_hash(),
 				"hash_previously" => ?header_hash,
 			);
 

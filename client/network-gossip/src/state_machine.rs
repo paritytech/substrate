@@ -45,7 +45,7 @@ mod rep {
 	pub const DUPLICATE_GOSSIP: Rep = Rep::new(-(1 << 2), "Duplicate gossip");
 	/// Reputation change when a peer sends us a gossip message for an unknown engine, whatever that
 	/// means.
-	pub const UNKNOWN_GOSSIP: Rep = Rep::new(-(1 << 6), "Unknown gossup message engine id");
+	pub const UNKNOWN_GOSSIP: Rep = Rep::new(-(1 << 6), "Unknown gossip message engine id");
 	/// Reputation change when a peer sends a message from a topic it isn't registered on.
 	pub const UNREGISTERED_TOPIC: Rep = Rep::new(-(1 << 10), "Unregistered gossip message topic");
 }

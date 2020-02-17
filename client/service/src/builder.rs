@@ -55,6 +55,8 @@ use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
+pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
+
 /// Aggregator for the components required to build a service.
 ///
 /// # Usage
@@ -90,6 +92,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TF
 	rpc_extensions: TRpc,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
+	background_tasks: Vec<(&'static str, BackgroundTask)>,
 }
 
 /// Full client type.
@@ -265,6 +268,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			remote_backend: None,
+			background_tasks: Default::default(),
 			marker: PhantomData,
 		})
 	}
@@ -350,6 +354,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			remote_backend: Some(remote_blockchain),
+			background_tasks: Default::default(),
 			marker: PhantomData,
 		})
 	}
@@ -398,6 +403,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -440,6 +446,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -466,6 +473,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -506,6 +514,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -570,6 +579,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -596,20 +606,24 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 
 	/// Defines which transaction pool to use.
 	pub fn with_transaction_pool<UExPool>(
-		self,
+		mut self,
 		transaction_pool_builder: impl FnOnce(
 			sc_transaction_pool::txpool::Options,
 			Arc<TCl>,
 			Option<TFchr>,
-		) -> Result<UExPool, Error>
+		) -> Result<(UExPool, Option<BackgroundTask>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		TNetP, UExPool, TRpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
-		let transaction_pool = transaction_pool_builder(
+		let (transaction_pool, background_task) = transaction_pool_builder(
 			self.config.transaction_pool.clone(),
 			self.client.clone(),
 			self.fetcher.clone(),
 		)?;
+
+		if let Some(background_task) = background_task{
+			self.background_tasks.push(("txpool-background", background_task));
+		}
 
 		Ok(ServiceBuilder {
 			config: self.config,
@@ -625,6 +639,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: Arc::new(transaction_pool),
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -664,6 +679,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -778,6 +794,7 @@ ServiceBuilder<
 			transaction_pool,
 			rpc_extensions,
 			remote_backend,
+			background_tasks,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -874,6 +891,15 @@ ServiceBuilder<
 			_ => None,
 		};
 
+		// Spawn background tasks which were stacked during the
+		// service building.
+		for (title, background_task) in background_tasks {
+			let _ = to_spawn_tx.unbounded_send((
+				background_task,
+				title.into(),
+			));
+		}
+
 		{
 			// block notifications
 			let txpool = Arc::downgrade(&transaction_pool);
@@ -930,9 +956,10 @@ ServiceBuilder<
 
 					ready(())
 				});
+
 			let _ = to_spawn_tx.unbounded_send((
 				Box::pin(select(events, exit.clone()).map(drop)),
-				From::from("txpool-and-offchain-notif")
+				From::from("txpool-and-offchain-notif"),
 			));
 		}
 
@@ -955,7 +982,7 @@ ServiceBuilder<
 
 			let _ = to_spawn_tx.unbounded_send((
 				Box::pin(select(events, exit.clone()).map(drop)),
-				From::from("telemetry-on-block")
+				From::from("telemetry-on-block"),
 			));
 		}
 
@@ -1028,7 +1055,7 @@ ServiceBuilder<
 
 		let _ = to_spawn_tx.unbounded_send((
 			Box::pin(select(tel_task, exit.clone()).map(drop)),
-			From::from("telemetry-periodic-send")
+			From::from("telemetry-periodic-send"),
 		));
 
 		// Periodically send the network state to the telemetry.
@@ -1044,7 +1071,7 @@ ServiceBuilder<
 		});
 		let _ = to_spawn_tx.unbounded_send((
 			Box::pin(select(tel_task_2, exit.clone()).map(drop)),
-			From::from("telemetry-periodic-network-state")
+			From::from("telemetry-periodic-network-state"),
 		));
 
 		// RPC
@@ -1130,7 +1157,7 @@ ServiceBuilder<
 				system_rpc_rx,
 				has_bootnodes,
 			), exit.clone()).map(drop)),
-			From::from("network-worker")
+			From::from("network-worker"),
 		));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>> = Default::default();

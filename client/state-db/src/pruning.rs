@@ -36,7 +36,7 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	death_rows: VecDeque<DeathRow<BlockHash, Key>>,
 	/// An index that maps each key from `death_rows` to block number.
 	death_index: HashMap<Key, u64>,
-	/// Block number that corresponts to the front of `death_rows`
+	/// Block number that corresponds to the front of `death_rows`.
 	pending_number: u64,
 	/// Number of call of `note_canonical` after
 	/// last call `apply_pending` or `revert_pending`
@@ -348,7 +348,7 @@ mod tests {
 	}
 
 	#[test]
-	fn reinserted_survivew_pending() {
+	fn reinserted_survive_pending() {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
 		let mut commit = make_commit(&[], &[2]);

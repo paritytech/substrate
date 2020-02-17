@@ -627,7 +627,7 @@ decl_module! {
 		/// - `max_fee`: The maximum fee that may be paid. This should just be auto-populated as:
 		///
 		/// ```nocompile
-		/// Self::registrars(reg_index).uwnrap().fee
+		/// Self::registrars(reg_index).unwrap().fee
 		/// ```
 		///
 		/// Emits `JudgementRequested` if successful.
