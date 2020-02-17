@@ -17,23 +17,23 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use std::{process::{Command, Stdio}, fs, path::PathBuf};
+use std::process::{Command, Stdio};
+use tempfile::tempdir;
 
 mod common;
 
 #[test]
 fn factory_works() {
-	let base_path = "factory_test";
+	let base_path = tempdir().unwrap();
 
-	let _ = fs::remove_dir_all(base_path);
 	let status = Command::new(cargo_bin("substrate"))
 		.stdout(Stdio::null())
-		.args(&["factory", "--dev", "-d", base_path])
+		.args(&["factory", "--dev", "-d", base_path.path().to_str().unwrap()])
 		.status()
 		.unwrap();
 	assert!(status.success());
 
 	// Make sure that the `dev` chain folder exists & `db`
-	assert!(PathBuf::from(base_path).join("chains/dev/").exists());
-	assert!(PathBuf::from(base_path).join("chains/dev/db").exists());
+	assert!(base_path.path().join("chains/dev/").exists());
+	assert!(base_path.path().join("chains/dev/db").exists());
 }

@@ -17,19 +17,19 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use std::{process::Command, fs};
+use std::process::Command;
+use tempfile::tempdir;
 
 mod common;
 
 #[test]
 fn check_block_works() {
-	let base_path = "check_block_test";
+	let base_path = tempdir().unwrap();
 
-	let _ = fs::remove_dir_all(base_path);
-	common::run_command_for_a_while(&["-d", base_path]);
+	common::run_command_for_a_while(&["-d", base_path.path().to_str().unwrap()]);
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["check-block", "-d", base_path, "1"])
+		.args(&["check-block", "-d", base_path.path().to_str().unwrap(), "1"])
 		.status()
 		.unwrap();
 	assert!(status.success());

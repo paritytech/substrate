@@ -17,24 +17,24 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use std::{process::Command, fs, path::PathBuf};
+use std::process::Command;
+use tempfile::tempdir;
 
 mod common;
 
 #[test]
 fn build_spec_works() {
-	let base_path = "build_spec_test";
+	let base_path = tempdir().unwrap();
 
-	let _ = fs::remove_dir_all(base_path);
 	let output = Command::new(cargo_bin("substrate"))
-		.args(&["build-spec", "--dev", "-d", base_path])
+		.args(&["build-spec", "--dev", "-d", base_path.path().to_str().unwrap()])
 		.output()
 		.unwrap();
 	assert!(output.status.success());
 
 	// Make sure that the `dev` chain folder exists, but the `db` doesn't
-	assert!(PathBuf::from(base_path).join("chains/dev/").exists());
-	assert!(!PathBuf::from(base_path).join("chains/dev/db").exists());
+	assert!(base_path.path().join("chains/dev/").exists());
+	assert!(!base_path.path().join("chains/dev/db").exists());
 
 	let _value: serde_json::Value = serde_json::from_slice(output.stdout.as_slice()).unwrap();
 }

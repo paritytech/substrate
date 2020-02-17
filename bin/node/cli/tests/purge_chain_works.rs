@@ -15,25 +15,25 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use assert_cmd::cargo::cargo_bin;
-use std::{process::Command, fs, path::PathBuf};
+use std::process::Command;
+use tempfile::tempdir;
 
 mod common;
 
 #[test]
 #[cfg(unix)]
 fn purge_chain_works() {
-	let base_path = "purge_chain_test";
+	let base_path = tempdir().unwrap();
 
-	let _ = fs::remove_dir_all(base_path);
-	common::run_command_for_a_while(&["--dev", "-d", base_path]);
+	common::run_command_for_a_while(&["--dev", "-d", base_path.path().to_str().unwrap()]);
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["purge-chain", "--dev", "-d", base_path, "-y"])
+		.args(&["purge-chain", "--dev", "-d", base_path.path().to_str().unwrap(), "-y"])
 		.status()
 		.unwrap();
 	assert!(status.success());
 
 	// Make sure that the `dev` chain folder exists, but the `db` is deleted.
-	assert!(PathBuf::from(base_path).join("chains/dev/").exists());
-	assert!(!PathBuf::from(base_path).join("chains/dev/db").exists());
+	assert!(base_path.path().join("chains/dev/").exists());
+	assert!(!base_path.path().join("chains/dev/db").exists());
 }
