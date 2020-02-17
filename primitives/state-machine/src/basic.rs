@@ -172,7 +172,7 @@ impl Externalities for BasicExternalities {
 	) -> Option<StorageKey> {
 		let storage_key = child_info.storage_key();
 		let range = (Bound::Excluded(key), Bound::Unbounded);
-		self.inner.children.get(storage_key.as_ref())
+		self.inner.children.get(storage_key)
 			.and_then(|child| child.data.range::<[u8], _>(range).next().map(|(k, _)| k).cloned())
 	}
 
