@@ -1,5 +1,5 @@
 use super::*;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter};
+use sp_runtime::{BenchmarkResults, BenchmarkParameter, DispatchError};
 use sp_runtime::traits::{Dispatchable, Convert, Benchmarking, BenchmarkingSetup};
 use sp_io::hashing::blake2_256;
 use frame_support::StorageValue;
@@ -269,8 +269,13 @@ fn get_seq_phragmen_solution<T: Trait>(do_reduce: bool)
 #[cfg(test)]
 fn clean<T: Trait>() {
 	use frame_support::StoragePrefixedMap;
-
-	<Validators<T>>::enumerate().for_each(|(k, _)| <Validators<T>>::remove(k));
+	<Validators<T>>::enumerate().for_each(|(k, _)| {
+		let ctrl = <Module<T>>::bonded(&k).unwrap();
+		<Bonded<T>>::remove(&k);
+		<Validators<T>>::remove(&k);
+		<Stakers<T>>::remove(&k);
+		<Ledger<T>>::remove(&ctrl);
+	});
 	<Nominators<T>>::enumerate().for_each(|(k, _)| <Nominators<T>>::remove(k));
 	<Stakers<T>>::remove_all();
 	<Ledger<T>>::remove_all();
@@ -299,11 +304,11 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Submit
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// number of nominators
-			(BenchmarkParameter::N, 100, 20_000),
+			(BenchmarkParameter::N, 1, 5_000),
 			// number of validator candidates
-			(BenchmarkParameter::V, 100, 2_000),
+			(BenchmarkParameter::V, 1, 1000),
 			// num to elect
-			(BenchmarkParameter::E, 100, 1000),
+			(BenchmarkParameter::E, 1, 500),
 			// edge per vote
 			(BenchmarkParameter::Z, 2, 16),
 		]
@@ -318,6 +323,13 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Submit
 		let mode: BenchmarkingMode = BenchmarkingMode::WeakerSubmission;
 		let do_reduce: bool = true;
 		let to_elect: u32 = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
+
+		// let num_validators = 20;
+		// let num_nominators = 5;
+		// let edge_per_voter = 16;
+		// let mode: BenchmarkingMode = BenchmarkingMode::WeakerSubmission;
+		// let do_reduce: bool = true;
+		// let to_elect: u32 = 10;
 
 		sp_std::if_std! {
 			println!("++ instance with params {} / {} / {} / {:?} / {}",
@@ -438,8 +450,16 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where T::Lookup: Sta
 
 						match mode {
 							BenchmarkingMode::WeakerSubmission => {
-								// todo check the correct error is coming.
-								let _ = call.dispatch(caller.into()).unwrap_err();
+								#[cfg(test)]
+								assert_eq!(
+									call.dispatch(caller.into()).unwrap_err(),
+									DispatchError::Module { index: 0, error: 11, message: Some("PhragmenWeakSubmission") },
+								);
+								#[cfg(not(test))]
+								assert_eq!(
+									call.dispatch(caller.into()).unwrap_err(),
+									DispatchError::Module { index: 8, error: 11, message: Some("PhragmenWeakSubmission") },
+								);
 							},
 							_ => call.dispatch(caller.into())?,
 						};
@@ -450,6 +470,8 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where T::Lookup: Sta
 
 						#[cfg(not(test))]
 						sp_io::benchmarking::wipe_db();
+						#[cfg(test)]
+						clean::<T>();
 					} else {
 						results.push((c.clone(), 0));
 					}
@@ -514,7 +536,7 @@ mod tests {
 		type OnReapAccount = (Balances, Staking);
 	}
 	parameter_types! {
-		pub const ExistentialDeposit: Balance = 0;
+		pub const ExistentialDeposit: Balance = 10;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = Balance;
@@ -550,7 +572,6 @@ mod tests {
 
 	pub struct TestSessionHandler;
 	impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
-		// EVEN if no tests break, I must have broken something here... TODO
 		const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
 
 		fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
@@ -624,9 +645,9 @@ mod tests {
 	#[test]
 	fn benchmarking_setup_should_work() {
 		new_test_ext().execute_with(|| {
-			let _ = <Staking as Benchmarking<BenchmarkResults>>::run_benchmark(
-				Default::default(),
-				Default::default(),
+			let res = <Staking as Benchmarking<BenchmarkResults>>::run_benchmark(
+				b"submit_election_solution".to_vec(),
+				1,
 				1,
 			);
 		})

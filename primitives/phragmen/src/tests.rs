@@ -495,8 +495,9 @@ fn self_votes_should_be_kept() {
 			a.into_staked(stake, true)
 		}).collect();
 
+	let winners = result.winners.into_iter().map(|(who, _)| who).collect::<Vec<AccountId>>();
 	let (mut supports, _) = build_support_map::<AccountId>(
-		&result.winners.into_iter().map(|(who, _)| who).collect(),
+		winners.as_slice(),
 		&staked_assignments,
 	);
 
@@ -896,7 +897,7 @@ mod compact {
 		let assignments = vec![
 			StakedAssignment {
 				who: 1 as AccountId,
-				distribution: (10..30).map(|i| (i as AccountId, i as Balance)).collect::<Vec<_>>(),
+				distribution: (10..26).map(|i| (i as AccountId, i as Balance)).collect::<Vec<_>>(),
 			},
 		];
 
@@ -908,9 +909,47 @@ mod compact {
 			entity_index,
 		);
 
+		assert!(compacted.is_ok());
+
+		let assignments = vec![
+			StakedAssignment {
+				who: 1 as AccountId,
+				distribution: (10..27).map(|i| (i as AccountId, i as Balance)).collect::<Vec<_>>(),
+			},
+		];
+
+		let compacted = <TestCompact<u16, u16, Balance, AccountId>>::from_staked(
+			assignments.clone(),
+			entity_index,
+			entity_index,
+		);
+
 		assert_eq!(
 			compacted.unwrap_err(),
 			PhragmenError::CompactTargetOverflow,
-		)
+		);
+
+		let assignments = vec![
+			Assignment {
+				who: 1 as AccountId,
+				distribution: (10..27).map(|i| (i as AccountId, Percent::from_parts(i as u8))).collect::<Vec<_>>(),
+			},
+		];
+
+		let compacted = <TestCompact<u16, u16, Percent, AccountId>>::from_assignment(
+			assignments.clone(),
+			entity_index,
+			entity_index,
+		);
+
+		assert_eq!(
+			compacted.unwrap_err(),
+			PhragmenError::CompactTargetOverflow,
+		);
+	}
+
+	#[test]
+	fn zero_target_count_is_ignored() {
+		unimplemented!();
 	}
 }
