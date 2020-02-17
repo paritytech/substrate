@@ -8,6 +8,8 @@ use frame_system::RawOrigin;
 use sp_phragmen::{
 	ExtendedBalance, StakedAssignment, reduce, build_support_map, evaluate_support, PhragmenScore,
 };
+use rand::Rng;
+use rand_chacha::rand_core::SeedableRng;
 
 macro_rules! assert_ok {
 	( $x:expr $(,)? ) => {
@@ -26,9 +28,8 @@ static mut SEED: u64 = 999_666;
 
 type AddressOf<T> = Address<<T as frame_system::Trait>::AccountId, u32>;
 
+/// _r_andom number in _r_ange.
 fn rr(a: u32, b: u32) -> u32 {
-	use rand::Rng;
-	use rand_chacha::rand_core::SeedableRng;
 	// well, what do you expect? This is just benchmark code.
 	unsafe {
 		let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(SEED);
@@ -119,6 +120,8 @@ fn setup_chain_stakers<T: Trait>(
 	<Module<T>>::create_stakers_snapshot();
 }
 
+/// Build a _really bad_ but acceptable solution for election. This should always yield a solution
+/// which has a less score than the seq-phragmen.
 fn get_weak_solution<T: Trait>(do_reduce: bool)
 -> (Vec<ValidatorIndex>, CompactOf<T>, PhragmenScore) {
 	use sp_std::collections::btree_map::BTreeMap;
@@ -323,13 +326,6 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Submit
 		let mode: BenchmarkingMode = BenchmarkingMode::WeakerSubmission;
 		let do_reduce: bool = true;
 		let to_elect: u32 = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
-
-		// let num_validators = 20;
-		// let num_nominators = 5;
-		// let edge_per_voter = 16;
-		// let mode: BenchmarkingMode = BenchmarkingMode::WeakerSubmission;
-		// let do_reduce: bool = true;
-		// let to_elect: u32 = 10;
 
 		sp_std::if_std! {
 			println!("++ instance with params {} / {} / {} / {:?} / {}",
