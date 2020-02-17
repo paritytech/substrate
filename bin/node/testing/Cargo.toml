@@ -48,6 +48,7 @@ tempdir = "0.3"
 fs_extra = "1"
 hex-literal = "0.2.1"
 sc-cli = { version = "0.8.0", path = "../../../client/cli" }
+sc-service = { version = "0.8.0", path = "../../../client/service", features = ["rocksdb"] }
 
 [[bench]]
 name = "import"

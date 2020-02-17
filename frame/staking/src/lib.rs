@@ -250,7 +250,6 @@
 mod mock;
 #[cfg(test)]
 mod tests;
-mod migration;
 mod slashing;
 
 pub mod inflation;
@@ -761,9 +760,6 @@ decl_storage! {
 
 		/// The earliest era for which we have a pending, unapplied slash.
 		EarliestUnappliedSlash: Option<EraIndex>;
-
-		/// The version of storage for upgrade.
-		StorageVersion: u32;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -795,8 +791,6 @@ decl_storage! {
 					}, _ => Ok(())
 				};
 			}
-
-			StorageVersion::put(migration::CURRENT_VERSION);
 		});
 	}
 }
@@ -1298,9 +1292,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Ensures storage is upgraded to most recent necessary state.
-	fn ensure_storage_upgraded() {
-		migration::perform_migrations::<T>();
-	}
+	///
+	/// Right now it's a no-op as all networks that are supported by Substrate Frame Core are
+	/// running with the latest staking storage scheme.
+	fn ensure_storage_upgraded() {}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.

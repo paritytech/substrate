@@ -69,7 +69,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 
 criterion_group!(
 	name = benches;
-	config = Criterion::default().sample_size(10);
+	config = Criterion::default().sample_size(50).warm_up_time(std::time::Duration::from_secs(20));
 	targets = bench_block_import
 );
 criterion_group!(
@@ -358,20 +358,9 @@ fn generate_block_import(client: &Client, keyring: &BenchKeyring) -> Block {
 
 // Import generated block.
 fn import_block(client: &mut Client, block: Block) {
-	let import_params = BlockImportParams {
-		origin: BlockOrigin::NetworkBroadcast,
-		header: block.header().clone(),
-		post_digests: Default::default(),
-		body: Some(block.extrinsics().to_vec()),
-		storage_changes: Default::default(),
-		finalized: false,
-		justification: Default::default(),
-		auxiliary: Default::default(),
-		intermediates: Default::default(),
-		fork_choice: Some(ForkChoiceStrategy::LongestChain),
-		allow_missing_state: false,
-		import_existing: false,
-	};
+	let mut import_params = BlockImportParams::new(BlockOrigin::NetworkBroadcast, block.header.clone());
+	import_params.body = Some(block.extrinsics().to_vec());
+	import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 	assert_eq!(client.chain_info().best_number, 0);
 

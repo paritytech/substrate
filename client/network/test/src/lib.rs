@@ -85,21 +85,13 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 				.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
 			)
 			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
+		let mut import = BlockImportParams::new(origin, header);
+		import.body = body;
+		import.finalized = self.0;
+		import.justification = justification;
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		Ok((BlockImportParams {
-			origin,
-			header,
-			body,
-			storage_changes: None,
-			finalized: self.0,
-			justification,
-			post_digests: vec![],
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		}, maybe_keys))
+		Ok((import, maybe_keys))
 	}
 }
 
@@ -191,7 +183,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	client: PeersClient,
 	/// We keep a copy of the verifier so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
-	verifier: VerifierAdapter<dyn Verifier<Block>>,
+	verifier: VerifierAdapter<Block>,
 	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
 	block_import: BlockImportAdapter<()>,
@@ -368,6 +360,11 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 			|backend| backend.blocks_count()
 		).unwrap_or(0)
 	}
+
+	/// Return a collection of block hashes that failed verification
+	pub fn failed_verifications(&self) -> HashMap<<Block as BlockT>::Hash, String> {
+		self.verifier.failed_verifications.lock().clone()
+	}
 }
 
 pub struct EmptyTransactionPool;
@@ -493,15 +490,13 @@ impl<Transaction> BlockImport<Block> for BlockImportAdapter<Transaction> {
 }
 
 /// Implements `Verifier` on an `Arc<Mutex<impl Verifier>>`. Used internally.
-struct VerifierAdapter<T: ?Sized>(Arc<Mutex<Box<T>>>);
-
-impl<T: ?Sized> Clone for VerifierAdapter<T> {
-	fn clone(&self) -> Self {
-		VerifierAdapter(self.0.clone())
-	}
+#[derive(Clone)]
+struct VerifierAdapter<B: BlockT> {
+	verifier: Arc<Mutex<Box<dyn Verifier<B>>>>,
+	failed_verifications: Arc<Mutex<HashMap<B::Hash, String>>>,
 }
 
-impl<B: BlockT, T: ?Sized + Verifier<B>> Verifier<B> for VerifierAdapter<T> {
+impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
 	fn verify(
 		&mut self,
 		origin: BlockOrigin,
@@ -509,7 +504,20 @@ impl<B: BlockT, T: ?Sized + Verifier<B>> Verifier<B> for VerifierAdapter<T> {
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		self.0.lock().verify(origin, header, justification, body)
+		let hash = header.hash();
+		self.verifier.lock().verify(origin, header, justification, body).map_err(|e| {
+			self.failed_verifications.lock().insert(hash, e.clone());
+			e
+		})
+	}
+}
+
+impl<B: BlockT> VerifierAdapter<B> {
+	fn new(verifier: Arc<Mutex<Box<dyn Verifier<B>>>>) -> VerifierAdapter<B> {
+		VerifierAdapter {
+			verifier,
+			failed_verifications: Default::default(),
+		}
 	}
 }
 
@@ -600,7 +608,7 @@ pub trait TestNetFactory: Sized {
 			config,
 			&data,
 		);
-		let verifier = VerifierAdapter(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
+		let verifier = VerifierAdapter::new(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
@@ -676,7 +684,7 @@ pub trait TestNetFactory: Sized {
 			&config,
 			&data,
 		);
-		let verifier = VerifierAdapter(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
+		let verifier = VerifierAdapter::new(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),

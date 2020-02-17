@@ -148,7 +148,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 				Judgement::Reasonable
 			)?;
 		}
-		
+
 		// Create identity info with x additional fields
 		let x = components.iter().find(|&c| c.0 == BenchmarkParameter::X).unwrap().1;
 		// 32 byte data that we reuse below
@@ -171,7 +171,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{	
+	{
 		// Generic data to be used.
 		let data = Data::Raw(vec![0; 32]);
 
@@ -212,7 +212,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{	
+	{
 		// The target user
 		let caller = account::<T>("caller", 0);
 		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
@@ -262,7 +262,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{	
+	{
 		// The target user
 		let caller = account::<T>("caller", 0);
 		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
@@ -296,7 +296,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{	
+	{
 		// The target user
 		let caller = account::<T>("caller", 0);
 		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
@@ -330,7 +330,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{	
+	{
 		// The target user
 		let caller = account::<T>("caller", 0);
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -359,7 +359,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{	
+	{
 		// The target user
 		let caller = account::<T>("caller", 0);
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -388,7 +388,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{	
+	{
 		// The target user
 		let caller = account::<T>("caller", 0);
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -410,7 +410,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
-// Benchmark `provide_judgement` extrinsic.
+// Benchmark `provide_judgement` extrinsic.g
 struct ProvideJudgement;
 impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ProvideJudgement {
 
@@ -425,7 +425,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{	
+	{
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap().1;
 		benchmarking::add_registrars::<T>(r)?;
@@ -477,7 +477,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{	
+	{
 		// The target user
 		let caller = account::<T>("caller", 0);
 		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
@@ -550,8 +550,8 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		sp_io::benchmarking::commit_db();
 		sp_io::benchmarking::wipe_db();
 
-		// first one is set_identity.		
-		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);		
+		// first one is set_identity.
+		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
 		// results go here
 		let mut results: Vec<BenchmarkResults> = Vec::new();
 		// Select the component we will be benchmarking. Each component will be benchmarked.

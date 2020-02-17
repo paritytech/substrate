@@ -1011,20 +1011,11 @@ fn allows_reimporting_change_blocks() {
 
 	let block = || {
 		let block = block.clone();
-		BlockImportParams {
-			origin: BlockOrigin::File,
-			header: block.header,
-			justification: None,
-			post_digests: Vec::new(),
-			body: Some(block.extrinsics),
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		}
+		let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
+		import.body = Some(block.extrinsics);
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+
+		import
 	};
 
 	assert_eq!(
@@ -1071,20 +1062,12 @@ fn test_bad_justification() {
 
 	let block = || {
 		let block = block.clone();
-		BlockImportParams {
-			origin: BlockOrigin::File,
-			header: block.header,
-			justification: Some(Vec::new()),
-			post_digests: Vec::new(),
-			body: Some(block.extrinsics),
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		}
+		let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
+		import.justification = Some(Vec::new());
+		import.body = Some(block.extrinsics);
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+
+		import
 	};
 
 	assert_eq!(
@@ -1805,23 +1788,13 @@ fn imports_justification_for_regular_blocks_on_import() {
 	};
 
 	// we import the block with justification attached
-	let block = BlockImportParams {
-		origin: BlockOrigin::File,
-		header: block.header,
-		justification: Some(justification.encode()),
-		post_digests: Vec::new(),
-		body: Some(block.extrinsics),
-		storage_changes: None,
-		finalized: false,
-		auxiliary: Vec::new(),
-		intermediates: Default::default(),
-		fork_choice: Some(ForkChoiceStrategy::LongestChain),
-		allow_missing_state: false,
-		import_existing: false,
-	};
+	let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
+	import.justification = Some(justification.encode());
+	import.body = Some(block.extrinsics);
+	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 	assert_eq!(
-		block_import.import_block(block, HashMap::new()).unwrap(),
+		block_import.import_block(import, HashMap::new()).unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: false,
 			clear_justification_requests: false,
