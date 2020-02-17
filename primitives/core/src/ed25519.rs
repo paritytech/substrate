@@ -433,7 +433,7 @@ impl TraitPair for Pair {
 
 	/// Make a new key pair from secret seed material.
 	///
-	/// You should never need to use this; generate(), generate_with_phrasee
+	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed(seed: &Seed) -> Pair {
 		Self::from_seed_slice(&seed[..]).expect("seed has valid length; qed")
 	}

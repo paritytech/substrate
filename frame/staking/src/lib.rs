@@ -171,7 +171,7 @@
 //!
 //! Validators and nominators are rewarded at the end of each era. The total reward of an era is
 //! calculated using the era duration and the staking rate (the total amount of tokens staked by
-//! nominators and validators, divided by the total token supply). It aims to incentivise toward a
+//! nominators and validators, divided by the total token supply). It aims to incentivize toward a
 //! defined staking rate. The full specification can be found
 //! [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model).
 //!
@@ -1360,7 +1360,7 @@ impl<T: Trait> Module<T> {
 		Self::new_era(session_index)
 	}
 
-	/// Initialise the first session (and consequently the first era)
+	/// Initialize the first session (and consequently the first era)
 	fn initial_session() -> Option<Vec<T::AccountId>> {
 		// note: `CurrentEraStart` is set in `on_finalize` of the first block because now is not
 		// available yet.

@@ -487,27 +487,16 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			let signature = pair.sign(header_hash.as_ref());
 			let digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
 
-			BlockImportParams {
-				origin: BlockOrigin::Own,
-				header,
-				justification: None,
-				post_digests: vec![digest_item],
-				body: Some(body),
-				storage_changes: Some(storage_changes),
-				finalized: false,
-				auxiliary: Vec::new(), // block-weight is written in block import.
-				intermediates: {
-					let mut intermediates = HashMap::new();
-					intermediates.insert(
-						Cow::from(INTERMEDIATE_KEY),
-						Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
-					);
-					intermediates
-				},
-				fork_choice: None,
-				allow_missing_state: false,
-				import_existing: false,
-			}
+			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
+			import_block.post_digests.push(digest_item);
+			import_block.body = Some(body);
+			import_block.storage_changes = Some(storage_changes);
+			import_block.intermediates.insert(
+				Cow::from(INTERMEDIATE_KEY),
+				Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+			);
+
+			import_block
 		})
 	}
 
@@ -861,30 +850,17 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 
-				let mut intermediates = HashMap::new();
-				intermediates.insert(
+				let mut import_block = BlockImportParams::new(origin, pre_header);
+				import_block.post_digests.push(verified_info.seal);
+				import_block.body = body;
+				import_block.justification = justification;
+				import_block.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate {
-						epoch,
-					}) as Box<dyn Any>,
+					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
 				);
+				import_block.post_hash = Some(hash);
 
-				let block_import_params = BlockImportParams {
-					origin,
-					header: pre_header,
-					post_digests: vec![verified_info.seal],
-					body,
-					storage_changes: None,
-					finalized: false,
-					justification,
-					auxiliary: Vec::new(),
-					intermediates,
-					fork_choice: None,
-					allow_missing_state: false,
-					import_existing: false,
-				};
-
-				Ok((block_import_params, Default::default()))
+				Ok((import_block, Default::default()))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
@@ -981,7 +957,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		let hash = block.post_header().hash();
+		let hash = block.post_hash();
 		let number = block.header.number().clone();
 
 		// early exit if block already in chain, otherwise the check for

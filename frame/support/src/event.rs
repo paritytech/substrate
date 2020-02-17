@@ -641,7 +641,7 @@ mod tests {
 		}
 
 		decl_event!(
-			/// Event finish formatting on an unnamed one with trailling comma
+			/// Event finish formatting on an unnamed one with trailing comma
 			pub enum Event<T> where
 				<T as Trait>::Balance,
 				<T as Trait>::Origin,
