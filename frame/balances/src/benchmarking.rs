@@ -20,6 +20,7 @@ use super::*;
 
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
+use sp_core::Benchmark;
 use sp_runtime::{BenchmarkResults, BenchmarkParameter};
 use sp_runtime::traits::{Bounded, Benchmarking, BenchmarkingSetup, Dispatchable};
 
@@ -53,7 +54,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 		// Select an account
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
-		let user = account::<T>("user", u);
+		let user = <T::AccountId as Benchmark>::value(b"user", u);
 		let user_origin = RawOrigin::Signed(user.clone());
 
 		// Give some multiple of the existential deposit + creation fee + transfer fee

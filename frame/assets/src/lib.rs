@@ -134,6 +134,7 @@
 
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure};
 use sp_runtime::traits::{Member, AtLeast32Bit, Zero, StaticLookup};
+use sp_core::Benchmark;
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::traits::One;
 
@@ -143,10 +144,10 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The units in which we record balances.
-	type Balance: Member + Parameter + AtLeast32Bit + Default + Copy;
+	type Balance: Member + Parameter + AtLeast32Bit + Default + Copy + Benchmark;
 
 	/// The arithmetic type of asset identifier.
-	type AssetId: Parameter + AtLeast32Bit + Default + Copy;
+	type AssetId: Parameter + AtLeast32Bit + Default + Copy + Benchmark;
 }
 
 decl_module! {

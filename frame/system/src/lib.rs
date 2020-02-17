@@ -110,7 +110,7 @@ use sp_runtime::{
 	},
 };
 
-use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
+use sp_core::{ChangesTrieConfiguration, storage::well_known_keys, Benchmark};
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
 	traits::{
@@ -154,12 +154,12 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The block number type used by the runtime.
 	type BlockNumber:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + AtLeast32Bit
+		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + AtLeast32Bit + Benchmark
 		+ Default + Bounded + Copy + sp_std::hash::Hash + sp_std::str::FromStr + MaybeMallocSizeOf;
 
 	/// The output of the `Hashing` function.
 	type Hash:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
+		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord + Benchmark
 		+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
@@ -167,7 +167,7 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The user account identifier type for the runtime.
 	type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord
-		+ Default;
+		+ Default + Benchmark;
 
 	/// Converting trait to take a source type and convert to `AccountId`.
 	///
@@ -178,7 +178,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Lookup: StaticLookup<Target = Self::AccountId>;
 
 	/// The block header.
-	type Header: Parameter + traits::Header<
+	type Header: Parameter + Benchmark + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
 	>;

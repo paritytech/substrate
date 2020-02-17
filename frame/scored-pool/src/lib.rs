@@ -101,6 +101,7 @@ use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::{
 	traits::{EnsureOrigin, AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup},
 };
+use sp_core::Benchmark;
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type PoolT<T, I> = Vec<(<T as frame_system::Trait>::AccountId, Option<<T as Trait<I>>::Score>)>;
@@ -121,7 +122,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 
 	/// The score attributed to a member or candidate.
 	type Score:
-		AtLeast32Bit + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
+		AtLeast32Bit + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug + Benchmark;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;

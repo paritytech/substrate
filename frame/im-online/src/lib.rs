@@ -72,7 +72,7 @@ mod tests;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
-use sp_core::offchain::OpaqueNetworkState;
+use sp_core::{offchain::OpaqueNetworkState, Benchmark};
 use sp_std::prelude::*;
 use sp_std::convert::TryInto;
 use pallet_session::historical::IdentificationTuple;
@@ -203,7 +203,7 @@ impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNu
 pub type AuthIndex = u32;
 
 /// Heartbeat which is sent/received.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, Default)]
 pub struct Heartbeat<BlockNumber>
 	where BlockNumber: PartialEq + Eq + Decode + Encode,
 {
@@ -216,6 +216,8 @@ pub struct Heartbeat<BlockNumber>
 	/// An index of the authority on the list of validators.
 	pub authority_index: AuthIndex,
 }
+
+impl<BlockNumber: Default + PartialEq + Eq + Decode + Encode> Benchmark for Heartbeat<BlockNumber> {}
 
 pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
 	/// The identifier type for an authority.

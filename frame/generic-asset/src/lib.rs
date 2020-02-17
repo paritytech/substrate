@@ -159,11 +159,11 @@ use sp_runtime::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, AtLeast32Bit,
 	Zero, Bounded,
 };
-
+use sp_core::Benchmark;
 use sp_std::prelude::*;
 use sp_std::{cmp, result, fmt::Debug};
 use frame_support::{
-	decl_event, decl_module, decl_storage, ensure, decl_error,
+	decl_event, decl_module, decl_storage, ensure, decl_error, Benchmark,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
 		SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop, BalanceStatus,
@@ -182,10 +182,11 @@ pub trait Trait: frame_system::Trait {
 		+ Member
 		+ AtLeast32Bit
 		+ Default
+		+ Benchmark
 		+ Copy
 		+ MaybeSerializeDeserialize
 		+ Debug;
-	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
+	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy + Benchmark;
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
@@ -196,8 +197,9 @@ pub trait Subtrait: frame_system::Trait {
 		+ Default
 		+ Copy
 		+ MaybeSerializeDeserialize
+		+ Benchmark
 		+ Debug;
-	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
+	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy + Benchmark;
 }
 
 impl<T: Trait> Subtrait for T {
@@ -206,8 +208,8 @@ impl<T: Trait> Subtrait for T {
 }
 
 /// Asset creation options.
-#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
-pub struct AssetOptions<Balance: HasCompact, AccountId> {
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug, Default, Benchmark)]
+pub struct AssetOptions<Balance: HasCompact + Default, AccountId: Default> {
 	/// Initial issuance of this asset. All deposit to the creater of the asset.
 	#[codec(compact)]
 	pub initial_issuance: Balance,
@@ -240,6 +242,8 @@ pub struct PermissionsV1<AccountId> {
 	/// Who have permission to burn asset
 	pub burn: Owner<AccountId>,
 }
+
+impl<AccountId: Default> Benchmark for PermissionsV1<AccountId> {}
 
 #[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 #[repr(u8)]
@@ -1138,6 +1142,7 @@ pub struct AssetCurrency<T, U>(sp_std::marker::PhantomData<T>, sp_std::marker::P
 impl<T, U> Currency<T::AccountId> for AssetCurrency<T, U>
 where
 	T: Trait,
+	T::Balance: Benchmark,
 	U: AssetIdProvider<AssetId = T::AssetId>,
 {
 	type Balance = T::Balance;
@@ -1262,6 +1267,7 @@ where
 impl<T, U> ReservableCurrency<T::AccountId> for AssetCurrency<T, U>
 where
 	T: Trait,
+	T::Balance: Benchmark,
 	U: AssetIdProvider<AssetId = T::AssetId>,
 {
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
@@ -1325,7 +1331,7 @@ impl<T: Trait> AssetIdProvider for SpendingAssetIdProvider<T> {
 impl<T> LockableCurrency<T::AccountId> for AssetCurrency<T, StakingAssetIdProvider<T>>
 where
 	T: Trait,
-	T::Balance: MaybeSerializeDeserialize + Debug,
+	T::Balance: MaybeSerializeDeserialize + Debug + Benchmark,
 {
 	type Moment = T::BlockNumber;
 

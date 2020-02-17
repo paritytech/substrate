@@ -17,7 +17,7 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
+pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq, Default}, marker};
 pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use frame_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
@@ -27,6 +27,7 @@ pub use crate::weights::{
 	SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
 	TransactionPriority, Weight, WeighBlock, PaysFee,
 };
+pub use sp_core::Benchmark;
 pub use sp_runtime::{traits::Dispatchable, DispatchError, DispatchResult};
 pub use crate::traits::{CallMetadata, GetCallMetadata, GetCallName};
 
@@ -1354,10 +1355,33 @@ macro_rules! decl_module {
 					)*
 				]
 			}
+
+			fn get_call(function: &str, mut inputs: $crate::dispatch::Vec<u32>) -> Self {
+				match function {
+					$( 
+						stringify!($fn_name) => {
+							$(
+								let value = inputs.pop().unwrap_or(Default::default());
+								let $param_name =
+									<$param as $crate::dispatch::Benchmark>::value(Default::default(), Default::default());
+							)*
+							$call_type::$fn_name($( $param_name ),* )
+						}
+					)*
+					_ => unreachable!(),
+				}
+			}
 		}
 
-		// manual implementation of clone/eq/partialeq because using derive erroneously requires
+		// manual implementation of default/clone/eq/partialeq because using derive erroneously requires
 		// clone/eq/partialeq from T.
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Default
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn default() -> Self {
+				$call_type::default()
+			}
+		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Clone
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
@@ -1508,6 +1532,12 @@ macro_rules! impl_outer_dispatch {
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )
 			,)*
 		}
+		impl $crate::dispatch::Default for $call_type {
+			fn default() -> Self {
+				<Self as $crate::dispatch::GetCallMetadata>::get_call("System", "remark", vec![])
+			}
+		}
+		impl $crate::dispatch::Benchmark for $call_type {}
 		impl $crate::dispatch::GetDispatchInfo for $call_type {
 			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
 				match self {
@@ -1540,6 +1570,18 @@ macro_rules! impl_outer_dispatch {
 						stringify!($camelcase) =>
 							<<$camelcase as Callable<$runtime>>::Call
 								as GetCallName>::get_call_names(),
+					)*
+					_ => unreachable!(),
+				}
+			}
+
+			fn get_call(module: &str, function: &str, inputs: $crate::dispatch::Vec<u32>) -> Self {
+				use $crate::dispatch::{Callable, GetCallName};
+				match module {
+					$(
+						stringify!($camelcase) =>
+							$call_type::$camelcase(<<$camelcase as Callable<$runtime>>::Call
+								as GetCallName>::get_call(function, inputs)),
 					)*
 					_ => unreachable!(),
 				}

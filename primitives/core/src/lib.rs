@@ -51,6 +51,7 @@ pub use impl_serde::serialize as bytes;
 pub mod hashing;
 #[cfg(feature = "full_crypto")]
 pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256, keccak_256};
+
 #[cfg(feature = "std")]
 pub mod hexdisplay;
 pub mod crypto;
@@ -75,6 +76,7 @@ pub use self::uint::U256;
 pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
+use crypto::AccountId32;
 
 pub use hash_db::Hasher;
 // Switch back to Blake after PoC-3 is out
@@ -346,3 +348,36 @@ macro_rules! impl_maybe_marker {
 		)+
 	}
 }
+
+/// Abtract types for benchmarking purposes.
+pub trait Benchmark: Default {
+	/// Get a simple value for benchmarking.
+	fn value(_name: &[u8], _index: u32) -> Self {
+		Default::default()
+	}
+}
+
+impl Benchmark for bool {}
+impl Benchmark for u8 {}
+impl Benchmark for [u8; 32] {}
+impl Benchmark for u16 {}
+impl Benchmark for u32 {}
+impl Benchmark for u64 {}
+impl Benchmark for u128 {}
+impl Benchmark for i32 {}
+impl Benchmark for () {}
+impl Benchmark for H160 {}
+impl Benchmark for H256 {}
+impl Benchmark for U256 {}
+impl Benchmark for ChangesTrieConfiguration {}
+impl Benchmark for AccountId32 {
+	#[cfg(feature = "full_crypto")]
+	fn value(name: &[u8], index: u32) -> Self {
+		let entropy = (name, index).using_encoded(blake2_256);
+		Self::decode(&mut &entropy[..]).unwrap_or_default()
+	}
+}
+impl<A: Benchmark, B: Benchmark> Benchmark for (A, B) {}
+impl<T: Benchmark> Benchmark for Vec<T> {}
+impl<T: Benchmark> Benchmark for Option<T> {}
+impl<T: Benchmark> Benchmark for Box<T> {}

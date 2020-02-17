@@ -25,7 +25,7 @@ pub use sp_core::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
 pub use sp_core::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
-pub use sp_core::{crypto::{KeyTypeId, key_types}};
+pub use sp_core::{crypto::{KeyTypeId, key_types}, Benchmark};
 
 #[doc(hidden)]
 pub use codec;
@@ -331,6 +331,8 @@ macro_rules! app_crypto_signature_full_crypto {
 			type Pair = Pair;
 		}
 
+		impl $crate::Benchmark for Signature {}
+
 		impl $crate::AppKey for Signature {
 			type UntypedGeneric = $sig;
 			type Public = Public;
@@ -359,6 +361,8 @@ macro_rules! app_crypto_signature_not_full_crypto {
 		}
 
 		impl $crate::CryptoType for Signature {}
+
+		impl $crate::Benchmark for Signature {}
 
 		impl $crate::AppKey for Signature {
 			type UntypedGeneric = $sig;

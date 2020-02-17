@@ -10,6 +10,7 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
@@ -29,5 +30,6 @@ std = [
 	"sp-io/std",
 	"frame-support/std",
 	"sp-runtime/std",
+	"sp-core/std",
 	"frame-system/std",
 ]

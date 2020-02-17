@@ -12,6 +12,7 @@ sp-keyring = { version = "2.0.0", optional = true, path = "../../primitives/keyr
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 sp-phragmen = { version = "2.0.0", default-features = false, path = "../../primitives/phragmen" }
 sp-io ={ path = "../../primitives/io", default-features = false }
+sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
@@ -37,6 +38,7 @@ std = [
 	"sp-phragmen/std",
 	"sp-io/std",
 	"frame-support/std",
+	"sp-core/std",
 	"sp-runtime/std",
 	"sp-staking/std",
 	"pallet-session/std",

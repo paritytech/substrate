@@ -108,7 +108,7 @@ pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use sp_core::crypto::UncheckedFrom;
+use sp_core::{crypto::UncheckedFrom, Benchmark};
 use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use sp_io::hashing::blake2_256;
@@ -122,7 +122,7 @@ use sp_runtime::{
 use frame_support::dispatch::{DispatchResult, Dispatchable};
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, storage::child,
-	parameter_types, IsSubType,
+	parameter_types, IsSubType, Benchmark,
 	weights::DispatchInfo,
 };
 use frame_support::traits::{OnReapAccount, OnUnbalanced, Currency, Get, Time, Randomness};
@@ -977,7 +977,7 @@ impl<T: Trait> Config<T> {
 
 /// Definition of the cost schedule and other parameterizations for wasm vm.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug, Benchmark)]
 pub struct Schedule {
 	/// Version of the schedule.
 	pub version: u32,

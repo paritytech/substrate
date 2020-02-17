@@ -24,10 +24,11 @@ use sp_runtime::{
 	RuntimeDebug, DispatchResult,
 	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable, Saturating},
 };
+use sp_core::Benchmark;
 use codec::{Ref, Encode, Decode, Input, Output};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	weights::SimpleDispatchInfo,
+	weights::SimpleDispatchInfo, Benchmark,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnReapAccount, OnUnbalanced, BalanceStatus
@@ -47,7 +48,7 @@ pub type PropIndex = u32;
 pub type ReferendumIndex = u32;
 
 /// A value denoting the strength of conviction of a vote.
-#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, Benchmark)]
 pub enum Conviction {
 	/// 0.1x votes, unlocked.
 	None,
@@ -146,7 +147,7 @@ impl Bounded for Conviction {
 const MAX_RECURSION_LIMIT: u32 = 16;
 
 /// A number of lock periods, plus a vote, one way or the other.
-#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
+#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug, Benchmark)]
 pub struct Vote {
 	pub aye: bool,
 	pub conviction: Conviction,

@@ -25,7 +25,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
+use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug, Benchmark};
 use crate::BenchmarkParameter;
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
@@ -190,7 +190,7 @@ pub trait Lookup {
 /// context.
 pub trait StaticLookup {
 	/// Type to lookup from.
-	type Source: Codec + Clone + PartialEq + Debug;
+	type Source: Codec + Clone + PartialEq + Debug + Benchmark;
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
@@ -202,7 +202,7 @@ pub trait StaticLookup {
 /// A lookup implementation returning the input value.
 #[derive(Default)]
 pub struct IdentityLookup<T>(PhantomData<T>);
-impl<T: Codec + Clone + PartialEq + Debug> StaticLookup for IdentityLookup<T> {
+impl<T: Codec + Clone + PartialEq + Debug + Benchmark> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> Result<T, LookupError> { Ok(x) }
@@ -394,7 +394,7 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
@@ -1386,6 +1386,8 @@ macro_rules! selected_benchmark {
 		}
 	};
 }
+
+impl Benchmark for BlakeTwo256 {}
 
 #[cfg(test)]
 mod tests {

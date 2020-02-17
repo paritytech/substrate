@@ -7,6 +7,7 @@ license = "GPL-3.0"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-phragmen = { version = "2.0.0", default-features = false, path = "../../primitives/phragmen" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
@@ -27,6 +28,7 @@ std = [
 	"codec/std",
 	"frame-support/std",
 	"sp-runtime/std",
+	"sp-core/std",
 	"sp-phragmen/std",
 	"frame-system/std",
 	"sp-std/std",

@@ -69,10 +69,11 @@ use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
+use sp_core::Benchmark;
 use sp_runtime::{DispatchResult, RuntimeDebug};
 use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error,
+	decl_module, decl_event, decl_storage, ensure, decl_error, Benchmark,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus},
 	weights::SimpleDispatchInfo,
 };
@@ -122,7 +123,7 @@ pub trait Trait: frame_system::Trait {
 /// than 32-bytes then it will be truncated when encoding.
 ///
 /// Can also be `None`.
-#[derive(Clone, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, RuntimeDebug, Benchmark)]
 pub enum Data {
 	/// No data here.
 	None,
@@ -220,6 +221,18 @@ pub enum Judgement<
 
 impl<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
+> Default for Judgement<Balance> {
+	fn default() -> Self {
+		Self::Unknown
+	}
+}
+
+impl<
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
+> Benchmark for Judgement<Balance> {}
+
+impl<
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > Judgement<Balance> {
 	/// Returns `true` if this judgement is indicative of a deposit being currently held. This means
 	/// it should not be cleared or replaced except by an operation which utilizes the deposit.
@@ -260,6 +273,7 @@ pub enum IdentityField {
 #[derive(Clone, Copy, PartialEq, Default, RuntimeDebug)]
 pub struct IdentityFields(BitFlags<IdentityField>);
 
+impl Benchmark for IdentityFields {}
 impl Eq for IdentityFields {}
 impl Encode for IdentityFields {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -277,7 +291,7 @@ impl Decode for IdentityFields {
 ///
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, Benchmark)]
 #[cfg_attr(test, derive(Default))]
 pub struct IdentityInfo {
 	/// Additional fields of the identity that are not catered for with the struct's explicit
@@ -364,10 +378,10 @@ impl<
 }
 
 /// Information concerning a registrar.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, Benchmark)]
 pub struct RegistrarInfo<
-	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
-	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
+	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq + Default,
+	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq + Default
 > {
 	/// The account of the registrar.
 	pub account: AccountId,

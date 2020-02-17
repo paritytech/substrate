@@ -19,6 +19,7 @@
 #[cfg(feature = "std")]
 use std::fmt;
 use sp_std::convert::TryInto;
+use sp_core::Benchmark;
 use crate::Member;
 use codec::{Encode, Decode, Input, Output, Error};
 
@@ -34,6 +35,15 @@ pub enum Address<AccountId, AccountIndex> where
 	Id(AccountId),
 	/// It's an account index.
 	Index(AccountIndex),
+}
+
+impl<AccountId, AccountIndex> Benchmark for Address<AccountId, AccountIndex> where
+	AccountId: Member + Benchmark,
+	AccountIndex: Member + Benchmark,
+{
+	fn value(name: &[u8], index: u32) -> Self {
+		Address::Id(AccountId::value(name, index))
+	}
 }
 
 #[cfg(feature = "std")]

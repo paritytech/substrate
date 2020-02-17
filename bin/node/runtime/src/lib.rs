@@ -26,7 +26,7 @@ use frame_support::{
 	weights::Weight,
 	traits::{SplitTwoWays, Currency, Randomness},
 };
-use sp_core::u32_trait::{_1, _2, _3, _4};
+use sp_core::{u32_trait::{_1, _2, _3, _4}, Benchmark as BenchType};
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
@@ -232,6 +232,8 @@ impl_opaque_keys! {
 		pub authority_discovery: AuthorityDiscovery,
 	}
 }
+
+impl BenchType for SessionKeys {}
 
 parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(17);

@@ -24,7 +24,7 @@
 #![recursion_limit="128"]
 
 use sp_std::{prelude::*, result};
-use sp_core::u32_trait::Value as U32;
+use sp_core::{u32_trait::Value as U32, Benchmark};
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{Hash, EnsureOrigin};
 use frame_support::weights::SimpleDispatchInfo;
@@ -49,7 +49,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
 
 	/// The outer call dispatch type.
-	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin>;
+	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin> + Benchmark;
 
 	/// The outer event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;

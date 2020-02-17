@@ -282,7 +282,8 @@ use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 use sp_phragmen::ExtendedBalance;
-use frame_support::traits::OnReapAccount;
+use sp_core::Benchmark;
+use frame_support::{traits::OnReapAccount, Benchmark};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -330,7 +331,7 @@ pub enum StakerStatus<AccountId> {
 }
 
 /// A destination account for payment.
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, Benchmark)]
 pub enum RewardDestination {
 	/// Pay into the stash account, increasing the amount at stake accordingly.
 	Staked,
@@ -347,7 +348,7 @@ impl Default for RewardDestination {
 }
 
 /// Preference of what happens regarding validation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Benchmark)]
 pub struct ValidatorPrefs {
 	/// Reward that validator takes up-front; only the rest is split between themselves and
 	/// nominators.

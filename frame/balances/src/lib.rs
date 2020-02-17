@@ -169,11 +169,12 @@ use frame_support::{
 		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status
 	}
 };
+use sp_core::Benchmark;
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
 		Zero, AtLeast32Bit, StaticLookup, Member, CheckedAdd, CheckedSub,
-		MaybeSerializeDeserialize, Saturating, Bounded,
+		MaybeSerializeDeserialize, Saturating, Bounded
 	},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -186,7 +187,7 @@ pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
-		MaybeSerializeDeserialize + Debug;
+		MaybeSerializeDeserialize + Debug + Benchmark;
 
 	/// The minimum amount required to keep an account open.
 	type ExistentialDeposit: Get<Self::Balance>;
@@ -198,7 +199,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
-		MaybeSerializeDeserialize + Debug;
+		MaybeSerializeDeserialize + Debug + Benchmark;
 
 	/// Handler for the unbalanced reduction when removing a dust account.
 	type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;

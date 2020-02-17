@@ -20,7 +20,7 @@
 
 use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode};
-use sp_core::u32_trait::Value as U32;
+use sp_core::{u32_trait::Value as U32, Benchmark};
 use sp_runtime::{
 	RuntimeDebug,
 	ConsensusEngineId, DispatchResult, DispatchError,
@@ -444,7 +444,7 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+	type Balance: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Benchmark;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
@@ -942,6 +942,8 @@ pub struct CallMetadata {
 
 /// Gets the function name of the Call.
 pub trait GetCallName {
+	/// Return a call in this module.
+	fn get_call(function: &str, inputs: Vec<u32>) -> Self;
 	/// Return all function names.
 	fn get_call_names() -> &'static [&'static str];
 	/// Return the function name of the Call.
@@ -950,6 +952,8 @@ pub trait GetCallName {
 
 /// Gets the metadata for the Call - function name and pallet name.
 pub trait GetCallMetadata {
+	/// Return a call.
+	fn get_call(module: &str, function: &str, inputs: Vec<u32>) -> Self;
 	/// Return all module names.
 	fn get_module_names() -> &'static [&'static str];
 	/// Return all function names for the given `module`.

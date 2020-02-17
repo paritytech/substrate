@@ -25,14 +25,14 @@ use crate::traits::{
 	MaybeMallocSizeOf,
 };
 use crate::generic::Digest;
-use sp_core::U256;
+use sp_core::{U256, Benchmark};
 use sp_std::{
 	convert::TryFrom,
 	fmt::Debug,
 };
 
 /// Abstraction over a block header for a substrate chain.
-#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
@@ -51,6 +51,8 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
 	pub digest: Digest<Hash::Output>,
 }
+
+impl<Number: Copy + Default + Into<U256> + TryFrom<U256>, Hash: HashT + Default> Benchmark for Header<Number, Hash> {}
 
 #[cfg(feature = "std")]
 impl<Number, Hash> parity_util_mem::MallocSizeOf for Header<Number, Hash>

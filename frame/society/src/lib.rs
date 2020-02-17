@@ -259,7 +259,8 @@ use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 		TrailingZeroInput, CheckedSub, EnsureOrigin
 	}
 };
-use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
+use sp_core::Benchmark;
+use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult, Benchmark};
 use frame_support::weights::SimpleDispatchInfo;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
@@ -327,7 +328,7 @@ pub enum Vote {
 }
 
 /// A judgement by the suspension judgement origin on a suspended candidate.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, Benchmark)]
 pub enum Judgement {
 	/// The suspension judgement origin takes no direct judgment
 	/// and places the candidate back into the bid pool.
@@ -336,6 +337,12 @@ pub enum Judgement {
 	Reject,
 	/// The suspension judgement origin approves of the candidate's application.
 	Approve,
+}
+
+impl Default for Judgement {
+	fn default() -> Self {
+		Self::Approve
+	}
 }
 
 /// Details of a payout given as a per-block linear "trickle".

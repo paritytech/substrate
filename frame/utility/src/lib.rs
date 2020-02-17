@@ -63,14 +63,15 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sp_core::TypeId;
+use sp_core::{TypeId, Benchmark};
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
-use frame_support::{traits::{Get, ReservableCurrency, Currency}, weights::{
-	GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee
-}};
+use frame_support::{
+	traits::{Get, ReservableCurrency, Currency},
+	weights::{GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee},
+};
 use frame_system::{self as system, ensure_signed};
-use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
+use sp_runtime::{DispatchError, DispatchResult, traits::{Dispatchable}};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
@@ -80,7 +81,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + Benchmark;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -110,6 +111,8 @@ pub struct Timepoint<BlockNumber> {
 	/// The index of the extrinsic at the point in time.
 	index: u32,
 }
+
+impl<BlockNumber: Default> Benchmark for Timepoint<BlockNumber> {}
 
 /// An open multisig operation.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
@@ -166,7 +169,7 @@ decl_event! {
 	/// Events type.
 	pub enum Event<T> where
 		AccountId = <T as system::Trait>::AccountId,
-		BlockNumber = <T as system::Trait>::BlockNumber
+		BlockNumber = <T as system::Trait>::BlockNumber,
 	{
 		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
 		/// well as the error.

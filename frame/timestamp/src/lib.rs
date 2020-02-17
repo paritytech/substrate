@@ -98,10 +98,9 @@ use frame_support::{Parameter, decl_storage, decl_module};
 use frame_support::traits::{Time, Get};
 use sp_runtime::{
 	RuntimeString,
-	traits::{
-		AtLeast32Bit, Zero, SaturatedConversion, Scale
-	}
+	traits::{AtLeast32Bit, Zero, SaturatedConversion, Scale}
 };
+use sp_core::Benchmark;
 use frame_support::weights::SimpleDispatchInfo;
 use frame_system::ensure_none;
 use sp_timestamp::{
@@ -112,7 +111,7 @@ use sp_timestamp::{
 /// The module configuration trait
 pub trait Trait: frame_system::Trait {
 	/// Type used for expressing timestamp.
-	type Moment: Parameter + Default + AtLeast32Bit
+	type Moment: Parameter + Default + AtLeast32Bit + Benchmark
 		+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
 
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.

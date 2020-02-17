@@ -104,9 +104,13 @@ use codec::Decode;
 use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
+use sp_core::Benchmark;
 use sp_staking::SessionIndex;
 use frame_support::{dispatch, ConsensusEngineId, decl_module, decl_event, decl_storage, decl_error};
-use frame_support::{ensure, traits::{OnReapAccount, Get, FindAuthor, ValidatorRegistration}, Parameter};
+use frame_support::{
+	ensure, Parameter,
+	traits::{OnReapAccount, Get, FindAuthor, ValidatorRegistration},
+};
 use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
@@ -325,7 +329,7 @@ pub trait Trait: frame_system::Trait {
 	type SessionHandler: SessionHandler<Self::ValidatorId>;
 
 	/// The keys.
-	type Keys: OpaqueKeys + Member + Parameter + Default;
+	type Keys: OpaqueKeys + Member + Parameter + Default + Benchmark;
 
 	/// The fraction of validators set that is safe to be disabled.
 	///

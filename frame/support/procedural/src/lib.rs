@@ -306,3 +306,29 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
 }
+
+
+use quote::quote;
+use syn;
+
+#[proc_macro_derive(Benchmark)]
+pub fn benchmark_derive(input: TokenStream) -> TokenStream {
+    // Construct syntax tree.
+    let ast = syn::parse(input).expect("failed to parse input in benchmark derive");
+
+    // Build the trait implementation.
+    impl_benchmark_macro(&ast)
+}
+
+fn impl_benchmark_macro(ast: &syn::DeriveInput) -> TokenStream {
+    let name = &ast.ident;
+	let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
+    let gen = quote! {
+        impl #impl_generics Benchmark for #name #ty_generics #where_clause {
+            fn value(name: &[u8], index: u32) -> Self {
+                Default::default()
+            }
+        }
+    };
+    gen.into()
+}
