@@ -18,7 +18,6 @@
 
 use super::*;
 use mock::*;
-use codec::Encode;
 use sp_runtime::{assert_eq_error_rate, traits::{OnInitialize, BadOrigin}};
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
@@ -2066,7 +2065,8 @@ fn slash_in_old_span_does_not_deselect() {
 				),
 				reporters: vec![],
 			}],
-			&[Perbill::from_percent(100)],
+			// NOTE: A 100% slash here would clean up the account, causing de-registration.
+			&[Perbill::from_percent(95)],
 			1,
 		);
 
@@ -2272,7 +2272,7 @@ fn only_slash_for_max_in_era() {
 
 #[test]
 fn garbage_collection_after_slashing() {
-	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(2).build().execute_with(|| {
 		assert_eq!(Balances::free_balance(11), 256_000);
 
 		on_offence_now(
@@ -2671,13 +2671,6 @@ fn remove_multi_deferred() {
 }
 
 #[test]
-fn version_initialized() {
-	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(<Staking as Store>::StorageVersion::get(), crate::migration::CURRENT_VERSION);
-	});
-}
-
-#[test]
 fn slash_kicks_validators_not_nominators() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
@@ -2713,56 +2706,6 @@ fn slash_kicks_validators_not_nominators() {
 		// re-registers.
 		let last_slash = <Staking as Store>::SlashingSpans::get(&11).unwrap().last_nonzero_slash();
 		assert!(nominations.submitted_in < last_slash);
-	});
-}
-
-#[test]
-fn migration_v2() {
-	ExtBuilder::default().build().execute_with(|| {
-		use crate::{EraIndex, slashing::SpanIndex};
-
-		#[derive(Encode)]
-		struct V1SlashingSpans {
-			span_index: SpanIndex,
-			last_start: EraIndex,
-			prior: Vec<EraIndex>,
-		}
-
-		// inject old-style values directly into storage.
-		let set = |stash, spans: V1SlashingSpans| {
-			let key = <Staking as Store>::SlashingSpans::hashed_key_for(stash);
-			sp_io::storage::set(&key, &spans.encode());
-		};
-
-		let spans_11 = V1SlashingSpans {
-			span_index: 10,
-			last_start: 1,
-			prior: vec![0],
-		};
-
-		let spans_21 = V1SlashingSpans {
-			span_index: 1,
-			last_start: 5,
-			prior: vec![],
-		};
-
-		set(11, spans_11);
-		set(21, spans_21);
-
-		<Staking as Store>::StorageVersion::put(1);
-
-		// perform migration.
-		crate::migration::inner::to_v2::<Test>(&mut 1);
-
-		assert_eq!(
-			<Staking as Store>::SlashingSpans::get(&11).unwrap().last_nonzero_slash(),
-			1,
-		);
-
-		assert_eq!(
-			<Staking as Store>::SlashingSpans::get(&21).unwrap().last_nonzero_slash(),
-			5,
-		);
 	});
 }
 
