@@ -206,7 +206,7 @@ impl<Call: GetDispatchInfo> ClassifyDispatch<(&u16, &Box<Call>)> for Passthrough
 }
 impl<Call: GetDispatchInfo> PaysFee<(&u16, &Box<Call>)> for Passthrough<Call> {
 	fn pays_fee(&self, (_, call): (&u16, &Box<Call>)) -> bool {
-		call.get_dispatch_info().pays_fee
+		true
 	}
 }
 
@@ -239,8 +239,7 @@ impl<Call: GetDispatchInfo> ClassifyDispatch<(&Vec<Call>,)> for BatchPassthrough
 }
 impl<Call: GetDispatchInfo> PaysFee<(&Vec<Call>,)> for BatchPassthrough<Call> {
 	fn pays_fee(&self, (calls,): (&Vec<Call>,)) -> bool {
-		calls.iter()
-			.any(|call| call.get_dispatch_info().pays_fee)
+		true
 	}
 }
 
