@@ -2066,7 +2066,7 @@ mod tests {
 	}
 
 	#[test]
-	/// If transactor already voted, delegated vote is overwriten.
+	/// If transactor already voted, delegated vote is overwritten.
 	fn single_proposal_should_work_with_vote_and_delegation() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(0);
@@ -2121,7 +2121,7 @@ mod tests {
 	}
 
 	#[test]
-	/// If transactor voted, delegated vote is overwriten.
+	/// If transactor voted, delegated vote is overwritten.
 	fn single_proposal_should_work_with_delegation_and_vote() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(0);

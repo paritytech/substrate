@@ -18,7 +18,7 @@
 //! function returns a pair of [`HttpApi`] and [`HttpWorker`] that share some state.
 //!
 //! The [`HttpApi`] is (indirectly) passed to the runtime when calling an offchain worker, while
-//! the [`HttpWorker`] must be processed in the background. The [`HttpApi`] mimicks the API of the
+//! the [`HttpWorker`] must be processed in the background. The [`HttpApi`] mimics the API of the
 //! HTTP-related methods available to offchain workers.
 //!
 //! The reason for this design is driven by the fact that HTTP requests should continue running
@@ -110,7 +110,7 @@ struct HttpApiRequestRp {
 }
 
 impl HttpApi {
-	/// Mimicks the corresponding method in the offchain API.
+	/// Mimics the corresponding method in the offchain API.
 	pub fn request_start(
 		&mut self,
 		method: &str,
@@ -138,7 +138,7 @@ impl HttpApi {
 		Ok(new_id)
 	}
 
-	/// Mimicks the corresponding method in the offchain API.
+	/// Mimics the corresponding method in the offchain API.
 	pub fn request_add_header(
 		&mut self,
 		request_id: HttpRequestId,
@@ -158,7 +158,7 @@ impl HttpApi {
 		Ok(())
 	}
 
-	/// Mimicks the corresponding method in the offchain API.
+	/// Mimics the corresponding method in the offchain API.
 	pub fn request_write_body(
 		&mut self,
 		request_id: HttpRequestId,
@@ -266,7 +266,7 @@ impl HttpApi {
 		}
 	}
 
-	/// Mimicks the corresponding method in the offchain API.
+	/// Mimics the corresponding method in the offchain API.
 	pub fn response_wait(
 		&mut self,
 		ids: &[HttpRequestId],
@@ -392,7 +392,7 @@ impl HttpApi {
 		}
 	}
 
-	/// Mimicks the corresponding method in the offchain API.
+	/// Mimics the corresponding method in the offchain API.
 	pub fn response_headers(
 		&mut self,
 		request_id: HttpRequestId
@@ -411,7 +411,7 @@ impl HttpApi {
 			.collect()
 	}
 
-	/// Mimicks the corresponding method in the offchain API.
+	/// Mimics the corresponding method in the offchain API.
 	pub fn response_read_body(
 		&mut self,
 		request_id: HttpRequestId,
@@ -947,7 +947,7 @@ mod tests {
 
 	#[test]
 	fn fuzzing() {
-		// Uses the API in random ways to try to trigger panicks.
+		// Uses the API in random ways to try to trigger panics.
 		// Doesn't test some paths, such as waiting for multiple requests. Also doesn't test what
 		// happens if the server force-closes our socket.
 

@@ -69,7 +69,7 @@ pub type DigestItem = generic::DigestItem<Hash>;
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
 /// of data like extrinsics, allowing for them to continue syncing the network through upgrades
-/// to even the core datastructures.
+/// to even the core data structures.
 pub mod opaque {
 	use super::*;
 
@@ -109,7 +109,7 @@ pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
 
-/// The version infromation used to identify this runtime when compiled natively.
+/// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
 pub fn native_version() -> NativeVersion {
 	NativeVersion {

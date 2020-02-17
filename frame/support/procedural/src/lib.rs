@@ -123,7 +123,7 @@ use proc_macro::TokenStream;
 ///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
-///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be choosen with care, see
+///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be chosen with care, see
 ///   generator documentation.
 ///
 ///   If the first key is untrusted, a cryptographic `hasher` such as `blake2_256` or
@@ -200,7 +200,7 @@ use proc_macro::TokenStream;
 ///
 /// ```nocompile
 /// construct_runtime!(
-/// 	pub enum Runtume with ... {
+/// 	pub enum Runtime with ... {
 ///         ...,
 ///         Example: example::{Module, Storage, ..., Config<T>},
 ///         ...,

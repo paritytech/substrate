@@ -229,7 +229,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 		}
 	}
 
-	/// Take interemdiate by given key, and remove it from the processing list.
+	/// Take intermediate by given key, and remove it from the processing list.
 	pub fn take_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<Box<T>, Error> {
 		let (k, v) = self.intermediates.remove_entry(key).ok_or(Error::NoIntermediate)?;
 

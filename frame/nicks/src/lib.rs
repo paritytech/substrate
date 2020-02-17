@@ -104,7 +104,7 @@ decl_error! {
 		TooShort,
 		/// A name is too long.
 		TooLong,
-		/// An account in't named.
+		/// An account isn't named.
 		Unnamed,
 	}
 }

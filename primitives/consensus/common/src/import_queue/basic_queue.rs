@@ -29,7 +29,7 @@ use crate::import_queue::{
 };
 
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate
-/// task, with pluggable verification.
+/// task, with plugable verification.
 pub struct BasicQueue<B: BlockT, Transaction> {
 	/// Channel to send messages to the background task.
 	sender: mpsc::UnboundedSender<ToWorkerMsg<B>>,

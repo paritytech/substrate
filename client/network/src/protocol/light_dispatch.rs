@@ -227,7 +227,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 impl<B: BlockT> LightDispatch<B> where
 	B::Header: HeaderT,
 {
-	/// Creates new light client requests processer.
+	/// Creates new light client requests processor.
 	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
 		LightDispatch {
 			checker,
@@ -567,7 +567,7 @@ impl<B: BlockT> LightDispatch<B> where
 				// return peer to the back of the queue
 				self.idle_peers.push_back(peer.clone());
 
-				// we have enumerated all peers and noone can handle request
+				// we have enumerated all peers and no one can handle request
 				if Some(peer) == last_peer {
 					let request = self.pending_requests.pop_front().expect("checked in loop condition; qed");
 					unhandled_requests.push_back(request);
