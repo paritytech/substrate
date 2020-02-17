@@ -282,20 +282,13 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 			let signature = pair.sign(header_hash.as_ref());
 			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
 
-			BlockImportParams {
-				origin: BlockOrigin::Own,
-				header,
-				justification: None,
-				post_digests: vec![signature_digest_item],
-				body: Some(body),
-				storage_changes: Some(storage_changes),
-				finalized: false,
-				auxiliary: Vec::new(),
-				intermediates: Default::default(),
-				fork_choice: Some(ForkChoiceStrategy::LongestChain),
-				allow_missing_state: false,
-				import_existing: false,
-			}
+			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
+			import_block.post_digests.push(signature_digest_item);
+			import_block.body = Some(body);
+			import_block.storage_changes = Some(storage_changes);
+			import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+
+			import_block
 		})
 	}
 
@@ -637,22 +630,14 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 						_ => None,
 					});
 
-				let block_import_params = BlockImportParams {
-					origin,
-					header: pre_header,
-					post_digests: vec![seal],
-					body,
-					storage_changes: None,
-					finalized: false,
-					justification,
-					auxiliary: Vec::new(),
-					intermediates: Default::default(),
-					fork_choice: Some(ForkChoiceStrategy::LongestChain),
-					allow_missing_state: false,
-					import_existing: false,
-				};
+				let mut import_block = BlockImportParams::new(origin, pre_header);
+				import_block.post_digests.push(seal);
+				import_block.body = body;
+				import_block.justification = justification;
+				import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+				import_block.post_hash = Some(hash);
 
-				Ok((block_import_params, maybe_keys))
+				Ok((import_block, maybe_keys))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
@@ -790,7 +775,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 		block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		let hash = block.post_header().hash();
+		let hash = block.post_hash();
 		let slot_number = find_pre_digest::<Block, P>(&block.header)
 			.expect("valid Aura headers must contain a predigest; \
 					 header has been already verified; qed");
