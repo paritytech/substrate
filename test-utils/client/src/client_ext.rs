@@ -87,60 +87,28 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 {
 	fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
-		let import = BlockImportParams {
-			origin,
-			header,
-			justification: None,
-			post_digests: vec![],
-			body: Some(extrinsics),
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import = BlockImportParams::new(origin, header);
+		import.body = Some(extrinsics);
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 
 	fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
-		let import = BlockImportParams {
-			origin,
-			header,
-			justification: None,
-			post_digests: vec![],
-			body: Some(extrinsics),
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::Custom(true)),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import = BlockImportParams::new(origin, header);
+		import.body = Some(extrinsics);
+		import.fork_choice = Some(ForkChoiceStrategy::Custom(true));
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 
 	fn import_as_final(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
-		let import = BlockImportParams {
-			origin,
-			header,
-			justification: None,
-			post_digests: vec![],
-			body: Some(extrinsics),
-			storage_changes: None,
-			finalized: true,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::Custom(true)),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import = BlockImportParams::new(origin, header);
+		import.body = Some(extrinsics);
+		import.finalized = true;
+		import.fork_choice = Some(ForkChoiceStrategy::Custom(true));
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
@@ -152,20 +120,11 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 		justification: Justification,
 	) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
-		let import = BlockImportParams {
-			origin,
-			header,
-			justification: Some(justification),
-			post_digests: vec![],
-			body: Some(extrinsics),
-			storage_changes: None,
-			finalized: true,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import = BlockImportParams::new(origin, header);
+		import.justification = Some(justification);
+		import.body = Some(extrinsics);
+		import.finalized = true;
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
@@ -177,60 +136,28 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 {
 	fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
-		let import = BlockImportParams {
-			origin,
-			header,
-			justification: None,
-			post_digests: vec![],
-			body: Some(extrinsics),
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import = BlockImportParams::new(origin, header);
+		import.body = Some(extrinsics);
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 
 	fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
-		let import = BlockImportParams {
-			origin,
-			header,
-			justification: None,
-			post_digests: vec![],
-			body: Some(extrinsics),
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::Custom(true)),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import = BlockImportParams::new(origin, header);
+		import.body = Some(extrinsics);
+		import.fork_choice = Some(ForkChoiceStrategy::Custom(true));
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 
 	fn import_as_final(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
-		let import = BlockImportParams {
-			origin,
-			header,
-			justification: None,
-			post_digests: vec![],
-			body: Some(extrinsics),
-			storage_changes: None,
-			finalized: true,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::Custom(true)),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import = BlockImportParams::new(origin, header);
+		import.body = Some(extrinsics);
+		import.finalized = true;
+		import.fork_choice = Some(ForkChoiceStrategy::Custom(true));
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
@@ -242,20 +169,11 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 		justification: Justification,
 	) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
-		let import = BlockImportParams {
-			origin,
-			header,
-			justification: Some(justification),
-			post_digests: vec![],
-			body: Some(extrinsics),
-			storage_changes: None,
-			finalized: true,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import = BlockImportParams::new(origin, header);
+		import.justification = Some(justification);
+		import.body = Some(extrinsics);
+		import.finalized = true;
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}

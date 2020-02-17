@@ -504,7 +504,7 @@ impl<B: BlockT> LightDispatch<B> where
 	}
 
 	pub fn is_light_response(&self, peer: &PeerId, request_id: message::RequestId) -> bool {
-		self.active_peers.get(&peer).map_or(false, |r| r.id == request_id)
+		self.active_peers.get(peer).map_or(false, |r| r.id == request_id)
 	}
 
 	fn remove(&mut self, peer: PeerId, id: u64) -> Option<Request<B>> {
