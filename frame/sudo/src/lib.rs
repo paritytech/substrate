@@ -91,9 +91,7 @@ use sp_runtime::{traits::{StaticLookup, Dispatchable}, DispatchError};
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
-use frame_support::weights::{
-	GetDispatchInfo, DispatchClass, FunctionOf,
-};
+use frame_support::weights::{GetDispatchInfo, FunctionOf};
 use frame_system::{self as system, ensure_signed};
 
 pub trait Trait: frame_system::Trait {
@@ -123,7 +121,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().weight + 10_000, 
-			DispatchClass::Normal,
+			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().class,
 			true
 		)]
 		fn sudo(origin, call: Box<<T as Trait>::Call>) {
@@ -177,7 +175,9 @@ decl_module! {
 			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
 				args.1.get_dispatch_info().weight + 10_000
 			}, 
-			DispatchClass::Normal,
+			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
+				args.1.get_dispatch_info().class
+			},
 			true
 		)]
 		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, call: Box<<T as Trait>::Call>) {
