@@ -26,7 +26,7 @@ use sp_std::collections::btree_map::{BTreeMap, Entry};
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Zero};
-use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
+use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance};
 use frame_support::{storage::child, StorageMap};
 use frame_system;
 
@@ -146,9 +146,11 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		let mut total_imbalance = SignedImbalance::zero();
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance() {
-				let (imbalance, outcome) = T::Currency::make_free_balance_be(&address, balance);
+				let existed  = !T::Currency::total_balance(&address).is_zero();
+				let imbalance = T::Currency::make_free_balance_be(&address, balance);
+				let exists  = !T::Currency::total_balance(&address).is_zero();
 				total_imbalance = total_imbalance.merge(imbalance);
-				if let UpdateBalanceOutcome::AccountKilled = outcome {
+				if existed && !exists {
 					// Account killed. This will ultimately lead to calling `OnReapAccount` callback
 					// which will make removal of CodeHashOf and AccountStorage for this account.
 					// In order to avoid writing over the deleted properties we `continue` here.

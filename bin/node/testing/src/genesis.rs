@@ -62,7 +62,7 @@ pub fn config_endowed(
 			code: code.map(|x| x.to_vec()).unwrap_or_else(|| WASM_BINARY.to_vec()),
 		}),
 		pallet_indices: Some(IndicesConfig {
-			ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
+			indices: vec![],
 		}),
 		pallet_balances: Some(BalancesConfig {
 			balances: endowed,

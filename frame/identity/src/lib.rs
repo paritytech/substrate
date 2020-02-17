@@ -73,7 +73,7 @@ use sp_runtime::{DispatchResult, RuntimeDebug};
 use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
-	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
+	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus},
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -823,7 +823,7 @@ decl_module! {
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
 				Ok(position) => {
 					if let Judgement::FeePaid(fee) = id.judgements[position].1 {
-						let _ = T::Currency::repatriate_reserved(&target, &sender, fee);
+						let _ = T::Currency::repatriate_reserved(&target, &sender, fee, BalanceStatus::Free);
 					}
 					id.judgements[position] = item
 				}
@@ -924,20 +924,19 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnReapAccount = Balances;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 	parameter_types! {
 		pub const BasicDeposit: u64 = 10;

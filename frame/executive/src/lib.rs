@@ -416,6 +416,7 @@ mod tests {
 
 	impl_outer_event!{
 		pub enum MetaEvent for Runtime {
+			system<T>,
 			balances<T>,
 		}
 	}
@@ -451,20 +452,19 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnReapAccount = Balances;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Runtime {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = MetaEvent;
 		type DustRemoval = ();
-		type TransferPayment = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 
 	parameter_types! {
@@ -559,7 +559,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("a0b84fec49718caf59350dab6ec2993f12db399a7cccdb80f3cf79618ed93bd8").into(),
+					state_root: hex!("96797237079b6d6ffab7a47f90ee257a439a0e8268bdab3fe2f1e52572b101de").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
