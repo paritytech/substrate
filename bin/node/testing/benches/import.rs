@@ -434,7 +434,7 @@ fn bench_block_import(c: &mut Criterion) {
 	log::trace!(
 		target: "bench-logistics",
 		"Seed database directory: {}",
-		bench_db.path().to_string_lossy(),
+		bench_db.path().display(),
 	);
 
 	c.bench_function_over_inputs("import block",
