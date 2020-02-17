@@ -40,7 +40,15 @@ variables:
     - rustup show
     - cargo --version
     - mkdir -p ${CARGO_HOME}; touch ${CARGO_HOME}/config
-    - mkdir -p ${CARGO_TARGET_DIR}
+    # if there is no directory for this $CI_COMMIT_REF_NAME/$CI_JOB_NAME
+    # create such directory and
+    # create hardlinks recursively of all the files from the master/$CI_JOB_NAME if it exists
+    - if [[ ! -d $CARGO_TARGET_DIR ]]; then
+        mkdir -p /ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME};
+        cp -al /ci-cache/${CI_PROJECT_NAME}/targets/master/${CI_JOB_NAME} 
+          /ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME} || 
+          echo "_____No such target dir, proceeding from scratch_____";
+      fi
     - sccache -s
   only:
     - master
