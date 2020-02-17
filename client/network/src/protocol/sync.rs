@@ -813,7 +813,7 @@ impl<B: BlockT> ChainSync<B> {
 			peer.state = PeerSyncState::Available;
 
 			// We only request one justification at a time
-			if let Some(block) = response.blocks.into_iter().next() {
+			let justification = if let Some(block) = response.blocks.into_iter().next() {
 				if hash != block.hash {
 					info!(
 						target: "sync",
@@ -821,13 +821,22 @@ impl<B: BlockT> ChainSync<B> {
 					);
 					return Err(BadPeer(who, rep::BAD_JUSTIFICATION));
 				}
-				if let Some((peer, hash, number, j)) = self.extra_justifications.on_response(who, block.justification) {
-					return Ok(OnBlockJustification::Import { peer, hash, number, justification: j })
-				}
+
+				block.justification
 			} else {
-				// we might have asked the peer for a justification on a block that we thought it had
-				// (regardless of whether it had a justification for it or not).
-				trace!(target: "sync", "Peer {:?} provided empty response for justification request {:?}", who, hash)
+				// we might have asked the peer for a justification on a block that we assumed it
+				// had but didn't (regardless of whether it had a justification for it or not).
+				trace!(target: "sync",
+					"Peer {:?} provided empty response for justification request {:?}",
+					who,
+					hash,
+				);
+
+				None
+			};
+
+			if let Some((peer, hash, number, j)) = self.extra_justifications.on_response(who, justification) {
+				return Ok(OnBlockJustification::Import { peer, hash, number, justification: j })
 			}
 		}
 
