@@ -53,7 +53,7 @@ pub trait BabeApi {
 ///
 /// Uses a background thread to calculate epoch_authorship data.
 pub struct BabeRPCHandler<B: BlockT, C, SC> {
-	/// shared refernce to the client.
+	/// shared reference to the client.
 	client: Arc<C>,
 	/// shared reference to EpochChanges
 	shared_epoch_changes: SharedEpochChanges<B, Epoch>,
@@ -61,12 +61,12 @@ pub struct BabeRPCHandler<B: BlockT, C, SC> {
 	keystore: KeyStorePtr,
 	/// config (actually holds the slot duration)
 	babe_config: Config,
-	/// select chain
+	/// The SelectChain strategy
 	select_chain: SC,
 }
 
 impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
-	/// creates a new instance of the BabeRpc handler.
+	/// Creates a new instance of the BabeRpc handler.
 	pub fn new(
 		client: Arc<C>,
 		shared_epoch_changes: SharedEpochChanges<B, Epoch>,

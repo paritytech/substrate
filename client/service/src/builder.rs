@@ -385,16 +385,15 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 	}
 
 	/// Returns a reference to the fetcher, only available if builder
-	/// was created with `new_light`
+	/// was created with `new_light`.
 	pub fn fetcher(&self) -> Option<TFchr>
-		where
-			TFchr: Clone
+		where TFchr: Clone
 	{
 		self.fetcher.clone()
 	}
 
 	/// Returns a reference to the remote_backend, only available if builder
-	/// was created with `new_light`
+	/// was created with `new_light`.
 	pub fn remote_backend(&self) -> Option<Arc<dyn RemoteBlockchain<TBl>>> {
 		self.remote_backend.clone()
 	}

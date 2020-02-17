@@ -45,9 +45,9 @@ use sc_consensus_babe_rpc::BabeRPCHandler;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
-	/// client instance
+	/// The client instance to use.
 	pub client: Arc<C>,
-	/// txpool
+	/// Transaction pool instance.
 	pub pool: Arc<P>,
 	/// Remote access to the blockchain (async).
 	pub remote_blockchain: Arc<dyn sc_client::light::blockchain::RemoteBlockchain<Block>>,
@@ -55,28 +55,27 @@ pub struct LightDeps<C, F, P> {
 	pub fetcher: Arc<F>,
 }
 
-/// extra dependencies for babe.
+/// Extra dependencies for BABE.
 pub struct BabeDeps {
-	/// babe config.
+	/// BABE protocol config.
 	pub babe_config: Config,
-	/// shared reference to EpochChanges
+	/// BABE pending epoch changes.
 	pub shared_epoch_changes: SharedEpochChanges<Block, Epoch>,
-	/// shared reference to the Keystore
+	/// The keystore that manages the keys of the node.
 	pub keystore: KeyStorePtr,
 }
 
-/// Full client dependecies
+/// Full client dependencies.
 pub struct FullDeps<C, P, SC> {
-	/// client instance
+	/// The client instance to use.
 	pub client: Arc<C>,
-	/// txpool
+	/// Transaction pool instance.
 	pub pool: Arc<P>,
-	/// SelectChain instance
+	/// The SelectChain Strategy
 	pub select_chain: SC,
-	/// babe specific dependencies.
+	/// BABE specific dependencies.
 	pub babe: BabeDeps,
 }
-
 
 /// Instantiate all Full RPC extensions.
 pub fn create_full<C, P, M, SC>(
@@ -110,7 +109,6 @@ pub fn create_full<C, P, M, SC>(
 		babe_config,
 		shared_epoch_changes,
 	} = babe;
-
 
 	io.extend_with(
 		SystemApi::to_delegate(FullSystem::new(client.clone(), pool))
