@@ -79,6 +79,31 @@ mod verification;
 mod authorship;
 mod utils;
 
+/// Set that are generating.
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct GeneratingSet {
+	/// Epoch index of validating.
+	pub epoch_index: u64,
+	/// The authorities and their weights.
+	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+	/// Randomness for this epoch.
+	pub randomness: Randomness,
+	/// Local pending proofs collected.
+	pub pending: Vec<(u64, u32, VRFOutput, VRFProof)>,
+}
+
+impl GeneratingSet {
+	/// Maximum attempts for proof generation.
+	pub fn max_attempts(&self) -> u64 {
+		64
+	}
+
+	/// Difficulty where the attempts are valid.
+	pub fn threshold(&self) -> (u64, u64) {
+		(1, 4)
+	}
+}
+
 /// Set that are publishing.
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct PublishingSet {
@@ -140,6 +165,8 @@ impl ValidatingSet {
 /// Epoch data for Sassafras
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct Epoch {
+	/// Generating validator set. The set will start publishing in the next epoch.
+	pub generating: GeneratingSet,
 	/// Publishing validator set. The set will start validating block in the next epoch.
 	pub publishing: PublishingSet,
 	/// Validating validator set. The set validates block in the current epoch.
@@ -158,6 +185,19 @@ impl EpochT for Epoch {
 		);
 
 		Epoch {
+			generating: GeneratingSet {
+				epoch_index: self.generating.epoch_index + 1,
+				authorities: descriptor.authorities,
+				randomness: descriptor.randomness,
+				pending: Vec::new(),
+			},
+			publishing: PublishingSet {
+				epoch_index: self.generating.epoch_index,
+				authorities: self.generating.authorities.clone(),
+				randomness: self.generating.randomness,
+				proofs: Vec::new(),
+				pending: self.generating.pending.clone(),
+			},
 			validating: ValidatingSet {
 				start_slot,
 				duration: self.validating.duration,
@@ -170,13 +210,6 @@ impl EpochT for Epoch {
 					.map(|(i, p)| (start_slot + i as u64, p))
 					.collect(),
 				pending: self.publishing.pending.clone(),
-			},
-			publishing: PublishingSet {
-				epoch_index: self.publishing.epoch_index + 1,
-				authorities: descriptor.authorities,
-				randomness: descriptor.randomness,
-				proofs: Vec::new(),
-				pending: Vec::new(),
 			},
 		}
 	}
@@ -284,29 +317,25 @@ impl Config {
 
 	/// Create the genesis epoch (epoch #0)
 	pub fn genesis_epoch(&self, slot_number: SlotNumber) -> Epoch {
-		let publishing_proofs = self.genesis_proofs.clone()
-			.into_iter()
-			.map(|p| p.try_into().expect("Genesis proofs are invalid"))
-			.collect::<Vec<VRFProof>>();
-		let validating_proofs = self.genesis_proofs.clone()
-			.into_iter()
-			.enumerate()
-			.map(|(i, p)| (slot_number + i as u64, p.try_into().expect("Genesis proofs are invalid")))
-			.collect::<Vec<(u64, VRFProof)>>();
-
 		Epoch {
-			validating: ValidatingSet {
-				start_slot: slot_number,
-				duration: self.epoch_length,
-				epoch_index: 0,
-				proofs: validating_proofs,
+			generating: GeneratingSet {
+				epoch_index: 2,
 				authorities: self.genesis_authorities.clone(),
 				randomness: self.randomness.clone(),
 				pending: Vec::new(),
 			},
 			publishing: PublishingSet {
 				epoch_index: 1,
-				proofs: publishing_proofs,
+				proofs: Vec::new(),
+				authorities: self.genesis_authorities.clone(),
+				randomness: self.randomness.clone(),
+				pending: Vec::new(),
+			},
+			validating: ValidatingSet {
+				start_slot: slot_number,
+				duration: self.epoch_length,
+				epoch_index: 0,
+				proofs: Vec::new(),
 				authorities: self.genesis_authorities.clone(),
 				randomness: self.randomness.clone(),
 				pending: Vec::new(),
@@ -493,9 +522,9 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Sassafra
 			|slot| self.config.genesis_epoch(slot)
 		)?;
 
-		if viable_epoch.as_ref().publishing.pending.is_empty() {
+		if viable_epoch.as_ref().generating.pending.is_empty() {
 			trace!(target: "sassafras", "Pending proof set is empty, generating a new one.");
-			viable_epoch.as_mut().publishing.append_to_pending(&self.keystore);
+			viable_epoch.as_mut().generating.append_to_pending(&self.keystore);
 		}
 
 		let s = authorship::claim_slot(

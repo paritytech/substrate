@@ -344,7 +344,6 @@ impl_runtime_apis! {
 				slot_duration: Sassafras::slot_duration(),
 				epoch_length: EpochDuration::get(),
 				genesis_authorities: Sassafras::authorities(),
-				genesis_proofs: Vec::new(),
 				randomness: Sassafras::randomness(),
 				secondary_slots: true,
 			}

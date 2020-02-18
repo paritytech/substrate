@@ -31,7 +31,7 @@ use sp_consensus_sassafras::{
 use sc_consensus_epochs::ViableEpochDescriptor;
 use sc_keystore::KeyStorePtr;
 use log::trace;
-use super::{Epoch, PublishingSet};
+use super::{Epoch, GeneratingSet};
 
 /// Calculates the primary selection threshold for a given authority, taking
 /// into account `c` (`1 - c` represents the probability of a slot being empty).
@@ -146,7 +146,7 @@ fn get_keypair(q: &AuthorityPair) -> &schnorrkel::Keypair {
 	sp_core::sr25519::Pair::from_ref(q).as_ref()
 }
 
-impl PublishingSet {
+impl GeneratingSet {
 	/// Get or generate pending proofs for current epoch, given keystore.
 	pub fn append_to_pending(
 		&mut self,
