@@ -17,21 +17,18 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
-          profile: minimal
           override: true
       - name: Install wasm in stable toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: wasm32-unknown-unknown
-          profile: minimal
           override: true
       - name: Install wasm in nightly toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           target: wasm32-unknown-unknown
-          profile: minimal
           override: true
       - name: Install cargo-audit, cargo-web, wasm-pack
         uses: actions-rs/cargo@v1
@@ -54,11 +51,11 @@ jobs:
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-      - name: Cache cargo build
-        uses: actions/cache@v1
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      #- name: Cache cargo build
+      #  uses: actions/cache@v1
+      #  with:
+      #    path: target
+      #    key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
       - name: Cargo audit
         uses: actions-rs/cargo@v1
         with:
@@ -83,11 +80,10 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+          toolchain: stable
           args: --all --release --verbose --locked
         env: 
           RUSTFLAGS: "-Cdebug-assertions=y"
-      - name: Test dependency rules
-        run: .maintain/ensure-deps.sh
       - name: Test frame staking
         uses: actions-rs/cargo@v1
         with:
