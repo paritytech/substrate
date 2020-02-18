@@ -21,7 +21,7 @@
 //!
 //! ## Overview
 //!
-//! The executive module is not a typical FRAME module providing functionality around a specific feature.
+//! The executive module is not a typical pallet providing functionality around a specific feature.
 //! It is a cross-cutting framework component for the FRAME. It works in conjunction with the
 //! [FRAME System module](../frame_system/index.html) to perform these cross-cutting functions.
 //!
