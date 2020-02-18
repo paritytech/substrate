@@ -2221,6 +2221,7 @@ dependencies = [
  "httparse",
  "itoa",
  "log 0.4.8",
+ "net2",
  "pin-project",
  "time",
  "tokio 0.2.11",
@@ -2230,19 +2231,19 @@ dependencies = [
 
 [[package]]
 name = "hyper-rustls"
-version = "0.17.1"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "719d85c7df4a7f309a77d145340a063ea929dcb2e025bae46a80345cffec2952"
+checksum = "f6ea6215c7314d450ee45970ab8b3851ab447a0e6bafdd19e31b20a42dbb7faf"
 dependencies = [
- "bytes 0.4.12",
+ "bytes 0.5.4",
  "ct-logs",
- "futures 0.1.29",
- "hyper 0.12.35",
+ "futures-util",
+ "hyper 0.13.2",
  "rustls",
- "tokio-io",
+ "rustls-native-certs",
+ "tokio 0.2.11",
  "tokio-rustls",
  "webpki",
- "webpki-roots 0.17.0",
 ]
 
 [[package]]
@@ -5476,6 +5477,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-native-certs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51ffebdbb48c14f84eba0b715197d673aff1dd22cc1007ca647e28483bbcc307"
+dependencies = [
+ "openssl-probe",
+ "rustls",
+ "schannel",
+ "security-framework",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6243,13 +6256,12 @@ dependencies = [
 name = "sc-offchain"
 version = "2.0.0"
 dependencies = [
- "bytes 0.4.12",
+ "bytes 0.5.4",
  "env_logger 0.7.1",
  "fnv",
- "futures 0.1.29",
  "futures 0.3.4",
  "futures-timer 3.0.1",
- "hyper 0.12.35",
+ "hyper 0.13.2",
  "hyper-rustls",
  "log 0.4.8",
  "num_cpus",
@@ -6268,7 +6280,7 @@ dependencies = [
  "sp-transaction-pool",
  "substrate-test-runtime-client",
  "threadpool",
- "tokio 0.1.22",
+ "tokio 0.2.11",
 ]
 
 [[package]]
@@ -6418,7 +6430,6 @@ dependencies = [
  "sysinfo",
  "target_info",
  "tokio 0.2.11",
- "tokio-executor 0.1.10",
  "tracing",
  "wasm-timer",
 ]
@@ -8011,6 +8022,7 @@ checksum = "8fdd17989496f49cdc57978c96f0c9fe5e4a58a8bddc6813c449a4624f6a030b"
 dependencies = [
  "bytes 0.5.4",
  "fnv",
+ "iovec",
  "lazy_static",
  "libc",
  "memchr",
@@ -8019,6 +8031,7 @@ dependencies = [
  "num_cpus",
  "pin-project-lite",
  "signal-hook-registry",
+ "slab",
  "tokio-macros",
  "winapi 0.3.8",
 ]
@@ -8130,15 +8143,13 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.10.3"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d7cf08f990090abd6c6a73cab46fed62f85e8aef8b99e4b918a9f4a637f0676"
+checksum = "141afec0978abae6573065a48882c6bae44c5cc61db9b511ac4abf6a09bfd9cc"
 dependencies = [
- "bytes 0.4.12",
- "futures 0.1.29",
- "iovec",
+ "futures-core",
  "rustls",
- "tokio-io",
+ "tokio 0.2.11",
  "webpki",
 ]
 
@@ -8501,7 +8512,6 @@ checksum = "c689459fbaeb50e56c6749275f084decfd02194ac5852e6617d95d0d3cf02eaf"
 dependencies = [
  "bytes 0.5.4",
  "futures_codec",
- "tokio-util",
 ]
 
 [[package]]
