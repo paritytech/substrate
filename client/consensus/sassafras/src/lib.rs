@@ -77,8 +77,7 @@ use sp_api::ApiExt;
 mod aux_schema;
 mod verification;
 mod authorship;
-#[cfg(test)]
-mod tests;
+mod utils;
 
 /// Set that are publishing.
 #[derive(Debug, Clone, Encode, Decode)]
@@ -153,6 +152,10 @@ impl EpochT for Epoch {
 
 	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
 		let start_slot = self.validating.start_slot + self.validating.duration;
+		let sortition_proofs = utils::sortition(
+			&self.publishing.proofs,
+			self.validating.duration as usize
+		);
 
 		Epoch {
 			validating: ValidatingSet {
@@ -161,7 +164,7 @@ impl EpochT for Epoch {
 				epoch_index: self.publishing.epoch_index,
 				authorities: self.publishing.authorities.clone(),
 				randomness: self.publishing.randomness,
-				proofs: self.publishing.proofs.clone()
+				proofs: sortition_proofs
 					.into_iter()
 					.enumerate()
 					.map(|(i, p)| (start_slot + i as u64, p))

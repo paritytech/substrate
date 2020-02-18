@@ -1,4 +1,5 @@
 use codec::{Encode, Decode};
+use sp_core::U512;
 use sp_runtime::RuntimeDebug;
 #[cfg(feature = "std")]
 use std::{ops::{Deref, DerefMut}, convert::TryFrom};
@@ -92,6 +93,20 @@ impl core::cmp::Eq for RawVRFProof { }
 #[cfg(feature = "std")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VRFProof(pub schnorrkel::vrf::VRFProof);
+
+#[cfg(feature = "std")]
+impl PartialOrd for VRFProof {
+	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+#[cfg(feature = "std")]
+impl Ord for VRFProof {
+	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+		U512::from(self.0.to_bytes()).cmp(&U512::from(other.0.to_bytes()))
+	}
+}
 
 #[cfg(not(feature = "std"))]
 pub type VRFProof = RawVRFProof;
