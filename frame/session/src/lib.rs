@@ -362,7 +362,7 @@ decl_storage! {
 		///
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		// TODO: Migrate to a normal map now
+		// TODO: Migrate to a normal map now https://github.com/paritytech/substrate/issues/4917
 		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) T::ValidatorId
 			=> Option<T::Keys>;
 
@@ -370,7 +370,7 @@ decl_storage! {
 		///
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		// TODO: Migrate to a normal map now
+		// TODO: Migrate to a normal map now https://github.com/paritytech/substrate/issues/4917
 		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) (KeyTypeId, Vec<u8>)
 			=> Option<T::ValidatorId>;
 	}
