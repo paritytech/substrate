@@ -710,8 +710,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// This is the opposite of `all_extrinsics_weight` provided for convenience.
 	pub fn remaining_weight() -> Weight {
-		T::MaximumBlockWeight::get()
-			.saturating_sub(Self::all_extrinsics_weight())
+		T::MaximumBlockWeight::get().saturating_sub(Self::all_extrinsics_weight())
 	}
 
 	/// Inform the system module of some additional weight that should be accounted for, in the

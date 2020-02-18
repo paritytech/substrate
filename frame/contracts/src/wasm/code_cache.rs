@@ -28,9 +28,9 @@
 
 use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
 use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
-use sp_std::prelude::*;
-use sp_runtime::traits::Hash;
 use frame_support::StorageMap;
+use sp_runtime::traits::Hash;
+use sp_std::prelude::*;
 
 /// Put code in the storage. The hash of code is used as a key and is returned
 /// as a result of this function.

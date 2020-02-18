@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{Trait, BalanceOf};
-use sp_runtime::traits::{
-	Zero, SaturatedConversion, AtLeast32Bit,
-};
+use crate::{BalanceOf, Trait};
+use sp_runtime::traits::{AtLeast32Bit, SaturatedConversion, Zero};
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};

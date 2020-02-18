@@ -93,9 +93,9 @@ mod gas;
 
 mod account_db;
 mod exec;
-mod wasm;
-mod rent;
 mod gas_weight_conv;
+mod rent;
+mod wasm;
 
 #[cfg(test)]
 mod tests;
@@ -113,11 +113,12 @@ use frame_support::dispatch::{DispatchResult, Dispatchable};
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, parameter_types,
 	storage::child,
-	traits::{OnReapAccount, Currency, Get, OnUnbalanced, Randomness, Time},
+	traits::{Currency, Get, OnReapAccount, OnUnbalanced, Randomness, Time},
 	weights::{DispatchClass, FunctionOf, Weight},
 	IsSubType, Parameter,
 };
-use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
+use frame_system::{self as system, ensure_root, ensure_signed, RawOrigin};
+use pallet_contracts_primitives::{ContractAccessError, RentProjection};
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::UncheckedFrom;
@@ -125,7 +126,6 @@ use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Convert, Hash, MaybeSerializeDeserialize, Member, StaticLookup, Zero};
 use sp_std::{fmt, marker::PhantomData, prelude::*};
-use pallet_contracts_primitives::{RentProjection, ContractAccessError};
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
 pub type TrieId = Vec<u8>;
@@ -242,10 +242,16 @@ pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
 
 impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
 where
-	H: Member + MaybeSerializeDeserialize + fmt::Debug
-		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default
-		+ sp_std::hash::Hash + Codec,
-	Hasher: Hash<Output=H>,
+	H: Member
+		+ MaybeSerializeDeserialize
+		+ fmt::Debug
+		+ AsRef<[u8]>
+		+ AsMut<[u8]>
+		+ Copy
+		+ Default
+		+ sp_std::hash::Hash
+		+ Codec,
+	Hasher: Hash<Output = H>,
 {
 	fn new(storage_root: &[u8], code_hash: H) -> Self {
 		let mut buf = Vec::new();
@@ -718,7 +724,7 @@ impl<T: Trait> Module<T> {
 	fn execute_wasm(
 		origin: T::AccountId,
 		gas_limit: Gas,
-		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult
+		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult,
 	) -> ExecResult {
 		//
 		// Take the gas price prepared by the signed extension.

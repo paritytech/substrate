@@ -19,28 +19,36 @@
 
 #![allow(unused)]
 
-use crate::{
-	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig,
-	Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, Schedule,
-	TrieIdGenerator, account_db::{AccountDb, DirectAccountDb, OverlayAccountDb},
-};
 use crate::gas_weight_conv::GasWeightConversion;
+use crate::{
+	account_db::{AccountDb, DirectAccountDb, OverlayAccountDb},
+	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig,
+	Module, RawAliveContractInfo, RawEvent, Schedule, Trait, TrieId, TrieIdFromParentCounter,
+	TrieIdGenerator,
+};
 use assert_matches::assert_matches;
-use hex_literal::*;
 use codec::{Decode, Encode, KeyedVec};
-use sp_runtime::{
-	Perbill, BuildStorage, transaction_validity::{InvalidTransaction, ValidTransaction},
-	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension},
-	testing::{Digest, DigestItem, Header, UintAuthorityId, H256},
-};
 use frame_support::{
-	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
-	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
-	weights::{DispatchInfo, DispatchClass, Weight},
+	assert_err, assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin,
+	parameter_types,
+	storage::child,
+	traits::{Currency, Get},
+	weights::{DispatchClass, DispatchInfo, Weight},
+	StorageMap, StorageValue,
 };
-use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
-use sp_core::storage::well_known_keys;
 use frame_system::{self as system, EventRecord, Phase};
+use hex_literal::*;
+use sp_core::storage::well_known_keys;
+use sp_runtime::{
+	testing::{Digest, DigestItem, Header, UintAuthorityId, H256},
+	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension},
+	transaction_validity::{InvalidTransaction, ValidTransaction},
+	BuildStorage, Perbill,
+};
+use std::{
+	cell::RefCell,
+	sync::atomic::{AtomicUsize, Ordering},
+};
 
 mod contracts {
 	// Re-export contents of the root. This basically
@@ -87,9 +95,10 @@ impl Get<u64> for TransferFee {
 
 pub struct CreationFee;
 impl Get<u64> for CreationFee {
-	fn get() -> u64 { INSTANTIATION_FEE.with(|v| *v.borrow()) }
+	fn get() -> u64 {
+		INSTANTIATION_FEE.with(|v| *v.borrow())
+	}
 }
-
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
@@ -261,23 +270,27 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		pallet_balances::GenesisConfig::<Test> {
-			balances: vec![],
-		}.assimilate_storage(&mut t).unwrap();
+		pallet_balances::GenesisConfig::<Test> { balances: vec![] }
+			.assimilate_storage(&mut t)
+			.unwrap();
 		GenesisConfig {
 			current_schedule: Schedule {
 				enable_println: true,
 				..Default::default()
 			},
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		sp_io::TestExternalities::new(t)
 	}
 }
 
 /// Generate Wasm binary and code hash from wabt source.
-fn compile_module<T>(wabt_module: &str)
-	-> Result<(Vec<u8>, <T::Hashing as Hash>::Output), wabt::Error>
-	where T: frame_system::Trait
+fn compile_module<T>(
+	wabt_module: &str,
+) -> Result<(Vec<u8>, <T::Hashing as Hash>::Output), wabt::Error>
+where
+	T: frame_system::Trait,
 {
 	let wasm = wabt::wat2wasm(wabt_module)?;
 	let code_hash = T::Hashing::hash(&wasm);
@@ -289,7 +302,13 @@ fn compile_module<T>(wabt_module: &str)
 fn call_doesnt_pay_for_gas() {
 	ExtBuilder::default().build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 100_000_000);
-		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, Vec::new()));
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			BOB,
+			0,
+			100_000,
+			Vec::new()
+		));
 		assert_eq!(Balances::free_balance(&ALICE), 100_000_000);
 	});
 }
@@ -881,9 +900,12 @@ fn test_set_rent_code_and_hash() {
 
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 
 		// If you ever need to update the wasm source this test will fail
 		// and will show you the actual hash.
@@ -1398,10 +1420,13 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 	let (restoration_wasm, restoration_code_hash) =
 		compile_module::<Test>(CODE_RESTORATION).unwrap();
 
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), restoration_wasm));
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), set_rent_wasm));
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), restoration_wasm));
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), set_rent_wasm));
 
 		// If you ever need to update the wasm source this test will fail
 		// and will show you the actual hash.
@@ -2168,11 +2193,14 @@ const CODE_SELF_DESTRUCT: &str = r#"
 #[test]
 fn self_destruct_by_draining_balance() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCT).unwrap();
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 
-		// Instantiate the BOB contract.
+			// Instantiate the BOB contract.
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100_000,
@@ -2204,11 +2232,14 @@ fn self_destruct_by_draining_balance() {
 #[test]
 fn cannot_self_destruct_while_live() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCT).unwrap();
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 
-		// Instantiate the BOB contract.
+			// Instantiate the BOB contract.
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100_000,
@@ -2499,9 +2530,12 @@ const CODE_SELF_DESTRUCTING_CONSTRUCTOR: &str = r#"
 #[test]
 fn cannot_self_destruct_in_constructor() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCTING_CONSTRUCTOR).unwrap();
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 
 		// Fail to instantiate the BOB contract since its final balance is below existential
 		// deposit.
@@ -2521,18 +2555,22 @@ fn cannot_self_destruct_in_constructor() {
 #[test]
 fn check_block_gas_limit_works() {
 	ExtBuilder::default().build().execute_with(|| {
-		let info = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: true };
+		let info = DispatchInfo {
+			weight: 100,
+			class: DispatchClass::Normal,
+			pays_fee: true,
+		};
 		let check = GasWeightConversion::<Test>::new();
 		let call: Call = crate::Call::put_code(vec![]).into();
 		match check.pre_dispatch(&0, &call, info, 0) {
-			Ok(None) => {},
+			Ok(None) => {}
 			_ => panic!("put_code is not dynamic and should pass validation"),
 		}
 
 		let check = GasWeightConversion::<Test>::new();
 		let call: Call = crate::Call::call(Default::default(), 0, 100, vec![]).into();
 		match check.pre_dispatch(&0, &call, info, 0) {
-			Ok(Some(_)) => {},
+			Ok(Some(_)) => {}
 			_ => panic!(),
 		}
 	});
