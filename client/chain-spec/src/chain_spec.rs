@@ -20,7 +20,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 use serde::{Serialize, Deserialize};
 use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
 use sp_runtime::BuildStorage;
@@ -32,7 +32,7 @@ use sc_telemetry::TelemetryEndpoints;
 enum GenesisSource<G> {
 	File(PathBuf),
 	Binary(Cow<'static, [u8]>),
-	Factory(Rc<dyn Fn() -> G>),
+	Factory(Arc<dyn Fn() -> G + Send + Sync>),
 }
 
 impl<G> Clone for GenesisSource<G> {
@@ -215,7 +215,7 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Create hardcoded spec.
-	pub fn from_genesis<F: Fn() -> G + 'static>(
+	pub fn from_genesis<F: Fn() -> G + 'static + Send + Sync>(
 		name: &str,
 		id: &str,
 		constructor: F,
@@ -239,7 +239,7 @@ impl<G, E> ChainSpec<G, E> {
 
 		ChainSpec {
 			client_spec,
-			genesis: GenesisSource::Factory(Rc::new(constructor)),
+			genesis: GenesisSource::Factory(Arc::new(constructor)),
 		}
 	}
 }
