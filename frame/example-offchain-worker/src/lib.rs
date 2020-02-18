@@ -25,191 +25,6 @@
 //! - \[`Call`](./enum.Call.html)
 //! - \[`Module`](./struct.Module.html)
 //!
-//! \## Overview
-//!
-//! <!-- Original author of paragraph: Various. See https://github.com/paritytech/substrate-developer-hub/issues/44 -->
-//! // Short description of module purpose.
-//! // Links to Traits that should be implemented.
-//! // What this module is for.
-//! // What functionality the module provides.
-//! // When to use the module (use case examples).
-//! // How it is used.
-//! // Inputs it uses and the source of each input.
-//! // Outputs it produces.
-//!
-//! <!-- Original author of paragraph: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
-//! <!-- and comment https://github.com/paritytech/substrate-developer-hub/issues/44#issuecomment-471982710 -->
-//!
-//! \## Terminology
-//!
-//! // Add terminology used in the custom module. Include concepts, storage items, or actions that you think
-//! // deserve to be noted to give context to the rest of the documentation or module usage. The author needs to
-//! // use some judgment about what is included. We don't want a list of every storage item nor types - the user
-//! // can go to the code for that. For example, "transfer fee" is obvious and should not be included, but
-//! // "free balance" and "reserved balance" should be noted to give context to the module.
-//! // Please do not link to outside resources. The reference docs should be the ultimate source of truth.
-//!
-//! <!-- Original author of heading: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
-//!
-//! \## Goals
-//!
-//! // Add goals that the custom module is designed to achieve.
-//!
-//! <!-- Original author of heading: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
-//!
-//! \### Scenarios
-//!
-//! <!-- Original author of paragraph: @Kianenigma. Based on PR https://github.com/paritytech/substrate/pull/1951 -->
-//!
-//! \#### <INSERT_SCENARIO_NAME>
-//!
-//! // Describe requirements prior to interacting with the custom module.
-//! // Describe the process of interacting with the custom module for this scenario and public API functions used.
-//!
-//! \## Interface
-//!
-//! \### Supported Origins
-//!
-//! // What origins are used and supported in this module (root, signed, none)
-//! // i.e. root when <code>\`ensure_root\`</code> used
-//! // i.e. none when <code>\`ensure_none\`</code> used
-//! // i.e. signed when <code>\`ensure_signed\`</code> used
-//!
-//! <code>\`inherent\`</code> <INSERT_DESCRIPTION>
-//!
-//! <!-- Original author of paragraph: @Kianenigma in comment -->
-//! <!-- https://github.com/paritytech/substrate-developer-hub/issues/44#issuecomment-471982710 -->
-//!
-//! \### Types
-//!
-//! // Type aliases. Include any associated types and where the user would typically define them.
-//!
-//! <code>\`ExampleType\`</code> <INSERT_DESCRIPTION>
-//!
-//! <!-- Original author of paragraph: ??? -->
-//!
-//! // Reference documentation of aspects such as `storageItems` and `dispatchable` functions should only be
-//! // included in the https://docs.rs Rustdocs for Substrate and not repeated in the README file.
-//!
-//! \### Dispatchable Functions
-//!
-//! <!-- Original author of paragraph: @AmarRSingh & @joepetrowski -->
-//!
-//! // A brief description of dispatchable functions and a link to the rustdoc with their actual documentation.
-//!
-//! // <b>MUST</b> have link to Call enum
-//! // <b>MUST</b> have origin information included in function doc
-//! // <b>CAN</b> have more info up to the user
-//!
-//! \### Public Functions
-//!
-//! <!-- Original author of paragraph: @joepetrowski -->
-//!
-//! // A link to the rustdoc and any notes about usage in the module, not for specific functions.
-//! // For example, in the balances module: "Note that when using the publicly exposed functions,
-//! // you (the runtime developer) are responsible for implementing any necessary checks
-//! // (e.g. that the sender is the signer) before calling a function that will affect storage."
-//!
-//! <!-- Original author of paragraph: @AmarRSingh -->
-//!
-//! // It is up to the writer of the respective module (with respect to how much information to provide).
-//!
-//! \#### Public Inspection functions - Immutable (getters)
-//!
-//! // Insert a subheading for each getter function signature
-//!
-//! \##### <code>\`example_getter_name()\`</code>
-//!
-//! // What it returns
-//! // Why, when, and how often to call it
-//! // When it could panic or error
-//! // When safety issues to consider
-//!
-//! \#### Public Mutable functions (changing state)
-//!
-//! // Insert a subheading for each setter function signature
-//!
-//! \##### <code>\`example_setter_name(origin, parameter_name: T::ExampleType)\`</code>
-//!
-//! // What state it changes
-//! // Why, when, and how often to call it
-//! // When it could panic or error
-//! // When safety issues to consider
-//! // What parameter values are valid and why
-//!
-//! \### Storage Items
-//!
-//! // Explain any storage items included in this module
-//!
-//! \### Digest Items
-//!
-//! // Explain any digest items included in this module
-//!
-//! \### Inherent Data
-//!
-//! // Explain what inherent data (if any) is defined in the module and any other related types
-//!
-//! \### Events:
-//!
-//! // Insert events for this module if any
-//!
-//! \### Errors:
-//!
-//! // Explain what generates errors
-//!
-//! \## Usage
-//!
-//! // Insert 2-3 examples of usage and code snippets that show how to
-//! // use <INSERT_CUSTOM_MODULE_NAME> module in a custom module.
-//!
-//! \### Prerequisites
-//!
-//! // Show how to include necessary imports for <INSERT_CUSTOM_MODULE_NAME> and derive
-//! // your module configuration trait with the `INSERT_CUSTOM_MODULE_NAME` trait.
-//!
-//! \```rust
-//! use <INSERT_CUSTOM_MODULE_NAME>;
-//!
-//! pub trait Trait: <INSERT_CUSTOM_MODULE_NAME>::Trait { }
-//! \```
-//!
-//! \### Simple Code Snippet
-//!
-//! // Show a simple example (e.g. how to query a public getter function of <INSERT_CUSTOM_MODULE_NAME>)
-//!
-//! \### Example from SRML
-//!
-//! // Show a usage example in an actual runtime
-//!
-//! // See:
-//! // - Substrate TCR https://github.com/parity-samples/substrate-tcr
-//! // - Substrate Kitties https://shawntabrizi.github.io/substrate-collectables-workshop/#/
-//!
-//! \## Genesis Config
-//!
-//! <!-- Original author of paragraph: @joepetrowski -->
-//!
-//! \## Dependencies
-//!
-//! // Dependencies on other SRML modules and the genesis config should be mentioned,
-//! // but not the Rust Standard Library.
-//! // Genesis configuration modifications that may be made to incorporate this module
-//! // Interaction with other modules
-//!
-//! <!-- Original author of heading: @AmarRSingh -->
-//!
-//! \## Related Modules
-//!
-//! // Interaction with other modules in the form of a bullet point list
-//!
-//! \## References
-//!
-//! <!-- Original author of paragraph: @joepetrowski -->
-//!
-//! // Links to reference material, if applicable. For example, Phragmen, W3F research, etc.
-//! // that the implementation is based on.
-//! </pre></p></details>
-
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -226,19 +41,29 @@ use sp_runtime::{
 	traits::{Zero, UniqueSaturatedFrom},
 	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionValidity},
 };
-use sp_std::convert::TryInto;
 
 #[cfg(test)]
 mod tests;
 
+/// Defines application identifier for crypto keys of this module.
+///
+/// Every module that deals with signatures needs to declare it's unique identifier for
+/// it's crypto keys.
+/// When offchain worker is signing transactions it's going to request keys with below
+/// `KeyTypeId` from the keystore and use the ones it founds to sign the transaction.
+/// The keys can be inserted manually via RPC (see `author_insertKey`).
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"btc!");
 
+/// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
+/// We can use from supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
+/// the types with this pallet-specific identifier.
 pub mod crypto {
 	use super::KEY_TYPE;
 	use sp_runtime::app_crypto::{app_crypto, sr25519};
 	app_crypto!(sr25519, KEY_TYPE);
 }
 
+/// A base trait for this pallet.
 pub trait Trait: frame_system::Trait {
 	/// The type to sign and submit transactions.
 	type SubmitSignedTransaction:
@@ -253,6 +78,9 @@ pub trait Trait: frame_system::Trait {
 	type Call: From<Call<Self>>;
 }
 
+/// Number of blocks of cooldown after unsigned transaction is included.
+///
+/// This ensure that we only accept unsigned transaction once, every `UNSIGNED_INTERVAL` blocks.
 const UNSIGNED_INTERVAL: u128 = 128;
 
 decl_storage! {
@@ -271,6 +99,7 @@ decl_storage! {
 }
 
 decl_event!(
+	/// Events generated by the module.
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
 		/// Event generated when new price is accepted to contirbute to the average.
 		NewPrice(u32, AccountId),
@@ -278,6 +107,7 @@ decl_event!(
 );
 
 decl_module! {
+	/// A public part of the pallet.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
@@ -304,7 +134,18 @@ decl_module! {
 			Ok(())
 		}
 
-		// TODO [ToDr] docs
+		/// Submit new price to the list via unsigned transaction.
+		///
+		/// Works exactly like the `submit_price` function, but since we allow sending the
+		/// transaction without a signature, and hence without paying any fees,
+		/// we need a way to make sure that only some transactions are accepted.
+		/// This function can be called only once every `UNSIGNED_INTERVAL` blocks.
+		/// Transactions that call that function are de-duplicated on the pool level
+		/// via `validate_unsigned` implementation and also are rendered invalid if
+		/// the function has already been called in current "session".
+		///
+		/// This example is not focused on correctness of the oracle itself, but rather it's
+		/// purpose is to showcase offchain worker capabilities.
 		pub fn submit_price_unsigned(origin, _block_number: T::BlockNumber, price: u32) -> DispatchResult {
 			// This ensure that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
@@ -544,24 +385,58 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
+	/// Validate unsigned call to this module.
+	///
+	/// By default unsigned transactions are disallowed, but implementing the validator
+	/// here we make sure that some particular calls (the ones produced by offchain worker)
+	/// are being whitelisted and marked as valid.
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		// Firstly let's check that we call the right function.
 		if let Call::submit_price_unsigned(block_number, new_price) = call {
+			// Now let's check if the transaction has any chance to succeed.
 			let next_unsigned_at = <NextUnsignedAt<T>>::get();
 			if &next_unsigned_at > block_number {
 				return InvalidTransaction::Stale.into();
 			}
+			// Let's make sure to reject transactions from the future.
+			let current_block = <system::Module<T>>::block_number();
+			if &current_block < block_number {
+				return InvalidTransaction::Future.into();
+			}
 
+			// We prioritize transactions that are more far away from current average.
+			//
+			// Note this doesn't make much sense when building an actual oracle,
+			// but this example is here mostly to show off offchain workers
+			// capabilities, not about building an oracle.
 			let avg_price = Self::average_price()
 				.map(|price| if &price > new_price { price - new_price } else { new_price - price })
 				.unwrap_or(0);
 
-			let longevity = *block_number - next_unsigned_at;
-
 			Ok(ValidTransaction {
+				// We set base priority to 2**20 to make sure it's included before any other
+				// transactions in the pool. Next we tweak the priority depending on how much
+				// it differs from the current average. (the more it differs the more priority it
+				// has).
 				priority: (1 << 20) + avg_price as u64,
+				// This transaction does not require anything else to go before into the pool.
+				// In theory we could require `previous_unsigned_at` transaction to go first,
+				// but it's not necessary in our case.
 				requires: vec![],
-				provides: vec![codec::Encode::encode(&block_number)],
-				longevity: TryInto::<u64>::try_into(longevity).unwrap_or(10_u64),
+				// We set the `provides` tag to be the same as `next_unsigned_at`. This makes
+				// sure only one transaction produced after `next_unsigned_at` will ever
+				// get to the transaction pool and will end up in the block.
+				// We can still have multiple transactions compete for the same "spot",
+				// and the one with higher priority will replace other one in the pool.
+				provides: vec![codec::Encode::encode(&(KEY_TYPE.0, next_unsigned_at))],
+				// The transaction is only valid for next 5 blocks. After that it's
+				// going to be revalidated by the pool.
+				longevity: 5,
+				// It's fine to propagate that transaction to other peers, which means
+				// it can be created even by nodes that don't produce blocks.
+				// Note that sometimes it's better to keep it for yourself (if you are the block
+				// producer), since for instance in some schemes others may copy your solution and
+				// claim a reward.
 				propagate: true,
 			})
 		} else {

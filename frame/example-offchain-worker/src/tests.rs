@@ -16,16 +16,19 @@
 
 use crate::*;
 
+use codec::Decode;
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types,
 	weights::{GetDispatchInfo, Weight},
 };
 use sp_core::{
-	offchain::{OffchainExt, testing},
 	H256,
+	offchain::{OffchainExt, TransactionPoolExt, testing},
+	testing::KeyStore,
+	traits::KeystoreExt,
 };
 use sp_runtime::{
-	Perbill,
+	Perbill, RuntimeAppPublic,
 	testing::{Header, TestXt},
 	traits::{BlakeTwo256, IdentityLookup, Extrinsic as ExtrinsicsT},
 };
@@ -128,35 +131,55 @@ fn should_make_http_call_and_parse_result() {
 
 #[test]
 fn should_submit_signed_transaction_on_chain() {
-	let (offchain, state) = testing::TestOffchainExt::new();
+	const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
+
+	let (offchain, offchain_state) = testing::TestOffchainExt::new();
+	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+	let keystore = KeyStore::new();
+	keystore.write().sr25519_generate_new(
+		crate::crypto::Public::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+
+
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
+	t.register_extension(TransactionPoolExt::new(pool));
+	t.register_extension(KeystoreExt(keystore));
 
-	price_oracle_response(&mut state.write());
+	price_oracle_response(&mut offchain_state.write());
 
 	t.execute_with(|| {
 		// when
 		Example::fetch_price_and_send_signed().unwrap();
 		// then
-		//		// TODO [ToDr] Check txpool content
-		assert_eq!(1, 3);
+		let tx = pool_state.write().transactions.pop().unwrap();
+		assert!(pool_state.read().transactions.is_empty());
+		let tx = Extrinsic::decode(&mut &*tx).unwrap();
+		assert_eq!(tx.0.unwrap().0, 0);
+		assert_eq!(tx.1, Call::submit_price(15522));
 	});
 }
 
 #[test]
 fn should_submit_unsigned_transaction_on_chain() {
-	let (offchain, state) = testing::TestOffchainExt::new();
+	let (offchain, offchain_state) = testing::TestOffchainExt::new();
+	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
+	t.register_extension(TransactionPoolExt::new(pool));
 
-	price_oracle_response(&mut state.write());
+	price_oracle_response(&mut offchain_state.write());
 
 	t.execute_with(|| {
 		// when
 		Example::fetch_price_and_send_unsigned(1).unwrap();
 		// then
-		// TODO [ToDr] Check txpool content
-		assert_eq!(1, 3);
+		let tx = pool_state.write().transactions.pop().unwrap();
+		assert!(pool_state.read().transactions.is_empty());
+		let tx = Extrinsic::decode(&mut &*tx).unwrap();
+		assert_eq!(tx.0, None);
+		assert_eq!(tx.1, Call::submit_price_unsigned(1, 15522));
 	});
 }
 
