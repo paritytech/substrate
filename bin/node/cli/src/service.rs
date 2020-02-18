@@ -63,8 +63,7 @@ macro_rules! new_full_start {
 			})?
 			.with_transaction_pool(|config, client, _fetcher| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
-				let pool = sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api));
-				Ok(pool)
+				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api)))
 			})?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
@@ -96,8 +95,21 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|client, pool, _backend, fetcher, _remote_blockchain| -> Result<RpcExtension, _> {
-				Ok(node_rpc::create(client, pool, node_rpc::LightDeps::none(fetcher)))
+			.with_rpc_extensions(|builder| -> Result<RpcExtension, _> {
+				let babe_link = import_setup.as_ref().map(|s| &s.2)
+					.expect("BabeLink is present for full services or set up failed; qed.");
+				let deps = node_rpc::FullDeps {
+					client: builder.client().clone(),
+					pool: builder.pool(),
+					select_chain: builder.select_chain().cloned()
+						.expect("SelectChain is present for full services or set up failed; qed."),
+					babe: node_rpc::BabeDeps {
+						keystore: builder.keystore(),
+						babe_config: sc_consensus_babe::BabeLink::config(babe_link).clone(),
+						shared_epoch_changes: sc_consensus_babe::BabeLink::epoch_changes(babe_link).clone()
+					}
+				};
+				Ok(node_rpc::create_full(deps))
 			})?;
 
 		(builder, import_setup, inherent_data_providers)
@@ -216,7 +228,6 @@ macro_rules! new_full {
 					grandpa_link,
 					service.network(),
 					service.on_exit(),
-					service.spawn_task_handle(),
 				)?);
 			},
 			(true, false) => {
@@ -229,7 +240,6 @@ macro_rules! new_full {
 					on_exit: service.on_exit(),
 					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 					voting_rule: grandpa::VotingRulesBuilder::default().build(),
-					executor: service.spawn_task_handle(),
 				};
 				// the GRANDPA voter task is considered infallible, i.e.
 				// if it fails we take down the service with it.
@@ -355,14 +365,21 @@ pub fn new_light(config: NodeConfiguration)
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
-		.with_rpc_extensions(|client, pool, _backend, fetcher, remote_blockchain| -> Result<RpcExtension, _> {
-			let fetcher = fetcher
+		.with_rpc_extensions(|builder,| ->
+			Result<RpcExtension, _>
+		{
+			let fetcher = builder.fetcher()
 				.ok_or_else(|| "Trying to start node RPC without active fetcher")?;
-			let remote_blockchain = remote_blockchain
+			let remote_blockchain = builder.remote_backend()
 				.ok_or_else(|| "Trying to start node RPC without active remote blockchain")?;
 
-			let light_deps = node_rpc::LightDeps { remote_blockchain, fetcher };
-			Ok(node_rpc::create(client, pool, Some(light_deps)))
+			let light_deps = node_rpc::LightDeps {
+				remote_blockchain,
+				fetcher,
+				client: builder.client().clone(),
+				pool: builder.pool(),
+			};
+			Ok(node_rpc::create_light(light_deps))
 		})?
 		.build()?;
 
@@ -371,7 +388,7 @@ pub fn new_light(config: NodeConfiguration)
 
 #[cfg(test)]
 mod tests {
-	use std::{sync::Arc, collections::HashMap, borrow::Cow, any::Any};
+	use std::{sync::Arc, borrow::Cow, any::Any};
 	use sc_consensus_babe::{
 		CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY
 	};
@@ -559,27 +576,14 @@ mod tests {
 				);
 				slot_num += 1;
 
-				let params = BlockImportParams {
-					origin: BlockOrigin::File,
-					header: new_header,
-					justification: None,
-					post_digests: vec![item],
-					body: Some(new_body),
-					storage_changes: None,
-					finalized: false,
-					auxiliary: Vec::new(),
-					intermediates: {
-						let mut intermediates = HashMap::new();
-						intermediates.insert(
-							Cow::from(INTERMEDIATE_KEY),
-							Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
-						);
-						intermediates
-					},
-					fork_choice: Some(ForkChoiceStrategy::LongestChain),
-					allow_missing_state: false,
-					import_existing: false,
-				};
+				let mut params = BlockImportParams::new(BlockOrigin::File, new_header);
+				params.post_digests.push(item);
+				params.body = Some(new_body);
+				params.intermediates.insert(
+					Cow::from(INTERMEDIATE_KEY),
+					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+				);
+				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 				block_import.import_block(params, Default::default())
 					.expect("error importing test block");

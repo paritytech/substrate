@@ -41,8 +41,7 @@ macro_rules! new_full_start {
 			})?
 			.with_transaction_pool(|config, client, _fetcher| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
-				let pool = sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api));
-				Ok(pool)
+				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api)))
 			})?
 			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
 				let select_chain = select_chain.take()
@@ -159,7 +158,6 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 				grandpa_link,
 				service.network(),
 				service.on_exit(),
-				service.spawn_task_handle(),
 			)?);
 		},
 		(true, false) => {
@@ -172,7 +170,6 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 				on_exit: service.on_exit(),
 				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 				voting_rule: grandpa::VotingRulesBuilder::default().build(),
-				executor: service.spawn_task_handle(),
 			};
 
 			// the GRANDPA voter task is considered infallible, i.e.

@@ -52,10 +52,10 @@ use cfg_if::cfg_if;
 use sp_core::storage::ChildType;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use sp_consensus_babe::AuthorityId;
+pub use sp_consensus_babe::{AuthorityId, SlotNumber};
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
-// Inlucde the WASM binary
+// Include the WASM binary
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
@@ -114,7 +114,7 @@ pub enum Extrinsic {
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
 }
 
-parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinisic does not need this
+parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
 
 #[cfg(feature = "std")]
 impl serde::Serialize for Extrinsic {
@@ -340,8 +340,8 @@ impl_outer_origin!{
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Event;
 
-impl From<frame_system::Event> for Event {
-	fn from(_evt: frame_system::Event) -> Self {
+impl From<frame_system::Event<Runtime>> for Event {
+	fn from(_evt: frame_system::Event<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
@@ -371,6 +371,9 @@ impl frame_system::Trait for Runtime {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnReapAccount = ();
 }
 
 impl pallet_timestamp::Trait for Runtime {
@@ -603,6 +606,10 @@ cfg_if! {
 						secondary_slots: true,
 					}
 				}
+
+				fn current_epoch_start() -> SlotNumber {
+					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
 			}
 
 			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
@@ -789,6 +796,10 @@ cfg_if! {
 						randomness: <pallet_babe::Module<Runtime>>::randomness(),
 						secondary_slots: true,
 					}
+				}
+
+				fn current_epoch_start() -> SlotNumber {
+					<pallet_babe::Module<Runtime>>::current_epoch_start()
 				}
 			}
 

@@ -17,7 +17,7 @@
 use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
 use sp_std::convert::TryFrom;
 use sp_runtime::traits::{
-	CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto,
+	CheckedMul, Zero, SaturatedConversion, AtLeast32Bit, UniqueSaturatedInto,
 };
 use frame_support::{
 	traits::{Currency, ExistenceRequirement, Imbalance, OnUnbalanced, WithdrawReason}, StorageValue,
@@ -248,7 +248,7 @@ pub fn refund_unused_gas<T: Trait>(
 /// A little handy utility for converting a value in balance units into approximate value in gas units
 /// at the given gas price.
 pub fn approx_gas_for_balance<Balance>(gas_price: Balance, balance: Balance) -> Gas
-	where Balance: SimpleArithmetic
+	where Balance: AtLeast32Bit
 {
 	(balance / gas_price).saturated_into::<Gas>()
 }

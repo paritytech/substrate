@@ -30,7 +30,7 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
-		OnReapAccount, OnUnbalanced
+		OnReapAccount, OnUnbalanced, BalanceStatus
 	}
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -802,7 +802,7 @@ decl_module! {
 			let queue = <DispatchQueue<T>>::get();
 			ensure!(!queue.iter().any(|item| &item.1 == &proposal_hash), Error::<T>::Imminent);
 
-			let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
+			let _ = T::Currency::repatriate_reserved(&old, &who, deposit, BalanceStatus::Free);
 			<Preimages<T>>::remove(&proposal_hash);
 			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
 		}
@@ -1227,20 +1227,19 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnReapAccount = Balances;
 	}
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 0;
-		pub const CreationFee: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 2;
@@ -2067,7 +2066,7 @@ mod tests {
 	}
 
 	#[test]
-	/// If transactor already voted, delegated vote is overwriten.
+	/// If transactor already voted, delegated vote is overwritten.
 	fn single_proposal_should_work_with_vote_and_delegation() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(0);
@@ -2122,7 +2121,7 @@ mod tests {
 	}
 
 	#[test]
-	/// If transactor voted, delegated vote is overwriten.
+	/// If transactor voted, delegated vote is overwritten.
 	fn single_proposal_should_work_with_delegation_and_vote() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(0);

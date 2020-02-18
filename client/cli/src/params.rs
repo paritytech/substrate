@@ -238,6 +238,10 @@ pub struct NetworkConfigurationParams {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
+
+	/// Experimental feature flag.
+	#[structopt(long = "use-yamux-flow-control")]
+	pub use_yamux_flow_control: bool,
 }
 
 arg_enum! {
@@ -714,7 +718,7 @@ pub struct BuildSpecCmd {
 	pub node_key_params: NodeKeyParams,
 }
 
-/// Wrapper type of `String` which holds an arbitary sized unsigned integer formatted as decimal.
+/// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a decimal.
 #[derive(Debug, Clone)]
 pub struct BlockNumber(String);
 
@@ -1262,4 +1266,3 @@ impl BenchmarkCmd {
 		Ok(())
 	}
 }
-

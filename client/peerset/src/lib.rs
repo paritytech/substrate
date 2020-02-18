@@ -30,7 +30,7 @@ use wasm_timer::Instant;
 /// We don't accept nodes whose reputation is under this value.
 const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
 /// Reputation change for a node when we get disconnected from it.
-const DISCONNECT_REPUTATION_CHANGE: i32 = -10;
+const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// Reserved peers group ID
 const RESERVED_NODES: &'static str = "reserved";
 
@@ -199,14 +199,16 @@ impl Peerset {
 			tx: tx.clone(),
 		};
 
+		let now = Instant::now();
+
 		let mut peerset = Peerset {
 			data: peersstate::PeersState::new(config.in_peers, config.out_peers, config.reserved_only),
 			tx,
 			rx,
 			reserved_only: config.reserved_only,
 			message_queue: VecDeque::new(),
-			created: Instant::now(),
-			latest_time_update: Instant::now(),
+			created: now,
+			latest_time_update: now,
 		};
 
 		peerset.data.set_priority_group(RESERVED_NODES, config.reserved_nodes.into_iter().collect());

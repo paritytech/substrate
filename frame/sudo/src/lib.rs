@@ -90,8 +90,8 @@ use sp_runtime::{traits::{StaticLookup, Dispatchable}, DispatchError};
 
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
-	weights::SimpleDispatchInfo,
 };
+use frame_support::weights::{GetDispatchInfo, FunctionOf};
 use frame_system::{self as system, ensure_signed};
 
 pub trait Trait: frame_system::Trait {
@@ -99,7 +99,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// A sudo-able call.
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
 }
 
 decl_module! {
@@ -117,15 +117,19 @@ decl_module! {
 		/// - O(1).
 		/// - Limited storage reads.
 		/// - One DB write (event).
-		/// - Unknown weight of derivative `proposal` execution.
+		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn sudo(origin, proposal: Box<T::Proposal>) {
+		#[weight = FunctionOf(
+			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().weight + 10_000, 
+			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().class,
+			true
+		)]
+		fn sudo(origin, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
-			let res = match proposal.dispatch(frame_system::RawOrigin::Root.into()) {
+			let res = match call.dispatch(frame_system::RawOrigin::Root.into()) {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();
@@ -165,17 +169,25 @@ decl_module! {
 		/// - O(1).
 		/// - Limited storage reads.
 		/// - One DB write (event).
-		/// - Unknown weight of derivative `proposal` execution.
+		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(0)]
-		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, proposal: Box<T::Proposal>) {
+		#[weight = FunctionOf(
+			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
+				args.1.get_dispatch_info().weight + 10_000
+			}, 
+			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
+				args.1.get_dispatch_info().class
+			},
+			true
+		)]
+		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let who = T::Lookup::lookup(who)?;
 
-			let res = match proposal.dispatch(frame_system::RawOrigin::Signed(who).into()) {
+			let res = match call.dispatch(frame_system::RawOrigin::Signed(who).into()) {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();

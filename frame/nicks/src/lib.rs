@@ -104,7 +104,7 @@ decl_error! {
 		TooShort,
 		/// A name is too long.
 		TooLong,
-		/// An account in't named.
+		/// An account isn't named.
 		Unnamed,
 	}
 }
@@ -285,20 +285,19 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnReapAccount = Balances;
 	}
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 0;
-		pub const CreationFee: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 	parameter_types! {
 		pub const ReservationFee: u64 = 2;

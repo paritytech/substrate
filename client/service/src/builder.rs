@@ -51,9 +51,11 @@ use std::{
 use wasm_timer::SystemTime;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::MaintainedTransactionPool;
+use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
+
+pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
 /// Aggregator for the components required to build a service.
 ///
@@ -90,6 +92,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TF
 	rpc_extensions: TRpc,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
+	background_tasks: Vec<(&'static str, BackgroundTask)>,
 }
 
 /// Full client type.
@@ -265,6 +268,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			remote_backend: None,
+			background_tasks: Default::default(),
 			marker: PhantomData,
 		})
 	}
@@ -350,6 +354,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			remote_backend: Some(remote_blockchain),
+			background_tasks: Default::default(),
 			marker: PhantomData,
 		})
 	}
@@ -372,6 +377,30 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 	/// Returns a reference to the select-chain that was stored in this builder.
 	pub fn select_chain(&self) -> Option<&TSc> {
 		self.select_chain.as_ref()
+	}
+
+	/// Returns a reference to the keystore
+	pub fn keystore(&self) -> Arc<RwLock<Keystore>> {
+		self.keystore.clone()
+	}
+
+	/// Returns a reference to the transaction pool stored in this builder
+	pub fn pool(&self) -> Arc<TExPool> {
+		self.transaction_pool.clone()
+	}
+
+	/// Returns a reference to the fetcher, only available if builder
+	/// was created with `new_light`.
+	pub fn fetcher(&self) -> Option<TFchr>
+		where TFchr: Clone
+	{
+		self.fetcher.clone()
+	}
+
+	/// Returns a reference to the remote_backend, only available if builder
+	/// was created with `new_light`.
+	pub fn remote_backend(&self) -> Option<Arc<dyn RemoteBlockchain<TBl>>> {
+		self.remote_backend.clone()
 	}
 
 	/// Defines which head-of-chain strategy to use.
@@ -398,6 +427,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -440,6 +470,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -466,6 +497,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -506,6 +538,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -570,6 +603,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -596,20 +630,24 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 
 	/// Defines which transaction pool to use.
 	pub fn with_transaction_pool<UExPool>(
-		self,
+		mut self,
 		transaction_pool_builder: impl FnOnce(
 			sc_transaction_pool::txpool::Options,
 			Arc<TCl>,
 			Option<TFchr>,
-		) -> Result<UExPool, Error>
+		) -> Result<(UExPool, Option<BackgroundTask>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		TNetP, UExPool, TRpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
-		let transaction_pool = transaction_pool_builder(
+		let (transaction_pool, background_task) = transaction_pool_builder(
 			self.config.transaction_pool.clone(),
 			self.client.clone(),
 			self.fetcher.clone(),
 		)?;
+
+		if let Some(background_task) = background_task{
+			self.background_tasks.push(("txpool-background", background_task));
+		}
 
 		Ok(ServiceBuilder {
 			config: self.config,
@@ -625,6 +663,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: Arc::new(transaction_pool),
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -632,23 +671,11 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 	/// Defines the RPC extensions to use.
 	pub fn with_rpc_extensions<URpc>(
 		self,
-		rpc_ext_builder: impl FnOnce(
-			Arc<TCl>,
-			Arc<TExPool>,
-			Arc<Backend>,
-			Option<TFchr>,
-			Option<Arc<dyn RemoteBlockchain<TBl>>>,
-		) -> Result<URpc, Error>,
+		rpc_ext_builder: impl FnOnce(&Self) -> Result<URpc, Error>,
 	) -> Result<ServiceBuilder<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		TNetP, TExPool, URpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
-		let rpc_extensions = rpc_ext_builder(
-			self.client.clone(),
-			self.transaction_pool.clone(),
-			self.backend.clone(),
-			self.fetcher.clone(),
-			self.remote_backend.clone(),
-		)?;
+		let rpc_extensions = rpc_ext_builder(&self)?;
 
 		Ok(ServiceBuilder {
 			config: self.config,
@@ -664,6 +691,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			transaction_pool: self.transaction_pool,
 			rpc_extensions,
 			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
 			marker: self.marker,
 		})
 	}
@@ -778,6 +806,7 @@ ServiceBuilder<
 			transaction_pool,
 			rpc_extensions,
 			remote_backend,
+			background_tasks,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -874,6 +903,15 @@ ServiceBuilder<
 			_ => None,
 		};
 
+		// Spawn background tasks which were stacked during the
+		// service building.
+		for (title, background_task) in background_tasks {
+			let _ = to_spawn_tx.unbounded_send((
+				background_task,
+				title.into(),
+			));
+		}
+
 		{
 			// block notifications
 			let txpool = Arc::downgrade(&transaction_pool);
@@ -882,39 +920,58 @@ ServiceBuilder<
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 			let is_validator = config.roles.is_authority();
 
-			let events = client.import_notification_stream()
-				.for_each(move |notification| {
-					let txpool = txpool.upgrade();
+			let (import_stream, finality_stream) = (
+				client.import_notification_stream().map(|n| ChainEvent::NewBlock {
+					id: BlockId::Hash(n.hash),
+					header: n.header,
+					retracted: n.retracted,
+					is_new_best: n.is_new_best,
+				}),
+				client.finality_notification_stream().map(|n| ChainEvent::Finalized {
+					hash: n.hash
+				})
+			);
+			let events = futures::stream::select(import_stream, finality_stream)
+				.for_each(move |event| {
+					// offchain worker is only interested in block import events
+					if let ChainEvent::NewBlock { ref header, is_new_best, .. } = event {
+						let offchain = offchain.as_ref().and_then(|o| o.upgrade());
+						match offchain {
+							Some(offchain) if is_new_best => {
+								let future = offchain.on_block_imported(
+									&header,
+									network_state_info.clone(),
+									is_validator,
+								);
+								let _ = to_spawn_tx_.unbounded_send((
+									Box::pin(future),
+									From::from("offchain-on-block"),
+								));
+							},
+							Some(_) => log::debug!(
+									target: "sc_offchain",
+									"Skipping offchain workers for non-canon block: {:?}",
+									header,
+								),
+							_ => {},
+						}
+					};
 
+					let txpool = txpool.upgrade();
 					if let Some(txpool) = txpool.as_ref() {
-						let future = txpool.maintain(
-							&BlockId::hash(notification.hash),
-							&notification.retracted,
-						);
+						let future = txpool.maintain(event);
 						let _ = to_spawn_tx_.unbounded_send((
 							Box::pin(future),
 							From::from("txpool-maintain")
 						));
 					}
 
-					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
-					if let Some(offchain) = offchain {
-						let future = offchain.on_block_imported(
-							&notification.header,
-							network_state_info.clone(),
-							is_validator
-						);
-						let _ = to_spawn_tx_.unbounded_send((
-							Box::pin(future),
-							From::from("offchain-on-block")
-						));
-					}
-
 					ready(())
 				});
+
 			let _ = to_spawn_tx.unbounded_send((
 				Box::pin(select(events, exit.clone()).map(drop)),
-				From::from("txpool-and-offchain-notif")
+				From::from("txpool-and-offchain-notif"),
 			));
 		}
 
@@ -937,7 +994,7 @@ ServiceBuilder<
 
 			let _ = to_spawn_tx.unbounded_send((
 				Box::pin(select(events, exit.clone()).map(drop)),
-				From::from("telemetry-on-block")
+				From::from("telemetry-on-block"),
 			));
 		}
 
@@ -1010,7 +1067,7 @@ ServiceBuilder<
 
 		let _ = to_spawn_tx.unbounded_send((
 			Box::pin(select(tel_task, exit.clone()).map(drop)),
-			From::from("telemetry-periodic-send")
+			From::from("telemetry-periodic-send"),
 		));
 
 		// Periodically send the network state to the telemetry.
@@ -1026,7 +1083,7 @@ ServiceBuilder<
 		});
 		let _ = to_spawn_tx.unbounded_send((
 			Box::pin(select(tel_task_2, exit.clone()).map(drop)),
-			From::from("telemetry-periodic-network-state")
+			From::from("telemetry-periodic-network-state"),
 		));
 
 		// RPC
@@ -1112,7 +1169,7 @@ ServiceBuilder<
 				system_rpc_rx,
 				has_bootnodes,
 			), exit.clone()).map(drop)),
-			From::from("network-worker")
+			From::from("network-worker"),
 		));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>> = Default::default();
