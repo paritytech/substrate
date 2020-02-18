@@ -379,6 +379,30 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 		self.select_chain.as_ref()
 	}
 
+	/// Returns a reference to the keystore
+	pub fn keystore(&self) -> Arc<RwLock<Keystore>> {
+		self.keystore.clone()
+	}
+
+	/// Returns a reference to the transaction pool stored in this builder
+	pub fn pool(&self) -> Arc<TExPool> {
+		self.transaction_pool.clone()
+	}
+
+	/// Returns a reference to the fetcher, only available if builder
+	/// was created with `new_light`.
+	pub fn fetcher(&self) -> Option<TFchr>
+		where TFchr: Clone
+	{
+		self.fetcher.clone()
+	}
+
+	/// Returns a reference to the remote_backend, only available if builder
+	/// was created with `new_light`.
+	pub fn remote_backend(&self) -> Option<Arc<dyn RemoteBlockchain<TBl>>> {
+		self.remote_backend.clone()
+	}
+
 	/// Defines which head-of-chain strategy to use.
 	pub fn with_opt_select_chain<USc>(
 		self,
@@ -647,23 +671,11 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 	/// Defines the RPC extensions to use.
 	pub fn with_rpc_extensions<URpc>(
 		self,
-		rpc_ext_builder: impl FnOnce(
-			Arc<TCl>,
-			Arc<TExPool>,
-			Arc<Backend>,
-			Option<TFchr>,
-			Option<Arc<dyn RemoteBlockchain<TBl>>>,
-		) -> Result<URpc, Error>,
+		rpc_ext_builder: impl FnOnce(&Self) -> Result<URpc, Error>,
 	) -> Result<ServiceBuilder<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		TNetP, TExPool, URpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
-		let rpc_extensions = rpc_ext_builder(
-			self.client.clone(),
-			self.transaction_pool.clone(),
-			self.backend.clone(),
-			self.fetcher.clone(),
-			self.remote_backend.clone(),
-		)?;
+		let rpc_extensions = rpc_ext_builder(&self)?;
 
 		Ok(ServiceBuilder {
 			config: self.config,

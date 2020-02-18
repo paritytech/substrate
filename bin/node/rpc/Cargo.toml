@@ -12,7 +12,14 @@ node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "2.0.0", path = "../runtime" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
-pallet-contracts-rpc = { version = "0.8.0", path = "../../../frame/contracts/rpc/" }
+pallet-contracts-rpc = { version = "0.8", path = "../../../frame/contracts/rpc/" }
 pallet-transaction-payment-rpc = { version = "2.0.0", path = "../../../frame/transaction-payment/rpc/" }
 substrate-frame-rpc-system = { version = "2.0.0", path = "../../../utils/frame/rpc/system" }
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
+sc-consensus-babe = { version = "0.8", path = "../../../client/consensus/babe" }
+sc-consensus-babe-rpc = { version = "0.8", path = "../../../client/consensus/babe/rpc" }
+sp-consensus-babe = { version = "0.8", path = "../../../primitives/consensus/babe" }
+sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
+sc-consensus-epochs = { version = "0.8", path = "../../../client/consensus/epochs" }
+sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
+sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
