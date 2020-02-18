@@ -16,7 +16,7 @@
 
 //! Types that should only be used for testing!
 
-use crate::crypto::{KeyKindId, KeyTypeId};
+use crate::crypto::{CryptoTypeId, KeyTypeId};
 #[cfg(feature = "std")]
 use crate::{
 	crypto::{Pair, Public},
@@ -135,9 +135,9 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		public_keys.iter().all(|(k, t)| self.keys.get(&t).and_then(|s| s.get(k)).is_some())
 	}
 
-	fn sign_with(&self, kind: KeyKindId, id: KeyTypeId, msg: &[u8]) -> Result<Vec<u8>, String> {
+	fn sign_with(&self, kind: CryptoTypeId, id: KeyTypeId, msg: &[u8]) -> Result<Vec<u8>, String> {
 		match kind {
-			ed25519::ED25519_KIND_ID => {
+			ed25519::ED25519_CRYPTO_ID => {
 				let ed_public_key = self
 					.ed25519_public_keys(id)
 					.pop()
@@ -148,7 +148,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 					.ok_or(String::from("ed25519 pair not found"))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			sr25519::SR25519_KIND_ID => {
+			sr25519::SR25519_CRYPTO_ID => {
 				let sr_public_key = self
 					.sr25519_public_keys(id)
 					.pop()

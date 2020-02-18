@@ -38,9 +38,6 @@ use zeroize::Zeroize;
 pub use sp_std::ops::Deref;
 use sp_runtime_interface::pass_by::PassByInner;
 
-/// Shorthand type for declaring the public key kind identifier
-pub type KeyKindId = &'static str;
-
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
@@ -522,7 +519,8 @@ pub trait Public:
 	AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync
 {
 	/// Each implementation of Public should define its Kind identifier
-	const KEY_KIND_ID: &'static str = "";
+	const CRYPTO_TYPE_ID: CryptoTypeId;
+
 	/// A new instance from the given slice.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -664,6 +662,8 @@ mod dummy {
 	impl Derive for Dummy {}
 
 	impl Public for Dummy {
+		const CRYPTO_TYPE_ID: CryptoTypeId = CryptoTypeId("dummy");
+
 		fn from_slice(_: &[u8]) -> Self { Self }
 		#[cfg(feature = "std")]
 		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
@@ -889,7 +889,7 @@ pub trait CryptoType {
 
 /// An identifier for a type of cryptographic key.
 ///
-/// To avoid clashes with other modules when distributing your module publically, register your
+/// To avoid clashes with other modules when distributing your module publicly, register your
 /// `KeyTypeId` on the list here by making a PR.
 ///
 /// Values whose first character is `_` are reserved for private use and won't conflict with any
@@ -924,6 +924,10 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 		Ok(res)
 	}
 }
+
+/// An identifier for a specific cryptographic algorithm used by a key pair
+#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+pub struct CryptoTypeId(pub &'static str);
 
 /// Known key types; this also functions as a global registry of key types for projects wishing to
 /// avoid collisions with each other.

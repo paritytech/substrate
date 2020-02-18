@@ -38,14 +38,14 @@ use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError};
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
+use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::ops::Deref;
 
 /// A value which is passed along with the public key
 /// to define which cryptographic algorithm that key
 /// belongs to.
-pub const ED25519_KIND_ID: &str = "ed25519";
+pub const ED25519_CRYPTO_ID: CryptoTypeId = CryptoTypeId("ed25519");
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -370,7 +370,7 @@ impl Public {
 }
 
 impl TraitPublic for Public {
-	const KEY_KIND_ID: &'static str = ED25519_KIND_ID;
+	const CRYPTO_TYPE_ID: CryptoTypeId = ED25519_CRYPTO_ID;
 
 	/// A new instance from the given slice that should be 32 bytes long.
 	///

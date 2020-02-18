@@ -39,7 +39,7 @@ use crate::crypto::{
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 
-use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
+use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 use crate::hash::{H256, H512};
 use codec::{Encode, Decode};
 use sp_std::ops::Deref;
@@ -57,7 +57,7 @@ const SIGNING_CTX: &[u8] = b"substrate";
 /// A value which is passed along with the public key
 /// to define which cryptographic algorithm that key
 /// belongs to.
-pub const SR25519_KIND_ID: &str = "sr25519";
+pub const SR25519_CRYPTO_ID: CryptoTypeId = CryptoTypeId("sr25519");
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
@@ -384,7 +384,7 @@ impl Public {
 }
 
 impl TraitPublic for Public {
-	const KEY_KIND_ID: &'static str = SR25519_KIND_ID;
+	const CRYPTO_TYPE_ID: CryptoTypeId = SR25519_CRYPTO_ID;
 
 	/// A new instance from the given slice that should be 32 bytes long.
 	///

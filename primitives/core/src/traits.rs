@@ -17,7 +17,7 @@
 //! Shareable Substrate traits.
 
 use crate::{
-	crypto::{KeyKindId, KeyTypeId},
+	crypto::{CryptoTypeId, KeyTypeId},
 	ed25519, sr25519,
 };
 
@@ -82,7 +82,7 @@ pub trait BareCryptoStore: Send + Sync {
 	/// the public key passed.
 	fn sign_with(
 		&self,
-		kind: KeyKindId,
+		kind: CryptoTypeId,
 		id: KeyTypeId,
 		msg: &[u8],
 	) -> std::result::Result<Vec<u8>, String>;

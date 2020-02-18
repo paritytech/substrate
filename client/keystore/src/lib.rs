@@ -21,7 +21,7 @@
 use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 
 use sp_core::{
-	crypto::{IsWrappedBy, KeyKindId, KeyTypeId, Pair as PairT, Protected, Public},
+	crypto::{IsWrappedBy, CryptoTypeId, KeyTypeId, Pair as PairT, Protected, Public},
 	traits::BareCryptoStore,
 };
 
@@ -282,12 +282,12 @@ impl Store {
 	/// the public key passed.
 	fn _sign_with(
 		&self,
-		kind: KeyKindId,
+		kind: CryptoTypeId,
 		id: KeyTypeId,
 		msg: &[u8],
 	) -> std::result::Result<Vec<u8>, String> {
 		match kind {
-			ed25519::ED25519_KIND_ID => {
+			ed25519::ED25519_CRYPTO_ID => {
 				let public_key = self
 					.ed25519_public_keys(id)
 					.pop()
@@ -299,7 +299,7 @@ impl Store {
 					.map_err(|e| e.to_string())?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			sr25519::SR25519_KIND_ID => {
+			sr25519::SR25519_CRYPTO_ID => {
 				let public_key = self
 					.sr25519_public_keys(id)
 					.pop()
@@ -318,7 +318,7 @@ impl Store {
 impl BareCryptoStore for Store {
 	fn sign_with(
 		&self,
-		kind: KeyKindId,
+		kind: CryptoTypeId,
 		id: KeyTypeId,
 		msg: &[u8],
 	) -> std::result::Result<Vec<u8>, String> {

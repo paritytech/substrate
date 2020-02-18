@@ -36,14 +36,14 @@ use crate::{hashing::blake2_256, crypto::{Pair as TraitPair, DeriveJunction, Sec
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive};
+use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 #[cfg(feature = "full_crypto")]
 use secp256k1::{PublicKey, SecretKey};
 
 /// A value which is passed along with the public key
 /// to define which cryptographic algorithm that key
 /// belongs to.
-pub const ECDSA_KIND_ID: &str = "ecdsa";
+pub const ECDSA_CRYPTO_ID: CryptoTypeId = CryptoTypeId("ecdsa");
 
 /// A secret seed (which is bytewise essentially equivalent to a SecretKey).
 ///
@@ -100,7 +100,7 @@ impl Public {
 }
 
 impl TraitPublic for Public {
-	const KEY_KIND_ID: &'static str = ECDCA_KIND_ID;
+	const CRYPTO_TYPE_ID: CryptoTypeId = ECDSA_CRYPTO_ID;
 	/// A new instance from the given slice that should be 33 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
