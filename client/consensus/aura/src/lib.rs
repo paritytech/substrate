@@ -65,8 +65,7 @@ use sp_timestamp::{
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
-	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, StorageChanges,
-	SlotDuration, check_equivocation,
+	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
 };
 
 use sc_keystore::KeyStorePtr;
@@ -85,6 +84,9 @@ pub use digests::CompatibleDigestItem;
 mod digests;
 
 type AuthorityId<P> = <P as Pair>::Public;
+
+/// Slot duration type for Aura.
+pub type SlotDuration = sc_consensus_slots::SlotDuration<u64>;
 
 /// Get slot author for given block along with authorities.
 fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
@@ -121,7 +123,7 @@ impl SlotCompatible for AuraSlotCompatible {
 
 /// Start the aura worker. The returned future should be run in a futures executor.
 pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
-	slot_duration: SlotDuration<u64>,
+	slot_duration: SlotDuration,
 	client: Arc<C>,
 	select_chain: SC,
 	block_import: I,
@@ -784,7 +786,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, I, C, P, T>(
-	slot_duration: SlotDuration<u64>,
+	slot_duration: SlotDuration,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
