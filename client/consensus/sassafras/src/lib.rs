@@ -256,6 +256,8 @@ enum Error<B: BlockT> {
 	HeaderUnsealed(B::Hash),
 	#[display(fmt = "Slot author not found")]
 	SlotAuthorNotFound,
+	#[display(fmt = "Proof for a primary claim not found")]
+	ProofNotFound,
 	#[display(fmt = "Secondary slot assignments are disabled for the current epoch.")]
 	SecondarySlotAssignmentsDisabled,
 	#[display(fmt = "Bad signature on {:?}", _0)]

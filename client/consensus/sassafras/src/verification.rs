@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Verification for Sassafras headers.
-use sp_core::crypto::Pair;
+use sp_core::crypto::{Pair, Public};
 use sp_runtime::traits::{Header as HeaderT, DigestItemFor};
 use sp_consensus_sassafras::{
 	SlotNumber, AuthorityId, AuthorityPair, AuthoritySignature,
@@ -93,10 +93,15 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	};
 
 	match &pre_digest {
-		PreDigest::Primary { .. } => {
+		PreDigest::Primary(digest) => {
 			debug!(target: "sassafras", "Verifying Primary block");
 
-			unimplemented!()
+			check_primary_header::<B>(
+				pre_hash,
+				digest,
+				sig,
+				&epoch,
+			)?;
 		},
 		PreDigest::Secondary(digest) if config.secondary_slots => {
 			debug!(target: "sassafras", "Verifying Secondary block");
@@ -134,7 +139,58 @@ fn check_primary_header<B: BlockT + Sized>(
 	signature: AuthoritySignature,
 	epoch: &Epoch,
 ) -> Result<(), Error<B>> {
-	unimplemented!()
+	let ticket_vrf_proof = epoch.validating.proofs.iter()
+		.find(|p| p.0 == pre_digest.slot_number)
+		.ok_or_else(|| Error::ProofNotFound)?
+		.1
+		.clone();
+	let author = &epoch.validating.authorities[pre_digest.authority_index as usize].0;
+
+	if !AuthorityPair::verify(&signature, pre_hash, &author) {
+		return Err(Error::BadSignature(pre_hash))
+	}
+
+	let (ticket_inout, _) = {
+		let ticket_transcript = crate::authorship::make_ticket_transcript(
+			&epoch.validating.randomness,
+			pre_digest.ticket_vrf_attempt,
+			epoch.validating.epoch_index
+		);
+
+		schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
+			p.vrf_verify(
+				ticket_transcript,
+				&pre_digest.ticket_vrf_output,
+				&ticket_vrf_proof,
+			)
+		}).map_err(|s| Error::VRFVerificationFailed(s))?
+	};
+
+	let ticket_threshold = crate::authorship::calculate_primary_threshold(
+		epoch.validating.threshold(),
+		&epoch.validating.authorities,
+		pre_digest.authority_index as usize,
+	);
+
+	if !crate::authorship::check_primary_threshold(&ticket_inout, ticket_threshold) {
+		return Err(Error::VRFVerificationOfBlockFailed(author.clone(), ticket_threshold));
+	}
+
+	let post_transcript = crate::authorship::make_post_transcript(
+		&epoch.validating.randomness,
+		pre_digest.slot_number,
+		epoch.validating.epoch_index,
+	);
+
+	schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
+		p.vrf_verify(
+			post_transcript,
+			&pre_digest.post_vrf_output,
+			&pre_digest.post_vrf_proof,
+		)
+	}).map_err(|s| Error::VRFVerificationFailed(s))?;
+
+	Ok(())
 }
 
 /// Check a secondary slot proposal header. We validate that the given header is
