@@ -49,14 +49,14 @@ use crate::protocol::generic_proto::{
 	handler::legacy::{LegacyProtoHandler, LegacyProtoHandlerProto, LegacyProtoHandlerIn, LegacyProtoHandlerOut},
 	handler::notif_in::{NotifsInHandlerProto, NotifsInHandler, NotifsInHandlerIn, NotifsInHandlerOut},
 	handler::notif_out::{NotifsOutHandlerProto, NotifsOutHandler, NotifsOutHandlerIn, NotifsOutHandlerOut},
-	upgrade::{NotificationsIn, NotificationsOut, RegisteredProtocol, UpgradeCollec},
+	upgrade::{NotificationsIn, NotificationsOut, NotificationsHandshakeError, RegisteredProtocol, UpgradeCollec},
 };
 use crate::protocol::message::generic::{Message as GenericMessage, ConsensusMessage};
 
 use bytes::BytesMut;
 use codec::Encode as _;
 use libp2p::core::{either::{EitherError, EitherOutput}, ConnectedPoint, PeerId};
-use libp2p::core::upgrade::{EitherUpgrade, ReadOneError, UpgradeError, SelectUpgrade, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::upgrade::{EitherUpgrade, UpgradeError, SelectUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -358,7 +358,7 @@ impl ProtocolsHandler for NotifsHandler {
 	fn inject_dial_upgrade_error(
 		&mut self,
 		num: Option<usize>,
-		err: ProtocolsHandlerUpgrErr<EitherError<ReadOneError, io::Error>>
+		err: ProtocolsHandlerUpgrErr<EitherError<NotificationsHandshakeError, io::Error>>
 	) {
 		match (err, num) {
 			(ProtocolsHandlerUpgrErr::Timeout, Some(num)) =>

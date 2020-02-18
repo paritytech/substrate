@@ -21,10 +21,10 @@
 //! >			protocols, you need to create multiple instances and group them.
 //!
 
-use crate::protocol::generic_proto::upgrade::{NotificationsOut, NotificationsOutSubstream};
+use crate::protocol::generic_proto::upgrade::{NotificationsOut, NotificationsOutSubstream, NotificationsHandshakeError};
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId};
-use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, ReadOneError, OutboundUpgrade};
+use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -317,7 +317,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 		}
 	}
 
-	fn inject_dial_upgrade_error(&mut self, _: (), _: ProtocolsHandlerUpgrErr<ReadOneError>) {
+	fn inject_dial_upgrade_error(&mut self, _: (), _: ProtocolsHandlerUpgrErr<NotificationsHandshakeError>) {
 		match mem::replace(&mut self.state, State::Poisoned) {
 			State::Disabled => {},
 			State::DisabledOpen(_) | State::Refused | State::Open { .. } =>

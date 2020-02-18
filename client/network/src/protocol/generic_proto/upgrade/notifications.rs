@@ -136,7 +136,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 		_: Self::Info,
 	) -> Self::Future {
 		Box::pin(async move {
-			let initial_message_len = unsigned_varint::aio::read_varint(&mut socket).await?;
+			let initial_message_len = unsigned_varint::aio::read_usize(&mut socket).await?;
 			if initial_message_len > MAX_HANDSHAKE_SIZE {
 				return Err(NotificationsHandshakeError::TooLarge {
 					requested: initial_message_len,
@@ -255,7 +255,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 			upgrade::write_with_len_prefix(&mut socket, &self.initial_message).await?;
 
 			// Reading handshake.
-			let handshake_len = unsigned_varint::aio::read_varint(&mut socket).await?;
+			let handshake_len = unsigned_varint::aio::read_usize(&mut socket).await?;
 			if handshake_len > MAX_HANDSHAKE_SIZE {
 				return Err(NotificationsHandshakeError::TooLarge {
 					requested: handshake_len,
@@ -340,6 +340,7 @@ pub enum NotificationsHandshakeError {
 	Io(io::Error),
 
 	/// Initial message or handshake was too large.
+	#[display(fmt = "Initial message or handshake was too large: {}", requested)]
 	TooLarge {
 		/// Size requested by the remote.
 		requested: usize,
@@ -356,6 +357,10 @@ impl From<unsigned_varint::io::ReadError> for NotificationsHandshakeError {
 		match err {
 			unsigned_varint::io::ReadError::Io(err) => NotificationsHandshakeError::Io(err),
 			unsigned_varint::io::ReadError::Decode(err) => NotificationsHandshakeError::VarintDecode(err),
+			_ => {
+				log::warn!("Unrecognized varint decoding error");
+				NotificationsHandshakeError::Io(From::from(io::ErrorKind::InvalidData))
+			}
 		}
 	}
 }

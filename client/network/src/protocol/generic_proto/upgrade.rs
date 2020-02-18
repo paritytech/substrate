@@ -25,7 +25,9 @@ pub use self::notifications::{
 	NotificationsIn,
 	NotificationsInSubstream,
 	NotificationsOut,
-	NotificationsOutSubstream
+	NotificationsOutSubstream,
+	NotificationsHandshakeError,
+	NotificationsOutError,
 };
 
 mod collec;
