@@ -819,7 +819,7 @@ macro_rules! decl_module {
 	// TODO: this probably should be a different macro?
 
 	(@call
-		$ingore:ident
+		$ignore:ident
 		$mod_type:ident<$trait_instance:ident $(, $instance:ident)?> $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
 	) => {
 		<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* )

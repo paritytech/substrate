@@ -32,7 +32,7 @@ use parking_lot::{Mutex, RwLock};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
-	transaction_validity::TransactionTag as Tag,
+	transaction_validity::{TransactionTag as Tag, ValidTransaction},
 };
 use sp_transaction_pool::{error, PoolStatus};
 use wasm_timer::Instant;
@@ -51,6 +51,30 @@ pub enum ValidatedTransaction<Hash, Ex, Error> {
 	///
 	/// We're notifying watchers about failure, if 'unknown' transaction is submitted.
 	Unknown(Hash, Error),
+}
+
+impl<Hash, Ex, Error> ValidatedTransaction<Hash, Ex, Error> {
+	/// Consume validity result, transaction data and produce ValidTransaction.
+	pub fn valid_at(
+		at: u64,
+		hash: Hash,
+		data: Ex,
+		bytes: usize,
+		validity: ValidTransaction,
+	) -> Self {
+		Self::Valid(base::Transaction {
+			data,
+			bytes,
+			hash,
+			priority: validity.priority,
+			requires: validity.requires,
+			provides: validity.provides,
+			propagate: validity.propagate,
+			valid_till: at
+				.saturated_into::<u64>()
+				.saturating_add(validity.longevity),
+		})
+	}
 }
 
 /// A type of validated transaction stored in the pool.
