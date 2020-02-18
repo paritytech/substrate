@@ -72,15 +72,15 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	}
 
 	/// Access the root of the child storage in its parent trie
-	fn child_root(&self, child_info: ChildInfo) -> Result<Option<StorageValue>, String> {
-		self.storage(child_info.storage_key())
+	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<StorageValue>, String> {
+		self.storage(child_info.prefixed_storage_key().as_slice())
 	}
 
 	/// Return the next key in the child trie i.e. the minimum key that is strictly superior to
 	/// `key` in lexicographic order.
 	pub fn next_child_storage_key(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, String> {
 		let child_root = match self.child_root(child_info)? {
@@ -103,7 +103,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	fn next_storage_key_from_root(
 		&self,
 		root: &H::Out,
-		child_info: Option<ChildInfo>,
+		child_info: Option<&ChildInfo>,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, String> {
 		let mut read_overlay = S::Overlay::default();
@@ -165,7 +165,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	/// Get the value of child storage at given key.
 	pub fn child_storage(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, String> {
 		let root = self.child_root(child_info)?
@@ -186,7 +186,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
 		let root = match self.child_root(child_info) {
@@ -216,7 +216,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	/// Execute given closure for all keys starting with prefix.
 	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		mut f: F,
 	) {
@@ -242,7 +242,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		root: &H::Out,
 		prefix: &[u8],
 		mut f: F,
-		child_info: Option<ChildInfo>,
+		child_info: Option<&ChildInfo>,
 	) {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
@@ -436,9 +436,8 @@ mod test {
 
 	#[test]
 	fn next_storage_key_and_next_child_storage_key_work() {
-		let child_info = ChildInfo::default_unchecked(
-			b":child_storage:default:MyChild"
-		);
+		let child_info = ChildInfo::new_default(b"MyChild");
+		let child_info = &child_info;
 		// Contains values
 		let mut root_1 = H256::default();
 		// Contains child trie
@@ -462,7 +461,7 @@ mod test {
 		}
 		{
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root_2);
-			trie.insert(child_info.storage_key(), root_1.as_ref())
+			trie.insert(child_info.prefixed_storage_key().as_slice(), root_1.as_ref())
 				.expect("insert failed");
 		};
 

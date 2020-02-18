@@ -140,7 +140,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn child_storage(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.borrow().as_ref().ok_or_else(state_err)?.child_storage(child_info, key)
@@ -152,7 +152,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn exists_child_storage(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
 		self.state.borrow().as_ref().ok_or_else(state_err)?.exists_child_storage(child_info, key)
@@ -164,7 +164,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn next_child_storage_key(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.borrow().as_ref().ok_or_else(state_err)?.next_child_storage_key(child_info, key)
@@ -184,7 +184,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
 		if let Some(ref state) = *self.state.borrow() {
@@ -194,7 +194,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
@@ -211,7 +211,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn child_storage_root<I>(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction) where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -229,7 +229,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn child_keys(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.child_keys(child_info, prefix))

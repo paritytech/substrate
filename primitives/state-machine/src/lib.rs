@@ -550,7 +550,7 @@ where
 /// Generate child storage read proof.
 pub fn prove_child_read<B, H, I>(
 	mut backend: B,
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	keys: I,
 ) -> Result<StorageProof, Box<dyn Error>>
 where
@@ -589,7 +589,7 @@ where
 /// Generate storage read proof on pre-created trie backend.
 pub fn prove_child_read_on_trie_backend<S, H, I>(
 	trie_backend: &TrieBackend<S, H>,
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	keys: I,
 ) -> Result<StorageProof, Box<dyn Error>>
 where
@@ -602,7 +602,7 @@ where
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
 	for key in keys.into_iter() {
 		proving_backend
-			.child_storage(child_info.clone(), key.as_ref())
+			.child_storage(child_info, key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
 	Ok(proving_backend.extract_proof())
@@ -633,7 +633,7 @@ where
 pub fn read_child_proof_check<H, I>(
 	root: H::Out,
 	proof: StorageProof,
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	keys: I,
 ) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, Box<dyn Error>>
 where
@@ -670,7 +670,7 @@ where
 /// Check child storage read proof on pre-created proving backend.
 pub fn read_child_proof_check_on_proving_backend<H>(
 	proving_backend: &TrieBackend<MemoryDB<H>, H>,
-	child_info: ChildInfo,
+	child_info: &ChildInfo,
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<dyn Error>>
 where
@@ -698,10 +698,6 @@ mod tests {
 		native_succeeds: bool,
 		fallback_succeeds: bool,
 	}
-
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::default_unchecked(
-		b":child_storage:default:sub1"
-	);
 
 	impl CodeExecutor for DummyCodeExecutor {
 		type Error = u8;
@@ -931,6 +927,8 @@ mod tests {
 
 	#[test]
 	fn set_child_storage_works() {
+		let child_info = ChildInfo::new_default(b"sub1");
+		let child_info = &child_info;
 		let mut state = InMemoryBackend::<Blake2Hasher>::default();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
@@ -944,23 +942,23 @@ mod tests {
 		);
 
 		ext.set_child_storage(
-			CHILD_INFO_1,
+			child_info,
 			b"abc".to_vec(),
 			b"def".to_vec()
 		);
 		assert_eq!(
 			ext.child_storage(
-				CHILD_INFO_1,
+				child_info,
 				b"abc"
 			),
 			Some(b"def".to_vec())
 		);
 		ext.kill_child_storage(
-			CHILD_INFO_1,
+			child_info,
 		);
 		assert_eq!(
 			ext.child_storage(
-				CHILD_INFO_1,
+				child_info,
 				b"abc"
 			),
 			None
@@ -969,6 +967,8 @@ mod tests {
 
 	#[test]
 	fn prove_read_and_proof_check_works() {
+		let child_info = ChildInfo::new_default(b"sub1");
+		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
@@ -995,19 +995,19 @@ mod tests {
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_child_read(
 			remote_backend,
-			CHILD_INFO_1,
+			child_info,
 			&[b"value3"],
 		).unwrap();
 		let local_result1 = read_child_proof_check::<Blake2Hasher, _>(
 			remote_root,
 			remote_proof.clone(),
-			CHILD_INFO_1,
+			child_info,
 			&[b"value3"],
 		).unwrap();
 		let local_result2 = read_child_proof_check::<Blake2Hasher, _>(
 			remote_root,
 			remote_proof.clone(),
-			CHILD_INFO_1,
+			child_info,
 			&[b"value2"],
 		).unwrap();
 		assert_eq!(
@@ -1023,12 +1023,8 @@ mod tests {
 	#[test]
 	fn child_storage_uuid() {
 
-		const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::default_unchecked(
-			b":child_storage:default:sub_test1"
-		);
-		const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::default_unchecked(
-			b":child_storage:default:sub_test2"
-		);
+		let child_info_1 = ChildInfo::new_default(b"sub_test1");
+		let child_info_2 = ChildInfo::new_default(b"sub_test2");
 
 		use crate::trie_backend::tests::test_trie;
 		let mut overlay = OverlayedChanges::default();
@@ -1043,8 +1039,8 @@ mod tests {
 				changes_trie::disabled_state::<_, u64>(),
 				None,
 			);
-			ext.set_child_storage(CHILD_INFO_1, b"abc".to_vec(), b"def".to_vec());
-			ext.set_child_storage(CHILD_INFO_2, b"abc".to_vec(), b"def".to_vec());
+			ext.set_child_storage(&child_info_1, b"abc".to_vec(), b"def".to_vec());
+			ext.set_child_storage(&child_info_2, b"abc".to_vec(), b"def".to_vec());
 			ext.storage_root();
 			cache.transaction.unwrap()
 		};

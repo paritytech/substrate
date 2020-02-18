@@ -33,7 +33,7 @@ use sc_client::{
 	Client, CallExecutor, BlockchainEvents
 };
 use sp_core::{
-	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, OwnedChildInfo},
+	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{
@@ -314,10 +314,10 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| {
-					let child_info = OwnedChildInfo::new_default(storage_key.0); 
+					let child_info = ChildInfo::new_default_from_vec(storage_key.0); 
 					self.client.child_storage_keys(
 						&BlockId::Hash(block),
-						child_info.as_ref(),
+						&child_info,
 						&prefix,
 					)
 				})
@@ -333,10 +333,10 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| {
-					let child_info = OwnedChildInfo::new_default(storage_key.0); 
+					let child_info = ChildInfo::new_default_from_vec(storage_key.0); 
 					self.client.child_storage(
 						&BlockId::Hash(block),
-						child_info.as_ref(),
+						&child_info,
 						&key,
 					)
 				})
@@ -352,10 +352,10 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| {
-					let child_info = OwnedChildInfo::new_default(storage_key.0); 
+					let child_info = ChildInfo::new_default_from_vec(storage_key.0); 
 					self.client.child_storage_hash(
 						&BlockId::Hash(block),
-						child_info.as_ref(),
+						&child_info,
 						&key,
 					)
 				})

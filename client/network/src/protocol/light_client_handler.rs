@@ -48,7 +48,7 @@ use rustc_hex::ToHex;
 use sc_client::light::fetcher;
 use sc_client_api::StorageProof;
 use sc_peerset::ReputationChange;
-use sp_core::storage::{ChildInfo, OwnedChildInfo, StorageKey};
+use sp_core::storage::{ChildInfo, StorageKey};
 use sp_blockchain::{Error as ClientError};
 use sp_runtime::traits::{Block, Header, NumberFor, Zero};
 use std::{
@@ -510,8 +510,8 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let child_info = OwnedChildInfo::new_default(request.storage_key.clone());
-		let proof =	match self.chain.read_child_proof(&block, child_info.as_ref(), &request.keys) {
+		let child_info = ChildInfo::new_default(&request.storage_key);
+		let proof =	match self.chain.read_child_proof(&block, &child_info, &request.keys) {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",

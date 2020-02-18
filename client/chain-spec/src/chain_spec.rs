@@ -287,8 +287,7 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 					.collect();
 				let children = storage.children.into_iter()
 					.map(|(sk, child)| {
-						let info = child.child_info.as_ref();
-						let (info, ci_type) = info.info();
+						let (info, ci_type) = child.child_info.info();
 						(
 							StorageKey(sk),
 							ChildRawStorage {

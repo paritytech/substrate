@@ -872,7 +872,7 @@ fn test_read_storage() {
 }
 
 fn test_read_child_storage() {
-	const STORAGE_KEY: &[u8] = b":child_storage:default:unique_id_1";
+	const STORAGE_KEY: &[u8] = b"unique_id_1";
 	const KEY: &[u8] = b":read_child_storage";
 	sp_io::default_child_storage::set(
 		STORAGE_KEY,

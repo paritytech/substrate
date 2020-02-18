@@ -129,7 +129,7 @@ impl Externalities for BasicExternalities {
 
 	fn child_storage(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
 		let storage_key = child_info.storage_key();
@@ -138,7 +138,7 @@ impl Externalities for BasicExternalities {
 
 	fn child_storage_hash(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		self.child_storage(child_info, key).map(|v| Blake2Hasher::hash(&v).encode())
@@ -146,7 +146,7 @@ impl Externalities for BasicExternalities {
 
 	fn original_child_storage_hash(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		self.child_storage_hash(child_info, key)
@@ -154,7 +154,7 @@ impl Externalities for BasicExternalities {
 
 	fn original_child_storage(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
 		Externalities::child_storage(self, child_info, key)
@@ -167,7 +167,7 @@ impl Externalities for BasicExternalities {
 
 	fn next_child_storage_key(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageKey> {
 		let storage_key = child_info.storage_key();
@@ -190,7 +190,7 @@ impl Externalities for BasicExternalities {
 
 	fn place_child_storage(
 		&mut self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
@@ -209,7 +209,7 @@ impl Externalities for BasicExternalities {
 
 	fn kill_child_storage(
 		&mut self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 	) {
 		let storage_key = child_info.storage_key();
 		self.inner.children.remove(storage_key);
@@ -237,7 +237,7 @@ impl Externalities for BasicExternalities {
 
 	fn clear_child_prefix(
 		&mut self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) {
 		let storage_key = child_info.storage_key();
@@ -258,19 +258,19 @@ impl Externalities for BasicExternalities {
 
 	fn storage_root(&mut self) -> Vec<u8> {
 		let mut top = self.inner.top.clone();
-		let keys: Vec<_> = self.inner.children.iter().map(|(k, v)| {
-			(k.to_vec(), v.child_info.clone())
+		let keys: Vec<_> = self.inner.children.iter().map(|(_k, v)| {
+			(v.child_info.prefixed_storage_key(), v.child_info.clone())
 		}).collect();
 		// Single child trie implementation currently allows using the same child
 		// empty root for all child trie. Using null storage key until multiple
 		// type of child trie support.
 		let empty_hash = default_child_trie_root::<Layout<Blake2Hasher>>();
-		for (storage_key, child_info) in keys {
-			let child_root = self.child_storage_root(child_info.as_ref());
+		for (prefixed_storage_key, child_info) in keys {
+			let child_root = self.child_storage_root(&child_info);
 			if &empty_hash[..] == &child_root[..] {
-				top.remove(storage_key.as_slice());
+				top.remove(prefixed_storage_key.as_slice());
 			} else {
-				top.insert(storage_key, child_root);
+				top.insert(prefixed_storage_key, child_root);
 			}
 		}
 
@@ -279,13 +279,13 @@ impl Externalities for BasicExternalities {
 
 	fn child_storage_root(
 		&mut self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 	) -> Vec<u8> {
 		if let Some(child) = self.inner.children.get(child_info.storage_key()) {
 			let delta = child.data.clone().into_iter().map(|(k, v)| (k, Some(v)));
 
 			InMemoryBackend::<Blake2Hasher>::default()
-				.child_storage_root(child.child_info.as_ref(), delta).0
+				.child_storage_root(&child.child_info, delta).0
 		} else {
 			default_child_trie_root::<Layout<Blake2Hasher>>()
 		}.encode()
@@ -311,10 +311,6 @@ mod tests {
 	use sp_core::storage::well_known_keys::CODE;
 	use hex_literal::hex;
 
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::default_unchecked(
-		b":child_storage:default:unique_id_1"
-	);
-
 	#[test]
 	fn commit_should_work() {
 		let mut ext = BasicExternalities::default();
@@ -338,26 +334,28 @@ mod tests {
 
 	#[test]
 	fn children_works() {
+		let child_info = ChildInfo::new_default(b"storage_key");
+		let child_info = &child_info;
 		let mut ext = BasicExternalities::new(Storage {
 			top: Default::default(),
 			children: map![
-				CHILD_INFO_1.storage_key().to_vec() => StorageChild {
+				child_info.storage_key().to_vec() => StorageChild {
 					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
-					child_info: CHILD_INFO_1.to_owned(),
+					child_info: child_info.to_owned(),
 				}
 			]
 		});
 
-		assert_eq!(ext.child_storage(CHILD_INFO_1, b"doe"), Some(b"reindeer".to_vec()));
+		assert_eq!(ext.child_storage(child_info, b"doe"), Some(b"reindeer".to_vec()));
 
-		ext.set_child_storage(CHILD_INFO_1, b"dog".to_vec(), b"puppy".to_vec());
-		assert_eq!(ext.child_storage(CHILD_INFO_1, b"dog"), Some(b"puppy".to_vec()));
+		ext.set_child_storage(child_info, b"dog".to_vec(), b"puppy".to_vec());
+		assert_eq!(ext.child_storage(child_info, b"dog"), Some(b"puppy".to_vec()));
 
-		ext.clear_child_storage(CHILD_INFO_1, b"dog");
-		assert_eq!(ext.child_storage(CHILD_INFO_1, b"dog"), None);
+		ext.clear_child_storage(child_info, b"dog");
+		assert_eq!(ext.child_storage(child_info, b"dog"), None);
 
-		ext.kill_child_storage(CHILD_INFO_1);
-		assert_eq!(ext.child_storage(CHILD_INFO_1, b"doe"), None);
+		ext.kill_child_storage(child_info);
+		assert_eq!(ext.child_storage(child_info, b"doe"), None);
 	}
 
 	#[test]

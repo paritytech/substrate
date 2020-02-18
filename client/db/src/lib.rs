@@ -152,7 +152,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn child_storage(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.child_storage(child_info, key)
@@ -164,7 +164,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn exists_child_storage(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
 		self.state.exists_child_storage(child_info, key)
@@ -176,7 +176,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn next_child_storage_key(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.next_child_storage_key(child_info, key)
@@ -192,7 +192,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
 		self.state.for_keys_in_child_storage(child_info, f)
@@ -200,7 +200,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
@@ -216,7 +216,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn child_storage_root<I>(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
@@ -235,7 +235,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn child_keys(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
 		self.state.child_keys(child_info, prefix)

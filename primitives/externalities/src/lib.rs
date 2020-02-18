@@ -47,7 +47,7 @@ pub trait Externalities: ExtensionStore {
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn child_storage_hash(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
@@ -59,7 +59,7 @@ pub trait Externalities: ExtensionStore {
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn original_child_storage(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
@@ -75,7 +75,7 @@ pub trait Externalities: ExtensionStore {
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn original_child_storage_hash(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
@@ -84,7 +84,7 @@ pub trait Externalities: ExtensionStore {
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn child_storage(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
@@ -96,7 +96,7 @@ pub trait Externalities: ExtensionStore {
 	/// Set child storage entry `key` of current contract being called (effective immediately).
 	fn set_child_storage(
 		&mut self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
@@ -111,7 +111,7 @@ pub trait Externalities: ExtensionStore {
 	/// Clear a child storage entry (`key`) of current contract being called (effective immediately).
 	fn clear_child_storage(
 		&mut self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) {
 		self.place_child_storage(child_info, key.to_vec(), None)
@@ -125,7 +125,7 @@ pub trait Externalities: ExtensionStore {
 	/// Whether a child storage entry exists.
 	fn exists_child_storage(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> bool {
 		self.child_storage(child_info, key).is_some()
@@ -137,12 +137,12 @@ pub trait Externalities: ExtensionStore {
 	/// Returns the key immediately following the given key, if it exists, in child storage.
 	fn next_child_storage_key(
 		&self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
 	/// Clear an entire child storage.
-	fn kill_child_storage(&mut self, child_info: ChildInfo);
+	fn kill_child_storage(&mut self, child_info: &ChildInfo);
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
@@ -150,7 +150,7 @@ pub trait Externalities: ExtensionStore {
 	/// Clear child storage entries which keys are start with the given prefix.
 	fn clear_child_prefix(
 		&mut self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	);
 
@@ -160,7 +160,7 @@ pub trait Externalities: ExtensionStore {
 	/// Set or clear a child storage entry. Return whether the operation succeeds.
 	fn place_child_storage(
 		&mut self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
 	);
@@ -182,7 +182,7 @@ pub trait Externalities: ExtensionStore {
 	/// storage map will be removed.
 	fn child_storage_root(
 		&mut self,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 	) -> Vec<u8>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.

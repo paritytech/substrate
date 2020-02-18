@@ -129,17 +129,17 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 	/// Extend child storage
 	pub fn add_child_storage(
 		mut self,
+		child_info: &ChildInfo,
 		key: impl AsRef<[u8]>,
-		child_key: impl AsRef<[u8]>,
-		child_info: ChildInfo,
 		value: impl AsRef<[u8]>,
 	) -> Self {
-		let entry = self.child_storage_extension.entry(key.as_ref().to_vec())
+		let storage_key = child_info.storage_key();
+		let entry = self.child_storage_extension.entry(storage_key.to_vec())
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
-				child_info: child_info.to_owned(),
+				child_info: child_info.clone(),
 			});
-		entry.data.insert(child_key.as_ref().to_vec(), value.as_ref().to_vec());
+		entry.data.insert(key.as_ref().to_vec(), value.as_ref().to_vec());
 		self
 	}
 

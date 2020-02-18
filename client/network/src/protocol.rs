@@ -23,7 +23,7 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::{listeners::ListenerId, Substream}, muxing::StreamMuxerBox};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use sp_core::storage::{StorageKey, OwnedChildInfo};
+use sp_core::storage::{StorageKey, ChildInfo};
 use sp_consensus::{
 	BlockOrigin,
 	block_validation::BlockAnnounceValidator,
@@ -1567,10 +1567,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
-		let child_info = OwnedChildInfo::new_default(request.storage_key.clone());
+		let child_info = ChildInfo::new_default(&request.storage_key);
 		let proof = match self.context_data.chain.read_child_proof(
 			&request.block,
-			child_info.as_ref(),
+			&child_info,
 			&request.keys,
 		) {
 			Ok(proof) => proof,

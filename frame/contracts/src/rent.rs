@@ -223,7 +223,7 @@ fn enact_verdict<T: Trait>(
 		Verdict::Kill => {
 			<ContractInfoOf<T>>::remove(account);
 			child::kill_storage(
-				alive_contract_info.child_trie_unique_id(),
+				&alive_contract_info.child_trie_unique_id(),
 			);
 			<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), false));
 			None
@@ -235,7 +235,7 @@ fn enact_verdict<T: Trait>(
 
 			// Note: this operation is heavy.
 			let child_storage_root = child::root(
-				alive_contract_info.child_trie_unique_id(),
+				&alive_contract_info.child_trie_unique_id(),
 			);
 
 			let tombstone = <TombstoneContractInfo<T>>::new(
@@ -246,7 +246,7 @@ fn enact_verdict<T: Trait>(
 			<ContractInfoOf<T>>::insert(account, &tombstone_info);
 
 			child::kill_storage(
-				alive_contract_info.child_trie_unique_id(),
+				&alive_contract_info.child_trie_unique_id(),
 			);
 
 			<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), true));

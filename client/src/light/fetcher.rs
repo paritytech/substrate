@@ -23,7 +23,7 @@ use std::marker::PhantomData;
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
 use sp_core::{convert_hash, traits::CodeExecutor};
-use sp_core::storage::OwnedChildInfo;
+use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	AtLeast32Bit, CheckedConversion,
@@ -241,11 +241,11 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
-		let child_trie = OwnedChildInfo::new_default(request.storage_key.clone());
+		let child_trie = ChildInfo::new_default(&request.storage_key);
 		read_child_proof_check::<H, _>(
 			convert_hash(request.header.state_root()),
 			remote_proof,
-			child_trie.as_ref(),
+			&child_trie,
 			request.keys.iter(),
 		).map_err(Into::into)
 	}
@@ -347,7 +347,7 @@ pub mod tests {
 	use crate::light::fetcher::{FetchChecker, LightDataChecker, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use sp_core::{blake2_256, Blake2Hasher, ChangesTrieConfiguration, H256};
-	use sp_core::storage::{well_known_keys, StorageKey, OwnedChildInfo};
+	use sp_core::storage::{well_known_keys, StorageKey, ChildInfo};
 	use sp_runtime::generic::BlockId;
 	use sp_state_machine::Backend;
 	use super::*;
@@ -400,8 +400,8 @@ pub mod tests {
 	fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, Vec<u8>) {
 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
 		use substrate_test_runtime_client::TestClientBuilderExt;
-		let child_info = OwnedChildInfo::new_default(b"child1".to_vec());
-		let child_info = child_info.as_ref();
+		let child_info = ChildInfo::new_default(b"child1");
+		let child_info = &child_info;
 		// prepare remote client
 		let remote_client = substrate_test_runtime_client::TestClientBuilder::new()
 			.add_extra_child_storage(
