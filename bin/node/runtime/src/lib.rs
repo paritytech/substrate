@@ -82,7 +82,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 221,
+	spec_version: 222,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -684,6 +684,10 @@ impl_runtime_apis! {
 	impl sp_block_builder::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 			Executive::apply_extrinsic(extrinsic)
+		}
+
+		fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
+			Executive::apply_trusted_extrinsic(extrinsic)
 		}
 
 		fn finalize_block() -> <Block as BlockT>::Header {

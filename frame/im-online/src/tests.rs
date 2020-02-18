@@ -222,7 +222,7 @@ fn should_generate_heartbeats() {
 		assert_eq!(state.read().transactions.len(), 2);
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
-		let heartbeat = match ex.1 {
+		let heartbeat = match ex.call {
 			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, _)) => h,
 			e => panic!("Unexpected call: {:?}", e),
 		};
@@ -332,7 +332,7 @@ fn should_not_send_a_report_if_already_online() {
 		assert_eq!(pool_state.read().transactions.len(), 0);
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
-		let heartbeat = match ex.1 {
+		let heartbeat = match ex.call {
 			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, _)) => h,
 			e => panic!("Unexpected call: {:?}", e),
 		};
