@@ -49,7 +49,7 @@ use sp_consensus::import_queue::{
 use sc_client_api::backend::AuxStore;
 use sc_client::BlockOf;
 use sp_blockchain::{
-	self, Result as CResult, well_known_cache_keys::{self, Id as CacheKeyId},
+	self, well_known_cache_keys::{self, Id as CacheKeyId},
 	ProvideCache, HeaderBackend,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -65,7 +65,8 @@ use sp_timestamp::{
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
-	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
+	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, StorageChanges,
+	SlotDuration, check_equivocation,
 };
 
 use sc_keystore::KeyStorePtr;
@@ -79,34 +80,11 @@ pub use sp_consensus_aura::{
 	},
 };
 pub use sp_consensus::SyncOracle;
-pub use digest::CompatibleDigestItem;
+pub use digests::CompatibleDigestItem;
 
-mod digest;
+mod digests;
 
 type AuthorityId<P> = <P as Pair>::Public;
-
-/// A slot duration. Create with `get_or_compute`.
-#[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
-pub struct SlotDuration(sc_consensus_slots::SlotDuration<u64>);
-
-impl SlotDuration {
-	/// Either fetch the slot duration from disk or compute it from the genesis
-	/// state.
-	pub fn get_or_compute<A, B, C>(client: &C) -> CResult<Self>
-	where
-		A: Codec,
-		B: BlockT,
-		C: AuxStore + ProvideRuntimeApi<B>,
-		C::Api: AuraApi<B, A, Error = sp_blockchain::Error>,
-	{
-		sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
-	}
-
-	/// Get the slot duration in milliseconds.
-	pub fn get(&self) -> u64 {
-		self.0.get()
-	}
-}
 
 /// Get slot author for given block along with authorities.
 fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
@@ -143,7 +121,7 @@ impl SlotCompatible for AuraSlotCompatible {
 
 /// Start the aura worker. The returned future should be run in a futures executor.
 pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
-	slot_duration: SlotDuration,
+	slot_duration: SlotDuration<u64>,
 	client: Arc<C>,
 	select_chain: SC,
 	block_import: I,
@@ -179,10 +157,10 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	};
 	register_aura_inherent_data_provider(
 		&inherent_data_providers,
-		slot_duration.0.slot_duration()
+		slot_duration.slot_duration()
 	)?;
 	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
-		slot_duration.0,
+		slot_duration,
 		select_chain,
 		worker,
 		sync_oracle,
@@ -806,7 +784,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, I, C, P, T>(
-	slot_duration: SlotDuration,
+	slot_duration: SlotDuration<u64>,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
