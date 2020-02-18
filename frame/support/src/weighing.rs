@@ -84,24 +84,40 @@ pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed
 ///   foo {
 ///     let caller = account::<T>(b"caller", 0, _benchmarks_seed);
 ///     let l = ...;
-///   } (Origin::Signed(caller), vec![0u8; l])
+///   } _(Origin::Signed(caller), vec![0u8; l])
 ///
 ///   // second dispatchable: foo; this is a root dispatchable and accepts a `u8` vector of size
 ///   // `l`. We don't want it preininitialised like before so we override using the `=> ()`
 ///   // notation.
-///   bar {
+///   // In this case, we explicitly name the call using `bar` instead of `_`.
+///   bar _{
 ///     let l = _ .. _ => ();
-///   } (Origin::Root, vec![0u8; l])
+///   } bar(Origin::Root, vec![0u8; l])
 ///
 ///   // third dispatchable: baz; this is a user dispatchable. It isn't dependent on length like the
 ///   // other two but has its own complexity `c` that needs setting up. It uses `caller` (in the
 ///   // pre-instancing block) within the code block. This is only allowed in the param instancers
 ///   // of arms. Instancers of common params cannot optimistically draw upon hypothetical variables
 ///   // that the arm's pre-instancing code block might have declared.
-///   baz {
+///   baz1 _{
 ///     let caller = account::<T>(b"caller", 0, _benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c(&caller, c);
-///   } (Origin::Signed(caller), vec![0u8; l])
+///   } baz(Origin::Signed(caller))
+///
+///   // this is a second benchmark of the baz dispatchable with a different setup.
+///   baz2 _{
+///     let caller = account::<T>(b"caller", 0, _benchmarks_seed);
+///     let c = 0 .. 10 => setup_c_in_some_other_way(&caller, c);
+///   } baz(Origin::Signed(caller))
+///
+///   // this is benchmarking some code that is not a dispatchable.
+///   populate_a_set _{
+///     let x in 0 .. 10_000;
+///     let mut m = Vec::<u32>::new();
+///     for i in 0..x {
+///       m.insert(i);
+///     }
+///   } { m.into_iter().collect::<BTreeSet>() }
 /// }
 /// ```
 #[macro_export]
@@ -189,11 +205,22 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
-		$name:ident { $( $code:tt )* }: ( $origin:expr $( , $arg:expr )* )
+		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: { Ok((crate::Call::<T>::$name($($arg),*), $origin)) } $( $rest )*
+			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: $name ( $origin $( , $arg )* ) $( $rest )*
+		}
+	};
+	// mutation arm:
+	(
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter! {
+			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: { Ok((crate::Call::<T>::$dispatch($($arg),*), $origin)) } $( $rest )*
 		}
 	};
 	// iteration arm:
