@@ -30,7 +30,7 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Set {
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Current time ("Now")
-			(BenchmarkParameter::N, 1, 100),
+			(BenchmarkParameter::n, 1, 100),
 		]
 	}
 
@@ -38,7 +38,7 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Set {
 		-> Result<(Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
 		let user_origin = RawOrigin::None;
-		let now = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
+		let now = components.iter().find(|&c| c.0 == BenchmarkParameter::n).unwrap().1;
 
 		// Return the `set` call
 		Ok((Call::<T>::set(now.into()), user_origin))
