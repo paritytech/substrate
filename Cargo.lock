@@ -3658,7 +3658,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "fs_extra",
- "hex-literal",
  "log 0.4.8",
  "node-executor",
  "node-primitives",
