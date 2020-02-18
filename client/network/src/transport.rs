@@ -57,17 +57,14 @@ pub fn build_transport(
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
 
-	let yamux_config = {
-		let mut c = yamux::Config::default();
-		// Only set SYN flag on first data frame sent to the remote.
-		c.set_lazy_open(true);
-		if use_yamux_flow_control {
-			// Enable proper flow-control: window updates are only sent when
-			// buffered data has been consumed.
-			c.set_window_update_mode(yamux::WindowUpdateMode::OnRead);
-		}
-		libp2p::yamux::Config::new(c)
-	};
+	let mut yamux_config = libp2p::yamux::Config::default();
+	yamux_config.set_lazy_open(true); // Only set SYN flag on first data frame sent to the remote.
+
+	if use_yamux_flow_control {
+		// Enable proper flow-control: window updates are only sent when
+		// buffered data has been consumed.
+		yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::OnRead);
+	}
 
 	// Build the base layer of the transport.
 	let transport = if let Some(t) = wasm_external_transport {
