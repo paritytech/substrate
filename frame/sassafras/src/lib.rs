@@ -37,7 +37,7 @@ use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalE
 use sp_consensus_sassafras::{
 	SASSAFRAS_ENGINE_ID, ConsensusLog, SassafrasAuthorityWeight, SlotNumber,
 	inherents::{INHERENT_IDENTIFIER, SassafrasInherentData},
-	digests::{NextEpochDescriptor, PreDigest},
+	digests::{NextEpochDescriptor, PreDigest, PrimaryPreDigest},
 };
 pub use sp_consensus_sassafras::{
 	AuthorityId, RawVRFOutput, VRFOutput, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH
@@ -209,12 +209,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 		for (id, mut data) in digests.into_iter() {
 			if id == SASSAFRAS_ENGINE_ID {
 				let pre_digest = PreDigest::decode(&mut data).ok()?;
-				return Some(match pre_digest {
-					PreDigest::Primary { authority_index, .. } =>
-						authority_index,
-					PreDigest::Secondary { authority_index, .. } =>
-						authority_index,
-				});
+				return Some(pre_digest.authority_index())
 			}
 		}
 
@@ -427,7 +422,7 @@ impl<T: Trait> Module<T> {
 
 			CurrentSlot::put(digest.slot_number());
 
-			if let PreDigest::Primary { post_vrf_output, .. } = digest {
+			if let PreDigest::Primary(PrimaryPreDigest { post_vrf_output, .. }) = digest {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.

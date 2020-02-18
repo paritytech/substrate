@@ -14,7 +14,7 @@ sp-api = { version = "2.0.0", default-features = false, path = "../../api" }
 sp-consensus = { version = "0.8", optional = true, path = "../common" }
 sp-inherents = { path = "../../inherents", default-features = false }
 sp-timestamp = { path = "../../timestamp", default-features = false }
-sp-runtime = {  path = "../../runtime", default-features = false }
+sp-runtime = { path = "../../runtime", default-features = false }
 sp-application-crypto = { path = "../../application-crypto", default-features = false }
 
 [features]

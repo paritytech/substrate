@@ -25,8 +25,9 @@ use sp_api::NumberFor;
 use sp_runtime::traits::Block as BlockT;
 use sp_consensus_sassafras::{
 	SlotNumber, AuthorityPair, SassafrasConfiguration, AuthorityId,
-	SassafrasAuthorityWeight, SASSAFRAS_ENGINE_ID, digests::PreDigest,
+	SassafrasAuthorityWeight, SASSAFRAS_ENGINE_ID,
 	VRFProof, SASSAFRAS_TICKET_VRF_PREFIX, VRFOutput,
+	digests::{PreDigest, PrimaryPreDigest, SecondaryPreDigest},
 };
 use sc_consensus_epochs::ViableEpochDescriptor;
 use sc_keystore::KeyStorePtr;
@@ -129,11 +130,11 @@ fn claim_primary_slot(
 	}
 	trace!(target: "sassafras", "Appending commitment length: {}", commitments.len());
 
-	let claim = PreDigest::Primary {
+	let claim = PreDigest::Primary(PrimaryPreDigest {
 		ticket_vrf_index, ticket_vrf_attempt, ticket_vrf_output,
 		authority_index, slot_number, post_vrf_proof, post_vrf_output,
 		commitments,
-	};
+	});
 
 	trace!(target: "sassafras", "Claimed a primary slot with slot number: {:?}", slot_number);
 	trace!(target: "sassafras", "Epoch data as of now: {:?}", epoch);
@@ -233,11 +234,11 @@ fn claim_secondary_slot(
 			}
 			trace!(target: "sassafras", "Appending commitment length: {}", commitments.len());
 
-			let pre_digest = PreDigest::Secondary {
+			let pre_digest = PreDigest::Secondary(SecondaryPreDigest {
 				slot_number,
 				authority_index: authority_index as u32,
 				commitments,
-			};
+			});
 
 			return Some((pre_digest, pair));
 		}
@@ -249,7 +250,7 @@ fn claim_secondary_slot(
 /// Get the expected secondary author for the given slot and with given
 /// authorities. This should always assign the slot to some authority unless the
 /// authorities list is empty.
-fn secondary_slot_author(
+pub(super) fn secondary_slot_author(
 	slot_number: u64,
 	authorities: &[(AuthorityId, SassafrasAuthorityWeight)],
 	randomness: [u8; 32],

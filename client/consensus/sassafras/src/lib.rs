@@ -20,7 +20,10 @@ pub use sp_consensus_sassafras::{
 	SassafrasApi, ConsensusLog, SASSAFRAS_ENGINE_ID, SlotNumber, SassafrasConfiguration,
 	AuthorityId, AuthorityPair, AuthoritySignature, VRFOutput,
 	SassafrasAuthorityWeight, VRF_OUTPUT_LENGTH, VRFProof, Randomness,
-	digests::{PreDigest, CompatibleDigestItem, NextEpochDescriptor, PostBlockDescriptor},
+	digests::{
+		PreDigest, CompatibleDigestItem, NextEpochDescriptor, PostBlockDescriptor,
+		PrimaryPreDigest, SecondaryPreDigest,
+	},
 };
 pub use sp_consensus::SyncOracle;
 
@@ -668,11 +671,11 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
-		return Ok(PreDigest::Secondary {
+		return Ok(PreDigest::Secondary(SecondaryPreDigest {
 			slot_number: 0,
 			authority_index: 0,
 			commitments: Vec::new(),
-		})
+		}))
 	}
 
 	let mut pre_digest: Option<_> = None;
@@ -1180,7 +1183,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, 
 		})?;
 
 		match pre_digest {
-			PreDigest::Primary { commitments, .. } => {
+			PreDigest::Primary(PrimaryPreDigest { commitments, .. }) => {
 				let epoch = viable_epoch.as_mut();
 
 				trace!(target: "sassafras", "Importing commitments of length: {}", commitments.len());
@@ -1190,7 +1193,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, 
 					}
 				}
 			},
-			PreDigest::Secondary { commitments, .. } => {
+			PreDigest::Secondary(SecondaryPreDigest { commitments, .. }) => {
 				let epoch = viable_epoch.as_mut();
 
 				trace!(target: "sassafras", "Importing commitments of length: {}", commitments.len());

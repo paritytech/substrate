@@ -87,6 +87,38 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 	}
 }
 
+/// A primary Sassafras pre-digest.
+#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq)]
+pub struct PrimaryPreDigest {
+	/// Index of ticket VRF proof that has been previously committed.
+	pub ticket_vrf_index: VRFIndex,
+	/// Attempt number of the ticket VRF proof.
+	pub ticket_vrf_attempt: u64,
+	/// Reveal of tocket VRF output.
+	pub ticket_vrf_output: VRFOutput,
+	/// Validator index.
+	pub authority_index: AuthorityIndex,
+	/// Corresponding slot number.
+	pub slot_number: SlotNumber,
+	/// Secondary "Post Block VRF" proof.
+	pub post_vrf_proof: VRFProof,
+	/// Secondary "Post Block VRF" output.
+	pub post_vrf_output: VRFOutput,
+	/// Additional commitments posted directly at pre-digest.
+	pub commitments: Vec<VRFProof>,
+}
+
+/// A secondary Sassafras pre-digest.
+#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq)]
+pub struct SecondaryPreDigest {
+	/// Authority index.
+	pub authority_index: AuthorityIndex,
+	/// Slot number.
+	pub slot_number: SlotNumber,
+	/// Additional commitments posted directly at pre-digest.
+	pub commitments: Vec<VRFProof>,
+}
+
 /// A Sassafras pre-digest. The validator pre-commit a VRF proof at `vrf_index`, and now reveal it
 /// as `vrf_output`.
 ///
@@ -94,49 +126,25 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 #[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq)]
 pub enum PreDigest {
 	/// A primary VRF-based slot-assignment.
-	Primary {
-		/// Index of ticket VRF proof that has been previously committed.
-		ticket_vrf_index: VRFIndex,
-		/// Attempt number of the ticket VRF proof.
-		ticket_vrf_attempt: u64,
-		/// Reveal of tocket VRF output.
-		ticket_vrf_output: VRFOutput,
-		/// Validator index.
-		authority_index: AuthorityIndex,
-		/// Corresponding slot number.
-		slot_number: SlotNumber,
-		/// Secondary "Post Block VRF" proof.
-		post_vrf_proof: VRFProof,
-		/// Secondary "Post Block VRF" output.
-		post_vrf_output: VRFOutput,
-		/// Additional commitments posted directly at pre-digest.
-		commitments: Vec<VRFProof>,
-	},
+	Primary(PrimaryPreDigest),
 	/// A secondary deterministic slot assignment.
-	Secondary {
-		/// Authority index.
-		authority_index: AuthorityIndex,
-		/// Slot number.
-		slot_number: SlotNumber,
-		/// Additional commitments posted directly at pre-digest.
-		commitments: Vec<VRFProof>,
-	},
+	Secondary(SecondaryPreDigest),
 }
 
 impl PreDigest {
 	/// Returns the slot number of the pre digest.
 	pub fn authority_index(&self) -> AuthorityIndex {
 		match self {
-			PreDigest::Primary { authority_index, .. } => *authority_index,
-			PreDigest::Secondary { authority_index, .. } => *authority_index,
+			PreDigest::Primary(p) => p.authority_index,
+			PreDigest::Secondary(s) => s.authority_index,
 		}
 	}
 
 	/// Returns the slot number of the pre digest.
 	pub fn slot_number(&self) -> SlotNumber {
 		match self {
-			PreDigest::Primary { slot_number, .. } => *slot_number,
-			PreDigest::Secondary { slot_number, .. } => *slot_number,
+			PreDigest::Primary(p) => p.slot_number,
+			PreDigest::Secondary(s) => s.slot_number,
 		}
 	}
 
@@ -144,8 +152,8 @@ impl PreDigest {
 	/// of the chain.
 	pub fn added_weight(&self) -> super::SassafrasBlockWeight {
 		match self {
-			PreDigest::Primary { .. } => 1,
-			PreDigest::Secondary { .. } => 0,
+			PreDigest::Primary(_) => 1,
+			PreDigest::Secondary(_) => 0,
 		}
 	}
 }
