@@ -48,9 +48,13 @@ use codec::{Encode, Decode};
 
 mod node;
 mod reduce;
+mod helpers;
 
-// re-export reduce stuff
+// re-export reduce stuff.
 pub use reduce::reduce;
+
+// re-export the helpers.
+pub use helpers::*;
 
 // re-export the compact macro, with the dependencies of the macro.
 #[doc(hidden)]
@@ -58,6 +62,7 @@ pub use codec;
 #[doc(hidden)]
 pub use sp_runtime;
 
+// re-export the compact solution type.
 pub use sp_phragmen_compact::generate_compact_solution_type;
 
 // an aggregator trait for a generic type of a voter/target identifier. This usually maps to
@@ -153,7 +158,7 @@ pub struct Assignment<AccountId, T: PerThing> {
 }
 
 impl<AccountId, T: PerThing> Assignment<AccountId, T>
-	where T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>
+	where ExtendedBalance: From<<T as PerThing>::Inner>
 {
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
@@ -164,7 +169,7 @@ impl<AccountId, T: PerThing> Assignment<AccountId, T>
 	{
 		let mut sum: ExtendedBalance = Bounded::min_value();
 		let mut distribution = self.distribution.into_iter().map(|(target, p)| {
-			let distribution_stake = p * stake;
+			let distribution_stake = p.mul_collapse(stake);
 			// defensive only. We assume that balance cannot exceed extended balance.
 			sum = sum.saturating_add(distribution_stake);
 			(target, distribution_stake)
@@ -175,6 +180,10 @@ impl<AccountId, T: PerThing> Assignment<AccountId, T>
 			if let Some(leftover) = stake.checked_sub(sum) {
 				if let Some(last) = distribution.last_mut() {
 					last.1 += leftover;
+				}
+			} else if let Some(excess) = sum.checked_sub(stake) {
+				if let Some(last) = distribution.last_mut() {
+					last.1 -= excess;
 				}
 			}
 		}
@@ -196,17 +205,19 @@ pub struct StakedAssignment<AccountId> {
 	pub distribution: Vec<(AccountId, ExtendedBalance)>,
 }
 
-impl<AccountId> StakedAssignment<AccountId> {
+impl<AccountId> StakedAssignment<AccountId>
+{
 	/// Converts self into the normal [`Assignment`] type.
-	pub fn into_assignment<T: PerThing>(self, fill: bool) -> Assignment<AccountId, T> {
+	pub fn into_assignment<T: PerThing>(self, fill: bool) -> Assignment<AccountId, T>
+		where ExtendedBalance: From<<T as PerThing>::Inner>
+	{
 		let accuracy: u128 = T::ACCURACY.saturated_into();
 		let mut sum: u128 = Zero::zero();
 
 		let stake = self.distribution.iter().map(|x| x.1).sum();
 		let mut distribution = self.distribution.into_iter().map(|(target, w)| {
-			let portion = multiply_by_rational(w, accuracy, stake).unwrap_or(Bounded::max_value());
-			sum += portion;
-			let per_thing = T::from_parts(portion.saturated_into());
+			let per_thing = T::from_rational_approximation(w, stake);
+			sum += per_thing.clone().deconstruct().saturated_into();
 			(target, per_thing)
 		}).collect::<Vec<(AccountId, T)>>();
 
@@ -214,6 +225,10 @@ impl<AccountId> StakedAssignment<AccountId> {
 			if let Some(leftover) = accuracy.checked_sub(sum) {
 				if let Some(last) = distribution.last_mut() {
 					last.1 = last.1.saturating_add(T::from_parts(leftover.saturated_into()));
+				}
+			} else if let Some(excess) = sum.checked_sub(accuracy) {
+				if let Some(last) = distribution.last_mut() {
+					last.1 = last.1.saturating_sub(T::from_parts(excess.saturated_into()));
 				}
 			}
 		}
@@ -496,8 +511,8 @@ pub fn elect<AccountId, Balance, FS, C, R>(
 ///
 /// `O(E)` where `E` is the total number of edges.
 pub fn build_support_map<AccountId>(
-	winners: &Vec<AccountId>,
-	assignments: &Vec<StakedAssignment<AccountId>>,
+	winners: &[AccountId],
+	assignments: &[StakedAssignment<AccountId>],
 ) -> (SupportMap<AccountId>, u32) where
 	AccountId: Default + Ord + Member,
 {

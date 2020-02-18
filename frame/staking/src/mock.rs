@@ -40,7 +40,7 @@ use sp_staking::{
 	offence::{OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
-use std::{cell::RefCell, collections::HashSet, ops};
+use std::{cell::RefCell, collections::HashSet};
 
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
@@ -746,31 +746,6 @@ pub fn on_offence_now(
 	on_offence_in_era(offenders, slash_fraction, now)
 }
 
-/// convert a vector of staked assignments into ratio
-pub fn assignment_to_staked<T: PerThing + ops::Mul<ExtendedBalance, Output=ExtendedBalance>>(
-	assignments: Vec<Assignment<AccountId, T>>
-) -> Vec<StakedAssignment<AccountId>> {
-	assignments
-		.into_iter()
-		.map(|a| {
-			let stake = <CurrencyToVoteHandler as Convert<Balance, u64>>::convert(
-				Staking::slashable_balance_of(&a.who)
-			) as ExtendedBalance;
-			a.into_staked(stake, true)
-		})
-		.collect()
-}
-
-/// convert a vector of assignments into staked
-pub fn staked_to_assignment<T: PerThing>(
-	staked: Vec<StakedAssignment<AccountId>>,
-) -> Vec<Assignment<AccountId, T>> {
-	staked
-		.into_iter()
-		.map(|sa| sa.into_assignment(true))
-		.collect()
-}
-
 // winners will be chosen by simply their unweighted total backing stake. Nominator stake is
 // distributed evenly.
 pub fn horrible_phragmen_with_post_processing(
@@ -872,7 +847,10 @@ pub fn horrible_phragmen_with_post_processing(
 	};
 
 	// convert back to ratio assignment. This takes less space.
-	let assignments_reduced = staked_to_assignment::<OffchainAccuracy>(staked_assignment);
+	let assignments_reduced = sp_phragmen::assignment_staked_to_ratio::<
+		AccountId,
+		OffchainAccuracy,
+	>(staked_assignment);
 
 	let compact = <CompactOf<Test>>::from_assignment(
 		assignments_reduced,
@@ -899,9 +877,14 @@ pub fn do_phragmen_with_post_processing(
 		winners,
 		assignments,
 	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
-	let winners = winners.into_iter().map(|(w, _)| w).collect();
+	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<AccountId>>();
 
-	let mut staked = assignment_to_staked::<OffchainAccuracy>(assignments);
+	let stake_of = |who: &AccountId| -> ExtendedBalance {
+		<CurrencyToVoteHandler as Convert<Balance, u64>>::convert(
+			Staking::slashable_balance_of(&who)
+		) as ExtendedBalance
+	};
+	let mut staked = sp_phragmen::assignment_ratio_to_budget(assignments, stake_of);
 
 	// apply custom tweaks. awesome for testing.
 	tweak(&mut staked);
@@ -911,7 +894,7 @@ pub fn do_phragmen_with_post_processing(
 	}
 
 	// compute score
-	let (support_map, _) = build_support_map::<AccountId>(&winners, &staked);
+	let (support_map, _) = build_support_map::<AccountId>(winners.as_ref(), &staked);
 	let score = evaluate_support::<AccountId>(&support_map);
 
 	// convert back to ratio assignment. This takes less space.
