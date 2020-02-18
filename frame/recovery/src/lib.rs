@@ -159,11 +159,7 @@ use codec::{Encode, Decode};
 
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
-	Parameter, RuntimeDebug,
-	weights::{
-		GetDispatchInfo, PaysFee, DispatchClass, ClassifyDispatch, Weight, WeighData,
-		SimpleDispatchInfo, FunctionOf
-	},
+	Parameter, RuntimeDebug, weights::{GetDispatchInfo, SimpleDispatchInfo, FunctionOf},
 	traits::{Currency, ReservableCurrency, Get, BalanceStatus},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
