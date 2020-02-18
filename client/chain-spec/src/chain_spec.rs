@@ -32,7 +32,7 @@ use sc_telemetry::TelemetryEndpoints;
 enum GenesisSource<G> {
 	File(PathBuf),
 	Binary(Cow<'static, [u8]>),
-	Factory(Arc<dyn Fn() -> G>),
+	Factory(Arc<dyn Fn() -> G + Send + Sync>),
 }
 
 impl<G> Clone for GenesisSource<G> {
@@ -215,7 +215,7 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Create hardcoded spec.
-	pub fn from_genesis<F: Fn() -> G + 'static>(
+	pub fn from_genesis<F: Fn() -> G + 'static + Send + Sync>(
 		name: &str,
 		id: &str,
 		constructor: F,
