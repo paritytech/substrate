@@ -27,7 +27,13 @@ pub fn run(version: VersionInfo) -> error::Result<()> {
 	let config = sc_service::Configuration::new(&version);
 
 	match opt.subcommand {
-		Some(subcommand) => unimplemented!(),
+		Some(subcommand) => sc_cli::run_subcommand(
+			config,
+			subcommand,
+			chain_spec::load_spec,
+			|config: _| Ok(new_full_start!(config).0),
+			&version,
+		),
 		None => sc_cli::run(
 			config,
 			opt.run,

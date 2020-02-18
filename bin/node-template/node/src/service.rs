@@ -27,6 +27,33 @@ construct_simple_protocol! {
 	pub struct NodeProtocol where Block = Block { }
 }
 
+/// Starts a `ServiceBuilder` for a full service.
+///
+/// Use this macro if you don't actually need the full service, but just the builder in order to
+/// be able to perform chain operations.
+macro_rules! new_full_start {
+	($config:expr) => {{
+		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
+
+		let builder = sc_service::ServiceBuilder::new_full::<
+			node_template_runtime::opaque::Block, node_template_runtime::RuntimeApi, crate::service::Executor
+		>($config)?
+			.with_select_chain(|_config, backend| {
+				Ok(sc_client::LongestChain::new(backend.clone()))
+			})?
+			.with_transaction_pool(|config, client, _fetcher| {
+				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
+				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api)))
+			})?
+			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
+				let import_queue = sc_consensus_manual_seal::import_queue(Box::new(client.clone()), client);
+				Ok(import_queue)
+			})?;
+
+		(builder, inherent_data_providers)
+	}}
+}
+
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration<GenesisConfig>)
 	-> Result<impl AbstractService, ServiceError>
