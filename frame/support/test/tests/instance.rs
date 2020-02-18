@@ -300,7 +300,7 @@ fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 #[test]
-fn storage_instance_independance() {
+fn storage_instance_independence() {
 	let mut storage = sp_core::storage::Storage {
 		top: std::collections::BTreeMap::new(),
 		children: std::collections::HashMap::new()

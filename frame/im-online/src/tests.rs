@@ -328,7 +328,7 @@ fn should_not_send_a_report_if_already_online() {
 
 		// then
 		let transaction = pool_state.write().transactions.pop().unwrap();
-		// All validators have `0` as their session key, but we should only produce 1 hearbeat.
+		// All validators have `0` as their session key, but we should only produce 1 heartbeat.
 		assert_eq!(pool_state.read().transactions.len(), 0);
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();

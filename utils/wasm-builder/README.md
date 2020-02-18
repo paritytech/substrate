@@ -57,7 +57,7 @@ be `NODE_RUNTIME`.
 
 ## Prerequisites:
 
-WASM builder requires the following prerequisities for building the WASM binary:
+WASM builder requires the following prerequisites for building the WASM binary:
 
 - rust nightly + `wasm32-unknown-unknown` toolchain
 
