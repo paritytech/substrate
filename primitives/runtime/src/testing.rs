@@ -28,7 +28,7 @@ use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
-use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
+use crate::transaction_validity::{TransactionValidity, TransactionValidityError, InvalidTransaction};
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
@@ -353,8 +353,8 @@ impl<Call, Extra> TestXt<Call, Extra> {
 	}
 
 	/// Build badly signed variant of `TestXt`.
-	pub fn badly_signed(mut self, err: TransactionValidityError) -> Self {
-		self.validity = TestValidity::SignatureInvalid(err);
+	pub fn badly_signed(mut self) -> Self {
+		self.validity = TestValidity::SignatureInvalid(TransactionValidityError::Invalid(InvalidTransaction::BadProof));
 		self
 	}
  }

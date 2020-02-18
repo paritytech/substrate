@@ -718,6 +718,28 @@ mod tests {
 	}
 
 	#[test]
+	fn apply_trusted_skips_signature_check_but_not_others() {
+		let xt1 = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)))
+			.badly_signed();
+
+		let mut t = new_test_ext(1);
+
+		t.execute_with(|| {
+			assert_eq!(Executive::apply_trusted_extrinsic(xt1), Ok(Ok(())));
+		});
+
+		let xt2 = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)))
+			.invalid(TransactionValidityError::Invalid(InvalidTransaction::Call));
+
+		t.execute_with(|| {
+			assert_eq!(
+				Executive::apply_trusted_extrinsic(xt2),
+				Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
+			);
+		});
+	}
+
+	#[test]
 	fn can_pay_for_tx_fee_on_full_lock() {
 		let id: LockIdentifier = *b"0       ";
 		let execute_with_lock = |lock: WithdrawReasons| {
