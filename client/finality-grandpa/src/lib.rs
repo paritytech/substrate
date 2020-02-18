@@ -857,25 +857,6 @@ where
 	}
 }
 
-#[deprecated(since = "1.1.0", note = "Please switch to run_grandpa_voter.")]
-pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
-) -> sp_blockchain::Result<impl Future<Output=()> + Send + 'static> where
-	Block::Hash: Ord,
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: NetworkT<Block> + Send + Sync + Clone + 'static,
-	SC: SelectChain<Block> + 'static,
-	NumberFor<Block>: BlockNumberOps,
-	DigestFor<Block>: Encode,
-	RA: Send + Sync + 'static,
-	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
-	X: futures::Future<Output=()> + Clone + Send + Unpin + 'static,
-	Client<B, E, Block, RA>: AuxStore,
-{
-	run_grandpa_voter(grandpa_params)
-}
-
 /// When GRANDPA is not initialized we still need to register the finality
 /// tracker inherent provider which might be expected by the runtime for block
 /// authoring. Additionally, we register a gossip message validator that
