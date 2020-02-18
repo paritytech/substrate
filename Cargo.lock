@@ -3377,6 +3377,7 @@ dependencies = [
  "log 0.4.8",
  "nix",
  "node-executor",
+ "node-inspect",
  "node-primitives",
  "node-rpc",
  "node-runtime",
@@ -3461,6 +3462,22 @@ dependencies = [
  "substrate-test-client",
  "trie-root",
  "wabt",
+]
+
+[[package]]
+name = "node-inspect"
+version = "0.8.0"
+dependencies = [
+ "derive_more",
+ "log 0.4.8",
+ "parity-scale-codec",
+ "sc-cli",
+ "sc-client-api",
+ "sc-service",
+ "sp-blockchain",
+ "sp-core",
+ "sp-runtime",
+ "structopt",
 ]
 
 [[package]]
@@ -7047,7 +7064,7 @@ dependencies = [
  "hash256-std-hasher",
  "hex",
  "hex-literal",
- "impl-serde 0.2.3",
+ "impl-serde 0.3.0",
  "lazy_static",
  "libsecp256k1",
  "log 0.4.8",
