@@ -166,10 +166,11 @@ impl<AccountId, T: PerThing> Assignment<AccountId, T>
 	/// it ensures that all the potential rounding errors are compensated and the distribution's sum
 	/// is exactly equal to the total budget.
 	pub fn into_staked(self, stake: ExtendedBalance, fill: bool) -> StakedAssignment<AccountId>
+		where T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>
 	{
 		let mut sum: ExtendedBalance = Bounded::min_value();
 		let mut distribution = self.distribution.into_iter().map(|(target, p)| {
-			let distribution_stake = p.mul_collapse(stake);
+			let distribution_stake = p * stake;
 			// defensive only. We assume that balance cannot exceed extended balance.
 			sum = sum.saturating_add(distribution_stake);
 			(target, distribution_stake)

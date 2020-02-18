@@ -672,7 +672,7 @@ impl<T: Trait> Module<T> {
 					Self::locked_stake_of(who)
 				) as ExtendedBalance
 			};
-			let staked_assignments = sp_phragmen::assignment_ratio_to_budget(
+			let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
 				phragmen_result.assignments,
 				stake_of,
 			);

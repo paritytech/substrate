@@ -21,13 +21,14 @@ use sp_std::prelude::*;
 use sp_runtime::PerThing;
 
 /// Converts a vector of ratio assignments into ones with absolute budget value.
-pub fn assignment_ratio_to_budget<A: IdentifierT, T: PerThing, FS>(
+pub fn assignment_ratio_to_staked<A: IdentifierT, T: PerThing, FS>(
 	ratio: Vec<Assignment<A, T>>,
 	stake_of: FS,
 ) -> Vec<StakedAssignment<A>>
 	where
 		for <'r> FS: Fn(&'r A) -> ExtendedBalance,
-		ExtendedBalance: From<<T as PerThing>::Inner>
+		T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
+		ExtendedBalance: From<<T as PerThing>::Inner>,
 {
 	ratio
 		.into_iter()
@@ -75,7 +76,7 @@ mod tests {
 		];
 
 		let stake_of = |_: &u32| -> ExtendedBalance { 100u128 };
-		let staked = assignment_ratio_to_budget(ratio, stake_of);
+		let staked = assignment_ratio_to_staked(ratio, stake_of);
 
 		assert_eq!(
 			staked,

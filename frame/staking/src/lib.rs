@@ -268,7 +268,7 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Perbill, PerThing, Percent, RuntimeDebug, RuntimeAppPublic,
+	Perbill, PerThing, RuntimeDebug, RuntimeAppPublic,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
@@ -289,8 +289,8 @@ use frame_system::{
 	offchain::SubmitUnsignedTransaction,
 };
 use sp_phragmen::{
-	ExtendedBalance, StakedAssignment, Assignment, PhragmenScore, PhragmenResult,
-	build_support_map, evaluate_support, elect, generate_compact_solution_type, is_score_better,
+	ExtendedBalance, Assignment, PhragmenScore, PhragmenResult, build_support_map, evaluate_support,
+	elect, generate_compact_solution_type, is_score_better,
 };
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -320,7 +320,7 @@ pub type Points = u32;
 pub type ChainAccuracy = Perbill;
 
 /// Accuracy used for off-chain phragmen. This better be small.
-pub type OffchainAccuracy = Percent;
+pub type OffchainAccuracy = sp_runtime::PerU16;
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -1598,6 +1598,13 @@ impl<T: Trait> Module<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
+	/// internal impl of [`slashable_balance_of`] that returns [`ExtendedBalance`].
+	fn slashable_balance_of_extended(stash: &T::AccountId) -> ExtendedBalance {
+		<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
+			Self::slashable_balance_of(stash)
+		) as ExtendedBalance
+	}
+
 	/// returns true if the end of the current session leads to an era change.
 	fn is_current_session_final() -> bool {
 		let current_index = T::SessionInterface::current_index();
@@ -1801,11 +1808,6 @@ impl<T: Trait> Module<T> {
 			// NOTE: we assume both `ValidatorIndex` and `NominatorIndex` are smaller than usize.
 			snapshot_validators.get(i as usize).cloned()
 		};
-		let slashable_balance = |w: &T::AccountId| -> ExtendedBalance {
-			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
-				Self::slashable_balance_of(w)
-			) as ExtendedBalance
-		};
 
 		// un-compact.
 		let assignments = compact_assignments.into_assignment(
@@ -1860,13 +1862,10 @@ impl<T: Trait> Module<T> {
 		}
 
 		// convert into staked assignments.
-		let staked_assignments: Vec<StakedAssignment<T::AccountId>> = assignments
-			.into_iter()
-			.map(|a| {
-				let stake = slashable_balance(&a.who);
-				a.into_staked(stake, true)
-			})
-			.collect();
+		let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
+			assignments,
+			Self::slashable_balance_of_extended,
+		);
 
 		// build the support map thereof in order to evaluate.
 		// OPTIMIZATION: loop to create the staked assignments but it would bloat the code. Okay for
@@ -2105,7 +2104,9 @@ impl<T: Trait> Module<T> {
 	>(
 		compute: ElectionCompute,
 	) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>>
-		where ExtendedBalance: From<<Accuracy as PerThing>::Inner>
+		where
+			Accuracy: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
+			ExtendedBalance: From<<Accuracy as PerThing>::Inner>,
 	{
 		if let Some(phragmen_result) = Self::do_phragmen::<Accuracy>() {
 			let elected_stashes = phragmen_result.winners.iter()
@@ -2113,15 +2114,10 @@ impl<T: Trait> Module<T> {
 				.collect::<Vec<T::AccountId>>();
 			let assignments = phragmen_result.assignments;
 
-			let staked_assignments: Vec<StakedAssignment<T::AccountId>> = assignments
-				.into_iter()
-				.map(|a: Assignment<T::AccountId, Accuracy>| {
-					let stake = <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
-						Self::slashable_balance_of(&a.who)
-					) as ExtendedBalance;
-					a.into_staked(stake, true)
-				})
-				.collect();
+			let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
+				assignments,
+				Self::slashable_balance_of_extended,
+			);
 
 			let (supports, _) = build_support_map::<T::AccountId>(
 				&elected_stashes,
