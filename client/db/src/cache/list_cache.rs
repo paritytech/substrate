@@ -357,7 +357,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 					// it is possible that we're inserting extra (but still required) fork here
 					let new_storage_entry = StorageEntry {
 						prev_valid_from: Some(prev_valid_from),
-						value: value.expect("chcecked abpve that !value.is_none(); qed"),
+						value: value.expect("checked above that !value.is_none(); qed"),
 					};
 
 					tx.insert_storage_entry(&block, &new_storage_entry);

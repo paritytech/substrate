@@ -56,7 +56,7 @@ fn set_recovered_works() {
 }
 
 #[test]
-fn recovery_lifecycle_works() {
+fn recovery_life_cycle_works() {
 	new_test_ext().execute_with(|| {
 		let friends = vec![2, 3, 4];
 		let threshold = 3;

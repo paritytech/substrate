@@ -469,7 +469,7 @@ mod tests {
 	}
 
 	#[test]
-	fn anecstor_roots_are_finalized_when_finality_notification_is_missed() {
+	fn ancestor_roots_are_finalized_when_finality_notification_is_missed() {
 		let mut finality_proofs = ExtraRequests::<Block>::new("test");
 
 		let hash4 = [4; 32].into();

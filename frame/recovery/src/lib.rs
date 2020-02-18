@@ -44,9 +44,9 @@
 //! the number of friends chosen. This deposit is returned in full when the account
 //! owner removes their recovery configuration.
 //!
-//! ### Recovery Lifecycle
+//! ### Recovery Life Cycle
 //!
-//! The intended lifecycle of a successful recovery takes the following steps:
+//! The intended life cycle of a successful recovery takes the following steps:
 //! 1. The account owner calls `create_recovery` to set up a recovery configuration
 //!    for their account.
 //! 2. At some later time, the account owner loses access to their account and wants
@@ -162,7 +162,7 @@ use frame_support::{
 	Parameter, RuntimeDebug,
 	weights::{
 		GetDispatchInfo, PaysFee, DispatchClass, ClassifyDispatch, Weight, WeighData,
-		SimpleDispatchInfo,
+		SimpleDispatchInfo, FunctionOf
 	},
 	traits::{Currency, ReservableCurrency, Get, BalanceStatus},
 };
@@ -335,10 +335,14 @@ decl_module! {
 		/// - `call`: The call you want to make with the recovered account.
 		///
 		/// # <weight>
-		/// - The weight of the `call`.
+		/// - The weight of the `call` + 10,000.
 		/// - One storage lookup to check account is recovered by `who`. O(1)
 		/// # </weight>
-		#[weight = <Passthrough<T::AccountId, <T as Trait>::Call>>::new()]
+		#[weight = FunctionOf(
+			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000,
+			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
+			true
+		)]
 		fn as_recovered(origin,
 			account: T::AccountId,
 			call: Box<<T as Trait>::Call>
@@ -664,27 +668,5 @@ impl<T: Trait> Module<T> {
 	/// Check that a user is a friend in the friends list.
 	fn is_friend(friends: &Vec<T::AccountId>, friend: &T::AccountId) -> bool {
 		friends.binary_search(&friend).is_ok()
-	}
-}
-
-/// Simple pass through for the weight functions.
-struct Passthrough<AccountId, Call>(sp_std::marker::PhantomData<(AccountId, Call)>);
-
-impl<AccountId, Call> Passthrough<AccountId, Call> {
-	fn new() -> Self { Self(Default::default()) }
-}
-impl<AccountId, Call: GetDispatchInfo> WeighData<(&AccountId, &Box<Call>)> for Passthrough<AccountId, Call> {
-	fn weigh_data(&self, (_, call): (&AccountId, &Box<Call>)) -> Weight {
-		call.get_dispatch_info().weight + 10_000
-	}
-}
-impl<AccountId, Call: GetDispatchInfo> ClassifyDispatch<(&AccountId, &Box<Call>)> for Passthrough<AccountId, Call> {
-	fn classify_dispatch(&self, (_, call): (&AccountId, &Box<Call>)) -> DispatchClass {
-		call.get_dispatch_info().class
-	}
-}
-impl<AccountId, Call: GetDispatchInfo> PaysFee<(&AccountId, &Box<Call>)> for Passthrough<AccountId, Call> {
-	fn pays_fee(&self, (_, call): (&AccountId, &Box<Call>)) -> bool {
-		call.get_dispatch_info().pays_fee
 	}
 }
