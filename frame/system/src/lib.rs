@@ -678,8 +678,7 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event_indexed(&[], event.into());
 	}
 
-	/// Increment the reference counter on an account. `_context` is a RefContext value identifying
-	/// the context of the reference.
+	/// Increment the reference counter on an account.
 	pub fn inc_ref(who: &T::AccountId) {
 		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_add(1));
 	}
@@ -688,20 +687,6 @@ impl<T: Trait> Module<T> {
 	/// you called `inc_ref` on `who`.
 	pub fn dec_ref(who: &T::AccountId) {
 		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_sub(1));
-	}
-
-	/// Note that a particular storage key is referring to a particular account. Returns the status
-	/// of this storage key immediately *before* this call (after this call it will be `Referenced`,
-	/// of course).
-	pub fn note_referenced(_who: &T::AccountId, _storage_key: &[u8]) -> RefStatus {
-		unimplemented!()
-	}
-
-	/// Note that a particular storage key is not referring to a particular account. Returns the
-	/// status of this storage key immediately *before* this call (after this call it will be
-	/// `Unreferenced`, of course).
-	pub fn note_unreferenced(_who: &T::AccountId, _storage_key: &[u8]) -> RefStatus {
-		unimplemented!()
 	}
 
 	/// The number of outstanding references for the account `who`.
