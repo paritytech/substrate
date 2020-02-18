@@ -171,7 +171,7 @@
 //!
 //! Validators and nominators are rewarded at the end of each era. The total reward of an era is
 //! calculated using the era duration and the staking rate (the total amount of tokens staked by
-//! nominators and validators, divided by the total token supply). It aims to incentivise toward a
+//! nominators and validators, divided by the total token supply). It aims to incentivize toward a
 //! defined staking rate. The full specification can be found
 //! [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model).
 //!
@@ -250,7 +250,6 @@
 mod mock;
 #[cfg(test)]
 mod tests;
-mod migration;
 mod slashing;
 
 pub mod inflation;
@@ -261,18 +260,17 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::SimpleDispatchInfo,
 	traits::{
-		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
+		Currency, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
 use pallet_session::historical::SessionManager;
 use sp_runtime::{
-	Perbill,
-	RuntimeDebug,
+	Perbill, PerThing, RuntimeDebug,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin,
+		AtLeast32Bit, EnsureOrigin,
 	}
 };
 use sp_staking::{
@@ -284,6 +282,7 @@ use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 use sp_phragmen::ExtendedBalance;
+use frame_support::traits::OnReapAccount;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -395,7 +394,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 
 impl<
 	AccountId,
-	Balance: HasCompact + Copy + Saturating + SimpleArithmetic,
+	Balance: HasCompact + Copy + Saturating + AtLeast32Bit,
 > StakingLedger<AccountId, Balance> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
@@ -439,7 +438,7 @@ impl<
 }
 
 impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
-	Balance: SimpleArithmetic + Saturating + Copy,
+	Balance: AtLeast32Bit + Saturating + Copy,
 {
 	/// Slash the validator for a given amount of balance. This can grow the value
 	/// of the slash in the case that the validator has less than `minimum_balance`
@@ -761,9 +760,6 @@ decl_storage! {
 
 		/// The earliest era for which we have a pending, unapplied slash.
 		EarliestUnappliedSlash: Option<EraIndex>;
-
-		/// The version of storage for upgrade.
-		StorageVersion: u32;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -795,8 +791,6 @@ decl_storage! {
 					}, _ => Ok(())
 				};
 			}
-
-			StorageVersion::put(migration::CURRENT_VERSION);
 		});
 	}
 }
@@ -886,13 +880,13 @@ decl_module! {
 		) {
 			let stash = ensure_signed(origin)?;
 
-			if <Bonded<T>>::exists(&stash) {
+			if <Bonded<T>>::contains_key(&stash) {
 				Err(Error::<T>::AlreadyBonded)?
 			}
 
 			let controller = T::Lookup::lookup(controller)?;
 
-			if <Ledger<T>>::exists(&controller) {
+			if <Ledger<T>>::contains_key(&controller) {
 				Err(Error::<T>::AlreadyPaired)?
 			}
 
@@ -1138,7 +1132,7 @@ decl_module! {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 			let controller = T::Lookup::lookup(controller)?;
-			if <Ledger<T>>::exists(&controller) {
+			if <Ledger<T>>::contains_key(&controller) {
 				Err(Error::<T>::AlreadyPaired)?
 			}
 			if controller != old_controller {
@@ -1286,7 +1280,6 @@ impl<T: Trait> Module<T> {
 			STAKING_ID,
 			&ledger.stash,
 			ledger.total,
-			T::BlockNumber::max_value(),
 			WithdrawReasons::all(),
 		);
 		<Ledger<T>>::insert(controller, ledger);
@@ -1299,9 +1292,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Ensures storage is upgraded to most recent necessary state.
-	fn ensure_storage_upgraded() {
-		migration::perform_migrations::<T>();
-	}
+	///
+	/// Right now it's a no-op as all networks that are supported by Substrate Frame Core are
+	/// running with the latest staking storage scheme.
+	fn ensure_storage_upgraded() {}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
@@ -1366,7 +1360,7 @@ impl<T: Trait> Module<T> {
 		Self::new_era(session_index)
 	}
 
-	/// Initialise the first session (and consequently the first era)
+	/// Initialize the first session (and consequently the first era)
 	fn initial_session() -> Option<Vec<T::AccountId>> {
 		// note: `CurrentEraStart` is set in `on_finalize` of the first block because now is not
 		// available yet.
@@ -1503,7 +1497,7 @@ impl<T: Trait> Module<T> {
 		});
 		all_nominators.extend(nominator_votes);
 
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote>(
+		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote, Perbill>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,
@@ -1520,7 +1514,7 @@ impl<T: Trait> Module<T> {
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
-			let supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
+			let supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote, Perbill>(
 				&elected_stashes,
 				&assignments,
 				Self::slashable_balance_of,
@@ -1682,8 +1676,8 @@ impl<T: Trait> SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(stash: &T::AccountId) {
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	fn on_reap_account(stash: &T::AccountId) {
 		Self::ensure_storage_upgraded();
 		Self::kill_stash(stash);
 	}

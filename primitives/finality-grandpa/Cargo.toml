@@ -6,7 +6,7 @@ edition = "2018"
 license = "GPL-3.0"
 
 [dependencies]
-app-crypto = { version = "2.0.0", default-features = false, package = "sp-application-crypto", path = "../application-crypto" }
+sp-application-crypto = { version = "2.0.0", default-features = false, path = "../application-crypto" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
@@ -16,7 +16,7 @@ sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" 
 [features]
 default = ["std"]
 std = [
-	"app-crypto/std",
+	"sp-application-crypto/std",
 	"codec/std",
 	"sp-std/std",
 	"serde",

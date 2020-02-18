@@ -39,9 +39,9 @@ parameter_types! {
 }
 impl frame_system::Trait for Test {
 	type Origin = Origin;
+	type Call = ();
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -54,24 +54,20 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = pallet_balances::AccountData<u64>;
+	type OnNewAccount = ();
+	type OnReapAccount = Balances;
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u64 = 0;
-	pub const TransferFee: u64 = 0;
-	pub const CreationFee: u64 = 0;
+	pub const ExistentialDeposit: u64 = 1;
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnNewAccount = ();
-	type OnFreeBalanceZero = ();
-	type OnReapAccount = System;
-	type Event = Event;
-	type TransferPayment = ();
 	type DustRemoval = ();
+	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
-	type CreationFee = CreationFee;
+	type AccountStore = System;
 }
 
 parameter_types! {
@@ -154,7 +150,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event},
+		System: system::{Module, Call, Event<T>},
 		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 		Elections: elections::{Module, Call, Event<T>, Config<T>},
 	}
@@ -222,7 +218,6 @@ impl ExtBuilder {
 					(5, 50 * self.balance_factor),
 					(6, 60 * self.balance_factor)
 				],
-				vesting: vec![],
 			}),
 			elections: Some(elections::GenesisConfig::<Test>{
 				members: vec![],

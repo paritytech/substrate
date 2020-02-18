@@ -16,7 +16,7 @@
 
 use crate::{Trait, BalanceOf};
 use sp_runtime::traits::{
-	Zero, SaturatedConversion, SimpleArithmetic,
+	Zero, SaturatedConversion, AtLeast32Bit,
 };
 
 #[cfg(test)]
@@ -193,7 +193,7 @@ impl<T: Trait> GasMeter<T> {
 /// A little handy utility for converting a value in balance units into approximate value in gas units
 /// at the given gas price.
 pub fn approx_gas_for_balance<Balance>(gas_price: Balance, balance: Balance) -> Gas
-	where Balance: SimpleArithmetic
+	where Balance: AtLeast32Bit
 {
 	(balance / gas_price).saturated_into::<Gas>()
 }

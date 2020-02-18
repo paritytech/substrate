@@ -18,51 +18,29 @@
 
 #![cfg(test)]
 
-use std::{cell::RefCell, collections::HashSet};
 use sp_runtime::testing::Header;
 use sp_runtime::Perbill;
 use sp_core::H256;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
-use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
+use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
+use crate::{self as indices, Module, Trait};
+use frame_system as system;
+use pallet_balances as balances;
 
 impl_outer_origin!{
-	pub enum Origin for Runtime where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
-
-thread_local! {
-	static ALIVE: RefCell<HashSet<u64>> = Default::default();
-}
-
-pub fn make_account(who: u64) {
-	ALIVE.with(|a| a.borrow_mut().insert(who));
-	Indices::on_new_account(&who);
-}
-
-pub fn kill_account(who: u64) {
-	ALIVE.with(|a| a.borrow_mut().remove(&who));
-}
-
-pub struct TestIsDeadAccount {}
-impl IsDeadAccount<u64> for TestIsDeadAccount {
-	fn is_dead_account(who: &u64) -> bool {
-		!ALIVE.with(|a| a.borrow_mut().contains(who))
-	}
-}
-
-pub struct TestResolveHint;
-impl ResolveHint<u64, u64> for TestResolveHint {
-	fn resolve_hint(who: &u64) -> Option<u64> {
-		if *who < 256 {
-			None
-		} else {
-			Some(*who - 256)
-		}
+impl_outer_event!{
+	pub enum MetaEvent for Test {
+		system<T>,
+		balances<T>,
+		indices<T>,
 	}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Runtime;
+pub struct Test;
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: Weight = 1024;
@@ -70,46 +48,59 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
-impl frame_system::Trait for Runtime {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
+	type Call = ();
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = Indices;
 	type Header = Header;
-	type Event = ();
+	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = pallet_balances::AccountData<u64>;
+	type OnNewAccount = ();
+	type OnReapAccount = Balances;
 }
 
-impl Trait for Runtime {
+parameter_types! {
+	pub const ExistentialDeposit: u64 = 1;
+}
+
+impl pallet_balances::Trait for Test {
+	type Balance = u64;
+	type DustRemoval = ();
+	type Event = MetaEvent;
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = System;
+}
+
+parameter_types! {
+	pub const Deposit: u64 = 1;
+}
+
+impl Trait for Test {
 	type AccountIndex = u64;
-	type IsDeadAccount = TestIsDeadAccount;
-	type ResolveHint = TestResolveHint;
-	type Event = ();
+	type Currency = Balances;
+	type Deposit = Deposit;
+	type Event = MetaEvent;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	{
-		ALIVE.with(|a| {
-			let mut h = a.borrow_mut();
-			h.clear();
-			for i in 1..5 { h.insert(i); }
-		});
-	}
-
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-	GenesisConfig::<Runtime> {
-		ids: vec![1, 2, 3, 4]
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	pallet_balances::GenesisConfig::<Test>{
+		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 
-pub type Indices = Module<Runtime>;
+pub type System = frame_system::Module<Test>;
+pub type Balances = pallet_balances::Module<Test>;
+pub type Indices = Module<Test>;

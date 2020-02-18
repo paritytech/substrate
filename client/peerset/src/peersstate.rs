@@ -156,7 +156,7 @@ impl PeersState {
 	pub fn priority_not_connected_peer(&mut self) -> Option<NotConnectedPeer> {
 		let id = self.priority_nodes.values()
 			.flatten()
-			.find(|id| self.nodes.get(id).map_or(false, |node| !node.connection_state.is_connected()))
+			.find(|&id| self.nodes.get(id).map_or(false, |node| !node.connection_state.is_connected()))
 			.cloned();
 		id.map(move |id| NotConnectedPeer {
 			state: self,
@@ -170,7 +170,7 @@ impl PeersState {
 	pub fn priority_not_connected_peer_from_group(&mut self, group_id: &str) -> Option<NotConnectedPeer> {
 		let id = self.priority_nodes.get(group_id)
 			.and_then(|group| group.iter()
-				.find(|id| self.nodes.get(id).map_or(false, |node| !node.connection_state.is_connected()))
+				.find(|&id| self.nodes.get(id).map_or(false, |node| !node.connection_state.is_connected()))
 				.cloned());
 		id.map(move |id| NotConnectedPeer {
 			state: self,
@@ -300,7 +300,7 @@ impl PeersState {
 
 		for id in &peers {
 			// update slots for nodes that become priority
-			if !all_other_groups.contains(&id) {
+			if !all_other_groups.contains(id) {
 				let peer = self.nodes.entry(id.clone()).or_default();
 				match peer.connection_state {
 					ConnectionState::In => self.num_in -= 1,
@@ -322,7 +322,7 @@ impl PeersState {
 	/// Remove a peer from a priority group.
 	pub fn remove_from_priority_group(&mut self, group_id: &str, peer_id: &PeerId) {
 		let mut peers = self.priority_nodes.get(group_id).cloned().unwrap_or_default();
-		peers.remove(&peer_id);
+		peers.remove(peer_id);
 		self.set_priority_group(group_id, peers);
 	}
 

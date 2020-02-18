@@ -70,9 +70,6 @@ mod changes_trie;
 pub mod traits;
 pub mod testing;
 
-#[cfg(test)]
-mod tests;
-
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
 pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
@@ -204,7 +201,7 @@ impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
 }
 
 /// A value that is never in a native representation.
-/// This is type is useful in conjuction with `NativeOrEncoded`.
+/// This is type is useful in conjunction with `NativeOrEncoded`.
 #[cfg(feature = "std")]
 #[derive(PartialEq)]
 pub enum NeverNativeValue {}

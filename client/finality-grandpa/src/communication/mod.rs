@@ -62,7 +62,7 @@ pub mod gossip;
 mod periodic;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 
@@ -74,7 +74,7 @@ mod cost {
 	pub(super) const MALFORMED_CATCH_UP: Rep = Rep::new(-1000, "Grandpa: Malformed cath-up");
 	pub(super) const MALFORMED_COMMIT: Rep = Rep::new(-1000, "Grandpa: Malformed commit");
 	pub(super) const FUTURE_MESSAGE: Rep = Rep::new(-500, "Grandpa: Future message");
-	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "Grandpa: Uknown voter");
+	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "Grandpa: Unknown voter");
 
 	pub(super) const INVALID_VIEW_CHANGE: Rep = Rep::new(-500, "Grandpa: Invalid view change");
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
@@ -83,7 +83,7 @@ mod cost {
 	pub(super) const INVALID_CATCH_UP: Rep = Rep::new(-5000, "Grandpa: Invalid catch-up");
 	pub(super) const INVALID_COMMIT: Rep = Rep::new(-5000, "Grandpa: Invalid commit");
 	pub(super) const OUT_OF_SCOPE_MESSAGE: Rep = Rep::new(-500, "Grandpa: Out-of-scope message");
-	pub(super) const CATCH_UP_REQUEST_TIMEOUT: Rep = Rep::new(-200, "Grandpa: Catch-up reqeust timeout");
+	pub(super) const CATCH_UP_REQUEST_TIMEOUT: Rep = Rep::new(-200, "Grandpa: Catch-up request timeout");
 
 	// cost of answering a catch up request
 	pub(super) const CATCH_UP_REPLY: Rep = Rep::new(-200, "Grandpa: Catch-up reply");
@@ -153,14 +153,14 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 
 	/// `NeighborPacketWorker` processing packets sent through the `NeighborPacketSender`.
 	//
-	// `NetworkBridge` is required to be clonable, thus one needs to be able to clone its children,
-	// thus one has to wrap neighor_packet_worker with an `Arc` `Mutex`.
+	// `NetworkBridge` is required to be cloneable, thus one needs to be able to clone its children,
+	// thus one has to wrap `neighbor_packet_worker` with an `Arc` `Mutex`.
 	neighbor_packet_worker: Arc<Mutex<periodic::NeighborPacketWorker<B>>>,
 
 	/// Receiver side of the peer report stream populated by the gossip validator, forwarded to the
 	/// gossip engine.
 	//
-	// `NetworkBridge` is required to be clonable, thus one needs to be able to clone its children,
+	// `NetworkBridge` is required to be cloneable, thus one needs to be able to clone its children,
 	// thus one has to wrap gossip_validator_report_stream with an `Arc` `Mutex`. Given that it is
 	// just an `UnboundedReceiver`, one could also switch to a multi-producer-*multi*-consumer
 	// channel implementation.
@@ -178,7 +178,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
-		executor: &impl futures::task::Spawn,
 	) -> Self {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
@@ -186,7 +185,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 
 		let validator = Arc::new(validator);
-		let gossip_engine = GossipEngine::new(service.clone(), executor, GRANDPA_ENGINE_ID, validator.clone());
+		let gossip_engine = GossipEngine::new(service.clone(), GRANDPA_ENGINE_ID, validator.clone());
 
 		{
 			// register all previous votes with the gossip service so that they're
@@ -374,10 +373,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
-		let service = self.gossip_engine.clone();
 		let topic = global_topic::<B>(set_id.0);
 		let incoming = incoming_global(
-			service,
+			self.gossip_engine.clone(),
 			topic,
 			voters,
 			self.validator.clone(),
@@ -419,7 +417,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
 	type Output = Result<(), Error>;
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		loop {
 			match self.neighbor_packet_worker.lock().poll_next_unpin(cx) {
 				Poll::Ready(Some((to, packet))) => {
@@ -442,6 +440,12 @@ impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
 				),
 				Poll::Pending => break,
 			}
+		}
+
+		match self.gossip_engine.poll_unpin(cx) {
+			// The gossip engine future finished. We should do the same.
+			Poll::Ready(()) => return Poll::Ready(Ok(())),
+			Poll::Pending => {},
 		}
 
 		Poll::Pending

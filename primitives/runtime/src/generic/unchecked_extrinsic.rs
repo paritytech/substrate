@@ -44,6 +44,18 @@ where
 	pub function: Call,
 }
 
+#[cfg(feature = "std")]
+impl<Address, Call, Signature, Extra> parity_util_mem::MallocSizeOf
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Extra: SignedExtension
+{
+	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		// Instantiated only in runtime.
+		0
+	}
+}
+
 impl<Address, Call, Signature, Extra: SignedExtension>
 	UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
@@ -271,6 +283,19 @@ impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> s
 {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a, Address: Decode, Signature: Decode, Call: Decode, Extra: SignedExtension> serde::Deserialize<'a>
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+{
+	fn deserialize<D>(de: D) -> Result<Self, D::Error> where
+		D: serde::Deserializer<'a>,
+	{
+		let r = sp_core::bytes::deserialize(de)?;
+		Decode::decode(&mut &r[..])
+			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
 	}
 }
 

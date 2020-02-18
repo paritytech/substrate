@@ -103,7 +103,6 @@ mod tests {
 	use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 
 	type AuthorityDiscovery = Module<Test>;
-	type SessionIndex = u32;
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
@@ -158,6 +157,9 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnReapAccount = ();
 	}
 
 	impl_outer_origin! {

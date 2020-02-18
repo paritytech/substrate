@@ -323,7 +323,7 @@ mod tests {
 			let child_filters = Some([
 				(StorageKey(vec![4]), None),
 				(StorageKey(vec![5]), None),
-			].into_iter().cloned().collect());
+			].iter().cloned().collect());
 			StorageChangeSet {
 				changes: Arc::new(changes.0),
 				child_changes: Arc::new(changes.1),

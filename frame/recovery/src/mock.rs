@@ -36,6 +36,7 @@ impl_outer_origin! {
 
 impl_outer_event! {
 	pub enum TestEvent for Test {
+		system<T>,
 		pallet_balances<T>,
 		recovery<T>,
 	}
@@ -62,10 +63,10 @@ parameter_types! {
 
 impl frame_system::Trait for Test {
 	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -77,25 +78,21 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = pallet_balances::AccountData<u128>;
+	type OnNewAccount = ();
+	type OnReapAccount = (Balances, Recovery);
 }
 
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
-	pub const TransferFee: u64 = 0;
-	pub const CreationFee: u64 = 0;
 }
 
 impl pallet_balances::Trait for Test {
 	type Balance = u128;
-	type OnFreeBalanceZero = ();
-	type OnReapAccount = (System, Recovery);
-	type OnNewAccount = ();
-	type Event = TestEvent;
-	type TransferPayment = ();
 	type DustRemoval = ();
+	type Event = TestEvent;
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
-	type CreationFee = CreationFee;
+	type AccountStore = System;
 }
 
 parameter_types! {
@@ -126,7 +123,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100)],
-		vesting: vec![],
 	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
