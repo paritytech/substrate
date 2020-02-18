@@ -103,9 +103,6 @@ pub struct SassafrasConfiguration {
 	/// The authorities for the genesis epoch.
 	pub genesis_authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 
-	/// The proofs for genesis epoch.
-	pub genesis_proofs: Vec<RawVRFProof>,
-
 	/// The randomness for the genesis epoch.
 	pub randomness: Randomness,
 
