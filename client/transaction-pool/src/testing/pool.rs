@@ -384,7 +384,7 @@ fn fork_aware_finalization() {
 	let mut canon_watchers = vec![];
 
 	let from_alice = uxt(Alice, 1);
-	let from_dave = uxt(Dave, 1);
+	let from_dave = uxt(Dave, 2);
 	let from_bob = uxt(Bob, 1);
 	let from_charlie = uxt(Charlie, 1);
 	pool.api.increment_nonce(Alice.into());
@@ -488,7 +488,7 @@ fn fork_aware_finalization() {
 
 	// block e1
 	{
-		let header = pool.api.push_block(5, vec![from_dave]);
+		let header = pool.api.push_block(5, vec![from_dave, from_bob]);
 		e1 = header.hash();
 		let event = ChainEvent::NewBlock {
 			id: BlockId::Hash(header.hash()),
@@ -515,15 +515,8 @@ fn fork_aware_finalization() {
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c2.clone())));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(c2)));
-
-		// can be either Ready, or InBlock, depending on which event comes first
-		assert_eq!(
-			match stream.next() {
-				Some(TransactionStatus::Ready) => stream.next(),
-				val @ _ => val,
-			}, 
-			Some(TransactionStatus::InBlock(e1)),
-		);
+		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(e1)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1.clone())));
 		assert_eq!(stream.next(), None);
 	}
@@ -533,6 +526,10 @@ fn fork_aware_finalization() {
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(d2.clone())));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(d2)));
+		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(e1)));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1.clone())));
+		assert_eq!(stream.next(), None);
 	}
 
 }
