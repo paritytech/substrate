@@ -13,14 +13,20 @@ jobs:
       - name: Checkout submodules
         shell: bash
         run: git submodule update --init --recursive
-      - name: Install stable toolchain
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          override: true
+      - name: Install wasm in stable toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: wasm32-unknown-unknown
           profile: minimal
           override: true
-      - name: Install nightly toolchain
+      - name: Install wasm in nightly toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -116,13 +122,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          toolchain: nigthly
+          toolchain: nightly
           args: --manifest-path "primitives/core/Cargo.toml" --verbose --no-default-features --features full_crypto
       - name: Test full crypto feature app
         uses: actions-rs/cargo@v1
         with:
           command: build
-          toolchain: nigthly
+          toolchain: nightly
           args: --manifest-path "primitives/application-crypto/Cargo.toml" --verbose --no-default-features --features full_crypto
       - name: Prepare build directory for cache
         run: |
