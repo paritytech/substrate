@@ -737,6 +737,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			Locks::<T, I>::remove(who);
 			if existed {
 				// TODO: use Locks::<T, I>::hashed_key
+				// https://github.com/paritytech/substrate/issues/4969
 				system::Module::<T>::dec_ref(who);
 			}
 		} else {
