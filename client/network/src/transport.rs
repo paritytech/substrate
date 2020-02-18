@@ -17,10 +17,10 @@
 use futures::prelude::*;
 use libp2p::{
 	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
-	mplex, identity, bandwidth, wasm_ext
+	mplex, identity, bandwidth, wasm_ext, noise
 };
 #[cfg(not(target_os = "unknown"))]
-use libp2p::{tcp, dns, websocket, noise};
+use libp2p::{tcp, dns, websocket};
 use libp2p::core::{self, upgrade, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
 use std::{io, sync::Arc, time::Duration, usize};
 
@@ -40,7 +40,6 @@ pub fn build_transport(
 	use_yamux_flow_control: bool
 ) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
 	// Build configuration objects for encryption mechanisms.
-	#[cfg(not(target_os = "unknown"))]
 	let noise_config = {
 		let noise_keypair = noise::Keypair::new().into_authentic(&keypair)
 			// For more information about this panic, see in "On the Importance of Checking
@@ -95,9 +94,6 @@ pub fn build_transport(
 	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
 
 	// Encryption
-
-	// For non-WASM, we support both secio and noise.
-	#[cfg(not(target_os = "unknown"))]
 	let transport = transport.and_then(move |stream, endpoint| {
 		core::upgrade::apply(stream, noise_config, endpoint, upgrade::Version::V1)
 			.and_then(|(remote_id, out)| async move {
@@ -107,15 +103,6 @@ pub fn build_transport(
 				};
 				Ok((out, remote_key.into_peer_id()))
 			})
-	});
-
-	// We refuse all WASM connections for now. It is intended that we negotiate noise in the
-	// future. See https://github.com/libp2p/rust-libp2p/issues/1414
-	#[cfg(target_os = "unknown")]
-	let transport = transport.and_then(move |_, _| async move {
-		let r: Result<(wasm_ext::Connection, PeerId), _> =
-			Err(io::Error::new(io::ErrorKind::Other, format!("No encryption protocol supported")));
-		r
 	});
 
 	// Multiplexing
@@ -129,16 +116,10 @@ pub fn build_transport(
 				.map_ok(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
 		});
 
-	let transport = if cfg!(not(target_os = "unknown")) {
-		transport
+	let transport = transport
 			.timeout(Duration::from_secs(20))
 			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-			.boxed()
-	} else {
-		transport
-			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-			.boxed()
-	};
+			.boxed();
 
 	(transport, sinks)
 }
