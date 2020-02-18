@@ -29,7 +29,7 @@ pub struct Log {
 	pub address: H160,
 	/// Topics of the log.
 	pub topics: Vec<H256>,
-	/// Bytearray data of the log.
+	/// Byte array data of the log.
 	pub data: Vec<u8>,
 }
 

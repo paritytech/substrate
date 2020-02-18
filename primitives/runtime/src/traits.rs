@@ -955,7 +955,7 @@ pub trait ValidateUnsigned {
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity;
 }
 
-/// Opaque datatype that may be destructured into a series of raw byte slices (which represent
+/// Opaque data type that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
 pub trait OpaqueKeys: Clone {
 	/// Types bound to this opaque keys that provide the key type ids returned.

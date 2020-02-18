@@ -594,7 +594,7 @@ fn dispatch_call() {
 				topics: vec![],
 			},
 
-			// Event emited as a result of dispatch.
+			// Event emitted as a result of dispatch.
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::contracts(RawEvent::Dispatched(BOB, true)),
@@ -1049,7 +1049,7 @@ fn claim_surcharge_malus() {
 }
 
 /// Claim surcharge with the given trigger_call at the given blocks.
-/// if removes is true then assert that the contract is a tombstonedead
+/// If `removes` is true then assert that the contract is a tombstone.
 fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
@@ -2116,11 +2116,11 @@ const CODE_SELF_DESTRUCT: &str = r#"
 				;; Read own address into memory.
 				(call $ext_scratch_read
 					(i32.const 16)	;; Pointer to write address to
-					(i32.const 0)	;; Offset into scrach buffer
+					(i32.const 0)	;; Offset into scratch buffer
 					(i32.const 8)	;; Length of encoded address
 				)
 
-				;; Recursively call self with empty imput data.
+				;; Recursively call self with empty input data.
 				(call $assert
 					(i32.eq
 						(call $ext_call
@@ -2152,7 +2152,7 @@ const CODE_SELF_DESTRUCT: &str = r#"
 		;; Read balance into memory.
 		(call $ext_scratch_read
 			(i32.const 8)	;; Pointer to write balance to
-			(i32.const 0)	;; Offset into scrach buffer
+			(i32.const 0)	;; Offset into scratch buffer
 			(i32.const 8)	;; Length of encoded balance
 		)
 
@@ -2481,7 +2481,7 @@ const CODE_SELF_DESTRUCTING_CONSTRUCTOR: &str = r#"
 		;; Read balance into memory.
 		(call $ext_scratch_read
 			(i32.const 8)	;; Pointer to write balance to
-			(i32.const 0)	;; Offset into scrach buffer
+			(i32.const 0)	;; Offset into scratch buffer
 			(i32.const 8)	;; Length of encoded balance
 		)
 

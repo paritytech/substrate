@@ -377,7 +377,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 	/// Note: changes to code will be in place if this call is made again. For running partial
 	/// blocks (e.g. a transaction at a time), ensure a different method is used.
 	///
-	/// Returns the result of the executed function either in native reprensentation `R` or
+	/// Returns the result of the executed function either in native representation `R` or
 	/// in SCALE encoded representation.
 	pub fn execute_using_consensus_failure_handler<Handler, R, NC>(
 		&mut self,

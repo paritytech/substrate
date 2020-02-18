@@ -214,7 +214,7 @@ impl Default for MultiSigner {
 	}
 }
 
-/// NOTE: This implementations is required by `SimpleAddressDeterminator`,
+/// NOTE: This implementations is required by `SimpleAddressDeterminer`,
 /// we convert the hash into some AccountId, it's fine to use any scheme.
 impl<T: Into<H256>> crypto::UncheckedFrom<T> for MultiSigner {
 	fn unchecked_from(x: T) -> Self {
@@ -458,7 +458,7 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 ///
 /// Examples of reasons preventing inclusion in a block:
 /// - More block weight is required to process the extrinsic than is left in the block being built.
-///   This doesn't neccessarily mean that the extrinsic is invalid, since it can still be
+///   This doesn't necessarily mean that the extrinsic is invalid, since it can still be
 ///   included in the next block if it has enough spare weight available.
 /// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
 ///   a transaction in the block doesn't make sense.

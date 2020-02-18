@@ -121,20 +121,10 @@ pub async fn seal_new_block<B, SC, CB, E, T, P>(
 		}
 
 		let (header, body) = proposal.block.deconstruct();
-		let params = BlockImportParams {
-			origin: BlockOrigin::Own,
-			header: header.clone(),
-			justification: None,
-			post_digests: Vec::new(),
-			body: Some(body),
-			finalized: finalize,
-			storage_changes: None,
-			auxiliary: Vec::new(),
-			intermediates: HashMap::new(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut params = BlockImportParams::new(BlockOrigin::Own, header.clone());
+		params.body = Some(body);
+		params.finalized = finalize;
+		params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		match block_import.import_block(params, HashMap::new())? {
 			ImportResult::Imported(aux) => {

@@ -68,7 +68,7 @@ pub trait Signer<Public, Signature> {
 
 /// A `Signer` implementation for any `AppPublic` type.
 ///
-/// This implementation additionaly supports conversion to/from multi-signature/multi-signer
+/// This implementation additionally supports conversion to/from multi-signature/multi-signer
 /// wrappers.
 /// If the wrapped crypto doesn't match `AppPublic`s crypto `None` is returned.
 impl<Public, Signature, TAnyAppPublic> Signer<Public, Signature> for TAnyAppPublic where

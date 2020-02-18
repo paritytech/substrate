@@ -50,7 +50,7 @@ pub type LightBackend<Block> = sc_client::light::backend::Backend<
 	Blake2Hasher,
 >;
 
-/// A genesis storage initialisation trait.
+/// A genesis storage initialization trait.
 pub trait GenesisInit: Default {
 	/// Construct genesis storage.
 	fn genesis_storage(&self) -> Storage;
