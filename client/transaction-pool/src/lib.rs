@@ -21,6 +21,7 @@
 
 mod api;
 pub mod error;
+mod revalidation;
 
 #[cfg(any(feature = "test-helpers", test))]
 pub mod testing;
@@ -51,6 +52,7 @@ pub struct BasicPool<PoolApi, Block>
 	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	api: Arc<PoolApi>,
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
+	revalidation_queue: Arc<revalidation::RevalidationQueue<PoolApi>>,
 }
 
 #[cfg(not(target_os = "unknown"))]
@@ -86,13 +88,16 @@ pub enum RevalidationType {
 impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
+		PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash> + 'static,
 {
 	/// Create new basic transaction pool with provided api.
+	///
+	/// It will also optionally return background task that might be started by the
+	/// caller.
 	pub fn new(
 		options: sc_transaction_graph::Options,
 		pool_api: Arc<PoolApi>,
-	) -> Self {
+	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
 		Self::with_revalidation_type(options, pool_api, RevalidationType::Full)
 	}
 
@@ -102,18 +107,29 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		options: sc_transaction_graph::Options,
 		pool_api: Arc<PoolApi>,
 		revalidation_type: RevalidationType,
-	) -> Self {
-		let cloned_api = pool_api.clone();
-		BasicPool {
-			api: cloned_api,
-			pool: Arc::new(sc_transaction_graph::Pool::new(options, pool_api)),
-			revalidation_strategy: Arc::new(Mutex::new(
-				match revalidation_type {
-					RevalidationType::Light => RevalidationStrategy::Light(RevalidationStatus::NotScheduled),
-					RevalidationType::Full => RevalidationStrategy::Always,
-				}
-			)),
-		}
+	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
+		let pool = Arc::new(sc_transaction_graph::Pool::new(options, pool_api.clone()));
+		let (revalidation_queue, background_task) = match revalidation_type {
+			RevalidationType::Light => (revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()), None),
+			RevalidationType::Full => {
+				let (queue, background) = revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone());
+				(queue, Some(background))
+			},
+		};
+		(
+			BasicPool {
+				api: pool_api,
+				pool,
+				revalidation_queue: Arc::new(revalidation_queue),
+				revalidation_strategy: Arc::new(Mutex::new(
+					match revalidation_type {
+						RevalidationType::Light => RevalidationStrategy::Light(RevalidationStatus::NotScheduled),
+						RevalidationType::Full => RevalidationStrategy::Always,
+					}
+				)),
+			},
+			background_task,
+		)
 	}
 
 	/// Gets shared reference to the underlying pool.
@@ -218,7 +234,6 @@ enum RevalidationStrategy<N> {
 struct RevalidationAction {
 	revalidate: bool,
 	resubmit: bool,
-	revalidate_amount: Option<usize>,
 }
 
 impl<N: Clone + Copy + AtLeast32Bit> RevalidationStrategy<N> {
@@ -242,12 +257,10 @@ impl<N: Clone + Copy + AtLeast32Bit> RevalidationStrategy<N> {
 					revalidate_block_period,
 				),
 				resubmit: false,
-				revalidate_amount: None,
 			},
 			Self::Always => RevalidationAction {
 				revalidate: true,
 				resubmit: true,
-				revalidate_amount: Some(16),
 			}
 		}
 	}
@@ -314,6 +327,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 				);
 				let revalidation_strategy = self.revalidation_strategy.clone();
 				let retracted = retracted.clone();
+				let revalidation_queue = self.revalidation_queue.clone();
 
 				async move {
 					// We don't query block if we won't prune anything
@@ -360,9 +374,8 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 					}
 
 					if next_action.revalidate {
-						if let Err(e) = pool.revalidate_ready(&id, next_action.revalidate_amount).await {
-							log::warn!("Revalidate ready failed {:?}", e);
-						}
+						let hashes = pool.validated_pool().ready().map(|tx| tx.hash.clone()).collect();
+						revalidation_queue.revalidate_later(block_number, hashes).await;
 					}
 
 					revalidation_strategy.lock().clear();

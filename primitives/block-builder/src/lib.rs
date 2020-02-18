@@ -26,7 +26,7 @@ use sp_inherents::{InherentData, CheckInherentsResult};
 ///
 /// These definitions are taken from the 2c58e30246a029b53d51e5b24c31974ac539ee8b git revision.
 #[deprecated(note = "These definitions here are only for compatibility reasons")]
-pub mod compatability_v3 {
+pub mod compatibility_v3 {
 	use sp_runtime::{DispatchOutcome, transaction_validity};
 	use codec::{Encode, Decode};
 
@@ -51,7 +51,7 @@ sp_api::decl_runtime_apis! {
 		#[changed_in(4)]
 		#[allow(deprecated)]
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic)
-			-> self::compatability_v3::ApplyResult;
+			-> self::compatibility_v3::ApplyResult;
 
 		/// Apply the given extrinsic.
 		///

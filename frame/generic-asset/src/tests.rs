@@ -440,7 +440,7 @@ fn reserve_should_not_moves_amount_from_balance_to_reserved_balance() {
 // Then
 // - unreserved should return 20.
 #[test]
-fn unreserve_should_return_substratced_value_from_unreserved_amount_by_actual_acount_balance() {
+fn unreserve_should_return_subtracted_value_from_unreserved_amount_by_actual_account_balance() {
 	ExtBuilder::default().free_balance((1, 0, 100)).build().execute_with(|| {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		assert_eq!(GenericAsset::unreserve(&1, &0, 120), 20);
@@ -553,7 +553,7 @@ fn slash_reserved_should_return_none() {
 // Then
 // - Should not return None.
 #[test]
-fn repatriate_reserved_return_amount_substracted_by_slash_amount() {
+fn repatriate_reserved_return_amount_subtracted_by_slash_amount() {
 	ExtBuilder::default().build().execute_with(|| {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		assert_eq!(GenericAsset::repatriate_reserved(&1, &0, &1, 130, BalanceStatus::Free), 30);

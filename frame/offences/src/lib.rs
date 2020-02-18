@@ -187,7 +187,7 @@ struct TriageOutcome<T: Trait> {
 	concurrent_offenders: Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>,
 }
 
-/// An auxilary struct for working with storage of indexes localized for a specific offence
+/// An auxiliary struct for working with storage of indexes localized for a specific offence
 /// kind (specified by the `O` type parameter).
 ///
 /// This struct is responsible for aggregating storage writes and the underlying storage should not

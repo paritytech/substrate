@@ -201,7 +201,7 @@ impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
 }
 
 /// A value that is never in a native representation.
-/// This is type is useful in conjuction with `NativeOrEncoded`.
+/// This is type is useful in conjunction with `NativeOrEncoded`.
 #[cfg(feature = "std")]
 #[derive(PartialEq)]
 pub enum NeverNativeValue {}

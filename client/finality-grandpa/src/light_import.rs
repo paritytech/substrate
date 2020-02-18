@@ -257,7 +257,7 @@ fn do_import_block<B, C, Block: BlockT, J>(
 		DigestFor<Block>: Encode,
 		J: ProvableJustification<Block::Header>,
 {
-	let hash = block.post_header().hash();
+	let hash = block.post_hash();
 	let number = block.header.number().clone();
 
 	// we don't want to finalize on `inner.import_block`
@@ -682,26 +682,19 @@ pub mod tests {
 			authority_set: LightAuthoritySet::genesis(vec![(AuthorityId::from_slice(&[1; 32]), 1)]),
 			consensus_changes: ConsensusChanges::empty(),
 		};
-		let block = BlockImportParams {
-			origin: BlockOrigin::Own,
-			header: Header {
+		let mut block = BlockImportParams::new(
+			BlockOrigin::Own,
+			Header {
 				number: 1,
 				parent_hash: client.chain_info().best_hash,
 				state_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
 			},
-			justification,
-			post_digests: Vec::new(),
-			body: None,
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: true,
-			import_existing: false,
-		};
+		);
+		block.justification = justification;
+		block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+
 		do_import_block::<_, _, _, TestJustification>(
 			&client,
 			&mut import_data,

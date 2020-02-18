@@ -1224,7 +1224,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 			let actual = cmp::min(account.reserved, value);
 			account.reserved -= actual;
 			// defensive only: this can never fail since total issuance which is at least free+reserved
-			// fits into the same datatype.
+			// fits into the same data type.
 			account.free = account.free.saturating_add(actual);
 			value - actual
 		})
