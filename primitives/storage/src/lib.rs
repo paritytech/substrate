@@ -63,9 +63,9 @@ pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
 	/// Children trie storage data.
-	/// Note that the key is not including child prefix, this will
-	/// not be possible if a different kind of trie than `default`
-	/// get in use.
+	/// The key does not including prefix, for the `default`
+	/// trie kind, so this is exclusively for the `ChildType::ParentKeyId`
+	/// tries.
 	pub children: std::collections::HashMap<Vec<u8>, StorageChild>,
 }
 
@@ -137,15 +137,15 @@ pub enum ChildInfo {
 }
 
 impl ChildInfo {
-	/// Instantiates info for a default child trie with a default unprefixed parent
+	/// Instantiates child information for a default child trie
+	/// of kind `ChildType::ParentKeyId`, using an unprefixed parent
 	/// storage key.
 	pub fn new_default(storage_key: &[u8]) -> Self {
 		let data = storage_key.to_vec();
 		ChildInfo::ParentKeyId(ChildTrie { data })
 	}
 
-	/// Instantiates info for a default child trie with a default unprefixed parent
-	/// owned storage key.
+	/// Same as `new_default` but with `Vec<u8>` as input.
 	pub fn new_default_from_vec(storage_key: Vec<u8>) -> Self {
 		ChildInfo::ParentKeyId(ChildTrie {
 			data: storage_key,
@@ -173,20 +173,7 @@ impl ChildInfo {
 		}
 	}
 
-	/// Top trie defined as the unique crypto id trie with
-	/// 0 length unique id.
-	pub fn top_trie() -> Self {
-		Self::new_default(&[])
-	}
-
-	/// Is this child info a the top trie.
-	pub fn is_top_trie(&self) -> bool {
-		match self {
-			ChildInfo::ParentKeyId(ChildTrie { data }) => data.len() == 0
-		}
-	}
-
-	/// Return a single byte vector containing packed child info content and its child info type.
+	/// Returns a single byte vector containing packed child info content and its child info type.
 	/// This can be use as input for `resolve_child_info`.
 	pub fn info(&self) -> (&[u8], u32) {
 		match self {
@@ -205,7 +192,7 @@ impl ChildInfo {
 		}
 	}
 
-	/// Return byte sequence (keyspace) that can be use by underlying db to isolate keys.
+	/// Returns byte sequence (keyspace) that can be use by underlying db to isolate keys.
 	/// This is a unique id of the child trie. The collision resistance of this value
 	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
 	pub fn keyspace(&self) -> &[u8] {
@@ -214,12 +201,9 @@ impl ChildInfo {
 		}
 	}
 
-	/// Return a reference to the location in the direct parent of
-	/// this trie.
-	///	If the trie got no parent this returns the empty slice,
-	/// so by nature an empty slice is not a valid parent location.
-	/// This does not include child type related prefix.
-	/// The static part of the storage key is omitted.
+	/// Returns a reference to the location in the direct parent of
+	/// this trie but without the common prefix for this kind of
+	/// child trie.
 	pub fn storage_key(&self) -> &[u8] {
 		match self {
 			ChildInfo::ParentKeyId(ChildTrie {
@@ -238,7 +222,7 @@ impl ChildInfo {
 		}
 	}
 
-	/// Return a the full location in the direct parent of
+	/// Returns a the full location in the direct parent of
 	/// this trie.
 	pub fn into_prefixed_storage_key(self) -> Vec<u8> {
 		match self {
@@ -251,7 +235,7 @@ impl ChildInfo {
 		}
 	}
 
-	/// Return the type for this child info.
+	/// Returns the type for this child info.
 	pub fn child_type(&self) -> ChildType {
 		match self {
 			ChildInfo::ParentKeyId(..) => ChildType::ParentKeyId,
@@ -280,7 +264,7 @@ impl ChildType {
 		})
 	}
 
-	/// Change a key to get prefixed with the parent prefix.
+	/// Produce a prefixed key for a given child type.
 	fn new_prefixed_key(&self, key: &[u8]) -> Vec<u8> {
 		let parent_prefix = self.parent_prefix();
 		let mut result = Vec::with_capacity(parent_prefix.len() + key.len());
@@ -289,7 +273,7 @@ impl ChildType {
 		result
 	}
 
-	/// Change a key to get prefixed with the parent prefix.
+	/// Prefixes a vec with the prefix for this child type.
 	fn do_prefix_key(&self, key: &mut Vec<u8>) {
 		let parent_prefix = self.parent_prefix();
 		let key_len = key.len();
@@ -300,7 +284,7 @@ impl ChildType {
 		}
 	}
 
-	/// Return the location reserved for this child trie in their parent trie if there
+	/// Returns the location reserved for this child trie in their parent trie if there
 	/// is one.
 	fn parent_prefix(&self) -> &'static [u8] {
 		match self {

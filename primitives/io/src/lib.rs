@@ -161,8 +161,6 @@ pub trait DefaultChildStorage {
 	/// doesn't exist at all.
 	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
 	/// are copied into `value_out`.
-	///
-	/// See `child_get` for common child api parameters.
 	fn read(
 		&self,
 		storage_key: &[u8],
@@ -182,8 +180,6 @@ pub trait DefaultChildStorage {
 	}
 
 	/// Set `key` to `value` in the child storage denoted by `storage_key`.
-	///
-	/// See `child_get` for common child api parameters.
 	fn set(
 		&mut self,
 		storage_key: &[u8],
@@ -195,8 +191,6 @@ pub trait DefaultChildStorage {
 	}
 
 	/// Clear the given child storage of the given `key` and its value.
-	///
-	/// See `child_get` for common child api parameters.
 	fn clear (
 		&mut self,
 		storage_key: &[u8],
@@ -207,8 +201,6 @@ pub trait DefaultChildStorage {
 	}
 
 	/// Clear an entire child storage.
-	///
-	/// See `child_get` for common child api parameters.
 	fn storage_kill(
 		&mut self,
 		storage_key: &[u8],
@@ -218,8 +210,6 @@ pub trait DefaultChildStorage {
 	}
 
 	/// Check whether the given `key` exists in storage.
-	///
-	/// See `child_get` for common child api parameters.
 	fn exists(
 		&self,
 		storage_key: &[u8],
@@ -230,8 +220,6 @@ pub trait DefaultChildStorage {
 	}
 
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
-	///
-	/// See `child_get` for common child api parameters.
 	fn clear_prefix(
 		&mut self,
 		storage_key: &[u8],
@@ -246,8 +234,6 @@ pub trait DefaultChildStorage {
 	/// The hashing algorithm is defined by the `Block`.
 	///
 	/// Returns the SCALE encoded hash.
-	///
-	/// See `child_get` for common child api parameters.
 	fn root(
 		&mut self,
 		storage_key: &[u8],

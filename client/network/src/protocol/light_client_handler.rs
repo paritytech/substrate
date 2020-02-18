@@ -511,7 +511,7 @@ where
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
 		let child_info = ChildInfo::new_default(&request.storage_key);
-		let proof =	match self.chain.read_child_proof(&block, &child_info, &request.keys) {
+		let proof = match self.chain.read_child_proof(&block, &child_info, &request.keys) {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",

@@ -166,7 +166,7 @@ impl<H: Hasher> From<Vec<(Option<ChildInfo>, StorageCollection)>>
 impl<H: Hasher> InMemory<H> {
 	/// Child storage infos iterator.
 	pub fn child_storage_infos(&self) -> impl Iterator<Item = &ChildInfo> {
-		self.inner.iter().filter_map(|item|	item.0.as_ref())
+		self.inner.iter().filter_map(|item| item.0.as_ref())
 	}
 }
 

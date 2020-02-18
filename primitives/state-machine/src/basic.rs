@@ -132,8 +132,8 @@ impl Externalities for BasicExternalities {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
-		let storage_key = child_info.storage_key();
-		self.inner.children.get(storage_key).and_then(|child| child.data.get(key)).cloned()
+		self.inner.children.get(child_info.storage_key())
+			.and_then(|child| child.data.get(key)).cloned()
 	}
 
 	fn child_storage_hash(
@@ -170,9 +170,8 @@ impl Externalities for BasicExternalities {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageKey> {
-		let storage_key = child_info.storage_key();
 		let range = (Bound::Excluded(key), Bound::Unbounded);
-		self.inner.children.get(storage_key)
+		self.inner.children.get(child_info.storage_key())
 			.and_then(|child| child.data.range::<[u8], _>(range).next().map(|(k, _)| k).cloned())
 	}
 
@@ -194,8 +193,7 @@ impl Externalities for BasicExternalities {
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
-		let storage_key = child_info.storage_key().to_vec();
-		let child_map = self.inner.children.entry(storage_key)
+		let child_map = self.inner.children.entry(child_info.storage_key().to_vec())
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
 				child_info: child_info.to_owned(),
@@ -211,8 +209,7 @@ impl Externalities for BasicExternalities {
 		&mut self,
 		child_info: &ChildInfo,
 	) {
-		let storage_key = child_info.storage_key();
-		self.inner.children.remove(storage_key);
+		self.inner.children.remove(child_info.storage_key());
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -240,8 +237,7 @@ impl Externalities for BasicExternalities {
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) {
-		let storage_key = child_info.storage_key();
-		if let Some(child) = self.inner.children.get_mut(storage_key) {
+		if let Some(child) = self.inner.children.get_mut(child_info.storage_key()) {
 			let to_remove = child.data.range::<[u8], _>((Bound::Included(prefix), Bound::Unbounded))
 				.map(|(k, _)| k)
 				.take_while(|k| k.starts_with(prefix))
