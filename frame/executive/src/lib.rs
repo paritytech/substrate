@@ -83,10 +83,11 @@ use sp_runtime::{
 	ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating, UnsafeConvert,
+		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating,
 	},
 	transaction_validity::TransactionValidity,
 };
+use sp_runtime::generic::CheckSignature;
 #[allow(deprecated)]
 use sp_runtime::traits::ValidateUnsigned;
 use codec::{Codec, Encode};
@@ -96,11 +97,6 @@ use frame_system::{extrinsics_root, DigestOf};
 pub trait ExecuteBlock<Block: BlockT> {
 	/// Actually execute all transitions for `block`.
 	fn execute_block(block: Block);
-}
-
-enum CheckSignature {
-	Yes,
-	No,
 }
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
@@ -124,7 +120,7 @@ impl<
 		WeighBlock<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context> + UnsafeConvert<Context, UnsafeResult=CheckedOf<Block::Extrinsic, Context>> + Codec,
+	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
 		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
 		GetDispatchInfo,
@@ -150,7 +146,7 @@ impl<
 		WeighBlock<System::BlockNumber>,
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context> + UnsafeConvert<Context, UnsafeResult=CheckedOf<Block::Extrinsic, Context>> + Codec,
+	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
 		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
 		GetDispatchInfo,
@@ -293,10 +289,11 @@ where
 		check_signature: CheckSignature,
 	) -> ApplyExtrinsicResult {
 		// Verify that the signature is good.
-		let xt = match check_signature {
-			CheckSignature::Yes => uxt.check(&Default::default())?,
-			CheckSignature::No => uxt.unsafe_convert(&Default::default())?,
-		};
+		let xt = uxt.check(
+			check_signature,
+			&Default::default()
+		)?;
+
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
 		// executed to prevent it from leaking in storage since at this point, it will either
 		// execute or panic (and revert storage changes).
@@ -343,7 +340,7 @@ where
 	/// Changes made to storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		let encoded_len = uxt.using_encoded(|d| d.len());
-		let xt = uxt.check(&Default::default())?;
+		let xt = uxt.check(CheckSignature::Yes, &Default::default())?;
 
 		let dispatch_info = xt.get_dispatch_info();
 		xt.validate::<UnsignedValidator>(dispatch_info, encoded_len)

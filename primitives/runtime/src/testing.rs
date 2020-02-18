@@ -25,7 +25,7 @@ use crate::traits::{
 };
 #[allow(deprecated)]
 use crate::traits::ValidateUnsigned;
-use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
+use crate::{generic::{self, CheckSignature}, KeyTypeId, ApplyExtrinsicResult};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError, InvalidTransaction};
@@ -379,20 +379,17 @@ impl<Call, Extra> Debug for TestXt<Call, Extra> {
 
 impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Call, Extra> {
 	type Checked = Self;
-	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> {
+	fn check(self, signature: CheckSignature, _: &Context) -> Result<Self::Checked, TransactionValidityError> {
 		match self.validity {
 			TestValidity::Valid => Ok(self),
-			TestValidity::SignatureInvalid(e) | TestValidity::OtherInvalid(e) => Err(e),
-		}
-	 }
-}
-
-impl<Call: Codec + Sync + Send, Context, Extra> traits::UnsafeConvert<Context> for TestXt<Call, Extra> {
-	type UnsafeResult = Self;
-	fn unsafe_convert(self, _: &Context) -> Result<Self::UnsafeResult, TransactionValidityError> {
-		match self.validity {
-			TestValidity::Valid | TestValidity::SignatureInvalid(_) => Ok(self),
-			TestValidity::OtherInvalid(e) => Err(e),
+			TestValidity::SignatureInvalid(e) =>
+				if let CheckSignature::No = signature {
+					Ok(self)
+				}
+				else {
+					Err(e)
+				},
+			TestValidity::OtherInvalid(e)  => Err(e),
 		}
 	 }
 }

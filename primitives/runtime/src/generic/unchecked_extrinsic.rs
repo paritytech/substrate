@@ -22,9 +22,10 @@ use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
 	traits::{
 		self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, ExtrinsicMetadata,
-		IdentifyAccount, UnsafeConvert,
+		IdentifyAccount,
 	},
-	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
+	generic::{CheckSignature, CheckedExtrinsic}, 
+	transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
 
 const TRANSACTION_VERSION: u8 = 4;
@@ -120,18 +121,26 @@ where
 {
 	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
 
-	fn check(self, lookup: &Lookup) -> Result<Self::Checked, TransactionValidityError> {
+	fn check(self, check_signature: CheckSignature, lookup: &Lookup) -> Result<Self::Checked, TransactionValidityError> {
 		Ok(match self.signature {
 			Some((signed, signature, extra)) => {
 				let signed = lookup.lookup(signed)?;
-				let raw_payload = SignedPayload::new(self.function, extra)?;
-				if !raw_payload.using_encoded(|payload| {
-					signature.verify(payload, &signed)
-				}) {
-					return Err(InvalidTransaction::BadProof.into())
-				}
 
-				let (function, extra, _) = raw_payload.deconstruct();
+				let (function, extra) = if let CheckSignature::No = check_signature {
+					(self.function, extra)
+				} else {
+					let raw_payload = SignedPayload::new(self.function, extra)?;
+
+					if !raw_payload.using_encoded(|payload| {
+						signature.verify(payload, &signed)
+					}) {
+						return Err(InvalidTransaction::BadProof.into())
+					}
+					let (function, extra, _) = raw_payload.deconstruct();
+
+					(function, extra)
+				};
+
 				CheckedExtrinsic {
 					signed: Some((signed, extra)),
 					function,
@@ -141,31 +150,6 @@ where
 				signed: None,
 				function: self.function,
 			},
-		})
-	}
-}
-
-impl<Address, AccountId, Call, Signature, Extra, Lookup>
-	UnsafeConvert<Lookup>
-for
-	UncheckedExtrinsic<Address, Call, Signature, Extra>
-where
-	Address: Member + MaybeDisplay,
-	Call: Encode + Member,
-	Lookup: traits::Lookup<Source=Address, Target=AccountId>,
-	Extra: SignedExtension
-{
-	type UnsafeResult = CheckedExtrinsic<AccountId, Call, Extra>;
-
-	fn unsafe_convert(self, lookup: &Lookup) -> Result<Self::UnsafeResult, TransactionValidityError> {
-		let UncheckedExtrinsic { signature, function } = self;
-
-		Ok(CheckedExtrinsic {
-			signed: match signature {
-				Some((address, _signature, extra)) => Some((lookup.lookup(address)?, extra)),
-				None => None,
-			},
-			function,
 		})
 	}
 }
@@ -347,6 +331,7 @@ mod tests {
 	use sp_io::hashing::blake2_256;
 	use crate::codec::{Encode, Decode};
 	use crate::traits::{SignedExtension, IdentifyAccount, IdentityLookup};
+	use crate::generic::CheckSignature;
 	use serde::{Serialize, Deserialize};
 
 	type TestContext = IdentityLookup<u64>;
@@ -427,7 +412,7 @@ mod tests {
 	fn unsigned_check_should_work() {
 		let ux = Ex::new_unsigned(vec![0u8; 0]);
 		assert!(!ux.is_signed().unwrap_or(false));
-		assert!(<Ex as Checkable<TestContext>>::check(ux, &Default::default()).is_ok());
+		assert!(<Ex as Checkable<TestContext>>::check(ux, CheckSignature::Yes, &Default::default()).is_ok());
 	}
 
 	#[test]
@@ -440,7 +425,7 @@ mod tests {
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
-			<Ex as Checkable<TestContext>>::check(ux, &Default::default()),
+			<Ex as Checkable<TestContext>>::check(ux, CheckSignature::Yes, &Default::default()),
 			Err(InvalidTransaction::BadProof.into()),
 		);
 	}
@@ -455,7 +440,7 @@ mod tests {
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
-			<Ex as Checkable<TestContext>>::check(ux, &Default::default()),
+			<Ex as Checkable<TestContext>>::check(ux, CheckSignature::Yes, &Default::default()),
 			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] }),
 		);
 	}

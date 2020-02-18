@@ -39,8 +39,9 @@ use sp_runtime::{
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup, UnsafeConvert,
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
 	},
+	generic::CheckSignature,
 };
 use sp_version::RuntimeVersion;
 pub use sp_core::{hash::H256};
@@ -126,7 +127,7 @@ impl serde::Serialize for Extrinsic {
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
 
-	fn check(self) -> Result<Self, TransactionValidityError> {
+	fn check(self, _signature: CheckSignature) -> Result<Self, TransactionValidityError> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
@@ -141,15 +142,6 @@ impl BlindCheckable for Extrinsic {
 			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
 				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
 		}
-	}
-}
-
-
-impl<Context> UnsafeConvert<Context> for Extrinsic {
-	type UnsafeResult = Self;
-
-	fn unsafe_convert(self, _context: &Context) -> Result<Self, TransactionValidityError> {
-		Ok(self)
 	}
 }
 
