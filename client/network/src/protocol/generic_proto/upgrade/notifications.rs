@@ -102,9 +102,9 @@ pub struct NotificationsOutSubstream<TSubstream> {
 
 impl NotificationsIn {
 	/// Builds a new potential upgrade.
-	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>) -> Self {
 		NotificationsIn {
-			protocol_name: proto_name.into(),
+			protocol_name: protocol_name.into(),
 		}
 	}
 
@@ -217,14 +217,14 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 
 impl NotificationsOut {
 	/// Builds a new potential upgrade.
-	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>, initial_message: impl Into<Vec<u8>>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>, initial_message: impl Into<Vec<u8>>) -> Self {
 		let initial_message = initial_message.into();
 		if initial_message.len() > MAX_HANDSHAKE_SIZE {
 			error!(target: "sub-libp2p", "Outbound networking handshake is above allowed protocol limit");
 		}
 
 		NotificationsOut {
-			protocol_name: proto_name.into(),
+			protocol_name: protocol_name.into(),
 			initial_message,
 		}
 	}

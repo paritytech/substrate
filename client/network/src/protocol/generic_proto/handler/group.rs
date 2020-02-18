@@ -77,10 +77,10 @@ use std::{borrow::Cow, error, io, task::{Context, Poll}};
 ///
 /// See the documentation at the module level for more information.
 pub struct NotifsHandlerProto {
-	/// Prototypes for handlers for ingoing substreams.
+	/// Prototypes for handlers for inbound substreams.
 	in_handlers: Vec<(NotifsInHandlerProto, ConsensusEngineId)>,
 
-	/// Prototypes for handlers for outgoing substreams.
+	/// Prototypes for handlers for outbound substreams.
 	out_handlers: Vec<(NotifsOutHandlerProto, ConsensusEngineId)>,
 
 	/// Prototype for handler for backwards-compatibility.
@@ -91,10 +91,10 @@ pub struct NotifsHandlerProto {
 ///
 /// See the documentation at the module level for more information.
 pub struct NotifsHandler {
-	/// Handlers for ingoing substreams.
+	/// Handlers for inbound substreams.
 	in_handlers: Vec<(NotifsInHandler, ConsensusEngineId)>,
 
-	/// Handlers for outgoing substreams.
+	/// Handlers for outbound substreams.
 	out_handlers: Vec<(NotifsOutHandler, ConsensusEngineId)>,
 
 	/// Handler for backwards-compatibility.
@@ -168,7 +168,7 @@ pub enum NotifsHandlerIn {
 		/// Must match one of the registered protocols. For backwards-compatibility reasons, if
 		/// the remote doesn't support this protocol, we use the legacy substream to send a
 		/// `ConsensusMessage` message.
-		proto_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, [u8]>,
 
 		/// The engine ID to use, in case we need to send this message over the legacy substream.
 		///
@@ -207,7 +207,7 @@ pub enum NotifsHandlerOut {
 	/// Received a message on a custom protocol substream.
 	Notification {
 		/// Engine corresponding to the message.
-		proto_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, [u8]>,
 
 		/// For legacy reasons, the name to use if we had received the message from the legacy
 		/// substream.
@@ -215,7 +215,7 @@ pub enum NotifsHandlerOut {
 
 		/// Message that has been received.
 		///
-		/// If `proto_name` is `None`, this decodes to a `Message`. If `proto_name` is `Some`,
+		/// If `protocol_name` is `None`, this decodes to a `Message`. If `protocol_name` is `Some`,
 		/// this is directly a gossiping message.
 		message: BytesMut,
 	},
@@ -329,9 +329,9 @@ impl ProtocolsHandler for NotifsHandler {
 			},
 			NotifsHandlerIn::SendLegacy { message } =>
 				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
-			NotifsHandlerIn::SendNotification { message, engine_id, proto_name } => {
+			NotifsHandlerIn::SendNotification { message, engine_id, protocol_name } => {
 				for (handler, ngn_id) in &mut self.out_handlers {
-					if handler.protocol_name() != &proto_name[..] {
+					if handler.protocol_name() != &protocol_name[..] {
 						break;
 					}
 
@@ -454,7 +454,7 @@ impl ProtocolsHandler for NotifsHandler {
 							let msg = NotifsHandlerOut::Notification {
 								message,
 								engine_id: *engine_id,
-								proto_name: handler.protocol_name().to_owned().into(),
+								protocol_name: handler.protocol_name().to_owned().into(),
 							};
 							return Poll::Ready(ProtocolsHandlerEvent::Custom(msg));
 						}

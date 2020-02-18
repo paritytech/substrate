@@ -55,15 +55,15 @@ const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 /// See the documentation of [`NotifsOutHandler`] for more information.
 pub struct NotifsOutHandlerProto {
 	/// Name of the protocol to negotiate.
-	proto_name: Cow<'static, [u8]>,
+	protocol_name: Cow<'static, [u8]>,
 }
 
 impl NotifsOutHandlerProto {
 	/// Builds a new [`NotifsOutHandlerProto`]. Will use the given protocol name for the
 	/// notifications substream.
-	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>) -> Self {
 		NotifsOutHandlerProto {
-			proto_name: proto_name.into(),
+			protocol_name: protocol_name.into(),
 		}
 	}
 }
@@ -77,7 +77,7 @@ impl IntoProtocolsHandler for NotifsOutHandlerProto {
 
 	fn into_handler(self, _: &PeerId, _: &ConnectedPoint) -> Self::Handler {
 		NotifsOutHandler {
-			proto_name: self.proto_name,
+			protocol_name: self.protocol_name,
 			when_connection_open: Instant::now(),
 			state: State::Disabled,
 			events_queue: SmallVec::new(),
@@ -95,7 +95,7 @@ impl IntoProtocolsHandler for NotifsOutHandlerProto {
 /// the remote for the purpose of sending notifications to it.
 pub struct NotifsOutHandler {
 	/// Name of the protocol to negotiate.
-	proto_name: Cow<'static, [u8]>,
+	protocol_name: Cow<'static, [u8]>,
 
 	/// Relationship with the node we're connected to.
 	state: State,
@@ -203,7 +203,7 @@ impl NotifsOutHandler {
 
 	/// Returns the name of the protocol that we negotiate.
 	pub fn protocol_name(&self) -> &[u8] {
-		&self.proto_name
+		&self.protocol_name
 	}
 }
 
@@ -254,7 +254,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 			NotifsOutHandlerIn::Enable { initial_message } => {
 				match mem::replace(&mut self.state, State::Poisoned) {
 					State::Disabled => {
-						let proto = NotificationsOut::new(self.proto_name.clone(), initial_message.clone());
+						let proto = NotificationsOut::new(self.protocol_name.clone(), initial_message.clone());
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							protocol: SubstreamProtocol::new(proto).with_timeout(OPEN_TIMEOUT),
 							info: (),
@@ -274,7 +274,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 							);
 						}
 
-						let proto = NotificationsOut::new(self.proto_name.clone(), initial_message.clone());
+						let proto = NotificationsOut::new(self.protocol_name.clone(), initial_message.clone());
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							protocol: SubstreamProtocol::new(proto).with_timeout(OPEN_TIMEOUT),
 							info: (),
@@ -362,7 +362,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 						// We try to re-open a substream.
 						let initial_message = mem::replace(initial_message, Vec::new());
 						self.state = State::Opening { initial_message: initial_message.clone() };
-						let proto = NotificationsOut::new(self.proto_name.clone(), initial_message);
+						let proto = NotificationsOut::new(self.protocol_name.clone(), initial_message);
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							protocol: SubstreamProtocol::new(proto).with_timeout(OPEN_TIMEOUT),
 							info: (),

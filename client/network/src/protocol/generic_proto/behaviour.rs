@@ -47,9 +47,9 @@ use wasm_timer::Instant;
 /// - For each registered protocol, we also open an additional substream for this protocol. If the
 /// remote refuses this substream, then it's fine.
 ///
-/// - Whenever we want to send a message, we pass either `None` to force the legacy substream, or
-/// `Some` to indicate a registered protocol. If the registered protocol was refused by the remote,
-/// we use the legacy instead.
+/// - Whenever we want to send a message, we can call either `send_packet` to force the legacy
+/// substream, or `write_notification` to indicate a registered protocol. If the registered
+/// protocol was refused or isn't supported by the remote, we always use the legacy instead.
 ///
 /// ## How it works
 ///
@@ -266,15 +266,15 @@ impl GenericProto {
 
 	/// Registers a new notifications protocol.
 	///
-	/// You are very strongly encouraged to call this method very early on. Any connection open
+	/// You are very strongly encouraged to call this method very early on. Any open connection
 	/// will retain the protocols that were registered then, and not any new one.
 	pub fn register_notif_protocol(
 		&mut self,
-		proto_name: impl Into<Cow<'static, [u8]>>,
+		protocol_name: impl Into<Cow<'static, [u8]>>,
 		engine_id: ConsensusEngineId,
 		handshake_msg: impl Into<Vec<u8>>
 	) {
-		self.notif_protocols.push((proto_name.into(), engine_id, handshake_msg.into()));
+		self.notif_protocols.push((protocol_name.into(), engine_id, handshake_msg.into()));
 	}
 
 	/// Returns the list of all the peers we have an open channel to.
@@ -388,7 +388,7 @@ impl GenericProto {
 		&mut self,
 		target: &PeerId,
 		engine_id: ConsensusEngineId,
-		proto_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, [u8]>,
 		message: impl Into<Vec<u8>>,
 	) {
 		if !self.is_open(target) {
@@ -399,7 +399,7 @@ impl GenericProto {
 			target: "sub-libp2p",
 			"External API => Notification for {:?} with protocol {:?}",
 			target,
-			str::from_utf8(&proto_name)
+			str::from_utf8(&protocol_name)
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 
@@ -408,7 +408,7 @@ impl GenericProto {
 			event: NotifsHandlerIn::SendNotification {
 				message: message.into(),
 				engine_id,
-				proto_name,
+				protocol_name,
 			},
 		});
 	}
@@ -983,13 +983,13 @@ impl NetworkBehaviour for GenericProto {
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
 
-			NotifsHandlerOut::Notification { proto_name, engine_id, message } => {
+			NotifsHandlerOut::Notification { protocol_name, engine_id, message } => {
 				debug_assert!(self.is_open(&source));
 				trace!(
 					target: "sub-libp2p",
 					"Handler({:?}) => Notification({:?})",
 					source,
-					str::from_utf8(&proto_name)
+					str::from_utf8(&protocol_name)
 				);
 				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
 				let event = GenericProtoOut::CustomMessage {

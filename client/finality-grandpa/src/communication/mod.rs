@@ -186,7 +186,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 
 		let validator = Arc::new(validator);
-		let gossip_engine = GossipEngine::new(service.clone(), GRANDPA_ENGINE_ID, GRANDPA_PROTOCOL_NAME, validator.clone());
+		let gossip_engine = GossipEngine::new(
+			service.clone(),
+			GRANDPA_ENGINE_ID,
+			GRANDPA_PROTOCOL_NAME,
+			validator.clone()
+		);
 
 		{
 			// register all previous votes with the gossip service so that they're

@@ -1079,8 +1079,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		engine_id: ConsensusEngineId,
 		message: impl Into<Vec<u8>>
 	) {
-		if let Some(proto_name) = self.protocol_name_by_engine.get(&engine_id) {
-			self.behaviour.write_notification(&target, engine_id, proto_name.clone(), message);
+		if let Some(protocol_name) = self.protocol_name_by_engine.get(&engine_id) {
+			self.behaviour.write_notification(&target, engine_id, protocol_name.clone(), message);
 		} else {
 			error!(
 				target: "sub-libp2p",
