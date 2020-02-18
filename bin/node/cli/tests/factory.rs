@@ -24,11 +24,12 @@ mod common;
 
 #[test]
 fn factory_works() {
-	let base_path = tempdir().unwrap();
+	let base_path = tempdir().expect("could not create a temp dir");
 
 	let status = Command::new(cargo_bin("substrate"))
 		.stdout(Stdio::null())
-		.args(&["factory", "--dev", "-d", base_path.path().to_str().unwrap()])
+		.args(&["factory", "--dev", "-d"])
+		.arg(base_path.path())
 		.status()
 		.unwrap();
 	assert!(status.success());

@@ -17,7 +17,7 @@
 #![cfg(unix)]
 #![allow(dead_code)]
 
-use std::{process::{Child, ExitStatus}, thread, time::Duration};
+use std::{process::{Child, ExitStatus}, thread, time::Duration, path::Path};
 use assert_cmd::cargo::cargo_bin;
 use std::{convert::TryInto, process::Command};
 use nix::sys::signal::{kill, Signal::SIGINT};
@@ -40,9 +40,16 @@ pub fn wait_for(child: &mut Child, secs: usize) -> Option<ExitStatus> {
 	None
 }
 
-pub fn run_command_for_a_while(args: &[&str]) {
-	let mut cmd = Command::new(cargo_bin("substrate"))
-		.args(args)
+pub fn run_command_for_a_while(base_path: &Path, dev: bool) {
+	let mut cmd = Command::new(cargo_bin("substrate"));
+
+	if dev {
+		cmd.arg("--dev");
+	}
+
+	let mut cmd = cmd
+		.arg("-d")
+		.arg(base_path)
 		.spawn()
 		.unwrap();
 

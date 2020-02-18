@@ -24,16 +24,15 @@ mod common;
 
 #[test]
 fn import_export_and_revert_work() {
-	let base_path = tempdir().unwrap();
+	let base_path = tempdir().expect("could not create a temp dir");
 	let exported_blocks = base_path.path().join("exported_blocks");
 
-	common::run_command_for_a_while(&["-d", base_path.path().to_str().unwrap()]);
+	common::run_command_for_a_while(base_path.path(), false);
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&[
-			"export-blocks", "-d", base_path.path().to_str().unwrap(),
-			exported_blocks.to_str().unwrap(),
-		])
+		.args(&["export-blocks", "-d"])
+		.arg(base_path.path())
+		.arg(&exported_blocks)
 		.status()
 		.unwrap();
 	assert!(status.success());
@@ -44,16 +43,16 @@ fn import_export_and_revert_work() {
 	let _ = fs::remove_dir_all(base_path.path().join("db"));
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&[
-			"import-blocks", "-d", base_path.path().to_str().unwrap(),
-			exported_blocks.to_str().unwrap(),
-		])
+		.args(&["import-blocks", "-d"])
+		.arg(base_path.path())
+		.arg(&exported_blocks)
 		.status()
 		.unwrap();
 	assert!(status.success());
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["revert", "-d", base_path.path().to_str().unwrap()])
+		.args(&["revert", "-d"])
+		.arg(base_path.path())
 		.status()
 		.unwrap();
 	assert!(status.success());

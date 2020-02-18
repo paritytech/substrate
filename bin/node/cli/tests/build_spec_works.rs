@@ -24,10 +24,11 @@ mod common;
 
 #[test]
 fn build_spec_works() {
-	let base_path = tempdir().unwrap();
+	let base_path = tempdir().expect("could not create a temp dir");
 
 	let output = Command::new(cargo_bin("substrate"))
-		.args(&["build-spec", "--dev", "-d", base_path.path().to_str().unwrap()])
+		.args(&["build-spec", "--dev", "-d"])
+		.arg(base_path.path().as_os_str())
 		.output()
 		.unwrap();
 	assert!(output.status.success());

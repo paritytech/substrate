@@ -23,12 +23,14 @@ mod common;
 #[test]
 #[cfg(unix)]
 fn purge_chain_works() {
-	let base_path = tempdir().unwrap();
+	let base_path = tempdir().expect("could not create a temp dir");
 
-	common::run_command_for_a_while(&["--dev", "-d", base_path.path().to_str().unwrap()]);
+	common::run_command_for_a_while(base_path.path(), true);
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["purge-chain", "--dev", "-d", base_path.path().to_str().unwrap(), "-y"])
+		.args(&["purge-chain", "--dev", "-d"])
+		.arg(base_path.path())
+		.arg("-y")
 		.status()
 		.unwrap();
 	assert!(status.success());

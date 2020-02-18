@@ -24,12 +24,14 @@ mod common;
 
 #[test]
 fn check_block_works() {
-	let base_path = tempdir().unwrap();
+	let base_path = tempdir().expect("could not create a temp dir");
 
-	common::run_command_for_a_while(&["-d", base_path.path().to_str().unwrap()]);
+	common::run_command_for_a_while(base_path.path(), false);
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["check-block", "-d", base_path.path().to_str().unwrap(), "1"])
+		.args(&["check-block", "-d"])
+		.arg(base_path.path())
+		.arg("1")
 		.status()
 		.unwrap();
 	assert!(status.success());
