@@ -7,11 +7,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-bytes = "0.4.12"
+bytes = "0.5"
 sc-client-api = { version = "2.0.0", path = "../api" }
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
 fnv = "1.0.6"
-futures01 = { package = "futures", version = "0.1" }
 futures = "0.3.1"
 futures-timer = "3.0.1"
 log = "0.4.8"
@@ -27,14 +26,14 @@ sc-network = { version = "0.8", path = "../network" }
 sc-keystore = { version = "2.0.0", path = "../keystore" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
-hyper = "0.12.35"
-hyper-rustls = "0.17.1"
+hyper = "0.13.2"
+hyper-rustls = "0.19"
 
 [dev-dependencies]
 sc-client-db = { version = "0.8", default-features = true, path = "../db/" }
 env_logger = "0.7.0"
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-tokio = "0.1.22"
+tokio = "0.2"
 sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 
