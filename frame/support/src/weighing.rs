@@ -36,7 +36,7 @@ pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed
 /// preparation. It may use `?` (`i.e. `return Err(...)`) to bail with a string error. Here's a
 /// few examples:
 ///
-/// ```
+/// ```ignore
 /// // These two are equivalent:
 /// let x in 0 .. 10;
 /// let x in 0 .. 10 => ();
@@ -72,7 +72,7 @@ pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed
 /// evaluated.
 ///
 /// Example:
-/// ```
+/// ```ignore
 /// benchmarks! {
 ///   // common parameter; just one for this example.
 ///   _ {
