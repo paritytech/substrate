@@ -944,6 +944,7 @@ decl_storage! {
 // TODO: this should be removed in favour of a self-destruct contract host function allowing the
 // contract to delete all storage and the `ContractInfoOf` key and transfer remaining balance to
 // some other account. As it stands, it's an economic insecurity on any smart-contract chain.
+// https://github.com/paritytech/substrate/issues/4952
 impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
 	fn on_reap_account(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
