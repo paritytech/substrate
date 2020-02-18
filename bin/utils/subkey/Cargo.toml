@@ -13,7 +13,7 @@ node-primitives = { version = "*", path = "../../node/primitives" }
 sp-runtime = { version = "*", path = "../../../primitives/runtime" }
 rand = "0.7.2"
 clap = "2.33.0"
-tiny-bip39 = "0.6.2"
+tiny-bip39 = "0.7"
 rustc-hex = "2.0.1"
 substrate-bip39 = "0.3.1"
 hex = "0.4.0"

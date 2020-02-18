@@ -160,10 +160,7 @@ use codec::{Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
 	Parameter, RuntimeDebug,
-	weights::{
-		GetDispatchInfo, PaysFee, DispatchClass, ClassifyDispatch, Weight, WeighData,
-		SimpleDispatchInfo,
-	},
+	weights::{GetDispatchInfo, SimpleDispatchInfo, FunctionOf},
 	traits::{Currency, ReservableCurrency, Get, OnReapAccount, BalanceStatus},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -331,10 +328,14 @@ decl_module! {
 		/// - `call`: The call you want to make with the recovered account.
 		///
 		/// # <weight>
-		/// - The weight of the `call`.
+		/// - The weight of the `call` + 10,000.
 		/// - One storage lookup to check account is recovered by `who`. O(1)
 		/// # </weight>
-		#[weight = <Passthrough<T::AccountId, <T as Trait>::Call>>::new()]
+		#[weight = FunctionOf(
+			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000, 
+			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
+			true
+		)]
 		fn as_recovered(origin,
 			account: T::AccountId,
 			call: Box<<T as Trait>::Call>
@@ -644,27 +645,5 @@ impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
 	/// This removes the final storage item managed by this module for any given account.
 	fn on_reap_account(who: &T::AccountId) {
 		<Recovered<T>>::remove(who);
-	}
-}
-
-/// Simple pass through for the weight functions.
-struct Passthrough<AccountId, Call>(sp_std::marker::PhantomData<(AccountId, Call)>);
-
-impl<AccountId, Call> Passthrough<AccountId, Call> {
-	fn new() -> Self { Self(Default::default()) }
-}
-impl<AccountId, Call: GetDispatchInfo> WeighData<(&AccountId, &Box<Call>)> for Passthrough<AccountId, Call> {
-	fn weigh_data(&self, (_, call): (&AccountId, &Box<Call>)) -> Weight {
-		call.get_dispatch_info().weight + 10_000
-	}
-}
-impl<AccountId, Call: GetDispatchInfo> ClassifyDispatch<(&AccountId, &Box<Call>)> for Passthrough<AccountId, Call> {
-	fn classify_dispatch(&self, (_, call): (&AccountId, &Box<Call>)) -> DispatchClass {
-		call.get_dispatch_info().class
-	}
-}
-impl<AccountId, Call: GetDispatchInfo> PaysFee<(&AccountId, &Box<Call>)> for Passthrough<AccountId, Call> {
-	fn pays_fee(&self, (_, call): (&AccountId, &Box<Call>)) -> bool {
-		call.get_dispatch_info().pays_fee
 	}
 }

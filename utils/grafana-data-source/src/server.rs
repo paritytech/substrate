@@ -15,12 +15,15 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use serde::{Serialize, de::DeserializeOwned};
-use hyper::{Body, Request, Response, header, service::{service_fn, make_service_fn}, Server};
 use chrono::{Duration, Utc};
 use futures_util::{FutureExt, TryStreamExt, future::{Future, select, Either}};
 use futures_timer::Delay;
 use crate::{DATABASE, Error, types::{Target, Query, TimeseriesData, Range}};
 
+#[cfg(not(target_os = "unknown"))]
+use hyper::{Body, Request, Response, header, service::{service_fn, make_service_fn}, Server};
+
+#[cfg(not(target_os = "unknown"))]
 async fn api_response(req: Request<Body>) -> Result<Response<Body>, Error> {
 	match req.uri().path() {
 		"/search" => {
@@ -57,6 +60,7 @@ async fn api_response(req: Request<Body>) -> Result<Response<Body>, Error> {
 	}
 }
 
+#[cfg(not(target_os = "unknown"))]
 async fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation: T) -> Result<Response<Body>, Error>
 	where
 		Req: DeserializeOwned,
