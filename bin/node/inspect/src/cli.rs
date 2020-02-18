@@ -76,7 +76,7 @@ impl InspectCmd {
 		G: sc_service::RuntimeGenesis,
 		E: sc_service::ChainSpecExtension,
 	{
-		sc_cli::init(config, spec_factory, &self.shared_params, version)?;
+		sc_cli::init_config(config, &self.shared_params, version, spec_factory)?;
 		// make sure to configure keystore
 		sc_cli::fill_config_keystore_in_memory(config)?;
 		// and all import params (especially pruning that has to match db meta)
