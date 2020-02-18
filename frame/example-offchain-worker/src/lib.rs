@@ -218,13 +218,15 @@ use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	weights::SimpleDispatchInfo,
 };
-use frame_system::{self as system, ensure_signed, offchain};
+use frame_system::{self as system, ensure_signed, ensure_none, offchain};
+use serde_json as json;
+use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	offchain::{http, Duration},
-	traits::Zero,
+	traits::{Zero, UniqueSaturatedFrom},
+	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionValidity},
 };
-use sp_core::crypto::KeyTypeId;
-use serde_json as json;
+use sp_std::convert::TryInto;
 
 #[cfg(test)]
 mod tests;
@@ -238,7 +240,12 @@ pub mod crypto {
 }
 
 pub trait Trait: frame_system::Trait {
-	type SubmitTransaction: offchain::SubmitSignedTransaction<Self, <Self as Trait>::Call>;
+	/// The type to sign and submit transactions.
+	type SubmitSignedTransaction:
+		offchain::SubmitSignedTransaction<Self, <Self as Trait>::Call>;
+	/// The type to submit unsigned transactions.
+	type SubmitUnsignedTransaction:
+		offchain::SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -246,14 +253,26 @@ pub trait Trait: frame_system::Trait {
 	type Call: From<Call<Self>>;
 }
 
+const UNSIGNED_INTERVAL: u128 = 128;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Example {
+		/// A vector of recently submitted prices.
+		///
+		/// This is used to calculate average price, should have bounded size.
 		Prices get(fn prices): Vec<u32>;
+		/// Defines the block when next unsigned transaction will be accepted.
+		///
+		/// To prevent spam of unsigned (and unpayed!) transactions on the network,
+		/// we only allow one transaction every UNSIGNED_INTERVAL blocks.
+		/// This storage entry defines when new transaction is going to be accepted.
+		NextUnsignedAt get(fn next_unsigned_at): T::BlockNumber;
 	}
 }
 
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
+		/// Event generated when new price is accepted to contirbute to the average.
 		NewPrice(u32, AccountId),
 	}
 );
@@ -278,24 +297,24 @@ decl_module! {
 		/// purpose is to showcase offchain worker capabilities.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		pub fn submit_price(origin, price: u32) -> DispatchResult {
+			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
+			// Add the price to the on-chain list.
+			Self::add_price(who, price);
+			Ok(())
+		}
 
-			debug::info!("Adding to the average: {}", price);
-			Prices::mutate(|prices| {
-				const MAX_LEN: usize = 64;
-
-				if prices.len() < MAX_LEN {
-					prices.push(price);
-				} else {
-					prices[price as usize % MAX_LEN] = price;
-				}
-			});
-
-			let average = Self::average_price()
-				.expect("The average is not empty, because it was just mutated; qed");
-			debug::info!("Current average price is: {}", average);
-			// here we are raising the NewPrice event
-			Self::deposit_event(RawEvent::NewPrice(price, who));
+		// TODO [ToDr] docs
+		pub fn submit_price_unsigned(origin, _block_number: T::BlockNumber, price: u32) -> DispatchResult {
+			// This ensure that the function can only be called via unsigned transaction.
+			ensure_none(origin)?;
+			// Add the price to the on-chain list, but mark it as coming from an empty address.
+			Self::add_price(Default::default(), price);
+			// now increment the block number at which we expect next unsigned transaction.
+			let current_block = <system::Module<T>>::block_number();
+			<NextUnsignedAt<T>>::put(
+				current_block + T::BlockNumber::unique_saturated_from(UNSIGNED_INTERVAL)
+			);
 			Ok(())
 		}
 
@@ -341,7 +360,7 @@ decl_module! {
 			let res = if send_signed {
 				Self::fetch_price_and_send_signed()
 			} else {
-				Self::fetch_price_and_send_unsigned()
+				Self::fetch_price_and_send_unsigned(block_number)
 			};
 			if let Err(e) = res {
 				debug::error!("Error: {}", e);
@@ -362,7 +381,7 @@ impl<T: Trait> Module<T> {
 		// that are capable of signing the transaction.
 		// If not it doesn't even make sense to make external HTTP requests, since
 		// we won't be able to put the results back on-chain.
-		if !T::SubmitTransaction::can_sign() {
+		if !T::SubmitSignedTransaction::can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC."
 			)?
@@ -377,11 +396,11 @@ impl<T: Trait> Module<T> {
 		// will simply call that function passing `price` as an argument.
 		let call = Call::submit_price(price);
 
-		// Using `SubmitTransaction` associated type we create and submit
+		// Using `SubmitSignedTransaction` associated type we create and submit
 		// a transaction representing the call, we've just created.
 		// Submit signed will return a vector of results for all
 		// accounts that were found in the local keystore with expected `KEY_TYPE`.
-		let results = T::SubmitTransaction::submit_signed(call);
+		let results = T::SubmitSignedTransaction::submit_signed(call);
 		for (acc, res) in &results {
 			match res {
 				Ok(()) => debug::info!("[{:?}] Submitted price of {} cents", acc, price),
@@ -392,8 +411,36 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn fetch_price_and_send_unsigned() -> Result<(), String> {
-		unimplemented!()
+	/// A helper function to fetch the price and send unsigned transaction.
+	fn fetch_price_and_send_unsigned(block_number: T::BlockNumber) -> Result<(), String> {
+		use system::offchain::SubmitUnsignedTransaction;
+		// Make sure we don't fetch the price if unsigned transaction is going
+		// to be rejected anyway.
+		let next_unsigned_at = <NextUnsignedAt<T>>::get();
+		if next_unsigned_at > block_number {
+			return Err(
+				format!("Too early to send unsigned transaction. Next at: {:?}", next_unsigned_at)
+			)?
+		}
+
+		// Make an external HTTP request to fetch the current price.
+		// Note this call will block until response is received.
+		let price = Self::fetch_price().map_err(|e| format!("{:?}", e))?;
+
+		// Received price is wrapped into a call to `submit_price_unsigned` public function
+		// of this module. This means that the transaction, when executed,
+		// will simply call that function passing `price` as an argument.
+		let call = Call::submit_price_unsigned(block_number, price);
+
+		// Now let's create an unsigned transaction out of this call
+		// and submit it to the pool.
+		// By default unsigned transactions are disallowed, so we need to whitelist this case
+		// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefuly
+		// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
+		// attack vectors. See validation logic docs for more details.
+		T::SubmitUnsignedTransaction::submit_unsigned(call)
+			.map_err(|()| "Unable to submit unsigned transaction.".into())
+
 	}
 
 	/// Fetch current price and return the result in cents.
@@ -462,6 +509,26 @@ impl<T: Trait> Module<T> {
 		Ok(price)
 	}
 
+	/// Add new price to the list.
+	fn add_price(who: T::AccountId, price: u32) {
+		debug::info!("Adding to the average: {}", price);
+		Prices::mutate(|prices| {
+			const MAX_LEN: usize = 64;
+
+			if prices.len() < MAX_LEN {
+				prices.push(price);
+			} else {
+				prices[price as usize % MAX_LEN] = price;
+			}
+		});
+
+		let average = Self::average_price()
+			.expect("The average is not empty, because it was just mutated; qed");
+		debug::info!("Current average price is: {}", average);
+		// here we are raising the NewPrice event
+		Self::deposit_event(RawEvent::NewPrice(price, who));
+	}
+
 	/// Calculate current average price.
 	fn average_price() -> Option<u32> {
 		let prices = Prices::get();
@@ -472,3 +539,34 @@ impl<T: Trait> Module<T> {
 		}
 	}
 }
+
+#[allow(deprecated)] // ValidateUnsigned
+impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
+	type Call = Call<T>;
+
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		if let Call::submit_price_unsigned(block_number, new_price) = call {
+			let next_unsigned_at = <NextUnsignedAt<T>>::get();
+			if &next_unsigned_at > block_number {
+				return InvalidTransaction::Stale.into();
+			}
+
+			let avg_price = Self::average_price()
+				.map(|price| if &price > new_price { price - new_price } else { new_price - price })
+				.unwrap_or(0);
+
+			let longevity = *block_number - next_unsigned_at;
+
+			Ok(ValidTransaction {
+				priority: (1 << 20) + avg_price as u64,
+				requires: vec![],
+				provides: vec![codec::Encode::encode(&block_number)],
+				longevity: TryInto::<u64>::try_into(longevity).unwrap_or(10_u64),
+				propagate: true,
+			})
+		} else {
+			InvalidTransaction::Call.into()
+		}
+	}
+}
+

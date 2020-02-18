@@ -62,6 +62,9 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type OnReapAccount = ();
+	type OnNewAccount = ();
+	type AccountData = ();
 }
 
 type Extrinsic = TestXt<Call<Test>, ()>;
@@ -88,7 +91,8 @@ impl frame_system::offchain::CreateTransaction<Test, Extrinsic> for Test {
 impl Trait for Test {
 	type Event = ();
 	type Call = Call<Test>;
-	type SubmitTransaction = SubmitTransaction;
+	type SubmitSignedTransaction = SubmitTransaction;
+	type SubmitUnsignedTransaction = SubmitTransaction;
 }
 
 type Example = Module<Test>;
@@ -112,13 +116,7 @@ fn should_make_http_call_and_parse_result() {
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 
-	state.write().expect_request(0, testing::PendingRequest {
-		method: "GET".into(),
-		uri: "https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".into(),
-		response: Some(br#"{"USD": 155.23}"#.to_vec()),
-		sent: true,
-		..Default::default()
-	});
+	price_oracle_response(&mut state.write());
 
 	t.execute_with(|| {
 		// when
@@ -129,24 +127,36 @@ fn should_make_http_call_and_parse_result() {
 }
 
 #[test]
-fn should_submit_transaction_on_chain() {
+fn should_submit_signed_transaction_on_chain() {
 	let (offchain, state) = testing::TestOffchainExt::new();
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 
-	state.write().expect_request(0, testing::PendingRequest {
-		method: "GET".into(),
-		uri: "https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".into(),
-		response: Some(br#"{"USD": 155.23}"#.to_vec()),
-		sent: true,
-		..Default::default()
-	});
+	price_oracle_response(&mut state.write());
 
 	t.execute_with(|| {
 		// when
-		let price = Example::fetch_price().unwrap();
+		Example::fetch_price_and_send_signed().unwrap();
 		// then
-		assert_eq!(price, 15522);
+		//		// TODO [ToDr] Check txpool content
+		assert_eq!(1, 3);
+	});
+}
+
+#[test]
+fn should_submit_unsigned_transaction_on_chain() {
+	let (offchain, state) = testing::TestOffchainExt::new();
+	let mut t = sp_io::TestExternalities::default();
+	t.register_extension(OffchainExt::new(offchain));
+
+	price_oracle_response(&mut state.write());
+
+	t.execute_with(|| {
+		// when
+		Example::fetch_price_and_send_unsigned(1).unwrap();
+		// then
+		// TODO [ToDr] Check txpool content
+		assert_eq!(1, 3);
 	});
 }
 
@@ -157,4 +167,14 @@ fn weights_work() {
 	let info = default_call.get_dispatch_info();
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
 	assert_eq!(info.weight, 10_000);
+}
+
+fn price_oracle_response(state: &mut testing::OffchainState) {
+	state.expect_request(0, testing::PendingRequest {
+		method: "GET".into(),
+		uri: "https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".into(),
+		response: Some(br#"{"USD": 155.23}"#.to_vec()),
+		sent: true,
+		..Default::default()
+	});
 }
