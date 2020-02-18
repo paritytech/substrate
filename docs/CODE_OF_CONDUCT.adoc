@@ -22,7 +22,7 @@ Examples of unacceptable behavior by participants include:
 * Publishing others' private information, such as a physical or electronic address, without explicit permission
 * Other conduct which could reasonably be considered inappropriate in a professional setting
 
-=== Facilitation, Not Strongarming
+=== Facilitation, Not Strong Arming
 
 We recognize that this software is merely a tool for users to create and maintain their blockchain of preference. We see that blockchains are naturally community platforms with users being the ultimate decision makers. We assert that good software will maximize user agency by facilitate user-expression on the network. As such:
 

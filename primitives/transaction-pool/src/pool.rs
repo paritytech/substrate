@@ -169,7 +169,7 @@ pub trait InPoolTransaction {
 	/// Get tags that transaction provides.
 	fn provides(&self) -> &[TransactionTag];
 	/// Return a flag indicating if the transaction should be propagated to other peers.
-	fn is_propagateable(&self) -> bool;
+	fn is_propagable(&self) -> bool;
 }
 
 /// Transaction pool interface.
@@ -249,7 +249,7 @@ pub enum ChainEvent<B: BlockT> {
 		/// List of retracted blocks ordered by block number.
 		retracted: Vec<B::Hash>,
 	},
-	/// An existing block has been finalzied.
+	/// An existing block has been finalized.
 	Finalized {
 		/// Hash of just finalized block
 		hash: B::Hash,

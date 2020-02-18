@@ -16,7 +16,7 @@
 
 use std::{process::{Child, ExitStatus}, thread, time::Duration};
 
-/// Wait for the given `child` the given ammount of `secs`.
+/// Wait for the given `child` the given number of `secs`.
 ///
 /// Returns the `Some(exit status)` or `None` if the process did not finish in the given time.
 pub fn wait_for(child: &mut Child, secs: usize) -> Option<ExitStatus> {
