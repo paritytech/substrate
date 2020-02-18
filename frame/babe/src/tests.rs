@@ -34,12 +34,14 @@ fn make_pre_digest(
 	vrf_output: [u8; sp_consensus_babe::VRF_OUTPUT_LENGTH],
 	vrf_proof: [u8; sp_consensus_babe::VRF_PROOF_LENGTH],
 ) -> Digest {
-	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary {
-		authority_index,
-		slot_number,
-		vrf_output,
-		vrf_proof,
-	};
+	let digest_data = sp_consensus_babe::digests::PreDigest::Primary(
+		sp_consensus_babe::digests::PrimaryPreDigest {
+			authority_index,
+			slot_number,
+			vrf_output: vrf_output.into(),
+			vrf_proof: vrf_proof.into(),
+		}
+	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
 }

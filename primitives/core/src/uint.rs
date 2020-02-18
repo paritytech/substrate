@@ -16,7 +16,7 @@
 
 //! An unsigned fixed-size integer.
 
-pub use primitive_types::U256;
+pub use primitive_types::{U256, U512};
 
 #[cfg(test)]
 mod tests {

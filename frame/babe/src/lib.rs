@@ -35,9 +35,9 @@ use sp_staking::{
 use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_babe::{
-	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber,
+	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber, RawVRFOutput,
 	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
-	digests::{NextEpochDescriptor, RawPreDigest},
+	digests::{NextEpochDescriptor, PreDigest, PrimaryPreDigest},
 };
 pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
@@ -210,13 +210,8 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				let pre_digest = RawPreDigest::decode(&mut data).ok()?;
-				return Some(match pre_digest {
-					RawPreDigest::Primary { authority_index, .. } =>
-						authority_index,
-					RawPreDigest::Secondary { authority_index, .. } =>
-						authority_index,
-				});
+				let pre_digest = PreDigest::decode(&mut data).ok()?;
+				return Some(pre_digest.authority_index());
 			}
 		}
 
@@ -402,7 +397,7 @@ impl<T: Trait> Module<T> {
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
 			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-				RawPreDigest::decode(&mut data).ok()
+				PreDigest::decode(&mut data).ok()
 			} else {
 				None
 			})
@@ -429,7 +424,7 @@ impl<T: Trait> Module<T> {
 
 			CurrentSlot::put(digest.slot_number());
 
-			if let RawPreDigest::Primary { vrf_output, .. } = digest {
+			if let PreDigest::Primary(PrimaryPreDigest { vrf_output, .. }) = digest {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.
@@ -439,7 +434,7 @@ impl<T: Trait> Module<T> {
 			}
 		});
 
-		Initialized::put(maybe_vrf);
+		Initialized::put(maybe_vrf.map(|v| RawVRFOutput::from(v).0));
 
 		// enact epoch change, if necessary.
 		T::EpochChangeTrigger::trigger::<T>(now)

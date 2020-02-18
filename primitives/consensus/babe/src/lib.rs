@@ -32,6 +32,11 @@ mod app {
 	app_crypto!(sr25519, BABE);
 }
 
+pub use sp_consensus_vrf::schnorrkel::{
+	VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH, VRFProof, RawVRFProof, VRFOutput,
+	RawVRFOutput, Randomness
+};
+
 /// The prefix used by BABE for its VRF keys.
 pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
 
@@ -49,12 +54,6 @@ pub type AuthorityId = app::Public;
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
-
-/// The length of the VRF output
-pub const VRF_OUTPUT_LENGTH: usize = 32;
-
-/// The length of the VRF proof
-pub const VRF_PROOF_LENGTH: usize = 64;
 
 /// The length of the public key
 pub const PUBLIC_KEY_LENGTH: usize = 32;

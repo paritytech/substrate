@@ -1,0 +1,21 @@
+[package]
+name = "sp-consensus-vrf"
+version = "0.8.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Primitives for VRF based consensus"
+edition = "2018"
+license = "GPL-3.0"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
+schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], optional = true }
+sp-core = { path = "../../core", default-features = false }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../runtime" }
+
+[features]
+std = [
+	"codec/std",
+	"schnorrkel",
+	"sp-core/std",
+	"sp-runtime/std",
+]
