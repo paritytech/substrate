@@ -133,11 +133,11 @@ where
 	///
 	/// This will treat incoming extrinsic `xt` as untrusted and perform additional checks
 	/// (currenty checking signature).
-	pub fn push_untrusted(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
+	pub fn push_trusted(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
 		self.push_internal(xt, true)
 	}
 
-	fn push_internal(&mut self, xt: <Block as BlockT>::Extrinsic, do_untrusted_checks: bool) -> Result<(), ApiErrorFor<A, Block>> {
+	fn push_internal(&mut self, xt: <Block as BlockT>::Extrinsic, skip_signature: bool) -> Result<(), ApiErrorFor<A, Block>> {
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
@@ -163,19 +163,27 @@ where
 					Err(e) => Err(ApplyExtrinsicFailed::from(e).into()),
 				}
 			})
-		} else {
+		}  else {
+			let use_trusted = skip_signature && self
+				.api
+				.has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
+					block_id,
+					|version| version >= 5,
+				)?;
+
 			self.api.map_api_result(|api| {
-				let apply_result = match do_untrusted_checks {
-					true => api.apply_extrinsic_with_context(
+				let apply_result = if use_trusted {
+					api.apply_trusted_extrinsic_with_context(
 						block_id,
 						ExecutionContext::BlockConstruction,
 						xt.clone(),
-					)?,
-					false => api.apply_trusted_extrinsic_with_context(
+					)?
+				} else  { 
+					api.apply_extrinsic_with_context(
 						block_id,
 						ExecutionContext::BlockConstruction,
 						xt.clone(),
-					)?,
+					)?
 				};
 
 				match apply_result {

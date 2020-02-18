@@ -43,7 +43,7 @@ pub mod compatibility_v3 {
 
 sp_api::decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides the required functionality for building a block.
-	#[api_version(4)]
+	#[api_version(5)]
 	pub trait BlockBuilder {
 		/// Compatibility version of `apply_extrinsic` for v3.
 		///
@@ -60,8 +60,7 @@ sp_api::decl_runtime_apis! {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult;
 		/// Apply the given extrinsic.
 		///
-		/// Same as `apply_extrinsic`, but assumes that signature check has been already performed
-		/// elsewhere.
+		/// Same as `apply_extrinsic`, but skips signature verification.
 		fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult;
 		/// Finish the current block.
 		#[renamed("finalise_block", 3)]

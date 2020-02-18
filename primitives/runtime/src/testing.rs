@@ -29,7 +29,6 @@ use crate::{generic::{self, CheckSignature}, KeyTypeId, ApplyExtrinsicResult};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError, InvalidTransaction};
-
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct UintAuthorityId(pub u64);
@@ -385,8 +384,7 @@ impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Ca
 			TestValidity::SignatureInvalid(e) =>
 				if let CheckSignature::No = signature {
 					Ok(self)
-				}
-				else {
+				} else {
 					Err(e)
 				},
 			TestValidity::OtherInvalid(e)  => Err(e),

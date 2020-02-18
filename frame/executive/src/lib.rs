@@ -262,15 +262,12 @@ where
 
 	/// Apply extrinsic outside of the block execution function.
 	///
-	/// Same as `apply_extrinsic`, but without signature checks.
-	/// This does not check transaction signature and assumes `uxt` passed is originated
-	/// from the source that validates transactions before applying (for example, transaction pool).
+	/// Same as `apply_extrinsic`, but skips signature checks.
 	pub fn apply_trusted_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
 		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded), CheckSignature::No)
 	}
-
 
 	/// Apply an extrinsic inside the block execution function.
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
@@ -291,7 +288,7 @@ where
 		// Verify that the signature is good.
 		let xt = uxt.check(
 			check_signature,
-			&Default::default()
+			&Default::default(),
 		)?;
 
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be

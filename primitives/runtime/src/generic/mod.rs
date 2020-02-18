@@ -39,8 +39,8 @@ pub use self::digest::{
 use crate::codec::Encode;
 use sp_std::prelude::*;
 
-#[derive(PartialEq, Eq, Clone, Copy)]
 /// Perform singature check.
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum CheckSignature {
 	/// Perform.
 	Yes,
