@@ -66,9 +66,9 @@ use codec::{Encode, Decode};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
-use frame_support::{traits::{Get, ReservableCurrency, Currency}, weights::{
-	GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee
-}};
+use frame_support::{traits::{Get, ReservableCurrency, Currency},
+	weights::{GetDispatchInfo, DispatchClass,FunctionOf},
+};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
 
@@ -188,126 +188,6 @@ decl_event! {
 	}
 }
 
-/// Simple index-based pass through for the weight functions.
-struct Passthrough<Call>(sp_std::marker::PhantomData<Call>);
-
-impl<Call> Passthrough<Call> {
-	fn new() -> Self { Self(Default::default()) }
-}
-impl<Call: GetDispatchInfo> WeighData<(&u16, &Box<Call>)> for Passthrough<Call> {
-	fn weigh_data(&self, (_, call): (&u16, &Box<Call>)) -> Weight {
-		call.get_dispatch_info().weight + 10_000
-	}
-}
-impl<Call: GetDispatchInfo> ClassifyDispatch<(&u16, &Box<Call>)> for Passthrough<Call> {
-	fn classify_dispatch(&self, (_, call): (&u16, &Box<Call>)) -> DispatchClass {
-		call.get_dispatch_info().class
-	}
-}
-impl<Call: GetDispatchInfo> PaysFee<(&u16, &Box<Call>)> for Passthrough<Call> {
-	fn pays_fee(&self, (_, call): (&u16, &Box<Call>)) -> bool {
-		call.get_dispatch_info().pays_fee
-	}
-}
-
-/// Summation pass-through for the weight function of the batch call.
-///
-/// This just adds all of the weights together of all of the calls.
-struct BatchPassthrough<Call>(sp_std::marker::PhantomData<Call>);
-
-impl<Call> BatchPassthrough<Call> {
-	fn new() -> Self { Self(Default::default()) }
-}
-impl<Call: GetDispatchInfo> WeighData<(&Vec<Call>,)> for BatchPassthrough<Call> {
-	fn weigh_data(&self, (calls,): (&Vec<Call>,)) -> Weight {
-		calls.iter()
-			.map(|call| call.get_dispatch_info().weight)
-			.fold(10_000, |a, n| a + n)
-	}
-}
-impl<Call: GetDispatchInfo> ClassifyDispatch<(&Vec<Call>,)> for BatchPassthrough<Call> {
-	fn classify_dispatch(&self, (calls,): (&Vec<Call>,)) -> DispatchClass {
-		let all_operational = calls.iter()
-			.map(|call| call.get_dispatch_info().class)
-			.all(|class| class == DispatchClass::Operational);
-		if all_operational {
-			DispatchClass::Operational
-		} else {
-			DispatchClass::Normal
-		}
-	}
-}
-impl<Call: GetDispatchInfo> PaysFee<(&Vec<Call>,)> for BatchPassthrough<Call> {
-	fn pays_fee(&self, (calls,): (&Vec<Call>,)) -> bool {
-		calls.iter()
-			.any(|call| call.get_dispatch_info().pays_fee)
-	}
-}
-
-/// Simple index-based pass through for the weight functions.
-struct MultiPassthrough<Call, AccountId, Timepoint>(
-	sp_std::marker::PhantomData<(Call, AccountId, Timepoint)>
-);
-
-impl<Call, AccountId, Timepoint> MultiPassthrough<Call, AccountId, Timepoint> {
-	fn new() -> Self { Self(Default::default()) }
-}
-impl<Call: GetDispatchInfo, AccountId, Timepoint> WeighData<(&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)>
-for MultiPassthrough<Call, AccountId, Timepoint>
-{
-	fn weigh_data(&self, (_, sigs, _, call): (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)) -> Weight {
-		call.get_dispatch_info().weight + 10_000 * (sigs.len() as u32 + 1)
-	}
-}
-impl<Call: GetDispatchInfo, AccountId, Timepoint> ClassifyDispatch<(&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)>
-for MultiPassthrough<Call, AccountId, Timepoint>
-{
-	fn classify_dispatch(&self, (_, _, _, call): (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>))
-		-> DispatchClass
-	{
-		call.get_dispatch_info().class
-	}
-}
-impl<Call: GetDispatchInfo, AccountId, Timepoint> PaysFee<(&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)>
-for MultiPassthrough<Call, AccountId, Timepoint>
-{
-	fn pays_fee(&self, _: (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)) -> bool {
-		true
-	}
-}
-
-/// Simple index-based pass through for the weight functions.
-struct SigsLen<AccountId, Timepoint>(
-	sp_std::marker::PhantomData<(AccountId, Timepoint)>
-);
-
-impl<AccountId, Timepoint> SigsLen<AccountId, Timepoint> {
-	fn new() -> Self { Self(Default::default()) }
-}
-impl<AccountId, Timepoint> WeighData<(&u16, &Vec<AccountId>, &Timepoint, &[u8; 32])>
-for SigsLen<AccountId, Timepoint>
-{
-	fn weigh_data(&self, (_, sigs, _, _): (&u16, &Vec<AccountId>, &Timepoint, &[u8; 32])) -> Weight {
-		10_000 * (sigs.len() as u32 + 1)
-	}
-}
-impl<AccountId, Timepoint> ClassifyDispatch<(&u16, &Vec<AccountId>, &Timepoint, &[u8; 32])>
-for SigsLen<AccountId, Timepoint>
-{
-	fn classify_dispatch(&self, _: (&u16, &Vec<AccountId>, &Timepoint, &[u8; 32]))
-		-> DispatchClass
-	{
-		DispatchClass::Normal
-	}
-}
-impl<AccountId, Timepoint> PaysFee<(&u16, &Vec<AccountId>, &Timepoint, &[u8; 32])>
-for SigsLen<AccountId, Timepoint>
-{
-	fn pays_fee(&self, _: (&u16, &Vec<AccountId>, &Timepoint, &[u8; 32])) -> bool {
-		true
-	}
-}
-
 /// A module identifier. These are per module and should be stored in a registry somewhere.
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
 struct IndexedUtilityModuleId(u16);
@@ -341,7 +221,24 @@ decl_module! {
 		/// `BatchInterrupted` event is deposited, along with the number of successful calls made
 		/// and the error of the failed call. If all were successful, then the `BatchCompleted`
 		/// event is deposited.
-		#[weight = <BatchPassthrough<<T as Trait>::Call>>::new()]
+		#[weight = FunctionOf(
+			|args: (&Vec<<T as Trait>::Call>,)| {
+				args.0.iter()
+					.map(|call| call.get_dispatch_info().weight)
+					.fold(10_000, |a, n| a + n)
+			},
+			|args: (&Vec<<T as Trait>::Call>,)| {
+				let all_operational = args.0.iter()
+					.map(|call| call.get_dispatch_info().class)
+					.all(|class| class == DispatchClass::Operational);
+				if all_operational {
+					DispatchClass::Operational
+				} else {
+					DispatchClass::Normal
+				}
+			},
+			true
+		)]
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
 			for (index, call) in calls.into_iter().enumerate() {
 				let result = call.dispatch(origin.clone());
@@ -358,9 +255,13 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// # <weight>
-		/// - The weight of the `call`.
+		/// - The weight of the `call` + 10,000.
 		/// # </weight>
-		#[weight = <Passthrough<<T as Trait>::Call>>::new()]
+		#[weight = FunctionOf(
+			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000, 
+			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
+			true
+		)]
 		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let pseudonym = Self::sub_account_id(who, index);
@@ -408,7 +309,15 @@ decl_module! {
 		///   deposit taken for its lifetime of
 		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
 		/// # </weight>
-		#[weight = <MultiPassthrough<<T as Trait>::Call, T::AccountId, Option<Timepoint<T::BlockNumber>>>>::new()]
+		#[weight = FunctionOf(
+			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
+				args.3.get_dispatch_info().weight + 10_000 * (args.1.len() as u32 + 1)
+			},
+			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
+				args.3.get_dispatch_info().class
+			},
+			true
+		)]
 		fn as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -498,7 +407,13 @@ decl_module! {
 		///   deposit taken for its lifetime of
 		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
 		/// # </weight>
-		#[weight = <SigsLen<T::AccountId, Option<Timepoint<T::BlockNumber>>>>::new()]
+		#[weight = FunctionOf(
+			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &[u8; 32])| {
+				10_000 * (args.1.len() as u32 + 1)
+			}, 
+			DispatchClass::Normal,
+			true
+		)]
 		fn approve_as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -567,7 +482,13 @@ decl_module! {
 		/// - I/O: 1 read `O(S)`, one remove.
 		/// - Storage: removes one item.
 		/// # </weight>
-		#[weight = <SigsLen<T::AccountId, Timepoint<T::BlockNumber>>>::new()]
+		#[weight = FunctionOf(
+			|args: (&u16, &Vec<T::AccountId>, &Timepoint<T::BlockNumber>, &[u8; 32])| {
+				10_000 * (args.1.len() as u32 + 1)
+			}, 
+			DispatchClass::Normal,
+			true
+		)]
 		fn cancel_as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
