@@ -53,9 +53,11 @@ pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed
 /// Note that due to parsing restrictions, if the `from` expression is not a single token (i.e. a
 /// literal or constant), then it must be parenthesised.
 ///
-/// The macro allows for a number of "arms", each representing an individual benchmark and
-/// associated dispatchable function. Right now, these are at a 1:1 mapping, but it should not be
-/// too difficult to introduce alternative syntax to allow for multiple benchmarks per dispatchable.
+/// The macro allows for a number of "arms", each representing an individual benchmark. Using the
+/// simple syntax, the associated dispatchable function maps 1:1 with the benchmark and the name of
+/// the benchmark is the same as that of the associated function. However, extended syntax allows
+/// for arbitrary expresions to be evaluated in a benchmark (including for example,
+/// `on_initialize`).
 ///
 /// The macro allows for common parameters whose ranges and instancing expressions may be drawn upon
 /// (or not) by each arm. Syntax is available to allow for only the range to be drawn upon if
@@ -183,17 +185,30 @@ macro_rules! impl_benchmark {
 #[macro_export]
 #[allow(missing_docs)]
 macro_rules! benchmarks_iter {
+	// mutation arm:
 	(
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
+		$crate::benchmarks_iter! {
+			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: { Ok((crate::Call::<T>::$name($($arg),*), $origin)) } $( $rest )*
+		}
+	};
+	// iteration arm:
+	(
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		$name:ident { $( $code:tt )* }: { $eval:expr }
+		$( $rest:tt )*
+	) => {
 		$crate::benchmark_backend! {
-			$name { $( $common )* } { } ( $origin $( , $arg )* ) { $( $code )* }
+			$name { $( $common )* } { } { $eval } { $( $code )* }
 		}
 		$crate::benchmarks_iter!( { $( $common )* } ( $( $names )* $name ) $( $rest )* );
 	};
+	// iteration-exit arm
 	( { $( $common:tt )* } ( $( $names:ident )* ) ) => {
 		$crate::selected_benchmark!( $( $names ),* );
 		$crate::impl_benchmark!( $( $names ),* );
@@ -208,7 +223,7 @@ macro_rules! benchmark_backend {
 		$( $common:tt )*
 	} {
 		$( PRE { $( $pre_parsed:tt )* } )*
-	} ( $origin:expr $( , $arg:expr )* ) {
+	} { $eval:expr } {
 			let $pre_id:tt : $pre_ty:ty = $pre_ex:expr;
 			$( $rest:tt )*
 	} ) => {
@@ -216,14 +231,14 @@ macro_rules! benchmark_backend {
 			$name { $( $common )* } {
 				$( PRE { $( $pre_parsed )* } )*
 				PRE { $pre_id , $pre_ty , $pre_ex }
-			} ( $origin $( , $arg )* ) { $( $rest )* }
+			} { $eval } { $( $rest )* }
 		}
 	};
 	($name:ident {
 		$( $common:tt )*
 	} {
 		$( $parsed:tt )*
-	} ( $origin:expr $( , $arg:expr )* ) {
+	} { $eval:expr } {
 		let $param:ident in ( $param_from:expr ) .. $param_to:expr => $param_instancer:expr;
 		$( $rest:tt )*
 	}) => {
@@ -231,7 +246,7 @@ macro_rules! benchmark_backend {
 			$name { $( $common )* } {
 				$( $parsed )*
 				PARAM { $param , $param_from , $param_to , $param_instancer }
-			} ( $origin $( , $arg )* ) { $( $rest )* }
+			} { $eval } { $( $rest )* }
 		}
 	};
 	// mutation arm to look after defaulting to a common param
@@ -239,7 +254,7 @@ macro_rules! benchmark_backend {
 		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
 	} {
 		$( $parsed:tt )*
-	} ( $origin:expr $( , $arg:expr )* ) {
+	} { $eval:expr } {
 		let $param:ident in ...;
 		$( $rest:tt )*
 	}) => {
@@ -248,7 +263,7 @@ macro_rules! benchmark_backend {
 				$( { $common , $common_from , $common_to , $common_instancer } )*
 			} {
 				$( $parsed )*
-			} ( $origin $( , $arg )* ) {
+			} { $eval } {
 				let $param
 					in ({ $( let $common = $common_from; )* $param })
 					.. ({ $( let $common = $common_to; )* $param })
@@ -262,7 +277,7 @@ macro_rules! benchmark_backend {
 		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
 	} {
 		$( $parsed:tt )*
-	} ( $origin:expr $( , $arg:expr )* ) {
+	} { $eval:expr } {
 		let $param:ident in _ .. _ => $param_instancer:expr ;
 		$( $rest:tt )*
 	}) => {
@@ -271,7 +286,7 @@ macro_rules! benchmark_backend {
 				$( { $common , $common_from , $common_to , $common_instancer } )*
 			} {
 				$( $parsed )*
-			} ( $origin $( , $arg )* ) {
+			} { $eval } {
 				let $param
 					in ({ $( let $common = $common_from; )* $param })
 					.. ({ $( let $common = $common_to; )* $param })
@@ -285,12 +300,12 @@ macro_rules! benchmark_backend {
 		$( $common:tt )*
 	} {
 		$( $parsed:tt )*
-	} ( $origin:expr $( , $arg:expr )* ) {
+	} { $eval:expr } {
 		let $param:ident in $param_from:tt .. $param_to:expr => $param_instancer:expr ;
 		$( $rest:tt )*
 	}) => {
 		$crate::benchmark_backend! {
-			$name { $( $common )* } { $( $parsed )* } ( $origin $( , $arg )* ) {
+			$name { $( $common )* } { $( $parsed )* } { $eval } {
 				let $param in ( $param_from ) .. $param_to => $param_instancer;
 				$( $rest )*
 			}
@@ -301,12 +316,12 @@ macro_rules! benchmark_backend {
 		$( $common:tt )*
 	} {
 		$( $parsed:tt )*
-	} ( $origin:expr $( , $arg:expr )* ) {
+	} { $eval:expr } {
 		let $param:ident in $param_from:tt .. $param_to:expr ;
 		$( $rest:tt )*
 	}) => {
 		$crate::benchmark_backend! {
-			$name { $( $common )* } { $( $parsed )* } ( $origin $( , $arg )* ) {
+			$name { $( $common )* } { $( $parsed )* } { $eval } {
 				let $param in $param_from .. $param_to => ();
 				$( $rest )*
 			}
@@ -317,12 +332,12 @@ macro_rules! benchmark_backend {
 		$( $common:tt )*
 	} {
 		$( $parsed:tt )*
-	} ( $origin:expr $( , $arg:expr )* ) {
+	} { $eval:expr } {
 		let $pre_id:tt = $pre_ex:expr;
 		$( $rest:tt )*
 	}) => {
 		$crate::benchmark_backend! {
-			$name { $( $common )* } { $( $parsed )* } ( $origin $( , $arg )* ) {
+			$name { $( $common )* } { $( $parsed )* } { $eval } {
 				let $pre_id : _ = $pre_ex;
 				$( $rest )*
 			}
@@ -334,7 +349,7 @@ macro_rules! benchmark_backend {
 	} {
 		$( PRE { $pre_id:tt , $pre_ty:ty , $pre_ex:expr } )*
 		$( PARAM { $param:ident , $param_from:expr , $param_to:expr , $param_instancer:expr } )*
-	} ( $origin:expr $( , $arg:expr )* ) { $( $post:tt )* } ) => {
+	} { $eval:expr } { $( $post:tt )* } ) => {
 		#[allow(non_camel_case_types)]
 		struct $name;
 		impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for $name {
@@ -366,7 +381,7 @@ macro_rules! benchmark_backend {
 				)*
 				$( $param_instancer ; )*
 				$( $post )*
-				Ok((crate::Call::<T>::$name($($arg),*), $origin))
+				$eval
 			}
 		}
 	}
