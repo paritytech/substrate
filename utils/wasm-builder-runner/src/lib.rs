@@ -315,6 +315,42 @@ impl WasmBuilderSource {
 	}
 }
 
+/// Build the currently built project as WASM binary and extend `RUSTFLAGS` with the given rustflags.
+///
+/// For more information, see [`build_current_project`].
+#[deprecated(
+	since = "1.0.5",
+	note = "Please switch to [`WasmBuilder`]",
+)]
+pub fn build_current_project_with_rustflags(
+	file_name: &str,
+	wasm_builder_source: WasmBuilderSource,
+	default_rust_flags: &str,
+) {
+	WasmBuilder::new()
+		.with_current_project()
+		.with_wasm_builder_source(wasm_builder_source)
+		.append_to_rust_flags(default_rust_flags)
+		.set_file_name(file_name)
+		.build()
+}
+
+/// Build the currently built project as WASM binary.
+///
+/// The current project is determined using the `CARGO_MANIFEST_DIR` environment variable.
+///
+/// `file_name` - The name of the file being generated in the `OUT_DIR`. The file contains the
+///               constant `WASM_BINARY` which contains the build wasm binary.
+/// `wasm_builder_path` - Path to the wasm-builder project, relative to `CARGO_MANIFEST_DIR`.
+#[deprecated(
+	since = "1.0.5",
+	note = "Please switch to [`WasmBuilder`]",
+)]
+pub fn build_current_project(file_name: &str, wasm_builder_source: WasmBuilderSource) {
+	#[allow(deprecated)]
+	build_current_project_with_rustflags(file_name, wasm_builder_source, "");
+}
+
 /// Returns the root path of the wasm-builder workspace.
 ///
 /// The wasm-builder workspace contains all wasm-builder's projects.
