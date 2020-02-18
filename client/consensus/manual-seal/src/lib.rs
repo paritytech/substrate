@@ -32,6 +32,7 @@ use sp_inherents::InherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justification};
 use sc_client_api::backend::Backend as ClientBackend;
 use futures::prelude::*;
+use sp_api::{TransactionFor, ProvideRuntimeApi};
 use sc_transaction_pool::txpool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -44,25 +45,28 @@ use finalize_block::{finalize_block, FinalizeBlockParams};
 use seal_new_block::{seal_new_block, SealBlockParams};
 pub use error::Error;
 pub use rpc::{EngineCommand, CreatedBlock};
+use serde::export::PhantomData;
 
 /// The synchronous block-import worker of the engine.
-pub struct ManualSealBlockImport<I> {
+pub struct ManualSealBlockImport<C, I> {
 	inner: I,
+	_phantom: PhantomData<C>,
 }
 
-impl<I> From<I> for ManualSealBlockImport<I> {
+impl<C, I> From<I> for ManualSealBlockImport<C, I> {
 	fn from(i: I) -> Self {
-		ManualSealBlockImport { inner: i }
+		ManualSealBlockImport { inner: i, _phantom: PhantomData }
 	}
 }
 
-impl<B, I> BlockImport<B> for ManualSealBlockImport<I>
+impl<C, B, I> BlockImport<B> for ManualSealBlockImport<C, I>
 	where
+		C: ProvideRuntimeApi<B>,
 		B: BlockT,
-		I: BlockImport<B, Transaction = ()>,
+		I: BlockImport<B, Transaction = TransactionFor<C, B>>,
 {
 	type Error = I::Error;
-	type Transaction = ();
+	type Transaction = TransactionFor<C, B>;
 
 	fn check_block(&mut self, block: BlockCheckParams<B>) -> Result<ImportResult, Self::Error>
 	{
@@ -100,8 +104,11 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 }
 
 /// Instantiate the import queue for the manual seal consensus engine.
-pub fn import_queue<B: BlockT>(block_import: BoxBlockImport<B, ()>) -> BasicQueue<B, ()>
-{
+pub fn import_queue<B: BlockT, C: ProvideRuntimeApi<B> + 'static>(
+	block_import: BoxBlockImport<B, TransactionFor<C, B>>,
+	// this is entirely for resolving type errors
+	_client: Arc<C>,
+) -> BasicQueue<B, TransactionFor<C, B>> {
 	BasicQueue::new(
 		ManualSealVerifier,
 		block_import,

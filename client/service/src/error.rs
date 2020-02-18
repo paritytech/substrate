@@ -20,6 +20,7 @@ use sc_network;
 use sc_keystore;
 use sp_consensus;
 use sp_blockchain;
+use sp_inherents;
 
 /// Service Result typedef.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -37,6 +38,8 @@ pub enum Error {
 	Network(sc_network::error::Error),
 	/// Keystore error.
 	Keystore(sc_keystore::Error),
+	/// InherentsDataProviders error
+	Inherents(sp_inherents::Error),
 	/// Best chain selection strategy is missing.
 	#[display(fmt="Best chain selection strategy (SelectChain) is not provided.")]
 	SelectChainRequired,

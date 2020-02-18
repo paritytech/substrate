@@ -30,7 +30,9 @@ grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path 
 sc-client = { version = "0.8", path = "../../../client/" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sc-basic-authorship = { path = "../../../client/basic-authorship" }
-
+sc-consensus-manual-seal = { path = "../../../client/consensus/manual-seal" }
+sp-timestamp = { path = "../../../primitives/timestamp" }
+jsonrpc-core = "14.0.5"
 node-template-runtime = { version = "2.0.0", path = "../runtime" }
 
 [build-dependencies]

@@ -17,6 +17,7 @@ parking_lot = "0.10.0"
 serde = { version = "1.0", features=["derive"] }
 
 sc-client = { path = "../../../client" }
+sp-api = { path = "../../../primitives/api" }
 sc-client-api = { path = "../../../client/api" }
 sc-transaction-pool = { path = "../../transaction-pool" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
