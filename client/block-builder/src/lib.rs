@@ -163,7 +163,7 @@ where
 					Err(e) => Err(ApplyExtrinsicFailed::from(e).into()),
 				}
 			})
-		}  else {
+		} else {
 			let use_trusted = skip_signature && self
 				.api
 				.has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
