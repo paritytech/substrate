@@ -109,14 +109,14 @@ impl Clone for BenchDb {
 }
 
 impl BenchDb {
-    /// New immutable benchmarking database.
-    ///
-    /// This will generate database files in random temporary directory
-    /// and keep it there until struct is dropped.
-    ///
-    /// You can `clone` this database or you can `create_context` from it
-    /// (which also do `clone`) to run actual operation against new database
-    /// which will be identical to this.
+	/// New immutable benchmarking database.
+	///
+	/// This will generate database files in random temporary directory
+	/// and keep it there until struct is dropped.
+	///
+	/// You can `clone` this database or you can `create_context` from it
+	/// (which also do `clone`) to run actual operation against new database
+	/// which will be identical to this.
 	pub fn new(keyring_length: usize) -> Self {
 		let keyring = BenchKeyring::new(keyring_length);
 
@@ -160,7 +160,7 @@ impl BenchDb {
 		(client, backend)
 	}
 
-    /// Generate new block using this database.
+	/// Generate new block using this database.
 	pub fn generate_block(&mut self, transactions: usize) -> Block {
 		let (client, _backend) = Self::bench_client(
 			self.directory_guard.path(),
@@ -249,12 +249,12 @@ impl BenchDb {
 		block
 	}
 
-    /// Database path.
+	/// Database path.
 	pub fn path(&self) -> &Path {
 		self.directory_guard.path()
 	}
 
-    /// Clone this database and create context for testing/benchmarking.
+	/// Clone this database and create context for testing/benchmarking.
 	pub fn create_context(&self, profile: Profile) -> BenchContext {
 		let BenchDb { directory_guard, keyring } = self.clone();
 		let (client, backend) = Self::bench_client(directory_guard.path(), profile, &keyring);
@@ -266,8 +266,8 @@ impl BenchDb {
 }
 
 impl BenchKeyring {
-    /// New keyring.
-    ///
+	/// New keyring.
+	///
 	/// `length` is the number of accounts generated.
 	pub fn new(length: usize) -> Self {
 		let mut accounts = BTreeMap::new();
@@ -282,17 +282,17 @@ impl BenchKeyring {
 		Self { accounts }
 	}
 
-    /// Generated account id-s from keyring keypairs.
+	/// Generated account id-s from keyring keypairs.
 	pub fn collect_account_ids(&self) -> Vec<AccountId> {
 		self.accounts.keys().cloned().collect()
 	}
 
-    /// Get account id at position `index`
+	/// Get account id at position `index`
 	pub fn at(&self, index: usize) -> AccountId {
 		self.accounts.keys().nth(index).expect("Failed to get account").clone()
 	}
 
-    /// Sign transaction with keypair from this keyring.
+	/// Sign transaction with keypair from this keyring.
 	pub fn sign(&self, xt: CheckedExtrinsic, version: u32, genesis_hash: [u8; 32]) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, extra)) => {
@@ -315,24 +315,24 @@ impl BenchKeyring {
 				function: xt.function,
 			},
 		}
-    }
+	}
 
-    /// Generate genesis with accounts from this keyring endowed with some balance.
-    pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
-        crate::genesis::config_endowed(
-            false,
-            Some(node_runtime::WASM_BINARY),
-            self.collect_account_ids(),
-        )
-    }
+	/// Generate genesis with accounts from this keyring endowed with some balance.
+	pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
+		crate::genesis::config_endowed(
+			false,
+			Some(node_runtime::WASM_BINARY),
+			self.collect_account_ids(),
+		)
+	}
 }
 
 /// Profile for exetion strategies.
 #[derive(Clone, Copy, Debug)]
 pub enum Profile {
-    /// As native as possible.
-    Native,
-    /// As wasm as possible.
+	/// As native as possible.
+	Native,
+	/// As wasm as possible.
 	Wasm,
 }
 
@@ -367,12 +367,12 @@ impl Guard {
 
 /// Benchmarking/test context holding instantiated client and backend references.
 pub struct BenchContext {
-    /// Node client.
-    pub client: Client,
-    /// Node backend.
-    pub backend: Arc<Backend>,
+	/// Node client.
+	pub client: Client,
+	/// Node backend.
+	pub backend: Arc<Backend>,
 
-    db_guard: Guard,
+	db_guard: Guard,
 }
 
 type AccountPublic = <Signature as Verify>::Signer;
@@ -415,10 +415,10 @@ impl BenchContext {
 		);
 
 		assert_eq!(self.client.chain_info().best_number, 1);
-    }
+	}
 
-    /// Database path for the current context.
-    pub fn path(&self) -> &Path {
-        self.db_guard.path()
-    }
+	/// Database path for the current context.
+	pub fn path(&self) -> &Path {
+		self.db_guard.path()
+	}
 }
