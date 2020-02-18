@@ -906,8 +906,10 @@ mod tests {
 		{
 			match client {
 				PeersClient::Full(client, _) => {
-					let slot_duration = SlotDuration::get_or_compute(&*client)
-						.expect("slot duration available");
+					let slot_duration = SlotDuration::get_or_compute(
+						&*client,
+						|a, b| a.slot_duration(b)
+					).expect("slot duration available");
 					let inherent_data_providers = InherentDataProviders::new();
 					register_aura_inherent_data_provider(
 						&inherent_data_providers,
@@ -975,8 +977,10 @@ mod tests {
 					.for_each(move |_| future::ready(()))
 			);
 
-			let slot_duration = SlotDuration::get_or_compute(&*client)
-				.expect("slot duration available");
+			let slot_duration = SlotDuration::get_or_compute(
+				&*client,
+				|a, b| a.slot_duration(b)
+			).expect("slot duration available");
 
 			let inherent_data_providers = InherentDataProviders::new();
 			register_aura_inherent_data_provider(
