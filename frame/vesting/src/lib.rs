@@ -50,9 +50,9 @@ use sp_std::prelude::*;
 use sp_std::fmt::Debug;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
-	StaticLookup, Zero, SimpleArithmetic, MaybeSerializeDeserialize, Saturating, Convert
+	StaticLookup, Zero, AtLeast32Bit, MaybeSerializeDeserialize, Convert
 }};
-use frame_support::{decl_module, decl_event, decl_storage, ensure, decl_error};
+use frame_support::{decl_module, decl_event, decl_storage, decl_error};
 use frame_support::traits::{
 	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier
 };
@@ -85,8 +85,8 @@ pub struct VestingInfo<Balance, BlockNumber> {
 }
 
 impl<
-	Balance: SimpleArithmetic + Copy,
-	BlockNumber: SimpleArithmetic + Copy,
+	Balance: AtLeast32Bit + Copy,
+	BlockNumber: AtLeast32Bit + Copy,
 > VestingInfo<Balance, BlockNumber> {
 	/// Amount locked at block `n`.
 	pub fn locked_at<
@@ -115,6 +115,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, BalanceOf<T>)>;
 		build(|config: &GenesisConfig<T>| {
+			use sp_runtime::traits::Saturating;
 			// Generate initial vesting configuration
 			// * who - Account which we are generating vesting configuration for
 			// * begin - Block when the account will start to vest
@@ -212,16 +213,18 @@ impl<T: Trait> Module<T> {
 	/// (Re)set or remove the module's currency lock on `who`'s account in accordance with their
 	/// current unvested amount.
 	fn update_lock(who: T::AccountId) -> DispatchResult {
-		ensure!(Vesting::<T>::exists(&who), Error::<T>::NotVesting);
-		let unvested = Self::vesting_balance(&who);
-		if unvested.is_zero() {
+		let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
+		let now = <frame_system::Module<T>>::block_number();
+		let locked_now = vesting.locked_at::<T::BlockNumberToBalance>(now);
+
+		if locked_now.is_zero() {
 			T::Currency::remove_lock(VESTING_ID, &who);
 			Vesting::<T>::remove(&who);
 			Self::deposit_event(RawEvent::VestingCompleted(who));
 		} else {
 			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
-			T::Currency::set_lock(VESTING_ID, &who, unvested, reasons);
-			Self::deposit_event(RawEvent::VestingUpdated(who, unvested));
+			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
+			Self::deposit_event(RawEvent::VestingUpdated(who, locked_now));
 		}
 		Ok(())
 	}
@@ -249,6 +252,10 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 	/// If there already exists a vesting schedule for the given account, an `Err` is returned
 	/// and nothing is updated.
 	///
+	/// On success, a linearly reducing amount of funds will be locked. In order to realise any
+	/// reduction of the lock over time as it diminishes, the account owner must use `vest` or
+	/// `vest_other`.
+	///
 	/// Is a no-op if the amount to be vested is zero.
 	fn add_vesting_schedule(
 		who: &T::AccountId,
@@ -257,7 +264,7 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 		starting_block: T::BlockNumber
 	) -> DispatchResult {
 		if locked.is_zero() { return Ok(()) }
-		if Vesting::<T>::exists(who) {
+		if Vesting::<T>::contains_key(who) {
 			Err(Error::<T>::ExistingVestingSchedule)?
 		}
 		let vesting_schedule = VestingInfo {
@@ -292,7 +299,9 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
-		Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup, Identity, OnInitialize},
+		Perbill,
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup, Identity, OnInitialize},
 	};
 	use sp_storage::Storage;
 
@@ -300,9 +309,9 @@ mod tests {
 		pub enum Origin for Test  where system = frame_system {}
 	}
 
-	// For testing the module, we construct most of a mock runtime. This means
+	// For testing the pallet, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of modules we want to use.
+	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -328,19 +337,16 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
-	}
-	parameter_types! {
-		pub const CreationFee: u64 = 0;
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnReapAccount = Balances;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
-		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
+		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 	impl Trait for Test {
 		type Event = ();

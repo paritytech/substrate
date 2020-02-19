@@ -20,7 +20,7 @@ use crate::utils::interval;
 use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use libp2p::{Multiaddr, PeerId};
-use libp2p::core::{ConnectedPoint, nodes::{listeners::ListenerId, Substream}, muxing::StreamMuxerBox};
+use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use sp_core::storage::{StorageKey, ChildInfo};
@@ -51,19 +51,35 @@ use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
+use wasm_timer::Instant;
+
+// Include sources generated from protobuf definitions.
+pub mod api {
+	pub mod v1 {
+		include!(concat!(env!("OUT_DIR"), "/api.v1.rs"));
+		pub mod light {
+			include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
+		}
+	}
+}
 
 mod legacy_proto;
 mod util;
 
+pub mod block_requests;
 pub mod message;
 pub mod event;
+pub mod light_client_handler;
 pub mod light_dispatch;
 pub mod sync;
+
+pub use block_requests::BlockRequests;
+pub use light_client_handler::LightClientHandler;
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
-/// Interval at which we propagate exstrinsics;
+/// Interval at which we propagate extrinsics;
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 
 /// Maximim number of known block hashes to keep for a peer.
@@ -79,7 +95,7 @@ pub(crate) const MIN_VERSION: u32 = 3;
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 /// When light node connects to the full node and the full node is behind light node
-/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it unuseful
+/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it not useful
 /// and disconnect to free connection slot.
 const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
@@ -139,7 +155,7 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	/// When asked for a proof of finality, we use this struct to build one.
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
-	behaviour: LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: LegacyProto,
 	/// List of notification protocols that have been registered.
 	registered_notif_protocols: HashSet<ConsensusEngineId>,
 }
@@ -155,7 +171,7 @@ struct PacketStats {
 /// A peer that we are connected to
 /// and from whom we have not yet received a Status message.
 struct HandshakingPeer {
-	timestamp: time::Instant,
+	timestamp: Instant,
 }
 
 /// Peer information
@@ -163,9 +179,9 @@ struct HandshakingPeer {
 struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
-	block_request: Option<(time::Instant, message::BlockRequest<B>)>,
-	/// Requests we are no longer insterested in.
-	obsolete_requests: HashMap<message::RequestId, time::Instant>,
+	block_request: Option<(Instant, message::BlockRequest<B>)>,
+	/// Requests we are no longer interested in.
+	obsolete_requests: HashMap<message::RequestId, Instant>,
 	/// Holds a set of transactions known to this peer.
 	known_extrinsics: LruHashSet<H>,
 	/// Holds a set of blocks known to this peer.
@@ -188,7 +204,7 @@ pub struct PeerInfo<B: BlockT> {
 }
 
 struct LightDispatchIn<'a> {
-	behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: &'a mut LegacyProto,
 	peerset: sc_peerset::PeersetHandle,
 }
 
@@ -634,7 +650,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Called when a new peer is connected
 	pub fn on_peer_connected(&mut self, who: PeerId) {
 		trace!(target: "sync", "Connecting {}", who);
-		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: time::Instant::now() });
+		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: Instant::now() });
 		self.send_status(who);
 	}
 
@@ -779,8 +795,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			blocks_range
 		);
 
-		// TODO [andre]: move this logic to the import queue so that
-		// justifications are imported asynchronously (#1482)
 		if request.fields == message::BlockAttributes::JUSTIFICATION {
 			match self.sync.on_block_justification(peer, response) {
 				Ok(sync::OnBlockJustification::Nothing) => CustomMessageOutcome::None,
@@ -821,21 +835,21 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	fn maintain_peers(&mut self) {
-		let tick = time::Instant::now();
+		let tick = Instant::now();
 		let mut aborting = Vec::new();
 		{
 			for (who, peer) in self.context_data.peers.iter() {
 				if peer.block_request.as_ref().map_or(false, |(t, _)| (tick - *t).as_secs() > REQUEST_TIMEOUT_SEC) {
 					log!(
 						target: "sync",
-						if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
+						if self.important_peers.contains(who) { Level::Warn } else { Level::Trace },
 						"Request timeout {}", who
 					);
 					aborting.push(who.clone());
 				} else if peer.obsolete_requests.values().any(|t| (tick - *t).as_secs() > REQUEST_TIMEOUT_SEC) {
 					log!(
 						target: "sync",
-						if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
+						if self.important_peers.contains(who) { Level::Warn } else { Level::Trace },
 						"Obsolete timeout {}", who
 					);
 					aborting.push(who.clone());
@@ -846,7 +860,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			{
 				log!(
 					target: "sync",
-					if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
+					if self.important_peers.contains(who) { Level::Warn } else { Level::Trace },
 					"Handshake timeout {}", who
 				);
 				aborting.push(who.clone());
@@ -1739,7 +1753,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 }
 
 fn send_request<B: BlockT, H: ExHashT>(
-	behaviour: &mut LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: &mut LegacyProto,
 	stats: &mut HashMap<&'static str, PacketStats>,
 	peers: &mut HashMap<PeerId, Peer<B, H>>,
 	who: &PeerId,
@@ -1753,14 +1767,14 @@ fn send_request<B: BlockT, H: ExHashT>(
 				trace!(target: "sync", "Request {} for {} is now obsolete.", request.id, who);
 				peer.obsolete_requests.insert(request.id, timestamp);
 			}
-			peer.block_request = Some((time::Instant::now(), r.clone()));
+			peer.block_request = Some((Instant::now(), r.clone()));
 		}
 	}
 	send_message::<B>(behaviour, stats, who, message)
 }
 
 fn send_message<B: BlockT>(
-	behaviour: &mut LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: &mut LegacyProto,
 	stats: &mut HashMap<&'static str, PacketStats>,
 	who: &PeerId,
 	message: Message<B>,
@@ -1772,9 +1786,8 @@ fn send_message<B: BlockT>(
 	behaviour.send_packet(who, encoded);
 }
 
-impl<B: BlockT, H: ExHashT> NetworkBehaviour for
-Protocol<B, H> {
-	type ProtocolsHandler = <LegacyProto<Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
+impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
+	type ProtocolsHandler = <LegacyProto as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {

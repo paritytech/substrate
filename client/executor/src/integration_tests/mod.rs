@@ -88,7 +88,7 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"call to undefined external function with index 68\")"
+					"Other(\"Wasm execution trapped: call to a missing function env:missing_external\")"
 				),
 			}
 		}
@@ -117,7 +117,7 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"call to undefined external function with index 69\")"
+					"Other(\"Wasm execution trapped: call to a missing function env:yet_another_missing_external\")"
 				),
 			}
 		}
@@ -564,4 +564,27 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	// On the second invocation we allocate yet another 768KB (75%) of stack
 	let res = instance.call("allocates_huge_stack_array", &false.encode());
 	assert!(res.is_ok());
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
+	let mut instance = crate::wasm_runtime::create_wasm_runtime_with_code(
+		wasm_method,
+		1024,
+		&WASM_BINARY[..],
+		HostFunctions::host_functions(),
+		true,
+	).expect("Creates instance");
+
+	let heap_base = instance.get_global_val("__heap_base")
+		.expect("`__heap_base` is valid")
+		.expect("`__heap_base` exists")
+		.as_i32()
+		.expect("`__heap_base` is an `i32`");
+
+	let params = (heap_base as u32, 512u32 * 64 * 1024).encode();
+	instance.call("check_and_set_in_heap", &params).unwrap();
+
+	// Cal it a second time to check that the heap was freed.
+	instance.call("check_and_set_in_heap", &params).unwrap();
 }

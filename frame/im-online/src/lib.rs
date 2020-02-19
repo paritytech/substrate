@@ -79,7 +79,7 @@ use pallet_session::historical::IdentificationTuple;
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
 	RuntimeDebug,
-	traits::{Convert, Member, Saturating, SimpleArithmetic}, Perbill,
+	traits::{Convert, Member, Saturating, AtLeast32Bit}, Perbill, PerThing,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, InvalidTransaction,
 		TransactionPriority,
@@ -102,9 +102,10 @@ pub mod sr25519 {
 		app_crypto!(sr25519, IM_ONLINE);
 	}
 
-	/// An i'm online keypair using sr25519 as its crypto.
-	#[cfg(feature = "std")]
-	pub type AuthorityPair = app_sr25519::Pair;
+	sp_application_crypto::with_pair! {
+		/// An i'm online keypair using sr25519 as its crypto.
+		pub type AuthorityPair = app_sr25519::Pair;
+	}
 
 	/// An i'm online signature using sr25519 as its crypto.
 	pub type AuthoritySignature = app_sr25519::Signature;
@@ -119,9 +120,10 @@ pub mod ed25519 {
 		app_crypto!(ed25519, IM_ONLINE);
 	}
 
-	/// An i'm online keypair using ed25519 as its crypto.
-	#[cfg(feature = "std")]
-	pub type AuthorityPair = app_ed25519::Pair;
+	sp_application_crypto::with_pair! {
+		/// An i'm online keypair using ed25519 as its crypto.
+		pub type AuthorityPair = app_ed25519::Pair;
+	}
 
 	/// An i'm online signature using ed25519 as its crypto.
 	pub type AuthoritySignature = app_ed25519::Signature;
@@ -151,7 +153,7 @@ struct HeartbeatStatus<BlockNumber> {
 	pub sent_at: BlockNumber,
 }
 
-impl<BlockNumber: PartialEq + SimpleArithmetic + Copy> HeartbeatStatus<BlockNumber> {
+impl<BlockNumber: PartialEq + AtLeast32Bit + Copy> HeartbeatStatus<BlockNumber> {
 	/// Returns true if heartbeat has been recently sent.
 	///
 	/// Parameters:
@@ -231,7 +233,7 @@ pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
 	/// An expected duration of the session.
 	///
 	/// This parameter is used to determine the longevity of `heartbeat` transaction
-	/// and a rough time when we should start considering sending hearbeats,
+	/// and a rough time when we should start considering sending heartbeats,
 	/// since the workers avoids sending them at the very beginning of the session, assuming
 	/// there is a chance the authority will produce a block and they won't be necessary.
 	type SessionDuration: Get<Self::BlockNumber>;
@@ -315,7 +317,7 @@ decl_module! {
 			ensure_none(origin)?;
 
 			let current_session = <pallet_session::Module<T>>::current_index();
-			let exists = <ReceivedHeartbeats>::exists(
+			let exists = <ReceivedHeartbeats>::contains_key(
 				&current_session,
 				&heartbeat.authority_index
 			);
@@ -367,7 +369,7 @@ decl_module! {
 type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Trait>::BlockNumber>>;
 
 /// Keep track of number of authored blocks per authority, uncles are counted as
-/// well since they're a valid proof of onlineness.
+/// well since they're a valid proof of being online.
 impl<T: Trait + pallet_authorship::Trait> pallet_authorship::EventHandler<T::ValidatorId, T::BlockNumber> for Module<T> {
 	fn note_author(author: T::ValidatorId) {
 		Self::note_authorship(author);
@@ -398,7 +400,7 @@ impl<T: Trait> Module<T> {
 	fn is_online_aux(authority_index: AuthIndex, authority: &T::ValidatorId) -> bool {
 		let current_session = <pallet_session::Module<T>>::current_index();
 
-		<ReceivedHeartbeats>::exists(&current_session, &authority_index) ||
+		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index) ||
 			<AuthoredBlocks<T>>::get(
 				&current_session,
 				authority,
@@ -409,7 +411,7 @@ impl<T: Trait> Module<T> {
 	/// the authorities series, during the current session. Otherwise `false`.
 	pub fn received_heartbeat_in_current_session(authority_index: AuthIndex) -> bool {
 		let current_session = <pallet_session::Module<T>>::current_index();
-		<ReceivedHeartbeats>::exists(&current_session, &authority_index)
+		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index)
 	}
 
 	/// Note that the given authority has authored a block in the current session.
@@ -574,7 +576,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	{
 		// Tell the offchain worker to start making the next session's heartbeats.
 		// Since we consider producing blocks as being online,
-		// the heartbeat is defered a bit to prevent spaming.
+		// the heartbeat is deferred a bit to prevent spamming.
 		let block_number = <frame_system::Module<T>>::block_number();
 		let half_session = T::SessionDuration::get() / 2.into();
 		<HeartbeatAfter<T>>::put(block_number + half_session);

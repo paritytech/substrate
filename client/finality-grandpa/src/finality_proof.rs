@@ -920,7 +920,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn finality_proof_check_fails_when_intemediate_fragment_has_unknown_headers() {
+	fn finality_proof_check_fails_when_intermediate_fragment_has_unknown_headers() {
 		let blockchain = test_blockchain();
 
 		// when intermediate (#0) fragment has non-empty unknown headers
@@ -945,7 +945,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn finality_proof_check_fails_when_intemediate_fragment_has_no_authorities_proof() {
+	fn finality_proof_check_fails_when_intermediate_fragment_has_no_authorities_proof() {
 		let blockchain = test_blockchain();
 
 		// when intermediate (#0) fragment has empty authorities proof
@@ -1004,7 +1004,7 @@ pub(crate) mod tests {
 	#[test]
 	fn finality_proof_is_none_if_first_justification_is_generated_by_unknown_set() {
 		// this is the case for forced change: set_id has been forcibly increased on full node
-		// and ligh node missed that
+		// and light node missed that
 		// => justification verification will fail on light node anyways, so we do not return
 		// finality proof at all
 		let blockchain = test_blockchain();

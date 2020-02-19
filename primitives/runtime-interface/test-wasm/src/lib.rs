@@ -25,7 +25,7 @@ use sp_std::{vec, vec::Vec, mem, convert::TryFrom};
 
 use sp_core::{sr25519::Public, wasm_export_functions};
 
-// Inlucde the WASM binary
+// Include the WASM binary
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
@@ -37,6 +37,17 @@ pub trait TestApi {
 	/// Returns the input data as result.
 	fn return_input(data: Vec<u8>) -> Vec<u8> {
 		data
+	}
+
+	/// Returns 16kb data.
+	///
+	/// # Note
+	///
+	/// We return a `Vec<u32>` because this will use the code path that uses SCALE
+	/// to pass the data between native/wasm. (Vec<u8> is passed without encoding the
+	/// data)
+	fn return_16kb() -> Vec<u32> {
+		vec![0; 4 * 1024]
 	}
 
 	/// Set the storage at key with value.
@@ -97,6 +108,7 @@ pub trait TestApi {
 /// Two random external functions from the old runtime interface.
 /// This ensures that we still inherently export these functions from the host and that we are still
 /// compatible with old wasm runtimes.
+#[cfg(not(feature = "std"))]
 extern "C" {
 	pub fn ext_clear_storage(key_data: *const u8, key_len: u32);
 	pub fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
@@ -104,6 +116,7 @@ extern "C" {
 
 /// Make sure the old runtime interface needs to be imported.
 #[no_mangle]
+#[cfg(not(feature = "std"))]
 pub fn force_old_runtime_interface_import() {
 	unsafe { ext_clear_storage(sp_std::ptr::null(), 0); }
 	unsafe { ext_keccak_256(sp_std::ptr::null(), 0, sp_std::ptr::null_mut()); }
@@ -210,5 +223,29 @@ wasm_export_functions! {
 		for val in &[i128::max_value(), i128::min_value(), 1i128, 5000i128, u64::max_value() as i128] {
 			assert_eq!(*val, test_api::get_and_return_i128(*val));
 		}
+	}
+
+	fn test_vec_return_value_memory_is_freed() {
+		let mut len = 0;
+		for _ in 0..1024 {
+			len += test_api::return_16kb().len();
+		}
+		assert_eq!(1024 * 1024 * 4, len);
+	}
+
+	fn test_encoded_return_value_memory_is_freed() {
+		let mut len = 0;
+		for _ in 0..1024 {
+			len += test_api::return_option_input(vec![0; 16 * 1024]).map(|v| v.len()).unwrap();
+		}
+		assert_eq!(1024 * 1024 * 16, len);
+	}
+
+	fn test_array_return_value_memory_is_freed() {
+		let mut len = 0;
+		for _ in 0..1024 * 1024 {
+			len += test_api::get_and_return_array([0; 34])[1];
+		}
+		assert_eq!(0, len);
 	}
 }

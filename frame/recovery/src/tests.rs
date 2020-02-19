@@ -56,7 +56,7 @@ fn set_recovered_works() {
 }
 
 #[test]
-fn recovery_lifecycle_works() {
+fn recovery_life_cycle_works() {
 	new_test_ext().execute_with(|| {
 		let friends = vec![2, 3, 4];
 		let threshold = 3;
@@ -92,9 +92,9 @@ fn recovery_lifecycle_works() {
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(5), 0);
 		// All storage items are removed from the module
-		assert!(!<ActiveRecoveries<Test>>::exists(&5, &1));
-		assert!(!<Recoverable<Test>>::exists(&5));
-		assert!(!<Recovered<Test>>::exists(&5));
+		assert!(!<ActiveRecoveries<Test>>::contains_key(&5, &1));
+		assert!(!<Recoverable<Test>>::contains_key(&5));
+		assert!(!<Recovered<Test>>::contains_key(&5));
 	});
 }
 

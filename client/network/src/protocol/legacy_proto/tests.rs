@@ -18,8 +18,8 @@
 
 use futures::{prelude::*, ready};
 use codec::{Encode, Decode};
-use libp2p::core::nodes::{Substream, listeners::ListenerId};
-use libp2p::core::{ConnectedPoint, transport::boxed::Boxed, muxing::StreamMuxerBox};
+use libp2p::core::nodes::listeners::ListenerId;
+use libp2p::core::ConnectedPoint;
 use libp2p::swarm::{Swarm, ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{PollParameters, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::{PeerId, Multiaddr, Transport};
@@ -32,11 +32,7 @@ use sp_test_primitives::Block;
 
 /// Builds two nodes that have each other as bootstrap nodes.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
-fn build_nodes()
--> (
-	Swarm<Boxed<(PeerId, StreamMuxerBox), io::Error>, CustomProtoWithAddr>,
-	Swarm<Boxed<(PeerId, StreamMuxerBox), io::Error>, CustomProtoWithAddr>
-) {
+fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 	let mut out = Vec::with_capacity(2);
 
 	let keypairs: Vec<_> = (0..2).map(|_| libp2p::identity::Keypair::generate_ed25519()).collect();
@@ -116,12 +112,12 @@ fn build_nodes()
 
 /// Wraps around the `CustomBehaviour` network behaviour, and adds hardcoded node addresses to it.
 struct CustomProtoWithAddr {
-	inner: LegacyProto<Substream<StreamMuxerBox>>,
+	inner: LegacyProto,
 	addrs: Vec<(PeerId, Multiaddr)>,
 }
 
 impl std::ops::Deref for CustomProtoWithAddr {
-	type Target = LegacyProto<Substream<StreamMuxerBox>>;
+	type Target = LegacyProto;
 
 	fn deref(&self) -> &Self::Target {
 		&self.inner
@@ -135,9 +131,8 @@ impl std::ops::DerefMut for CustomProtoWithAddr {
 }
 
 impl NetworkBehaviour for CustomProtoWithAddr {
-	type ProtocolsHandler =
-		<LegacyProto<Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
-	type OutEvent = <LegacyProto<Substream<StreamMuxerBox>> as NetworkBehaviour>::OutEvent;
+	type ProtocolsHandler = <LegacyProto as NetworkBehaviour>::ProtocolsHandler;
+	type OutEvent = <LegacyProto as NetworkBehaviour>::OutEvent;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		self.inner.new_handler()
@@ -425,7 +420,7 @@ fn reconnect_after_disconnect() {
 			_ => panic!()
 		}
 
-		if let Poll::Ready(Ok(_)) = delay.poll_unpin(cx) {
+		if let Poll::Ready(()) = delay.poll_unpin(cx) {
 			Poll::Ready(Ok(()))
 		} else {
 			Poll::Pending

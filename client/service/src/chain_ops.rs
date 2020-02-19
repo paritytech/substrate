@@ -27,9 +27,12 @@ use sp_runtime::traits::{
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
-use sc_client::Client;
-use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
-use sp_consensus::BlockOrigin;
+use sc_client::{Client, LocalCallExecutor};
+use sp_consensus::{
+	BlockOrigin,
+	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
+};
+use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
 
@@ -45,19 +48,21 @@ pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<Strin
 
 impl<
 	TBl, TRtApi, TGen, TCSExt, TBackend,
-	TExec, TFchr, TSc, TImpQu, TFprb, TFpp,
+	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp,
 	TExPool, TRpc, Backend
 > ServiceBuilderCommand for ServiceBuilder<
-	TBl, TRtApi, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
+	TBl, TRtApi, TGen, TCSExt,
+	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
 	TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend
 > where
 	TBl: BlockT,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
+	TExecDisp: 'static + NativeExecutionDispatch,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
 {
 	type Block = TBl;
+	type NativeDispatch = TExecDisp;
 
 	fn import_blocks(
 		self,

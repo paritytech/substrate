@@ -59,7 +59,7 @@ type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
 #[derive(Clone)]
 struct DummyFactory {
 	client: Arc<TestClient>,
-	epoch_changes: crate::SharedEpochChanges<TestBlock>,
+	epoch_changes: SharedEpochChanges<TestBlock, Epoch>,
 	config: Config,
 	mutator: Mutator,
 }
@@ -105,7 +105,6 @@ impl DummyProposer {
 			>
 		>
 	{
-		use codec::Encode;
 		let block_builder = self.factory.client.new_block_at(
 			&BlockId::Hash(self.parent_hash),
 			pre_digests,
@@ -230,7 +229,7 @@ impl Verifier<TestBlock> for TestVerifier {
 	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut header, Stage::PostSeal);
-		Ok(self.inner.verify(origin, header, justification, body).expect("verification failed!"))
+		self.inner.verify(origin, header, justification, body)
 	}
 }
 
@@ -316,12 +315,12 @@ impl TestNetFactory for BabeTestNet {
 	}
 
 	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData> {
-		trace!(target: "babe", "Retreiving a peer");
+		trace!(target: "babe", "Retrieving a peer");
 		&mut self.peers[i]
 	}
 
 	fn peers(&self) -> &Vec<Peer<Self::PeerData>> {
-		trace!(target: "babe", "Retreiving peers");
+		trace!(target: "babe", "Retrieving peers");
 		&self.peers
 	}
 
@@ -423,7 +422,14 @@ fn run_one_test(
 	}
 
 	runtime.spawn(futures01::future::poll_fn(move || {
-		net.lock().poll();
+		let mut net = net.lock();
+		net.poll();
+		for p in net.peers() {
+			for (h, e) in p.failed_verifications() {
+				panic!("Verification failed for {:?}: {}", h, e);
+			}
+		}
+
 		Ok::<_, ()>(futures01::Async::NotReady::<()>)
 	}));
 
@@ -557,7 +563,7 @@ fn propose_and_import_block<Transaction>(
 	let pre_digest = sp_runtime::generic::Digest {
 		logs: vec![
 			Item::babe_pre_digest(
-				BabePreDigest::Secondary {
+				PreDigest::Secondary {
 					authority_index: 0,
 					slot_number,
 				},
@@ -565,7 +571,17 @@ fn propose_and_import_block<Transaction>(
 		],
 	};
 
+	let parent_hash = parent.hash();
+
 	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap().block;
+
+	let epoch = proposer_factory.epoch_changes.lock().epoch_for_child_of(
+		descendent_query(&*proposer_factory.client),
+		&parent_hash,
+		*parent.number(),
+		slot_number,
+		|slot| proposer_factory.config.genesis_epoch(slot)
+	).unwrap().unwrap();
 
 	let seal = {
 		// sign the pre-sealed hash of the block and then
@@ -583,23 +599,15 @@ fn propose_and_import_block<Transaction>(
 		h
 	};
 
-	let import_result = block_import.import_block(
-		BlockImportParams {
-			origin: BlockOrigin::Own,
-			header: block.header,
-			justification: None,
-			post_digests: vec![seal],
-			body: Some(block.extrinsics),
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		},
-		Default::default(),
-	).unwrap();
+	let mut import = BlockImportParams::new(BlockOrigin::Own, block.header);
+	import.post_digests.push(seal);
+	import.body = Some(block.extrinsics);
+	import.intermediates.insert(
+		Cow::from(INTERMEDIATE_KEY),
+		Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+	);
+	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+	let import_result = block_import.import_block(import, Default::default()).unwrap();
 
 	match import_result {
 		ImportResult::Imported(_) => {},

@@ -289,6 +289,7 @@ impl Default for NetworkConfiguration {
 				enable_mdns: false,
 				allow_private_ipv4: true,
 				wasm_external_transport: None,
+				use_yamux_flow_control: false,
 			},
 			max_parallel_downloads: 5,
 		}
@@ -334,8 +335,9 @@ pub enum TransportConfig {
 		enable_mdns: bool,
 
 		/// If true, allow connecting to private IPv4 addresses (as defined in
-		/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address has been passed in
-		/// [`NetworkConfiguration::reserved_nodes`] or [`NetworkConfiguration::boot_nodes`].
+		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
+		/// been passed in [`NetworkConfiguration::reserved_nodes`] or
+		/// [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
 
 		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we
@@ -345,6 +347,8 @@ pub enum TransportConfig {
 		/// This parameter exists whatever the target platform is, but it is expected to be set to
 		/// `Some` only when compiling for WASM.
 		wasm_external_transport: Option<wasm_ext::ExtTransport>,
+		/// Use flow control for yamux streams if set to true.
+		use_yamux_flow_control: bool,
 	},
 
 	/// Only allow connections within the same process.

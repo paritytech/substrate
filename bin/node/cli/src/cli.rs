@@ -17,7 +17,7 @@
 use sc_cli::{SharedParams, ImportParams, RunCmd};
 use structopt::StructOpt;
 
-#[allow(missing_docs)]
+/// An overarching CLI command definition.
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(settings = &[
 	structopt::clap::AppSettings::GlobalVersion,
@@ -25,7 +25,7 @@ use structopt::StructOpt;
 	structopt::clap::AppSettings::SubcommandsNegateReqs,
 ])]
 pub struct Cli {
-	#[allow(missing_docs)]
+	/// Possible subcommand with parameters.
 	#[structopt(subcommand)]
 	pub subcommand: Option<Subcommand>,
 	#[allow(missing_docs)]
@@ -33,10 +33,10 @@ pub struct Cli {
 	pub run: RunCmd,
 }
 
-#[allow(missing_docs)]
+/// Possible subcommands of the main binary.
 #[derive(Clone, Debug, StructOpt)]
 pub enum Subcommand {
-	#[allow(missing_docs)]
+	/// A set of base subcommands handled by `sc_cli`.
 	#[structopt(flatten)]
 	Base(sc_cli::Subcommand),
 	/// The custom factory subcommmand for manufacturing transactions.
@@ -46,40 +46,33 @@ pub enum Subcommand {
 		Only supported for development or local testnet."
 	)]
 	Factory(FactoryCmd),
+
+	/// The custom inspect subcommmand for decoding blocks and extrinsics.
+	#[structopt(
+		name = "inspect",
+		about = "Decode given block or extrinsic using current native runtime."
+	)]
+	Inspect(node_inspect::cli::InspectCmd),
+
+	/// The custom benchmark subcommmand benchmarking runtime pallets.
+	#[structopt(
+		name = "benchmark",
+		about = "Benchmark runtime pallets."
+	)]
+	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 }
 
 /// The `factory` command used to generate transactions.
 /// Please note: this command currently only works on an empty database!
 #[derive(Debug, StructOpt, Clone)]
 pub struct FactoryCmd {
-	/// How often to repeat. This option only has an effect in mode `MasterToNToM`.
-	#[structopt(long="rounds", default_value = "1")]
-	pub rounds: u64,
+	/// Number of blocks to generate.
+	#[structopt(long="blocks", default_value = "1")]
+	pub blocks: u32,
 
-	/// MasterToN: Manufacture `num` transactions from the master account
-	///            to `num` randomly created accounts, one each.
-	///
-	/// MasterTo1: Manufacture `num` transactions from the master account
-	///            to exactly one other randomly created account.
-	///
-	/// MasterToNToM: Manufacture `num` transactions from the master account
-	///               to `num` randomly created accounts.
-	///               From each of these randomly created accounts manufacture
-	///               a transaction to another randomly created account.
-	///               Repeat this `rounds` times. If `rounds` = 1 the behavior
-	///               is the same as `MasterToN`.{n}
-	///               A -> B, A -> C, A -> D, ... x `num`{n}
-	///               B -> E, C -> F, D -> G, ...{n}
-	///               ... x `rounds`
-	///
-	/// These three modes control manufacturing.
-	#[structopt(long="mode", default_value = "MasterToN")]
-	pub mode: node_transaction_factory::Mode,
-
-	/// Number of transactions to generate. In mode `MasterNToNToM` this is
-	/// the number of transactions per round.
-	#[structopt(long="num", default_value = "8")]
-	pub num: u64,
+	/// Number of transactions to push per block.
+	#[structopt(long="transactions", default_value = "8")]
+	pub transactions: u32,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

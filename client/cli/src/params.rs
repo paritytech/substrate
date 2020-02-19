@@ -47,28 +47,34 @@ impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
 	}
 }
 
-arg_enum! {
-	/// How to execute Wasm runtime code
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone, Copy)]
-	pub enum WasmExecutionMethod {
-		// Uses an interpreter.
-		Interpreted,
-		// Uses a compiled runtime.
-		Compiled,
+#[allow(missing_docs)]
+mod wasm_execution_method {
+	use super::*;
+
+	arg_enum! {
+		/// How to execute Wasm runtime code
+		#[derive(Debug, Clone, Copy)]
+		pub enum WasmExecutionMethod {
+			// Uses an interpreter.
+			Interpreted,
+			// Uses a compiled runtime.
+			Compiled,
+		}
+	}
+
+	impl WasmExecutionMethod {
+		/// Returns list of variants that are not disabled by feature flags.
+		pub fn enabled_variants() -> Vec<&'static str> {
+			Self::variants()
+				.iter()
+				.cloned()
+				.filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
+				.collect()
+		}
 	}
 }
 
-impl WasmExecutionMethod {
-	/// Returns list of variants that are not disabled by feature flags.
-	fn enabled_variants() -> Vec<&'static str> {
-		Self::variants()
-			.iter()
-			.cloned()
-			.filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
-			.collect()
-	}
-}
+pub use wasm_execution_method::WasmExecutionMethod;
 
 impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	fn into(self) -> sc_service::config::WasmExecutionMethod {
@@ -155,6 +161,20 @@ pub struct ImportParams {
 	/// Specify the state cache size.
 	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
+
+	/// Comma separated list of targets for tracing
+	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
+	pub tracing_targets: Option<String>,
+
+	/// Receiver to process tracing messages
+	#[structopt(
+		long = "tracing-receiver",
+		value_name = "RECEIVER",
+		possible_values = &TracingReceiver::variants(),
+		case_insensitive = true,
+		default_value = "Log"
+	)]
+	pub tracing_receiver: TracingReceiver,
 }
 
 /// Parameters used to create the network configuration.
@@ -193,7 +213,7 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "port", value_name = "PORT")]
 	pub port: Option<u16>,
 
-	/// Allow connecting to private IPv4 addresses (as specified in
+	/// Forbid connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
 	/// `--reserved-nodes` or `--bootnodes`.
 	#[structopt(long = "no-private-ipv4")]
@@ -224,6 +244,10 @@ pub struct NetworkConfigurationParams {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
+
+	/// Experimental feature flag.
+	#[structopt(long = "use-yamux-flow-control")]
+	pub use_yamux_flow_control: bool,
 }
 
 arg_enum! {
@@ -579,20 +603,6 @@ pub struct RunCmd {
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 
-	/// Comma separated list of targets for tracing
-	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
-	pub tracing_targets: Option<String>,
-
-	/// Receiver to process tracing messages
-	#[structopt(
-		long = "tracing-receiver",
-		value_name = "RECEIVER",
-		possible_values = &TracingReceiver::variants(),
-		case_insensitive = true,
-		default_value = "Log"
-	)]
-	pub tracing_receiver: TracingReceiver,
-
 	/// Specify custom keystore path.
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
@@ -714,7 +724,7 @@ pub struct BuildSpecCmd {
 	pub node_key_params: NodeKeyParams,
 }
 
-/// Wrapper type of `String` which holds an arbitary sized unsigned integer formatted as decimal.
+/// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a decimal.
 #[derive(Debug, Clone)]
 pub struct BlockNumber(String);
 
@@ -861,7 +871,7 @@ pub enum Subcommand {
 	/// Import blocks from file.
 	ImportBlocks(ImportBlocksCmd),
 
-	/// Validte a single block.
+	/// Validate a single block.
 	CheckBlock(CheckBlockCmd),
 
 	/// Revert chain to the previous state.
@@ -933,10 +943,7 @@ impl RunCmd {
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-		crate::update_config_for_running_node(
-			&mut config,
-			self,
-		)?;
+		crate::update_config_for_running_node(&mut config, self)?;
 
 		crate::run_node(config, new_light, new_full, &version)
 	}
@@ -1003,7 +1010,7 @@ impl ExportBlocksCmd {
 
 		crate::fill_config_keystore_in_memory(&mut config)?;
 
-		if let DatabaseConfig::Path { ref path, .. } = &config.database {
+		if let DatabaseConfig::Path { ref path, .. } = config.expect_database() {
 			info!("DB path: {}", path.display());
 		}
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
@@ -1124,7 +1131,7 @@ impl PurgeChainCmd {
 
 		crate::fill_config_keystore_in_memory(&mut config)?;
 
-		let db_path = match config.database {
+		let db_path = match config.expect_database() {
 			DatabaseConfig::Path { path, .. } => path,
 			_ => {
 				eprintln!("Cannot purge custom database implementation");

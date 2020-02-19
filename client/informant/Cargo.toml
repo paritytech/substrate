@@ -1,0 +1,19 @@
+[package]
+name = "sc-informant"
+version = "0.8.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate informant."
+edition = "2018"
+license = "GPL-3.0"
+
+[dependencies]
+ansi_term = "0.12.1"
+futures = "0.3.1"
+log = "0.4.8"
+parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
+wasm-timer = "0.2"
+sc-client-api = { version = "2.0.0", path = "../api" }
+sc-network = { version = "0.8", path = "../network" }
+sc-service = { version = "0.8", default-features = false, path = "../service" }
+sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }

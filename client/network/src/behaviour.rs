@@ -18,12 +18,11 @@ use crate::{
 	debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut, DiscoveryNetBehaviour,
 	Event, protocol::event::DhtEvent, ExHashT,
 };
-use crate::protocol::{CustomMessageOutcome, Protocol};
+use crate::protocol::{self, light_client_handler, CustomMessageOutcome, Protocol};
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
-use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
-use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
+use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
 use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, Justification};
@@ -38,10 +37,13 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	substrate: Protocol<B, H>,
 	/// Periodically pings and identifies the nodes we are connected to, and store information in a
 	/// cache.
-	debug_info: debug_info::DebugInfoBehaviour<Substream<StreamMuxerBox>>,
+	debug_info: debug_info::DebugInfoBehaviour,
 	/// Discovers nodes of the network.
-	discovery: DiscoveryBehaviour<Substream<StreamMuxerBox>>,
-
+	discovery: DiscoveryBehaviour,
+	/// Block request handling.
+	block_requests: protocol::BlockRequests<B>,
+	/// Light client request handling.
+	light_client_handler: protocol::LightClientHandler<B>,
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
 	events: Vec<BehaviourOut<B>>,
@@ -64,6 +66,9 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 		allow_private_ipv4: bool,
+		discovery_only_if_under_num: u64,
+		block_requests: protocol::BlockRequests<B>,
+		light_client_handler: protocol::LightClientHandler<B>,
 	) -> Self {
 		Behaviour {
 			substrate,
@@ -72,9 +77,12 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 				local_public_key,
 				known_addresses,
 				enable_mdns,
-				allow_private_ipv4
+				allow_private_ipv4,
+				discovery_only_if_under_num,
 			).await,
-			events: Vec::new(),
+			block_requests,
+			light_client_handler,
+			events: Vec::new()
 		}
 	}
 
@@ -115,6 +123,12 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	/// Starts putting a record into DHT. Will later produce either a `ValuePut` or a `ValuePutFailed` event.
 	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
 		self.discovery.put_value(key, value);
+	}
+
+	/// Issue a light client request.
+	#[allow(unused)]
+	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::Error> {
+		self.light_client_handler.request(r)
 	}
 }
 
@@ -207,7 +221,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 }
 
 impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
-	fn poll<TEv>(&mut self, _: &mut Context) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
+	fn poll<TEv>(&mut self, _: &mut Context, _: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
 		if !self.events.is_empty() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(self.events.remove(0)))
 		}
