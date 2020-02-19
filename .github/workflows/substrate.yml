@@ -13,12 +13,9 @@ jobs:
     steps:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v1
         with:
-          fetch-depth: 50
-      - name: Checkout submodules
-        shell: bash
-        run: git submodule update --init --recursive
+          submodules: recursive
       - name: Prepare for restoring caches
         run: |
           rm -rf /home/runner/.rustup
