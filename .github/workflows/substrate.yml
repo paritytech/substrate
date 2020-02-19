@@ -845,7 +845,7 @@ jobs:
         with:
           path: target
           key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-        run: rm -f ./crate-docs/index.html
+      - run: rm -f ./crate-docs/index.html
       - name: Run cargo doc release
         uses: actions-rs/cargo@v1
         with:
