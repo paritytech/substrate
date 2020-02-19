@@ -391,7 +391,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 								DiscoveryOut::ValueFound(results)
 							}
-							Err(e@libp2p::kad::GetRecordError::NotFound{..}) => {
+							Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
 								trace!(target: "sub-libp2p",
 									"Libp2p => Failed to get record: {:?}", e);
 								DiscoveryOut::ValueNotFound(e.into_key())
