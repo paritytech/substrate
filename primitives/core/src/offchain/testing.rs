@@ -146,7 +146,7 @@ impl TestOffchainExt {
 
 impl offchain::Externalities for TestOffchainExt {
 	fn is_validator(&self) -> bool {
-		unimplemented!("not needed in tests so far")
+		true
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {

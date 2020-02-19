@@ -192,6 +192,8 @@ fn late_heartbeat_should_fail() {
 
 #[test]
 fn should_generate_heartbeats() {
+	use sp_runtime::traits::OffchainWorker;
+
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
 	let (pool, state) = TestTransactionPoolExt::new();
@@ -203,6 +205,11 @@ fn should_generate_heartbeats() {
 		let block = 1;
 		System::set_block_number(block);
 		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
+		// buffer new validators
+		Session::rotate_session();
+		// enact the change and buffer another one
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		Session::rotate_session();
 
 		// when
 		ImOnline::offchain_worker(block);
@@ -220,7 +227,7 @@ fn should_generate_heartbeats() {
 		};
 
 		assert_eq!(heartbeat, Heartbeat {
-			block_number: 2,
+			block_number: block,
 			network_state: sp_io::offchain::network_state().unwrap(),
 			session_index: 2,
 			authority_index: 2,
