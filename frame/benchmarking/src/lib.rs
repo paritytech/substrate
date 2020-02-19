@@ -506,8 +506,8 @@ macro_rules! benchmark_backend {
 		#[allow(non_camel_case_types)]
 		struct $name;
 		impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for $name {
+			#[allow(unused_variables)]
 			fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-				// Registrar Count
 				vec! [
 					$(
 						(BenchmarkParameter::$param, $param_from, $param_to)
@@ -515,6 +515,7 @@ macro_rules! benchmark_backend {
 				]
 			}
 
+			#[allow(unused_variables)]
 			fn instance(&self, components: &[(BenchmarkParameter, u32)])
 				-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 			{
