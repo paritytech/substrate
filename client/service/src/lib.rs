@@ -46,7 +46,7 @@ use futures::{
 	task::{Spawn, FutureObj, SpawnError},
 };
 use sc_network::{
-	NetworkService, NetworkState, specialization::NetworkSpecialization,
+	NetworkService, network_state::NetworkState, specialization::NetworkSpecialization,
 	PeerId, ReportHandle,
 };
 use log::{log, warn, debug, error, Level};
@@ -71,7 +71,7 @@ pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use sc_network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
+pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -634,10 +634,10 @@ where
 		.collect()
 }
 
-impl<B, H, C, Pool, E> sc_network::TransactionPool<H, B> for
+impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for
 	TransactionPoolAdapter<C, Pool>
 where
-	C: sc_network::ClientHandle<B> + Send + Sync,
+	C: sc_network::config::Client<B> + Send + Sync,
 	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
