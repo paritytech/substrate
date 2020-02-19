@@ -17,7 +17,7 @@
 //! Tools for analysing the benchmark results.
 
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder, RegressionModel};
-use frame_benchmarking::{BenchmarkResults, BenchmarkParameter};
+use frame_benchmarking::BenchmarkResults;
 use std::collections::BTreeMap;
 
 pub struct Analysis {
@@ -50,7 +50,7 @@ impl Analysis {
 			(format!("{:?}", p), i, others, values)
 		}).collect::<Vec<_>>();
 
-		let models = results.iter().map(|(ref name, i, ref others, ref values)| {
+		let models = results.iter().map(|(_, _, _, ref values)| {
 			let mut slopes = vec![];
 			for (i, &(x1, y1)) in values.iter().enumerate() {
 				for &(x2, y2) in values.iter().skip(i + 1) {
@@ -77,7 +77,7 @@ impl Analysis {
 			.map(|((offset, slope), (_, i, others, _))| {
 				let over = others.iter()
 					.enumerate()
-					.filter(|(j, v)| j != i)
+					.filter(|(j, _)| j != i)
 					.map(|(j, v)| models[j].1 * *v as f64)
 					.fold(0f64, |acc, i| acc + i);
 				(*offset - over, *slope)
@@ -134,7 +134,7 @@ impl Analysis {
 
 		let slopes = model.parameters.regressor_values.iter()
 			.enumerate()
-			.map(|(i, x)| (*x + 0.5) as u128)
+			.map(|(_, x)| (*x + 0.5) as u128)
 			.collect();
 
 		let value_dists = results.iter().map(|(p, vs)| {
