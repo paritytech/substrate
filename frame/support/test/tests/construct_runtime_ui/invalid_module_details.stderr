@@ -2,4 +2,4 @@ error: expected curly braces
  --> $DIR/invalid_module_details.rs:9:19
   |
 9 |         system: System::(),
-  |                         ^
+  |                         ^^
