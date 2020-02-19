@@ -26,13 +26,13 @@ pub use prometheus::{
 use prometheus::{Encoder, TextEncoder, core::Collector};
 use std::net::SocketAddr;
 
-#[cfg(target_os = "unknown")]
-pub use unknown_os::init_prometheus;
-
 #[cfg(not(target_os = "unknown"))]
 mod networking;
-pub use known_os::init_prometheus;
 
+#[cfg(target_os = "unknown")]
+pub use unknown_os::init_prometheus;
+#[cfg(not(target_os = "unknown"))]
+pub use known_os::init_prometheus;
 
 pub fn register<T: Clone + Collector + 'static>(metric: T, registry: &Registry) -> Result<T, PrometheusError> {
 	registry.register(Box::new(metric.clone()))?;
