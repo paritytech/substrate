@@ -143,8 +143,13 @@ decl_module! {
 		/// via `validate_unsigned` implementation and also are rendered invalid if
 		/// the function has already been called in current "session".
 		///
+		/// It's important to specify `weight` for unsigned calls as well, because even though
+		/// they don't charge fees, we still don't want a single block to contain unlimited
+		/// number of such transactions.
+		///
 		/// This example is not focused on correctness of the oracle itself, but rather it's
 		/// purpose is to showcase offchain worker capabilities.
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		pub fn submit_price_unsigned(origin, _block_number: T::BlockNumber, price: u32) -> DispatchResult {
 			// This ensure that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
