@@ -18,7 +18,6 @@
 
 use super::*;
 use mock::*;
-use codec::Encode;
 use sp_runtime::{assert_eq_error_rate, traits::{OnInitialize, BadOrigin}};
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
@@ -451,7 +450,7 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 0
 			let total_payout_0 = current_total_payout_for_duration(3000);
-			assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_0 > 100); // Test is meaningful if reward something
 			<Module<Test>>::reward_by_ids(vec![(41, 1)]);
 			<Module<Test>>::reward_by_ids(vec![(31, 1)]);
 
@@ -494,7 +493,7 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 1
 			let total_payout_1 = current_total_payout_for_duration(3000);
-			assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_1 > 100); // Test is meaningful if reward something
 			<Module<Test>>::reward_by_ids(vec![(21, 2)]);
 			<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
@@ -562,7 +561,7 @@ fn nominators_also_get_slashed() {
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
 
 		let total_payout = current_total_payout_for_duration(3000);
-		assert!(total_payout > 100); // Test is meaningfull if reward something
+		assert!(total_payout > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		// new era, pay rewards,
@@ -851,7 +850,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
-		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(1);
@@ -875,7 +874,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(3000);
-		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_1 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(2);
@@ -904,7 +903,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_2 = current_total_payout_for_duration(3000);
-		assert!(total_payout_2 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_2 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(3);
@@ -950,8 +949,8 @@ fn validator_payment_prefs_work() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(3000);
+		assert!(total_payout_1 > 100); // Test is meaningful if reward something
 		let exposure_1 = Staking::eras_stakers(Staking::active_era().unwrap(), 11);
-		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(2);
@@ -1410,7 +1409,7 @@ fn reward_to_stake_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
-		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 		<Module<Test>>::reward_by_ids(vec![(21, 1)]);
 
@@ -1680,7 +1679,7 @@ fn bond_with_little_staked_value_bounded() {
 
 			// reward era 0
 			let total_payout_0 = current_total_payout_for_duration(3000);
-			assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_0 > 100); // Test is meaningful if reward something
 			reward_all_elected();
 			start_era(1);
 			mock::make_all_reward_payment(0);
@@ -1697,7 +1696,7 @@ fn bond_with_little_staked_value_bounded() {
 
 			// reward era 1
 			let total_payout_1 = current_total_payout_for_duration(3000);
-			assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_1 > 100); // Test is meaningful if reward something
 			reward_all_elected();
 			start_era(2);
 			mock::make_all_reward_payment(1);
@@ -2700,13 +2699,6 @@ fn remove_multi_deferred() {
 }
 
 #[test]
-fn version_initialized() {
-	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(<Staking as Store>::StorageVersion::get(), crate::migration::CURRENT_VERSION);
-	});
-}
-
-#[test]
 fn slash_kicks_validators_not_nominators() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
@@ -2812,57 +2804,7 @@ fn claim_reward_at_the_last_era() {
 }
 
 #[test]
-fn migration_v2() {
-	ExtBuilder::default().build().execute_with(|| {
-		use crate::slashing::SpanIndex;
-
-		#[derive(Encode)]
-		struct V1SlashingSpans {
-			span_index: SpanIndex,
-			last_start: EraIndex,
-			prior: Vec<EraIndex>,
-		}
-
-		// inject old-style values directly into storage.
-		let set = |stash, spans: V1SlashingSpans| {
-			let key = <Staking as Store>::SlashingSpans::hashed_key_for(stash);
-			sp_io::storage::set(&key, &spans.encode());
-		};
-
-		let spans_11 = V1SlashingSpans {
-			span_index: 10,
-			last_start: 1,
-			prior: vec![0],
-		};
-
-		let spans_21 = V1SlashingSpans {
-			span_index: 1,
-			last_start: 5,
-			prior: vec![],
-		};
-
-		set(11, spans_11);
-		set(21, spans_21);
-
-		<Staking as Store>::StorageVersion::put(1);
-
-		// perform migration.
-		crate::migration::inner::to_v2::<Test>(&mut 1);
-
-		assert_eq!(
-			<Staking as Store>::SlashingSpans::get(&11).unwrap().last_nonzero_slash(),
-			1,
-		);
-
-		assert_eq!(
-			<Staking as Store>::SlashingSpans::get(&21).unwrap().last_nonzero_slash(),
-			5,
-		);
-	});
-}
-
-#[test]
-fn migration_v3() {
+fn upgrade_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(3);
 
@@ -2894,9 +2836,12 @@ fn migration_v3() {
 		<Staking as Store>::ErasStakers::remove_all();
 		<Staking as Store>::ErasStakersClipped::remove_all();
 
-		<Staking as Store>::StorageVersion::put(2);
-		// Perform migration.
-		crate::migration::inner::to_v3::<Test>(&mut 2);
+		<Staking as Store>::IsUpgraded::put(false);
+
+		// Perform upgrade
+		Staking::ensure_storage_upgraded();
+
+		assert_eq!(<Staking as Store>::IsUpgraded::get(), true);
 
 		// Check migration
 		assert_eq!(<Staking as Store>::ActiveEraStart::get().unwrap(), 777);

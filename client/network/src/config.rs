@@ -338,8 +338,9 @@ pub enum TransportConfig {
 		enable_mdns: bool,
 
 		/// If true, allow connecting to private IPv4 addresses (as defined in
-		/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address has been passed in
-		/// [`NetworkConfiguration::reserved_nodes`] or [`NetworkConfiguration::boot_nodes`].
+		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
+		/// been passed in [`NetworkConfiguration::reserved_nodes`] or
+		/// [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
 
 		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we

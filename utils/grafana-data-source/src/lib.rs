@@ -72,11 +72,13 @@ pub fn record_metrics_slice(metrics: &[(&str, f32)]) -> Result<(), Error> {
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Hyper internal error.
+	#[cfg(not(target_os = "unknown"))]
 	Hyper(hyper::Error),
+	/// Http request error.
+	#[cfg(not(target_os = "unknown"))]
+	Http(hyper::http::Error),
 	/// Serialization/deserialization error.
 	Serde(serde_json::Error),
-	/// Http request error.
-	Http(hyper::http::Error),
 	/// Timestamp error.
 	Timestamp(TryFromIntError),
 	/// i/o error.
@@ -86,9 +88,11 @@ pub enum Error {
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
+			#[cfg(not(target_os = "unknown"))]
 			Error::Hyper(error) => Some(error),
-			Error::Serde(error) => Some(error),
+			#[cfg(not(target_os = "unknown"))]
 			Error::Http(error) => Some(error),
+			Error::Serde(error) => Some(error),
 			Error::Timestamp(error) => Some(error),
 			Error::Io(error) => Some(error)
 		}

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-//! A crate that hosts a common definitions that are relevent for the pallet-contracts.
+//! A crate that hosts a common definitions that are relevant for the pallet-contracts.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

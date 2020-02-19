@@ -20,8 +20,8 @@ use codec::Encode;
 use sp_std::convert::TryInto;
 use sp_std::prelude::Vec;
 use sp_runtime::app_crypto::{RuntimeAppPublic, AppPublic, AppSignature};
-use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
-use frame_support::debug;
+use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
+use frame_support::{debug, storage::StorageMap};
 
 /// Creates runtime-specific signed transaction.
 ///
@@ -68,7 +68,7 @@ pub trait Signer<Public, Signature> {
 
 /// A `Signer` implementation for any `AppPublic` type.
 ///
-/// This implementation additionaly supports conversion to/from multi-signature/multi-signer
+/// This implementation additionally supports conversion to/from multi-signature/multi-signer
 /// wrappers.
 /// If the wrapped crypto doesn't match `AppPublic`s crypto `None` is returned.
 impl<Public, Signature, TAnyAppPublic> Signer<Public, Signature> for TAnyAppPublic where
@@ -128,19 +128,19 @@ pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 	fn sign_and_submit(call: impl Into<Call>, public: PublicOf<T, Call, Self>) -> Result<(), ()> {
 		let call = call.into();
 		let id = public.clone().into_account();
-		let expected = <crate::Module<T>>::account_nonce(&id);
+		let (expected_nonce, extra) = super::Account::<T>::get(&id);
 		debug::native::debug!(
 			target: "offchain",
 			"Creating signed transaction from account: {:?} (nonce: {:?})",
 			id,
-			expected,
+			expected_nonce,
 		);
 		let (call, signature_data) = Self::CreateTransaction
-			::create_transaction::<Self::Signer>(call, public, id.clone(), expected)
+			::create_transaction::<Self::Signer>(call, public, id.clone(), expected_nonce)
 			.ok_or(())?;
 		// increment the nonce. This is fine, since the code should always
 		// be running in off-chain context, so we NEVER persists data.
-		<crate::Module<T>>::inc_account_nonce(&id);
+		super::Account::<T>::insert(&id, (expected_nonce + One::one(), extra));
 
 		let xt = Self::Extrinsic::new(call, Some(signature_data)).ok_or(())?;
 		sp_io::offchain::submit_transaction(xt.encode())

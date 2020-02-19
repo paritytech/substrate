@@ -173,7 +173,7 @@
 //!
 //! Validators and nominators are rewarded at the end of each era. The total reward of an era is
 //! calculated using the era duration and the staking rate (the total amount of tokens staked by
-//! nominators and validators, divided by the total token supply). It aims to incentivise toward a
+//! nominators and validators, divided by the total token supply). It aims to incentivize toward a
 //! defined staking rate. The full specification can be found
 //! [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model).
 //!
@@ -253,7 +253,6 @@
 mod mock;
 #[cfg(test)]
 mod tests;
-mod migration;
 mod slashing;
 
 pub mod inflation;
@@ -271,12 +270,11 @@ use frame_support::{
 };
 use pallet_session::historical::SessionManager;
 use sp_runtime::{
-	Perbill,
-	RuntimeDebug,
+	Perbill, PerThing, RuntimeDebug,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin,
+		AtLeast32Bit, EnsureOrigin,
 	}
 };
 use sp_staking::{
@@ -402,7 +400,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 
 impl<
 	AccountId,
-	Balance: HasCompact + Copy + Saturating + SimpleArithmetic,
+	Balance: HasCompact + Copy + Saturating + AtLeast32Bit,
 > StakingLedger<AccountId, Balance> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
@@ -453,7 +451,7 @@ impl<
 }
 
 impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
-	Balance: SimpleArithmetic + Saturating + Copy,
+	Balance: AtLeast32Bit + Saturating + Copy,
 {
 	/// Slash the validator for a given amount of balance. This can grow the value
 	/// of the slash in the case that the validator has less than `minimum_balance`
@@ -833,8 +831,10 @@ decl_storage! {
 		/// The earliest era for which we have a pending, unapplied slash.
 		EarliestUnappliedSlash: Option<EraIndex>;
 
-		/// The version of storage for upgrade.
-		StorageVersion: u32;
+		/// True if network has been upgraded to this version.
+		///
+		/// True for new networks.
+		IsUpgraded build(|_| true): bool;
 
 		/// Deprecated.
 		SlotStake: BalanceOf<T>;
@@ -866,8 +866,6 @@ decl_storage! {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|config: &GenesisConfig<T>| {
-			StorageVersion::put(migration::CURRENT_VERSION);
-
 			for &(ref stash, ref controller, balance, ref status) in &config.stakers {
 				assert!(
 					T::Currency::free_balance(&stash) >= balance,
@@ -1553,8 +1551,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Ensures storage is upgraded to most recent necessary state.
+	///
+	/// Right now it's a no-op as all networks that are supported by Substrate Frame Core are
+	/// running with the latest staking storage scheme.
 	fn ensure_storage_upgraded() {
-		migration::perform_migrations::<T>();
+		if !IsUpgraded::get() {
+			IsUpgraded::put(true);
+			Self::do_upgrade();
+		}
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -1768,7 +1772,7 @@ impl<T: Trait> Module<T> {
 		});
 		all_nominators.extend(nominator_votes);
 
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote>(
+		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote, Perbill>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,
@@ -1785,7 +1789,7 @@ impl<T: Trait> Module<T> {
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
-			let supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
+			let supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote, Perbill>(
 				&elected_stashes,
 				&assignments,
 				Self::slashable_balance_of,
@@ -1906,6 +1910,98 @@ impl<T: Trait> Module<T> {
 			Forcing::ForceAlways | Forcing::ForceNew => (),
 			_ => ForceEra::put(Forcing::ForceNew),
 		}
+	}
+
+	/// Update storages to current version
+	///
+	/// In old version the staking module has several issue about handling session delay, the
+	/// current era was always considered the active one.
+	///
+	/// After the migration the current era will still be considered the active one for the era of
+	/// the upgrade. And the delay issue will be fixed when planning the next era.
+	// * create:
+	//   * ActiveEraStart
+	//   * ErasRewardPoints
+	//   * ActiveEra
+	//   * ErasStakers
+	//   * ErasStakersClipped
+	//   * ErasValidatorPrefs
+	//   * ErasTotalStake
+	//   * ErasStartSessionIndex
+	// * translate StakingLedger
+	// * removal of:
+	//   * Stakers
+	//   * SlotStake
+	//   * CurrentElected
+	//   * CurrentEraStart
+	//   * CurrentEraStartSessionIndex
+	//   * CurrentEraPointsEarned
+	fn do_upgrade() {
+		#[derive(Encode, Decode)]
+		struct OldStakingLedger<AccountId, Balance: HasCompact> {
+			stash: AccountId,
+			#[codec(compact)]
+			total: Balance,
+			#[codec(compact)]
+			active: Balance,
+			unlocking: Vec<UnlockChunk<Balance>>,
+		}
+
+		let current_era_start_index = <Module<T> as Store>::CurrentEraStartSessionIndex::get();
+		let current_era = <Module<T> as Store>::CurrentEra::get().unwrap_or(0);
+		<Module<T> as Store>::ErasStartSessionIndex::insert(current_era, current_era_start_index);
+		<Module<T> as Store>::ActiveEra::put(current_era);
+		<Module<T> as Store>::ActiveEraStart::put(<Module<T> as Store>::CurrentEraStart::get());
+
+		let current_elected = <Module<T> as Store>::CurrentElected::get();
+		let mut current_total_stake = <BalanceOf<T>>::zero();
+		for validator in &current_elected {
+			let exposure = <Module<T> as Store>::Stakers::get(validator);
+			current_total_stake += exposure.total;
+			<Module<T> as Store>::ErasStakers::insert(current_era, validator, &exposure);
+
+			let mut exposure_clipped = exposure;
+			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
+			if exposure_clipped.others.len() > clipped_max_len {
+				exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value).reverse());
+				exposure_clipped.others.truncate(clipped_max_len);
+			}
+			<Module<T> as Store>::ErasStakersClipped::insert(current_era, validator, exposure_clipped);
+
+			let pref = <Module<T> as Store>::Validators::get(validator);
+			<Module<T> as Store>::ErasValidatorPrefs::insert(current_era, validator, pref);
+		}
+		<Module<T> as Store>::ErasTotalStake::insert(current_era, current_total_stake);
+
+		let points = <Module<T> as Store>::CurrentEraPointsEarned::get();
+		<Module<T> as Store>::ErasRewardPoints::insert(current_era, EraRewardPoints {
+			total: points.total,
+			individual: current_elected.iter().cloned().zip(points.individual.iter().cloned()).collect(),
+		});
+
+		let res = <Module<T> as Store>::Ledger::translate_values(
+			|old: OldStakingLedger<T::AccountId, BalanceOf<T>>| StakingLedger {
+				stash: old.stash,
+				total: old.total,
+				active: old.active,
+				unlocking: old.unlocking,
+				next_reward: 0,
+			}
+		);
+		if let Err(e) = res {
+			frame_support::print("Encountered error in migration of Staking::Ledger map.");
+			frame_support::print("The number of removed key/value is:");
+			frame_support::print(e);
+		}
+
+
+		// Kill old storages
+		<Module<T> as Store>::Stakers::remove_all();
+		<Module<T> as Store>::SlotStake::kill();
+		<Module<T> as Store>::CurrentElected::kill();
+		<Module<T> as Store>::CurrentEraStart::kill();
+		<Module<T> as Store>::CurrentEraStartSessionIndex::kill();
+		<Module<T> as Store>::CurrentEraPointsEarned::kill();
 	}
 }
 

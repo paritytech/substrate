@@ -21,8 +21,9 @@ use std::cell::RefCell;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
-	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
-	testing::{Header, UintAuthorityId}
+	Perbill, impl_opaque_keys,
+	traits::{BlakeTwo256, IdentityLookup, ConvertInto},
+	testing::{Header, UintAuthorityId},
 };
 use sp_staking::SessionIndex;
 
@@ -177,6 +178,9 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnReapAccount = Session;
 }
 
 impl pallet_timestamp::Trait for Test {

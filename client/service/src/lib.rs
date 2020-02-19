@@ -625,7 +625,7 @@ where
 	E: IntoPoolError + From<sp_transaction_pool::error::Error>,
 {
 	pool.ready()
-		.filter(|t| t.is_propagateable())
+		.filter(|t| t.is_propagable())
 		.map(|t| {
 			let hash = t.hash().clone();
 			let ex: B::Extrinsic = t.data().clone();
@@ -705,6 +705,7 @@ mod tests {
 	use futures::executor::block_on;
 	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
+	use sp_runtime::generic::CheckSignature;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 
@@ -716,7 +717,7 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
-		));
+		).0);
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
@@ -733,7 +734,7 @@ mod tests {
 
 		// then
 		assert_eq!(transactions.len(), 1);
-		assert!(transactions[0].1.clone().check().is_ok());
+		assert!(transactions[0].1.clone().check(CheckSignature::Yes).is_ok());
 		// this should not panic
 		let _ = transactions[0].1.transfer();
 	}

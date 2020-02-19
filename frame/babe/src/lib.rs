@@ -25,7 +25,7 @@ pub use pallet_timestamp;
 use sp_std::{result, prelude::*};
 use frame_support::{decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT}};
 use sp_timestamp::OnTimestampSet;
-use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
+use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill, PerThing};
 use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash};
 use sp_staking::{
 	SessionIndex,
@@ -365,7 +365,7 @@ impl<T: Trait> Module<T> {
 	// finds the start slot of the current epoch. only guaranteed to
 	// give correct results after `do_initialize` of the first block
 	// in the chain (as its result is based off of `GenesisSlot`).
-	fn current_epoch_start() -> SlotNumber {
+	pub fn current_epoch_start() -> SlotNumber {
 		(EpochIndex::get() * T::EpochDuration::get()) + GenesisSlot::get()
 	}
 

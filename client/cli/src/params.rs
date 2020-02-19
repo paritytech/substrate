@@ -207,7 +207,7 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "port", value_name = "PORT")]
 	pub port: Option<u16>,
 
-	/// Allow connecting to private IPv4 addresses (as specified in
+	/// Forbid connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
 	/// `--reserved-nodes` or `--bootnodes`.
 	#[structopt(long = "no-private-ipv4")]
@@ -718,7 +718,7 @@ pub struct BuildSpecCmd {
 	pub node_key_params: NodeKeyParams,
 }
 
-/// Wrapper type of `String` which holds an arbitary sized unsigned integer formatted as decimal.
+/// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a decimal.
 #[derive(Debug, Clone)]
 pub struct BlockNumber(String);
 
@@ -908,7 +908,7 @@ pub enum Subcommand {
 	/// Import blocks from file.
 	ImportBlocks(ImportBlocksCmd),
 
-	/// Validte a single block.
+	/// Validate a single block.
 	CheckBlock(CheckBlockCmd),
 
 	/// Revert chain to the previous state.
@@ -1266,4 +1266,3 @@ impl BenchmarkCmd {
 		Ok(())
 	}
 }
-
