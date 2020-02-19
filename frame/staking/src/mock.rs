@@ -751,7 +751,8 @@ pub fn assignment_to_staked<T: PerThing>(
 	assignments: Vec<Assignment<AccountId, T>>
 ) -> Vec<StakedAssignment<AccountId>>
 where
-	ExtendedBalance: From<<T as PerThing>::Inner>
+	ExtendedBalance: From<<T as PerThing>::Inner>,
+	T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
 {
 	assignments
 		.into_iter()

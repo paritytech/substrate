@@ -529,6 +529,16 @@ fn self_votes_should_be_kept() {
 }
 
 #[test]
+fn elect_should_never_output_zero() {
+	// phragmen internally uses Rational128 to keep ratios, which is _as accurate as it gets_. When
+	// down-casting this number to a PerThing, this might lead to `Zero::zero()`. This should simply
+	// be dropped as an edge.
+	// We also guard against this when we convert assignments into staked and visa versa, but still
+	// the elect must also check this.
+	unimplemented!();
+}
+
+#[test]
 fn assignment_convert_works() {
 	let staked = StakedAssignment {
 		who: 1 as AccountId,

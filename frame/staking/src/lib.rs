@@ -1811,7 +1811,14 @@ impl<T: Trait> Module<T> {
 		let assignments = compact_assignments.into_assignment(
 			nominator_at,
 			validator_at,
-		).map_err(|_| Error::<T>::PhragmenBogusCompact)?;
+		).map_err(|e| {
+			debug::native::warn!(
+				target: "staking",
+				"un-compacting solution failed due to {:?}",
+				e,
+			);
+			Error::<T>::PhragmenBogusCompact
+		})?;
 
 		// check all nominators actually including the claimed vote. Also check correct self votes.
 		// Note that we assume all validators and nominators in `assignments` are properly bonded,
@@ -2104,7 +2111,8 @@ impl<T: Trait> Module<T> {
 		compute: ElectionCompute,
 	) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>>
 	where
-		ExtendedBalance: From<<Accuracy as PerThing>::Inner>
+		ExtendedBalance: From<<Accuracy as PerThing>::Inner>,
+		Accuracy: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
 	{
 		if let Some(phragmen_result) = Self::do_phragmen::<Accuracy>() {
 			let elected_stashes = phragmen_result.winners.iter()

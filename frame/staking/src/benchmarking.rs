@@ -25,6 +25,7 @@ const NOMINATOR_PREFIX: u32 = 1_000_000;
 const USER: u32 = 999_999_999;
 
 static mut SEED: u64 = 999_666;
+static mut MODE: BenchmarkingMode = BenchmarkingMode::StrongerSubmission;
 
 type AddressOf<T> = Address<<T as frame_system::Trait>::AccountId, u32>;
 
@@ -151,7 +152,7 @@ fn get_weak_solution<T: Trait>(do_reduce: bool)
 		.take(<Module<T>>::validator_count() as usize)
 		.collect();
 
-	let mut assignments: Vec<StakedAssignment<T::AccountId>> = Vec::new();
+	let mut staked_assignments: Vec<StakedAssignment<T::AccountId>> = Vec::new();
 	<Nominators<T>>::enumerate().for_each(|(who, nomination)| {
 		let mut dist: Vec<(T::AccountId, ExtendedBalance)> = Vec::new();
 		nomination.targets.into_iter().for_each(|v| {
@@ -189,14 +190,14 @@ fn get_weak_solution<T: Trait>(do_reduce: bool)
 		let last = dist.last_mut().unwrap();
 		last.1 += leftover;
 
-		assignments.push(StakedAssignment {
+		staked_assignments.push(StakedAssignment {
 			who,
 			distribution: dist,
 		});
 	});
 
 	// add self support to winners.
-	winners.iter().for_each(|w| assignments.push(StakedAssignment {
+	winners.iter().for_each(|w| staked_assignments.push(StakedAssignment {
 		who: w.clone(),
 		distribution: vec![(
 			w.clone(),
@@ -206,11 +207,8 @@ fn get_weak_solution<T: Trait>(do_reduce: bool)
 		)]
 	}));
 
-	let support = build_support_map::<T::AccountId>(&winners, &assignments).0;
-	let score = evaluate_support(&support);
-
 	if do_reduce {
-		reduce(&mut assignments);
+		reduce(&mut staked_assignments);
 	}
 
 	// helpers for building the compact
@@ -227,12 +225,33 @@ fn get_weak_solution<T: Trait>(do_reduce: bool)
 			<usize as TryInto<ValidatorIndex>>::try_into(i).ok()
 		)
 	};
+	let stake_of = |who: &T::AccountId| -> ExtendedBalance {
+		<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
+			<Module<T>>::slashable_balance_of(who)
+		) as ExtendedBalance
+	};
 
 	// convert back to ratio assignment. This takes less space.
-	let low_accuracy_assignment: Vec<Assignment<T::AccountId, OffchainAccuracy>> = assignments
+	let low_accuracy_assignment: Vec<Assignment<T::AccountId, OffchainAccuracy>> = staked_assignments
 		.into_iter()
 		.map(|sa| sa.into_assignment(true))
 		.collect();
+
+	// re-calculate score based on what the chain will decode.
+	let score = {
+		let staked: Vec<StakedAssignment<T::AccountId>> = low_accuracy_assignment
+		.iter()
+		.map(|a| {
+			let stake = stake_of(&a.who);
+			a.clone().into_staked(stake, true)
+		}).collect();
+
+		let (support_map, _) = build_support_map::<T::AccountId>(
+			winners.as_slice(),
+			staked.as_slice(),
+		);
+		evaluate_support::<T::AccountId>(&support_map)
+	};
 
 
 	// compact encode the assignment.
@@ -256,6 +275,8 @@ fn get_seq_phragmen_solution<T: Trait>(do_reduce: bool)
 		winners,
 		assignments,
 	} = <Module<T>>::do_phragmen::<Percent>().unwrap();
+
+	println!("Original assignments = {:?}", assignments);
 
 	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
 	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();
@@ -289,7 +310,7 @@ fn clean<T: Trait>() {
 
 #[repr(u32)]
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum BenchmarkingMode {
 	/// Initial submission. This will be rather cheap
 	InitialSubmission,
@@ -304,16 +325,34 @@ struct SubmitElectionSolution;
 impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for SubmitElectionSolution
 	where T::Lookup: StaticLookup<Source=AddressOf<T>>
 {
+	#[cfg(not(test))]
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// number of nominators
-			(BenchmarkParameter::N, 1, 5_000),
+			(BenchmarkParameter::N, 100, 5_000),
 			// number of validator candidates
-			(BenchmarkParameter::V, 1, 1000),
+			(BenchmarkParameter::V, 100, 5000),
 			// num to elect
-			(BenchmarkParameter::E, 1, 500),
+			(BenchmarkParameter::E, 100, 1000),
 			// edge per vote
 			(BenchmarkParameter::Z, 2, 16),
+			// mode
+			(BenchmarkParameter::M, 0, 2),
+		]
+	}
+	#[cfg(test)]
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+		vec![
+			// number of nominators
+			(BenchmarkParameter::N, 10, 1000),
+			// number of validator candidates
+			(BenchmarkParameter::V, 10, 200),
+			// num to elect
+			(BenchmarkParameter::E, 20, 100),
+			// edge per vote
+			(BenchmarkParameter::Z, 2, 16),
+			// mode
+			(BenchmarkParameter::M, 0, 2),
 		]
 	}
 
@@ -323,7 +362,12 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Submit
 		let num_validators = components.iter().find(|&c| c.0 == BenchmarkParameter::V).unwrap().1;
 		let num_nominators = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
 		let edge_per_voter = components.iter().find(|&c| c.0 == BenchmarkParameter::Z).unwrap().1;
-		let mode: BenchmarkingMode = BenchmarkingMode::WeakerSubmission;
+		let mode: BenchmarkingMode = unsafe {
+			let mode_num = components.iter().find(|&c| c.0 == BenchmarkParameter::M).unwrap().1;
+			let mode: BenchmarkingMode = sp_std::mem::transmute(mode_num);
+			MODE = mode;
+			mode
+		};
 		let do_reduce: bool = true;
 		let to_elect: u32 = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
 
@@ -356,7 +400,7 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Submit
 				get_seq_phragmen_solution::<T>(do_reduce)
 			},
 			BenchmarkingMode::StrongerSubmission => {
-				let (winners, compact, score) = get_weak_solution::<T>(do_reduce);
+				let (winners, compact, score) = get_weak_solution::<T>(false);
 				assert_ok!(
 					<Module<T>>::submit_election_solution(
 						signed_account::<T>(USER),
@@ -377,7 +421,7 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Submit
 						score,
 					)
 				);
-				get_weak_solution::<T>(do_reduce)
+				get_weak_solution::<T>(false)
 			}
 		};
 
@@ -415,13 +459,20 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where T::Lookup: Sta
 			as
 			BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>
 		>::components(&selected_benchmark);
-		let mode = BenchmarkingMode::WeakerSubmission;
 
 		let mut results: Vec<BenchmarkResults> = Vec::new();
 		for (name, low, high) in components.iter() {
 			// Create up to `STEPS` steps for that component between high and low.
-			let step_size = ((high - low) / steps).max(1);
-			let num_of_steps = (high - low) / step_size;
+			let step_size = if *name == BenchmarkParameter::M {
+				1
+			} else {
+				((high - low) / steps).max(1)
+			};
+			let num_of_steps = if *name == BenchmarkParameter::M {
+				3
+			} else {
+				(high - low) / step_size
+			};
 
 			for s in 0..num_of_steps {
 				// final component value.
@@ -439,11 +490,14 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where T::Lookup: Sta
 						Call<T>,
 						RawOrigin<T::AccountId>,
 					>>::instance(&selected_benchmark, &c) {
+						// read mode type set by `instance()`.
+						let mode = unsafe { MODE };
+
+						// massage the database.
 						#[cfg(not(test))]
 						sp_io::benchmarking::commit_db();
 
 						let start = sp_io::benchmarking::current_time();
-
 						match mode {
 							BenchmarkingMode::WeakerSubmission => {
 								#[cfg(test)]
@@ -643,7 +697,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert!(<Staking as Benchmarking<BenchmarkResults>>::run_benchmark(
 				b"submit_election_solution".to_vec(),
-				1,
+				20,
 				1,
 			).is_ok())
 		})

@@ -152,8 +152,10 @@ pub struct Assignment<AccountId, T: PerThing> {
 	pub distribution: Vec<(AccountId, T)>,
 }
 
-impl<AccountId, T: PerThing> Assignment<AccountId, T>
-	where ExtendedBalance: From<<T as PerThing>::Inner>
+impl<AccountId: IdentifierT, T: PerThing> Assignment<AccountId, T>
+	where
+		ExtendedBalance: From<<T as PerThing>::Inner>,
+		T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
 {
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
@@ -162,23 +164,31 @@ impl<AccountId, T: PerThing> Assignment<AccountId, T>
 	/// is exactly equal to the total budget.
 	pub fn into_staked(self, stake: ExtendedBalance, fill: bool) -> StakedAssignment<AccountId>
 	{
+		println!("Converting into staked {:?}", self);
 		let mut sum: ExtendedBalance = Bounded::min_value();
-		let mut distribution = self.distribution.into_iter().map(|(target, p)| {
-			let distribution_stake = p.mul_collapse(stake);
-			// defensive only. We assume that balance cannot exceed extended balance.
-			sum = sum.saturating_add(distribution_stake);
-			(target, distribution_stake)
+		let mut distribution = self.distribution.into_iter().filter_map(|(target, p)| {
+			// if this ratio is zero, then skip it.
+			if p == Bounded::min_value() {
+				None
+			} else {
+				let distribution_stake = p * stake;
+				// defensive only. We assume that balance cannot exceed extended balance.
+				sum = sum.saturating_add(distribution_stake);
+				Some((target, distribution_stake))
+			}
 		}).collect::<Vec<(AccountId, ExtendedBalance)>>();
 
+		println!("Sum = {:?} / stake = {:?}", sum, stake);
 		if fill {
-			// if leftover is zero it is effectless.
+			// NOTE: we can do this better.
+			// https://revs.runtime-revolution.com/getting-100-with-rounded-percentages-273ffa70252b
 			if let Some(leftover) = stake.checked_sub(sum) {
 				if let Some(last) = distribution.last_mut() {
-					last.1 += leftover;
+					last.1 = last.1.saturating_add(leftover);
 				}
 			} else if let Some(excess) = sum.checked_sub(stake) {
 				if let Some(last) = distribution.last_mut() {
-					last.1 -= excess;
+					last.1 = last.1.saturating_sub(excess);
 				}
 			}
 		}
@@ -209,10 +219,14 @@ impl<AccountId> StakedAssignment<AccountId> {
 		let accuracy: u128 = T::ACCURACY.saturated_into();
 		let mut sum: u128 = Zero::zero();
 		let stake = self.distribution.iter().map(|x| x.1).sum();
-		let mut distribution = self.distribution.into_iter().map(|(target, w)| {
+		let mut distribution = self.distribution.into_iter().filter_map(|(target, w)| {
 			let per_thing = T::from_rational_approximation(w, stake);
-			sum += per_thing.clone().deconstruct().saturated_into();
-			(target, per_thing)
+			if per_thing == Bounded::min_value() {
+				None
+			} else {
+				sum += per_thing.clone().deconstruct().saturated_into();
+				Some((target, per_thing))
+			}
 		}).collect::<Vec<(AccountId, T)>>();
 
 		if fill {
