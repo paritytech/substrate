@@ -859,6 +859,3 @@ jobs:
           command: doc
           toolchain: nightly
           args: --release --all --verbose
-        run: |
-        cp -R ./target/doc ./crate-docs
-        echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
