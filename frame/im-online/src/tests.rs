@@ -212,7 +212,6 @@ fn should_generate_heartbeats() {
 		// All validators have `0` as their session key, so we generate 2 transactions.
 		assert_eq!(state.read().transactions.len(), 2);
 
-
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
 		let heartbeat = match ex.call {
