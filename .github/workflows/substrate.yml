@@ -2,8 +2,8 @@ name: Substrate
 
 on: [push]
 jobs:
-  check:
-    name: Test
+  linux-cache-tools:
+    name: Cache tools
     runs-on: ubuntu-latest
     env:
       CC: "clang"
@@ -48,8 +48,7 @@ jobs:
           key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
       # if /home/runner/tools/bin wasn't cached, and rustup isn't cached, install toolchain
       - name: Install rust & wasm toolchain
-        if: "steps.cache-tools-bin.outputs.cache-hit != 'true'
-          && steps.cache-rustup   .outputs.cache-hit != 'true'"
+        if: "steps.cache-tools-bin.outputs.cache-hit != 'true' && steps.cache-rustup   .outputs.cache-hit != 'true'"
         run: |
           rustup set profile minimal
           rustup toolchain install $RUST_TOOLCHAIN --component clippy rustfmt
@@ -82,9 +81,7 @@ jobs:
           path: /home/runner/.cargo/registry
           key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Run cargo fetch
-        if: " steps.cache-tools-bin     .outputs.cache-hit != 'true'
-          && (steps.cache-cargo-git     .outputs.cache-hit != 'true'
-          ||  steps.cache-cargo-registry.outputs.cache-hit != 'true')"
+        if: " steps.cache-tools-bin     .outputs.cache-hit != 'true' && (steps.cache-cargo-git     .outputs.cache-hit != 'true' ||  steps.cache-cargo-registry.outputs.cache-hit != 'true')"
         run: cargo fetch
       - name: Install cargo-audit, cargo-web, wasm-pack
         if: "steps.cache-tools-bin.outputs.cache-hit != 'true'"
