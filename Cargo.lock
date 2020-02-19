@@ -5056,6 +5056,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "quanta"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4f7a1905379198075914bc93d32a5465c40474f90a078bb13439cb00c547bcc"
+dependencies = [
+ "libc",
+ "winapi 0.3.8",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7219,6 +7229,7 @@ dependencies = [
  "crossbeam",
  "lazy_static",
  "parking_lot 0.10.0",
+ "quanta",
 ]
 
 [[package]]
