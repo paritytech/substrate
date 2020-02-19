@@ -84,6 +84,42 @@ pub trait BareCryptoStore: Send + Sync {
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
 	) -> std::result::Result<Vec<u8>, String>;
+
+	/// Given a list of public keys, find the first supported key and
+	/// sign the provided message with that key.
+	///
+	/// Returns a tuple of the used key and the signature
+	fn sign_with_any(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+		msg: &[u8]
+	) -> Result<(CryptoTypePublicPair, Vec<u8>), String> {
+		if keys.len() == 1 {
+			return self.sign_with(id, &keys[0], msg).map(|s| (keys[0].clone(), s));
+		} else {
+			for k in self.get_supported_keys(id, keys)? {
+				if let Ok(sign) = self.sign_with(id, &k, msg) {
+					return Ok((k, sign));
+				}
+			}
+		}
+		Err("Could not sign with any of the given keys".to_owned())
+	}
+
+	/// Provided a list of public keys, sign a message with
+	/// each key given that the key is supported.
+	///
+	/// Returns a list of `Option`s each representing the signature of each key.
+	/// None is return for non-supported keys.
+	fn sign_with_all(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+		msg: &[u8]
+	) -> Vec<Option<Vec<u8>>> {
+		keys.iter().map(|k| self.sign_with(id, k, msg).ok()).collect()
+	}
 }
 
 /// A pointer to the key store.
