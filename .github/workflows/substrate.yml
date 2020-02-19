@@ -100,6 +100,7 @@ jobs:
           path: tools/bin
           key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
       - run: cargo-audit audit
+
   linux-cargo-check-benches:
     name: Run cargo check benches
     needs: [linux-cache-tools]
@@ -150,7 +151,8 @@ jobs:
       - name: Run cargo check benches
         uses: actions-rs/cargo@v1
         with:
-          command: check +nightly
+          command: check
+          toolchain: nightly
           args: --benches --all
 
   linux-cargo-check-subkey:
@@ -204,7 +206,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           args: --manifest-path "bin/utils/subkey/Cargo.toml" --release
 
   linux-test-stable:
@@ -258,7 +260,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           args: --all --release --verbose --locked
 
   linux-test-frame-staking:
@@ -311,5 +313,5 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           args: --manifest-path "./frame/staking/Cargo.toml" --release --verbose --no-default-features --features std
