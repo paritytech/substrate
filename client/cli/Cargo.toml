@@ -31,6 +31,7 @@ sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sc-service = { version = "0.8", default-features = false, path = "../service" }
 sp-state-machine = { version = "0.8", path = "../../primitives/state-machine" }
 sc-telemetry = { version = "2.0.0", path = "../telemetry" }
+prometheus-exporter = { path = "../../utils/prometheus" }
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
 names = "0.11.0"
 structopt = "0.3.8"
