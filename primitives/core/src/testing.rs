@@ -153,20 +153,22 @@ impl crate::traits::BareCryptoStore for KeyStore {
 	}
 
 	fn get_keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, String> {
-		let ed25519_existing_keys: Vec<Vec<u8>> = self.ed25519_public_keys(id).iter()
-								.map(|k| k.to_raw_vec()).collect();
-		let sr25519_existing_keys: Vec<Vec<u8>> = self.sr25519_public_keys(id).iter()
-								.map(|k| k.to_raw_vec()).collect();
+		let ed25519_existing_keys: Vec<CryptoTypePublicPair> = self
+			.ed25519_public_keys(id)
+			.iter()
+			.map(|k| (ed25519::ED25519_CRYPTO_ID, k.to_raw_vec()))
+			.collect();
 
-		let mut keys: Vec<CryptoTypePublicPair> = vec![];
-		keys.extend(sr25519_existing_keys.iter()
-					.cloned()
-    				.map(|k| (sr25519::SR25519_CRYPTO_ID, k)));
-		keys.extend(ed25519_existing_keys.iter()
-    				.cloned()
-					.map(|k| (ed25519::ED25519_CRYPTO_ID, k))
-					.collect::<Vec<_>>());
-		Ok(keys)
+		let sr25519_existing_keys: Vec<CryptoTypePublicPair> = self
+			.sr25519_public_keys(id)
+			.iter()
+			.map(|k| (sr25519::SR25519_CRYPTO_ID, k.to_raw_vec()))
+			.collect();
+
+		Ok(ed25519_existing_keys
+		   .iter()
+		   .chain(sr25519_existing_keys.iter())
+		   .cloned().collect())
 	}
 
 	fn sign_with(
