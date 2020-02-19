@@ -135,10 +135,7 @@ impl BenchmarkCmd {
 				self.repeat,
 			);
 
-			// Conduct analysis.
-			if let Some(analysis) = Analysis::from_results(&results) {
-				println!("Analysis: {}", analysis);
-			}
+			println!("Data:");
 
 			// Print the table header
 			results[0].0.iter().for_each(|param| print!("{:?},", param.0));
@@ -150,6 +147,11 @@ impl BenchmarkCmd {
 				parameters.iter().for_each(|param| print!("{:?},", param.1));
 				print!("{:?}\n", result.1);
 			});
+
+			// Conduct analysis.
+			if let Some(analysis) = Analysis::from_results(&results) {
+				println!("Analysis:\n{}", analysis);
+			}
 
 			eprintln!("Done.");
 		} else {
