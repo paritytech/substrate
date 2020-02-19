@@ -11,8 +11,7 @@ jobs:
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: printenv
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -96,7 +95,7 @@ jobs:
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -120,8 +119,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
-      - run: printenv
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -180,8 +178,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
-      - run: printenv
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -241,8 +238,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
-      - run: printenv
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -306,8 +302,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       RUST_BACKTRACE: 1
     steps:
-      - run: printenv
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -367,8 +362,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       RUST_BACKTRACE: 1
     steps:
-      - run: printenv
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -428,8 +422,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
-      - run: printenv
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -493,7 +486,7 @@ jobs:
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -601,7 +594,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       RUST_BACKTRACE: 1
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -661,7 +654,7 @@ jobs:
     name: Test dependency rules
     runs-on: ubuntu-latest
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -681,7 +674,7 @@ jobs:
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -745,7 +738,7 @@ jobs:
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -809,7 +802,7 @@ jobs:
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
