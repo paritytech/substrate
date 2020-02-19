@@ -1,0 +1,16 @@
+[package]
+name = "frame-benchmarking"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.1.2", default-features = false }
+sp-api = { version = "2.0.0", path = "../../primitives/api", default-features = false }
+sp-runtime-interface = { version = "2.0.0", path = "../../primitives/runtime-interface", default-features = false }
+sp-std = { version = "2.0.0", path = "../../primitives/std", default-features = false }
+
+[features]
+default = [ "std" ]
+std = [ "sp-runtime-interface/std", "sp-api/std", "codec/std", "sp-std/std" ]

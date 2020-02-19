@@ -31,14 +31,13 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, ApplyExtrinsicResult, BenchmarkResults,
-	impl_opaque_keys, generic, create_runtime_str,
+	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::TransactionValidity;
 use sp_runtime::traits::{
 	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
-	ConvertInto, OpaqueKeys, Benchmarking,
+	ConvertInto, OpaqueKeys,
 };
 use sp_version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
@@ -816,25 +815,22 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl crate::Benchmark<Block> for Runtime {
-		fn dispatch_benchmark(module: Vec<u8>, extrinsic: Vec<u8>, steps: u32, repeat: u32)
-			-> Option<Vec<BenchmarkResults>>
-		{
+	impl frame_benchmarking::Benchmark<Block> for Runtime {
+		fn dispatch_benchmark(
+			module: Vec<u8>,
+			extrinsic: Vec<u8>,
+			steps: u32,
+			repeat: u32,
+		) -> Option<Vec<frame_benchmarking::BenchmarkResults>> {
+			use frame_benchmarking::Benchmarking;
+
 			match module.as_slice() {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
 				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
-				_ => return None,
+				_ => None,
 			}
 		}
-	}
-}
-
-sp_api::decl_runtime_apis! {
-	pub trait Benchmark
-	{
-		fn dispatch_benchmark(module: Vec<u8>, extrinsic: Vec<u8>, steps: u32, repeat: u32)
-			-> Option<Vec<BenchmarkResults>>;
 	}
 }
 
