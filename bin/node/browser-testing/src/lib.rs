@@ -16,7 +16,7 @@
 
 //! # Running
 //! Running this test can be done with
-//! ```
+//! ```text
 //! wasm-pack test --firefox --release --headless bin/node/browser-testing
 //! ```
 //! For debug infomation, such as the informant, run without the `--headless`
