@@ -28,7 +28,9 @@
 //! to much configuring - just block full of randomized transactions.
 //! It is not supposed to measure runtime modules weight correctness
 
+use std::fmt;
 use node_testing::bench::{BenchDb, Profile};
+use node_primitives::Block;
 use sp_runtime::generic::BlockId;
 use criterion::{Criterion, criterion_group, criterion_main};
 use sc_client_api::backend::Backend;
@@ -39,11 +41,16 @@ criterion_group!(
 	targets = bench_block_import
 );
 criterion_group!(
+	name = wasm_size;
+	config = Criterion::default().sample_size(10);
+	targets = bench_wasm_size_import
+);
+criterion_group!(
 	name = profile;
 	config = Criterion::default().sample_size(10);
 	targets = profile_block_import
 );
-criterion_main!(benches, profile);
+criterion_main!(benches, profile, wasm_size);
 
 fn bench_block_import(c: &mut Criterion) {
 	sc_cli::init_logger("");
@@ -137,5 +144,43 @@ fn profile_block_import(c: &mut Criterion) {
 				criterion::BatchSize::PerIteration,
 			);
 		},
+	);
+}
+
+struct Setup {
+	db: BenchDb,
+	block: Block,
+}
+
+impl fmt::Debug for Setup {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Setup: {} tx/block", self.block.extrinsics.len())
+    }
+}
+
+fn bench_wasm_size_import(c: &mut Criterion) {
+	sc_cli::init_logger("");
+
+	let mut setups = Vec::new();
+
+	for block_size in 5..15 {
+		let mut db = BenchDb::new(block_size*50);
+		let block = db.generate_block(block_size * 50);
+		setups.push(Setup { db, block });
+	}
+
+	c.bench_function_over_inputs("wasm_size_import",
+		move |bencher, setup| {
+			bencher.iter_batched(
+				|| {
+					setup.db.create_context(Profile::Wasm)
+				},
+				|mut context| {
+					context.import_block(setup.block.clone());
+				},
+				criterion::BatchSize::PerIteration,
+			);
+		},
+		setups,
 	);
 }
