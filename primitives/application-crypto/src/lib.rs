@@ -25,7 +25,7 @@ pub use sp_core::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
 pub use sp_core::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
-pub use sp_core::{crypto::{KeyTypeId, key_types}};
+pub use sp_core::crypto::{CryptoTypeId, KeyTypeId, key_types};
 
 #[doc(hidden)]
 pub use codec;
@@ -271,6 +271,8 @@ macro_rules! app_crypto_public_common {
 		}
 
 		impl $crate::Public for Public {
+			const CRYPTO_TYPE_ID: $crate::CryptoTypeId = $crate::CryptoTypeId(stringify!($key_type));
+
 			fn from_slice(x: &[u8]) -> Self { Self(<$public>::from_slice(x)) }
 		}
 
