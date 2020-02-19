@@ -218,12 +218,12 @@ where
 			.collect();
 
 		let signatures = self.key_store
-							 .read()
-							 .sign_with_all(
-								 key_types::AUTHORITY_DISCOVERY,
-								 keys.clone(),
-								 serialized_addresses.as_slice()
-							 );
+							.read()
+							.sign_with_all(
+								key_types::AUTHORITY_DISCOVERY,
+								keys.clone(),
+								serialized_addresses.as_slice()
+							);
 
 		for (index, signature) in signatures.iter().enumerate() {
 			let mut signed_addresses = vec![];
