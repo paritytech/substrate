@@ -25,7 +25,7 @@ pub use pallet_timestamp;
 use sp_std::{result, prelude::*};
 use frame_support::{decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT}};
 use sp_timestamp::OnTimestampSet;
-use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
+use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill, PerThing};
 use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash};
 use sp_staking::{
 	SessionIndex,
@@ -159,7 +159,7 @@ decl_storage! {
 }
 
 decl_module! {
-	/// The BABE SRML module
+	/// The BABE Pallet
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// The number of **slots** that an epoch takes. We couple sessions to
 		/// epochs, i.e. we start a new session once the new epoch begins.
@@ -365,7 +365,7 @@ impl<T: Trait> Module<T> {
 	// finds the start slot of the current epoch. only guaranteed to
 	// give correct results after `do_initialize` of the first block
 	// in the chain (as its result is based off of `GenesisSlot`).
-	fn current_epoch_start() -> SlotNumber {
+	pub fn current_epoch_start() -> SlotNumber {
 		(EpochIndex::get() * T::EpochDuration::get()) + GenesisSlot::get()
 	}
 

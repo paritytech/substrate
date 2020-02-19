@@ -282,7 +282,7 @@ fn slash_payout_multi_works() {
 }
 
 #[test]
-fn suspended_member_lifecycle_works() {
+fn suspended_member_life_cycle_works() {
 	EnvBuilder::new().execute(|| {
 		// Add 20 to members, who is not the head and can be suspended/removed.
 		assert_ok!(Society::add_member(&20));

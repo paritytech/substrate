@@ -21,9 +21,9 @@
 //!
 //! ## Overview
 //!
-//! The executive module is not a typical SRML module providing functionality around a specific feature.
-//! It is a cross-cutting framework component for the SRML. It works in conjunction with the
-//! [SRML System module](../frame_system/index.html) to perform these cross-cutting functions.
+//! The executive module is not a typical pallet providing functionality around a specific feature.
+//! It is a cross-cutting framework component for the FRAME. It works in conjunction with the
+//! [FRAME System module](../frame_system/index.html) to perform these cross-cutting functions.
 //!
 //! The Executive module provides functions to:
 //!
@@ -39,7 +39,7 @@
 //! The Executive module provides the following implementations:
 //!
 //! - `ExecuteBlock`: Trait that can be used to execute a block.
-//! - `Executive`: Type that can be used to make the SRML available from the runtime.
+//! - `Executive`: Type that can be used to make the FRAME available from the runtime.
 //!
 //! ## Usage
 //!
@@ -79,13 +79,15 @@
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::weights::{GetDispatchInfo, WeighBlock, DispatchInfo};
 use sp_runtime::{
-	generic::Digest, ApplyExtrinsicResult,
+	generic::Digest,
+	ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
 		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating,
 	},
 	transaction_validity::TransactionValidity,
 };
+use sp_runtime::generic::CheckSignature;
 #[allow(deprecated)]
 use sp_runtime::traits::ValidateUnsigned;
 use codec::{Codec, Encode};
@@ -255,13 +257,22 @@ where
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
-		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded))
+		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded), CheckSignature::Yes)
+	}
+
+	/// Apply extrinsic outside of the block execution function.
+	///
+	/// Same as `apply_extrinsic`, but skips signature checks.
+	pub fn apply_trusted_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
+		let encoded = uxt.encode();
+		let encoded_len = encoded.len();
+		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded), CheckSignature::No)
 	}
 
 	/// Apply an extrinsic inside the block execution function.
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
-		match Self::apply_extrinsic_with_len(uxt, l, None) {
+		match Self::apply_extrinsic_with_len(uxt, l, None, CheckSignature::Yes) {
 			Ok(_) => (),
 			Err(e) => { let err: &'static str = e.into(); panic!(err) },
 		}
@@ -272,9 +283,13 @@ where
 		uxt: Block::Extrinsic,
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
+		check_signature: CheckSignature,
 	) -> ApplyExtrinsicResult {
 		// Verify that the signature is good.
-		let xt = uxt.check(&Default::default())?;
+		let xt = uxt.check(
+			check_signature,
+			&Default::default(),
+		)?;
 
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
 		// executed to prevent it from leaking in storage since at this point, it will either
@@ -322,7 +337,7 @@ where
 	/// Changes made to storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		let encoded_len = uxt.using_encoded(|d| d.len());
-		let xt = uxt.check(&Default::default())?;
+		let xt = uxt.check(CheckSignature::Yes, &Default::default())?;
 
 		let dispatch_info = xt.get_dispatch_info();
 		xt.validate::<UnsignedValidator>(dispatch_info, encoded_len)
@@ -416,6 +431,7 @@ mod tests {
 
 	impl_outer_event!{
 		pub enum MetaEvent for Runtime {
+			system<T>,
 			balances<T>,
 		}
 	}
@@ -451,20 +467,19 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnReapAccount = Balances;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Runtime {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = MetaEvent;
 		type DustRemoval = ();
-		type TransferPayment = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 
 	parameter_types! {
@@ -516,8 +531,8 @@ mod tests {
 		)
 	}
 
-	fn sign_extra(who: u64, nonce: u64, fee: u64) -> Option<(u64, SignedExtra)> {
-		Some((who, extra(nonce, fee)))
+	fn sign_extra(who: u64, nonce: u64, fee: u64) -> (u64, SignedExtra) {
+		(who, extra(nonce, fee))
 	}
 
 	#[test]
@@ -526,7 +541,7 @@ mod tests {
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 211)],
 		}.assimilate_storage(&mut t).unwrap();
-		let xt = sp_runtime::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
+		let xt = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
 		let weight = xt.get_dispatch_info().weight as u64;
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
@@ -559,7 +574,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("a0b84fec49718caf59350dab6ec2993f12db399a7cccdb80f3cf79618ed93bd8").into(),
+					state_root: hex!("96797237079b6d6ffab7a47f90ee257a439a0e8268bdab3fe2f1e52572b101de").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -606,7 +621,7 @@ mod tests {
 	fn bad_extrinsic_not_inserted() {
 		let mut t = new_test_ext(1);
 		// bad nonce check!
-		let xt = sp_runtime::testing::TestXt(sign_extra(1, 30, 0), Call::Balances(BalancesCall::transfer(33, 69)));
+		let xt = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 30, 0), Call::Balances(BalancesCall::transfer(33, 69)));
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -624,7 +639,7 @@ mod tests {
 	fn block_weight_limit_enforced() {
 		let mut t = new_test_ext(10000);
 		// given: TestXt uses the encoded len as fixed Len:
-		let xt = sp_runtime::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)));
+		let xt = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)));
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
 		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get() - 175;
@@ -641,7 +656,7 @@ mod tests {
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 175);
 
 			for nonce in 0..=num_to_exhaust_block {
-				let xt = sp_runtime::testing::TestXt(
+				let xt = sp_runtime::testing::TestXt::new_signed(
 					sign_extra(1, nonce.into(), 0), Call::Balances(BalancesCall::transfer(33, 0)),
 				);
 				let res = Executive::apply_extrinsic(xt);
@@ -661,9 +676,9 @@ mod tests {
 
 	#[test]
 	fn block_weight_and_size_is_stored_per_tx() {
-		let xt = sp_runtime::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)));
-		let x1 = sp_runtime::testing::TestXt(sign_extra(1, 1, 0), Call::Balances(BalancesCall::transfer(33, 0)));
-		let x2 = sp_runtime::testing::TestXt(sign_extra(1, 2, 0), Call::Balances(BalancesCall::transfer(33, 0)));
+		let xt = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)));
+		let x1 = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 1, 0), Call::Balances(BalancesCall::transfer(33, 0)));
+		let x2 = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 2, 0), Call::Balances(BalancesCall::transfer(33, 0)));
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
@@ -687,12 +702,34 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned() {
-		let xt = sp_runtime::testing::TestXt(None, Call::Balances(BalancesCall::set_balance(33, 69, 69)));
+		let xt = sp_runtime::testing::TestXt::new_unsigned(Call::Balances(BalancesCall::set_balance(33, 69, 69)));
 		let mut t = new_test_ext(1);
 
 		t.execute_with(|| {
 			assert_eq!(Executive::validate_transaction(xt.clone()), Ok(Default::default()));
 			assert_eq!(Executive::apply_extrinsic(xt), Ok(Err(DispatchError::BadOrigin)));
+		});
+	}
+
+	#[test]
+	fn apply_trusted_skips_signature_check_but_not_others() {
+		let xt1 = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)))
+			.badly_signed();
+
+		let mut t = new_test_ext(1);
+
+		t.execute_with(|| {
+			assert_eq!(Executive::apply_trusted_extrinsic(xt1), Ok(Ok(())));
+		});
+
+		let xt2 = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)))
+			.invalid(TransactionValidityError::Invalid(InvalidTransaction::Call));
+
+		t.execute_with(|| {
+			assert_eq!(
+				Executive::apply_trusted_extrinsic(xt2),
+				Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
+			);
 		});
 	}
 
@@ -708,7 +745,7 @@ mod tests {
 					110,
 					lock,
 				);
-				let xt = sp_runtime::testing::TestXt(
+				let xt = sp_runtime::testing::TestXt::new_signed(
 					sign_extra(1, 0, 0),
 					Call::System(SystemCall::remark(vec![1u8])),
 				);

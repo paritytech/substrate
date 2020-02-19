@@ -165,7 +165,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 }
 
 // needs to run in a tokio runtime.
-pub(crate) fn make_test_network(executor: &impl futures::task::Spawn) -> (
+pub(crate) fn make_test_network() -> (
 	impl Future<Output = Tester>,
 	TestNetwork,
 ) {
@@ -187,7 +187,6 @@ pub(crate) fn make_test_network(executor: &impl futures::task::Spawn) -> (
 		net.clone(),
 		config(),
 		voter_set_state(),
-		executor,
 	);
 
 	(
@@ -261,8 +260,7 @@ fn good_commit_leads_to_relay() {
 	let id = sc_network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
-	let test = make_test_network(&threads_pool).0
+	let test = make_test_network().0
 		.then(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
@@ -281,6 +279,7 @@ fn good_commit_leads_to_relay() {
 			}
 
 			let commit_to_send = encoded_commit.clone();
+			let network_bridge = tester.net_handle.clone();
 
 			// asking for global communication will cause the test network
 			// to send us an event asking us for a stream. use it to
@@ -325,7 +324,7 @@ fn good_commit_leads_to_relay() {
 
 			// once the message is sent and commit is "handled" we should have
 			// a repropagation event coming from the network.
-			future::join(send_message, handle_commit).then(move |(tester, ())| {
+			let fut = future::join(send_message, handle_commit).then(move |(tester, ())| {
 				tester.filter_network_events(move |event| match event {
 					Event::WriteNotification(_, data) => {
 						data == encoded_commit
@@ -333,7 +332,11 @@ fn good_commit_leads_to_relay() {
 					_ => false,
 				})
 			})
-				.map(|_| ())
+				.map(|_| ());
+
+			// Poll both the future sending and handling the commit, as well as the underlying
+			// NetworkBridge. Complete once the former completes.
+			future::select(fut, network_bridge)
 		});
 
 	futures::executor::block_on(test);
@@ -385,8 +388,7 @@ fn bad_commit_leads_to_report() {
 	let id = sc_network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
-	let test = make_test_network(&threads_pool).0
+	let test = make_test_network().0
 		.map(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
@@ -405,6 +407,7 @@ fn bad_commit_leads_to_report() {
 			}
 
 			let commit_to_send = encoded_commit.clone();
+			let network_bridge = tester.net_handle.clone();
 
 			// asking for global communication will cause the test network
 			// to send us an event asking us for a stream. use it to
@@ -427,7 +430,7 @@ fn bad_commit_leads_to_report() {
 				_ => false,
 			});
 
-			// when the commit comes in, we'll tell the callback it was good.
+			// when the commit comes in, we'll tell the callback it was bad.
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
 					match item.unwrap() {
@@ -440,7 +443,7 @@ fn bad_commit_leads_to_report() {
 
 			// once the message is sent and commit is "handled" we should have
 			// a report event coming from the network.
-			future::join(send_message, handle_commit).then(move |(tester, ())| {
+			let fut = future::join(send_message, handle_commit).then(move |(tester, ())| {
 				tester.filter_network_events(move |event| match event {
 					Event::Report(who, cost_benefit) => {
 						who == id && cost_benefit == super::cost::INVALID_COMMIT
@@ -448,7 +451,11 @@ fn bad_commit_leads_to_report() {
 					_ => false,
 				})
 			})
-				.map(|_| ())
+				.map(|_| ());
+
+			// Poll both the future sending and handling the commit, as well as the underlying
+			// NetworkBridge. Complete once the former completes.
+			future::select(fut, network_bridge)
 		});
 
 	futures::executor::block_on(test);
@@ -458,8 +465,7 @@ fn bad_commit_leads_to_report() {
 fn peer_with_higher_view_leads_to_catch_up_request() {
 	let id = sc_network::PeerId::random();
 
-	let threads_pool = futures::executor::ThreadPool::new().unwrap();
-	let (tester, mut net) = make_test_network(&threads_pool);
+	let (tester, mut net) = make_test_network();
 	let test = tester
 		.map(move |tester| {
 			// register a peer with authority role.

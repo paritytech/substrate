@@ -33,7 +33,7 @@ use sp_core::RuntimeDebug;
 #[cfg(feature = "std")]
 type StringBuf = String;
 
-/// Curent prefix of metadata
+/// Current prefix of metadata
 pub const META_RESERVED: u32 = 0x6174656d; // 'meta' warn endianness
 
 /// On `no_std` we do not support `Decode` and thus `StringBuf` is just `&'static str`.

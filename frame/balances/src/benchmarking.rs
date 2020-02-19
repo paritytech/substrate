@@ -20,8 +20,10 @@ use super::*;
 
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter};
-use sp_runtime::traits::{Bounded, Benchmarking, BenchmarkingSetup, Dispatchable};
+use frame_benchmarking::{
+	BenchmarkResults, BenchmarkParameter, Benchmarking, BenchmarkingSetup, benchmarking,
+};
+use sp_runtime::traits::{Bounded, Dispatchable};
 
 use crate::Module as Balances;
 
@@ -50,7 +52,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Constants
 		let ed = T::ExistentialDeposit::get();
-		
+
 		// Select an account
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
 		let user = account::<T>("user", u);
@@ -58,8 +60,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 		// Give some multiple of the existential deposit + creation fee + transfer fee
 		let e = components.iter().find(|&c| c.0 == BenchmarkParameter::E).unwrap().1;
-		let mut balance = ed.saturating_mul(e.into());
-		balance += T::CreationFee::get();
+		let balance = ed.saturating_mul(e.into());
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, balance);
 
 		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
@@ -90,7 +91,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Constants
 		let ed = T::ExistentialDeposit::get();
-		
+
 		// Select a sender
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
 		let user = account::<T>("user", u);
@@ -135,7 +136,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Constants
 		let ed = T::ExistentialDeposit::get();
-		
+
 		// Select a sender
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
 		let user = account::<T>("user", u);
@@ -176,7 +177,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Constants
 		let ed = T::ExistentialDeposit::get();
-		
+
 		// Select a sender
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
 		let user = account::<T>("user", u);
@@ -208,7 +209,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	{
 		// Constants
 		let ed = T::ExistentialDeposit::get();
-		
+
 		// Select a sender
 		let u = components.iter().find(|&c| c.0 == BenchmarkParameter::U).unwrap().1;
 		let user = account::<T>("user", u);
@@ -272,10 +273,10 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		};
 
 		// Warm up the DB
-		sp_io::benchmarking::commit_db();
-		sp_io::benchmarking::wipe_db();
+		benchmarking::commit_db();
+		benchmarking::wipe_db();
 
-		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);		
+		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
 		// results go here
 		let mut results: Vec<BenchmarkResults> = Vec::new();
 		// Select the component we will be benchmarking. Each component will be benchmarked.
@@ -299,11 +300,11 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
 					// Commit the externalities to the database, flushing the DB cache.
 					// This will enable worst case scenario for reading from the database.
-					sp_io::benchmarking::commit_db();
+					benchmarking::commit_db();
 					// Run the benchmark.
-					let start = sp_io::benchmarking::current_time();
+					let start = benchmarking::current_time();
 					call.dispatch(caller.clone().into())?;
-					let finish = sp_io::benchmarking::current_time();
+					let finish = benchmarking::current_time();
 					let elapsed = finish - start;
 					sp_std::if_std!{
 						if let RawOrigin::Signed(who) = caller.clone() {
@@ -313,7 +314,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					}
 					results.push((c.clone(), elapsed));
 					// Wipe the DB back to the genesis state.
-					sp_io::benchmarking::wipe_db();
+					benchmarking::wipe_db();
 				}
 			}
 		}

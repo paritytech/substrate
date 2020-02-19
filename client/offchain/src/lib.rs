@@ -204,7 +204,7 @@ mod tests {
 		let pool = Arc::new(TestPool(BasicPool::new(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
-		)));
+		).0));
 		client.execution_extensions()
 			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
 		let db = sc_client_db::offchain::LocalStorage::new_test();
@@ -217,6 +217,6 @@ mod tests {
 
 		// then
 		assert_eq!(pool.0.status().ready, 1);
-		assert_eq!(pool.0.ready().next().unwrap().is_propagateable(), false);
+		assert_eq!(pool.0.ready().next().unwrap().is_propagable(), false);
 	}
 }

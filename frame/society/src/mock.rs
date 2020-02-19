@@ -21,9 +21,11 @@ use super::*;
 use frame_support::{impl_outer_origin, parameter_types, ord_parameter_types};
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
-// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
+// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
-	Perbill, traits::{BlakeTwo256, IdentityLookup, OnInitialize, OnFinalize}, testing::Header,
+	Perbill,
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup, OnInitialize, OnFinalize},
 };
 use frame_system::EnsureSignedBy;
 
@@ -31,9 +33,9 @@ impl_outer_origin! {
 	pub enum Origin for Test {}
 }
 
-// For testing the module, we construct most of a mock runtime. This means
+// For testing the pallet, we construct most of a mock runtime. This means
 // first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of modules we want to use.
+// configuration traits of pallets we want to use.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 parameter_types! {
@@ -51,7 +53,6 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 
 	pub const ExistentialDeposit: u64 = 1;
-	pub const CreationFee: u64 = 0;
 }
 
 ord_parameter_types! {
@@ -76,17 +77,17 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type OnNewAccount = ();
+	type OnReapAccount = Balances;
+	type AccountData = pallet_balances::AccountData<u64>;
 }
 
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnNewAccount = ();
 	type Event = ();
-	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type CreationFee = CreationFee;
-	type OnReapAccount = System;
+	type AccountStore = System;
 }
 
 impl Trait for Test {
