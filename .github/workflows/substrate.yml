@@ -11,7 +11,7 @@ jobs:
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -95,7 +95,7 @@ jobs:
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -115,11 +115,13 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
+      CC: "clang"
+      CXX: "clang++"
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -174,11 +176,13 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
+      CC: "clang"
+      CXX: "clang++"
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -233,12 +237,14 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
+      CC: "clang"
+      CXX: "clang++"
       RUSTFLAGS: "-Cdebug-assertions=y"
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -297,12 +303,14 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
+      CC: "clang"
+      CXX: "clang++"
       RUSTFLAGS: "-Cdebug-assertions=y"
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       RUST_BACKTRACE: 1
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -357,12 +365,14 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
+      CC: "clang"
+      CXX: "clang++"
       RUSTFLAGS: "-Cdebug-assertions=y"
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       RUST_BACKTRACE: 1
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -417,12 +427,14 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
+      CC: "clang"
+      CXX: "clang++"
       RUSTFLAGS: "-Cdebug-assertions=y"
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -483,10 +495,12 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
+      CC: "clang"
+      CXX: "clang++"
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -580,12 +594,14 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
+      CC: "clang"
+      CXX: "clang++"
       RUSTFLAGS: "-Cdebug-assertions=y"
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       RUST_BACKTRACE: 1
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -645,7 +661,7 @@ jobs:
     name: Test dependency rules
     runs-on: ubuntu-latest
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -662,10 +678,12 @@ jobs:
     needs: [linux-cache-tools, linux-test-stable]
     runs-on: ubuntu-latest
     env:
+      CC: "clang"
+      CXX: "clang++"
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -726,10 +744,12 @@ jobs:
     needs: [linux-cache-tools, linux-test-stable]
     runs-on: ubuntu-latest
     env:
+      CC: "clang"
+      CXX: "clang++"
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -790,10 +810,12 @@ jobs:
     needs: [linux-cache-tools, linux-test-stable]
     runs-on: ubuntu-latest
     env:
+      CC: "clang"
+      CXX: "clang++"
       RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
-      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv &&sccache --show-stats
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
