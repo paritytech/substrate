@@ -65,10 +65,10 @@ async fn runs() {
             .await
             .unwrap();
 
-    let mut master_timeout = Delay::new(Duration::from_secs(45));
+    let mut test_timeout = Delay::new(Duration::from_secs(45));
     loop {
         // Check that timeout hasn't expired.
-        assert!((&mut master_timeout).now_or_never().is_none());
+        assert!((&mut test_timeout).now_or_never().is_none());
 
         // Let the node do a bit of work.
         Delay::new(Duration::from_secs(5)).await;
