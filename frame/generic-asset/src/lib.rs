@@ -108,11 +108,11 @@
 //!
 //! ### Usage
 //!
-//! The following examples show how to use the Generic Asset module in your custom module.
+//! The following examples show how to use the Generic Asset Pallet in your custom pallet.
 //!
-//! ### Examples from the frame module
+//! ### Examples from the FRAME pallet
 //!
-//! The Fees module uses the `Currency` trait to handle fee charge/refund, and its types inherit from `Currency`:
+//! The Fees Pallet uses the `Currency` trait to handle fee charge/refund, and its types inherit from `Currency`:
 //!
 //! ```
 //! use frame_support::{
@@ -148,7 +148,7 @@
 //!
 //! ## Genesis config
 //!
-//! The Generic Asset module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//! The Generic Asset Pallet depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -1092,7 +1092,7 @@ mod imbalances {
 // types (basically for charging fees).
 // This should eventually be refactored so that the two type items that do
 // depend on the Imbalance type (TransactionPayment, DustRemoval)
-// are placed in their own SRML module.
+// are placed in their own pallet.
 struct ElevatedTrait<T: Subtrait>(T);
 impl<T: Subtrait> Clone for ElevatedTrait<T> {
 	fn clone(&self) -> Self {

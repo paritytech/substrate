@@ -515,8 +515,15 @@ fn fork_aware_finalization() {
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c2.clone())));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(c2)));
-		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(e1)));
+
+		// can be either Ready, or InBlock, depending on which event comes first
+		assert_eq!(
+			match stream.next() {
+				Some(TransactionStatus::Ready) => stream.next(),
+				val @ _ => val,
+			}, 
+			Some(TransactionStatus::InBlock(e1)),
+		);
 		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1.clone())));
 		assert_eq!(stream.next(), None);
 	}
