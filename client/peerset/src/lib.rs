@@ -46,7 +46,7 @@ enum Action {
 	RemoveFromPriorityGroup(String, PeerId),
 }
 
-/// Shared handle to the peer set manager (PSM). Distributed around the code.
+/// Description of a reputation adjustment for a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReputationChange {
 	/// Reputation delta.

@@ -34,8 +34,8 @@ use futures::{
 };
 use sc_keystore::{Store as Keystore};
 use log::{info, warn, error};
-use sc_network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo};
-use sc_network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpecialization};
+use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+use sc_network::{NetworkService, NetworkStateInfo, specialization::NetworkSpecialization};
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
@@ -369,7 +369,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 				executor.clone(),
 			),
 		);
-		let fetcher = Arc::new(sc_network::OnDemand::new(fetch_checker));
+		let fetcher = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
 		let backend = sc_client::light::new_light_backend(light_blockchain);
 		let remote_blockchain = backend.remote_blockchain();
 		let client = Arc::new(sc_client::light::new_light(
