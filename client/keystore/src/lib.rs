@@ -309,7 +309,7 @@ impl Store {
 }
 
 impl BareCryptoStore for Store {
-	fn get_supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
+	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
 		let ed25519_existing_keys: Vec<Vec<u8>> = self.public_keys_by_type::<ed25519::Public>(id)
 								.map(|keys| keys.iter().map(|k| k.to_raw_vec()).collect())
 								.map_err(|e| e.to_string())?;

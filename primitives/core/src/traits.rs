@@ -68,7 +68,7 @@ pub trait BareCryptoStore: Send + Sync {
 	fn password(&self) -> Option<&str>;
 	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
 	/// a filtered list of public keys which are supported by the keystore.
-	fn get_supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, String>;
+	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, String>;
 	/// Get a list of public keys the signer supports.
 	fn get_keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, String>;
 	/// Checks if the private keys for the given public key and key type combinations exist.
@@ -98,7 +98,7 @@ pub trait BareCryptoStore: Send + Sync {
 		if keys.len() == 1 {
 			return self.sign_with(id, &keys[0], msg).map(|s| (keys[0].clone(), s));
 		} else {
-			for k in self.get_supported_keys(id, keys)? {
+			for k in self.supported_keys(id, keys)? {
 				if let Ok(sign) = self.sign_with(id, &k, msg) {
 					return Ok((k, sign));
 				}

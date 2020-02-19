@@ -137,7 +137,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		public_keys.iter().all(|(k, t)| self.keys.get(&t).and_then(|s| s.get(k)).is_some())
 	}
 
-	fn get_supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, String> {
+	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, String> {
 		let ed25519_existing_keys: Vec<Vec<u8>> = self.ed25519_public_keys(id).iter()
 								.map(|k| k.to_raw_vec()).collect();
 		let sr25519_existing_keys: Vec<Vec<u8>> = self.sr25519_public_keys(id).iter()
