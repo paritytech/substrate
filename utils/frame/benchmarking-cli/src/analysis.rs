@@ -123,7 +123,7 @@ impl std::fmt::Display for Analysis {
 		}
 
 		writeln!(f, "\nQuality and confidence:")?;
-		writeln!(f, "param     error", p, ms(*se as u128))?;
+		writeln!(f, "param     error")?;
 		for (p, se) in self.params.iter().zip(self.model.se.regressor_values.iter()) {
 			writeln!(f, "{}      {:>8}", p, ms(*se as u128))?;
 		}
