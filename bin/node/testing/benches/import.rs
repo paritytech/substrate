@@ -152,6 +152,33 @@ struct Setup {
 	block: Block,
 }
 
+struct SetupIterator {
+	current: usize,
+	finish: usize,
+	multiplier: usize,
+}
+
+impl SetupIterator {
+	fn new(current: usize, finish: usize, multiplier: usize) -> Self {
+		SetupIterator { current, finish, multiplier }
+	}
+}
+
+impl Iterator for SetupIterator {
+	type Item = Setup;
+
+	fn next(&mut self) -> Option<Setup> {
+		if self.current >= self.finish { return None }
+
+		self.current += 1;
+
+		let size = self.current*self.multiplier;
+		let mut db = BenchDb::new(size);
+		let block = db.generate_block(size);
+		Some(Setup { db, block })
+	}
+}
+
 impl fmt::Debug for Setup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Setup: {} tx/block", self.block.extrinsics.len())
@@ -160,14 +187,6 @@ impl fmt::Debug for Setup {
 
 fn bench_wasm_size_import(c: &mut Criterion) {
 	sc_cli::init_logger("");
-
-	let mut setups = Vec::new();
-
-	for block_size in 5..15 {
-		let mut db = BenchDb::new(block_size*50);
-		let block = db.generate_block(block_size * 50);
-		setups.push(Setup { db, block });
-	}
 
 	c.bench_function_over_inputs("wasm_size_import",
 		move |bencher, setup| {
@@ -181,6 +200,6 @@ fn bench_wasm_size_import(c: &mut Criterion) {
 				criterion::BatchSize::PerIteration,
 			);
 		},
-		setups,
+		SetupIterator::new(5, 15, 50),
 	);
 }
