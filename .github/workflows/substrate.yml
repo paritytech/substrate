@@ -8,9 +8,10 @@ jobs:
     env:
       CC: "clang"
       CXX: "clang++"
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
+      - run: printenv
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -92,7 +93,7 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
@@ -115,10 +116,11 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
+      - run: printenv
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -174,10 +176,11 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
+      - run: printenv
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -234,10 +237,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: "-Cdebug-assertions=y"
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
+      - run: printenv
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -281,6 +285,10 @@ jobs:
         with:
           path: target
           key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Configure node
+        uses: actions/setup-node@v1
+        with:
+          node-version: "13.x"
       - name: Run cargo Test linux stable
         uses: actions-rs/cargo@v1
         with:
@@ -294,10 +302,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: "-Cdebug-assertions=y"
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       RUST_BACKTRACE: 1
     steps:
+      - run: printenv
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -354,10 +363,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: "-Cdebug-assertions=y"
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       RUST_BACKTRACE: 1
     steps:
+      - run: printenv
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -414,10 +424,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: "-Cdebug-assertions=y"
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
+      - run: printenv
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -461,7 +472,11 @@ jobs:
         with:
           path: target
           key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name: Run cargo Test linux stable
+      - name: Configure node
+        uses: actions/setup-node@v1
+        with:
+          node-version: "13.x"
+      - name: Run cargo Test linux stable int
         uses: actions-rs/cargo@v1
         with:
           command: test
@@ -475,7 +490,7 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
@@ -582,7 +597,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: "-Cdebug-assertions=y"
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
       RUST_BACKTRACE: 1
     steps:
@@ -663,7 +678,7 @@ jobs:
     needs: [linux-cache-tools, linux-test-stable]
     runs-on: ubuntu-latest
     env:
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
@@ -715,13 +730,19 @@ jobs:
           command: build
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           args: --release --verbose
+      - name: Upload artifact
+        uses: actions/upload-artifact@v1
+        continue-on-error: true
+        with:
+          name: substrate
+          path: target/release
 
   build-linux-subkey:
     name: Build linux Subkey
     needs: [linux-cache-tools, linux-test-stable]
     runs-on: ubuntu-latest
     env:
-      RUST_TOOLCHAIN: 1.41.0
+      RUST_TOOLCHAIN: stable
       RUSTC_WRAPPER: sccache
     steps:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
@@ -773,3 +794,71 @@ jobs:
           command: build
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           args: --release --verbose
+      - name: Upload artifact
+        uses: actions/upload-artifact@v1
+        continue-on-error: true
+        with:
+          name: subkey
+          path: target/release
+
+  build-rust-doc-release:
+    name: Build Rust doc release
+    needs: [linux-cache-tools, linux-test-stable]
+    runs-on: ubuntu-latest
+    env:
+      RUST_TOOLCHAIN: stable
+      RUSTC_WRAPPER: sccache
+    steps:
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - name: Checkout submodules
+        shell: bash
+        run: git submodule update --init --recursive
+      - name: Prepare for restoring caches
+        run: |
+          rm -rf /home/runner/.rustup
+          rm -rf /home/runner/.cargo/git
+          rm -rf /home/runner/.cargo/registry
+      - name: Restore /home/runner/.rustup
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.rustup
+          key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
+      - name: Restore /home/runner/.cache/sccache
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.cache/sccache
+          key: sccache-[build-rust-doc-release]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+      - name: Restore /home/runner/tools/bin
+        uses: actions/cache@v1.1.2
+        with:
+          path: tools/bin
+          key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
+      - name: Restore /home/runner/.cargo/git
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.cargo/git
+          key: cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore /home/runner/.cargo/registry
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.cargo/registry
+          key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore ./target
+        uses: actions/cache@v1.1.2
+        with:
+          path: target
+          key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+        run: rm -f ./crate-docs/index.html
+      - name: Run cargo doc release
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          toolchain: nightly
+          args: --release --all --verbose
+        run: |
+        cp -R ./target/doc ./crate-docs
+        echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
