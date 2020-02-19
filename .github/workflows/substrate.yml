@@ -115,7 +115,7 @@ jobs:
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
-      RUST_TOOLCHAIN: nightly
+      RUST_TOOLCHAIN: 1.41.0
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
@@ -166,7 +166,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          toolchain: nightly
           args: --benches --all
 
   linux-cargo-check-subkey:
@@ -582,7 +582,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: "-Cdebug-assertions=y"
-      RUST_TOOLCHAIN: nightly
+      RUST_TOOLCHAIN: 1.41.0
       RUSTC_WRAPPER: sccache
       RUST_BACKTRACE: 1
     steps:
@@ -633,13 +633,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          toolchain: nightly
           args: --manifest-path "./primitives/core/Cargo.toml" --verbose --no-default-features --features full_crypto
       - name: Run cargo build crypto apps
         uses: actions-rs/cargo@v1
         with:
           command: build
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          toolchain: nightly
           args: --manifest-path "./primitives/application-crypto/Cargo.toml"--verbose --no-default-features --features full_crypto
 
   linux-dependency-rules:
