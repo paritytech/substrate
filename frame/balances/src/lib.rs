@@ -164,7 +164,7 @@ use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
 	weights::SimpleDispatchInfo, traits::{
-		Currency, OnReapAccount, OnUnbalanced, TryDrop, StoredMap,
+		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
 		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status
@@ -940,7 +940,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type Version = T::Version;
 	type ModuleToIndex = T::ModuleToIndex;
 	type OnNewAccount = T::OnNewAccount;
-	type OnReapAccount = T::OnReapAccount;
+	type OnKilledAccount = T::OnKilledAccount;
 	type AccountData = T::AccountData;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
@@ -1301,13 +1301,13 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 	}
 }
 
-/// Implement `OnReapAccount` to remove the local account, if using local account storage.
+/// Implement `OnKilledAccount` to remove the local account, if using local account storage.
 ///
 /// NOTE: You probably won't need to use this! This only needs to be "wired in" to System module
 /// if you're using the local balance storage. **If you're using the composite system account
 /// storage (which is the default in most examples and tests) then there's no need.**
-impl<T: Trait<I>, I: Instance> OnReapAccount<T::AccountId> for Module<T, I> {
-	fn on_reap_account(who: &T::AccountId) {
+impl<T: Trait<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
+	fn on_killed_account(who: &T::AccountId) {
 		Account::<T, I>::remove(who);
 	}
 }

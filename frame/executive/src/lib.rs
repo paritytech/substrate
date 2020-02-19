@@ -469,7 +469,7 @@ mod tests {
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnKilledAccount = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;

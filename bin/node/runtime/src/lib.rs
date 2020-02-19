@@ -131,7 +131,7 @@ impl frame_system::Trait for Runtime {
 	type ModuleToIndex = ModuleToIndex;
 	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
-	type OnReapAccount = ();
+	type OnKilledAccount = ();
 }
 
 parameter_types! {

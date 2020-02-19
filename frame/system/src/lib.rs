@@ -115,7 +115,7 @@ use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
 	traits::{
-		Contains, Get, ModuleToIndex, OnNewAccount, OnReapAccount, IsDeadAccount, Happened,
+		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap
 	},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
@@ -220,7 +220,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// A function that is invoked when an account has been determined to be dead.
 	///
 	/// All resources should be cleaned up associated with the given account.
-	type OnReapAccount: OnReapAccount<Self::AccountId>;
+	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -974,7 +974,7 @@ impl<T: Trait> Module<T> {
 
 	/// Do anything that needs to be done after an account has been killed.
 	fn on_killed_account(who: T::AccountId) {
-		T::OnReapAccount::on_reap_account(&who);
+		T::OnKilledAccount::on_killed_account(&who);
 		Self::deposit_event(RawEvent::ReapedAccount(who));
 	}
 }
@@ -1474,6 +1474,7 @@ impl<T: Trait> Lookup for ChainContext<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_std::cell::RefCell;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
 	use frame_support::{impl_outer_origin, parameter_types};
@@ -1500,6 +1501,15 @@ mod tests {
 		};
 	}
 
+	thread_local!{
+		pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	}
+
+	struct RecordKilled;
+	impl OnKilledAccount for RecordKilled {
+		fn on_killed_account(who: u64) { KILLED.with(|r| *r.borrow() = r) }
+	}
+
 	impl Trait for Test {
 		type Origin = Origin;
 		type Call = ();
@@ -1517,9 +1527,9 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = Version;
 		type ModuleToIndex = ();
-		type AccountData = ();
+		type AccountData = u32;
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnKilledAccount = ();
 	}
 
 	impl From<Event<Test>> for u16 {
@@ -1554,6 +1564,16 @@ mod tests {
 		let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
 		let x: Result<RawOrigin<u64>, Origin> = o.into();
 		assert_eq!(x, Ok(RawOrigin::<u64>::Signed(1u64)));
+	}
+
+	#[test]
+	fn stored_map_works() {
+		System::insert(&0, 42);
+		System::inc_ref(&0);
+		System::insert(&0, 69);
+		assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![]);
+		System::dec_ref(&0);
+		assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0]);
 	}
 
 	#[test]
