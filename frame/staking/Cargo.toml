@@ -21,6 +21,7 @@ sp-application-crypto = { version = "2.0.0", default-features = false, path = ".
 
 # Needed for benchmarking stuff. TODO: this stuff must NOT be always compiled. use a feature.
 # https://github.com/paritytech/substrate/issues/4873
+frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking" }
 pallet-indices = { version = "2.0.0", default-features = false, path = "../indices" }
 rand_chacha = { version = "0.2", default-features = false  }
 rand = { version = "0.7", default-features = false }
@@ -52,4 +53,6 @@ std = [
 	"frame-system/std",
 	"pallet-authorship/std",
 	"pallet-indices/std",
+	"frame-benchmarking/std",
+
 ]

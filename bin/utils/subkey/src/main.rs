@@ -280,7 +280,7 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 			SubCommand::with_name("transfer")
 				.about("Author and sign a Node pallet_balances::Transfer transaction with a given (secret) key")
 				.args_from_usage("
-					<genesis> -g, --genesis <genesis> 'The genesis hash or a recognised \
+					<genesis> -g, --genesis <genesis> 'The genesis hash or a recognized \
 											chain identifier (dev, elm, alex).'
 					<from> 'The signing secret key URI.'
 					<to> 'The destination account public key URI.'
@@ -572,7 +572,7 @@ fn read_genesis_hash(matches: &ArgMatches) -> Result<H256, Error> {
 		"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
 		"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
 		h => Decode::decode(&mut &decode_hex(h)?[..])
-			.expect("Invalid genesis hash or unrecognised chain identifier"),
+			.expect("Invalid genesis hash or unrecognized chain identifier"),
 	};
 	println!(
 		"Using a genesis hash of {}",

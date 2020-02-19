@@ -276,7 +276,7 @@ struct Resolver<'a> {
 	/// Will be used as initial and maximum size of the imported memory.
 	heap_pages: usize,
 	/// By default, runtimes should import memory and this is `Some(_)` after
-	/// reolving. However, to be backwards compatible, we also support memory
+	/// resolving. However, to be backwards compatible, we also support memory
 	/// exported by the WASM blob (this will be `None` after resolving).
 	import_memory: RefCell<Option<MemoryRef>>,
 }

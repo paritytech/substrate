@@ -1,12 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// A runtime module template with necessary imports
+/// A FRAME pallet template with necessary imports
 
 /// Feel free to remove or edit this file as needed.
 /// If you change the name of this file, make sure to update its references in runtime/src/lib.rs
 /// If you remove this file, you can remove those references
 
-/// For more guidance on Substrate modules, see the example module
+/// For more guidance on Substrate FRAME, see the example pallet
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
 use frame_support::{decl_module, decl_storage, decl_event, decl_error, dispatch};
@@ -41,7 +41,7 @@ decl_event!(
 	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
 		/// Just a dummy event.
 		/// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
-		/// To emit this event, we call the deposit funtion, from our runtime funtions
+		/// To emit this event, we call the deposit function, from our runtime functions
 		SomethingStored(u32, AccountId),
 	}
 );

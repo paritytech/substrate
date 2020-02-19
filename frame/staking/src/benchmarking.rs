@@ -1,15 +1,19 @@
 use super::*;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter, DispatchError};
-use sp_runtime::traits::{Dispatchable, Convert, Benchmarking, BenchmarkingSetup};
+use rand::Rng;
+use rand_chacha::rand_core::SeedableRng;
 use sp_io::hashing::blake2_256;
-use frame_support::StorageValue;
-use pallet_indices::address::Address;
 use frame_system::RawOrigin;
+use frame_support::StorageValue;
+use sp_runtime::DispatchError;
+use sp_runtime::traits::{Dispatchable, Convert};
+use frame_benchmarking::{
+	BenchmarkResults, BenchmarkParameter, selected_benchmark, benchmarking, Benchmarking,
+	BenchmarkingSetup,
+};
+use pallet_indices::address::Address;
 use sp_phragmen::{
 	ExtendedBalance, StakedAssignment, reduce, build_support_map, evaluate_support, PhragmenScore,
 };
-use rand::Rng;
-use rand_chacha::rand_core::SeedableRng;
 
 macro_rules! assert_ok {
 	( $x:expr $(,)? ) => {
@@ -441,8 +445,8 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where T::Lookup: Sta
 		// warm up. why not.
 		#[cfg(not(test))]
 		{
-			sp_io::benchmarking::commit_db();
-			sp_io::benchmarking::wipe_db();
+			benchmarking::commit_db();
+			benchmarking::wipe_db();
 		}
 
 		// select
@@ -493,9 +497,9 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where T::Lookup: Sta
 
 						// massage the database.
 						#[cfg(not(test))]
-						sp_io::benchmarking::commit_db();
+						benchmarking::commit_db();
 
-						let start = sp_io::benchmarking::current_time();
+						let start = benchmarking::current_time();
 						match mode {
 							BenchmarkingMode::WeakerSubmission => {
 								#[cfg(test)]
@@ -511,13 +515,13 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where T::Lookup: Sta
 							},
 							_ => call.dispatch(caller.into())?,
 						};
-						let finish = sp_io::benchmarking::current_time();
+						let finish = benchmarking::current_time();
 
 						let elapsed = finish - start;
 						results.push((c.clone(), elapsed));
 
 						#[cfg(not(test))]
-						sp_io::benchmarking::wipe_db();
+						benchmarking::wipe_db();
 						#[cfg(test)]
 						clean::<T>();
 					} else {
