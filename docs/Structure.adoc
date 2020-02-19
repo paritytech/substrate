@@ -67,7 +67,7 @@ There are a few crates with the `frame-` prefix. These do not contain domain-spe
 ** only helpers may be published
 ** purely testing crates must be `publish = false`
 
-All tests that have to pull (dev)-dependencies out of their subtree and would thus break the dependency rules are considered intergration tests and should be stored in here. Only helper-crates in here shall be published, everything else is expected to be non-publish.
+All tests that have to pull (dev)-dependencies out of their subtree and would thus break the dependency rules are considered integration tests and should be stored in here. Only helper-crates in here shall be published, everything else is expected to be non-publish.
 
 === Binaries and template
 

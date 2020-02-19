@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Authorship tracking for SRML runtimes.
+//! Authorship tracking for FRAME runtimes.
 //!
 //! This tracks the current author of the block and recent uncles.
 

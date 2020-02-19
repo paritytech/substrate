@@ -25,7 +25,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData};
 
 use libp2p::build_multiaddr;
 use log::trace;
-use sc_network::FinalityProofProvider;
+use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
 	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId}, Info as BlockchainInfo,
 };
@@ -52,11 +52,11 @@ use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProof
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
-use sc_network::ProtocolConfig;
+use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
-use sc_network::TransactionPool;
+use sc_network::config::TransactionPool;
 use sc_network::specialization::NetworkSpecialization;
 use substrate_test_runtime_client::{self, AccountKeyring};
 
@@ -766,7 +766,7 @@ pub trait TestNetFactory: Sized {
 
 	/// Blocks the current thread until we are sync'ed.
 	///
-	/// Calls `poll_until_sync` repeatidely with the runtime passed as parameter.
+	/// Calls `poll_until_sync` repeatedly with the runtime passed as parameter.
 	fn block_until_sync(&mut self, runtime: &mut tokio::runtime::current_thread::Runtime) {
 		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(self.poll_until_sync()))).unwrap();
 	}

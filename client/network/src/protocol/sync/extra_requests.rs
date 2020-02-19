@@ -228,6 +228,18 @@ impl<B: BlockT> ExtraRequests<B> {
 
 		true
 	}
+
+	/// Returns an iterator over all active (in-flight) requests and associated peer id.
+	#[cfg(test)]
+	pub(crate) fn active_requests(&self) -> impl Iterator<Item = (&PeerId, &ExtraRequest<B>)> {
+		self.active_requests.iter()
+	}
+
+	/// Returns an iterator over all scheduled pending requests.
+	#[cfg(test)]
+	pub(crate) fn pending_requests(&self) -> impl Iterator<Item = &ExtraRequest<B>> {
+		self.pending_requests.iter()
+	}
 }
 
 /// Matches peers with pending extra requests.
@@ -469,7 +481,7 @@ mod tests {
 	}
 
 	#[test]
-	fn anecstor_roots_are_finalized_when_finality_notification_is_missed() {
+	fn ancestor_roots_are_finalized_when_finality_notification_is_missed() {
 		let mut finality_proofs = ExtraRequests::<Block>::new("test");
 
 		let hash4 = [4; 32].into();

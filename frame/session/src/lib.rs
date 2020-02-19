@@ -80,7 +80,7 @@
 //!
 //! ## Usage
 //!
-//! ### Example from the SRML
+//! ### Example from the FRAME
 //!
 //! The [Staking pallet](../pallet_staking/index.html) uses the Session pallet to get the validator set.
 //!
@@ -168,7 +168,7 @@ impl<A> SessionManager<A> for () {
 	fn end_session(_: SessionIndex) {}
 }
 
-/// Handler for session lifecycle events.
+/// Handler for session life cycle events.
 pub trait SessionHandler<ValidatorId> {
 	/// All the key type ids this session handler can process.
 	///
