@@ -153,7 +153,7 @@ jobs:
           command: check
           toolchain: nightly
           args: --benches --all
-          
+
   linux-cargo-check-subkey:
     name: Run Cargo check subkey
     needs: [linux-cache-tools]
@@ -262,4 +262,3 @@ jobs:
           toolchain: stable
           args: --all --release --verbose --locked
         continue-on-error: true
-
