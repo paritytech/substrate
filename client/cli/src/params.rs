@@ -207,7 +207,7 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "port", value_name = "PORT")]
 	pub port: Option<u16>,
 
-	/// Allow connecting to private IPv4 addresses (as specified in
+	/// Forbid connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
 	/// `--reserved-nodes` or `--bootnodes`.
 	#[structopt(long = "no-private-ipv4")]
