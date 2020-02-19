@@ -17,10 +17,10 @@
 use sc_cli::{SharedParams, ImportParams, RunCmd};
 use structopt::StructOpt;
 
-#[allow(missing_docs)]
+/// An overarching CLI command definition.
 #[derive(Clone, Debug, StructOpt)]
 pub struct Cli {
-	#[allow(missing_docs)]
+	/// Possible subcommand with parameters.
 	#[structopt(subcommand)]
 	pub subcommand: Option<Subcommand>,
 	#[allow(missing_docs)]
@@ -28,10 +28,10 @@ pub struct Cli {
 	pub run: RunCmd,
 }
 
-#[allow(missing_docs)]
+/// Possible subcommands of the main binary.
 #[derive(Clone, Debug, StructOpt)]
 pub enum Subcommand {
-	#[allow(missing_docs)]
+	/// A set of base subcommands handled by `sc_cli`.
 	#[structopt(flatten)]
 	Base(sc_cli::Subcommand),
 	/// The custom factory subcommmand for manufacturing transactions.
@@ -41,6 +41,13 @@ pub enum Subcommand {
 		Only supported for development or local testnet."
 	)]
 	Factory(FactoryCmd),
+
+	/// The custom inspect subcommmand for decoding blocks and extrinsics.
+	#[structopt(
+		name = "inspect",
+		about = "Decode given block or extrinsic using current native runtime."
+	)]
+	Inspect(node_inspect::cli::InspectCmd),
 }
 
 /// The `factory` command used to generate transactions.
