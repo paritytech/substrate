@@ -25,7 +25,6 @@
 //! - \[`Call`](./enum.Call.html)
 //! - \[`Module`](./struct.Module.html)
 //!
-#![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
@@ -37,7 +36,7 @@ use frame_system::{self as system, ensure_signed, ensure_none, offchain};
 use serde_json as json;
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
-	offchain::{http, Duration},
+	offchain::{http, Duration, storage::StorageValueRef},
 	traits::{Zero, UniqueSaturatedFrom},
 	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionValidity},
 };
@@ -197,11 +196,11 @@ decl_module! {
 			// For this example we are going to send both
 			// signed and unsigned transactions depending on the block number.
 			// Usually it's enough to choose either options.
-			let send_signed = block_number % 2.into() == Zero::zero();
-			let res = if send_signed {
-				Self::fetch_price_and_send_signed()
-			} else {
-				Self::fetch_price_and_send_unsigned(block_number)
+			let should_send = Self::choose_transaction_type(block_number);
+			let res = match should_send {
+				TransactionType::Signed => Self::fetch_price_and_send_signed(),
+				TransactionType::Unsigned => Self::fetch_price_and_send_unsigned(block_number),
+				TransactionType::None => Ok(()),
 			};
 			if let Err(e) = res {
 				debug::error!("Error: {}", e);
@@ -210,11 +209,95 @@ decl_module! {
 	}
 }
 
+enum TransactionType {
+	Signed,
+	Unsigned,
+	None,
+}
+
 /// Most of the functions are moved outside of the `decl_module` macro.
 ///
 /// This greately helps with error messsages, as the ones inside the macro
 /// can sometimes be hard to debug.
 impl<T: Trait> Module<T> {
+	/// Chooses which transaction type to send.
+	///
+	/// This function serves mostly to showcase `StorageValue` helper
+	/// and local storage usage.
+	///
+	/// Returns a type of transaction that should be produced in current run.
+	fn choose_transaction_type(block_number: T::BlockNumber) -> TransactionType {
+		/// A grace period after we send transaction.
+		///
+		/// To avoid sending too many transactions, we only attempt to send one
+		/// every `GRACE_PERIOD` blocks. We use Local Storage to coordinate
+		/// sending between distinct runs of this offchain worker.
+		const GRACE_PERIOD: u32 = 5;
+		/// A friendlier name for the error that is going to be returned in case we are in the grace
+		/// period.
+		const RECENTLY_SENT: () = ();
+
+		// Start off by creating a reference to Local Storage value.
+		// Since the local storage is common for all offchain workers, it's a good practice
+		// to prepend your entry with the module name.
+		let val = StorageValueRef::persistent(b"example_ocw::last_send");
+		// The Local Storage is persisted and shared between runs of the offchain workers,
+		// and offchain workers may run concurrently we can use `mutate` function, to
+		// write a storage entry in atomic fashion. Under the hood it uses `compare_and_set`
+		// low-level method of local storage API, which means that only one worker
+		// will be able to "acquire a lock" and send a transaction if multiple workers
+		// happen to be executed concurrently.
+		let res = val.mutate(|last_send: Option<Option<T::BlockNumber>>| {
+			// We match on the value decoded from the storage. The first `Option`
+			// indicates if the value was present in the storage at all,
+			// the second (inner) `Option` indicates if the value was succesfuly
+			// decoded to expected type (`T::BlockNumber` in our case).
+			match last_send {
+				// If we already have a value in storage and the block number is recent enough
+				// we avoid sending another transaction at this time.
+				Some(Some(block)) if block + GRACE_PERIOD.into() < block_number => {
+					Err(RECENTLY_SENT)
+				},
+				// In every other case we attempt to acquire the lock and send a transaction.
+				_ => Ok(block_number)
+			}
+		});
+
+		// The result of `mutate` call will give us a nested `Result` type.
+		// The first one matches the return of the closure passed to `mutate`, i.e.
+		// if we return `Err` from the closure, we get an `Err` here.
+		// In case we return `Ok`, here we will have another `Result` that indicates
+		// if the value has been set to the storage correctly - i.e. if it wasn't
+		// written to in the meantime.
+		match res {
+			// The value has been set correctly, which means we can safely send a transaction now.
+			Ok(Ok(block_number)) => {
+				// Depending if the block is even or odd we will send a `Signed` or `Unsigned`
+				// transaction.
+				// Note that this logic doesn't really guarantee that the transactions will be sent
+				// in an alternating fashion (i.e. fairly distributed). Depending on the execution
+				// order and lock acquisition, we may end up for instance sending two `Signed`
+				// transactions in a row. If a strict order is desired, it's better to use
+				// the storage entry for that. (for instance store both block number and a flag
+				// indicating the type of next transaction to send).
+				let send_signed = block_number % 2.into() == Zero::zero();
+				if send_signed {
+					TransactionType::Signed
+				} else {
+					TransactionType::Unsigned
+				}
+			},
+			// We are in the grace period, we should not send a transaction this time.
+			Err(RECENTLY_SENT) => TransactionType::None,
+			// We wanted to send a transaction, but failed to write the block number (acquire a
+			// lock). This indicates that another offchain worker that was running concurrently
+			// most likely executed the same logic and succeeded at writing to storage.
+			// Thus we don't really want to send the transaction, knowing that the other run
+			// already did.
+			Ok(Err(_)) => TransactionType::None,
+		}
+	}
+
 	/// A helper function to fetch the price and send signed transaction.
 	fn fetch_price_and_send_signed() -> Result<(), String> {
 		use system::offchain::SubmitSignedTransaction;
