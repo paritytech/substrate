@@ -16,7 +16,7 @@
 
 //! Types that should only be used for testing!
 
-use crate::crypto::{CryptoTypeId, KeyTypeId, CryptoTypePublicPair};
+use crate::crypto::{KeyTypeId, CryptoTypePublicPair};
 #[cfg(feature = "std")]
 use crate::{
 	crypto::{Pair, Public},
@@ -169,26 +169,23 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		Ok(keys)
 	}
 
-	fn sign_with(&self, kind: CryptoTypeId, id: KeyTypeId, msg: &[u8]) -> Result<Vec<u8>, String> {
-		match kind {
+	fn sign_with(
+		&self,
+		id: KeyTypeId,
+		key: &CryptoTypePublicPair,
+		msg: &[u8]
+	) -> Result<Vec<u8>, String> {
+		match key.0 {
 			ed25519::ED25519_CRYPTO_ID => {
-				let ed_public_key = self
-					.ed25519_public_keys(id)
-					.pop()
-					.ok_or(String::from("ed25519 key not found"))?;
 				let key_pair: ed25519::Pair = self
-					.ed25519_key_pair(id, &ed_public_key)
+					.ed25519_key_pair(id, &ed25519::Public::from_slice(key.1.as_slice()))
 					.map(Into::into)
 					.ok_or(String::from("ed25519 pair not found"))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
 			sr25519::SR25519_CRYPTO_ID => {
-				let sr_public_key = self
-					.sr25519_public_keys(id)
-					.pop()
-					.ok_or(String::from("sr25519 key not found"))?;
 				let key_pair: sr25519::Pair = self
-					.sr25519_key_pair(id, &sr_public_key)
+					.sr25519_key_pair(id, &sr25519::Public::from_slice(key.1.as_slice()))
 					.map(Into::into)
 					.ok_or(String::from("sr25519 pair not found"))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
