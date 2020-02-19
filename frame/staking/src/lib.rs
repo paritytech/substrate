@@ -171,7 +171,7 @@
 //!
 //! Validators and nominators are rewarded at the end of each era. The total reward of an era is
 //! calculated using the era duration and the staking rate (the total amount of tokens staked by
-//! nominators and validators, divided by the total token supply). It aims to incentivise toward a
+//! nominators and validators, divided by the total token supply). It aims to incentivize toward a
 //! defined staking rate. The full specification can be found
 //! [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model).
 //!
@@ -250,7 +250,6 @@
 mod mock;
 #[cfg(test)]
 mod tests;
-mod migration;
 mod slashing;
 
 pub mod inflation;
@@ -261,18 +260,17 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::SimpleDispatchInfo,
 	traits::{
-		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
+		Currency, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
 use pallet_session::historical::SessionManager;
 use sp_runtime::{
-	Perbill,
-	RuntimeDebug,
+	Perbill, PerThing, RuntimeDebug,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin,
+		AtLeast32Bit, EnsureOrigin,
 	}
 };
 use sp_staking::{
@@ -284,6 +282,7 @@ use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 use sp_phragmen::ExtendedBalance;
+use frame_support::traits::OnReapAccount;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -395,7 +394,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 
 impl<
 	AccountId,
-	Balance: HasCompact + Copy + Saturating + SimpleArithmetic,
+	Balance: HasCompact + Copy + Saturating + AtLeast32Bit,
 > StakingLedger<AccountId, Balance> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
@@ -439,7 +438,7 @@ impl<
 }
 
 impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
-	Balance: SimpleArithmetic + Saturating + Copy,
+	Balance: AtLeast32Bit + Saturating + Copy,
 {
 	/// Slash the validator for a given amount of balance. This can grow the value
 	/// of the slash in the case that the validator has less than `minimum_balance`
@@ -671,28 +670,32 @@ decl_storage! {
 		pub Invulnerables get(fn invulnerables) config(): Vec<T::AccountId>;
 
 		/// Map from all locked "stash" accounts to the controller account.
-		pub Bonded get(fn bonded): map T::AccountId => Option<T::AccountId>;
+		pub Bonded get(fn bonded): map hasher(blake2_256) T::AccountId => Option<T::AccountId>;
 		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 		pub Ledger get(fn ledger):
-			map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>>>;
+			map hasher(blake2_256) T::AccountId
+			=> Option<StakingLedger<T::AccountId, BalanceOf<T>>>;
 
 		/// Where the reward payment should be made. Keyed by stash.
-		pub Payee get(fn payee): map T::AccountId => RewardDestination;
+		pub Payee get(fn payee): map hasher(blake2_256) T::AccountId => RewardDestination;
 
 		/// The map from (wannabe) validator stash key to the preferences of that validator.
-		pub Validators get(fn validators): linked_map T::AccountId => ValidatorPrefs;
+		pub Validators get(fn validators):
+			linked_map hasher(blake2_256) T::AccountId => ValidatorPrefs;
 
 		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 		///
 		/// NOTE: is private so that we can ensure upgraded before all typical accesses.
 		/// Direct storage APIs can still bypass this protection.
-		Nominators get(fn nominators): linked_map T::AccountId => Option<Nominations<T::AccountId>>;
+		Nominators get(fn nominators):
+			linked_map hasher(blake2_256) T::AccountId => Option<Nominations<T::AccountId>>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate
 		/// through validators here, but you can find them in the Session module.
 		///
 		/// This is keyed by the stash account.
-		pub Stakers get(fn stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
+		pub Stakers get(fn stakers):
+			map hasher(blake2_256) T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
 
 		/// The currently elected validator set keyed by stash account ID.
 		pub CurrentElected get(fn current_elected): Vec<T::AccountId>;
@@ -729,7 +732,8 @@ decl_storage! {
 		pub CanceledSlashPayout get(fn canceled_payout) config(): BalanceOf<T>;
 
 		/// All unapplied slashes that are queued for later.
-		pub UnappliedSlashes: map EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
+		pub UnappliedSlashes:
+			map hasher(blake2_256) EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
 
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
@@ -737,25 +741,25 @@ decl_storage! {
 		/// All slashing events on validators, mapped by era to the highest slash proportion
 		/// and slash value of the era.
 		ValidatorSlashInEra:
-			double_map EraIndex, hasher(twox_128) T::AccountId => Option<(Perbill, BalanceOf<T>)>;
+			double_map hasher(blake2_256) EraIndex, hasher(twox_128) T::AccountId
+			=> Option<(Perbill, BalanceOf<T>)>;
 
 		/// All slashing events on nominators, mapped by era to the highest slash value of the era.
 		NominatorSlashInEra:
-			double_map EraIndex, hasher(twox_128) T::AccountId => Option<BalanceOf<T>>;
+			double_map hasher(blake2_256) EraIndex, hasher(twox_128) T::AccountId
+			=> Option<BalanceOf<T>>;
 
 		/// Slashing spans for stash accounts.
-		SlashingSpans: map T::AccountId => Option<slashing::SlashingSpans>;
+		SlashingSpans: map hasher(blake2_256) T::AccountId => Option<slashing::SlashingSpans>;
 
 		/// Records information about the maximum slash of a stash within a slashing span,
 		/// as well as how much reward has been paid out.
 		SpanSlash:
-			map (T::AccountId, slashing::SpanIndex) => slashing::SpanRecord<BalanceOf<T>>;
+			map hasher(blake2_256) (T::AccountId, slashing::SpanIndex)
+			=> slashing::SpanRecord<BalanceOf<T>>;
 
 		/// The earliest era for which we have a pending, unapplied slash.
 		EarliestUnappliedSlash: Option<EraIndex>;
-
-		/// The version of storage for upgrade.
-		StorageVersion: u32;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -787,8 +791,6 @@ decl_storage! {
 					}, _ => Ok(())
 				};
 			}
-
-			StorageVersion::put(migration::CURRENT_VERSION);
 		});
 	}
 }
@@ -878,13 +880,13 @@ decl_module! {
 		) {
 			let stash = ensure_signed(origin)?;
 
-			if <Bonded<T>>::exists(&stash) {
+			if <Bonded<T>>::contains_key(&stash) {
 				Err(Error::<T>::AlreadyBonded)?
 			}
 
 			let controller = T::Lookup::lookup(controller)?;
 
-			if <Ledger<T>>::exists(&controller) {
+			if <Ledger<T>>::contains_key(&controller) {
 				Err(Error::<T>::AlreadyPaired)?
 			}
 
@@ -1130,7 +1132,7 @@ decl_module! {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 			let controller = T::Lookup::lookup(controller)?;
-			if <Ledger<T>>::exists(&controller) {
+			if <Ledger<T>>::contains_key(&controller) {
 				Err(Error::<T>::AlreadyPaired)?
 			}
 			if controller != old_controller {
@@ -1142,7 +1144,7 @@ decl_module! {
 		}
 
 		/// The ideal number of validators.
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
@@ -1155,7 +1157,7 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn force_no_eras(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNone);
@@ -1167,21 +1169,21 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNew);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
 		}
 
 		/// Force a current staker to become completely unstaked, immediately.
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn force_unstake(origin, stash: T::AccountId) {
 			ensure_root(origin)?;
 
@@ -1196,7 +1198,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage write
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn force_new_era_always(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceAlways);
@@ -1209,7 +1211,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage write.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
 			T::SlashCancelOrigin::try_origin(origin)
 				.map(|_| ())
@@ -1278,7 +1280,6 @@ impl<T: Trait> Module<T> {
 			STAKING_ID,
 			&ledger.stash,
 			ledger.total,
-			T::BlockNumber::max_value(),
 			WithdrawReasons::all(),
 		);
 		<Ledger<T>>::insert(controller, ledger);
@@ -1291,9 +1292,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Ensures storage is upgraded to most recent necessary state.
-	fn ensure_storage_upgraded() {
-		migration::perform_migrations::<T>();
-	}
+	///
+	/// Right now it's a no-op as all networks that are supported by Substrate Frame Core are
+	/// running with the latest staking storage scheme.
+	fn ensure_storage_upgraded() {}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
@@ -1358,7 +1360,7 @@ impl<T: Trait> Module<T> {
 		Self::new_era(session_index)
 	}
 
-	/// Initialise the first session (and consequently the first era)
+	/// Initialize the first session (and consequently the first era)
 	fn initial_session() -> Option<Vec<T::AccountId>> {
 		// note: `CurrentEraStart` is set in `on_finalize` of the first block because now is not
 		// available yet.
@@ -1495,7 +1497,7 @@ impl<T: Trait> Module<T> {
 		});
 		all_nominators.extend(nominator_votes);
 
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote>(
+		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote, Perbill>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,
@@ -1512,7 +1514,7 @@ impl<T: Trait> Module<T> {
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
-			let supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
+			let supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote, Perbill>(
 				&elected_stashes,
 				&assignments,
 				Self::slashable_balance_of,
@@ -1674,8 +1676,8 @@ impl<T: Trait> SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(stash: &T::AccountId) {
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	fn on_reap_account(stash: &T::AccountId) {
 		Self::ensure_storage_upgraded();
 		Self::kill_stash(stash);
 	}

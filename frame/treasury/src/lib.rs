@@ -38,7 +38,7 @@
 //! should be paid.
 //!
 //! A group of `Tippers` is determined through the config `Trait`. After half of these have declared
-//! some amount that they believe a particular reported reason deserves, then a countfown period is
+//! some amount that they believe a particular reported reason deserves, then a countdown period is
 //! entered where any remaining members can declare their tip amounts also. After the close of the
 //! countdown period, the median of all declared tips is paid to the reported beneficiary, along
 //! with any finders fee, in case of a public (and bonded) original report.
@@ -200,7 +200,7 @@ decl_storage! {
 		ProposalCount get(fn proposal_count): ProposalIndex;
 
 		/// Proposals that have been made.
-		Proposals get(fn proposals): map ProposalIndex => Option<Proposal<T::AccountId, BalanceOf<T>>>;
+		Proposals get(fn proposals): map hasher(blake2_256) ProposalIndex => Option<Proposal<T::AccountId, BalanceOf<T>>>;
 
 		/// Proposal indices that have been approved but not yet awarded.
 		Approvals get(fn approvals): Vec<ProposalIndex>;
@@ -371,7 +371,7 @@ decl_module! {
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
-			ensure!(<Proposals<T>>::exists(proposal_id), Error::<T>::InvalidProposalIndex);
+			ensure!(<Proposals<T>>::contains_key(proposal_id), Error::<T>::InvalidProposalIndex);
 
 			Approvals::mutate(|v| v.push(proposal_id));
 		}
@@ -403,9 +403,9 @@ decl_module! {
 			ensure!(reason.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
-			ensure!(!Reasons::<T>::exists(&reason_hash), Error::<T>::AlreadyKnown);
+			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
-			ensure!(!Tips::<T>::exists(&hash), Error::<T>::AlreadyKnown);
+			ensure!(!Tips::<T>::contains_key(&hash), Error::<T>::AlreadyKnown);
 
 			let deposit = T::TipReportDepositBase::get()
 				+ T::TipReportDepositPerByte::get() * (reason.len() as u32).into();
@@ -474,7 +474,7 @@ decl_module! {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
-			ensure!(!Reasons::<T>::exists(&reason_hash), Error::<T>::AlreadyKnown);
+			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 
 			Reasons::<T>::insert(&reason_hash, &reason);
@@ -590,7 +590,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Remove any non-members of `Tippers` from a `tips` vectr. `O(T)`.
+	/// Remove any non-members of `Tippers` from a `tips` vector. `O(T)`.
 	fn retain_active_tips(tips: &mut Vec<(T::AccountId, BalanceOf<T>)>) {
 		let members = T::Tippers::sorted_members();
 		let mut members_iter = members.iter();
@@ -724,7 +724,9 @@ mod tests {
 	use frame_support::traits::Contains;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, OnFinalize, IdentityLookup, BadOrigin}, testing::Header, Perbill
+		Perbill,
+		testing::Header,
+		traits::{BlakeTwo256, OnFinalize, IdentityLookup, BadOrigin},
 	};
 
 	impl_outer_origin! {
@@ -756,23 +758,19 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnReapAccount = Balances;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const TransferFee: u64 = 0;
-		pub const CreationFee: u64 = 0;
-	}
+}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnNewAccount = ();
-		type OnFreeBalanceZero = ();
-		type OnReapAccount = System;
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 	pub struct TenToFourteen;
 	impl Contains<u64> for TenToFourteen {
@@ -818,7 +816,6 @@ mod tests {
 		pallet_balances::GenesisConfig::<Test>{
 			// Total issuance will be 200 with treasury account initialized at ED.
 			balances: vec![(0, 100), (1, 98), (2, 1)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
 		t.into()
@@ -853,8 +850,8 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
-			assert_eq!(Balances::reserved_balance(&0), 12);
-			assert_eq!(Balances::free_balance(&0), 88);
+			assert_eq!(Balances::reserved_balance(0), 12);
+			assert_eq!(Balances::free_balance(0), 88);
 
 			// other reports don't count.
 			assert_noop!(
@@ -869,9 +866,9 @@ mod tests {
 			assert_noop!(Treasury::tip(Origin::signed(9), h.clone(), 10), BadOrigin);
 			System::set_block_number(2);
 			assert_ok!(Treasury::close_tip(Origin::signed(100), h.into()));
-			assert_eq!(Balances::reserved_balance(&0), 0);
-			assert_eq!(Balances::free_balance(&0), 102);
-			assert_eq!(Balances::free_balance(&3), 8);
+			assert_eq!(Balances::reserved_balance(0), 0);
+			assert_eq!(Balances::free_balance(0), 102);
+			assert_eq!(Balances::free_balance(3), 8);
 		});
 	}
 
@@ -880,16 +877,16 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 0));
-			assert_eq!(Balances::reserved_balance(&0), 12);
-			assert_eq!(Balances::free_balance(&0), 88);
+			assert_eq!(Balances::reserved_balance(0), 12);
+			assert_eq!(Balances::free_balance(0), 88);
 			let h = BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 0u64));
 			assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
 			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
 			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
 			System::set_block_number(2);
 			assert_ok!(Treasury::close_tip(Origin::signed(100), h.into()));
-			assert_eq!(Balances::reserved_balance(&0), 0);
-			assert_eq!(Balances::free_balance(&0), 110);
+			assert_eq!(Balances::reserved_balance(0), 0);
+			assert_eq!(Balances::free_balance(0), 110);
 		});
 	}
 
@@ -910,7 +907,7 @@ mod tests {
 			System::set_block_number(2);
 			assert_noop!(Treasury::close_tip(Origin::NONE, h.into()), BadOrigin);
 			assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
-			assert_eq!(Balances::free_balance(&3), 10);
+			assert_eq!(Balances::free_balance(3), 10);
 
 			assert_noop!(Treasury::close_tip(Origin::signed(100), h.into()), Error::<Test>::UnknownTip);
 		});
@@ -942,7 +939,7 @@ mod tests {
 			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 1000000));
 			System::set_block_number(2);
 			assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
-			assert_eq!(Balances::free_balance(&3), 10);
+			assert_eq!(Balances::free_balance(3), 10);
 		});
 	}
 
@@ -961,7 +958,7 @@ mod tests {
 			assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
 			System::set_block_number(2);
 			assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
-			assert_eq!(Balances::free_balance(&3), 10);
+			assert_eq!(Balances::free_balance(3), 10);
 		});
 	}
 
@@ -978,8 +975,8 @@ mod tests {
 	fn spend_proposal_takes_min_deposit() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 1, 3));
-			assert_eq!(Balances::free_balance(&0), 99);
-			assert_eq!(Balances::reserved_balance(&0), 1);
+			assert_eq!(Balances::free_balance(0), 99);
+			assert_eq!(Balances::reserved_balance(0), 1);
 		});
 	}
 
@@ -987,8 +984,8 @@ mod tests {
 	fn spend_proposal_takes_proportional_deposit() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-			assert_eq!(Balances::free_balance(&0), 95);
-			assert_eq!(Balances::reserved_balance(&0), 5);
+			assert_eq!(Balances::free_balance(0), 95);
+			assert_eq!(Balances::reserved_balance(0), 5);
 		});
 	}
 
@@ -1011,7 +1008,7 @@ mod tests {
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalize<u64>>::on_finalize(1);
-			assert_eq!(Balances::free_balance(&3), 0);
+			assert_eq!(Balances::free_balance(3), 0);
 			assert_eq!(Treasury::pot(), 100);
 		});
 	}
@@ -1038,7 +1035,7 @@ mod tests {
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
-			assert_eq!(Balances::free_balance(&3), 0);
+			assert_eq!(Balances::free_balance(3), 0);
 			assert_eq!(Treasury::pot(), 50);
 		});
 	}
@@ -1055,14 +1052,14 @@ mod tests {
 	}
 
 	#[test]
-	fn reject_non_existant_spend_proposal_fails() {
+	fn reject_non_existent_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 
 	#[test]
-	fn accept_non_existant_spend_proposal_fails() {
+	fn accept_non_existent_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
@@ -1089,7 +1086,7 @@ mod tests {
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
-			assert_eq!(Balances::free_balance(&3), 100);
+			assert_eq!(Balances::free_balance(3), 100);
 			assert_eq!(Treasury::pot(), 0);
 		});
 	}
@@ -1108,7 +1105,7 @@ mod tests {
 
 			let _ = Balances::deposit_into_existing(&Treasury::account_id(), 100).unwrap();
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
-			assert_eq!(Balances::free_balance(&3), 150); // Fund has been spent
+			assert_eq!(Balances::free_balance(3), 150); // Fund has been spent
 			assert_eq!(Treasury::pot(), 25); // Pot has finally changed
 		});
 	}
@@ -1133,24 +1130,23 @@ mod tests {
 
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
 			assert_eq!(Treasury::pot(), 0); // Pot is emptied
-			assert_eq!(Balances::free_balance(&Treasury::account_id()), 1); // but the account is still there
+			assert_eq!(Balances::free_balance(Treasury::account_id()), 1); // but the account is still there
 		});
 	}
 
 	// In case treasury account is not existing then it works fine.
-	// This is usefull for chain that will just update runtime.
+	// This is useful for chain that will just update runtime.
 	#[test]
-	fn inexisting_account_works() {
+	fn inexistent_account_works() {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		// Treasury genesis config is not build thus treasury account does not exist
 		let mut t: sp_io::TestExternalities = t.into();
 
 		t.execute_with(|| {
-			assert_eq!(Balances::free_balance(&Treasury::account_id()), 0); // Account does not exist
+			assert_eq!(Balances::free_balance(Treasury::account_id()), 0); // Account does not exist
 			assert_eq!(Treasury::pot(), 0); // Pot is empty
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 99, 3));
@@ -1159,16 +1155,16 @@ mod tests {
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 1));
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Treasury::pot(), 0); // Pot hasn't changed
-			assert_eq!(Balances::free_balance(&3), 0); // Balance of `3` hasn't changed
+			assert_eq!(Balances::free_balance(3), 0); // Balance of `3` hasn't changed
 
 			Balances::make_free_balance_be(&Treasury::account_id(), 100);
 			assert_eq!(Treasury::pot(), 99); // Pot now contains funds
-			assert_eq!(Balances::free_balance(&Treasury::account_id()), 100); // Account does exist
+			assert_eq!(Balances::free_balance(Treasury::account_id()), 100); // Account does exist
 
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
 
 			assert_eq!(Treasury::pot(), 0); // Pot has changed
-			assert_eq!(Balances::free_balance(&3), 99); // Balance of `3` has changed
+			assert_eq!(Balances::free_balance(3), 99); // Balance of `3` has changed
 		});
 	}
 }

@@ -19,16 +19,17 @@ use std::{
 	fmt,
 	hash,
 	sync::Arc,
-	time,
 };
 
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
+use wasm_timer::Instant;
 
 use crate::base_pool::Transaction;
 
+#[cfg_attr(not(target_os = "unknown"), derive(parity_util_mem::MallocSizeOf))]
 /// Transaction with partially satisfied dependencies.
 pub struct WaitingTransaction<Hash, Ex> {
 	/// Transaction details.
@@ -36,7 +37,7 @@ pub struct WaitingTransaction<Hash, Ex> {
 	/// Tags that are required and have not been satisfied yet by other transactions in the pool.
 	pub missing_tags: HashSet<Tag>,
 	/// Time of import to the Future Queue.
-	pub imported_at: time::Instant,
+	pub imported_at: Instant,
 }
 
 impl<Hash: fmt::Debug, Ex: fmt::Debug> fmt::Debug for WaitingTransaction<Hash, Ex> {
@@ -90,7 +91,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 		WaitingTransaction {
 			transaction: Arc::new(transaction),
 			missing_tags,
-			imported_at: time::Instant::now(),
+			imported_at: Instant::now(),
 		}
 	}
 
@@ -110,6 +111,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 /// Contains transactions that are still awaiting for some other transactions that
 /// could provide a tag that they require.
 #[derive(Debug)]
+#[cfg_attr(not(target_os = "unknown"), derive(parity_util_mem::MallocSizeOf))]
 pub struct FutureTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// tags that are not yet provided by any transaction and we await for them
 	wanted_tags: HashMap<Tag, HashSet<Hash>>,
@@ -160,7 +162,7 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	}
 
 	/// Returns a list of known transactions
-	pub fn by_hash(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
+	pub fn by_hashes(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
 		hashes.iter().map(|h| self.waiting.get(h).map(|x| x.transaction.clone())).collect()
 	}
 
@@ -241,5 +243,32 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	/// Returns sum of encoding lengths of all transactions in this queue.
 	pub fn bytes(&self) -> usize {
 		self.waiting.values().fold(0, |acc, tx| acc + tx.transaction.bytes)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn can_track_heap_size() {
+		let mut future = FutureTransactions::default();
+		future.import(WaitingTransaction {
+			transaction: Transaction {
+				data: vec![0u8; 1024],
+				bytes: 1,
+				hash: 1,
+				priority: 1,
+				valid_till: 2,
+				requires: vec![vec![1], vec![2]],
+				provides: vec![vec![3], vec![4]],
+				propagate: true,
+			}.into(),
+			missing_tags: vec![vec![1u8], vec![2u8]].into_iter().collect(),
+			imported_at: std::time::Instant::now(),
+		});
+
+		// data is at least 1024!
+		assert!(parity_util_mem::malloc_size(&future) > 1024);
 	}
 }

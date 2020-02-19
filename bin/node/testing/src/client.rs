@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Utilites to build a `TestClient` for `node-runtime`.
+//! Utilities to build a `TestClient` for `node-runtime`.
 
 use sp_runtime::BuildStorage;
 
@@ -34,6 +34,9 @@ pub type Client = sc_client::Client<
 	node_primitives::Block,
 	node_runtime::RuntimeApi,
 >;
+
+/// Transaction for node-runtime.
+pub type Transaction = sc_client_api::backend::TransactionFor<Backend, node_primitives::Block>;
 
 /// Genesis configuration parameters for `TestClient`.
 #[derive(Default)]
@@ -57,6 +60,7 @@ pub trait TestClientBuilderExt: Sized {
 }
 
 impl TestClientBuilderExt for substrate_test_client::TestClientBuilder<
+	node_primitives::Block,
 	sc_client::LocalCallExecutor<Backend, Executor>,
 	Backend,
 	GenesisParameters,

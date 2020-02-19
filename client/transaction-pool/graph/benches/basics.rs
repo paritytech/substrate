@@ -16,7 +16,7 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use futures::executor::block_on;
+use futures::{future::{ready, Ready}, executor::block_on};
 use sc_transaction_graph::*;
 use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 use codec::Encode;
@@ -49,7 +49,8 @@ impl ChainApi for TestApi {
 	type Block = Block;
 	type Hash = H256;
 	type Error = sp_transaction_pool::error::Error;
-	type ValidationFuture = futures::future::Ready<sp_transaction_pool::error::Result<TransactionValidity>>;
+	type ValidationFuture = Ready<sp_transaction_pool::error::Result<TransactionValidity>>;
+	type BodyFuture = Ready<sp_transaction_pool::error::Result<Option<Vec<Extrinsic>>>>;
 
 	fn validate_transaction(
 		&self,
@@ -61,14 +62,14 @@ impl ChainApi for TestApi {
 
 		match self.block_id_to_number(at) {
 			Ok(Some(num)) if num > 5 => {
-				return futures::future::ready(
+				return ready(
 					Ok(Err(InvalidTransaction::Stale.into()))
 				)
 			},
 			_ => {},
 		}
 
-		futures::future::ready(
+		ready(
 			Ok(Ok(ValidTransaction {
 				priority: 4,
 				requires: if nonce > 1 && self.nonce_dependant {
@@ -105,6 +106,10 @@ impl ChainApi for TestApi {
 		let encoded = uxt.encode();
 		(blake2_256(&encoded).into(), encoded.len())
 	}
+
+	fn block_body(&self, _id: &BlockId<Self::Block>) -> Self::BodyFuture {
+		ready(Ok(None))
+	}
 }
 
 fn uxt(transfer: Transfer) -> Extrinsic {
@@ -130,8 +135,8 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 	let res = block_on(futures::future::join_all(futures.into_iter()));
 	assert!(res.iter().all(Result::is_ok));
 
-	assert_eq!(pool.status().future, 0);
-	assert_eq!(pool.status().ready, number as usize);
+	assert_eq!(pool.validated_pool().status().future, 0);
+	assert_eq!(pool.validated_pool().status().ready, number as usize);
 
 	// Prune all transactions.
 	let block_num = 6;
@@ -142,21 +147,21 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 	)).expect("Prune failed");
 
 	// pool is empty
-	assert_eq!(pool.status().ready, 0);
-	assert_eq!(pool.status().future, 0);
+	assert_eq!(pool.validated_pool().status().ready, 0);
+	assert_eq!(pool.validated_pool().status().future, 0);
 }
 
 fn benchmark_main(c: &mut Criterion) {
 
-    c.bench_function("sequential 50 tx", |b| {
+	c.bench_function("sequential 50 tx", |b| {
 		b.iter(|| {
-			bench_configured(Pool::new(Default::default(), TestApi::new_dependant()), 50);
+			bench_configured(Pool::new(Default::default(), TestApi::new_dependant().into()), 50);
 		});
 	});
 
 	c.bench_function("random 100 tx", |b| {
 		b.iter(|| {
-			bench_configured(Pool::new(Default::default(), TestApi::default()), 100);
+			bench_configured(Pool::new(Default::default(), TestApi::default().into()), 100);
 		});
 	});
 }

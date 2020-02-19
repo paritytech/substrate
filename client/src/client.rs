@@ -82,7 +82,7 @@ use sp_blockchain::Error;
 use crate::{
 	call_executor::LocalCallExecutor,
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
-	in_mem, genesis, cht,
+	in_mem, genesis, cht, block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
 
 /// Substrate Client
@@ -94,10 +94,49 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
-	fork_blocks: ForkBlocks<Block>,
-	bad_blocks: BadBlocks<Block>,
+	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	_phantom: PhantomData<RA>,
+}
+
+/// An `Iterator` that iterates keys in a given block under a prefix.
+pub struct KeyIterator<'a, State, Block> {
+	state: State,
+	prefix: Option<&'a StorageKey>,
+	current_key: Vec<u8>,
+	_phantom: PhantomData<Block>,
+}
+
+impl <'a, State, Block> KeyIterator<'a, State, Block> {
+	fn new(state: State, prefix: Option<&'a StorageKey>, current_key: Vec<u8>) -> Self {
+		Self {
+			state,
+			prefix,
+			current_key,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
+	Block: BlockT,
+	State: StateBackend<HasherFor<Block>>,
+{
+	type Item = StorageKey;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let next_key = self.state
+			.next_storage_key(&self.current_key)
+			.ok()
+			.flatten()?;
+		if let Some(prefix) = self.prefix {
+			if !next_key.starts_with(&prefix.0[..]) {
+				return None;
+			}
+		}
+		self.current_key = next_key.clone();
+		Some(StorageKey(next_key))
+	}
 }
 
 // used in importing a block, where additional changes are made after the runtime
@@ -219,8 +258,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			importing_block: Default::default(),
-			fork_blocks,
-			bad_blocks,
+			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
 			_phantom: Default::default(),
 		})
@@ -236,14 +274,47 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.state_at(*block)
 	}
 
-	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
+	/// Given a `BlockId` and a key prefix, return the matching storage keys in that block.
 	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> sp_blockchain::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
 		Ok(keys)
 	}
 
+	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in that block.
+	pub fn storage_pairs(&self, id: &BlockId<Block>, key_prefix: &StorageKey)
+		-> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>
+	{
+		let state = self.state_at(id)?;
+		let keys = state
+			.keys(&key_prefix.0)
+			.into_iter()
+			.map(|k| {
+				let d = state.storage(&k).ok().flatten().unwrap_or_default();
+				(StorageKey(k), StorageData(d))
+			})
+			.collect();
+		Ok(keys)
+	}
+
+	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in that block.
+	pub fn storage_keys_iter<'a>(
+		&self,
+		id: &BlockId<Block>,
+		prefix: Option<&'a StorageKey>,
+		start_key: Option<&StorageKey>
+	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
+		let state = self.state_at(id)?;
+		let start_key = start_key
+			.or(prefix)
+			.map(|key| key.0.clone())
+			.unwrap_or_else(Vec::new);
+		Ok(KeyIterator::new(state, prefix, start_key))
+	}
+
 	/// Given a `BlockId` and a key, return the value under the key in that block.
-	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<StorageData>> {
+	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey)
+		-> sp_blockchain::Result<Option<StorageData>>
+	{
 		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 			.map(StorageData)
@@ -252,7 +323,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Given a `BlockId` and a key, return the value under the hash in that block.
 	pub fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey)
-		-> sp_blockchain::Result<Option<Block::Hash>> {
+		-> sp_blockchain::Result<Option<Block::Hash>>
+	{
 		Ok(self.state_at(id)?
 			.storage_hash(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 		)
@@ -818,11 +890,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finalized,
 			auxiliary,
 			fork_choice,
+			intermediates,
 			import_existing,
 			..
 		} = import_block;
 
 		assert!(justification.is_some() && finalized || justification.is_none());
+
+		if !intermediates.is_empty() {
+			return Err(Error::IncompletePipeline)
+		}
+
+		let fork_choice = fork_choice.ok_or(Error::IncompletePipeline)?;
 
 		let import_headers = if post_digests.is_empty() {
 			PrePostHeader::Same(header)
@@ -1113,7 +1192,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// NOTE: we're setting the finalized block as best block, this might
 			// be slightly inaccurate since we might have a "better" block
 			// further along this chain, but since best chain selection logic is
-			// pluggable we cannot make a better choice here. usages that need
+			// plugable we cannot make a better choice here. usages that need
 			// an accurate "best" block need to go through `SelectChain`
 			// instead.
 			operation.op.mark_head(BlockId::Hash(block))?;
@@ -1520,6 +1599,9 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 		mut import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
+		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
+		let _enter = span.enter();
+
 		if let Some(res) = self.prepare_block_storage_changes(&mut import_block).map_err(|e| {
 			warn!("Block prepare storage changes error:\n{:?}", e);
 			ConsensusError::ClientImport(e.to_string())
@@ -1544,32 +1626,25 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 
 		// Check the block against white and black lists if any are defined
 		// (i.e. fork blocks and bad blocks respectively)
-		let fork_block = self.fork_blocks.as_ref()
-			.and_then(|fs| fs.iter().find(|(n, _)| *n == number));
-
-		if let Some((_, h)) = fork_block {
-			if &hash != h  {
+		match self.block_rules.lookup(number, &hash) {
+			BlockLookupResult::KnownBad => {
+				trace!(
+					"Rejecting known bad block: #{} {:?}",
+					number,
+					hash,
+				);
+				return Ok(ImportResult::KnownBad);
+			},
+			BlockLookupResult::Expected(expected_hash) => {
 				trace!(
 					"Rejecting block from known invalid fork. Got {:?}, expected: {:?} at height {}",
 					hash,
-					h,
+					expected_hash,
 					number
 				);
 				return Ok(ImportResult::KnownBad);
-			}
-		}
-
-		let bad_block = self.bad_blocks.as_ref()
-			.filter(|bs| bs.contains(&hash))
-			.is_some();
-
-		if bad_block {
-			trace!(
-				"Rejecting known bad block: #{} {:?}",
-				number,
-				hash,
-			);
-			return Ok(ImportResult::KnownBad);
+			},
+			BlockLookupResult::NotSpecial => {}
 		}
 
 		// Own status must be checked first. If the block and ancestry is pruned
@@ -1902,6 +1977,7 @@ pub(crate) mod tests {
 		sc_client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
+	use hex_literal::hex;
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
@@ -2965,7 +3041,7 @@ pub(crate) mod tests {
 			.unwrap().build().unwrap().block;
 
 		// we will finalize A2 which should make it impossible to import a new
-		// B3 at the same height but that doesnt't include it
+		// B3 at the same height but that doesn't include it
 		ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
 
 		let import_err = client.import(BlockOrigin::Own, b3).err().unwrap();
@@ -3000,6 +3076,107 @@ pub(crate) mod tests {
 			import_err.to_string(),
 			expected_err.to_string(),
 		);
+	}
+
+
+	#[test]
+	fn respects_block_rules() {
+
+		fn run_test(
+			record_only: bool,
+			known_bad: &mut HashSet<H256>,
+			fork_rules: &mut Vec<(u64, H256)>,
+		) {
+			let mut client = if record_only {
+				TestClientBuilder::new().build()
+			} else {
+				TestClientBuilder::new()
+					.set_block_rules(
+						Some(fork_rules.clone()),
+						Some(known_bad.clone()),
+					)
+					.build()
+			};
+
+			let block_ok = client.new_block_at(&BlockId::Number(0), Default::default(), false)
+				.unwrap().build().unwrap().block;
+
+			let params = BlockCheckParams {
+				hash: block_ok.hash().clone(),
+				number: 0,
+				parent_hash: block_ok.header().parent_hash().clone(),
+				allow_missing_state: false,
+				import_existing: false,
+			};
+			assert_eq!(client.check_block(params).unwrap(), ImportResult::imported(false));
+
+			// this is 0x0d6d6612a10485370d9e085aeea7ec427fb3f34d961c6a816cdbe5cde2278864
+			let mut block_not_ok = client.new_block_at(&BlockId::Number(0), Default::default(), false)
+				.unwrap();
+			block_not_ok.push_storage_change(vec![0], Some(vec![1])).unwrap();
+			let block_not_ok = block_not_ok.build().unwrap().block;
+
+			let params = BlockCheckParams {
+				hash: block_not_ok.hash().clone(),
+				number: 0,
+				parent_hash: block_not_ok.header().parent_hash().clone(),
+				allow_missing_state: false,
+				import_existing: false,
+			};
+			if record_only {
+				known_bad.insert(block_not_ok.hash());
+			} else {
+				assert_eq!(client.check_block(params).unwrap(), ImportResult::KnownBad);
+			}
+
+			// Now going to the fork
+			client.import_as_final(BlockOrigin::Own, block_ok).unwrap();
+
+			// And check good fork
+			let mut block_ok = client.new_block_at(&BlockId::Number(1), Default::default(), false)
+				.unwrap();
+			block_ok.push_storage_change(vec![0], Some(vec![2])).unwrap();
+			let block_ok = block_ok.build().unwrap().block;
+
+			let params = BlockCheckParams {
+				hash: block_ok.hash().clone(),
+				number: 1,
+				parent_hash: block_ok.header().parent_hash().clone(),
+				allow_missing_state: false,
+				import_existing: false,
+			};
+			if record_only {
+				fork_rules.push((1, block_ok.hash().clone()));
+			}
+			assert_eq!(client.check_block(params).unwrap(), ImportResult::imported(false));
+
+			// And now try bad fork
+			let mut block_not_ok = client.new_block_at(&BlockId::Number(1), Default::default(), false)
+				.unwrap();
+			block_not_ok.push_storage_change(vec![0], Some(vec![3])).unwrap();
+			let block_not_ok = block_not_ok.build().unwrap().block;
+
+			let params = BlockCheckParams {
+				hash: block_not_ok.hash().clone(),
+				number: 1,
+				parent_hash: block_not_ok.header().parent_hash().clone(),
+				allow_missing_state: false,
+				import_existing: false,
+			};
+
+			if !record_only {
+				assert_eq!(client.check_block(params).unwrap(), ImportResult::KnownBad);
+			}
+		}
+
+		let mut known_bad = HashSet::new();
+		let mut fork_rules = Vec::new();
+
+		// records what bad_blocks and fork_blocks hashes should be
+		run_test(true, &mut known_bad, &mut fork_rules);
+
+		// enforces rules and actually makes assertions
+		run_test(false, &mut known_bad, &mut fork_rules);
 	}
 
 	#[test]
@@ -3203,5 +3380,62 @@ pub(crate) mod tests {
 			client.key_changes(1, BlockId::Number(31), None, &StorageKey(vec![42])).unwrap(),
 			vec![(30, 0), (27, 0), (25, 0), (24, 0), (11, 0)]
 		);
+	}
+
+	#[test]
+	fn storage_keys_iter_prefix_and_start_key_works() {
+		let client = substrate_test_runtime_client::new();
+
+		let prefix = StorageKey(hex!("3a").to_vec());
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("3a636f6465").to_vec(), hex!("3a686561707061676573").to_vec()]);
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("3a636f6465").to_vec())))
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("3a686561707061676573").to_vec()]);
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("3a686561707061676573").to_vec())))
+			.unwrap()
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, Vec::<Vec<u8>>::new());
+	}
+
+	#[test]
+	fn storage_keys_iter_works() {
+		let client = substrate_test_runtime_client::new();
+
+		let prefix = StorageKey(hex!("").to_vec());
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
+			.unwrap()
+			.take(2)
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("0befda6e1ca4ef40219d588a727f1271").to_vec(), hex!("3a636f6465").to_vec()]);
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("3a636f6465").to_vec())))
+			.unwrap()
+			.take(3)
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [
+			hex!("3a686561707061676573").to_vec(),
+			hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
+			hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
+		]);
+
+		let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec())))
+			.unwrap()
+			.take(1)
+			.map(|x| x.0)
+			.collect();
+		assert_eq!(res, [hex!("cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f").to_vec()]);
 	}
 }

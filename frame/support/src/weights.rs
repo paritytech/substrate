@@ -67,7 +67,7 @@ pub trait ClassifyDispatch<T> {
 	fn classify_dispatch(&self, target: T) -> DispatchClass;
 }
 
-/// Means of determining the weight of a block's lifecycle hooks: on_initialize, on_finalize and
+/// Means of determining the weight of a block's life cycle hooks: `on_initialize`, `on_finalize` and
 /// such.
 pub trait WeighBlock<BlockNumber> {
 	/// Return the weight of the block's on_initialize hook.
@@ -127,11 +127,10 @@ impl From<SimpleDispatchInfo> for DispatchClass {
 		match tx {
 			SimpleDispatchInfo::FixedOperational(_) => DispatchClass::Operational,
 			SimpleDispatchInfo::MaxOperational => DispatchClass::Operational,
-			SimpleDispatchInfo::FreeOperational => DispatchClass::Operational,
 
 			SimpleDispatchInfo::FixedNormal(_) => DispatchClass::Normal,
 			SimpleDispatchInfo::MaxNormal => DispatchClass::Normal,
-			SimpleDispatchInfo::FreeNormal => DispatchClass::Normal,
+			SimpleDispatchInfo::InsecureFreeNormal => DispatchClass::Normal,
 		}
 	}
 }
@@ -178,14 +177,12 @@ pub enum SimpleDispatchInfo {
 	FixedNormal(Weight),
 	/// A normal dispatch with the maximum weight.
 	MaxNormal,
-	/// A normal dispatch with no weight.
-	FreeNormal,
+	/// A normal dispatch with no weight. Base and bytes fees still need to be paid.
+	InsecureFreeNormal,
 	/// An operational dispatch with fixed weight.
 	FixedOperational(Weight),
 	/// An operational dispatch with the maximum weight.
 	MaxOperational,
-	/// An operational dispatch with no weight.
-	FreeOperational,
 }
 
 impl<T> WeighData<T> for SimpleDispatchInfo {
@@ -193,11 +190,10 @@ impl<T> WeighData<T> for SimpleDispatchInfo {
 		match self {
 			SimpleDispatchInfo::FixedNormal(w) => *w,
 			SimpleDispatchInfo::MaxNormal => Bounded::max_value(),
-			SimpleDispatchInfo::FreeNormal => Bounded::min_value(),
+			SimpleDispatchInfo::InsecureFreeNormal => Bounded::min_value(),
 
 			SimpleDispatchInfo::FixedOperational(w) => *w,
 			SimpleDispatchInfo::MaxOperational => Bounded::max_value(),
-			SimpleDispatchInfo::FreeOperational => Bounded::min_value(),
 		}
 	}
 }
@@ -213,11 +209,10 @@ impl<T> PaysFee<T> for SimpleDispatchInfo {
 		match self {
 			SimpleDispatchInfo::FixedNormal(_) => true,
 			SimpleDispatchInfo::MaxNormal => true,
-			SimpleDispatchInfo::FreeNormal => true,
+			SimpleDispatchInfo::InsecureFreeNormal => true,
 
 			SimpleDispatchInfo::FixedOperational(_) => true,
 			SimpleDispatchInfo::MaxOperational => true,
-			SimpleDispatchInfo::FreeOperational => false,
 		}
 	}
 }
@@ -239,32 +234,61 @@ impl SimpleDispatchInfo {
 /// A struct to represent a weight which is a function of the input arguments. The given items have
 /// the following types:
 ///
-/// - `F`: a closure with the same argument list as the dispatched, wrapped in a tuple.
-/// - `DispatchClass`: class of the dispatch.
-/// - `bool`: whether this dispatch pays fee or not.
-pub struct FunctionOf<F>(pub F, pub DispatchClass, pub bool);
+/// - `WD`: a raw `Weight` value or a closure that returns a `Weight` with the same
+///   argument list as the dispatched, wrapped in a tuple.
+/// - `CD`: a raw `DispatchClass` value or a closure that returns a `DispatchClass`
+///   with the same argument list as the dispatched, wrapped in a tuple.
+/// - `PF`: a `bool` for whether this dispatch pays fee or not or a closure that
+///   returns a bool with the same argument list as the dispatched, wrapped in a tuple.
+pub struct FunctionOf<WD, CD, PF>(pub WD, pub CD, pub PF);
 
-impl<Args, F> WeighData<Args> for FunctionOf<F>
-where
-	F : Fn(Args) -> Weight
+// `WeighData` as a raw value
+impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
+	fn weigh_data(&self, _: Args) -> Weight {
+		self.0
+	}
+}
+
+// `WeighData` as a closure
+impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF> where
+	WD : Fn(Args) -> Weight
 {
 	fn weigh_data(&self, args: Args) -> Weight {
 		(self.0)(args)
 	}
 }
 
-impl<Args, F> ClassifyDispatch<Args> for FunctionOf<F> {
+// `ClassifyDispatch` as a raw value
+impl<Args, WD, PF> ClassifyDispatch<Args> for FunctionOf<WD, DispatchClass, PF> {
 	fn classify_dispatch(&self, _: Args) -> DispatchClass {
-		self.1.clone()
+		self.1
 	}
 }
 
-impl<T, F> PaysFee<T> for FunctionOf<F> {
-	fn pays_fee(&self, _: T) -> bool {
+// `ClassifyDispatch` as a raw value
+impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF> where
+	CD : Fn(Args) -> DispatchClass
+{
+	fn classify_dispatch(&self, args: Args) -> DispatchClass {
+		(self.1)(args)
+	}
+}
+
+// `PaysFee` as a raw value
+impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, bool> {
+	fn pays_fee(&self, _: Args) -> bool {
 		self.2
 	}
 }
 
+// `PaysFee` as a closure
+impl<Args, WD, CD, PF> PaysFee<Args> for FunctionOf<WD, CD, PF> where
+	PF : Fn(Args) -> bool
+{
+	fn pays_fee(&self, args: Args) -> bool {
+		(self.2)(args)
+	}
+}
 
 /// Implementation for unchecked extrinsic.
 impl<Address, Call, Signature, Extra> GetDispatchInfo

@@ -25,6 +25,7 @@ pub mod hashed;
 pub mod child;
 #[doc(hidden)]
 pub mod generator;
+pub mod migration;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
@@ -42,6 +43,10 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query;
+
+	/// Try to get the underlying value from the provided storage instance; `Ok` if it exists,
+	/// `Err` if not.
+	fn try_get() -> Result<T, ()>;
 
 	/// Translate a value from some previous type (`O`) to the current type.
 	///
@@ -126,7 +131,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	fn hashed_key_for<KeyArg: EncodeLike<K>>(key: KeyArg) -> Vec<u8>;
 
 	/// Does the value (explicitly) exist in storage?
-	fn exists<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool;
+	fn contains_key<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool;
 
 	/// Load the value associated with the given key from the map.
 	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
@@ -143,14 +148,28 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Mutate the value under a key.
 	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
 
+	/// Mutate the item, only if an `Ok` value is returned.
+	fn try_mutate<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
+		key: KeyArg,
+		f: F,
+	) -> Result<R, E>;
+
+	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
+	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(key: KeyArg, f: F) -> R;
+
+	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	fn try_mutate_exists<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
+		key: KeyArg,
+		f: F,
+	) -> Result<R, E>;
+
 	/// Take the value under a key.
 	fn take<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
 
 	/// Append the given items to the value in the storage.
 	///
 	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str>
-	where
+	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str> where
 		KeyArg: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
@@ -162,8 +181,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
 	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items)
-	where
+	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) where
 		KeyArg: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
@@ -176,7 +194,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// `T` is required to implement `Codec::DecodeLength`.
 	///
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
-	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::contains_key()`
 	/// function for this purpose.
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
 		where V: codec::DecodeLength + Len;
@@ -196,7 +214,7 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	type Enumerator: Iterator<Item = (K, V)>;
 
 	/// Does the value (explicitly) exist in storage?
-	fn exists<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool;
+	fn contains_key<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool;
 
 	/// Load the value associated with the given key from the map.
 	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
@@ -227,7 +245,7 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// `T` is required to implement `Codec::DecodeLength`.
 	///
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
-	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::contains_key()`
 	/// function for this purpose.
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
 		where V: codec::DecodeLength + Len;
@@ -270,7 +288,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
-	fn exists<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> bool
+	fn contains_key<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> bool
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
@@ -348,7 +366,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// `V` is required to implement `Codec::DecodeLength`.
 	///
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
-	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::contains_key()`
 	/// function for this purpose.
 	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str>
 		where

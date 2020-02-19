@@ -97,7 +97,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 		is_validator: bool,
 	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
-		let at = BlockId::number(*header.number());
+		let at = BlockId::hash(header.hash());
 		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block, Error = ()>, _>(
 			&at, |v| v == 1
 		);
@@ -107,7 +107,11 @@ impl<Client, Storage, Block> OffchainWorkers<
 		let version = match (has_api_v1, has_api_v2) {
 			(_, Ok(true)) => 2,
 			(Ok(true), _) => 1,
-			_ => 0,
+			err => {
+				let help = "Consider turning off offchain workers if they are not part of your runtime.";
+				log::error!("Unsupported Offchain Worker API version: {:?}. {}.", err, help);
+				0
+			}
 		};
 		debug!("Checking offchain workers at {:?}: version:{}", at, version);
 		if version > 0 {
@@ -140,8 +144,6 @@ impl<Client, Storage, Block> OffchainWorkers<
 			});
 			futures::future::Either::Left(runner.process())
 		} else {
-			let help = "Consider turning off offchain workers if they are not part of your runtime.";
-			log::error!("Unsupported Offchain Worker API version: {}. {}", version, help);
 			futures::future::Either::Right(futures::future::ready(()))
 		}
 	}
@@ -167,7 +169,6 @@ mod tests {
 	use substrate_test_runtime_client::runtime::Block;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
-	use sp_runtime::{generic::Header, traits::Header as _};
 
 	struct MockNetworkStateInfo();
 
@@ -200,18 +201,15 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let pool = Arc::new(TestPool(BasicPool::new(Default::default(), FullChainApi::new(client.clone()))));
+		let pool = Arc::new(TestPool(BasicPool::new(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone())),
+		).0));
 		client.execution_extensions()
 			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
 		let db = sc_client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
-		let header = Header::new(
-			0u64,
-			Default::default(),
-			Default::default(),
-			Default::default(),
-			Default::default(),
-		);
+		let header = client.header(&BlockId::number(0)).unwrap().unwrap();
 
 		// when
 		let offchain = OffchainWorkers::new(client, db);
@@ -219,6 +217,6 @@ mod tests {
 
 		// then
 		assert_eq!(pool.0.status().ready, 1);
-		assert_eq!(pool.0.ready().next().unwrap().is_propagateable(), false);
+		assert_eq!(pool.0.ready().next().unwrap().is_propagable(), false);
 	}
 }

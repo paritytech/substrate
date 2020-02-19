@@ -118,7 +118,7 @@ fn current_version(path: &Path) -> sp_blockchain::Result<u32> {
 	}
 }
 
-/// Opens database of givent type with given number of columns.
+/// Opens database of given type with given number of columns.
 fn open_database(db_path: &Path, db_type: DatabaseType, db_columns: u32) -> sp_blockchain::Result<Database> {
 	let db_path = db_path.to_str()
 		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
@@ -172,14 +172,14 @@ mod tests {
 
 	#[test]
 	fn downgrade_never_happens() {
-		let db_dir = tempdir::TempDir::new("").unwrap();
+		let db_dir = tempfile::TempDir::new().unwrap();
 		create_db(db_dir.path(), Some(CURRENT_VERSION + 1));
 		assert!(open_database(db_dir.path()).is_err());
 	}
 
 	#[test]
 	fn open_empty_database_works() {
-		let db_dir = tempdir::TempDir::new("").unwrap();
+		let db_dir = tempfile::TempDir::new().unwrap();
 		open_database(db_dir.path()).unwrap();
 		open_database(db_dir.path()).unwrap();
 		assert_eq!(current_version(db_dir.path()).unwrap(), CURRENT_VERSION);
@@ -188,7 +188,7 @@ mod tests {
 	#[test]
 	fn upgrade_from_0_to_1_works() {
 		for version_from_file in &[None, Some(0)] {
-			let db_dir = tempdir::TempDir::new("").unwrap();
+			let db_dir = tempfile::TempDir::new().unwrap();
 			let db_path = db_dir.path();
 			create_db(db_path, *version_from_file);
 			open_database(db_path).unwrap();

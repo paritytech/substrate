@@ -301,6 +301,10 @@ macro_rules! app_crypto_public_common {
 			fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
 				<$public as $crate::RuntimePublic>::verify(self.as_ref(), msg, &signature.as_ref())
 			}
+
+			fn to_raw_vec(&self) -> $crate::Vec<u8> {
+				<$public as $crate::RuntimePublic>::to_raw_vec(&self.0)
+			}
 		}
 	}
 }
@@ -431,4 +435,31 @@ macro_rules! wrap {
 			}
 		}
 	}
+}
+
+/// Generate the given code if the pair type is available.
+///
+/// The pair type is available when `feature = "std"` || `feature = "full_crypto"`.
+///
+/// # Example
+///
+/// ```
+/// sp_application_crypto::with_pair! {
+///     pub type Pair = ();
+/// }
+/// ```
+#[macro_export]
+#[cfg(any(feature = "std", feature = "full_crypto"))]
+macro_rules! with_pair {
+	( $( $def:tt )* ) => {
+		$( $def )*
+	}
+}
+
+
+#[doc(hidden)]
+#[macro_export]
+#[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
+macro_rules! with_pair {
+	( $( $def:tt )* ) => {}
 }

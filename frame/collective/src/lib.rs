@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Collective system: Members of a set of account IDs can make their collective feelings known
-//! through dispatched calls from one of two specialised origins.
+//! through dispatched calls from one of two specialized origins.
 //!
 //! The membership can be provided in one of two ways: either directly, using the Root-dispatchable
 //! function `set_members`, or indirectly, through implementing the `ChangeMembers`
@@ -87,9 +87,11 @@ decl_storage! {
 		/// The hashes of the active proposals.
 		pub Proposals get(fn proposals): Vec<T::Hash>;
 		/// Actual proposal for a given hash, if it's current.
-		pub ProposalOf get(fn proposal_of): map T::Hash => Option<<T as Trait<I>>::Proposal>;
+		pub ProposalOf get(fn proposal_of):
+			map hasher(blake2_256) T::Hash => Option<<T as Trait<I>>::Proposal>;
 		/// Votes on a given proposal, if it is ongoing.
-		pub Voting get(fn voting): map T::Hash => Option<Votes<T::AccountId>>;
+		pub Voting get(fn voting):
+			map hasher(blake2_256) T::Hash => Option<Votes<T::AccountId>>;
 		/// Proposals so far.
 		pub ProposalCount get(fn proposal_count): u32;
 		/// The current members of the collective. This is stored sorted (just by value).
@@ -189,7 +191,7 @@ decl_module! {
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
 
-			ensure!(!<ProposalOf<T, I>>::exists(proposal_hash), Error::<T, I>::DuplicateProposal);
+			ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
 
 			if threshold < 2 {
 				let seats = Self::members().len() as MemberCount;
@@ -431,6 +433,9 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnReapAccount = ();
 	}
 	impl Trait<Instance1> for Test {
 		type Origin = Origin;
@@ -452,7 +457,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: system::{Module, Call, Event},
+			System: system::{Module, Call, Event<T>},
 			Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
 			DefaultCollective: collective::{Module, Call, Event<T>, Origin<T>, Config<T>},
 		}

@@ -42,6 +42,8 @@ pub enum WasmExecutionMethod {
 /// A Wasm runtime object along with its cached runtime version.
 struct VersionedRuntime {
 	runtime: Box<dyn WasmRuntime>,
+	/// The number of WebAssembly heap pages this instance was created with.
+	heap_pages: u64,
 	/// Runtime version according to `Core_version`.
 	version: RuntimeVersion,
 }
@@ -122,7 +124,7 @@ impl RuntimesCache {
 			Entry::Occupied(o) => {
 				let result = o.into_mut();
 				if let Ok(ref mut cached_runtime) = result {
-					let heap_pages_changed = !cached_runtime.runtime.update_heap_pages(heap_pages);
+					let heap_pages_changed = cached_runtime.heap_pages != heap_pages;
 					let host_functions_changed = cached_runtime.runtime.host_functions()
 						!= host_functions;
 					if heap_pages_changed || host_functions_changed {
@@ -191,15 +193,15 @@ pub fn create_wasm_runtime_with_code(
 	heap_pages: u64,
 	code: &[u8],
 	host_functions: Vec<&'static dyn Function>,
-	allow_missing_imports: bool,
+	allow_missing_func_imports: bool,
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
-			sc_executor_wasmi::create_instance(code, heap_pages, host_functions, allow_missing_imports)
+			sc_executor_wasmi::create_instance(code, heap_pages, host_functions, allow_missing_func_imports)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled =>
-			sc_executor_wasmtime::create_instance(code, heap_pages, host_functions)
+			sc_executor_wasmtime::create_instance(code, heap_pages, host_functions, allow_missing_func_imports)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }
@@ -236,6 +238,7 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 	Ok(VersionedRuntime {
 		runtime,
 		version,
+		heap_pages,
 	})
 }
 

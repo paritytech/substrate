@@ -210,7 +210,11 @@ fn should_generate_heartbeats() {
 
 		// when
 		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
-		ImOnline::offchain(2);
+		ImOnline::send_heartbeats(2)
+			.unwrap()
+			// make sure to consume the iterator and check there are no errors.
+			.collect::<Result<Vec<_>, _>>().unwrap();
+
 
 		// then
 		let transaction = state.write().transactions.pop().unwrap();
@@ -218,7 +222,7 @@ fn should_generate_heartbeats() {
 		assert_eq!(state.read().transactions.len(), 2);
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
-		let heartbeat = match ex.1 {
+		let heartbeat = match ex.call {
 			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, _)) => h,
 			e => panic!("Unexpected call: {:?}", e),
 		};
@@ -315,15 +319,20 @@ fn should_not_send_a_report_if_already_online() {
 
 		// when
 		UintAuthorityId::set_all_keys(vec![0]); // all authorities use pallet_session key 0
-		ImOnline::offchain(4);
+		// we expect error, since the authority is already online.
+		let mut res = ImOnline::send_heartbeats(4).unwrap();
+		assert_eq!(res.next().unwrap().unwrap(), ());
+		assert_eq!(res.next().unwrap().unwrap_err(), OffchainErr::AlreadyOnline(1));
+		assert_eq!(res.next().unwrap().unwrap_err(), OffchainErr::AlreadyOnline(2));
+		assert_eq!(res.next(), None);
 
 		// then
 		let transaction = pool_state.write().transactions.pop().unwrap();
-		// All validators have `0` as their session key, but we should only produce 1 hearbeat.
+		// All validators have `0` as their session key, but we should only produce 1 heartbeat.
 		assert_eq!(pool_state.read().transactions.len(), 0);
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
-		let heartbeat = match ex.1 {
+		let heartbeat = match ex.call {
 			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, _)) => h,
 			e => panic!("Unexpected call: {:?}", e),
 		};

@@ -99,7 +99,7 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::{
-	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDeserialize, Zero, StaticLookup},
+	traits::{EnsureOrigin, AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup},
 };
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -121,7 +121,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 
 	/// The score attributed to a member or candidate.
 	type Score:
-		SimpleArithmetic + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
+		AtLeast32Bit + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
@@ -165,7 +165,7 @@ decl_storage! {
 		/// check if a candidate is already in the pool, without having to
 		/// iterate over the entire pool (the `Pool` is not sorted by
 		/// `T::AccountId`, but by `T::Score` instead).
-		CandidateExists get(fn candidate_exists): map T::AccountId => bool;
+		CandidateExists get(fn candidate_exists): map hasher(blake2_256) T::AccountId => bool;
 
 		/// The current membership, stored as an ordered Vec.
 		Members get(fn members): Vec<T::AccountId>;
@@ -265,7 +265,7 @@ decl_module! {
 		/// the index of the transactor in the `Pool`.
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
-			ensure!(!<CandidateExists<T, I>>::exists(&who), Error::<T, I>::AlreadyInPool);
+			ensure!(!<CandidateExists<T, I>>::contains_key(&who), Error::<T, I>::AlreadyInPool);
 
 			let deposit = T::CandidateDeposit::get();
 			T::Currency::reserve(&who, deposit)?;

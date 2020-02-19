@@ -25,8 +25,9 @@ use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
-use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
-use std::time::{Duration, Instant};
+use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, mem, pin::Pin};
+use std::time::Duration;
+use wasm_timer::Instant;
 use std::task::{Context, Poll};
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
@@ -59,7 +60,7 @@ use std::task::{Context, Poll};
 /// Note that this "banning" system is not an actual ban. If a "banned" node tries to connect to
 /// us, we accept the connection. The "banning" system is only about delaying dialing attempts.
 ///
-pub struct LegacyProto< TSubstream> {
+pub struct LegacyProto {
 	/// List of protocols to open with peers. Never modified.
 	protocol: RegisteredProtocol,
 
@@ -79,9 +80,6 @@ pub struct LegacyProto< TSubstream> {
 
 	/// Events to produce from `poll()`.
 	events: SmallVec<[NetworkBehaviourAction<CustomProtoHandlerIn, LegacyProtoOut>; 4]>,
-
-	/// Marker to pin the generics.
-	marker: PhantomData<TSubstream>,
 }
 
 /// State of a peer we're connected to.
@@ -224,7 +222,7 @@ pub enum LegacyProtoOut {
 	},
 }
 
-impl<TSubstream> LegacyProto<TSubstream> {
+impl LegacyProto {
 	/// Creates a `CustomProtos`.
 	pub fn new(
 		protocol: impl Into<ProtocolId>,
@@ -240,7 +238,6 @@ impl<TSubstream> LegacyProto<TSubstream> {
 			incoming: SmallVec::new(),
 			next_incoming_index: sc_peerset::IncomingIndex(0),
 			events: SmallVec::new(),
-			marker: PhantomData,
 		}
 	}
 
@@ -382,12 +379,14 @@ impl<TSubstream> LegacyProto<TSubstream> {
 			}
 		};
 
+		let now = Instant::now();
+
 		match mem::replace(occ_entry.get_mut(), PeerState::Poisoned) {
-			PeerState::Banned { ref until } if *until > Instant::now() => {
+			PeerState::Banned { ref until } if *until > now => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", occ_entry.key(), until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
-					timer: futures_timer::Delay::new_at(until.clone()),
+					timer: futures_timer::Delay::new(until.clone() - now),
 					timer_deadline: until.clone(),
 				};
 			},
@@ -400,13 +399,13 @@ impl<TSubstream> LegacyProto<TSubstream> {
 			},
 
 			PeerState::Disabled { open, ref connected_point, banned_until: Some(ref banned) }
-				if *banned > Instant::now() => {
+				if *banned > now => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Has idle connection through \
 					{:?} but node is banned until {:?}", occ_entry.key(), connected_point, banned);
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
 					connected_point: connected_point.clone(),
 					open,
-					timer: futures_timer::Delay::new_at(banned.clone()),
+					timer: futures_timer::Delay::new(banned.clone() - now),
 					timer_deadline: banned.clone(),
 				};
 			},
@@ -604,7 +603,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 	}
 }
 
-impl<TSubstream> DiscoveryNetBehaviour for LegacyProto<TSubstream> {
+impl DiscoveryNetBehaviour for LegacyProto {
 	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
 			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
@@ -613,11 +612,8 @@ impl<TSubstream> DiscoveryNetBehaviour for LegacyProto<TSubstream> {
 	}
 }
 
-impl<TSubstream> NetworkBehaviour for LegacyProto<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite + Unpin,
-{
-	type ProtocolsHandler = CustomProtoHandlerProto<TSubstream>;
+impl NetworkBehaviour for LegacyProto {
+	type ProtocolsHandler = CustomProtoHandlerProto;
 	type OutEvent = LegacyProtoOut;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {

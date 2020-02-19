@@ -88,7 +88,7 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
+		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
 	}
 }
 
@@ -187,9 +187,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
 
 			let base_fee = T::TransactionBaseFee::get();
-			let final_fee = base_fee.saturating_add(adjusted_fee);
-
-			final_fee
+			base_fee.saturating_add(adjusted_fee)
 		} else {
 			0u32.into()
 		}
@@ -210,6 +208,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 	where BalanceOf<T>: Send + Sync
 {
+	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
@@ -342,28 +341,23 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnReapAccount = Balances;
 	}
 
 	parameter_types! {
-		pub const TransferFee: u64 = 0;
-		pub const CreationFee: u64 = 0;
-		pub const ExistentialDeposit: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 	}
 
 	impl pallet_balances::Trait for Runtime {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
-
-	thread_local! {
+thread_local! {
 		static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
 		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
 		static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);
@@ -468,15 +462,18 @@ mod tests {
 			self.set_constants();
 			let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 			pallet_balances::GenesisConfig::<Runtime> {
-				balances: vec![
-					(1, 10 * self.balance_factor),
-					(2, 20 * self.balance_factor),
-					(3, 30 * self.balance_factor),
-					(4, 40 * self.balance_factor),
-					(5, 50 * self.balance_factor),
-					(6, 60 * self.balance_factor)
-				],
-				vesting: vec![],
+				balances: if self.balance_factor > 0 {
+					vec![
+						(1, 10 * self.balance_factor),
+						(2, 20 * self.balance_factor),
+						(3, 30 * self.balance_factor),
+						(4, 40 * self.balance_factor),
+						(5, 50 * self.balance_factor),
+						(6, 60 * self.balance_factor)
+					]
+				} else {
+					vec![]
+				},
 			}.assimilate_storage(&mut t).unwrap();
 			t.into()
 		}
@@ -501,14 +498,14 @@ mod tests {
 					.pre_dispatch(&1, CALL, info_from_weight(5), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&1), 100 - 5 - 5 - 10);
+			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 					.pre_dispatch(&2, CALL, info_from_weight(3), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&2), 200 - 5 - 10 - 3 - 5);
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 3 - 5);
 		});
 	}
 
@@ -543,11 +540,11 @@ mod tests {
 			.execute_with(||
 		{
 			// 1 ain't have a penny.
-			assert_eq!(Balances::free_balance(&1), 0);
+			assert_eq!(Balances::free_balance(1), 0);
 
 			let len = 100;
 
-			// like a FreeOperational
+			// This is a completely free (and thus wholly insecure/DoS-ridden) transaction.
 			let operational_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
@@ -559,7 +556,7 @@ mod tests {
 					.is_ok()
 			);
 
-			// like a FreeNormal
+			// like a InsecureFreeNormal
 			let free_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Normal,
@@ -590,7 +587,7 @@ mod tests {
 					.pre_dispatch(&1, CALL, info_from_weight(3), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
+			assert_eq!(Balances::free_balance(1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
 		})
 	}
 

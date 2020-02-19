@@ -29,6 +29,7 @@ use sp_runtime::{
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionValidityError,
 	},
+	generic::CheckSignature,
 };
 use codec::{KeyedVec, Encode, Decode};
 use frame_system::Trait;
@@ -46,7 +47,7 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as TestRuntime {
-		ExtrinsicData: map u32 => Vec<u8>;
+		ExtrinsicData: map hasher(blake2_256) u32 => Vec<u8>;
 		// The current block number being processed. Set by `execute_block`.
 		Number get(fn number): Option<BlockNumber>;
 		ParentHash get(fn parent_hash): Hash;
@@ -243,7 +244,7 @@ pub fn finalize_block() -> Header {
 #[inline(always)]
 fn check_signature(utx: &Extrinsic) -> Result<(), TransactionValidityError> {
 	use sp_runtime::traits::BlindCheckable;
-	utx.clone().check().map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
+	utx.clone().check(CheckSignature::Yes).map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
 }
 
 fn execute_transaction_backend(utx: &Extrinsic) -> ApplyExtrinsicResult {

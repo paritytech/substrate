@@ -195,7 +195,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 				inherent_data
 			)?
 		{
-			block_builder.push(extrinsic)?;
+			block_builder.push_trusted(extrinsic)?;
 		}
 
 		// proceed with transactions
@@ -218,7 +218,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 			let pending_tx_data = pending_tx.data().clone();
 			let pending_tx_hash = pending_tx.hash().clone();
 			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
-			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
+			match sc_block_builder::BlockBuilder::push_trusted(&mut block_builder, pending_tx_data) {
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
@@ -251,10 +251,11 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
-		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
+		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
+			block.extrinsics().len(),
 			block.extrinsics()
 				.iter()
 				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
@@ -306,7 +307,9 @@ mod tests {
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let txpool = Arc::new(
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+		);
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)])
@@ -346,7 +349,9 @@ mod tests {
 		let (client, backend) = substrate_test_runtime_client::TestClientBuilder::new()
 			.build_with_backend();
 		let client = Arc::new(client);
-		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let txpool = Arc::new(
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+		);
 		let genesis_hash = client.info().best_hash;
 		let block_id = BlockId::Hash(genesis_hash);
 

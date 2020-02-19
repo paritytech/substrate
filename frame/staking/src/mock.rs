@@ -138,22 +138,16 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type ModuleToIndex = ();
-}
-parameter_types! {
-	pub const TransferFee: Balance = 0;
-	pub const CreationFee: Balance = 0;
+	type AccountData = pallet_balances::AccountData<u64>;
+	type OnNewAccount = ();
+	type OnReapAccount = (Balances, Staking, Session);
 }
 impl pallet_balances::Trait for Test {
 	type Balance = Balance;
-	type OnFreeBalanceZero = Staking;
-	type OnReapAccount = System;
-	type OnNewAccount = ();
 	type Event = ();
-	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
-	type CreationFee = CreationFee;
+	type AccountStore = System;
 }
 parameter_types! {
 	pub const Period: BlockNumber = 1;
@@ -236,7 +230,7 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			existential_deposit: 0,
+			existential_deposit: 1,
 			validator_pool: false,
 			nominate: true,
 			validator_count: 2,
@@ -293,7 +287,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		let balance_factor = if self.existential_deposit > 0 {
+		let balance_factor = if self.existential_deposit > 1 {
 			256
 		} else {
 			1
@@ -323,7 +317,6 @@ impl ExtBuilder {
 					// This allow us to have a total_payout different from 0.
 					(999, 1_000_000_000_000),
 			],
-			vesting: vec![],
 		}.assimilate_storage(&mut storage);
 
 		let stake_21 = if self.fair { 1000 } else { 2000 };

@@ -17,7 +17,7 @@
 //! Provides implementations for the runtime interface traits.
 
 use crate::{
-	RIType, Pointer, pass_by::{PassBy, Codec, Inner, PassByInner},
+	RIType, Pointer, pass_by::{PassBy, Codec, Inner, PassByInner, Enum},
 	util::{unpack_ptr_and_len, pack_ptr_and_len},
 };
 #[cfg(feature = "std")]
@@ -37,9 +37,6 @@ use sp_std::{any::TypeId, mem, vec::Vec};
 
 #[cfg(feature = "std")]
 use sp_std::borrow::Cow;
-
-#[cfg(not(feature = "std"))]
-use sp_std::{slice, boxed::Box};
 
 // Make sure that our assumptions for storing a pointer + its size in `u64` is valid.
 #[cfg(all(not(feature = "std"), not(feature = "disable_target_static_assertions")))]
@@ -196,11 +193,16 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 		let (ptr, len) = unpack_ptr_and_len(arg);
 		let len = len as usize;
 
+		if len == 0 {
+			return Vec::new();
+		}
+
+		let data = unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) };
+
 		if TypeId::of::<T>() == TypeId::of::<u8>() {
-			unsafe { mem::transmute(Vec::from_raw_parts(ptr as *mut u8, len, len)) }
+			unsafe { mem::transmute(data) }
 		} else {
-			let slice = unsafe { slice::from_raw_parts(ptr as *const u8, len) };
-			Self::decode(&mut &slice[..]).expect("Host to wasm values are encoded correctly; qed")
+			Self::decode(&mut &data[..]).expect("Host to wasm values are encoded correctly; qed")
 		}
 	}
 }
@@ -302,10 +304,9 @@ macro_rules! impl_traits_for_arrays {
 			impl FromFFIValue for [u8; $n] {
 				fn from_ffi_value(arg: u32) -> [u8; $n] {
 					let mut res = [0u8; $n];
-					res.copy_from_slice(unsafe { slice::from_raw_parts(arg as *const u8, $n) });
+					let data = unsafe { Vec::from_raw_parts(arg as *mut u8, $n, $n) };
 
-					// Make sure we free the pointer.
-					let _ = unsafe { Box::from_raw(arg as *mut u8) };
+					res.copy_from_slice(&data);
 
 					res
 				}
@@ -523,3 +524,11 @@ macro_rules! for_u128_i128 {
 
 for_u128_i128!(u128);
 for_u128_i128!(i128);
+
+impl PassBy for sp_wasm_interface::ValueType {
+	type PassBy = Enum<sp_wasm_interface::ValueType>;
+}
+
+impl PassBy for sp_wasm_interface::Value {
+	type PassBy = Codec<sp_wasm_interface::Value>;
+}

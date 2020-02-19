@@ -36,7 +36,7 @@ pub enum DhtEvent {
 	/// The record has been successfully inserted into the DHT.
 	ValuePut(Key),
 
-	/// An error has occured while putting a record into the DHT.
+	/// An error has occurred while putting a record into the DHT.
 	ValuePutFailed(Key),
 }
 
@@ -61,7 +61,7 @@ pub enum Event {
 
 	/// Closed a substream with the given node. Always matches a corresponding previous
 	/// `NotificationStreamOpened` message.
-	NotificationsStreamClosed {
+	NotificationStreamClosed {
 		/// Node we closed the substream with.
 		remote: PeerId,
 		/// The concerned protocol. Each protocol uses a different substream.

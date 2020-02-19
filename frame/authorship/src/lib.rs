@@ -438,6 +438,9 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnReapAccount = ();
 	}
 
 	parameter_types! {

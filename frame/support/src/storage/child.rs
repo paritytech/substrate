@@ -22,7 +22,7 @@
 //!
 //! A **key collision free** unique id is required as parameter to avoid key collision
 //! between child tries.
-//! This unique id management and generation responsability is delegated to pallet module.
+//! This unique id management and generation responsibility is delegated to pallet module.
 // NOTE: could replace unhashed by having only one kind of storage (root being null storage key (storage_key can become Option<&[u8]>).
 
 use crate::sp_std::prelude::*;

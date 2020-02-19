@@ -125,9 +125,10 @@ use frame_support::{
 	parameter_types, IsSubType,
 	weights::DispatchInfo,
 };
-use frame_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time, Randomness};
+use frame_support::traits::{OnReapAccount, OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
 use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
+use pallet_contracts_primitives::{RentProjection, ContractAccessError};
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
 pub type TrieId = Vec<u8>;
@@ -142,7 +143,7 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
-/// Information for managing an acocunt and its sub trie abstraction.
+/// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account
 #[derive(Encode, Decode, RuntimeDebug)]
 pub enum ContractInfo<T: Trait> {
@@ -400,12 +401,6 @@ pub trait Trait: frame_system::Trait {
 	/// to removal of a contract.
 	type SurchargeReward: Get<BalanceOf<Self>>;
 
-	/// The fee required to make a transfer.
-	type TransferFee: Get<BalanceOf<Self>>;
-
-	/// The fee required to create an account.
-	type CreationFee: Get<BalanceOf<Self>>;
-
 	/// The fee to be paid for making a transaction; the base.
 	type TransactionBaseFee: Get<BalanceOf<Self>>;
 
@@ -437,8 +432,8 @@ pub trait Trait: frame_system::Trait {
 /// and the account id that requested the account creation.
 ///
 /// Formula: `blake2_256(blake2_256(code) + blake2_256(data) + origin)`
-pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
-impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminator<T>
+pub struct SimpleAddressDeterminer<T: Trait>(PhantomData<T>);
+impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminer<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
@@ -499,7 +494,7 @@ decl_module! {
 		/// The minimum amount required to generate a tombstone.
 		const TombstoneDeposit: BalanceOf<T> = T::TombstoneDeposit::get();
 
-		/// Size of a contract at the time of instantiaion. This is a simple way to ensure that
+		/// Size of a contract at the time of instantiation. This is a simple way to ensure that
 		/// empty contracts eventually gets deleted.
 		const StorageSizeOffset: u32 = T::StorageSizeOffset::get();
 
@@ -518,12 +513,6 @@ decl_module! {
 		/// Reward that is received by the party whose touch has led
 		/// to removal of a contract.
 		const SurchargeReward: BalanceOf<T> = T::SurchargeReward::get();
-
-		/// The fee required to make a transfer.
-		const TransferFee: BalanceOf<T> = T::TransferFee::get();
-
-		/// The fee required to create an account.
-		const CreationFee: BalanceOf<T> = T::CreationFee::get();
 
 		/// The fee to be paid for making a transaction; the base.
 		const TransactionBaseFee: BalanceOf<T> = T::TransactionBaseFee::get();
@@ -669,7 +658,7 @@ decl_module! {
 			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			if rent::try_evict::<T>(&dest, handicap) == rent::RentOutcome::Evicted {
+			if rent::snitch_contract_should_be_evicted::<T>(&dest, handicap) {
 				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())?;
 			}
 		}
@@ -678,14 +667,6 @@ decl_module! {
 			GasSpent::kill();
 		}
 	}
-}
-
-/// The possible errors that can happen querying the storage of a contract.
-pub enum GetStorageError {
-	/// The given address doesn't point on a contract.
-	ContractDoesntExist,
-	/// The specified contract is a tombstone and thus cannot have any storage.
-	IsTombstone,
 }
 
 /// Public APIs provided by the contracts module.
@@ -710,11 +691,11 @@ impl<T: Trait> Module<T> {
 	pub fn get_storage(
 		address: T::AccountId,
 		key: [u8; 32],
-	) -> sp_std::result::Result<Option<Vec<u8>>, GetStorageError> {
+	) -> sp_std::result::Result<Option<Vec<u8>>, ContractAccessError> {
 		let contract_info = <ContractInfoOf<T>>::get(&address)
-			.ok_or(GetStorageError::ContractDoesntExist)?
+			.ok_or(ContractAccessError::DoesntExist)?
 			.get_alive()
-			.ok_or(GetStorageError::IsTombstone)?;
+			.ok_or(ContractAccessError::IsTombstone)?;
 
 		let maybe_value = AccountDb::<T>::get_storage(
 			&DirectAccountDb,
@@ -723,6 +704,12 @@ impl<T: Trait> Module<T> {
 			&key,
 		);
 		Ok(maybe_value)
+	}
+
+	pub fn rent_projection(
+		address: T::AccountId,
+	) -> sp_std::result::Result<RentProjection<T::BlockNumber>, ContractAccessError> {
+		rent::compute_rent_projection::<T>(&address)
 	}
 }
 
@@ -942,20 +929,20 @@ decl_storage! {
 		/// Current cost schedule for contracts.
 		CurrentSchedule get(fn current_schedule) config(): Schedule = Schedule::default();
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
-		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
+		pub PristineCode: map hasher(blake2_256) CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
-		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
+		pub CodeStorage: map hasher(blake2_256) CodeHash<T> => Option<wasm::PrefabWasmModule>;
 		/// The subtrie counter.
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
-		pub ContractInfoOf: map T::AccountId => Option<ContractInfo<T>>;
+		pub ContractInfoOf: map hasher(blake2_256) T::AccountId => Option<ContractInfo<T>>;
 		/// The price of one unit of gas.
 		GasPrice get(fn gas_price) config(): BalanceOf<T> = 1.into();
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(who: &T::AccountId) {
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	fn on_reap_account(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
 			child::kill_storage(&info.trie_id, info.child_trie_unique_id());
 		}
@@ -969,11 +956,10 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 pub struct Config<T: Trait> {
 	pub schedule: Schedule,
 	pub existential_deposit: BalanceOf<T>,
+	pub tombstone_deposit: BalanceOf<T>,
 	pub max_depth: u32,
 	pub max_value_size: u32,
 	pub contract_account_instantiate_fee: BalanceOf<T>,
-	pub account_create_fee: BalanceOf<T>,
-	pub transfer_fee: BalanceOf<T>,
 }
 
 impl<T: Trait> Config<T> {
@@ -981,11 +967,10 @@ impl<T: Trait> Config<T> {
 		Config {
 			schedule: <Module<T>>::current_schedule(),
 			existential_deposit: T::Currency::minimum_balance(),
+			tombstone_deposit: T::TombstoneDeposit::get(),
 			max_depth: T::MaxDepth::get(),
 			max_value_size: T::MaxValueSize::get(),
 			contract_account_instantiate_fee: T::ContractFee::get(),
-			account_create_fee: T::CreationFee::get(),
-			transfer_fee: T::TransferFee::get(),
 		}
 	}
 }
@@ -1030,6 +1015,9 @@ pub struct Schedule {
 	/// Gas cost per one byte written to the sandbox memory.
 	pub sandbox_data_write_cost: Gas,
 
+	/// Cost for a simple balance transfer.
+	pub transfer_cost: Gas,
+
 	/// The maximum number of topics supported by an event.
 	pub max_event_topics: u32,
 
@@ -1068,6 +1056,7 @@ impl Default for Schedule {
 			instantiate_base_cost: 175,
 			sandbox_data_read_cost: 1,
 			sandbox_data_write_cost: 1,
+			transfer_cost: 100,
 			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
@@ -1101,6 +1090,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for CheckBlockGasLimit<T> {
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
+	const IDENTIFIER: &'static str = "CheckBlockGasLimit";
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();

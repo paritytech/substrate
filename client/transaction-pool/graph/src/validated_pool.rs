@@ -16,13 +16,11 @@
 
 use std::{
 	collections::{HashSet, HashMap},
-	fmt,
 	hash,
 	sync::Arc,
-	time,
 };
 
-use crate::base_pool as base;
+use crate::{base_pool as base, BlockHash};
 use crate::listener::Listener;
 use crate::rotator::PoolRotator;
 use crate::watcher::Watcher;
@@ -34,12 +32,13 @@ use parking_lot::{Mutex, RwLock};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
-	transaction_validity::TransactionTag as Tag,
+	transaction_validity::{TransactionTag as Tag, ValidTransaction},
 };
 use sp_transaction_pool::{error, PoolStatus};
+use wasm_timer::Instant;
 
 use crate::base_pool::PruneStatus;
-use crate::pool::{EventStream, Options, ChainApi, BlockHash, ExHash, ExtrinsicFor, TransactionFor};
+use crate::pool::{EventStream, Options, ChainApi, ExHash, ExtrinsicFor, TransactionFor};
 
 /// Pre-validated transaction. Validated pool only accepts transactions wrapped in this enum.
 #[derive(Debug)]
@@ -54,6 +53,30 @@ pub enum ValidatedTransaction<Hash, Ex, Error> {
 	Unknown(Hash, Error),
 }
 
+impl<Hash, Ex, Error> ValidatedTransaction<Hash, Ex, Error> {
+	/// Consume validity result, transaction data and produce ValidTransaction.
+	pub fn valid_at(
+		at: u64,
+		hash: Hash,
+		data: Ex,
+		bytes: usize,
+		validity: ValidTransaction,
+	) -> Self {
+		Self::Valid(base::Transaction {
+			data,
+			bytes,
+			hash,
+			priority: validity.priority,
+			requires: validity.requires,
+			provides: validity.provides,
+			propagate: validity.propagate,
+			valid_till: at
+				.saturated_into::<u64>()
+				.saturating_add(validity.longevity),
+		})
+	}
+}
+
 /// A type of validated transaction stored in the pool.
 pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 	ExHash<B>,
@@ -62,26 +85,38 @@ pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 >;
 
 /// Pool that deals with validated transactions.
-pub(crate) struct ValidatedPool<B: ChainApi> {
-	api: B,
+pub struct ValidatedPool<B: ChainApi> {
+	api: Arc<B>,
 	options: Options,
-	listener: RwLock<Listener<ExHash<B>, BlockHash<B>>>,
+	listener: RwLock<Listener<ExHash<B>, B>>,
 	pool: RwLock<base::BasePool<
 		ExHash<B>,
 		ExtrinsicFor<B>,
 	>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<()>>>,
+	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<ExHash<B>>>>,
 	rotator: PoolRotator<ExHash<B>>,
+}
+
+#[cfg(not(target_os = "unknown"))]
+impl<B: ChainApi> parity_util_mem::MallocSizeOf for ValidatedPool<B>
+where
+	B::Hash: parity_util_mem::MallocSizeOf,
+	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		// other entries insignificant or non-primary references
+		self.pool.size_of(ops)
+	}
 }
 
 impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
-	pub fn new(options: Options, api: B) -> Self {
+	pub fn new(options: Options, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
 		ValidatedPool {
-			api,
 			options,
 			listener: Default::default(),
+			api,
 			pool: RwLock::new(base_pool),
 			import_notification_sinks: Default::default(),
 			rotator: Default::default(),
@@ -89,7 +124,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Bans given set of hashes.
-	pub fn ban(&self, now: &std::time::Instant, hashes: impl IntoIterator<Item=ExHash<B>>) {
+	pub fn ban(&self, now: &Instant, hashes: impl IntoIterator<Item=ExHash<B>>) {
 		self.rotator.ban(now, hashes)
 	}
 
@@ -125,22 +160,23 @@ impl<B: ChainApi> ValidatedPool<B> {
 			ValidatedTransaction::Valid(tx) => {
 				let imported = self.pool.write().import(tx)?;
 
-				if let base::Imported::Ready { .. } = imported {
-					self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
+				if let base::Imported::Ready { ref hash, .. } = imported {
+					self.import_notification_sinks.lock()
+						.retain(|sink| sink.unbounded_send(hash.clone()).is_ok());
 				}
 
 				let mut listener = self.listener.write();
 				fire_events(&mut *listener, &imported);
 				Ok(imported.hash().clone())
-			}
+			},
 			ValidatedTransaction::Invalid(hash, err) => {
-				self.rotator.ban(&std::time::Instant::now(), std::iter::once(hash));
+				self.rotator.ban(&Instant::now(), std::iter::once(hash));
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(hash, err) => {
 				self.listener.write().invalid(&hash, false);
 				Err(err.into())
-			}
+			},
 		}
 	}
 
@@ -150,19 +186,27 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let future_limit = &self.options.future;
 
 		debug!(target: "txpool", "Pool Status: {:?}", status);
-
 		if ready_limit.is_exceeded(status.ready, status.ready_bytes)
-			|| future_limit.is_exceeded(status.future, status.future_bytes) {
+			|| future_limit.is_exceeded(status.future, status.future_bytes)
+		{
+			debug!(
+				target: "txpool",
+				"Enforcing limits ({}/{}kB ready, {}/{}kB future",
+				ready_limit.count, ready_limit.total_bytes / 1024,
+				future_limit.count, future_limit.total_bytes / 1024,
+			);
+
 			// clean up the pool
 			let removed = {
 				let mut pool = self.pool.write();
 				let removed = pool.enforce_limits(ready_limit, future_limit)
 					.into_iter().map(|x| x.hash.clone()).collect::<HashSet<_>>();
 				// ban all removed transactions
-				self.rotator.ban(&std::time::Instant::now(), removed.iter().map(|x| x.clone()));
+				self.rotator.ban(&Instant::now(), removed.iter().map(|x| x.clone()));
 				removed
 			};
 			// run notifications
+			debug!(target: "txpool", "Enforcing limits: {} dropped", removed.len());
 			let mut listener = self.listener.write();
 			for h in &removed {
 				listener.dropped(h, None);
@@ -189,7 +233,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 					.map(|_| watcher)
 			},
 			ValidatedTransaction::Invalid(hash, err) => {
-				self.rotator.ban(&std::time::Instant::now(), std::iter::once(hash));
+				self.rotator.ban(&Instant::now(), std::iter::once(hash));
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(_, err) => Err(err.into()),
@@ -320,12 +364,16 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 	/// For each extrinsic, returns tags that it provides (if known), or None (if it is unknown).
 	pub fn extrinsics_tags(&self, hashes: &[ExHash<B>]) -> Vec<Option<Vec<Tag>>> {
-		self.pool.read().by_hash(&hashes)
+		self.pool.read().by_hashes(&hashes)
 			.into_iter()
 			.map(|existing_in_pool| existing_in_pool
-				.map(|transaction| transaction.provides.iter().cloned()
-				.collect()))
+				.map(|transaction| transaction.provides.iter().cloned().collect()))
 			.collect()
+	}
+
+	/// Get ready transaction by hash
+	pub fn ready_by_hash(&self, hash: &ExHash<B>) -> Option<TransactionFor<B>> {
+		self.pool.read().ready_by_hash(hash)
 	}
 
 	/// Prunes ready transactions that provide given list of tags.
@@ -391,8 +439,14 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let header_hash = self.api.block_id_to_hash(at)?
 			.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?;
 		let mut listener = self.listener.write();
+		let mut set = HashSet::with_capacity(hashes.size_hint().0);
 		for h in hashes {
-			listener.pruned(header_hash, &h);
+			// `hashes` has possibly duplicate hashes.
+			// we'd like to send out the `InBlock` notification only once.
+			if !set.contains(&h) {
+				listener.pruned(header_hash, &h);
+				set.insert(h);
+			}
 		}
 		Ok(())
 	}
@@ -406,7 +460,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let block_number = self.api.block_id_to_number(at)?
 			.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?
 			.saturated_into::<u64>();
-		let now = time::Instant::now();
+		let now = Instant::now();
 		let to_remove = {
 			self.ready()
 				.filter(|tx| self.rotator.ban_if_stale(&now, block_number, &tx))
@@ -443,8 +497,11 @@ impl<B: ChainApi> ValidatedPool<B> {
 		&self.api
 	}
 
-	/// Return an event stream of transactions imported to the pool.
-	pub fn import_notification_stream(&self) -> EventStream {
+	/// Return an event stream of notifications for when transactions are imported to the pool.
+	///
+	/// Consumers of this stream should use the `ready` method to actually get the
+	/// pending transactions in the right order.
+	pub fn import_notification_stream(&self) -> EventStream<ExHash<B>> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream
@@ -467,13 +524,13 @@ impl<B: ChainApi> ValidatedPool<B> {
 	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<TransactionFor<B>> {
 		// early exit in case there is no invalid transactions.
 		if hashes.is_empty() {
-			return vec![]
+			return vec![];
 		}
 
 		debug!(target: "txpool", "Removing invalid transactions: {:?}", hashes);
 
 		// temporarily ban invalid transactions
-		self.rotator.ban(&time::Instant::now(), hashes.iter().cloned());
+		self.rotator.ban(&Instant::now(), hashes.iter().cloned());
 
 		let invalid = self.pool.write().remove_subtree(hashes);
 
@@ -496,14 +553,34 @@ impl<B: ChainApi> ValidatedPool<B> {
 	pub fn status(&self) -> PoolStatus {
 		self.pool.read().status()
 	}
+
+	/// Notify all watchers that transactions in the block with hash have been finalized
+	pub async fn on_block_finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
+		debug!(target: "txpool", "Attempting to notify watchers of finalization for {}", block_hash);
+		// fetch all extrinsic hashes
+		if let Some(txs) = self.api.block_body(&BlockId::Hash(block_hash.clone())).await? {
+			let tx_hashes = txs.into_iter()
+				.map(|tx| self.api.hash_and_length(&tx).0)
+				.collect::<Vec<_>>();
+			// notify the watcher that these extrinsics have been finalized
+			self.listener.write().finalized(block_hash, tx_hashes);
+		}
+
+		Ok(())
+	}
+
+	/// Notify the listener of retracted blocks
+	pub fn on_block_retracted(&self, block_hash: BlockHash<B>) {
+		self.listener.write().retracted(block_hash)
+	}
 }
 
-fn fire_events<H, H2, Ex>(
-	listener: &mut Listener<H, H2>,
+fn fire_events<H, B, Ex>(
+	listener: &mut Listener<H, B>,
 	imported: &base::Imported<H, Ex>,
 ) where
 	H: hash::Hash + Eq + traits::Member + Serialize,
-	H2: Clone + fmt::Debug,
+	B: ChainApi,
 {
 	match *imported {
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {

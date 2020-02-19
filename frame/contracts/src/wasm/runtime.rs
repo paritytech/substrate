@@ -23,9 +23,7 @@ use crate::exec::{
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sp_sandbox;
 use frame_system;
-use sp_std::prelude::*;
-use sp_std::convert::TryInto;
-use sp_std::mem;
+use sp_std::{prelude::*, mem, convert::TryInto};
 use codec::{Decode, Encode};
 use sp_runtime::traits::{Bounded, SaturatedConversion};
 
@@ -41,6 +39,8 @@ const TRAP_RETURN_CODE: u32 = 0x0100;
 enum SpecialTrap {
 	/// Signals that trap was generated in response to call `ext_return` host function.
 	Return(Vec<u8>),
+	/// Signals that trap was generated because the contract exhausted its gas limit.
+	OutOfGas,
 }
 
 /// Can only be used for one call.
@@ -76,9 +76,21 @@ pub(crate) fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
 	sandbox_result: Result<sp_sandbox::ReturnValue, sp_sandbox::Error>,
 ) -> ExecResult {
-	// Special case. The trap was the result of the execution `return` host function.
-	if let Some(SpecialTrap::Return(data)) = runtime.special_trap {
-		return Ok(ExecReturnValue { status: STATUS_SUCCESS, data });
+	match runtime.special_trap {
+		// The trap was the result of the execution `return` host function.
+		Some(SpecialTrap::Return(data)) => {
+			return Ok(ExecReturnValue {
+				status: STATUS_SUCCESS,
+				data,
+			})
+		}
+		Some(SpecialTrap::OutOfGas) => {
+			return Err(ExecError {
+				reason: "ran out of gas during contract execution".into(),
+				buffer: runtime.scratch_buf,
+			})
+		}
+		_ => (),
 	}
 
 	// Check the exact type of the error.
@@ -89,7 +101,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 			buffer.clear();
 			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: buffer })
 		}
-		Ok(sp_sandbox::ReturnValue::Value(sp_sandbox::TypedValue::I32(exit_code))) => {
+		Ok(sp_sandbox::ReturnValue::Value(sp_sandbox::Value::I32(exit_code))) => {
 			let status = (exit_code & 0xFF).try_into()
 				.expect("exit_code is masked into the range of a u8; qed");
 			Ok(ExecReturnValue { status, data: runtime.scratch_buf })
@@ -181,11 +193,15 @@ impl<T: Trait> Token<T> for RuntimeToken {
 fn charge_gas<T: Trait, Tok: Token<T>>(
 	gas_meter: &mut GasMeter<T>,
 	metadata: &Tok::Metadata,
+	special_trap: &mut Option<SpecialTrap>,
 	token: Tok,
 ) -> Result<(), sp_sandbox::HostError> {
 	match gas_meter.charge(metadata, token) {
 		GasMeterResult::Proceed => Ok(()),
-		GasMeterResult::OutOfGas => Err(sp_sandbox::HostError),
+		GasMeterResult::OutOfGas =>  {
+			*special_trap = Some(SpecialTrap::OutOfGas);
+			Err(sp_sandbox::HostError)
+		},
 	}
 }
 
@@ -202,7 +218,12 @@ fn read_sandbox_memory<E: Ext>(
 	ptr: u32,
 	len: u32,
 ) -> Result<Vec<u8>, sp_sandbox::HostError> {
-	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
+	charge_gas(
+		ctx.gas_meter,
+		ctx.schedule,
+		&mut ctx.special_trap,
+		RuntimeToken::ReadMemory(len),
+	)?;
 
 	let mut buf = vec![0u8; len as usize];
 	ctx.memory.get(ptr, buf.as_mut_slice()).map_err(|_| sp_sandbox::HostError)?;
@@ -222,7 +243,12 @@ fn read_sandbox_memory_into_scratch<E: Ext>(
 	ptr: u32,
 	len: u32,
 ) -> Result<(), sp_sandbox::HostError> {
-	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
+	charge_gas(
+		ctx.gas_meter,
+		ctx.schedule,
+		&mut ctx.special_trap,
+		RuntimeToken::ReadMemory(len),
+	)?;
 
 	ctx.scratch_buf.resize(len as usize, 0);
 	ctx.memory.get(ptr, ctx.scratch_buf.as_mut_slice()).map_err(|_| sp_sandbox::HostError)?;
@@ -242,7 +268,12 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 	ptr: u32,
 	buf: &mut [u8],
 ) -> Result<(), sp_sandbox::HostError> {
-	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(buf.len() as u32))?;
+	charge_gas(
+		ctx.gas_meter,
+		ctx.schedule,
+		&mut ctx.special_trap,
+		RuntimeToken::ReadMemory(buf.len() as u32),
+	)?;
 
 	ctx.memory.get(ptr, buf).map_err(Into::into)
 }
@@ -275,12 +306,18 @@ fn read_sandbox_memory_as<E: Ext, D: Decode>(
 /// - designated area is not within the bounds of the sandbox memory.
 fn write_sandbox_memory<T: Trait>(
 	schedule: &Schedule,
+	special_trap: &mut Option<SpecialTrap>,
 	gas_meter: &mut GasMeter<T>,
 	memory: &sp_sandbox::Memory,
 	ptr: u32,
 	buf: &[u8],
 ) -> Result<(), sp_sandbox::HostError> {
-	charge_gas(gas_meter, schedule, RuntimeToken::WriteMemory(buf.len() as u32))?;
+	charge_gas(
+		gas_meter,
+		schedule,
+		special_trap,
+		RuntimeToken::WriteMemory(buf.len() as u32),
+	)?;
 
 	memory.set(ptr, buf)?;
 
@@ -302,7 +339,12 @@ define_env!(Env, <E: Ext>,
 	//
 	// - amount: How much gas is used.
 	gas(ctx, amount: u32) => {
-		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::Explicit(amount))?;
+		charge_gas(
+			&mut ctx.gas_meter,
+			ctx.schedule,
+			&mut ctx.special_trap,
+			RuntimeToken::Explicit(amount)
+		)?;
 		Ok(())
 	},
 
@@ -522,7 +564,12 @@ define_env!(Env, <E: Ext>,
 	//
 	// This is the only way to return a data buffer to the caller.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
-		charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReturnData(data_len))?;
+		charge_gas(
+			ctx.gas_meter,
+			ctx.schedule,
+			&mut ctx.special_trap,
+			RuntimeToken::ReturnData(data_len)
+		)?;
 
 		read_sandbox_memory_into_scratch(ctx, data_ptr, data_len)?;
 		let output_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
@@ -623,6 +670,23 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
+	// Stores the tombstone deposit into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch
+	// buffer are overwritten.
+	//
+	// # Note
+	//
+	// The tombstone deposit is on top of the existential deposit. So in order for
+	// a contract to leave a tombstone the balance of the contract must not go
+	// below the sum of existential deposit and the tombstone deposit. The sum
+	// is commonly referred as subsistence threshold in code.
+	ext_tombstone_deposit(ctx) => {
+		ctx.scratch_buf.clear();
+		ctx.ext.tombstone_deposit().encode_to(&mut ctx.scratch_buf);
+		Ok(())
+	},
+
 	// Decodes the given buffer as a `T::Call` and adds it to the list
 	// of to-be-dispatched calls.
 	//
@@ -637,7 +701,12 @@ define_env!(Env, <E: Ext>,
 			let balance_fee = <<E as Ext>::T as Trait>::ComputeDispatchFee::compute_dispatch_fee(&call);
 			approx_gas_for_balance(ctx.gas_meter.gas_price(), balance_fee)
 		};
-		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::ComputedDispatchFee(fee))?;
+		charge_gas(
+			&mut ctx.gas_meter,
+			ctx.schedule,
+			&mut ctx.special_trap,
+			RuntimeToken::ComputedDispatchFee(fee)
+		)?;
 
 		ctx.ext.note_dispatch_call(call);
 
@@ -647,10 +716,10 @@ define_env!(Env, <E: Ext>,
 	// Record a request to restore the caller contract to the specified contract.
 	//
 	// At the finalization stage, i.e. when all changes from the extrinsic that invoked this
-	// contract are commited, this function will compute a tombstone hash from the caller's
+	// contract are committed, this function will compute a tombstone hash from the caller's
 	// storage and the given code hash and if the hash matches the hash found in the tombstone at
 	// the specified address - kill the caller contract and restore the destination contract and set
-	// the specified `rent_allowance`. All caller's funds are transfered to the destination.
+	// the specified `rent_allowance`. All caller's funds are transferred to the destination.
 	//
 	// This function doesn't perform restoration right away but defers it to the end of the
 	// transaction. If there is no tombstone in the destination address or if the hashes don't match
@@ -741,6 +810,7 @@ define_env!(Env, <E: Ext>,
 		// Finally, perform the write.
 		write_sandbox_memory(
 			ctx.schedule,
+			&mut ctx.special_trap,
 			ctx.gas_meter,
 			&ctx.memory,
 			dest_ptr,
@@ -788,6 +858,7 @@ define_env!(Env, <E: Ext>,
 		charge_gas(
 			ctx.gas_meter,
 			ctx.schedule,
+			&mut ctx.special_trap,
 			RuntimeToken::DepositEvent(topics.len() as u32, data_len)
 		)?;
 		ctx.ext.deposit_event(topics, event_data);

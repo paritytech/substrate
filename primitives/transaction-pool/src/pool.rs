@@ -20,6 +20,7 @@ use std::{
 	collections::HashMap,
 	hash::Hash,
 	sync::Arc,
+	pin::Pin,
 };
 use futures::{
 	Future, Stream,
@@ -70,12 +71,18 @@ impl PoolStatus {
 ///		- `Invalid`
 ///		- `Usurped`
 ///		- `Dropped`
+///	4. Re-entering the pool:
+///		- `Retracted`
+///	5. Block finalized:
+///		- `Finalized`
+///		- `FinalityTimeout`
 ///
 /// The events will always be received in the order described above, however
 /// there might be cases where transactions alternate between `Future` and `Ready`
 /// pool, and are `Broadcast` in the meantime.
 ///
 /// There is also only single event causing the transaction to leave the pool.
+/// I.e. only one of the listed ones should be triggered.
 ///
 /// Note that there are conditions that may cause transactions to reappear in the pool.
 /// 1. Due to possible forks, the transaction that ends up being in included
@@ -85,8 +92,15 @@ impl PoolStatus {
 /// 3. `Invalid` transaction may become valid at some point in the future.
 /// (Note that runtimes are encouraged to use `UnknownValidity` to inform the pool about
 /// such case).
+/// 4. `Retracted` transactions might be included in some next block.
 ///
-/// However the user needs to re-subscribe to receive such notifications.
+/// The stream is considered finished only when either `Finalized` or `FinalityTimeout`
+/// event is triggered. You are however free to unsubscribe from notifications at any point.
+/// The first one will be emitted when the block, in which transaction was included gets
+/// finalized. The `FinalityTimeout` event will be emitted when the block did not reach finality
+/// within 512 blocks. This either indicates that finality is not available for your chain,
+/// or that finality gadget is lagging behind. If you choose to wait for finality longer, you can
+/// re-subscribe for a particular transaction hash manually again.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionStatus<Hash, BlockHash> {
@@ -97,8 +111,14 @@ pub enum TransactionStatus<Hash, BlockHash> {
 	/// The transaction has been broadcast to the given peers.
 	Broadcast(Vec<String>),
 	/// Transaction has been included in block with given hash.
-	#[serde(rename = "finalized")] // See #4438
 	InBlock(BlockHash),
+	/// The block this transaction was included in has been retracted.
+	Retracted(BlockHash),
+	/// Maximum number of finality watchers has been reached,
+	/// old watchers are being removed.
+	FinalityTimeout(BlockHash),
+	/// Transaction has been finalized by a finality-gadget, e.g GRANDPA
+	Finalized(BlockHash),
 	/// Transaction has been replaced in the pool, by another transaction
 	/// that provides the same tags. (e.g. same (sender, nonce)).
 	Usurped(Hash),
@@ -112,7 +132,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 pub type TransactionStatusStream<Hash, BlockHash> = dyn Stream<Item=TransactionStatus<Hash, BlockHash>> + Send + Unpin;
 
 /// The import notification event stream.
-pub type ImportNotificationStream = mpsc::UnboundedReceiver<()>;
+pub type ImportNotificationStream<H> = mpsc::UnboundedReceiver<H>;
 
 /// Transaction hash type for a pool.
 pub type TxHash<P> = <P as TransactionPool>::Hash;
@@ -122,6 +142,9 @@ pub type BlockHash<P> = <<P as TransactionPool>::Block as BlockT>::Hash;
 pub type TransactionFor<P> = <<P as TransactionPool>::Block as BlockT>::Extrinsic;
 /// Type of transactions event stream for a pool.
 pub type TransactionStatusStreamFor<P> = TransactionStatusStream<TxHash<P>, BlockHash<P>>;
+
+/// Typical future type used in transaction pool api.
+pub type PoolFuture<T, E> = std::pin::Pin<Box<dyn Future<Output=Result<T, E>> + Send>>;
 
 /// In-pool transaction interface.
 ///
@@ -146,7 +169,7 @@ pub trait InPoolTransaction {
 	/// Get tags that transaction provides.
 	fn provides(&self) -> &[TransactionTag];
 	/// Return a flag indicating if the transaction should be propagated to other peers.
-	fn is_propagateable(&self) -> bool;
+	fn is_propagable(&self) -> bool;
 }
 
 /// Transaction pool interface.
@@ -163,66 +186,80 @@ pub trait TransactionPool: Send + Sync {
 	/// Error type.
 	type Error: From<crate::error::Error> + crate::error::IntoPoolError;
 
-	// Networking
+	// *** RPC
 
 	/// Returns a future that imports a bunch of unverified transactions to the pool.
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
-		xts: impl IntoIterator<Item=TransactionFor<Self>> + 'static,
-	) -> Box<dyn Future<Output=Result<
-		Vec<Result<TxHash<Self>, Self::Error>>,
-		Self::Error
-	>> + Send + Unpin>;
+		xts: Vec<TransactionFor<Self>>,
+	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>;
 
 	/// Returns a future that imports one unverified transaction to the pool.
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> Box<dyn Future<Output=Result<
-		TxHash<Self>,
-		Self::Error
-	>> + Send + Unpin>;
-
-	// RPC
+	) -> PoolFuture<TxHash<Self>, Self::Error>;
 
 	/// Returns a future that import a single transaction and starts to watch their progress in the pool.
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> Box<dyn Future<Output=Result<Box<TransactionStatusStreamFor<Self>>, Self::Error>> + Send + Unpin>;
+	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error>;
 
-
-	// Block production / Networking
-
+	// *** Block production / Networking
 	/// Get an iterator for ready transactions ordered by priority
 	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>>;
 
-
-	// Block production
-
+	// *** Block production
 	/// Remove transactions identified by given hashes (and dependent transactions) from the pool.
 	fn remove_invalid(&self, hashes: &[TxHash<Self>]) -> Vec<Arc<Self::InPoolTransaction>>;
 
-	// logging
-
+	// *** logging
 	/// Returns pool status.
 	fn status(&self) -> PoolStatus;
 
-	// logging / RPC / networking
-
+	// *** logging / RPC / networking
 	/// Return an event stream of transactions imported to the pool.
-	fn import_notification_stream(&self) -> ImportNotificationStream;
+	fn import_notification_stream(&self) -> ImportNotificationStream<TxHash<Self>>;
 
-	// networking
-
+	// *** networking
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<TxHash<Self>, Vec<String>>);
 
 	/// Returns transaction hash
 	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self>;
+
+	/// Return specific ready transaction by hash, if there is one.
+	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>>;
+}
+
+/// Events that the transaction pool listens for.
+pub enum ChainEvent<B: BlockT> {
+	/// New blocks have been added to the chain
+	NewBlock {
+		/// Is this the new best block.
+		is_new_best: bool,
+		/// Id of the just imported block.
+		id: BlockId<B>,
+		/// Header of the just imported block
+		header: B::Header,
+		/// List of retracted blocks ordered by block number.
+		retracted: Vec<B::Hash>,
+	},
+	/// An existing block has been finalized.
+	Finalized {
+		/// Hash of just finalized block
+		hash: B::Hash,
+	},
+}
+
+/// Trait for transaction pool maintenance.
+pub trait MaintainedTransactionPool: TransactionPool {
+	/// Perform maintenance
+	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>>;
 }
 
 /// An abstraction for transaction pool.
@@ -263,110 +300,5 @@ impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 				"(offchain call) Error submitting a transaction to the pool: {:?}",
 				e
 			))
-	}
-}
-
-/// Transaction pool maintainer interface.
-pub trait TransactionPoolMaintainer: Send + Sync {
-	/// Block type.
-	type Block: BlockT;
-	/// Transaction Hash type.
-	type Hash: Hash + Eq + Member + Serialize;
-
-	/// Returns a future that performs maintenance procedures on the pool when
-	/// with given hash is imported.
-	fn maintain(
-		&self,
-		id: &BlockId<Self::Block>,
-		retracted: &[Self::Hash],
-	) -> Box<dyn Future<Output=()> + Send + Unpin>;
-}
-
-/// Maintainable pool implementation.
-pub struct MaintainableTransactionPool<Pool, Maintainer> {
-	pool: Pool,
-	maintainer: Maintainer,
-}
-
-impl<Pool, Maintainer> MaintainableTransactionPool<Pool, Maintainer> {
-	/// Create new maintainable pool using underlying pool and maintainer.
-	pub fn new(pool: Pool, maintainer: Maintainer) -> Self {
-		MaintainableTransactionPool { pool, maintainer }
-	}
-}
-
-impl<Pool, Maintainer> TransactionPool for MaintainableTransactionPool<Pool, Maintainer>
-	where
-		Pool: TransactionPool,
-		Maintainer: Send + Sync,
-{
-	type Block = Pool::Block;
-	type Hash = Pool::Hash;
-	type InPoolTransaction = Pool::InPoolTransaction;
-	type Error = Pool::Error;
-
-	fn submit_at(
-		&self,
-		at: &BlockId<Self::Block>,
-		xts: impl IntoIterator<Item=TransactionFor<Self>> + 'static,
-	) -> Box<dyn Future<Output=Result<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>> + Send + Unpin> {
-		self.pool.submit_at(at, xts)
-	}
-
-	fn submit_one(
-		&self,
-		at: &BlockId<Self::Block>,
-		xt: TransactionFor<Self>,
-	) -> Box<dyn Future<Output=Result<TxHash<Self>, Self::Error>> + Send + Unpin> {
-		self.pool.submit_one(at, xt)
-	}
-
-	fn submit_and_watch(
-		&self,
-		at: &BlockId<Self::Block>,
-		xt: TransactionFor<Self>,
-	) -> Box<dyn Future<Output=Result<Box<TransactionStatusStreamFor<Self>>, Self::Error>> + Send + Unpin> {
-		self.pool.submit_and_watch(at, xt)
-	}
-
-	fn remove_invalid(&self, hashes: &[TxHash<Self>]) -> Vec<Arc<Self::InPoolTransaction>> {
-		self.pool.remove_invalid(hashes)
-	}
-
-	fn status(&self) -> PoolStatus {
-		self.pool.status()
-	}
-
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>> {
-		self.pool.ready()
-	}
-
-	fn import_notification_stream(&self) -> ImportNotificationStream {
-		self.pool.import_notification_stream()
-	}
-
-	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self> {
-		self.pool.hash_of(xt)
-	}
-
-	fn on_broadcasted(&self, propagations: HashMap<TxHash<Self>, Vec<String>>) {
-		self.pool.on_broadcasted(propagations)
-	}
-}
-
-impl<Pool, Maintainer> TransactionPoolMaintainer for MaintainableTransactionPool<Pool, Maintainer>
-	where
-		Pool: Send + Sync,
-		Maintainer: TransactionPoolMaintainer
-{
-	type Block = Maintainer::Block;
-	type Hash = Maintainer::Hash;
-
-	fn maintain(
-		&self,
-		id: &BlockId<Self::Block>,
-		retracted: &[Self::Hash],
-	) -> Box<dyn Future<Output=()> + Send + Unpin> {
-		self.maintainer.maintain(id, retracted)
 	}
 }

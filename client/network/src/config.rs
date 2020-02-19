@@ -32,6 +32,7 @@ use libp2p::identity::{Keypair, ed25519};
 use libp2p::wasm_ext;
 use libp2p::{PeerId, Multiaddr, multiaddr};
 use core::{fmt, iter};
+use std::{future::Future, pin::Pin};
 use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
 use zeroize::Zeroize;
 
@@ -39,6 +40,10 @@ use zeroize::Zeroize;
 pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// Assigned roles for our node (full, light, ...).
 	pub roles: Roles,
+
+	/// How to spawn background tasks. If you pass `None`, then a threads pool will be used by
+	/// default.
+	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
@@ -287,6 +292,7 @@ impl Default for NetworkConfiguration {
 				enable_mdns: false,
 				allow_private_ipv4: true,
 				wasm_external_transport: None,
+				use_yamux_flow_control: false,
 			},
 			max_parallel_downloads: 5,
 		}
@@ -332,8 +338,9 @@ pub enum TransportConfig {
 		enable_mdns: bool,
 
 		/// If true, allow connecting to private IPv4 addresses (as defined in
-		/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address has been passed in
-		/// [`NetworkConfiguration::reserved_nodes`] or [`NetworkConfiguration::boot_nodes`].
+		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
+		/// been passed in [`NetworkConfiguration::reserved_nodes`] or
+		/// [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
 
 		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we
@@ -343,6 +350,8 @@ pub enum TransportConfig {
 		/// This parameter exists whatever the target platform is, but it is expected to be set to
 		/// `Some` only when compiling for WASM.
 		wasm_external_transport: Option<wasm_ext::ExtTransport>,
+		/// Use flow control for yamux streams if set to true.
+		use_yamux_flow_control: bool,
 	},
 
 	/// Only allow connections within the same process.
