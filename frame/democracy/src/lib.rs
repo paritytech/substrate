@@ -875,7 +875,7 @@ decl_module! {
 		///
 		/// - `target`: The account whose votes will later be proxied.
 		///
-		/// `close_proxy` must be called before the account can be destructed.
+		/// `close_proxy` must be called before the account can be destroyed.
 		///
 		/// # <weight>
 		/// - One extra DB entry.
