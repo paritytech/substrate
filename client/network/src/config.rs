@@ -19,12 +19,18 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-pub use crate::protocol::ProtocolConfig;
+pub use crate::chain::{Client, FinalityProofProvider};
+pub use crate::on_demand_layer::OnDemand;
+pub use crate::service::TransactionPool;
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
-use crate::chain::{Client, FinalityProofProvider};
-use crate::on_demand_layer::OnDemand;
-use crate::service::{ExHashT, TransactionPool};
+// Note: this re-export shouldn't be part of the public API of the crate and will be removed in
+// the future.
+#[doc(hidden)]
+pub use crate::protocol::ProtocolConfig;
+
+use crate::service::ExHashT;
+
 use bitflags::bitflags;
 use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sp_runtime::traits::{Block as BlockT};

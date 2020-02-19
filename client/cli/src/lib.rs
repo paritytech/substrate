@@ -623,13 +623,6 @@ where
 		config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
 	}
 
-	if config.grafana_port.is_none() || cli.grafana_port.is_some() {
-		let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
-		config.grafana_port = Some(
-			parse_address(&format!("{}:{}", grafana_interface, 9955), cli.grafana_port)?
-		);
-	}
-
 	config.rpc_ws_max_connections = cli.ws_max_connections;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
 		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
@@ -650,6 +643,14 @@ where
 		config.telemetry_endpoints = None;
 	} else if !cli.telemetry_endpoints.is_empty() {
 		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
+	}
+	// Override prometheus
+	if cli.no_prometheus {
+		config.prometheus_port = None;
+	} else {
+		let prometheus_interface: &str = if cli.prometheus_external { "0.0.0.0" } else { "127.0.0.1" };
+		config.prometheus_port = Some(
+		parse_address(&format!("{}:{}", prometheus_interface, 9615), cli.prometheus_port)?);
 	}
 
 	config.tracing_targets = cli.import_params.tracing_targets.into();
