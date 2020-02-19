@@ -190,7 +190,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 					.ok_or(String::from("sr25519 pair not found"))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			_ => Err(String::from("Key kind invalid")),
+			_ => Err(String::from("Key kind invalid"))
 		}
 	}
 }

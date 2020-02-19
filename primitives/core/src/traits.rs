@@ -66,9 +66,13 @@ pub trait BareCryptoStore: Send + Sync {
 
 	/// Get the password for this store.
 	fn password(&self) -> Option<&str>;
+	/// Find intersection between provided keys and supported keys
+	///
 	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
 	/// a filtered list of public keys which are supported by the keystore.
 	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, String>;
+	/// List all supported keys
+	///
 	/// Get a list of public keys the signer supports.
 	fn get_keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, String>;
 	/// Checks if the private keys for the given public key and key type combinations exist.
@@ -76,6 +80,8 @@ pub trait BareCryptoStore: Send + Sync {
 	/// Returns `true` iff all private keys could be found.
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
 
+	/// Sign with key
+	///
 	/// Signs a message with the private key that matches
 	/// the public key passed.
 	fn sign_with(
@@ -85,6 +91,8 @@ pub trait BareCryptoStore: Send + Sync {
 		msg: &[u8],
 	) -> std::result::Result<Vec<u8>, String>;
 
+	/// Sign with any key
+	///
 	/// Given a list of public keys, find the first supported key and
 	/// sign the provided message with that key.
 	///
@@ -107,6 +115,8 @@ pub trait BareCryptoStore: Send + Sync {
 		Err("Could not sign with any of the given keys".to_owned())
 	}
 
+	/// Sign with all keys
+	///
 	/// Provided a list of public keys, sign a message with
 	/// each key given that the key is supported.
 	///
