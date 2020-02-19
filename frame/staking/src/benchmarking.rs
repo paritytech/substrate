@@ -274,9 +274,7 @@ fn get_seq_phragmen_solution<T: Trait>(do_reduce: bool)
 	let sp_phragmen::PhragmenResult {
 		winners,
 		assignments,
-	} = <Module<T>>::do_phragmen::<Percent>().unwrap();
-
-	println!("Original assignments = {:?}", assignments);
+	} = <Module<T>>::do_phragmen::<OffchainAccuracy>().unwrap();
 
 	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
 	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();

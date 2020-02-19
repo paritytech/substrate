@@ -28,7 +28,6 @@ use sp_core::H256;
 use sp_io;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, PhragmenScore,
-	Assignment,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::testing::{Header, TestXt, UintAuthorityId};
@@ -746,35 +745,6 @@ pub fn on_offence_now(
 	on_offence_in_era(offenders, slash_fraction, now)
 }
 
-/// convert a vector of staked assignments into ratio
-pub fn assignment_to_staked<T: PerThing>(
-	assignments: Vec<Assignment<AccountId, T>>
-) -> Vec<StakedAssignment<AccountId>>
-where
-	ExtendedBalance: From<<T as PerThing>::Inner>,
-	T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
-{
-	assignments
-		.into_iter()
-		.map(|a| {
-			let stake = <CurrencyToVoteHandler as Convert<Balance, u64>>::convert(
-				Staking::slashable_balance_of(&a.who)
-			) as ExtendedBalance;
-			a.into_staked(stake, true)
-		})
-		.collect()
-}
-
-/// convert a vector of assignments into staked
-pub fn staked_to_assignment<T: PerThing>(
-	staked: Vec<StakedAssignment<AccountId>>,
-) -> Vec<Assignment<AccountId, T>> where u128: From<<T as PerThing>::Inner>{
-	staked
-		.into_iter()
-		.map(|sa| sa.into_assignment(true))
-		.collect()
-}
-
 // winners will be chosen by simply their unweighted total backing stake. Nominator stake is
 // distributed evenly.
 pub fn horrible_phragmen_with_post_processing(
@@ -876,7 +846,10 @@ pub fn horrible_phragmen_with_post_processing(
 	};
 
 	// convert back to ratio assignment. This takes less space.
-	let assignments_reduced = staked_to_assignment::<OffchainAccuracy>(staked_assignment);
+	let assignments_reduced = sp_phragmen::assignment_staked_to_ratio::<
+		AccountId,
+		OffchainAccuracy,
+	>(staked_assignment);
 
 	let compact = <CompactOf<Test>>::from_assignment(
 		assignments_reduced,
@@ -890,6 +863,8 @@ pub fn horrible_phragmen_with_post_processing(
 	(compact, winners, score)
 }
 
+// Note: this should always logicall reproduce [`offchain_election::prepare_submission`], yet we
+// cannot do it since we want to have `tweak` injected into the process.
 pub fn do_phragmen_with_post_processing(
 	do_reduce: bool,
 	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
@@ -905,7 +880,12 @@ pub fn do_phragmen_with_post_processing(
 	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
 	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<AccountId>>();
 
-	let mut staked = assignment_to_staked::<OffchainAccuracy>(assignments);
+	let stake_of = |who: &AccountId| -> ExtendedBalance {
+		<CurrencyToVoteHandler as Convert<Balance, u64>>::convert(
+			Staking::slashable_balance_of(&who)
+		) as ExtendedBalance
+	};
+	let mut staked = sp_phragmen::assignment_ratio_to_staked(assignments, stake_of);
 
 	// apply custom tweaks. awesome for testing.
 	tweak(&mut staked);
@@ -913,10 +893,6 @@ pub fn do_phragmen_with_post_processing(
 	if do_reduce {
 		reduce(&mut staked);
 	}
-
-	// compute score
-	let (support_map, _) = build_support_map::<AccountId>(&winners, &staked);
-	let score = evaluate_support::<AccountId>(&support_map);
 
 	// convert back to ratio assignment. This takes less space.
 	let snapshot_validators = Staking::snapshot_validators().unwrap();
@@ -928,10 +904,21 @@ pub fn do_phragmen_with_post_processing(
 		snapshot_validators.iter().position(|x| x == a).map(|i| i as ValidatorIndex)
 	};
 
-	let assignments_reduced: Vec<Assignment<AccountId, OffchainAccuracy>> = staked
-		.into_iter()
-		.map(|sa| sa.into_assignment(true))
-		.collect();
+	let assignments_reduced = sp_phragmen::assignment_staked_to_ratio(staked);
+
+	// re-compute score by converting, yet again, into staked type
+	let score = {
+		let staked = sp_phragmen::assignment_ratio_to_staked(
+			assignments_reduced.clone(),
+			Staking::slashable_balance_of_extended,
+		);
+
+		let (support_map, _) = build_support_map::<AccountId>(
+			winners.as_slice(),
+			staked.as_slice(),
+		);
+		evaluate_support::<AccountId>(&support_map)
+	};
 
 	let compact = <CompactOf<Test>>::from_assignment(
 		assignments_reduced,

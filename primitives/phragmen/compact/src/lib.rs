@@ -158,8 +158,7 @@ fn struct_def(
 	}).collect::<TokenStream2>();
 
 	Ok(quote! (
-		/// A struct to encode a `Vec<StakedAssignment>` or `Vec<Assignment>` of the phragmen module
-		/// in a compact way.
+		/// A struct to encode a Phragmen assignment in a compact way.
 		#[derive(
 			Default,
 			PartialEq,

@@ -24,7 +24,7 @@ use crate::{
 	Support, StakedAssignment, Assignment, PhragmenResult, ExtendedBalance,
 };
 use substrate_test_utils::assert_eq_uvec;
-use sp_runtime::{Perbill, Permill, Percent, traits::Convert};
+use sp_runtime::{Perbill, Permill, Percent, PerU16, traits::Convert};
 
 #[test]
 fn float_phragmen_poc_works() {
@@ -130,7 +130,8 @@ fn phragmen_poc_2_works() {
 
 	run_and_compare::<Perbill>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
 	run_and_compare::<Permill>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
-	run_and_compare::<Percent>(candidates, voters, &stake_of, 2, 2);
+	run_and_compare::<Percent>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
+	run_and_compare::<PerU16>(candidates, voters, &stake_of, 2, 2);
 }
 
 #[test]
@@ -150,7 +151,8 @@ fn phragmen_poc_3_works() {
 
 	run_and_compare::<Perbill>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
 	run_and_compare::<Permill>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
-	run_and_compare::<Percent>(candidates, voters, &stake_of, 2, 2);
+	run_and_compare::<Percent>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
+	run_and_compare::<PerU16>(candidates, voters, &stake_of, 2, 2);
 }
 
 #[test]

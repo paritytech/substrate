@@ -17,19 +17,18 @@
 //! Helpers for offchain worker election.
 
 use crate::{
-	Call, Module, Trait, BalanceOf, ValidatorIndex, NominatorIndex, CompactOf, OffchainAccuracy,
+	Call, Module, Trait, ValidatorIndex, NominatorIndex, CompactOf, OffchainAccuracy,
 };
 use codec::Encode;
 use frame_system::offchain::{SubmitUnsignedTransaction};
 use frame_support::debug;
 use sp_phragmen::{
-	reduce, ExtendedBalance, PhragmenResult, StakedAssignment, Assignment, PhragmenScore,
+	reduce, ExtendedBalance, PhragmenResult, Assignment, PhragmenScore,
 	build_support_map, evaluate_support,
 };
 use sp_std::{prelude::*, convert::TryInto};
 use sp_runtime::{RuntimeAppPublic, RuntimeDebug};
 use sp_runtime::offchain::storage::StorageValueRef;
-use sp_runtime::traits::Convert;
 use sp_runtime::PerThing;
 
 #[derive(RuntimeDebug)]
@@ -184,46 +183,36 @@ where
 			<usize as TryInto<ValidatorIndex>>::try_into(i).ok()
 		)
 	};
-	let stake_of = |who: &T::AccountId| -> ExtendedBalance {
-		<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
-			<Module<T>>::slashable_balance_of(who)
-		) as ExtendedBalance
-	};
 
 	// Clean winners.
 	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<T::AccountId>>();
 
 	// convert into absolute value and to obtain the reduced version.
-	let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
-		.into_iter()
-		.map(|a| {
-			let stake = stake_of(&a.who);
-			a.into_staked(stake, true)
-		})
-		.collect();
+	let mut staked = sp_phragmen::assignment_ratio_to_staked(
+		assignments,
+		<Module<T>>::slashable_balance_of_extended,
+	);
 
 	if do_reduce {
 		reduce(&mut staked);
 	}
 
 	// Convert back to ratio assignment. This takes less space.
-	let low_accuracy_assignment: Vec<Assignment<T::AccountId, OffchainAccuracy>> = staked
-		.into_iter()
-		.map(|sa| sa.into_assignment(true))
-		.collect();
+	let low_accuracy_assignment = sp_phragmen::assignment_staked_to_ratio(staked);
 
 	// convert back to staked to compute the score in the receiver's accuracy. This can be done
 	// nicer, for now we do it as such since this code is not time-critical. This ensure that the
 	// score _predicted_ here is the same as the one computed on chain and you will not get a
 	// `PhragmenBogusScore` error. This is totally NOT needed if we don't do reduce. This whole
-	// accuracy glitch happens because reduce breaks that assumption of scale.
+	// accuracy glitch happens because reduce breaks that assumption of _scale_. The initial
+	// phragmen results are computed in `OffchainAccuracy` and the initial `staked` assignment set
+	// is also all multiples of this value. After reduce, this no longer holds. Hence converting to
+	// ratio thereafter is not trivially reversible.
 	let score = {
-		let staked: Vec<StakedAssignment<T::AccountId>> = low_accuracy_assignment
-		.iter()
-		.map(|a| {
-			let stake = stake_of(&a.who);
-			a.clone().into_staked(stake, true)
-		}).collect();
+		let staked = sp_phragmen::assignment_ratio_to_staked(
+			low_accuracy_assignment.clone(),
+			<Module<T>>::slashable_balance_of_extended,
+		);
 
 		let (support_map, _) = build_support_map::<T::AccountId>(
 			winners.as_slice(),

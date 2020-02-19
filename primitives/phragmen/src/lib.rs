@@ -48,9 +48,13 @@ use codec::{Encode, Decode};
 
 mod node;
 mod reduce;
+mod helpers;
 
-// re-export reduce stuff
+// re-export reduce stuff.
 pub use reduce::reduce;
+
+// re-export the helpers.
+pub use helpers::*;
 
 // re-export the compact macro, with the dependencies of the macro.
 #[doc(hidden)]
@@ -58,6 +62,7 @@ pub use codec;
 #[doc(hidden)]
 pub use sp_runtime;
 
+// re-export the compact solution type.
 pub use sp_phragmen_compact::generate_compact_solution_type;
 
 // an aggregator trait for a generic type of a voter/target identifier. This usually maps to
@@ -160,11 +165,15 @@ impl<AccountId: IdentifierT, T: PerThing> Assignment<AccountId, T>
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
 	/// It needs `stake` which is the total budget of the voter. If `fill` is set to true,
-	/// it ensures that all the potential rounding errors are compensated and the distribution's sum
-	/// is exactly equal to the total budget.
+	/// it _tries_ to ensure that all the potential rounding errors are compensated and the
+	/// distribution's sum is exactly equal to the total budget, by adding or subtracting the
+	/// remainder from the last distribution.
+	///
+	/// If an edge ratio is [`Bounded::max_value()`], it is dropped. This edge can never mean
+	/// anything useful.
 	pub fn into_staked(self, stake: ExtendedBalance, fill: bool) -> StakedAssignment<AccountId>
+		where T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>
 	{
-		println!("Converting into staked {:?}", self);
 		let mut sum: ExtendedBalance = Bounded::min_value();
 		let mut distribution = self.distribution.into_iter().filter_map(|(target, p)| {
 			// if this ratio is zero, then skip it.
@@ -178,7 +187,6 @@ impl<AccountId: IdentifierT, T: PerThing> Assignment<AccountId, T>
 			}
 		}).collect::<Vec<(AccountId, ExtendedBalance)>>();
 
-		println!("Sum = {:?} / stake = {:?}", sum, stake);
 		if fill {
 			// NOTE: we can do this better.
 			// https://revs.runtime-revolution.com/getting-100-with-rounded-percentages-273ffa70252b
@@ -189,6 +197,10 @@ impl<AccountId: IdentifierT, T: PerThing> Assignment<AccountId, T>
 			} else if let Some(excess) = sum.checked_sub(stake) {
 				if let Some(last) = distribution.last_mut() {
 					last.1 = last.1.saturating_sub(excess);
+				}
+			} else if let Some(excess) = sum.checked_sub(stake) {
+				if let Some(last) = distribution.last_mut() {
+					last.1 -= excess;
 				}
 			}
 		}
@@ -211,8 +223,22 @@ pub struct StakedAssignment<AccountId> {
 	pub distribution: Vec<(AccountId, ExtendedBalance)>,
 }
 
-impl<AccountId> StakedAssignment<AccountId> {
+impl<AccountId> StakedAssignment<AccountId>
+{
 	/// Converts self into the normal [`Assignment`] type.
+	///
+	/// If `fill` is set to true, it _tries_ to ensure that all the potential rounding errors are
+	/// compensated and the distribution's sum is exactly equal to 100%, by adding or subtracting
+	/// the remainder from the last distribution.
+	///
+	/// NOTE: it is quite critical that this attempt always works. The data type returned here will
+	/// potentially get used to create a compact type; a compact type requires sum of ratios to be
+	/// less than 100% upon un-compacting.
+	/// TODO: isolate this process into something like `normalise_assignments` which makes sure all
+	/// is okay.
+	///
+	/// If an edge stake is so small that it cannot be represented in `T`, it is ignored. This edge
+	/// can never be re-created and does not mean anything useful anymore.
 	pub fn into_assignment<T: PerThing>(self, fill: bool) -> Assignment<AccountId, T>
 		where ExtendedBalance: From<<T as PerThing>::Inner>
 	{

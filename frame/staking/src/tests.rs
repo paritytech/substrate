@@ -2677,25 +2677,26 @@ fn remove_multi_deferred() {
 }
 
 mod offchain_phragmen {
+	use std::sync::Arc;
+	use parking_lot::RwLock;
 	use crate::*;
 	use mock::*;
-	use frame_support::{assert_ok, assert_noop, debug};
-	use substrate_test_utils::assert_eq_uvec;
-	use sp_runtime::traits::OffchainWorker;
+	use sp_core::traits::KeystoreExt;
+	use sp_core::testing::KeyStore;
 	use sp_core::offchain::{
 		OffchainExt,
 		TransactionPoolExt,
 		testing::{TestOffchainExt, TestTransactionPoolExt, PoolState},
 	};
 	use sp_io::TestExternalities;
-	use sp_core::traits::KeystoreExt;
-	use sp_core::testing::KeyStore;
-	use std::sync::Arc;
-	use parking_lot::RwLock;
+	use substrate_test_utils::assert_eq_uvec;
+	use frame_support::{assert_ok, assert_noop, debug};
+	use sp_runtime::traits::OffchainWorker;
+	use sp_phragmen::StakedAssignment;
 
 	type DummyT = dummy_sr25519::AuthorityId;
 
-	fn percent(x: u8) -> OffchainAccuracy {
+	fn percent(x: u16) -> OffchainAccuracy {
 		OffchainAccuracy::from_percent(x)
 	}
 
@@ -3009,7 +3010,7 @@ mod offchain_phragmen {
 			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact, score));
 
 			// a bad solution
-			let (compact, winners, score) = horrible_phragmen_with_post_processing(true);
+			let (compact, winners, score) = horrible_phragmen_with_post_processing(false);
 			assert_noop!(
 				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 				Error::<Test>::PhragmenWeakSubmission,
@@ -3031,7 +3032,7 @@ mod offchain_phragmen {
 			run_to_block(12);
 
 			// a meeeeh solution
-			let (compact, winners, score) = horrible_phragmen_with_post_processing(true);
+			let (compact, winners, score) = horrible_phragmen_with_post_processing(false);
 			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact, score));
 
 			// a better solution

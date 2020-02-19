@@ -187,7 +187,7 @@ pub(crate) fn assignment(
 
 				for _phragmen::Assignment { who, distribution } in assignments {
 					match distribution.len() {
-						0 => continue /* ignore and move on */,
+						0 => continue,
 						#from_impl
 						_ => {
 							return Err(_phragmen::Error::CompactTargetOverflow);
