@@ -926,8 +926,11 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 }
 
 /// An identifier for a specific cryptographic algorithm used by a key pair
-#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CryptoTypeId(pub &'static str);
+
+/// A type alias of CryptoTypeId & a public key
+pub type CryptoTypePublicPair = (CryptoTypeId, Vec<u8>);
 
 /// Known key types; this also functions as a global registry of key types for projects wishing to
 /// avoid collisions with each other.

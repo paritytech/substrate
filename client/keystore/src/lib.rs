@@ -21,7 +21,7 @@
 use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 
 use sp_core::{
-	crypto::{IsWrappedBy, CryptoTypeId, KeyTypeId, Pair as PairT, Protected, Public},
+	crypto::{IsWrappedBy, CryptoTypeId, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
 	traits::BareCryptoStore,
 };
 
@@ -316,6 +316,43 @@ impl Store {
 }
 
 impl BareCryptoStore for Store {
+	fn get_supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
+		let ed25519_existing_keys: Vec<Vec<u8>> = self.public_keys_by_type::<ed25519::Public>(id)
+								.map(|keys| keys.iter().map(|k| k.to_raw_vec()).collect())
+								.map_err(|e| e.to_string())?;
+		let sr25519_existing_keys: Vec<Vec<u8>> = self.public_keys_by_type::<sr25519::Public>(id)
+								.map(|keys| keys.iter().map(|k| k.to_raw_vec()).collect())
+								.map_err(|e| e.to_string())?;
+
+		Ok(keys.iter().filter_map(|k| {
+			match k.0 {
+				sr25519::SR25519_CRYPTO_ID if sr25519_existing_keys.contains(&k.1.to_vec()) => Some(k),
+				ed25519::ED25519_CRYPTO_ID if ed25519_existing_keys.contains(&k.1.to_vec()) => Some(k),
+				_ => None
+			}
+		}).cloned().collect::<Vec<_>>())
+	}
+
+	fn get_keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
+		let ed25519_existing_keys: Vec<Vec<u8>> = self.public_keys_by_type::<ed25519::Public>(id)
+								.map(|keys| keys.iter().map(|k| k.to_raw_vec()).collect())
+								.map_err(|e| e.to_string())?;
+		let sr25519_existing_keys: Vec<Vec<u8>> = self.public_keys_by_type::<sr25519::Public>(id)
+								.map(|keys| keys.iter().map(|k| k.to_raw_vec()).collect())
+								.map_err(|e| e.to_string())?;
+
+		let mut keys: Vec<CryptoTypePublicPair> = vec![];
+		keys.extend(sr25519_existing_keys.iter()
+					.cloned()
+    				.map(|k| (sr25519::SR25519_CRYPTO_ID, k)));
+		keys.extend(ed25519_existing_keys.iter()
+    				.cloned()
+					.map(|k| (ed25519::ED25519_CRYPTO_ID, k))
+					.collect::<Vec<_>>());
+		Ok(keys)
+
+	}
+
 	fn sign_with(
 		&self,
 		kind: CryptoTypeId,

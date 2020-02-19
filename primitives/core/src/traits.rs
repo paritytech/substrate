@@ -17,7 +17,7 @@
 //! Shareable Substrate traits.
 
 use crate::{
-	crypto::{CryptoTypeId, KeyTypeId},
+	crypto::{CryptoTypeId, KeyTypeId, CryptoTypePublicPair},
 	ed25519, sr25519,
 };
 
@@ -66,7 +66,11 @@ pub trait BareCryptoStore: Send + Sync {
 
 	/// Get the password for this store.
 	fn password(&self) -> Option<&str>;
-
+	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
+	/// a filtered list of public keys which are supported by the keystore.
+	fn get_supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, String>;
+	/// Get a list of public keys the signer supports.
+	fn get_keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, String>;
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.

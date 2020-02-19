@@ -16,7 +16,7 @@
 
 //! Types that should only be used for testing!
 
-use crate::crypto::{CryptoTypeId, KeyTypeId};
+use crate::crypto::{CryptoTypeId, KeyTypeId, CryptoTypePublicPair};
 #[cfg(feature = "std")]
 use crate::{
 	crypto::{Pair, Public},
@@ -135,6 +135,38 @@ impl crate::traits::BareCryptoStore for KeyStore {
 
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys.iter().all(|(k, t)| self.keys.get(&t).and_then(|s| s.get(k)).is_some())
+	}
+
+	fn get_supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, String> {
+		let ed25519_existing_keys: Vec<Vec<u8>> = self.ed25519_public_keys(id).iter()
+								.map(|k| k.to_raw_vec()).collect();
+		let sr25519_existing_keys: Vec<Vec<u8>> = self.sr25519_public_keys(id).iter()
+								.map(|k| k.to_raw_vec()).collect();
+
+		Ok(keys.iter().filter_map(|k| {
+			match k.0 {
+				sr25519::SR25519_CRYPTO_ID if sr25519_existing_keys.contains(&k.1.to_vec()) => Some(k),
+				ed25519::ED25519_CRYPTO_ID if ed25519_existing_keys.contains(&k.1.to_vec()) => Some(k),
+				_ => None
+			}
+		}).cloned().collect::<Vec<_>>())
+	}
+
+	fn get_keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, String> {
+		let ed25519_existing_keys: Vec<Vec<u8>> = self.ed25519_public_keys(id).iter()
+								.map(|k| k.to_raw_vec()).collect();
+		let sr25519_existing_keys: Vec<Vec<u8>> = self.sr25519_public_keys(id).iter()
+								.map(|k| k.to_raw_vec()).collect();
+
+		let mut keys: Vec<CryptoTypePublicPair> = vec![];
+		keys.extend(sr25519_existing_keys.iter()
+					.cloned()
+    				.map(|k| (sr25519::SR25519_CRYPTO_ID, k)));
+		keys.extend(ed25519_existing_keys.iter()
+    				.cloned()
+					.map(|k| (ed25519::ED25519_CRYPTO_ID, k))
+					.collect::<Vec<_>>());
+		Ok(keys)
 	}
 
 	fn sign_with(&self, kind: CryptoTypeId, id: KeyTypeId, msg: &[u8]) -> Result<Vec<u8>, String> {
