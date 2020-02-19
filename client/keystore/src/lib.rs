@@ -277,35 +277,6 @@ impl Store {
 		buf.push(key_type + key.as_str());
 		Some(buf)
 	}
-
-	/// Signs a message with the private key that matches
-	/// the public key passed.
-	fn _sign_with(
-		&self,
-		id: KeyTypeId,
-		key: &CryptoTypePublicPair,
-		msg: &[u8],
-	) -> std::result::Result<Vec<u8>, String> {
-		match key.0 {
-			ed25519::ED25519_CRYPTO_ID => {
-				let pub_key = ed25519::Public::from_slice(key.1.as_slice());
-				let key_pair: ed25519::Pair = self
-					.key_pair_by_type::<ed25519::Pair>(&pub_key, id)
-					.map(Into::into)
-					.map_err(|e| e.to_string())?;
-				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
-			}
-			sr25519::SR25519_CRYPTO_ID => {
-				let pub_key = sr25519::Public::from_slice(key.1.as_slice());
-				let key_pair: sr25519::Pair = self
-					.key_pair_by_type::<sr25519::Pair>(&pub_key, id)
-					.map(Into::into)
-					.map_err(|e| e.to_string())?;
-				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
-			}
-			_ => Err(String::from("Key crypto type is not supported"))
-		}
-	}
 }
 
 impl BareCryptoStore for Store {
@@ -362,7 +333,25 @@ impl BareCryptoStore for Store {
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
 	) -> std::result::Result<Vec<u8>, String> {
-		self._sign_with(id, key, msg)
+		match key.0 {
+			ed25519::ED25519_CRYPTO_ID => {
+				let pub_key = ed25519::Public::from_slice(key.1.as_slice());
+				let key_pair: ed25519::Pair = self
+					.key_pair_by_type::<ed25519::Pair>(&pub_key, id)
+					.map(Into::into)
+					.map_err(|e| e.to_string())?;
+				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
+			}
+			sr25519::SR25519_CRYPTO_ID => {
+				let pub_key = sr25519::Public::from_slice(key.1.as_slice());
+				let key_pair: sr25519::Pair = self
+					.key_pair_by_type::<sr25519::Pair>(&pub_key, id)
+					.map(Into::into)
+					.map_err(|e| e.to_string())?;
+				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
+			}
+			_ => Err(String::from("Key crypto type is not supported"))
+		}
 	}
 
 	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
