@@ -45,6 +45,7 @@ use sp_version::NativeVersion;
 use sp_core::OpaqueMetadata;
 use pallet_grandpa::AuthorityList as GrandpaAuthorityList;
 use pallet_grandpa::fg_primitives;
+use pallet_im_online::sr25519::{AuthorityId as ImOnlineId};
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use pallet_contracts_rpc_runtime_api::ContractExecResult;
@@ -81,7 +82,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 222,
-	impl_version: 0,
+	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -443,14 +444,12 @@ impl pallet_sudo::Trait for Runtime {
 	type Call = Call;
 }
 
+/// A runtime transaction submitter.
+pub type SubmitTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
+
 parameter_types! {
 	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
 }
-
-use pallet_im_online::sr25519::{AuthorityId as ImOnlineId};
-
-/// A runtime transaction submitter.
-pub type SubmitTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
 
 impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
