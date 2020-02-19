@@ -57,7 +57,7 @@ const SIGNING_CTX: &[u8] = b"substrate";
 /// A value which is passed along with the public key
 /// to define which cryptographic algorithm that key
 /// belongs to.
-pub const SR25519_CRYPTO_ID: CryptoTypeId = CryptoTypeId("sr25519");
+pub const SR25519_CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]

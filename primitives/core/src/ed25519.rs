@@ -45,7 +45,7 @@ use sp_std::ops::Deref;
 /// A value which is passed along with the public key
 /// to define which cryptographic algorithm that key
 /// belongs to.
-pub const ED25519_CRYPTO_ID: CryptoTypeId = CryptoTypeId("ed25519");
+pub const ED25519_CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ed25");
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we

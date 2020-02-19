@@ -43,7 +43,7 @@ use secp256k1::{PublicKey, SecretKey};
 /// A value which is passed along with the public key
 /// to define which cryptographic algorithm that key
 /// belongs to.
-pub const ECDSA_CRYPTO_ID: CryptoTypeId = CryptoTypeId("ecdsa");
+pub const ECDSA_CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 
 /// A secret seed (which is bytewise essentially equivalent to a SecretKey).
 ///

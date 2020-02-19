@@ -662,7 +662,7 @@ mod dummy {
 	impl Derive for Dummy {}
 
 	impl Public for Dummy {
-		const CRYPTO_TYPE_ID: CryptoTypeId = CryptoTypeId("dummy");
+		const CRYPTO_TYPE_ID: CryptoTypeId = CryptoTypeId(*b"dumm");
 
 		fn from_slice(_: &[u8]) -> Self { Self }
 		#[cfg(feature = "std")]
@@ -926,8 +926,8 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 }
 
 /// An identifier for a specific cryptographic algorithm used by a key pair
-#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CryptoTypeId(pub &'static str);
+#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+pub struct CryptoTypeId(pub [u8; 4]);
 
 /// A type alias of CryptoTypeId & a public key
 pub type CryptoTypePublicPair = (CryptoTypeId, Vec<u8>);
