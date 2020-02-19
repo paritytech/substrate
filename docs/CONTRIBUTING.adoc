@@ -27,7 +27,7 @@ Merging pull requests once CI is successful:
 
 . Once a PR is ready for review please add the https://github.com/paritytech/substrate/pulls?q=is%3Apr+is%3Aopen+label%3AA0-pleasereview[`pleasereview`] label. Generally PRs should sit with this label for 48 hours in order to garner feedback. It may be merged before if all relevant parties had a look at it.
 . If the first review is not an approval, swap `A0-pleasereview` to any label `[A3, A7]` to indicate that the PR has received some feedback, but needs further work. For example. https://github.com/paritytech/substrate/labels/A3-inprogress[`A3-inprogress`] is a general indicator that the PR is work in progress and https://github.com/paritytech/substrate/labels/A4-gotissues[`A4-gotissues`] means that it has significant problems that need fixing. Once the work is done, change the label back to `A0-pleasereview`. You might end up swapping a few times back and forth to climb up the A label group. Once a PR is https://github.com/paritytech/substrate/labels/A8-looksgood[`A8-looksgood`], it is ready to merge. 
-. PRs that break the external API must be tagged with https://github.com/paritytech/substrate/labels/B2-breaksapi[`breaksapi`], when it changes the SRML or consensus of running system with https://github.com/paritytech/substrate/labels/B3-breaksconsensus[`breaksconsensus`]
+. PRs that break the external API must be tagged with https://github.com/paritytech/substrate/labels/B2-breaksapi[`breaksapi`], when it changes the FRAME or consensus of running system with https://github.com/paritytech/substrate/labels/B3-breaksconsensus[`breaksconsensus`]
 . No PR should be merged until all reviews' comments are addressed.
 
 *Reviewing pull requests*:
