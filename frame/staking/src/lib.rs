@@ -250,6 +250,8 @@
 mod mock;
 #[cfg(test)]
 mod tests;
+#[cfg(feature = "testing-utils")]
+pub mod testing_utils;
 
 pub mod slashing;
 pub mod offchain_election;
@@ -1151,7 +1153,7 @@ decl_module! {
 		/// - O(N * d) to ensure vote veracity.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
-		fn submit_election_solution(
+		pub fn submit_election_solution(
 			origin,
 			winners: Vec<ValidatorIndex>,
 			compact_assignments: CompactOf<T>,
@@ -1169,7 +1171,7 @@ decl_module! {
 		/// Unsigned version of `submit_election_solution`. Will only be accepted from those who are
 		/// in the current validator set.
 		// TODO: weight should be noted.
-		fn submit_election_solution_unsigned(
+		pub fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<ValidatorIndex>,
 			compact_assignments: CompactOf<T>,

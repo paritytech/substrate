@@ -819,7 +819,6 @@ pub fn horrible_phragmen_with_post_processing(
 		});
 	});
 
-	dbg!(&staked_assignment);
 	// Ensure that this result is worse than seq-phragmen. Otherwise, it should not have been used
 	// for testing.
 	let score = {

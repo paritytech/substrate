@@ -163,24 +163,38 @@ impl<AccountId, T: PerThing> Assignment<AccountId, T>
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
 	/// It needs `stake` which is the total budget of the voter. If `fill` is set to true,
-	/// it ensures that all the potential rounding errors are compensated and the distribution's sum
-	/// is exactly equal to the total budget.
+	/// it _tries_ to ensure that all the potential rounding errors are compensated and the
+	/// distribution's sum is exactly equal to the total budget, by adding or subtracting the
+	/// remainder from the last distribution.
+	///
+	/// If an edge ratio is [`Bounded::max_value()`], it is dropped. This edge can never mean
+	/// anything useful.
 	pub fn into_staked(self, stake: ExtendedBalance, fill: bool) -> StakedAssignment<AccountId>
 		where T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>
 	{
 		let mut sum: ExtendedBalance = Bounded::min_value();
-		let mut distribution = self.distribution.into_iter().map(|(target, p)| {
-			let distribution_stake = p * stake;
-			// defensive only. We assume that balance cannot exceed extended balance.
-			sum = sum.saturating_add(distribution_stake);
-			(target, distribution_stake)
+		let mut distribution = self.distribution.into_iter().filter_map(|(target, p)| {
+			// if this ratio is zero, then skip it.
+			if p == Bounded::min_value() {
+				None
+			} else {
+				let distribution_stake = p * stake;
+				// defensive only. We assume that balance cannot exceed extended balance.
+				sum = sum.saturating_add(distribution_stake);
+				Some((target, distribution_stake))
+			}
 		}).collect::<Vec<(AccountId, ExtendedBalance)>>();
 
 		if fill {
-			// if leftover is zero it is effectless.
+			// NOTE: we can do this better.
+			// https://revs.runtime-revolution.com/getting-100-with-rounded-percentages-273ffa70252b
 			if let Some(leftover) = stake.checked_sub(sum) {
 				if let Some(last) = distribution.last_mut() {
-					last.1 += leftover;
+					last.1 = last.1.saturating_add(leftover);
+				}
+			} else if let Some(excess) = sum.checked_sub(stake) {
+				if let Some(last) = distribution.last_mut() {
+					last.1 = last.1.saturating_sub(excess);
 				}
 			} else if let Some(excess) = sum.checked_sub(stake) {
 				if let Some(last) = distribution.last_mut() {
@@ -188,6 +202,7 @@ impl<AccountId, T: PerThing> Assignment<AccountId, T>
 				}
 			}
 		}
+
 		StakedAssignment {
 			who: self.who,
 			distribution,
@@ -209,17 +224,33 @@ pub struct StakedAssignment<AccountId> {
 impl<AccountId> StakedAssignment<AccountId>
 {
 	/// Converts self into the normal [`Assignment`] type.
+	///
+	/// If `fill` is set to true, it _tries_ to ensure that all the potential rounding errors are
+	/// compensated and the distribution's sum is exactly equal to 100%, by adding or subtracting
+	/// the remainder from the last distribution.
+	///
+	/// NOTE: it is quite critical that this attempt always works. The data type returned here will
+	/// potentially get used to create a compact type; a compact type requires sum of ratios to be
+	/// less than 100% upon un-compacting.
+	/// TODO: isolate this process into something like `normalise_assignments` which makes sure all
+	/// is okay.
+	///
+	/// If an edge stake is so small that it cannot be represented in `T`, it is ignored. This edge
+	/// can never be re-created and does not mean anything useful anymore.
 	pub fn into_assignment<T: PerThing>(self, fill: bool) -> Assignment<AccountId, T>
 		where ExtendedBalance: From<<T as PerThing>::Inner>
 	{
 		let accuracy: u128 = T::ACCURACY.saturated_into();
 		let mut sum: u128 = Zero::zero();
-
 		let stake = self.distribution.iter().map(|x| x.1).sum();
-		let mut distribution = self.distribution.into_iter().map(|(target, w)| {
+		let mut distribution = self.distribution.into_iter().filter_map(|(target, w)| {
 			let per_thing = T::from_rational_approximation(w, stake);
-			sum += per_thing.clone().deconstruct().saturated_into();
-			(target, per_thing)
+			if per_thing == Bounded::min_value() {
+				None
+			} else {
+				sum += per_thing.clone().deconstruct().saturated_into();
+				Some((target, per_thing))
+			}
 		}).collect::<Vec<(AccountId, T)>>();
 
 		if fill {

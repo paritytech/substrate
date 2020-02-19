@@ -1,0 +1,31 @@
+[package]
+name = "pallet-staking-fuzzer"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+pallet-staking = { version = "2.0.0", path = "..", features = ["testing-utils"] }
+pallet-staking-reward-curve = { version = "2.0.0",  path = "../reward-curve" }
+pallet-session = { version = "2.0.0", path = "../../session" }
+pallet-indices = { version = "2.0.0", path = "../../indices" }
+pallet-balances = { version = "2.0.0", path = "../../balances" }
+pallet-timestamp = { version = "2.0.0", path = "../../timestamp" }
+frame-system = { version = "2.0.0", path = "../../system" }
+frame-support = { version = "2.0.0", path = "../../support" }
+sp-std = { version = "2.0.0", path = "../../../primitives/std" }
+sp-io ={ version = "2.0.0", path = "../../../primitives/io" }
+sp-core = { version = "2.0.0", path = "../../../primitives/core" }
+sp-phragmen = { version = "2.0.0", path = "../../../primitives/phragmen" }
+sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+# honggfuzz = "0.5"
+honggfuzz = { path = "../../../../honggfuzz-rs"}
+rand = "0.7.3"
+
+[workspace]
+
+[[bin]]
+name = "submit_solution"
+path = "src/submit_solution.rs"
+
