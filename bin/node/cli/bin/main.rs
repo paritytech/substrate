@@ -18,8 +18,6 @@
 
 #![warn(missing_docs)]
 
-use sc_cli;
-
 fn main() -> sc_cli::Result<()> {
 	let version = sc_cli::VersionInfo {
 		name: "Substrate Node",
