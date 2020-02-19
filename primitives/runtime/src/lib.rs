@@ -685,19 +685,6 @@ pub fn print(print: impl traits::Printable) {
 	print.print();
 }
 
-/// An alphabet of possible parameters to use for benchmarking.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
-#[allow(missing_docs)]
-#[allow(non_camel_case_types)]
-pub enum BenchmarkParameter {
-	a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z,
-}
-
-/// Results from running benchmarks on a FRAME pallet.
-/// Contains duration of the function call in nanoseconds along with the benchmark parameters
-/// used for that benchmark result.
-pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128);
-
 #[cfg(test)]
 mod tests {
 	use super::*;

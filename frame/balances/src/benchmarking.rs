@@ -20,8 +20,10 @@ use super::*;
 
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter};
-use sp_runtime::traits::{Bounded, Benchmarking, BenchmarkingSetup, Dispatchable};
+use frame_benchmarking::{
+	BenchmarkResults, BenchmarkParameter, Benchmarking, BenchmarkingSetup, benchmarking,
+};
+use sp_runtime::traits::{Bounded, Dispatchable};
 
 use crate::Module as Balances;
 
@@ -271,8 +273,8 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		};
 
 		// Warm up the DB
-		sp_io::benchmarking::commit_db();
-		sp_io::benchmarking::wipe_db();
+		benchmarking::commit_db();
+		benchmarking::wipe_db();
 
 		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
 		// results go here
@@ -298,11 +300,11 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
 					// Commit the externalities to the database, flushing the DB cache.
 					// This will enable worst case scenario for reading from the database.
-					sp_io::benchmarking::commit_db();
+					benchmarking::commit_db();
 					// Run the benchmark.
-					let start = sp_io::benchmarking::current_time();
+					let start = benchmarking::current_time();
 					call.dispatch(caller.clone().into())?;
-					let finish = sp_io::benchmarking::current_time();
+					let finish = benchmarking::current_time();
 					let elapsed = finish - start;
 					sp_std::if_std!{
 						if let RawOrigin::Signed(who) = caller.clone() {
@@ -312,7 +314,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					}
 					results.push((c.clone(), elapsed));
 					// Wipe the DB back to the genesis state.
-					sp_io::benchmarking::wipe_db();
+					benchmarking::wipe_db();
 				}
 			}
 		}

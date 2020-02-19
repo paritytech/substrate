@@ -195,7 +195,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 				inherent_data
 			)?
 		{
-			block_builder.push(extrinsic)?;
+			block_builder.push_trusted(extrinsic)?;
 		}
 
 		// proceed with transactions
@@ -218,7 +218,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 			let pending_tx_data = pending_tx.data().clone();
 			let pending_tx_hash = pending_tx.hash().clone();
 			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
-			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
+			match sc_block_builder::BlockBuilder::push_trusted(&mut block_builder, pending_tx_data) {
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}

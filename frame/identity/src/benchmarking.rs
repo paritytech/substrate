@@ -18,11 +18,13 @@
 
 use super::*;
 
-use sp_io::hashing::blake2_256;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter, selected_benchmark};
-use sp_runtime::traits::{Bounded, Benchmarking, BenchmarkingSetup, Dispatchable};
-use frame_support::benchmarks;
 use frame_system::RawOrigin;
+use sp_io::hashing::blake2_256;
+use frame_benchmarking::{
+	BenchmarkResults, BenchmarkParameter, benchmarking, Benchmarking,
+	BenchmarkingSetup, benchmarks,
+};
+use sp_runtime::traits::{Bounded, Dispatchable};
 
 use crate::Module as Identity;
 
@@ -91,15 +93,15 @@ fn create_identity_info<T: Trait>(num_fields: u32) -> IdentityInfo {
 benchmarks! {
 	// These are the common parameters along with their instancing.
 	_ {
-		let r in 1 .. MAX_REGISTRARS => benchmarking::add_registrars::<T>(r)?;
+		let r in 1 .. MAX_REGISTRARS => add_registrars::<T>(r)?;
 		let s in 1 .. T::MaxSubAccounts::get() => {
 			// Give them s many sub accounts
 			let caller = account::<T>("caller", 0);
-			let _ = benchmarking::add_sub_accounts::<T>(caller, s)?;
+			let _ = add_sub_accounts::<T>(caller, s)?;
 		};
 		let x in 1 .. T::MaxAdditionalFields::get() => {
 			// Create their main identity with x additional fields
-			let info = benchmarking::create_identity_info::<T>(x);
+			let info = create_identity_info::<T>(x);
 			let caller = account::<T>("caller", 0);
 			let caller_origin = <T as frame_system::Trait>::Origin::from(RawOrigin::Signed(caller));
 			Identity::<T>::set_identity(caller_origin, info)?;
@@ -123,7 +125,7 @@ benchmarks! {
 			let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 			// Add an initial identity
-			let initial_info = benchmarking::create_identity_info::<T>(1);
+			let initial_info = create_identity_info::<T>(1);
 			Identity::<T>::set_identity(caller_origin.clone(), initial_info)?;
 
 			// User requests judgement from all the registrars, and they approve
@@ -140,7 +142,7 @@ benchmarks! {
 		};
 	}: _(
 		RawOrigin::Signed(caller),
-		benchmarking::create_identity_info::<T>(x)
+		create_identity_info::<T>(x)
 	)
 
 	set_subs {
@@ -151,7 +153,7 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		// Create their main identity
-		let info = benchmarking::create_identity_info::<T>(1);
+		let info = create_identity_info::<T>(1);
 		Identity::<T>::set_identity(caller_origin, info)?;
 	}: _(RawOrigin::Signed(caller), {
 		let mut subs = Module::<T>::subs(&caller);
@@ -246,7 +248,7 @@ benchmarks! {
 		let r in ...;
 		// For this x, it's the user identity that gts the fields, not the caller.
 		let x in _ .. _ => {
-			let info = benchmarking::create_identity_info::<T>(x);
+			let info = create_identity_info::<T>(x);
 			Identity::<T>::set_identity(user_origin.clone(), info)?;
 		};
 
