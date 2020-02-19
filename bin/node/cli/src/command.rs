@@ -46,11 +46,17 @@ where
 			cmd.update_config(&mut config, load_spec, &version)?;
 
 			let client = sc_service::new_full_client::<
-				node_runtime::Block,node_runtime::RuntimeApi, node_executor::Executor, _, _,
+				node_runtime::Block, node_runtime::RuntimeApi, node_executor::Executor, _, _,
 			>(&config)?;
 			let inspect = node_inspect::Inspector::<node_runtime::Block>::new(client);
 
 			cmd.run(inspect)
+		},
+		Some(Subcommand::Benchmark(cmd)) => {
+			cmd.init(&version)?;
+			cmd.update_config(&mut config, load_spec, &version)?;
+
+			cmd.run::<_, _, node_runtime::Block, node_executor::Executor>(config)
 		},
 		Some(Subcommand::Factory(cli_args)) => {
 			cli_args.shared_params.init(&version)?;
