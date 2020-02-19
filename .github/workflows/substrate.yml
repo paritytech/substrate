@@ -13,9 +13,12 @@ jobs:
     steps:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
       - name: Checkout sources
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
         with:
-          submodules: recursive
+          fetch-depth: 50
+      - name: Checkout submodules
+        shell: bash
+        run: git submodule update --init --recursive
       - name: Prepare for restoring caches
         run: |
           rm -rf /home/runner/.rustup
@@ -85,7 +88,7 @@ jobs:
         run: cargo install --root tools --force cargo-audit cargo-web wasm-pack
   # verify that Cargo.lock passes audit
   linux-cargo-audit:
-    name: Run cargo audit
+    name: Cargo audit
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
@@ -93,7 +96,13 @@ jobs:
       RUSTC_WRAPPER: sccache
     steps:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
-      - uses: actions/checkout@v1
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - name: Checkout submodules
+        shell: bash
+        run: git submodule update --init --recursive
       - name: Restore /home/runner/tools/bin
         uses: actions/cache@v1.1.2
         with:
@@ -102,17 +111,22 @@ jobs:
       - run: cargo-audit audit
 
   linux-cargo-check-benches:
-    name: Run cargo check benches
+    name: Cargo check benches
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
-      RUSTFLAGS: -Dwarnings
       RUST_TOOLCHAIN: 1.41.0
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
-      - uses: actions/checkout@v1
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - name: Checkout submodules
+        shell: bash
+        run: git submodule update --init --recursive
       - name: Prepare for restoring caches
         run: |
           rm -rf /home/runner/.rustup
@@ -156,17 +170,22 @@ jobs:
           args: --benches --all
 
   linux-cargo-check-subkey:
-    name: Run Cargo check subkey
+    name: Cargo check subkey
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
-      RUSTFLAGS: -Dwarnings
       RUST_TOOLCHAIN: 1.41.0
       RUSTC_WRAPPER: sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
-      - uses: actions/checkout@v1
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - name: Checkout submodules
+        shell: bash
+        run: git submodule update --init --recursive
       - name: Prepare for restoring caches
         run: |
           rm -rf /home/runner/.rustup
@@ -210,7 +229,7 @@ jobs:
           args: --manifest-path "bin/utils/subkey/Cargo.toml" --release
 
   linux-test-stable:
-    name: Run Test linux stable
+    name: Test linux stable
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
@@ -220,7 +239,13 @@ jobs:
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
-      - uses: actions/checkout@v1
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - name: Checkout submodules
+        shell: bash
+        run: git submodule update --init --recursive
       - name: Prepare for restoring caches
         run: |
           rm -rf /home/runner/.rustup
@@ -264,7 +289,7 @@ jobs:
           args: --all --release --verbose --locked
 
   linux-test-frame-staking:
-    name: Run Test frame staking
+    name: Test frame staking
     needs: [linux-cache-tools]
     runs-on: ubuntu-latest
     env:
@@ -273,7 +298,13 @@ jobs:
       RUSTC_WRAPPER: sccache
     steps:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
-      - uses: actions/checkout@v1
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - name: Checkout submodules
+        shell: bash
+        run: git submodule update --init --recursive
       - name: Prepare for restoring caches
         run: |
           rm -rf /home/runner/.rustup
@@ -315,3 +346,140 @@ jobs:
           command: test
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           args: --manifest-path "./frame/staking/Cargo.toml" --release --verbose --no-default-features --features std
+
+  linux-test-wasmtime:
+    name: Test wasmtime
+    needs: [linux-cache-tools]
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-Cdebug-assertions=y"
+      RUST_TOOLCHAIN: 1.41.0
+      RUSTC_WRAPPER: sccache
+    steps:
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - name: Checkout submodules
+        shell: bash
+        run: git submodule update --init --recursive
+      - name: Prepare for restoring caches
+        run: |
+          rm -rf /home/runner/.rustup
+          rm -rf /home/runner/.cargo/git
+          rm -rf /home/runner/.cargo/registry
+      - name: Restore /home/runner/.rustup
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.rustup
+          key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
+      - name: Restore /home/runner/.cache/sccache
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.cache/sccache
+          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+      - name: Restore /home/runner/tools/bin
+        uses: actions/cache@v1.1.2
+        with:
+          path: tools/bin
+          key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
+      - name: Restore /home/runner/.cargo/git
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.cargo/git
+          key: cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore /home/runner/.cargo/registry
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.cargo/registry
+          key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore ./target
+        uses: actions/cache@v1.1.2
+        with:
+          path: target
+          key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run cargo Test wasmtime
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          args: --manifest-path "./client/executor/Cargo.toml" --release --verbose --features wasmtime
+
+  linux-test-stable-int:
+    name: Test linux stable int
+    needs: [linux-cache-tools]
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-Cdebug-assertions=y"
+      RUST_TOOLCHAIN: 1.41.0
+      RUSTC_WRAPPER: sccache
+      BUILD_DUMMY_WASM_BINARY: 1
+    steps:
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - name: Checkout submodules
+        shell: bash
+        run: git submodule update --init --recursive
+      - name: Prepare for restoring caches
+        run: |
+          rm -rf /home/runner/.rustup
+          rm -rf /home/runner/.cargo/git
+          rm -rf /home/runner/.cargo/registry
+      - name: Restore /home/runner/.rustup
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.rustup
+          key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
+      - name: Restore /home/runner/.cache/sccache
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.cache/sccache
+          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+      - name: Restore /home/runner/tools/bin
+        uses: actions/cache@v1.1.2
+        with:
+          path: tools/bin
+          key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
+      - name: Restore /home/runner/.cargo/git
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.cargo/git
+          key: cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore /home/runner/.cargo/registry
+        uses: actions/cache@v1.1.2
+        with:
+          path: /home/runner/.cargo/registry
+          key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore ./target
+        uses: actions/cache@v1.1.2
+        with:
+          path: target
+          key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run cargo Test linux stable
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          args: -p node-cli --release --verbose --locked -- --ignored
+        env:
+          RUST_LOG: "sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace"
+
+  linux-dependency-rules:
+    name: Test dependency rules
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - name: Checkout submodules
+        shell: bash
+        run: git submodule update --init --recursive
+      - name: Test dependency rules
+        shell: bash
+        run: .maintain/ensure-deps.sh
