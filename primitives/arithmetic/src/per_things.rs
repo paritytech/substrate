@@ -29,7 +29,7 @@ use sp_debug_derive::RuntimeDebug;
 pub trait PerThing:
 	Sized + Saturating + Copy + Default + Eq + PartialEq + Ord + PartialOrd + Bounded + fmt::Debug
 {
-/// The data type used to build this per-thingy.
+	/// The data type used to build this per-thingy.
 	type Inner: BaseArithmetic + Copy + fmt::Debug;
 
 	/// The data type that is used to store values bigger than the maximum of this type. This must

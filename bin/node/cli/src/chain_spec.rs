@@ -73,7 +73,7 @@ fn session_keys(
 	authority_discovery: AuthorityDiscoveryId,
 	staking: StakingId,
 ) -> SessionKeys {
-	SessionKeys { grandpa, babe, im_online, authority_discovery, staking, }
+	SessionKeys { grandpa, babe, im_online, authority_discovery, staking }
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {

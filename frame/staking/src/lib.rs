@@ -330,9 +330,10 @@ pub mod sr25519 {
 		app_crypto!(sr25519, STAKING);
 	}
 
-	/// Staking key-pair for signing.
-	#[cfg(feature = "std")]
-	pub type AuthorityPair = app_sr25519::Pair;
+	sp_application_crypto::with_pair! {
+		/// A staking keypair using sr25519 as its crypto.
+		pub type AuthorityPair = app_sr25519::Pair;
+	}
 
 	/// Staking signature using sr25519 as its crypto.
 	pub type AuthoritySignature = app_sr25519::Signature;
@@ -1133,26 +1134,31 @@ decl_module! {
 		/// m: size of winner committee.
 		/// n: number of nominators.
 		/// d: edge degree aka MAX_NOMINATIONS = 16
+		/// v: number of on-chain validator candidates.
 		///
 		/// NOTE: given a solution which is reduced, we can enable a new check the ensure `|E| < n +
 		/// m`.
 		///
 		/// major steps (all done in `check_and_replace_solution`):
 		///
-		/// TODO: update this one last time at the end.
-		/// - 1 read. `PhragmenScore`. O(1).
-		/// - `m` calls `Validators::contains_key()` for validator veracity.
+		/// - Storage: O(1) read `ElectionStatus`.
+		/// - Storage: O(1) read `PhragmenScore`.
+		/// - Storage: O(1) read `ValidatorCount`.
+		/// - Storage: O(1) length read from `SnapshotValidators`.
+		/// - Storage: O(v) reads of `AccountId`.
+		/// - Memory: O(m) iterations to map winner index to validator id.
+		/// - Storage: O(n) reads `AccountId`.
+		/// - Memory: O(n + m) reads to map index to `AccountId` for un-compact.
+		/// - Storage: O(e) accountid reads from `Nomination` to read correct nominations.
+		/// - Storage: O(e) calls into `slashable_balance_of_extended` to convert ratio to staked.
+		/// - Memory: build_support_map. O(e).
+		/// - Memory: evaluate_support: O(E).
+		/// - Storage: O(e) writes to `QueuedElected`.
+		/// - Storage: O(1) write to `QueuedScore`
 		///
-		/// - decode from compact and convert into assignments: O(E)
-		/// - build_support_map: O(E)
-		/// - evaluate_support: O(E)
-		///
-		/// - `n` reads from [`Bonded`], [`Ledger`] and [`Nominators`], and `n` calls to
-		///   `Validators::contains_key()` to ensure nominator veracity.
-		///
-		/// - O(N * d) to ensure vote veracity.
+		/// The weight of this call is 1/10th of the blocks total weight.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
 		pub fn submit_election_solution(
 			origin,
 			winners: Vec<ValidatorIndex>,
@@ -1170,7 +1176,7 @@ decl_module! {
 
 		/// Unsigned version of `submit_election_solution`. Will only be accepted from those who are
 		/// in the current validator set.
-		// TODO: weight should be noted.
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
 		pub fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<ValidatorIndex>,
@@ -1619,7 +1625,7 @@ impl<T: Trait> Module<T> {
 		era_length >= session_per_era
 	}
 
-	/// Dump the list list of validators and nominators into vectors and keep them on-chain.
+	/// Dump the list of validators and nominators into vectors and keep them on-chain.
 	///
 	/// This data is used to efficiently evaluate election results.
 	fn create_stakers_snapshot() -> bool {
@@ -1815,7 +1821,14 @@ impl<T: Trait> Module<T> {
 		let assignments = compact_assignments.into_assignment(
 			nominator_at,
 			validator_at,
-		).map_err(|_| Error::<T>::PhragmenBogusCompact)?;
+		).map_err(|e| {
+			debug::native::warn!(
+				target: "staking",
+				"un-compacting solution failed due to {:?}",
+				e,
+			);
+			Error::<T>::PhragmenBogusCompact
+		})?;
 
 		// check all nominators actually including the claimed vote. Also check correct self votes.
 		// Note that we assume all validators and nominators in `assignments` are properly bonded,
