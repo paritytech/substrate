@@ -75,7 +75,9 @@ parameter_types! {
 }
 impl pallet_transaction_payment::Trait for Test {
 	type Currency = Module<Test>;
-	type OnTransactionPayment = ();
+	type OnTransactionFeePayment = ();
+	type OnTransactionTipPayment = ();
+	type Author = ();
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = ConvertInto;
