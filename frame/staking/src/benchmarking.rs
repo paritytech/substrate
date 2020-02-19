@@ -327,7 +327,7 @@ impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Submit
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// number of nominators
-			(BenchmarkParameter::N, 100, 5_000),
+			(BenchmarkParameter::N, 100, 10_000),
 			// number of validator candidates
 			(BenchmarkParameter::V, 100, 5000),
 			// num to elect

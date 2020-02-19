@@ -162,7 +162,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 /// the chain.
 ///
 /// This does a lot of stuff; read the inline comments.
-pub(crate) fn prepare_submission<T: Trait>(
+pub fn prepare_submission<T: Trait>(
 	snapshot_nominators: Vec<T::AccountId>,
 	snapshot_validators: Vec<T::AccountId>,
 	assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>>,
