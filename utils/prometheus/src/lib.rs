@@ -120,7 +120,8 @@ mod known_os {
 			.await
 			.map_err(|_| Error::PortInUse(prometheus_addr))?;
 
-		log::info!("Prometheus server started at {}", prometheus_addr);
+		log::info!("Prometheus server started at {}.", prometheus_addr);
+		log::info!("The Grafana endpoint has been removed in favor of the Prometheus endpoint.");
 
 		let service = make_service_fn(move |_| {
 			let registry = registry.clone();
