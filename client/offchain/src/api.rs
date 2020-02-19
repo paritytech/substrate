@@ -24,7 +24,7 @@ use std::{
 use sp_core::offchain::OffchainStorage;
 use futures::Future;
 use log::error;
-use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
+use sc_network::{PeerId, Multiaddr, network_state::NetworkStateInfo};
 use codec::{Encode, Decode};
 use sp_core::offchain::{
 	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
