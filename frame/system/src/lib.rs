@@ -17,14 +17,14 @@
 //! # System Module
 //!
 //! The System module provides low-level access to core types and cross-cutting utilities.
-//! It acts as the base layer for other SRML modules to interact with the Substrate framework components.
+//! It acts as the base layer for other pallets to interact with the Substrate framework components.
 //!
 //! - [`system::Trait`](./trait.Trait.html)
 //!
 //! ## Overview
 //!
 //! The System module defines the core data types used in a Substrate runtime.
-//! It also provides several utility functions (see [`Module`](./struct.Module.html)) for other runtime modules.
+//! It also provides several utility functions (see [`Module`](./struct.Module.html)) for other FRAME pallets.
 //!
 //! In addition, it manages the storage items for extrinsics data, indexes, event records, and digest items,
 //! among other things that support the execution of the current block.
@@ -44,7 +44,7 @@
 //!
 //! ### Signed Extensions
 //!
-//! The system module defines the following extensions:
+//! The System module defines the following extensions:
 //!
 //!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
 //!     exceed the limits.
