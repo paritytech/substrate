@@ -8,6 +8,11 @@ edition = "2018"
 license = "GPL-3.0"
 default-run = "substrate"
 
+[package.metadata.wasm-pack.profile.release]
+# `wasm-opt` has some problems on linux, see
+# https://github.com/rustwasm/wasm-pack/issues/781 etc.
+wasm-opt = false
+
 [badges]
 travis-ci = { repository = "paritytech/substrate", branch = "master" }
 maintenance = { status = "actively-developed" }
