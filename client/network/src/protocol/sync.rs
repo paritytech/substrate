@@ -35,7 +35,7 @@ use sp_consensus::{BlockOrigin, BlockStatus,
 };
 use crate::{
 	config::{Roles, BoxFinalityProofRequestBuilder},
-	message::{self, generic::FinalityProofRequest, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
+	protocol::message::{self, generic::FinalityProofRequest, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
 	FinalityProofResponse},
 };
 use either::Either;
