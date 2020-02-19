@@ -217,6 +217,7 @@ fn should_notify_about_latest_block() {
 	// no more notifications on this channel
 	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
 }
+
 #[test]
 fn should_notify_about_best_block() {
 	let mut core = ::tokio::runtime::Runtime::new().unwrap();
