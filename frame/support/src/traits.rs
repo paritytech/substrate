@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Traits for SRML.
+//! Traits for FRAME.
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 

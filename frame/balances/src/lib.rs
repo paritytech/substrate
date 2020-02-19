@@ -92,7 +92,7 @@
 //!
 //! The following examples show how to use the Balances module in your custom module.
 //!
-//! ### Examples from the SRML
+//! ### Examples from the FRAME
 //!
 //! The Contract module uses the `Currency` trait to handle gas payment, and its types inherit from `Currency`:
 //!
@@ -896,7 +896,7 @@ mod imbalances {
 // This works as long as `increase_total_issuance_by` doesn't use the Imbalance
 // types (basically for charging fees).
 // This should eventually be refactored so that the type item that
-// depends on the Imbalance type (DustRemoval) is placed in its own SRML module.
+// depends on the Imbalance type (DustRemoval) is placed in its own pallet.
 struct ElevatedTrait<T: Subtrait<I>, I: Instance>(T, I);
 impl<T: Subtrait<I>, I: Instance> Clone for ElevatedTrait<T, I> {
 	fn clone(&self) -> Self { unimplemented!() }
@@ -1224,7 +1224,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 			let actual = cmp::min(account.reserved, value);
 			account.reserved -= actual;
 			// defensive only: this can never fail since total issuance which is at least free+reserved
-			// fits into the same datatype.
+			// fits into the same data type.
 			account.free = account.free.saturating_add(actual);
 			value - actual
 		})

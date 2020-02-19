@@ -156,20 +156,9 @@ where
 		best_hash = block.header().hash();
 		best_block_id = BlockId::<Block>::hash(best_hash);
 
-		let import = BlockImportParams {
-			origin: BlockOrigin::File,
-			header: block.header().clone(),
-			post_digests: Vec::new(),
-			body: Some(block.extrinsics().to_vec()),
-			storage_changes: None,
-			finalized: false,
-			justification: None,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import = BlockImportParams::new(BlockOrigin::File, block.header().clone());
+		import.body = Some(block.extrinsics().to_vec());
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 		client.clone().import_block(import, HashMap::new()).expect("Failed to import block");
 
 		info!("Imported block at {}", factory_state.block_number());

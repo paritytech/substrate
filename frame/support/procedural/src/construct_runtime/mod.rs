@@ -217,8 +217,8 @@ fn decl_runtime_metadata<'a>(
 				let filtered_names: Vec<_> = module_declaration
 					.module_parts()
 					.into_iter()
-					.filter(|part| part.name != "Module")
-					.map(|part| part.name.clone())
+					.filter(|part| part.name() != "Module")
+					.map(|part| part.ident())
 					.collect();
 				(module_declaration, filtered_names)
 			})

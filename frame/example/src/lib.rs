@@ -14,25 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! # Example Module
+//! # Example Pallet
 //!
 //! <!-- Original author of paragraph: @gavofyork -->
-//! The Example: A simple example of a runtime module demonstrating
-//! concepts, APIs and structures common to most runtime modules.
+//! The Example: A simple example of a FRAME pallet demonstrating
+//! concepts, APIs and structures common to most FRAME runtimes.
 //!
-//! Run `cargo doc --package pallet-example --open` to view this module's documentation.
+//! Run `cargo doc --package pallet-example --open` to view this pallet's documentation.
 //!
 //! ### Documentation Guidelines:
 //!
 //! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs addressing issues with -->
-//! <!-- label 'S3-SRML' in https://github.com/paritytech/substrate-developer-hub/issues -->
+//! <!-- label 'S3-FRAME' in https://github.com/paritytech/substrate-developer-hub/issues -->
 //! <ul>
 //!     <li>Documentation comments (i.e. <code>/// comment</code>) - should
-//!         accompany module functions and be restricted to the module interface,
-//!         not the internals of the module implementation. Only state inputs,
+//!         accompany pallet functions and be restricted to the pallet interface,
+//!         not the internals of the pallet implementation. Only state inputs,
 //!         outputs, and a brief description that mentions whether calling it
 //!         requires root, but without repeating the source code details.
-//!         Capitalise the first word of each documentation comment and end it with
+//!         Capitalize the first word of each documentation comment and end it with
 //!         a full stop. See
 //!         <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
 //!         target="_blank"> Generic example of annotating source code with documentation comments</a></li>
@@ -50,29 +50,29 @@
 //! ### Documentation Template:<br>
 //!
 //! Copy and paste this template from frame/example/src/lib.rs into file
-//! `frame/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs` of your own custom module and complete it.
+//! `frame/<INSERT_CUSTOM_PALLET_NAME>/src/lib.rs` of your own custom pallet and complete it.
 //! <details><p><pre>
-//! // Add heading with custom module name
+//! // Add heading with custom pallet name
 //!
-//! \# <INSERT_CUSTOM_MODULE_NAME> Module
+//! \# <INSERT_CUSTOM_PALLET_NAME> Pallet
 //!
 //! // Add simple description
 //!
-//! // Include the following links that shows what trait needs to be implemented to use the module
+//! // Include the following links that shows what trait needs to be implemented to use the pallet
 //! // and the supported dispatchables that are documented in the Call enum.
 //!
-//! - \[`<INSERT_CUSTOM_MODULE_NAME>::Trait`](./trait.Trait.html)
+//! - \[`<INSERT_CUSTOM_PALLET_NAME>::Trait`](./trait.Trait.html)
 //! - \[`Call`](./enum.Call.html)
 //! - \[`Module`](./struct.Module.html)
 //!
 //! \## Overview
 //!
 //! <!-- Original author of paragraph: Various. See https://github.com/paritytech/substrate-developer-hub/issues/44 -->
-//! // Short description of module purpose.
+//! // Short description of pallet's purpose.
 //! // Links to Traits that should be implemented.
-//! // What this module is for.
-//! // What functionality the module provides.
-//! // When to use the module (use case examples).
+//! // What this pallet is for.
+//! // What functionality the pallet provides.
+//! // When to use the pallet (use case examples).
 //! // How it is used.
 //! // Inputs it uses and the source of each input.
 //! // Outputs it produces.
@@ -82,18 +82,18 @@
 //!
 //! \## Terminology
 //!
-//! // Add terminology used in the custom module. Include concepts, storage items, or actions that you think
-//! // deserve to be noted to give context to the rest of the documentation or module usage. The author needs to
+//! // Add terminology used in the custom pallet. Include concepts, storage items, or actions that you think
+//! // deserve to be noted to give context to the rest of the documentation or pallet usage. The author needs to
 //! // use some judgment about what is included. We don't want a list of every storage item nor types - the user
 //! // can go to the code for that. For example, "transfer fee" is obvious and should not be included, but
-//! // "free balance" and "reserved balance" should be noted to give context to the module.
+//! // "free balance" and "reserved balance" should be noted to give context to the pallet.
 //! // Please do not link to outside resources. The reference docs should be the ultimate source of truth.
 //!
 //! <!-- Original author of heading: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
 //!
 //! \## Goals
 //!
-//! // Add goals that the custom module is designed to achieve.
+//! // Add goals that the custom pallet is designed to achieve.
 //!
 //! <!-- Original author of heading: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
 //!
@@ -103,14 +103,14 @@
 //!
 //! \#### <INSERT_SCENARIO_NAME>
 //!
-//! // Describe requirements prior to interacting with the custom module.
-//! // Describe the process of interacting with the custom module for this scenario and public API functions used.
+//! // Describe requirements prior to interacting with the custom pallet.
+//! // Describe the process of interacting with the custom pallet for this scenario and public API functions used.
 //!
 //! \## Interface
 //!
 //! \### Supported Origins
 //!
-//! // What origins are used and supported in this module (root, signed, none)
+//! // What origins are used and supported in this pallet (root, signed, none)
 //! // i.e. root when <code>\`ensure_root\`</code> used
 //! // i.e. none when <code>\`ensure_none\`</code> used
 //! // i.e. signed when <code>\`ensure_signed\`</code> used
@@ -145,14 +145,14 @@
 //!
 //! <!-- Original author of paragraph: @joepetrowski -->
 //!
-//! // A link to the rustdoc and any notes about usage in the module, not for specific functions.
-//! // For example, in the balances module: "Note that when using the publicly exposed functions,
+//! // A link to the rustdoc and any notes about usage in the pallet, not for specific functions.
+//! // For example, in the Balances Pallet: "Note that when using the publicly exposed functions,
 //! // you (the runtime developer) are responsible for implementing any necessary checks
 //! // (e.g. that the sender is the signer) before calling a function that will affect storage."
 //!
 //! <!-- Original author of paragraph: @AmarRSingh -->
 //!
-//! // It is up to the writer of the respective module (with respect to how much information to provide).
+//! // It is up to the writer of the respective pallet (with respect to how much information to provide).
 //!
 //! \#### Public Inspection functions - Immutable (getters)
 //!
@@ -179,19 +179,19 @@
 //!
 //! \### Storage Items
 //!
-//! // Explain any storage items included in this module
+//! // Explain any storage items included in this pallet
 //!
 //! \### Digest Items
 //!
-//! // Explain any digest items included in this module
+//! // Explain any digest items included in this pallet
 //!
 //! \### Inherent Data
 //!
-//! // Explain what inherent data (if any) is defined in the module and any other related types
+//! // Explain what inherent data (if any) is defined in the pallet and any other related types
 //!
 //! \### Events:
 //!
-//! // Insert events for this module if any
+//! // Insert events for this pallet if any
 //!
 //! \### Errors:
 //!
@@ -200,24 +200,24 @@
 //! \## Usage
 //!
 //! // Insert 2-3 examples of usage and code snippets that show how to
-//! // use <INSERT_CUSTOM_MODULE_NAME> module in a custom module.
+//! // use <INSERT_CUSTOM_PALLET_NAME> Pallet in a custom pallet.
 //!
 //! \### Prerequisites
 //!
-//! // Show how to include necessary imports for <INSERT_CUSTOM_MODULE_NAME> and derive
-//! // your module configuration trait with the `INSERT_CUSTOM_MODULE_NAME` trait.
+//! // Show how to include necessary imports for <INSERT_CUSTOM_PALLET_NAME> and derive
+//! // your pallet configuration trait with the `INSERT_CUSTOM_PALLET_NAME` trait.
 //!
 //! \```rust
-//! use <INSERT_CUSTOM_MODULE_NAME>;
+//! use <INSERT_CUSTOM_PALLET_NAME>;
 //!
-//! pub trait Trait: <INSERT_CUSTOM_MODULE_NAME>::Trait { }
+//! pub trait Trait: <INSERT_CUSTOM_PALLET_NAME>::Trait { }
 //! \```
 //!
 //! \### Simple Code Snippet
 //!
-//! // Show a simple example (e.g. how to query a public getter function of <INSERT_CUSTOM_MODULE_NAME>)
+//! // Show a simple example (e.g. how to query a public getter function of <INSERT_CUSTOM_PALLET_NAME>)
 //!
-//! \### Example from SRML
+//! \### Example from FRAME
 //!
 //! // Show a usage example in an actual runtime
 //!
@@ -231,16 +231,16 @@
 //!
 //! \## Dependencies
 //!
-//! // Dependencies on other SRML modules and the genesis config should be mentioned,
+//! // Dependencies on other FRAME pallets and the genesis config should be mentioned,
 //! // but not the Rust Standard Library.
-//! // Genesis configuration modifications that may be made to incorporate this module
-//! // Interaction with other modules
+//! // Genesis configuration modifications that may be made to incorporate this pallet
+//! // Interaction with other pallets
 //!
 //! <!-- Original author of heading: @AmarRSingh -->
 //!
-//! \## Related Modules
+//! \## Related Pallets
 //!
-//! // Interaction with other modules in the form of a bullet point list
+//! // Interaction with other pallets in the form of a bullet point list
 //!
 //! \## References
 //!
@@ -307,11 +307,11 @@ impl<T: pallet_balances::Trait> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy<
 	}
 }
 
-/// A type alias for the balance type from this module's point of view.
+/// A type alias for the balance type from this pallet's point of view.
 type BalanceOf<T> = <T as pallet_balances::Trait>::Balance;
 
-/// Our module's configuration trait. All our types and constants go in here. If the
-/// module is dependent on specific other modules, then their configuration traits
+/// Our pallet's configuration trait. All our types and constants go in here. If the
+/// pallet is dependent on specific other pallets, then their configuration traits
 /// should be added to our implied traits list.
 ///
 /// `frame_system::Trait` should always be included in our implied traits.
@@ -321,7 +321,7 @@ pub trait Trait: pallet_balances::Trait {
 }
 
 decl_storage! {
-	// A macro for the Storage trait, and its implementation, for this module.
+	// A macro for the Storage trait, and its implementation, for this pallet.
 	// This allows for type-safe usage of the Substrate storage database, so you can
 	// keep things around between blocks.
 	trait Store for Module<T: Trait> as Example {
@@ -345,7 +345,7 @@ decl_storage! {
 		// `frame_support::StorageValue`. For map items, you'll get a type which
 		// implements `frame_support::StorageMap`.
 		//
-		// If they have a getter (`get(getter_name)`), then your module will come
+		// If they have a getter (`get(getter_name)`), then your pallet will come
 		// equipped with `fn getter_name() -> Type` for basic value items or
 		// `fn getter_name(key: KeyType) -> ValueType` for map items.
 		Dummy get(fn dummy) config(): Option<T::Balance>;
@@ -383,7 +383,7 @@ decl_event!(
 // - Unsigned calls that can be of two kinds:
 //   * "Inherent extrinsics" that are opinions generally held by the block
 //     authors that build child blocks.
-//   * Unsigned Transactions that are of intrinsic recognisable utility to the
+//   * Unsigned Transactions that are of intrinsic recognizable utility to the
 //     network, and are validated by the runtime.
 //
 // Information about where this dispatch initiated from is provided as the first argument
@@ -394,7 +394,7 @@ decl_event!(
 // The `Result` is required as part of the syntax (and expands to the conventional dispatch
 // result of `Result<(), &'static str>`).
 //
-// When you come to `impl` them later in the module, you must specify the full type for `origin`:
+// When you come to `impl` them later in the pallet, you must specify the full type for `origin`:
 //
 // `fn foo(origin: T::Origin, bar: Bar, baz: Baz) { ... }`
 //
@@ -406,13 +406,13 @@ decl_event!(
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Deposit one of this module's events by using the default implementation.
+		/// Deposit one of this pallet's events by using the default implementation.
 		/// It is also possible to provide a custom implementation.
 		/// For non-generic events, the generic parameter just needs to be dropped, so that it
 		/// looks like: `fn deposit_event() = default;`.
 		fn deposit_event() = default;
 		/// This is your public interface. Be extremely careful.
-		/// This is just a simple example of how to interact with the module from the external
+		/// This is just a simple example of how to interact with the pallet from the external
 		/// world.
 		// This just increases the value of `Dummy` by `increase_by`.
 		//
@@ -434,7 +434,7 @@ decl_module! {
 		// If you can't be certain that the operation will succeed without substantial computation
 		// then you have a classic blockchain attack scenario. The normal way of managing this is
 		// to attach a bond to the operation. As the first major alteration of storage, reserve
-		// some value from the sender's account (`Balances` module has a `reserve` function for
+		// some value from the sender's account (`Balances` Pallet has a `reserve` function for
 		// exactly this scenario). This amount should be enough to cover any costs of the
 		// substantial execution in case it turns out that you can't proceed with the operation.
 		//
@@ -450,7 +450,7 @@ decl_module! {
 		// If you don't respect these rules, it is likely that your chain will be attackable.
 		//
 		// Each transaction can define an optional `#[weight]` attribute to convey a set of static
-		// information about its dispatch. The `system` and `executive` module then use this
+		// information about its dispatch. FRAME System and FRAME Executive pallet then use this
 		// information to properly execute the transaction, whilst keeping the total load of the
 		// chain in a moderate rate.
 		//
@@ -535,11 +535,11 @@ decl_module! {
 	}
 }
 
-// The main implementation block for the module. Functions here fall into three broad
+// The main implementation block for the pallet. Functions here fall into three broad
 // categories:
 // - Public interface. These are functions that are `pub` and generally fall into inspector
 // functions that do not write to storage and operation functions that do.
-// - Private functions. These are your usual private utilities unavailable to other modules.
+// - Private functions. These are your usual private utilities unavailable to other pallets.
 impl<T: Trait> Module<T> {
 	// Add public immutables and private mutables.
 	#[allow(dead_code)]
@@ -558,10 +558,10 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-// Similar to other SRML modules, your module can also define a signed extension and perform some
+// Similar to other FRAME pallets, your pallet can also define a signed extension and perform some
 // checks and [pre/post]processing [before/after] the transaction. A signed extension can be any
 // decodable type that implements `SignedExtension`. See the trait definition for the full list of
-// bounds. As a convention, you can follow this approach to create an extension for your module:
+// bounds. As a convention, you can follow this approach to create an extension for your pallet:
 //   - If the extension does not carry any data, then use a tuple struct with just a `marker`
 //     (needed for the compiler to accept `T: Trait`) will suffice.
 //   - Otherwise, create a tuple struct which contains the external data. Of course, for the entire
@@ -569,12 +569,12 @@ impl<T: Trait> Module<T> {
 //
 // Note that a signed extension can also indicate that a particular data must be present in the
 // _signing payload_ of a transaction by providing an implementation for the `additional_signed`
-// method. This example will not cover this type of extension. See `CheckRuntime` in system module
+// method. This example will not cover this type of extension. See `CheckRuntime` in FRAME System
 // for an example.
 //
-// Using the extension, you can add some hooks to the lifecycle of each transaction. Note that by
+// Using the extension, you can add some hooks to the life cycle of each transaction. Note that by
 // default, an extension is applied to all `Call` functions (i.e. all transactions). the `Call` enum
-// variant is given to each function of `SignedExtension`. Hence, you can filter based on module or
+// variant is given to each function of `SignedExtension`. Hence, you can filter based on pallet or
 // a particular call if needed.
 //
 // Some extra information, such as encoded length, some static dispatch info like weight and the
@@ -606,9 +606,9 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
 	// Note that this could also be assigned to the top-level call enum. It is passed into the
-	// balances module directly and since `Trait: pallet_balances::Trait`, you could also use `T::Call`.
+	// Balances Pallet directly and since `Trait: pallet_balances::Trait`, you could also use `T::Call`.
 	// In that case, you would have had access to all call variants and could match on variants from
-	// other modules.
+	// other pallets.
 	type Call = Call<T>;
 	type AdditionalSigned = ();
 	type DispatchInfo = DispatchInfo;
@@ -660,9 +660,9 @@ mod tests {
 		pub enum Origin for Test  where system = frame_system {}
 	}
 
-	// For testing the module, we construct most of a mock runtime. This means
+	// For testing the pallet, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of modules we want to use.
+	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {

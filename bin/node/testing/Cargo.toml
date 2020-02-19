@@ -41,12 +41,11 @@ sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builde
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 log = "0.4.8"
+tempdir = "0.3"
+fs_extra = "1"
 
 [dev-dependencies]
 criterion = "0.3.0"
-tempdir = "0.3"
-fs_extra = "1"
-hex-literal = "0.2.1"
 sc-cli = { version = "0.8.0", path = "../../../client/cli" }
 sc-service = { version = "0.8.0", path = "../../../client/service", features = ["rocksdb"] }
 

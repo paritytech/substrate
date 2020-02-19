@@ -81,7 +81,7 @@ mod tests;
 
 // for B blocks following, there's a counting period whereby each of the candidates that believe
 // they fall in the top K+C voted can present themselves. they get the total stake
-// recorded (based on the snapshot); an ordered list is maintained (the leaderboard). Noone may
+// recorded (based on the snapshot); an ordered list is maintained (the leaderboard). No one may
 // present themselves that, if elected, would result in being included twice in the collective
 // (important since existing members will have their approval votes as it may be that they
 // don't get removed), nor if existing presenters would mean they're not in the top K+C.

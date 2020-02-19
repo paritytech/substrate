@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Collective system: Members of a set of account IDs can make their collective feelings known
-//! through dispatched calls from one of two specialised origins.
+//! through dispatched calls from one of two specialized origins.
 //!
 //! The membership can be provided in one of two ways: either directly, using the Root-dispatchable
 //! function `set_members`, or indirectly, through implementing the `ChangeMembers`

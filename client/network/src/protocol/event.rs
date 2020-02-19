@@ -36,7 +36,7 @@ pub enum DhtEvent {
 	/// The record has been successfully inserted into the DHT.
 	ValuePut(Key),
 
-	/// An error has occured while putting a record into the DHT.
+	/// An error has occurred while putting a record into the DHT.
 	ValuePutFailed(Key),
 }
 
