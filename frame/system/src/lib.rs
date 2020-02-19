@@ -401,7 +401,7 @@ decl_event!(
 		/// A new account was created.
 		NewAccount(AccountId),
 		/// An account was reaped.
-		ReapedAccount(AccountId),
+		KilledAccount(AccountId),
 	}
 );
 
@@ -975,7 +975,25 @@ impl<T: Trait> Module<T> {
 	/// Do anything that needs to be done after an account has been killed.
 	fn on_killed_account(who: T::AccountId) {
 		T::OnKilledAccount::on_killed_account(&who);
-		Self::deposit_event(RawEvent::ReapedAccount(who));
+		Self::deposit_event(RawEvent::KilledAccount(who));
+	}
+
+	/// Remove an account from storage. This should only be done when its refs are zero or you'll
+	/// get storage leaks in other modules. Nonetheless we assume that the calling logic knows best.
+	///
+	/// This is a no-op if the account doesn't already exist. If it does then it will ensure
+	/// cleanups (those in `on_killed_account`) take place.
+	fn kill_account(who: &T::AccountId) {
+		if Account::<T>::contains_key(who) {
+			let account = Account::<T>::take(who);
+			if account.refcount > 0 {
+				debug::debug!(
+					target: "system",
+					"WARNING: Referenced account deleted. This is probably a bug."
+				);
+			}
+			Module::<T>::on_killed_account(who.clone());
+		}
 	}
 }
 
@@ -991,16 +1009,7 @@ impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 pub struct CallKillAccount<T>(PhantomData<T>);
 impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
-		if Account::<T>::contains_key(who) {
-			let account = Account::<T>::take(who);
-			if account.refcount > 0 {
-				debug::debug!(
-					target: "system",
-					"WARNING: Referenced account deleted. This is probably a bug."
-				);
-			}
-			Module::<T>::on_killed_account(who.clone());
-		}
+		Module::<T>::kill_account(who)
 	}
 }
 
@@ -1022,16 +1031,7 @@ impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 		}
 	}
 	fn remove(k: &T::AccountId) {
-		if Account::<T>::contains_key(k) {
-			let account = Account::<T>::take(k);
-			if account.refcount > 0 {
-				debug::debug!(
-					target: "system",
-					"WARNING: Referenced account deleted. This is probably a bug."
-				);
-			}
-			Self::on_killed_account(k.clone());
-		}
+		Self::kill_account(k)
 	}
 	fn mutate<R>(k: &T::AccountId, f: impl FnOnce(&mut T::AccountData) -> R) -> R {
 		let existed = Account::<T>::contains_key(k);
@@ -1505,9 +1505,9 @@ mod tests {
 		pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	}
 
-	struct RecordKilled;
-	impl OnKilledAccount for RecordKilled {
-		fn on_killed_account(who: u64) { KILLED.with(|r| *r.borrow() = r) }
+	pub struct RecordKilled;
+	impl OnKilledAccount<u64> for RecordKilled {
+		fn on_killed_account(who: &u64) { KILLED.with(|r| r.borrow_mut().push(*who)) }
 	}
 
 	impl Trait for Test {
@@ -1529,7 +1529,7 @@ mod tests {
 		type ModuleToIndex = ();
 		type AccountData = u32;
 		type OnNewAccount = ();
-		type OnKilledAccount = ();
+		type OnKilledAccount = RecordKilled;
 	}
 
 	impl From<Event<Test>> for u16 {
@@ -1568,12 +1568,23 @@ mod tests {
 
 	#[test]
 	fn stored_map_works() {
-		System::insert(&0, 42);
-		System::inc_ref(&0);
-		System::insert(&0, 69);
-		assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![]);
-		System::dec_ref(&0);
-		assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0]);
+		new_test_ext().execute_with(|| {
+			System::insert(&0, 42);
+			assert!(System::allow_death(&0));
+
+			System::inc_ref(&0);
+			assert!(!System::allow_death(&0));
+
+			System::insert(&0, 69);
+			assert!(!System::allow_death(&0));
+
+			System::dec_ref(&0);
+			assert!(System::allow_death(&0));
+
+			assert!(KILLED.with(|r| r.borrow().is_empty()));
+			System::kill_account(&0);
+			assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0u64]);
+		});
 	}
 
 	#[test]
@@ -1728,7 +1739,7 @@ mod tests {
 	#[test]
 	fn signed_ext_check_nonce_works() {
 		new_test_ext().execute_with(|| {
-			Account::<Test>::insert(1, AccountInfo { nonce: 1, refcount: 0, data: () });
+			Account::<Test>::insert(1, AccountInfo { nonce: 1, refcount: 0, data: 0 });
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale

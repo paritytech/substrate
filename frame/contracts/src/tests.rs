@@ -1606,7 +1606,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::system(system::RawEvent::ReapedAccount(DJANGO)),
+					event: MetaEvent::system(system::RawEvent::KilledAccount(DJANGO)),
 					topics: vec![],
 				},
 				EventRecord {
