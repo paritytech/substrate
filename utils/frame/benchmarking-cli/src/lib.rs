@@ -24,6 +24,10 @@ use std::fmt::Debug;
 use codec::{Encode, Decode};
 use frame_benchmarking::BenchmarkResults;
 
+mod analysis;
+
+use crate::analysis::Analysis;
+
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt, Clone)]
 pub struct BenchmarkCmd {
@@ -116,8 +120,8 @@ impl BenchmarkCmd {
 			&(&self.pallet, &self.extrinsic, self.steps, self.repeat).encode(),
 			Default::default(),
 		)
-		.execute(strategy.into())
-		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
+			.execute(strategy.into())
+			.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 		let results = <Option<Vec<BenchmarkResults>> as Decode>::decode(&mut &result[..])
 			.unwrap_or(None);
 
@@ -130,6 +134,11 @@ impl BenchmarkCmd {
 				self.steps,
 				self.repeat,
 			);
+
+			// Conduct analysis.
+			if let Some(analysis) = Analysis::from_results(&results) {
+				println!("Analysis: {}", analysis);
+			}
 
 			// Print the table header
 			results[0].0.iter().for_each(|param| print!("{:?},", param.0));
