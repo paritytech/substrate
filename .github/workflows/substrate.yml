@@ -141,7 +141,7 @@ jobs:
         uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
-          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+          key: sccache-[linux-cargo-check-benches]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
       - name: Restore /home/runner/tools/bin
         uses: actions/cache@v1.1.2
         with:
@@ -200,7 +200,7 @@ jobs:
         uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
-          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+          key: sccache-[linux-cargo-check-subkey]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
       - name: Restore /home/runner/tools/bin
         uses: actions/cache@v1.1.2
         with:
@@ -260,7 +260,7 @@ jobs:
         uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
-          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+          key: sccache-[linux-test-stable]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
       - name: Restore /home/runner/tools/bin
         uses: actions/cache@v1.1.2
         with:
@@ -320,7 +320,7 @@ jobs:
         uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
-          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+          key: sccache-[linux-test-frame-staking]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
       - name: Restore /home/runner/tools/bin
         uses: actions/cache@v1.1.2
         with:
@@ -380,7 +380,7 @@ jobs:
         uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
-          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+          key: sccache-[linux-test-wasmtime]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
       - name: Restore /home/runner/tools/bin
         uses: actions/cache@v1.1.2
         with:
@@ -440,7 +440,7 @@ jobs:
         uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
-          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+          key: sccache-[linux-test-stable-int]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
       - name: Restore /home/runner/tools/bin
         uses: actions/cache@v1.1.2
         with:
@@ -500,7 +500,7 @@ jobs:
         uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
-          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+          key: sccache-[check-web-wasm]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
       - name: Restore /home/runner/tools/bin
         uses: actions/cache@v1.1.2
         with:
@@ -608,7 +608,7 @@ jobs:
         uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
-          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+          key: sccache-[test-full-crypto-feature]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
       - name: Restore /home/runner/tools/bin
         uses: actions/cache@v1.1.2
         with:
@@ -629,18 +629,18 @@ jobs:
         with:
           path: target
           key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name: Run cargo build crypto core 
+      - name: Run cargo build crypto core
         uses: actions-rs/cargo@v1
         with:
           command: build
           toolchain: nightly
-          args: --target=wasm32-unknown-unknown --manifest-path="./primitives/core/Cargo.toml" --verbose --no-default-features --features full_crypto
+          args: --manifest-path="./primitives/core/Cargo.toml" --verbose --no-default-features --features full_crypto
       - name: Run cargo build crypto apps
         uses: actions-rs/cargo@v1
         with:
           command: build
           toolchain: nightly
-          args: --target=wasm32-unknown-unknown --manifest-path="./primitives/application-crypto/Cargo.toml"--verbose --no-default-features --features full_crypto
+          args: --manifest-path="./primitives/application-crypto/Cargo.toml"--verbose --no-default-features --features full_crypto
 
   linux-dependency-rules:
     name: Test dependency rules
