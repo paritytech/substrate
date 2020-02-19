@@ -54,7 +54,7 @@ pub fn run_command_for_a_while(base_path: &Path, dev: bool) {
 		.unwrap();
 
 	// Let it produce some blocks.
-	thread::sleep(Duration::from_secs(20));
+	thread::sleep(Duration::from_secs(30));
 	assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
 
 	// Stop the process

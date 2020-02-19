@@ -21,8 +21,6 @@ mod import_blocks_cmd;
 mod check_block_cmd;
 mod revert_cmd;
 mod purge_chain_cmd;
-#[cfg(feature = "rocksdb")]
-mod benchmark_cmd;
 
 use std::fmt::Debug;
 use structopt::StructOpt;
