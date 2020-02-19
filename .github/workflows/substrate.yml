@@ -8,7 +8,10 @@ jobs:
     env:
       CC: "clang"
       CXX: "clang++"
+      RUST_TOOLCHAIN: 1.41.0
+      RUSTC_WRAPPER: sccache
     steps:
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -16,125 +19,253 @@ jobs:
       - name: Checkout submodules
         shell: bash
         run: git submodule update --init --recursive
-      - name: Install nightly toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
-      - name: Install wasm in stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          override: true
-      - name: Install wasm in nightly toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          target: wasm32-unknown-unknown
-          override: true
-      - name: Install cargo-audit, cargo-web, wasm-pack
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: cargo-audit cargo-web wasm-pack
-      - name: Install wasm-gc
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          toolchain: nightly
-          args: --git https://github.com/alexcrichton/wasm-gc
-      - name: Cache cargo 
+      - name: Prepare for restoring caches
+        run: |
+          rm -rf /home/runner/.rustup
+          rm -rf /home/runner/.cargo/git
+          rm -rf /home/runner/.cargo/registry
+      - name: Restore /home/runner/tools/bin
+        id: cache-tools-bin
         uses: actions/cache@v1
         with:
-          path: ~/.cargo/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      #- name: Cache cargo registry
-      #  uses: actions/cache@v1
-      #  with:
-      #    path: ~/.cargo/registry
-      #    key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      #- name: Cache cargo index
-      #  uses: actions/cache@v1
-      #  with:
-      #    path: ~/.cargo/git
-      #    key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-      - name: Cache cargo build
+          path: tools/bin
+          key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
+      - name: Install sccache and wasm-pack
+        if: steps.cache-tools-bin.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p tools/bin
+            SCCACHE_LATEST_URL=`curl -sL    https://api.github.com/repos/mozilla/sccache/releases/latest | jq -r '.assets[4].browser_download_url'`
+          WASM_PACK_LATEST_URL=`curl -sL https://api.github.com/repos/rustwasm/wasm-pack/releases/latest | jq -r '.assets[3].browser_download_url'`
+          curl -L   $SCCACHE_LATEST_URL | tar zxf - --overwrite --strip-components=1 -C tools/bin
+          curl -L $WASM_PACK_LATEST_URL | tar zxf - --overwrite --strip-components=1 -C tools/bin
+      # if /home/runner/tools/bin wasn't cached, restore rustup
+      - name: Restore /home/runner/.rustup
+        if: "steps.cache-tools-bin.outputs.cache-hit != 'true'"
+        id: cache-rustup
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.rustup
+          key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
+      # if /home/runner/tools/bin wasn't cached, and rustup isn't cached, install toolchain
+      - name: Install rust & wasm toolchain
+        if: "steps.cache-tools-bin.outputs.cache-hit != 'true'
+          && steps.cache-rustup   .outputs.cache-hit != 'true'"
+        run: |
+          rustup set profile minimal
+          rustup toolchain install $RUST_TOOLCHAIN --component clippy rustfmt
+          rustup toolchain install nightly --component clippy rustfmt
+          rustup target add wasm32-unknown-unknown
+          rustup target add wasm32-unknown-unknown --toolchain nightly
+          cargo +nightly install --git https://github.com/alexcrichton/wasm-gc
+          rm -rf /home/runner/.rustup/toolchains/*/share
+      # if /home/runner/tools/bin wasn't cached, restore sccache cache
+      - name: Restore /home/runner/.cache/sccache
+        if: "steps.cache-tools-bin.outputs.cache-hit != 'true'"
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cache/sccache
+          key: sccache-[linux-cache-tools]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+      # if /home/runner/tools/bin wasn't cached, restore /home/runner/.cargo/git
+      - name: Restore /home/runner/.cargo/git
+        if: "steps.cache-tools-bin.outputs.cache-hit != 'true'"
+        id: cache-cargo-git
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cargo/git
+          key: cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      # if cargo-audit wasn't cached, restore /home/runner/.cargo/registry
+      - name: Restore /home/runner/.cargo/registry
+        id: cache-cargo-registry
+        if: "steps.cache-tools-bin.outputs.cache-hit != 'true'"
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cargo/registry
+          key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run cargo fetch
+        if: " steps.cache-tools-bin     .outputs.cache-hit != 'true'
+          && (steps.cache-cargo-git     .outputs.cache-hit != 'true'
+          ||  steps.cache-cargo-registry.outputs.cache-hit != 'true')"
+        run: cargo fetch
+      - name: Install cargo-audit, cargo-web, wasm-pack
+        if: "steps.cache-tools-bin.outputs.cache-hit != 'true'"
+        run: cargo install --root tools --force cargo-audit cargo-web wasm-pack
+  # verify that Cargo.lock passes audit
+  linux-cargo-audit:
+    name: Run cargo audit
+    needs: [linux-cache-tools]
+    runs-on: ubuntu-latest
+    env:
+      RUST_TOOLCHAIN: 1.41.0
+      RUSTC_WRAPPER: sccache
+    steps:
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - uses: actions/checkout@v1
+      - name: Restore /home/runner/tools/bin
+        uses: actions/cache@v1
+        with:
+          path: tools/bin
+          key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
+      - run: cargo-audit audit
+  linux-cargo-check-benches:
+    name: Run cargo check benches
+    needs: [linux-cache-tools]
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -Dwarnings
+      RUST_TOOLCHAIN: 1.41.0
+      RUSTC_WRAPPER: sccache
+      BUILD_DUMMY_WASM_BINARY: 1
+    steps:
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - uses: actions/checkout@v1
+      - name: Prepare for restoring caches
+        run: |
+          rm -rf /home/runner/.rustup
+          rm -rf /home/runner/.cargo/git
+          rm -rf /home/runner/.cargo/registry
+      - name: Restore /home/runner/.rustup
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.rustup
+          key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
+      - name: Restore /home/runner/.cache/sccache
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cache/sccache
+          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+      - name: Restore /home/runner/tools/bin
+        uses: actions/cache@v1
+        with:
+          path: tools/bin
+          key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
+      - name: Restore /home/runner/.cargo/git
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cargo/git
+          key: cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore /home/runner/.cargo/registry
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cargo/registry
+          key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore ./target
         uses: actions/cache@v1
         with:
           path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-      - name: Cargo audit
-        uses: actions-rs/cargo@v1
-        with:
-          command: audit
-      - name: Cargo check benches
+          key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run cargo check benches
         uses: actions-rs/cargo@v1
         with:
           command: check
           toolchain: nightly
           args: --benches --all
-        env: 
-          BUILD_DUMMY_WASM_BINARY: 1
-      - name: Cargo check subkey
+          
+  linux-cargo-check-subkey:
+    name: Run Cargo check subkey
+    needs: [linux-cache-tools]
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -Dwarnings
+      RUST_TOOLCHAIN: 1.41.0
+      RUSTC_WRAPPER: sccache
+      BUILD_DUMMY_WASM_BINARY: 1
+    steps:
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - uses: actions/checkout@v1
+      - name: Prepare for restoring caches
+        run: |
+          rm -rf /home/runner/.rustup
+          rm -rf /home/runner/.cargo/git
+          rm -rf /home/runner/.cargo/registry
+      - name: Restore /home/runner/.rustup
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.rustup
+          key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
+      - name: Restore /home/runner/.cache/sccache
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cache/sccache
+          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+      - name: Restore /home/runner/tools/bin
+        uses: actions/cache@v1
+        with:
+          path: tools/bin
+          key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
+      - name: Restore /home/runner/.cargo/git
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cargo/git
+          key: cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore /home/runner/.cargo/registry
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cargo/registry
+          key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore ./target
+        uses: actions/cache@v1
+        with:
+          path: target
+          key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run cargo check benches
         uses: actions-rs/cargo@v1
         with:
           command: check
+          toolchain: nightly
           args: --manifest-path "bin/utils/subkey/Cargo.toml" --benches --all
-        env: 
-          BUILD_DUMMY_WASM_BINARY: 1
-      - name: Test linux stable
-        continue-on-error: true
+
+  linux-test-stable:
+    name: Run Test linux stable
+    needs: [linux-cache-tools]
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-Cdebug-assertions=y"
+      RUST_TOOLCHAIN: 1.41.0
+      RUSTC_WRAPPER: sccache
+      BUILD_DUMMY_WASM_BINARY: 1
+    steps:
+      - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
+      - uses: actions/checkout@v1
+      - name: Prepare for restoring caches
+        run: |
+          rm -rf /home/runner/.rustup
+          rm -rf /home/runner/.cargo/git
+          rm -rf /home/runner/.cargo/registry
+      - name: Restore /home/runner/.rustup
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.rustup
+          key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
+      - name: Restore /home/runner/.cache/sccache
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cache/sccache
+          key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
+      - name: Restore /home/runner/tools/bin
+        uses: actions/cache@v1
+        with:
+          path: tools/bin
+          key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
+      - name: Restore /home/runner/.cargo/git
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cargo/git
+          key: cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore /home/runner/.cargo/registry
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/.cargo/registry
+          key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Restore ./target
+        uses: actions/cache@v1
+        with:
+          path: target
+          key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run cargo check benches
         uses: actions-rs/cargo@v1
         with:
           command: test
           toolchain: stable
           args: --all --release --verbose --locked
-        env: 
-          RUSTFLAGS: "-Cdebug-assertions=y"
-      - name: Test frame staking
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --manifest-path "frame/staking/Cargo.toml" --release --verbose --no-default-features --features std
-        env: 
-          RUSTFLAGS: "-Cdebug-assertions=y"
-      - name: Test wasmtime
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --manifest-path "client/executor/Cargo.toml" --release --verbose --features wasmtime
-        env: 
-          RUSTFLAGS: "-Cdebug-assertions=y"
-      - name: Test linux stable int
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: -p node-cli --release --verbose --locked -- --ignored
-      - name: Check wasm crates
-        run: |
-          cargo build --target=wasm32-unknown-unknown -p sp-io && \
-          cargo build --target=wasm32-unknown-unknown -p sp-runtime && \
-          cargo build --target=wasm32-unknown-unknown -p sp-std && \
-          cargo build --target=wasm32-unknown-unknown -p sc-client && \
-          cargo build --target=wasm32-unknown-unknown -p sc-consensus-aura && \
-          cargo build --target=wasm32-unknown-unknown -p sc-consensus-babe && \
-          cargo build --target=wasm32-unknown-unknown -p sp-consensus && \
-          cargo build --target=wasm32-unknown-unknown -p sc-telemetry && \
-          cargo build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
-      - name: Test full crypto feature core
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          toolchain: nightly
-          args: --manifest-path "primitives/core/Cargo.toml" --verbose --no-default-features --features full_crypto
-      - name: Test full crypto feature app
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          toolchain: nightly
-          args: --manifest-path "primitives/application-crypto/Cargo.toml" --verbose --no-default-features --features full_crypto
+        continue-on-error: true
 
-
-        
-      
