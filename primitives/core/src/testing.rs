@@ -42,6 +42,24 @@ impl KeyStore {
 	pub fn new() -> crate::traits::BareCryptoStorePtr {
 		std::sync::Arc::new(parking_lot::RwLock::new(Self::default()))
 	}
+
+	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
+		self.keys.get(&id)
+			.and_then(|inner|
+				inner.get(pub_key.as_slice())
+					.map(|s| sr25519::Pair::from_string(s, None).expect("`sr25519` seed slice is valid"))
+			)
+	}
+
+
+	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
+		self.keys.get(&id)
+			.and_then(|inner|
+				inner.get(pub_key.as_slice())
+					.map(|s| ed25519::Pair::from_string(s, None).expect("`ed25519` seed slice is valid"))
+			)
+	}
+
 }
 
 #[cfg(feature = "std")]
@@ -76,14 +94,6 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		}
 	}
 
-	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
-		self.keys.get(&id)
-			.and_then(|inner|
-				inner.get(pub_key.as_slice())
-					.map(|s| sr25519::Pair::from_string(s, None).expect("`sr25519` seed slice is valid"))
-			)
-	}
-
 	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
 		self.keys.get(&id)
 			.map(|keys|
@@ -112,14 +122,6 @@ impl crate::traits::BareCryptoStore for KeyStore {
 				Ok(pair.public())
 			}
 		}
-	}
-
-	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
-		self.keys.get(&id)
-			.and_then(|inner|
-				inner.get(pub_key.as_slice())
-					.map(|s| ed25519::Pair::from_string(s, None).expect("`ed25519` seed slice is valid"))
-			)
 	}
 
 	fn insert_unknown(&mut self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
