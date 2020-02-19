@@ -23,7 +23,6 @@ parking_lot = "0.10.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
 slog = { version = "2.5.2", features = ["nested-values"] }
-tokio-executor = "0.1.8"
 futures-timer = "3.0.1"
 wasm-timer = "0.2"
 exit-future = "0.2.0"

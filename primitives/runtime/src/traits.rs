@@ -31,7 +31,7 @@ use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
-use crate::generic::{Digest, DigestItem};
+use crate::generic::{Digest, DigestItem, CheckSignature};
 pub use sp_arithmetic::traits::{
 	AtLeast32Bit, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -637,7 +637,7 @@ pub trait Checkable<Context>: Sized {
 	type Checked;
 
 	/// Check self, given an instance of Context.
-	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
+	fn check(self, signature: CheckSignature, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -649,15 +649,15 @@ pub trait BlindCheckable: Sized {
 	type Checked;
 
 	/// Check self.
-	fn check(self) -> Result<Self::Checked, TransactionValidityError>;
+	fn check(self, signature: CheckSignature) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 // Every `BlindCheckable` is also a `StaticCheckable` for arbitrary `Context`.
 impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
 
-	fn check(self, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
-		BlindCheckable::check(self)
+	fn check(self, signature: CheckSignature, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
+		BlindCheckable::check(self, signature)
 	}
 }
 

@@ -63,10 +63,11 @@ use std::{
 	iter,
 	io,
 	sync::Arc,
-	time::{Duration, Instant},
+	time::Duration,
 	task::{Context, Poll}
 };
 use void::Void;
+use wasm_timer::Instant;
 
 /// Configuration options for `LightClientHandler` behaviour.
 #[derive(Debug, Clone)]

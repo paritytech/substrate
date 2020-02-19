@@ -137,7 +137,7 @@ pub enum KeystoreConfig {
 		password: Option<Protected<String>>
 	},
 	/// In-memory keystore. Recommended for in-browser nodes.
-	InMemory
+	InMemory,
 }
 
 impl KeystoreConfig {
