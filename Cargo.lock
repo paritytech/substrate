@@ -1442,6 +1442,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-benchmarking"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
+ "sp-runtime-interface",
+ "sp-std",
+]
+
+[[package]]
+name = "frame-benchmarking-cli"
+version = "2.0.0"
+dependencies = [
+ "frame-benchmarking",
+ "parity-scale-codec",
+ "sc-cli",
+ "sc-client",
+ "sc-client-db",
+ "sc-executor",
+ "sc-service",
+ "sp-runtime",
+ "structopt",
+]
+
+[[package]]
 name = "frame-executive"
 version = "2.0.0"
 dependencies = [
@@ -3369,6 +3394,7 @@ version = "2.0.0"
 dependencies = [
  "assert_cmd",
  "browser-utils",
+ "frame-benchmarking-cli",
  "frame-support",
  "frame-system",
  "futures 0.3.4",
@@ -3437,6 +3463,7 @@ name = "node-executor"
 version = "2.0.0"
 dependencies = [
  "criterion 0.3.1",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "node-primitives",
@@ -3530,6 +3557,7 @@ dependencies = [
 name = "node-runtime"
 version = "2.0.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-executive",
  "frame-support",
  "frame-system",
@@ -3966,6 +3994,7 @@ dependencies = [
 name = "pallet-balances"
 version = "2.0.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-transaction-payment",
@@ -4197,6 +4226,7 @@ name = "pallet-identity"
 version = "2.0.0"
 dependencies = [
  "enumflags2",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
@@ -4433,6 +4463,7 @@ dependencies = [
 name = "pallet-timestamp"
 version = "2.0.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",
