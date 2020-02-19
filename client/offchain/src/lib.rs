@@ -40,7 +40,7 @@ use threadpool::ThreadPool;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use futures::future::Future;
 use log::{debug, warn};
-use sc_network::network_state::NetworkStateInfo;
+use sc_network::NetworkStateInfo;
 use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext};
 use sp_runtime::{generic::BlockId, traits::{self, Header}};
 

@@ -17,11 +17,6 @@
 //! Information about the networking, for diagnostic purposes.
 //!
 //! **Warning**: These APIs are not stable.
-//!
-//! The [`NetworkService`](crate::NetworkService) struct implements the [`NetworkStateInfo`]
-//! trait, which allows one to retreive diagnostic information about the network.
-
-pub use crate::service::NetworkStateInfo;
 
 use libp2p::{core::ConnectedPoint, Multiaddr};
 use serde::{Deserialize, Serialize};

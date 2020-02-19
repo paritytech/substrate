@@ -179,7 +179,7 @@ pub mod config;
 pub mod error;
 pub mod network_state;
 
-pub use service::{NetworkService, NetworkWorker, ExHashT, ReportHandle};
+pub use service::{NetworkService, NetworkStateInfo, NetworkWorker, ExHashT, ReportHandle};
 pub use protocol::{PeerInfo, Context, specialization};
 pub use protocol::event::{Event, DhtEvent};
 pub use protocol::sync::SyncState;
