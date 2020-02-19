@@ -156,8 +156,8 @@ fn should_submit_signed_transaction_on_chain() {
 		let tx = pool_state.write().transactions.pop().unwrap();
 		assert!(pool_state.read().transactions.is_empty());
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
-		assert_eq!(tx.0.unwrap().0, 0);
-		assert_eq!(tx.1, Call::submit_price(15522));
+		assert_eq!(tx.signature.unwrap().0, 0);
+		assert_eq!(tx.call, Call::submit_price(15522));
 	});
 }
 
@@ -178,8 +178,8 @@ fn should_submit_unsigned_transaction_on_chain() {
 		let tx = pool_state.write().transactions.pop().unwrap();
 		assert!(pool_state.read().transactions.is_empty());
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
-		assert_eq!(tx.0, None);
-		assert_eq!(tx.1, Call::submit_price_unsigned(1, 15522));
+		assert_eq!(tx.signature, None);
+		assert_eq!(tx.call, Call::submit_price_unsigned(1, 15522));
 	});
 }
 
