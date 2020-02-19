@@ -796,7 +796,7 @@ impl<T: Trait> Module<T> {
 		//
 		// stay to be inspected by the client and will be cleared by `Self::initialize`.
 
-		<T::er as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
+		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.

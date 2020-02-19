@@ -25,7 +25,7 @@ impl AsyncProfiler {
 	pub fn new(filename: String) -> Self {
 		let (sender, receiver) = crossbeam::unbounded();
 		let join_handle = Some(std::thread::spawn(move || {
-			let mut spans: HashMap<u64, EnterSpan> = HashMap::new();
+			let mut spans: Vec<EnterSpan> = Vec::new();
 			use std::fs::OpenOptions;
 			use std::io::prelude::*;
 			let mut file = OpenOptions::new().write(true)
@@ -35,11 +35,12 @@ impl AsyncProfiler {
 				for span in receiver.recv() {
 					match span {
 						SpanPhase::Enter(s) => {
-							spans.insert(s.id, s);
+							spans.push(s);
 						}
 						SpanPhase::Exit(exit_span) => {
-							let enter_span = spans.remove(&exit_span.id)
-								.expect("You probably passed in the wrong id; the results are invalid");
+							let enter_span = spans.pop()
+								.expect("Shouldn't be possible to exit a span already exited");
+							assert_eq!(enter_span.id, exit_span.id, "Span ids not equal {:?},{:?}", enter_span, exit_span);
 							let time = (exit_span.time - enter_span.time).as_nanos();
 							if let Err(e) = writeln!(file, "{},{},{}",
 								   enter_span.target,
@@ -91,6 +92,7 @@ impl Profiler for AsyncProfiler {
 	}
 }
 
+#[derive(Debug)]
 struct EnterSpan {
 	id: u64,
 	name: String,
@@ -98,6 +100,7 @@ struct EnterSpan {
 	time: Instant,
 }
 
+#[derive(Debug)]
 struct ExitSpan {
 	id: u64,
 	time: Instant,
