@@ -133,6 +133,15 @@ impl Deref for Bytes {
 	fn deref(&self) -> &[u8] { &self.0[..] }
 }
 
+#[cfg(feature = "std")]
+impl sp_std::str::FromStr for Bytes {
+	type Err = bytes::FromHexError;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		bytes::from_hex(s).map(Bytes)
+	}
+}
+
 /// Stores the encoded `RuntimeMetadata` for the native side as opaque type.
 #[derive(Encode, Decode, PartialEq)]
 pub struct OpaqueMetadata(Vec<u8>);
