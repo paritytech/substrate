@@ -303,19 +303,27 @@ impl Store {
 					.map_err(|e| e.to_string())?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			_ => Err(String::from("Key kind invalid"))
+			_ => Err(String::from("Key crypto type is not supported"))
 		}
 	}
 }
 
 impl BareCryptoStore for Store {
-	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
+	fn supported_keys(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>
+	) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
 		let ed25519_existing_keys: Vec<Vec<u8>> = self.public_keys_by_type::<ed25519::Public>(id)
-								.map(|keys| keys.iter().map(|k| k.to_raw_vec()).collect())
-								.map_err(|e| e.to_string())?;
+			.map(|keys| {
+				keys.iter().map(|k| k.to_raw_vec()).collect()
+			})
+			.map_err(|e| e.to_string())?;
 		let sr25519_existing_keys: Vec<Vec<u8>> = self.public_keys_by_type::<sr25519::Public>(id)
-								.map(|keys| keys.iter().map(|k| k.to_raw_vec()).collect())
-								.map_err(|e| e.to_string())?;
+			.map(|keys| {
+				keys.iter().map(|k| k.to_raw_vec()).collect()
+			})
+			.map_err(|e| e.to_string())?;
 
 		Ok(keys.iter().filter_map(|k| {
 			match k.0 {
