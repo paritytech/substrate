@@ -2,4 +2,4 @@ error: Missing associated type for `UncheckedExtrinsic`. Add `UncheckedExtrinsic
  --> $DIR/missing_where_param.rs:7:2
   |
 7 |     {}
-  |     ^^
+  |     ^
