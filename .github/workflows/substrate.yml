@@ -295,7 +295,6 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
           args: --all --release --verbose --locked
 
   linux-test-frame-staking:
@@ -485,7 +484,6 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
           args: -p node-cli --release --verbose --locked -- --ignored
         env:
           RUST_LOG: "sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace"
