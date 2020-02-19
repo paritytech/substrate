@@ -23,7 +23,7 @@ jobs:
           rm -rf /home/runner/.cargo/registry
       - name: Restore /home/runner/tools/bin
         id: cache-tools-bin
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: tools/bin
           key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
@@ -39,7 +39,7 @@ jobs:
       - name: Restore /home/runner/.rustup
         if: "steps.cache-tools-bin.outputs.cache-hit != 'true'"
         id: cache-rustup
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.rustup
           key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
@@ -57,7 +57,7 @@ jobs:
       # if /home/runner/tools/bin wasn't cached, restore sccache cache
       - name: Restore /home/runner/.cache/sccache
         if: "steps.cache-tools-bin.outputs.cache-hit != 'true'"
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
           key: sccache-[linux-cache-tools]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
@@ -65,7 +65,7 @@ jobs:
       - name: Restore /home/runner/.cargo/git
         if: "steps.cache-tools-bin.outputs.cache-hit != 'true'"
         id: cache-cargo-git
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cargo/git
           key: cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
@@ -73,7 +73,7 @@ jobs:
       - name: Restore /home/runner/.cargo/registry
         id: cache-cargo-registry
         if: "steps.cache-tools-bin.outputs.cache-hit != 'true'"
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cargo/registry
           key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
@@ -95,7 +95,7 @@ jobs:
       - run: echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
       - uses: actions/checkout@v1
       - name: Restore /home/runner/tools/bin
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: tools/bin
           key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
@@ -118,32 +118,32 @@ jobs:
           rm -rf /home/runner/.cargo/git
           rm -rf /home/runner/.cargo/registry
       - name: Restore /home/runner/.rustup
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.rustup
           key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
       - name: Restore /home/runner/.cache/sccache
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
           key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
       - name: Restore /home/runner/tools/bin
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: tools/bin
           key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
       - name: Restore /home/runner/.cargo/git
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cargo/git
           key: cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Restore /home/runner/.cargo/registry
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cargo/registry
           key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Restore ./target
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: target
           key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
@@ -172,32 +172,32 @@ jobs:
           rm -rf /home/runner/.cargo/git
           rm -rf /home/runner/.cargo/registry
       - name: Restore /home/runner/.rustup
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.rustup
           key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
       - name: Restore /home/runner/.cache/sccache
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
           key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
       - name: Restore /home/runner/tools/bin
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: tools/bin
           key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
       - name: Restore /home/runner/.cargo/git
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cargo/git
           key: cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Restore /home/runner/.cargo/registry
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cargo/registry
           key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Restore ./target
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: target
           key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
@@ -226,32 +226,32 @@ jobs:
           rm -rf /home/runner/.cargo/git
           rm -rf /home/runner/.cargo/registry
       - name: Restore /home/runner/.rustup
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.rustup
           key: rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
       - name: Restore /home/runner/.cache/sccache
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cache/sccache
           key: sccache-[linux-cargo-check]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
       - name: Restore /home/runner/tools/bin
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: tools/bin
           key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
       - name: Restore /home/runner/.cargo/git
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cargo/git
           key: cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Restore /home/runner/.cargo/registry
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: /home/runner/.cargo/registry
           key: cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Restore ./target
-        uses: actions/cache@v1
+        uses: actions/cache@v1.1.2
         with:
           path: target
           key: cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
