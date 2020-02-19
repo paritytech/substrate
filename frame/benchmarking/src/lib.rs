@@ -23,12 +23,6 @@ use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use sp_io::hashing::blake2_256;
 
-/// Grab an account, seeded by a name and index.
-pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u32) -> AccountId {
-	let entropy = (name, index, seed).using_encoded(blake2_256);
-	AccountId::decode(&mut &entropy[..]).unwrap_or_default()
-}
-
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(codec::Encode, codec::Decode, Clone, Copy, PartialEq, Debug)]
 #[allow(missing_docs)]
@@ -97,6 +91,12 @@ pub trait BenchmarkingSetup<T, Call, RawOrigin> {
 
 	/// Set up the storage, and prepare a call and caller to test in a single run of the benchmark.
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(Call, RawOrigin), &'static str>;
+}
+
+/// Grab an account, seeded by a name and index.
+pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u32) -> AccountId {
+	let entropy = (name, index, seed).using_encoded(blake2_256);
+	AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 }
 
 /// Creates a `SelectedBenchmark` enum implementing `BenchmarkingSetup`.
@@ -267,8 +267,8 @@ macro_rules! impl_benchmark {
 	(
 		$( $name:ident ),*
 	) => {
-		impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
-			fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
+		impl<T: Trait> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T> {
+			fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
 				let extrinsic = sp_std::str::from_utf8(extrinsic.as_slice())
 					.map_err(|_| "Could not find extrinsic")?;
@@ -278,13 +278,13 @@ macro_rules! impl_benchmark {
 				};
 
 				// Warm up the DB
-				benchmarking::commit_db();
-				benchmarking::wipe_db();
+				$crate::benchmarking::commit_db();
+				$crate::benchmarking::wipe_db();
 
 				// first one is set_identity.
-				let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
+				let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
 				// results go here
-				let mut results: Vec<BenchmarkResults> = Vec::new();
+				let mut results: Vec<$crate::BenchmarkResults> = Vec::new();
 				// Select the component we will be benchmarking. Each component will be benchmarked.
 				for (name, low, high) in components.iter() {
 					// Create up to `STEPS` steps for that component between high and low.
@@ -295,7 +295,7 @@ macro_rules! impl_benchmark {
 						let component_value = low + step_size * s;
 
 						// Select the mid value for all the other components.
-						let c: Vec<(BenchmarkParameter, u32)> = components.iter()
+						let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
 							.map(|(n, l, h)|
 								(*n, if n == name { component_value } else { (h - l) / 2 + l })
 							).collect();
@@ -303,18 +303,18 @@ macro_rules! impl_benchmark {
 						// Run the benchmark `repeat` times.
 						for _ in 0..repeat {
 							// Set up the externalities environment for the setup we want to benchmark.
-							let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
+							let (call, caller) = <SelectedBenchmark as $crate::BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
 							// Commit the externalities to the database, flushing the DB cache.
 							// This will enable worst case scenario for reading from the database.
-							benchmarking::commit_db();
+							$crate::benchmarking::commit_db();
 							// Run the benchmark.
-							let start = benchmarking::current_time();
+							let start = $crate::benchmarking::current_time();
 							call.dispatch(caller.into())?;
-							let finish = benchmarking::current_time();
+							let finish = $crate::benchmarking::current_time();
 							let elapsed = finish - start;
 							results.push((c.clone(), elapsed));
 							// Wipe the DB back to the genesis state.
-							benchmarking::wipe_db();
+							$crate::benchmarking::wipe_db();
 						}
 					}
 				}
@@ -505,18 +505,18 @@ macro_rules! benchmark_backend {
 	} { $eval:expr } { $( $post:tt )* } ) => {
 		#[allow(non_camel_case_types)]
 		struct $name;
-		impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for $name {
+		impl<T: Trait> $crate::BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for $name {
 			#[allow(unused_variables)]
-			fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
+			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
 				vec! [
 					$(
-						(BenchmarkParameter::$param, $param_from, $param_to)
+						($crate::BenchmarkParameter::$param, $param_from, $param_to)
 					),*
 				]
 			}
 
 			#[allow(unused_variables)]
-			fn instance(&self, components: &[(BenchmarkParameter, u32)])
+			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
 				-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 			{
 				let _benchmarks_seed = 0;
@@ -527,7 +527,7 @@ macro_rules! benchmark_backend {
 				$(
 					// Prepare instance
 					#[allow(unused_variables)]
-					let $param = components.iter().find(|&c| c.0 == BenchmarkParameter::$param).unwrap().1;
+					let $param = components.iter().find(|&c| c.0 == $crate::BenchmarkParameter::$param).unwrap().1;
 				)*
 				$(
 					#[allow(unused_variables)]
