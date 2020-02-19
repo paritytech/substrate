@@ -122,19 +122,18 @@ impl std::fmt::Display for Analysis {
 			)?;
 		}
 
-		writeln!(f, "Quality and confidence:")?;
+		writeln!(f, "\nQuality and confidence:")?;
 		writeln!(f, "param     error", p, ms(*se as u128))?;
 		for (p, se) in self.params.iter().zip(self.model.se.regressor_values.iter()) {
 			writeln!(f, "{}      {:>8}", p, ms(*se as u128))?;
 		}
-		writeln!(f, "{} ", self.params.iter().map(|p| format!("{:>5}", p)).collect::<Vec<_>>().join(" "))?;
 
-
+		writeln!(f, "\nModel:")?;
 		writeln!(f, "Time ~= {:>8}", ms(self.base))?;
 		for &(p, t) in self.parameters.iter() {
 			writeln!(f, "    + {:?} {:>8}", p, ms(t))?;
 		}
-		writeln!(f, "    (µs)")
+		writeln!(f, "              µs")
 	}
 }
 
