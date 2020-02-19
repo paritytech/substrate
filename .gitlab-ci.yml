@@ -39,7 +39,7 @@ variables:
     name: parity-build
 
 .docker-env:                       &docker-env
-  image:                           parity/rust-builder:b2c2c71d-20200217
+  image:                           parity/rust-builder:0e1e2f7-20200219
   before_script:
     - rustup show
     - cargo --version
