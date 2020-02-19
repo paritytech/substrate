@@ -149,8 +149,8 @@ impl BenchmarkCmd {
 			});
 
 			// Conduct analysis.
-			if let Some(analysis) = Analysis::from_results(&results) {
-				println!("Analysis:\n{}", analysis);
+			if let Some(analysis) = Analysis::median_slopes(&results) {
+				println!("Analysis\n========\n{}", analysis);
 			}
 
 			eprintln!("Done.");
