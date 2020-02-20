@@ -347,7 +347,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984800000000)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -381,14 +381,13 @@ fn full_native_block_import_works() {
 	).0.unwrap();
 
 	t.execute_with(|| {
-		let fees = transfer_fee(&xt(), fm);
 		assert_eq!(
 			Balances::total_balance(&alice()),
-			alice_last_known_balance - 10 * DOLLARS - fees,
+			alice_last_known_balance - 10 * DOLLARS - transfer_fee(&xt(), fm),
 		);
 		assert_eq!(
 			Balances::total_balance(&bob()),
-			179 * DOLLARS - fees,
+			179 * DOLLARS - transfer_fee(&xt(), fm),
 		);
 		let events = vec![
 			EventRecord {
@@ -400,7 +399,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984788199392)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -423,7 +422,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984788199392)),
 				topics: vec![],
 			},
 			EventRecord {
