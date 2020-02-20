@@ -51,7 +51,6 @@ impl KeyStore {
 			)
 	}
 
-
 	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
 		self.keys.get(&id)
 			.and_then(|inner|
