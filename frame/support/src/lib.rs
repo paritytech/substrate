@@ -488,7 +488,7 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
-		prefix: DecodeDifferent::Encode("Example"),
+		prefix: DecodeDifferent::Encode("Test"),
 		entries: DecodeDifferent::Encode(
 			&[
 				StorageEntryMetadata {
