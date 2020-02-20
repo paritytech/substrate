@@ -83,8 +83,8 @@ impl Decode for VRFOutput {
 impl TryFrom<[u8; VRF_OUTPUT_LENGTH]> for VRFOutput {
 	type Error = SignatureError;
 
-	fn try_from(raw: RawVRFOutput) -> Result<VRFOutput, Self::Error> {
-		schnorrkel::vrf::VRFOutput::from_bytes(&raw.0).map(VRFOutput)
+	fn try_from(raw: [u8; VRF_OUTPUT_LENGTH]) -> Result<Self, Self::Error> {
+		schnorrkel::vrf::VRFOutput::from_bytes(&raw).map(VRFOutput)
 	}
 }
 
@@ -179,8 +179,8 @@ impl Decode for VRFProof {
 impl TryFrom<[u8; VRF_PROOF_LENGTH]> for VRFProof {
 	type Error = SignatureError;
 
-	fn try_from(raw: RawVRFProof) -> Result<VRFProof, Self::Error> {
-		schnorrkel::vrf::VRFProof::from_bytes(&raw.0).map(VRFProof)
+	fn try_from(raw: [u8; VRF_PROOF_LENGTH]) -> Result<Self, Self::Error> {
+		schnorrkel::vrf::VRFProof::from_bytes(&raw).map(VRFProof)
 	}
 }
 
