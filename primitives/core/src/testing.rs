@@ -152,7 +152,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		}).cloned().collect::<Vec<_>>())
 	}
 
-	fn get_keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, String> {
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, String> {
 		let ed25519_existing_keys: Vec<CryptoTypePublicPair> = self
 			.ed25519_public_keys(id)
 			.iter()

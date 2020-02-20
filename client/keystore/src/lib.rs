@@ -305,7 +305,7 @@ impl BareCryptoStore for Store {
 		}).cloned().collect::<Vec<_>>())
 	}
 
-	fn get_keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
+	fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
 		let ed25519_existing_keys: Vec<CryptoTypePublicPair> = self
 			.public_keys_by_type::<ed25519::Public>(id)
 			.map(|keys| {

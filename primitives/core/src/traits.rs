@@ -74,7 +74,7 @@ pub trait BareCryptoStore: Send + Sync {
 	/// List all supported keys
 	///
 	/// Get a list of public keys the signer supports.
-	fn get_keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, String>;
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, String>;
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.
