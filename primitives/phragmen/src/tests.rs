@@ -600,7 +600,7 @@ mod compact {
 
 	#[test]
 	fn compact_struct_is_codec() {
-		let compact = TestCompact::<_, _, _, u64> {
+		let compact = TestCompact::<_, _, _> {
 			votes1: vec![(2u64, 20), (4, 40)],
 			votes2: vec![
 				(1, (10, Accuracy::from_percent(80)), 11),
@@ -684,7 +684,7 @@ mod compact {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = <TestCompact<V, T, Percent, AccountId>>::from_assignment(
+		let compacted = <TestCompact<V, T, Percent>>::from_assignment(
 			assignments.clone(),
 			voter_index,
 			target_index,
@@ -782,7 +782,7 @@ mod compact {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = <TestCompact<u16, u16, Balance, AccountId>>::from_staked(
+		let compacted = <TestCompact<u16, u16, Balance>>::from_staked(
 			assignments.clone(),
 			voter_index,
 			target_index,
@@ -821,7 +821,7 @@ mod compact {
 	fn compact_into_stake_must_report_overflow() {
 		// The last edge which is computed from the rest should ALWAYS be positive.
 		// in votes2
-		let compact = TestCompact::<u16, u16, Balance, AccountId> {
+		let compact = TestCompact::<u16, u16, Balance> {
 			votes1: Default::default(),
 			votes2: vec![(0, (1, 10), 2)],
 			..Default::default()
@@ -836,7 +836,7 @@ mod compact {
 		);
 
 		// in votes3 onwards
-		let compact = TestCompact::<u16, u16, Balance, AccountId> {
+		let compact = TestCompact::<u16, u16, Balance> {
 			votes1: Default::default(),
 			votes2: Default::default(),
 			votes3: vec![(0, [(1, 7), (2, 8)], 3)],
@@ -849,7 +849,7 @@ mod compact {
 		);
 
 		// Also if equal
-		let compact = TestCompact::<u16, u16, Balance, AccountId> {
+		let compact = TestCompact::<u16, u16, Balance> {
 			votes1: Default::default(),
 			votes2: Default::default(),
 			// 5 is total, we cannot leave none for 30 here.
@@ -866,7 +866,7 @@ mod compact {
 	#[test]
 	fn compact_into_assignment_must_report_overflow() {
 		// in votes2
-		let compact = TestCompact::<u16, u16, Accuracy, AccountId> {
+		let compact = TestCompact::<u16, u16, Accuracy> {
 			votes1: Default::default(),
 			votes2: vec![(0, (1, Accuracy::from_percent(100)), 2)],
 			..Default::default()
@@ -880,7 +880,7 @@ mod compact {
 		);
 
 		// in votes3 onwards
-		let compact = TestCompact::<u16, u16, Accuracy, AccountId> {
+		let compact = TestCompact::<u16, u16, Accuracy> {
 			votes1: Default::default(),
 			votes2: Default::default(),
 			votes3: vec![(0, [(1, Accuracy::from_percent(70)), (2, Accuracy::from_percent(80))], 3)],
@@ -904,7 +904,7 @@ mod compact {
 
 		let entity_index = |a: &AccountId| -> Option<u16> { Some(*a as u16) };
 
-		let compacted = <TestCompact<u16, u16, Balance, AccountId>>::from_staked(
+		let compacted = <TestCompact<u16, u16, Balance>>::from_staked(
 			assignments.clone(),
 			entity_index,
 			entity_index,
@@ -919,7 +919,7 @@ mod compact {
 			},
 		];
 
-		let compacted = <TestCompact<u16, u16, Balance, AccountId>>::from_staked(
+		let compacted = <TestCompact<u16, u16, Balance>>::from_staked(
 			assignments.clone(),
 			entity_index,
 			entity_index,
@@ -937,7 +937,7 @@ mod compact {
 			},
 		];
 
-		let compacted = <TestCompact<u16, u16, Percent, AccountId>>::from_assignment(
+		let compacted = <TestCompact<u16, u16, Percent>>::from_assignment(
 			assignments.clone(),
 			entity_index,
 			entity_index,
@@ -972,7 +972,7 @@ mod compact {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = <TestCompact<u16, u16, Balance, AccountId>>::from_staked(
+		let compacted = <TestCompact<u16, u16, Balance>>::from_staked(
 			assignments.clone(),
 			voter_index,
 			target_index,

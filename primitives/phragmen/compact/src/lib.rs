@@ -33,30 +33,16 @@ const PREFIX: &'static str = "votes";
 /// Generates a struct to store the phragmen assignments in a compact way. The struct can only store
 /// distributions up to the given input count. The given count must be greater than 2.
 ///
-/// 3 generic types must be given to the type
-///
-/// - `V`: identifier/index type of the voter.
-/// - `T`: identifier/index type of the target.
-/// - `W`: any type used as the edge weight.
-///
 /// ```nocompile
 /// // generate a struct with nominator and edge weight u128, with maximum supported
 /// // edge per voter of 32.
-/// generate_compact_solution_type(TestCompact<u32, u128>, 32)
+/// generate_compact_solution_type(pub TestCompact, 32)
 /// ```
 ///
-/// The generated structure creates one key for each possible count of distributions from 1 up to
-/// the given length. A normal distribution is a tuple of `(candidate, weight)`. Typically, the
-/// weight can refer to either the ratio of the voter's support or its absolute value. The following
-/// rules hold regarding the compact representation:
-///   - For single distribution, no weight is stored. The weight is known to be 100%.
-///   - For all the rest, the weight if the last distribution is omitted. This value can be computed
-///     from the rest.
+/// This generates:
 ///
-/// An example expansion of length 16 is as follows:
-///
-/// ```nocompile
-/// struct TestCompact<V, T, W> {
+/// ```ignore
+/// pub struct TestCompact<V, T, W> {
 /// 	votes1: Vec<(V, T)>,
 /// 	votes2: Vec<(V, (T, W), T)>,
 /// 	votes3: Vec<(V, [(T, W); 2usize], T)>,
@@ -75,6 +61,22 @@ const PREFIX: &'static str = "votes";
 /// 	votes16: Vec<(V, [(T, W); 15usize], T)>,
 /// }
 /// ```
+///
+/// The generic arguments are:
+/// - `V`: identifier/index for voter (nominator) types.
+/// - `T` identifier/index for candidate (validator) types.
+/// - `W` weight type.
+///
+/// Some conversion implementations are provided by default if
+/// - `W` is u128, or
+/// - `W` is anything that implements `PerThing` (such as `Perbill`)
+///
+/// The ideas behind the structure are as follows:
+///
+/// - For single distribution, no weight is stored. The weight is known to be 100%.
+/// - For all the rest, the weight if the last distribution is omitted. This value can be computed
+///   from the rest.
+///
 #[proc_macro]
 pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 	let CompactSolutionDef {
@@ -168,8 +170,8 @@ fn struct_def(
 			_phragmen::codec::Encode,
 			_phragmen::codec::Decode,
 		)]
-		#vis struct #ident<#voter_type, #target_type, #weight_type, A> {
-			_marker: sp_std::marker::PhantomData<A>,
+		#vis struct #ident<#voter_type, #target_type, #weight_type> {
+			// _marker: sp_std::marker::PhantomData<A>,
 			#singles
 			#doubles
 			#rest

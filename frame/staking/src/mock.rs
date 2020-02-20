@@ -750,7 +750,7 @@ pub fn on_offence_now(
 pub fn horrible_phragmen_with_post_processing(
 	do_reduce: bool,
 ) -> (
-	CompactOf<Test>,
+	Compact,
 	Vec<ValidatorIndex>,
 	PhragmenScore,
 ) {
@@ -851,7 +851,7 @@ pub fn horrible_phragmen_with_post_processing(
 		OffchainAccuracy,
 	>(staked_assignment);
 
-	let compact = <CompactOf<Test>>::from_assignment(
+	let compact = Compact::from_assignment(
 		assignments_reduced,
 		nominator_index,
 		validator_index,
@@ -869,7 +869,7 @@ pub fn do_phragmen_with_post_processing(
 	do_reduce: bool,
 	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
 ) -> (
-	CompactOf<Test>,
+	Compact,
 	Vec<ValidatorIndex>,
 	PhragmenScore,
 ) {
@@ -920,7 +920,7 @@ pub fn do_phragmen_with_post_processing(
 		evaluate_support::<AccountId>(&support_map)
 	};
 
-	let compact = <CompactOf<Test>>::from_assignment(
+	let compact = Compact::from_assignment(
 		assignments_reduced,
 		nominator_index,
 		validator_index,

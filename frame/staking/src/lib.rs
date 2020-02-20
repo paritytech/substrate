@@ -631,11 +631,10 @@ impl<BlockNumber> Default for ElectionStatus<BlockNumber> {
 
 pub type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-pub type CompactOf<T> = CompactAssignments<
+pub type Compact = CompactAssignments<
 	NominatorIndex,
 	ValidatorIndex,
 	OffchainAccuracy,
-	<T as frame_system::Trait>::AccountId,
 >;
 
 type PositiveImbalanceOf<T> =
@@ -1162,7 +1161,7 @@ decl_module! {
 		pub fn submit_election_solution(
 			origin,
 			winners: Vec<ValidatorIndex>,
-			compact_assignments: CompactOf<T>,
+			compact_assignments: Compact,
 			score: PhragmenScore,
 		) {
 			let _who = ensure_signed(origin)?;
@@ -1180,7 +1179,7 @@ decl_module! {
 		pub fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<ValidatorIndex>,
-			compact_assignments: CompactOf<T>,
+			compact_assignments: Compact,
 			score: PhragmenScore,
 			// already used and checked in ValidateUnsigned.
 			_validator_index: u32,
@@ -1768,7 +1767,7 @@ impl<T: Trait> Module<T> {
 	/// of the next round. This may be called by both a signed and an unsigned transaction.
 	fn check_and_replace_solution(
 		winners: Vec<ValidatorIndex>,
-		compact_assignments: CompactOf<T>,
+		compact_assignments: Compact,
 		compute: ElectionCompute,
 		claimed_score: PhragmenScore,
 	) -> Result<(), Error<T>> {
@@ -2591,7 +2590,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			validator_index,
 			signature,
 		) = call {
-			use offchain_election::SignaturePayloadOf;
+			use offchain_election::SignaturePayload;
 
 			// discard early solution
 			if Self::era_election_status() == ElectionStatus::Close {
@@ -2614,7 +2613,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			// check signature
-			let payload: SignaturePayloadOf<T> = (
+			let payload: SignaturePayload = (
 				winners,
 				compact,
 				score,

@@ -158,12 +158,11 @@ pub(crate) fn staked(
 		impl<
 			#voter_type: _phragmen::codec::Codec + Default + Copy,
 			#target_type: _phragmen::codec::Codec + Default + Copy,
-			A: _phragmen::codec::Codec + Default + Clone,
 		>
-		#ident<#voter_type, #target_type, u128, A>
+		#ident<#voter_type, #target_type, u128>
 		{
 			/// Generate self from a vector of `StakedAssignment`.
-			pub fn from_staked<FV, FT>(
+			pub fn from_staked<FV, FT, A>(
 				assignments: Vec<_phragmen::StakedAssignment<A>>,
 				index_of_voter: FV,
 				index_of_target: FT,
@@ -171,8 +170,9 @@ pub(crate) fn staked(
 				where
 					for<'r> FV: Fn(&'r A) -> Option<#voter_type>,
 					for<'r> FT: Fn(&'r A) -> Option<#target_type>,
+					A: _phragmen::IdentifierT
 			{
-				let mut compact: #ident<#voter_type, #target_type, u128, A> = Default::default();
+				let mut compact: #ident<#voter_type, #target_type, u128> = Default::default();
 				for _phragmen::StakedAssignment { who, distribution }  in assignments {
 					match distribution.len() {
 						0 => continue,
@@ -188,7 +188,7 @@ pub(crate) fn staked(
 			/// Convert self into `StakedAssignment`. The given function should return the total
 			/// weight of a voter. It is used to subtract the sum of all the encoded weights to
 			/// infer the last one.
-			pub fn into_staked<FM>(
+			pub fn into_staked<FM, A>(
 				self,
 				max_of: FM,
 				voter_at: impl Fn(#voter_type) -> Option<A>,
@@ -197,6 +197,7 @@ pub(crate) fn staked(
 				-> Result<Vec<_phragmen::StakedAssignment<A>>, _phragmen::Error>
 			where
 				for<'r> FM: Fn(&'r A) -> u128,
+				A: _phragmen::IdentifierT,
 			{
 				let mut assignments: Vec<_phragmen::StakedAssignment<A>> = Default::default();
 				#into_impl

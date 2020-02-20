@@ -144,7 +144,7 @@ pub fn setup_chain_stakers<T: Trait>(
 /// Build a _really bad_ but acceptable solution for election. This should always yield a solution
 /// which has a less score than the seq-phragmen.
 pub fn get_weak_solution<T: Trait>(do_reduce: bool)
--> (Vec<ValidatorIndex>, CompactOf<T>, PhragmenScore) {
+-> (Vec<ValidatorIndex>, Compact, PhragmenScore) {
 	use sp_std::collections::btree_map::BTreeMap;
 	let mut backing_stake_of: BTreeMap<T::AccountId, BalanceOf<T>> = BTreeMap::new();
 
@@ -275,7 +275,7 @@ pub fn get_weak_solution<T: Trait>(do_reduce: bool)
 
 
 	// compact encode the assignment.
-	let compact = <CompactOf<T>>::from_assignment(
+	let compact = Compact::from_assignment(
 		low_accuracy_assignment,
 		nominator_index,
 		validator_index,
@@ -292,7 +292,7 @@ pub fn get_weak_solution<T: Trait>(do_reduce: bool)
 /// Create a solution for seq-phragmen. This uses the same internal function as used by the offchain
 /// worker code.
 pub fn get_seq_phragmen_solution<T: Trait>(do_reduce: bool)
--> (Vec<ValidatorIndex>, CompactOf<T>, PhragmenScore) {
+-> (Vec<ValidatorIndex>, Compact, PhragmenScore) {
 	let sp_phragmen::PhragmenResult {
 		winners,
 		assignments,

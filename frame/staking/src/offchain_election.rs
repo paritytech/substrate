@@ -17,7 +17,7 @@
 //! Helpers for offchain worker election.
 
 use crate::{
-	Call, Module, Trait, ValidatorIndex, NominatorIndex, CompactOf, OffchainAccuracy,
+	Call, Module, Trait, ValidatorIndex, NominatorIndex, Compact, OffchainAccuracy,
 };
 use codec::Encode;
 use frame_system::offchain::{SubmitUnsignedTransaction};
@@ -48,9 +48,9 @@ pub(crate) enum OffchainElectionError {
 }
 
 /// The type of signature data encoded with the unsigned submission
-pub(crate) type SignaturePayloadOf<'a, T> = (
+pub(crate) type SignaturePayload<'a> = (
 	&'a [ValidatorIndex],
-	&'a CompactOf<T>,
+	&'a Compact,
 	&'a PhragmenScore,
 	&'a u32,
 );
@@ -130,7 +130,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		);
 
 		// sign it.
-		let signature_payload: SignaturePayloadOf<T> =
+		let signature_payload: SignaturePayload =
 			(&winners, &compact, &score, &(index as u32));
 		let signature = pubkey.sign(&signature_payload.encode())
 			.ok_or(OffchainElectionError::SigningFailed)?;
@@ -168,7 +168,7 @@ pub fn prepare_submission<T: Trait>(
 	assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>>,
 	winners: Vec<(T::AccountId, ExtendedBalance)>,
 	do_reduce: bool,
-) -> (Vec<ValidatorIndex>, CompactOf<T>, PhragmenScore)
+) -> (Vec<ValidatorIndex>, Compact, PhragmenScore)
 where
 	ExtendedBalance: From<<OffchainAccuracy as PerThing>::Inner>,
 {
@@ -222,7 +222,7 @@ where
 	};
 
 	// compact encode the assignment.
-	let compact = <CompactOf<T>>::from_assignment(
+	let compact = Compact::from_assignment(
 		low_accuracy_assignment,
 		nominator_index,
 		validator_index,
