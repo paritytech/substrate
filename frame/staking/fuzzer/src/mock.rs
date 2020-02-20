@@ -189,7 +189,3 @@ impl pallet_staking::Trait for Test {
 	type SubmitTransaction = SubmitTransaction;
 	type KeyType = sp_runtime::testing::UintAuthorityId;
 }
-
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
-}

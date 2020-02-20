@@ -23,7 +23,7 @@
 //! # Debugging a panic
 //!
 //! Once a panic is found, it can be debugged with
-//! `cargo hfuzz run-debug submit_solution hfuzz_workspace/reduce/*.fuzz`.
+//! `cargo hfuzz run-debug submit_solution hfuzz_workspace/submit_solution/*.fuzz`.
 
 use honggfuzz::fuzz;
 
@@ -49,15 +49,18 @@ enum Mode {
 	WeakerSubmission,
 }
 
+pub fn new_test_ext() -> Result<sp_io::TestExternalities, std::string::String> {
+	frame_system::GenesisConfig::default().build_storage::<mock::Test>().map(Into::into)
+}
+
 fn main() {
 	loop {
-		fuzz!(|_data: _| {
-			let mut ext = mock::new_test_ext();
+		fuzz!(|do_reduce: bool| {
+			let ext = new_test_ext();
 			let mode: Mode = unsafe { std::mem::transmute(testing_utils::random(0, 2)) };
-			let num_validators = testing_utils::random(100, 1000);
-			let num_nominators = testing_utils::random(100, 20_000);
+			let num_validators = testing_utils::random(100, 2_000);
+			let num_nominators = testing_utils::random(100, 2_000);
 			let edge_per_voter = 16;
-			let do_reduce = true;
 			let to_elect = testing_utils::random(100, num_validators);
 
 			println!("++ instance with params {} / {} / {} / {:?} / {}",
@@ -68,7 +71,7 @@ fn main() {
 				to_elect,
 			);
 
-			ext.execute_with(|| {
+			ext.unwrap_or_default().execute_with(|| {
 				// initial setup
 				set_validator_count::<Test>(to_elect);
 				setup_chain_stakers::<Test>(
@@ -112,6 +115,7 @@ fn main() {
 				// must have chosen correct number of winners.
 				assert_eq!(winners.len() as u32, <pallet_staking::Module<Test>>::validator_count());
 
+				// final call and origin
 				let call = pallet_staking::Call::<Test>::submit_election_solution(
 					winners,
 					compact,

@@ -44,6 +44,7 @@ pub fn random(a: u32, b: u32) -> u32 {
 	rand::thread_rng().gen_range(a, b)
 }
 
+/// Set the desired validator count, with related storage items.
 pub fn set_validator_count<T: Trait>(to_elect: u32) {
 	ValidatorCount::put(to_elect);
 	MinimumValidatorCount::put(to_elect/2);
@@ -288,6 +289,8 @@ pub fn get_weak_solution<T: Trait>(do_reduce: bool)
 	(winners, compact, score)
 }
 
+/// Create a solution for seq-phragmen. This uses the same internal function as used by the offchain
+/// worker code.
 pub fn get_seq_phragmen_solution<T: Trait>(do_reduce: bool)
 -> (Vec<ValidatorIndex>, CompactOf<T>, PhragmenScore) {
 	let sp_phragmen::PhragmenResult {
@@ -307,6 +310,7 @@ pub fn get_seq_phragmen_solution<T: Trait>(do_reduce: bool)
 	)
 }
 
+/// Remove all validator, nominators, votes and exposures.
 pub fn clean<T: Trait>() {
 	<Validators<T>>::enumerate().for_each(|(k, _)| {
 		let ctrl = <Module<T>>::bonded(&k).unwrap();
