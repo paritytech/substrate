@@ -363,6 +363,22 @@ check_polkadot:
     - cd -
     - sccache -s
 
+run-benchmarks:
+  stage:                           build
+  allow_failure:                   true
+  script:
+    git clone --depth 1 https://gitlab.parity.io/parity/substrate.git
+    cd substrate
+    git checkout master
+    git fetch
+    git reset --hard origin/master
+    cargo bench -p node-testing -- "import block"
+    git merge nv-test-ci
+    cargo bench -p node-testing -- "import-block"
+  tags:
+    - benchmark
+
+
 trigger-contracts-ci:
   stage:                           publish
   needs:
