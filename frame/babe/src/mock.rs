@@ -106,6 +106,5 @@ pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> sp_io::TestExternalit
 	t.into()
 }
 
-#[allow(dead_code)]
 pub type System = frame_system::Module<Test>;
 pub type Babe = Module<Test>;
