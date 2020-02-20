@@ -89,7 +89,7 @@ pub trait BareCryptoStore: Send + Sync {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> std::result::Result<Vec<u8>, String>;
+	) -> Result<Vec<u8>, String>;
 
 	/// Sign with any key
 	///

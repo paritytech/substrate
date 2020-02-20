@@ -282,29 +282,27 @@ impl BareCryptoStore for Store {
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
-		let ed25519_existing_keys = self
+		let ed25519_existing_keys: Vec<Vec<u8>> = self
 			.public_keys_by_type::<ed25519::Public>(id)
-			.map_err(|e| e.to_string())?;
-		let ed25519_existing_keys: Vec<Vec<u8>>  = ed25519_existing_keys
-			.iter()
+			.map_err(|e| e.to_string())?
+			.into_iter()
 			.map(|k| k.to_raw_vec())
 			.collect();
 
-		let sr25519_existing_keys= self
+		let sr25519_existing_keys: Vec<Vec<u8>> = self
 			.public_keys_by_type::<sr25519::Public>(id)
-			.map_err(|e| e.to_string())?;
-		let sr25519_existing_keys: Vec<Vec<u8>> = sr25519_existing_keys
-			.iter()
+			.map_err(|e| e.to_string())?
+			.into_iter()
 			.map(|k| k.to_raw_vec())
 			.collect();
 
-		Ok(keys.iter().filter_map(|k| {
+		Ok(keys.into_iter().filter_map(|k| {
 			match k.0 {
 				sr25519::SR25519_CRYPTO_ID if sr25519_existing_keys.contains(&k.1.to_vec()) => Some(k),
 				ed25519::ED25519_CRYPTO_ID if ed25519_existing_keys.contains(&k.1.to_vec()) => Some(k),
 				_ => None
 			}
-		}).cloned().collect::<Vec<_>>())
+		}).collect::<Vec<_>>())
 	}
 
 	fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
