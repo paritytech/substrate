@@ -1376,7 +1376,7 @@ fn finalize_3_voters_1_light_observer() {
 
 	run_to_completion_with(&mut runtime, 20, net.clone(), authorities, |executor| {
 		executor.spawn(
-			run_grandpa_observer(
+			observer::run_grandpa_observer(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,
