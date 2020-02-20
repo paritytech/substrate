@@ -33,7 +33,7 @@ const PREFIX: &'static str = "votes";
 /// Generates a struct to store the phragmen assignments in a compact way. The struct can only store
 /// distributions up to the given input count. The given count must be greater than 2.
 ///
-/// ```nocompile
+/// ```ignore
 /// // generate a struct with nominator and edge weight u128, with maximum supported
 /// // edge per voter of 32.
 /// generate_compact_solution_type(pub TestCompact, 32)
@@ -175,6 +175,12 @@ fn struct_def(
 			#singles
 			#doubles
 			#rest
+		}
+
+		impl<#voter_type, #target_type, #weight_type> _phragmen::VotingLimit
+		for #ident<#voter_type, #target_type, #weight_type>
+		{
+			const LIMIT: usize = #count;
 		}
 	))
 }

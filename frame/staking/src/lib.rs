@@ -292,23 +292,23 @@ use frame_system::{
 };
 use sp_phragmen::{
 	ExtendedBalance, Assignment, PhragmenScore, PhragmenResult, build_support_map, evaluate_support,
-	elect, generate_compact_solution_type, is_score_better,
+	elect, generate_compact_solution_type, is_score_better, VotingLimit,
 };
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
-pub(crate) const MAX_NOMINATIONS: usize = 16;
 const MAX_UNLOCKING_CHUNKS: usize = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
-// indexable by 2 bytes
+/// Maximum number of stakers that can be stored in a snapshot.
 pub(crate) const MAX_VALIDATORS: u32 = ValidatorIndex::max_value() as u32;
 pub(crate) const MAX_NOMINATORS: u32 = NominatorIndex::max_value();
 
-// TODO: get rid of 16
+// Note: Maximum nomination limit is set here -- 16.
 generate_compact_solution_type!(pub CompactAssignments, 16);
 
 /// Data type used to index nominators in the compact type
 pub type NominatorIndex = u32;
+
 /// Data type used to index validators in the compact type.
 pub type ValidatorIndex = u16;
 
@@ -323,6 +323,23 @@ pub type ChainAccuracy = Perbill;
 
 /// Accuracy used for off-chain phragmen. This better be small.
 pub type OffchainAccuracy = sp_runtime::PerU16;
+
+/// The balance type of this module.
+pub type BalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
+/// The compact type for election solutions.
+pub type Compact = CompactAssignments<
+	NominatorIndex,
+	ValidatorIndex,
+	OffchainAccuracy,
+>;
+
+type PositiveImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -628,20 +645,6 @@ impl<BlockNumber> Default for ElectionStatus<BlockNumber> {
 		Self::Close
 	}
 }
-
-pub type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-pub type Compact = CompactAssignments<
-	NominatorIndex,
-	ValidatorIndex,
-	OffchainAccuracy,
->;
-
-type PositiveImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
-type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
-type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
 
 /// Means for interacting with a specialized version of the `session` trait.
 ///
@@ -1132,7 +1135,7 @@ decl_module! {
 		/// E: number of edges.
 		/// m: size of winner committee.
 		/// n: number of nominators.
-		/// d: edge degree aka MAX_NOMINATIONS = 16
+		/// d: edge degree (16 for now)
 		/// v: number of on-chain validator candidates.
 		///
 		/// NOTE: given a solution which is reduced, we can enable a new check the ensure `|E| < n +
@@ -1390,7 +1393,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - The transaction's complexity is proportional to the size of `targets`,
-		/// which is capped at `MAX_NOMINATIONS`.
+		/// which is capped at Compact::LIMIT.
 		/// - Both the reads and writes follow a similar pattern.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
@@ -1402,7 +1405,7 @@ decl_module! {
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			let targets = targets.into_iter()
-				.take(MAX_NOMINATIONS)
+				.take(<Compact as VotingLimit>::LIMIT)
 				.map(|t| T::Lookup::lookup(t))
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 

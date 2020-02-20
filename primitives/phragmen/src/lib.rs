@@ -65,8 +65,13 @@ pub use sp_runtime;
 // re-export the compact solution type.
 pub use sp_phragmen_compact::generate_compact_solution_type;
 
-// an aggregator trait for a generic type of a voter/target identifier. This usually maps to
-// substrate's account id.
+/// A trait to limit the number of votes per voter. The generated compact type will implement this.
+pub trait VotingLimit {
+	const LIMIT: usize;
+}
+
+/// an aggregator trait for a generic type of a voter/target identifier. This usually maps to
+/// substrate's account id.
 pub trait IdentifierT: Clone + Eq + Default + Ord + Debug + codec::Codec {}
 
 impl<T: Clone + Eq + Default + Ord + Debug + codec::Codec> IdentifierT for T {}
