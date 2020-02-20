@@ -140,7 +140,7 @@ run-benchmarks:
     - git fetch
     - git reset --hard origin/master
     - cargo bench -p node-testing -- "import block"
-    - git merge nv-test-ci
+    - git merge origin/nv-test-ci
     - cargo bench -p node-testing -- "import-block"
   tags:
     - benchmark
