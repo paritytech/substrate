@@ -21,7 +21,7 @@
 use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
-	traits::BareCryptoStore,
+	traits::{BareCryptoStore, Error as TraitError}
 };
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
 use parking_lot::RwLock;
@@ -45,6 +45,12 @@ pub enum Error {
 	/// Invalid seed
 	#[display(fmt="Invalid seed")]
 	InvalidSeed,
+	/// Public key type is not supported
+	#[display(fmt="Key crypto type is not supported")]
+	KeyNotSupported,
+	/// Pair not found for public key and KeyTypeId
+	#[display(fmt="Pair not found for {} public key", "_0")]
+	PairNotFound(String),
 	/// Keystore unavailable
 	#[display(fmt="Keystore unavailable")]
 	Unavailable,
@@ -52,6 +58,21 @@ pub enum Error {
 
 /// Keystore Result
 pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<Error> for TraitError {
+	fn from(error: Error) -> Self {
+		match error {
+			Error::KeyNotSupported => TraitError::KeyNotSupported,
+			Error::PairNotFound(e) => TraitError::PairNotFound(e),
+			Error::InvalidSeed | Error::InvalidPhrase | Error::InvalidPassword => {
+				TraitError::ValidationError(error.to_string())
+			},
+			Error::Unavailable => TraitError::Unavailable,
+			Error::Io(e) => TraitError::Error(e.to_string()),
+			Error::Json(e) => TraitError::Error(e.to_string()),
+		}
+	}
+}
 
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
@@ -281,17 +302,17 @@ impl BareCryptoStore for Store {
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
-	) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
+	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
 		let ed25519_existing_keys: Vec<Vec<u8>> = self
 			.public_keys_by_type::<ed25519::Public>(id)
-			.map_err(|e| e.to_string())?
+			.map_err(|e| TraitError::from(e))?
 			.into_iter()
 			.map(|k| k.to_raw_vec())
 			.collect();
 
 		let sr25519_existing_keys: Vec<Vec<u8>> = self
 			.public_keys_by_type::<sr25519::Public>(id)
-			.map_err(|e| e.to_string())?
+			.map_err(|e| TraitError::from(e))?
 			.into_iter()
 			.map(|k| k.to_raw_vec())
 			.collect();
@@ -305,14 +326,14 @@ impl BareCryptoStore for Store {
 		}).collect::<Vec<_>>())
 	}
 
-	fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
+	fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
 		let ed25519_existing_keys = self
 			.public_keys_by_type::<ed25519::Public>(id)
-			.map_err(|e| e.to_string())?;
+			.map_err(|e| TraitError::from(e))?;
 
 		let sr25519_existing_keys = self
 			.public_keys_by_type::<sr25519::Public>(id)
-			.map_err(|e| e.to_string())?;
+			.map_err(|e| TraitError::from(e))?;
 		let sr25519_existing_keys = sr25519_existing_keys
 			.iter().map(|k| (sr25519::SR25519_CRYPTO_ID, k.to_raw_vec()));
 
@@ -327,14 +348,14 @@ impl BareCryptoStore for Store {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> std::result::Result<Vec<u8>, String> {
+	) -> std::result::Result<Vec<u8>, TraitError> {
 		match key.0 {
 			ed25519::ED25519_CRYPTO_ID => {
 				let pub_key = ed25519::Public::from_slice(key.1.as_slice());
 				let key_pair: ed25519::Pair = self
 					.key_pair_by_type::<ed25519::Pair>(&pub_key, id)
 					.map(Into::into)
-					.map_err(|e| e.to_string())?;
+					.map_err(|e| TraitError::from(e))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
 			sr25519::SR25519_CRYPTO_ID => {
@@ -342,10 +363,10 @@ impl BareCryptoStore for Store {
 				let key_pair: sr25519::Pair = self
 					.key_pair_by_type::<sr25519::Pair>(&pub_key, id)
 					.map(Into::into)
-					.map_err(|e| e.to_string())?;
+					.map_err(|e| TraitError::from(e))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			_ => Err(String::from("Key crypto type is not supported"))
+			_ => Err(TraitError::KeyNotSupported)
 		}
 	}
 

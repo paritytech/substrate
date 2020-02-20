@@ -21,6 +21,7 @@ use crate::crypto::{KeyTypeId, CryptoTypePublicPair};
 use crate::{
 	crypto::{Pair, Public},
 	ed25519, sr25519,
+	traits::Error
 };
 
 /// Key type for generic Ed25519 key.
@@ -136,7 +137,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		public_keys.iter().all(|(k, t)| self.keys.get(&t).and_then(|s| s.get(k)).is_some())
 	}
 
-	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, String> {
+	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, Error> {
 		let ed25519_existing_keys: Vec<Vec<u8>> = self.ed25519_public_keys(id).iter()
 								.map(|k| k.to_raw_vec()).collect();
 		let sr25519_existing_keys: Vec<Vec<u8>> = self.sr25519_public_keys(id).iter()
@@ -151,7 +152,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		}).collect::<Vec<_>>())
 	}
 
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, String> {
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
 		let ed25519_existing_keys = self.ed25519_public_keys(id);
 		let ed25519_existing_keys = ed25519_existing_keys
 			.iter()
@@ -172,23 +173,23 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8]
-	) -> Result<Vec<u8>, String> {
+	) -> Result<Vec<u8>, Error> {
 		match key.0 {
 			ed25519::ED25519_CRYPTO_ID => {
 				let key_pair: ed25519::Pair = self
 					.ed25519_key_pair(id, &ed25519::Public::from_slice(key.1.as_slice()))
 					.map(Into::into)
-					.ok_or(String::from("ed25519 pair not found"))?;
+					.ok_or(Error::PairNotFound("ed25519".to_owned()))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
 			sr25519::SR25519_CRYPTO_ID => {
 				let key_pair: sr25519::Pair = self
 					.sr25519_key_pair(id, &sr25519::Public::from_slice(key.1.as_slice()))
 					.map(Into::into)
-					.ok_or(String::from("sr25519 pair not found"))?;
+					.ok_or(Error::PairNotFound("sr25519".to_owned()))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			_ => Err(String::from("Key crypto type is not supported"))
+			_ => Err(Error::KeyNotSupported)
 		}
 	}
 }

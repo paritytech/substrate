@@ -29,6 +29,20 @@ use std::{
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
+/// BareCryptoStore error
+pub enum Error {
+	/// Public key type is not supported
+	KeyNotSupported,
+	/// Pair not found for public key and KeyTypeId
+	PairNotFound(String),
+	/// Validation error
+	ValidationError(String),
+	/// Keystore unavailable
+	Unavailable,
+	/// Programming errors
+	Error(String)
+}
+
 /// Something that generates, stores and provides access to keys.
 pub trait BareCryptoStore: Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
@@ -70,11 +84,11 @@ pub trait BareCryptoStore: Send + Sync {
 	///
 	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
 	/// a filtered list of public keys which are supported by the keystore.
-	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, String>;
+	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, Error>;
 	/// List all supported keys
 	///
 	/// Get a list of public keys the signer supports.
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, String>;
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error>;
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.
@@ -89,7 +103,7 @@ pub trait BareCryptoStore: Send + Sync {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> Result<Vec<u8>, String>;
+	) -> Result<Vec<u8>, Error>;
 
 	/// Sign with any key
 	///
@@ -102,7 +116,7 @@ pub trait BareCryptoStore: Send + Sync {
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8]
-	) -> Result<(CryptoTypePublicPair, Vec<u8>), String> {
+	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
 		if keys.len() == 1 {
 			return self.sign_with(id, &keys[0], msg).map(|s| (keys[0].clone(), s));
 		} else {
@@ -112,7 +126,7 @@ pub trait BareCryptoStore: Send + Sync {
 				}
 			}
 		}
-		Err("Could not sign with any of the given keys".to_owned())
+		Err(Error::KeyNotSupported)
 	}
 
 	/// Sign with all keys
