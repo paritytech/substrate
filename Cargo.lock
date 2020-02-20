@@ -2700,7 +2700,7 @@ dependencies = [
  "sha2",
  "smallvec 1.2.0",
  "thiserror",
- "unsigned-varint 0.3.0",
+ "unsigned-varint 0.3.1",
  "void",
  "zeroize 1.1.0",
 ]
@@ -2775,7 +2775,7 @@ dependencies = [
  "rand 0.7.3",
  "sha2",
  "smallvec 1.2.0",
- "unsigned-varint 0.3.0",
+ "unsigned-varint 0.3.1",
  "wasm-timer",
 ]
 
@@ -2817,7 +2817,7 @@ dependencies = [
  "sha2",
  "smallvec 1.2.0",
  "uint",
- "unsigned-varint 0.3.0",
+ "unsigned-varint 0.3.1",
  "void",
  "wasm-timer",
 ]
@@ -2857,7 +2857,7 @@ dependencies = [
  "libp2p-core",
  "log 0.4.8",
  "parking_lot 0.10.0",
- "unsigned-varint 0.3.0",
+ "unsigned-varint 0.3.1",
 ]
 
 [[package]]
@@ -2910,7 +2910,7 @@ dependencies = [
  "prost",
  "prost-build",
  "rw-stream-sink",
- "unsigned-varint 0.3.0",
+ "unsigned-varint 0.3.1",
  "void",
 ]
 
@@ -3311,7 +3311,7 @@ dependencies = [
  "log 0.4.8",
  "smallvec 1.2.0",
  "tokio-io",
- "unsigned-varint 0.3.0",
+ "unsigned-varint 0.3.1",
 ]
 
 [[package]]
@@ -4585,7 +4585,7 @@ dependencies = [
  "percent-encoding 2.1.0",
  "serde",
  "static_assertions",
- "unsigned-varint 0.3.0",
+ "unsigned-varint 0.3.1",
  "url 2.1.1",
 ]
 
@@ -4616,7 +4616,7 @@ dependencies = [
  "sha-1",
  "sha2",
  "sha3",
- "unsigned-varint 0.3.0",
+ "unsigned-varint 0.3.1",
 ]
 
 [[package]]
@@ -6218,6 +6218,7 @@ dependencies = [
  "nohash-hasher",
  "parity-scale-codec",
  "parking_lot 0.10.0",
+ "pin-project",
  "prost",
  "prost-build",
  "quickcheck",
@@ -6245,7 +6246,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "thiserror",
- "unsigned-varint 0.3.0",
+ "unsigned-varint 0.3.1",
  "void",
  "wasm-timer",
  "zeroize 1.1.0",
@@ -8546,11 +8547,12 @@ checksum = "a7f0023a96687fe169081e8adce3f65e3874426b7886e9234d490af2dc077959"
 
 [[package]]
 name = "unsigned-varint"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c689459fbaeb50e56c6749275f084decfd02194ac5852e6617d95d0d3cf02eaf"
+checksum = "3b7ffb36714206d2f5f05d61a2bc350415c642f2c54433f0ebf829afbe41d570"
 dependencies = [
  "bytes 0.5.4",
+ "futures 0.3.4",
  "futures_codec",
 ]
 
