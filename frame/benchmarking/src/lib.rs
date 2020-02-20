@@ -205,18 +205,18 @@ macro_rules! selected_benchmark {
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
 ///   }
 ///
-///   // first dispatchable: bar; this is a user dispatchable and operates on a `u8` vector of
+///   // first dispatchable: foo; this is a user dispatchable and operates on a `u8` vector of
 ///   // size `l`, which we allow to be initialised as usual.
 ///   foo {
 ///     let caller = account::<T>(b"caller", 0, _benchmarks_seed);
 ///     let l = ...;
 ///   } _(Origin::Signed(caller), vec![0u8; l])
 ///
-///   // second dispatchable: foo; this is a root dispatchable and accepts a `u8` vector of size
+///   // second dispatchable: bar; this is a root dispatchable and accepts a `u8` vector of size
 ///   // `l`. We don't want it preininitialised like before so we override using the `=> ()`
 ///   // notation.
 ///   // In this case, we explicitly name the call using `bar` instead of `_`.
-///   bar _{
+///   bar {
 ///     let l = _ .. _ => ();
 ///   } bar(Origin::Root, vec![0u8; l])
 ///
@@ -225,19 +225,19 @@ macro_rules! selected_benchmark {
 ///   // pre-instancing block) within the code block. This is only allowed in the param instancers
 ///   // of arms. Instancers of common params cannot optimistically draw upon hypothetical variables
 ///   // that the arm's pre-instancing code block might have declared.
-///   baz1 _{
+///   baz1 {
 ///     let caller = account::<T>(b"caller", 0, _benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c(&caller, c);
 ///   } baz(Origin::Signed(caller))
 ///
 ///   // this is a second benchmark of the baz dispatchable with a different setup.
-///   baz2 _{
+///   baz2 {
 ///     let caller = account::<T>(b"caller", 0, _benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c_in_some_other_way(&caller, c);
 ///   } baz(Origin::Signed(caller))
 ///
 ///   // this is benchmarking some code that is not a dispatchable.
-///   populate_a_set _{
+///   populate_a_set {
 ///     let x in 0 .. 10_000;
 ///     let mut m = Vec::<u32>::new();
 ///     for i in 0..x {
@@ -470,7 +470,7 @@ macro_rules! benchmark_backend {
 	} {
 		$( $parsed:tt )*
 	} { $eval:expr } {
-		let $param:ident in $param_from:tt .. $param_to:expr ;
+		let $param:ident in $param_from:tt .. $param_to:expr;
 		$( $rest:tt )*
 	}) => {
 		$crate::benchmark_backend! {
@@ -505,8 +505,8 @@ macro_rules! benchmark_backend {
 	} { $eval:expr } { $( $post:tt )* } ) => {
 		#[allow(non_camel_case_types)]
 		struct $name;
+		#[allow(unused_variables)]
 		impl<T: Trait> $crate::BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for $name {
-			#[allow(unused_variables)]
 			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
 				vec! [
 					$(
@@ -515,22 +515,18 @@ macro_rules! benchmark_backend {
 				]
 			}
 
-			#[allow(unused_variables)]
 			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
 				-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 			{
 				let _benchmarks_seed = 0;
 				$(
-					#[allow(unused_variables)]
 					let $common = $common_from;
 				)*
 				$(
 					// Prepare instance
-					#[allow(unused_variables)]
 					let $param = components.iter().find(|&c| c.0 == $crate::BenchmarkParameter::$param).unwrap().1;
 				)*
 				$(
-					#[allow(unused_variables)]
 					let $pre_id : $pre_ty = $pre_ex;
 				)*
 				$( $param_instancer ; )*
