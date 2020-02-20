@@ -104,7 +104,7 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 	}
 
 	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg) {
-		unhashed::put(Self::storage_map_final_key(key).as_ref(), &val.borrow())
+		unhashed::put(Self::storage_map_final_key(key).as_ref(), &val)
 	}
 
 	fn remove<KeyArg: EncodeLike<K>>(key: KeyArg) {
@@ -117,8 +117,54 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 
 		let ret = f(&mut val);
 		match G::from_query_to_optional_value(val) {
-			Some(ref val) => unhashed::put(final_key.as_ref(), &val.borrow()),
+			Some(ref val) => unhashed::put(final_key.as_ref(), &val),
 			None => unhashed::kill(final_key.as_ref()),
+		}
+		ret
+	}
+
+	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(key: KeyArg, f: F) -> R {
+		let final_key = Self::storage_map_final_key(key);
+		let mut val = unhashed::get(final_key.as_ref());
+
+		let ret = f(&mut val);
+		match val {
+			Some(ref val) => unhashed::put(final_key.as_ref(), &val),
+			None => unhashed::kill(final_key.as_ref()),
+		}
+		ret
+	}
+
+	fn try_mutate<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
+		key: KeyArg,
+		f: F
+	) -> Result<R, E> {
+		let final_key = Self::storage_map_final_key(key);
+		let mut val = G::from_optional_value_to_query(unhashed::get(final_key.as_ref()));
+
+		let ret = f(&mut val);
+		if ret.is_ok() {
+			match G::from_query_to_optional_value(val) {
+				Some(ref val) => unhashed::put(final_key.as_ref(), &val.borrow()),
+				None => unhashed::kill(final_key.as_ref()),
+			}
+		}
+		ret
+	}
+
+	fn try_mutate_exists<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
+		key: KeyArg,
+		f: F
+	) -> Result<R, E> {
+		let final_key = Self::storage_map_final_key(key);
+		let mut val = unhashed::get(final_key.as_ref());
+
+		let ret = f(&mut val);
+		if ret.is_ok() {
+			match val {
+				Some(ref val) => unhashed::put(final_key.as_ref(), &val.borrow()),
+				None => unhashed::kill(final_key.as_ref()),
+			}
 		}
 		ret
 	}

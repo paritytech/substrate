@@ -1,0 +1,17 @@
+[package]
+name = "node-inspect"
+version = "0.8.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+derive_more = "0.99"
+log = "0.4.8"
+sc-cli = { version = "0.8.0", path = "../../../client/cli" }
+sc-client-api = { version = "2.0.0", path = "../../../client/api" }
+sc-service = { version = "0.8", default-features = false, path = "../../../client/service" }
+sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
+sp-core = { version = "2.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+structopt = "0.3.8"

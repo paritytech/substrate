@@ -118,7 +118,7 @@ fn current_version(path: &Path) -> sp_blockchain::Result<u32> {
 	}
 }
 
-/// Opens database of givent type with given number of columns.
+/// Opens database of given type with given number of columns.
 fn open_database(db_path: &Path, db_type: DatabaseType, db_columns: u32) -> sp_blockchain::Result<Database> {
 	let db_path = db_path.to_str()
 		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;

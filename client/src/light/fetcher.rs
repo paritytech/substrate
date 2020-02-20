@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use sp_core::{convert_hash, traits::CodeExecutor};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
-	SimpleArithmetic, CheckedConversion,
+	AtLeast32Bit, CheckedConversion,
 };
 use sp_state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
@@ -286,7 +286,7 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 }
 
 /// A view of BTreeMap<Number, Hash> as a changes trie roots storage.
-struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
+struct RootsStorage<'a, Number: AtLeast32Bit, Hash: 'a> {
 	roots: (Number, &'a [Hash]),
 	prev_roots: &'a BTreeMap<Number, Hash>,
 }
@@ -294,7 +294,7 @@ struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
 impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a, Number, Hash>
 	where
 		H: Hasher,
-		Number: ::std::fmt::Display + ::std::hash::Hash + Clone + SimpleArithmetic + Encode + Decode + Send + Sync + 'static,
+		Number: ::std::fmt::Display + ::std::hash::Hash + Clone + AtLeast32Bit + Encode + Decode + Send + Sync + 'static,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
 	fn build_anchor(

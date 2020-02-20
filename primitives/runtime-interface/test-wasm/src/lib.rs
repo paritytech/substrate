@@ -25,7 +25,7 @@ use sp_std::{vec, vec::Vec, mem, convert::TryFrom};
 
 use sp_core::{sr25519::Public, wasm_export_functions};
 
-// Inlucde the WASM binary
+// Include the WASM binary
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 

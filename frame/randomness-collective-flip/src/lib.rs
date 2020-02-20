@@ -135,7 +135,7 @@ impl<T: Trait> Randomness<T::Hash> for Module<T> {
 
 		let hash_series = <RandomMaterial<T>>::get();
 		if !hash_series.is_empty() {
-			// Always the case after block 1 is initialised.
+			// Always the case after block 1 is initialized.
 			hash_series.iter()
 				.cycle()
 				.skip(index)
@@ -154,7 +154,9 @@ mod tests {
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill, traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup}, testing::Header,
+		Perbill,
+		testing::Header,
+		traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup},
 	};
 	use frame_support::{impl_outer_origin, parameter_types, weights::Weight, traits::Randomness};
 
@@ -189,6 +191,9 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnReapAccount = ();
 	}
 
 	type System = frame_system::Module<Test>;
@@ -226,7 +231,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_random_material_parital() {
+	fn test_random_material_partial() {
 		new_test_ext().execute_with(|| {
 			let genesis_hash = System::parent_hash();
 

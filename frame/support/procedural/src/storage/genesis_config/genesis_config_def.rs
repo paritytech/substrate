@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Genesis config defintion.
+//! Genesis config definition.
 
 use frame_support_procedural_tools::syn_ext as ext;
 use proc_macro2::TokenStream;

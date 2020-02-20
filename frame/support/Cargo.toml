@@ -18,7 +18,7 @@ sp-arithmetic = { version = "2.0.0", default-features = false, path = "../../pri
 sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
 frame-support-procedural = { version = "2.0.0", path = "./procedural" }
 paste = "0.1.6"
-once_cell = { version = "0.2.4", default-features = false, optional = true }
+once_cell = { version = "1", default-features = false, optional = true }
 sp-state-machine = { version = "0.8", optional = true, path = "../../primitives/state-machine" }
 bitmask = { version = "0.5.0", default-features = false }
 impl-trait-for-tuples = "0.1.3"

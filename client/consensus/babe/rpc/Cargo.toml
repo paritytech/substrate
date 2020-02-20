@@ -1,0 +1,30 @@
+[package]
+name = "sc-consensus-babe-rpc"
+version = "0.8.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "RPC extensions for the BABE consensus algorithm"
+edition = "2018"
+license = "GPL-3.0"
+
+[dependencies]
+sc-consensus-babe = { version = "0.8.0", path = "../" }
+jsonrpc-core = "14.0.3"
+jsonrpc-core-client = "14.0.3"
+jsonrpc-derive = "14.0.3"
+sp-consensus-babe = { version = "0.8", path = "../../../../primitives/consensus/babe" }
+serde = { version = "1.0.104", features=["derive"] }
+sp-blockchain = { version = "2.0.0", path = "../../../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0", path = "../../../../primitives/runtime" }
+sc-consensus-epochs = { version = "0.8", path = "../../epochs" }
+futures = "0.3.1"
+derive_more = "0.99.2"
+sp-api = { version = "2.0.0", path = "../../../../primitives/api" }
+sp-consensus = { version = "0.8", path = "../../../../primitives/consensus/common" }
+sp-core = { version = "2.0.0", path = "../../../../primitives/core" }
+sc-keystore = { version = "2.0.0", path = "../../../keystore" }
+
+[dev-dependencies]
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }
+sp-application-crypto = { version = "2.0.0", path = "../../../../primitives/application-crypto" }
+sp-keyring = { version = "2.0.0", path = "../../../../primitives/keyring" }
+tempfile = "3.1.0"
