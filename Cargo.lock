@@ -4150,6 +4150,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-example-offchain-worker"
+version = "2.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "serde_json",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-finality-tracker"
 version = "2.0.0"
 dependencies = [
@@ -6255,7 +6270,6 @@ dependencies = [
 name = "sc-network-gossip"
 version = "0.8.0"
 dependencies = [
- "futures 0.1.29",
  "futures 0.3.4",
  "futures-timer 3.0.1",
  "libp2p",
