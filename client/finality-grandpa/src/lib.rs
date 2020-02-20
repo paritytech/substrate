@@ -550,7 +550,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 	Client<B, E, Block, RA>: AuxStore,
 {
 	let GrandpaParams {
-		config,
+		mut config,
 		link,
 		network,
 		inherent_data_providers,
@@ -558,6 +558,12 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 		telemetry_on_connect,
 		voting_rule,
 	} = grandpa_params;
+
+	// NOTE: we have recently removed `run_grandpa_observer` from the public
+	// API, I felt it is easier to just ignore this field rather than removing
+	// it from the config temporarily. This should be removed after #5013 is
+	// fixed and we re-add the observer to the public API.
+	config.observer_enabled = false;
 
 	let LinkHalf {
 		client,
