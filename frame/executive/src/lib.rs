@@ -60,16 +60,8 @@
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
 //! # use sp_runtime::transaction_validity::{TransactionValidity, UnknownTransaction};
-//! # use sp_runtime::traits::ValidateUnsigned;
-//! # impl ValidateUnsigned for Runtime {
-//! # 	type Call = ();
-//! #
-//! # 	fn validate_unsigned(_call: &Self::Call) -> TransactionValidity {
-//! # 		UnknownTransaction::NoUnsignedValidator.into()
-//! # 	}
-//! # }
 //! /// Executive: handles dispatch to the various modules.
-//! pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, AllModules>;
+//! pub type Executive = executive::Executive<Runtime, Block, Context, AllModules>;
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -86,7 +78,6 @@ use sp_runtime::{
 	transaction_validity::TransactionValidity,
 };
 use sp_runtime::generic::CheckSignature;
-use sp_runtime::traits::ValidateUnsigned;
 use codec::{Codec, Encode};
 use frame_system::{extrinsics_root, DigestOf};
 
@@ -100,21 +91,20 @@ pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
-pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
-	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
+pub struct Executive<System, Block, Context, AllModules>(
+	PhantomData<(System, Block, Context, AllModules)>
 );
 
 impl<
 	System: frame_system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	UnsignedValidator,
 	AllModules:
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber> +
 		WeighBlock<System::BlockNumber>,
-> ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
+> ExecuteBlock<Block> for Executive<System, Block, Context, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
@@ -122,10 +112,9 @@ where
 		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	fn execute_block(block: Block) {
-		Executive::<System, Block, Context, UnsignedValidator, AllModules>::execute_block(block);
+		Executive::<System, Block, Context, AllModules>::execute_block(block);
 	}
 }
 
@@ -133,13 +122,12 @@ impl<
 	System: frame_system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	UnsignedValidator,
 	AllModules:
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber> +
 		WeighBlock<System::BlockNumber>,
-> Executive<System, Block, Context, UnsignedValidator, AllModules>
+> Executive<System, Block, Context, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
@@ -147,7 +135,6 @@ where
 		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
@@ -297,7 +284,7 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
-		let r = Applyable::apply::<UnsignedValidator>(xt, dispatch_info, encoded_len)?;
+		let r = Applyable::apply(xt, dispatch_info, encoded_len)?;
 
 		<frame_system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32, dispatch_info);
 
@@ -335,7 +322,7 @@ where
 		let xt = uxt.check(CheckSignature::Yes, &Default::default())?;
 
 		let dispatch_info = xt.get_dispatch_info();
-		xt.validate::<UnsignedValidator>(dispatch_info, encoded_len)
+		xt.validate(dispatch_info, encoded_len)
 	}
 
 	/// Start an offchain worker and generate extrinsics.
@@ -491,7 +478,7 @@ mod tests {
 	}
 	impl custom::Trait for Runtime {}
 
-	impl ValidateUnsigned for Runtime {
+	impl traits::ValidateUnsigned for Runtime {
 		type Call = Call;
 
 		fn pre_dispatch(_call: &Self::Call) -> Result<(), TransactionValidityError> {
@@ -510,17 +497,19 @@ mod tests {
 		frame_system::CheckEra<Runtime>,
 		frame_system::CheckNonce<Runtime>,
 		frame_system::CheckWeight<Runtime>,
+		frame_system::ValidateUnsigned<Runtime>,
 		pallet_transaction_payment::ChargeTransactionPayment<Runtime>
 	);
 	type AllModules = (System, Balances, Custom);
 	type TestXt = sp_runtime::testing::TestXt<Call, SignedExtra>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, ChainContext<Runtime>, Runtime, AllModules>;
+	type Executive = super::Executive<Runtime, Block<TestXt>, ChainContext<Runtime>, AllModules>;
 
 	fn extra(nonce: u64, fee: u64) -> SignedExtra {
 		(
 			frame_system::CheckEra::from(Era::Immortal),
 			frame_system::CheckNonce::from(nonce),
 			frame_system::CheckWeight::new(),
+			frame_system::ValidateUnsigned::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::from(fee)
 		)
 	}

@@ -1140,6 +1140,59 @@ impl<T: Trait + Send + Sync> Debug for CheckWeight<T> {
 	}
 }
 
+
+/// Unsigned transactions validation.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct ValidateUnsigned<T: Trait + Send + Sync>(PhantomData<T>);
+
+impl<T: Trait + Send + Sync> ValidateUnsigned<T> {
+	/// Creates new `SignedExtension` to validate unsigned transactions.
+	pub fn new() -> Self {
+		Self(PhantomData)
+	}
+}
+
+impl<T> SignedExtension for ValidateUnsigned<T> where
+	T: Trait + traits::ValidateUnsigned<Call = <T as Trait>::Call> + Send + Sync,
+{
+	type AccountId = T::AccountId;
+	type Call = <T as Trait>::Call;
+	type AdditionalSigned = ();
+	type DispatchInfo = DispatchInfo;
+	type Pre = ();
+	const IDENTIFIER: &'static str = "ValidateUnsigned";
+
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
+
+	fn pre_dispatch_unsigned(
+		call: &Self::Call,
+		_info: Self::DispatchInfo,
+		_len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		<T as traits::ValidateUnsigned>::pre_dispatch(call)
+	}
+
+	fn validate_unsigned(
+		call: &Self::Call,
+		_info: Self::DispatchInfo,
+		_len: usize,
+	) -> TransactionValidity {
+		<T as traits::ValidateUnsigned>::validate_unsigned(call)
+	}
+}
+
+impl<T: Trait + Send + Sync> Debug for ValidateUnsigned<T> {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "ValidateUnsigned")
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		Ok(())
+	}
+}
+
 /// Nonce check and increment to give replay protection for transactions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckNonce<T: Trait>(#[codec(compact)] T::Index);

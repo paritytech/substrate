@@ -23,7 +23,6 @@ use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
 	SignedExtension, Dispatchable,
 };
-use crate::traits::ValidateUnsigned;
 use crate::{generic::{self, CheckSignature}, KeyTypeId, ApplyExtrinsicResult};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
@@ -417,7 +416,7 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 	fn sender(&self) -> Option<&Self::AccountId> { self.signature.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
+	fn validate(
 		&self,
 		_info: Self::DispatchInfo,
 		_len: usize,
@@ -427,7 +426,7 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
+	fn apply(
 		self,
 		info: Self::DispatchInfo,
 		len: usize,

@@ -20,7 +20,6 @@
 use crate::traits::{
 	self, Member, MaybeDisplay, SignedExtension, Dispatchable,
 };
-use crate::traits::ValidateUnsigned;
 use crate::transaction_validity::TransactionValidity;
 
 /// Definition of something that the external world might want to say; its
@@ -53,7 +52,7 @@ where
 		self.signed.as_ref().map(|x| &x.0)
 	}
 
-	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
+	fn validate(
 		&self,
 		info: Self::DispatchInfo,
 		len: usize,
@@ -61,13 +60,11 @@ where
 		if let Some((ref id, ref extra)) = self.signed {
 			Extra::validate(extra, id, &self.function, info.clone(), len)
 		} else {
-			let valid = Extra::validate_unsigned(&self.function, info, len)?;
-			let unsigned_validation = U::validate_unsigned(&self.function)?;
-			Ok(valid.combine_with(unsigned_validation))
+			Extra::validate_unsigned(&self.function, info, len)
 		}
 	}
 
-	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
+	fn apply(
 		self,
 		info: Self::DispatchInfo,
 		len: usize,
@@ -77,7 +74,6 @@ where
 			(Some(id), pre)
 		} else {
 			let pre = Extra::pre_dispatch_unsigned(&self.function, info.clone(), len)?;
-			U::pre_dispatch(&self.function)?;
 			(None, pre)
 		};
 		let res = self.function.dispatch(Origin::from(maybe_who));
