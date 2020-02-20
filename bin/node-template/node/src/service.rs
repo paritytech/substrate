@@ -9,7 +9,7 @@ use sp_inherents::InherentDataProviders;
 use sc_network::{construct_simple_protocol};
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
-use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
+use sp_consensus_aura::{AuraApi, sr25519::{AuthorityPair as AuraPair}};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 
 // Our native executor instance.
@@ -57,7 +57,10 @@ macro_rules! new_full_start {
 				);
 
 				let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
-					sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
+					sc_consensus_aura::SlotDuration::get_or_compute(
+						&*client,
+						|a, b| a.slot_duration(b),
+					)?,
 					aura_block_import,
 					Some(Box::new(grandpa_block_import.clone())),
 					None,
@@ -115,7 +118,10 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
 		let aura = sc_consensus_aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
-			sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
+			sc_consensus_aura::SlotDuration::get_or_compute(
+				&*client,
+				|a, b| a.slot_duration(b),
+			)?,
 			client,
 			select_chain,
 			block_import,
@@ -220,7 +226,10 @@ pub fn new_light(config: Configuration<GenesisConfig>)
 				finality_proof_import.create_finality_proof_request_builder();
 
 			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, ()>(
-				sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
+				sc_consensus_aura::SlotDuration::get_or_compute(
+					&*client,
+					|a, b| a.slot_duration(b),
+				)?,
 				grandpa_block_import,
 				None,
 				Some(Box::new(finality_proof_import)),
