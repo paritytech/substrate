@@ -218,17 +218,22 @@ where
 			.collect();
 
 		let signatures = self.key_store
-							.read()
-							.sign_with_all(
-								key_types::AUTHORITY_DISCOVERY,
-								keys.clone(),
-								serialized_addresses.as_slice()
-							);
+			.read()
+			.sign_with_all(
+				key_types::AUTHORITY_DISCOVERY,
+				keys.clone(),
+				serialized_addresses.as_slice()
+			);
 
-		for (index, signature) in signatures.iter().enumerate() {
+		for (signature, key) in signatures.iter().zip(keys) {
 			let mut signed_addresses = vec![];
-			let key = keys.get(index).ok_or(Error::PublicKeyToSignatureMapping)?;
 
+			// sign_with_all returns Option<Signature> where the signature
+			// is None for a public key that is not supported.
+			// Verify that all signatures exist for all provided keys.
+			if signature.is_none() {
+				return Err(Error::MissingSignature(kk));
+			}
 			schema::SignedAuthorityAddresses {
 				addresses: serialized_addresses.clone(),
 				signature: signature.encode(),
