@@ -311,11 +311,9 @@ mod tests {
 			.ed25519_generate_new(ED25519, None)
 			.expect("Genrates key");
 
-		let store_key_pair = store.read()
-			.ed25519_key_pair(ED25519, &public)
-			.expect("Key should exists in store");
+		let public_keys = store.read().keys(ED25519).unwrap();
 
-		assert_eq!(public, store_key_pair.public());
+		assert_eq!(true, public_keys.contains(&(ed25519::ED25519_CRYPTO_ID, public.to_raw_vec())));
 	}
 
 	#[test]
@@ -331,11 +329,8 @@ mod tests {
 			key_pair.public().as_ref(),
 		).expect("Inserts unknown key");
 
-		let store_key_pair = store.read().sr25519_key_pair(
-			SR25519,
-			&key_pair.public(),
-		).expect("Gets key pair from keystore");
+		let public_keys = store.read().keys(SR25519).unwrap();
 
-		assert_eq!(key_pair.public(), store_key_pair.public());
+		assert_eq!(true, public_keys.contains(&(ed25519::SR25519_CRYPTO_ID, key_pair.public().to_raw_vec())));
 	}
 }

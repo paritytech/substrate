@@ -21,7 +21,7 @@ use assert_matches::assert_matches;
 use codec::Encode;
 use sp_core::{
 	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore},
-	traits::BareCryptoStorePtr, ed25519, crypto::{Pair, Public},
+	traits::BareCryptoStorePtr, ed25519, sr25519, crypto::{Pair, Public},
 };
 use rpc::futures::Stream as _;
 use substrate_test_runtime_client::{
@@ -215,10 +215,9 @@ fn should_insert_key() {
 		key_pair.public().0.to_vec().into(),
 	).expect("Insert key");
 
-	let store_key_pair = setup.keystore.read()
-		.ed25519_key_pair(ED25519, &key_pair.public()).expect("Key exists in store");
+	let public_keys = setup.keystore.read().keys(ED25519).unwrap();
 
-	assert_eq!(key_pair.public(), store_key_pair.public());
+	assert_eq!(true, public_keys.contains(&(ed25519::ED25519_CRYPTO_ID, key_pair.public().to_raw_vec())));
 }
 
 #[test]
@@ -231,18 +230,11 @@ fn should_rotate_keys() {
 	let session_keys = SessionKeys::decode(&mut &new_public_keys[..])
 		.expect("SessionKeys decode successfully");
 
-	let ed25519_key_pair = setup.keystore.read().ed25519_key_pair(
-		ED25519,
-		&session_keys.ed25519.clone().into(),
-	).expect("ed25519 key exists in store");
+	let ed25519_public_keys = setup.keystore.read().keys(ED25519).unwrap();
+	let sr25519_public_keys = setup.keystore.read().keys(SR25519).unwrap();
 
-	let sr25519_key_pair = setup.keystore.read().sr25519_key_pair(
-		SR25519,
-		&session_keys.sr25519.clone().into(),
-	).expect("sr25519 key exists in store");
-
-	assert_eq!(session_keys.ed25519, ed25519_key_pair.public().into());
-	assert_eq!(session_keys.sr25519, sr25519_key_pair.public().into());
+	assert_eq!(true, ed25519_public_keys.contains(&(ed25519::ED25519_CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
+	assert_eq!(true, sr25519_public_keys.contains(&(sr25519::SR25519_CRYPTO_ID, session_keys.sr25519.to_raw_vec())));
 }
 
 #[test]
