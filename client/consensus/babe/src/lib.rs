@@ -693,49 +693,6 @@ impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
 	}
 }
 
-#[allow(dead_code)]
-fn median_algorithm(
-	median_required_blocks: u64,
-	slot_duration: u64,
-	slot_number: u64,
-	slot_now: u64,
-	time_source: &mut (Option<Duration>, Vec<(Instant, u64)>),
-) {
-	let num_timestamps = time_source.1.len();
-	if num_timestamps as u64 >= median_required_blocks && median_required_blocks > 0 {
-		let mut new_list: Vec<_> = time_source.1.iter().map(|&(t, sl)| {
-			let offset: u128 = u128::from(slot_duration)
-				.checked_mul(1_000_000u128) // self.config.slot_duration returns milliseconds
-				.and_then(|x| {
-					x.checked_mul(u128::from(slot_number).saturating_sub(u128::from(sl)))
-				})
-				.expect("we cannot have timespans long enough for this to overflow; qed");
-
-			const NANOS_PER_SEC: u32 = 1_000_000_000;
-			let nanos = (offset % u128::from(NANOS_PER_SEC)) as u32;
-			let secs = (offset / u128::from(NANOS_PER_SEC)) as u64;
-
-			t + Duration::new(secs, nanos)
-		}).collect();
-
-		// Use a partial sort to move the median timestamp to the middle of the list
-		pdqselect::select(&mut new_list, num_timestamps / 2);
-
-		let &median = new_list
-			.get(num_timestamps / 2)
-			.expect("we have at least one timestamp, so this is a valid index; qed");
-
-		let now = Instant::now();
-		if now >= median {
-			time_source.0.replace(now - median);
-		}
-
-		time_source.1.clear();
-	} else {
-		time_source.1.push((Instant::now(), slot_now))
-	}
-}
-
 impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA> where
 	Block: BlockT,
 	B: Backend<Block> + 'static,
