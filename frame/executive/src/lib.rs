@@ -696,7 +696,7 @@ mod tests {
 			let _ = <frame_system::Module<Runtime>>::finalize();
 
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 0);
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 0);
 		});
 	}
 
@@ -718,13 +718,13 @@ mod tests {
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 0);
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 0);
 
 			// This is okay -- balances transfer will panic since it requires ensure_signed.
 			assert_eq!(Executive::apply_extrinsic(xt), Ok(Err(DispatchError::BadOrigin)));
 
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), len);
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), len);
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), len);
 		});
 	}
 

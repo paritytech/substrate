@@ -117,7 +117,7 @@ use frame_support::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnReapAccount, IsDeadAccount, Happened,
 		StoredMap
 	},
-	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
+	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -414,11 +414,15 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-		/// A big dispatch that will disallow any other transaction to be included.
+		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = SimpleDispatchInfo::MaxOperational]
-		fn fill_block(origin) {
+		#[weight = FunctionOf(
+			|(ratio,): (&Perbill,)| *ratio * T::MaximumBlockWeight::get(),
+			DispatchClass::Operational,
+			true,
+		)]
+		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
 
