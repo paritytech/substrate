@@ -23,10 +23,10 @@ use frame_benchmarking::{
 	BenchmarkResults, BenchmarkParameter, selected_benchmark, benchmarking, Benchmarking,
     BenchmarkingSetup,
 };
+use sp_application_crypto::{key_types,RuntimePublic, RuntimeAppPublic};
+use sp_core::offchain::OpaqueNetworkState;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Dispatchable};
-use sp_application_crypto::{key_types,RuntimePublic, RuntimeAppPublic};
-
 use codec::{Encode, Decode};
 
 use crate::Module as ImOnline;
@@ -36,29 +36,37 @@ fn block_number<T: Trait>() -> T::BlockNumber {
 	// let entropy = (b"whatsoever", 0u32).using_encoded(blake2_256);
 	// <T::BlockNumber as Decode>::decode(&mut &entropy).expect("decode of heartbeat should work just fine")
 	// // unimplemented!("a random block number construction is a TODO")
-	27u32.into()
+	1u32.into()
 }
 
+
+fn network_state<T: Trait>() -> OpaqueNetworkState {
+	OpaqueNetworkState {
+		peer_id : sp_core::offchain::OpaquePeerId(vec![0u8, 2u8]),
+		external_addresses : vec![
+			sp_core::offchain::OpaqueMultiaddr (
+				vec![192u8,168u8,1u8,121u8]
+			)
+		]
+	}
+}
 
 fn heartbeat<T: Trait>() -> crate::Heartbeat<T::BlockNumber> {
 	crate::Heartbeat::<T::BlockNumber> {
 		block_number : <T::BlockNumber>::from(88u32),
 		session_index : 56u32 as SessionIndex,
 		authority_index : 14u32 as AuthIndex,
-		network_state : sp_core::offchain::OpaqueNetworkState {
-			peer_id : sp_core::offchain::OpaquePeerId(vec![0u8, 2u8]),
-			external_addresses : vec![
-				sp_core::offchain::OpaqueMultiaddr (
-					vec![192u8,168u8,1u8,121u8]
-				)
-			]
-		}
+		network_state : network_state::<T>(),
 	}
 }
 
 // Benchmark `add_registrar` extrinsic.
 struct Heartbeat;
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for Heartbeat {
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for Heartbeat
+where
+	<T as Trait>::AuthorityId : core::default::Default,
+	<<T as Trait>::AuthorityId as RuntimeAppPublic>::Signature : core::default::Default,
+{
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// unused
@@ -69,29 +77,24 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
-		// let signature = Default::default();
-		// let heartbeat_data = pallet_im_online::Heartbeat {
-		// 	block_number: 1,
-		// 	network_state: Default::default(),
-		// 	session_index: 1,
-		// 	authority_index: 0,
-		// };
+        let _x : u32 = components.iter()
+            .find(|param| param.0 == BenchmarkParameter::X)
+            .expect("Must contain param S")
+			.1.try_into().unwrap();
 
 		// let call = pallet_im_online::Call::heartbeat(heartbeat_data, signature);
-		// <SubmitTransaction as SubmitUnsignedTransaction<Runtime, Call>>
-		// 	::submit_unsigned(call)
-		// 	.unwrap();
-
-		// assert_eq!(state.read().transactions.len(), 1)
-		// });
-
-
-		let seed = Some(vec![1,2,3,4]);
-
-		let hb = heartbeat::<T>();
-		let raw = hb.encode();
-		let pair = <<T as Trait>::AuthorityId as RuntimeAppPublic>::generate_pair(seed);
-		let signature = pair.sign(&raw).expect("Failed to calculate signature");
+		// let seed = Some(vec![1,2,3,4]);
+		// let hb = heartbeat::<T>();
+		// let raw = hb.encode();
+		// let pair = <<T as Trait>::AuthorityId as RuntimeAppPublic>::generate_pair(seed);
+		// let signature = pair.sign(&raw).expect("Failed to calculate signature");
+		let hb = crate::Heartbeat::<T::BlockNumber> {
+			block_number: block_number::<T>(),
+			network_state: network_state::<T>(),
+			session_index: 1,
+			authority_index: 0,
+		};
+		let signature = Default::default();
 
 		Ok((crate::Call::<T>::heartbeat(hb, signature), RawOrigin::None))
 	}
@@ -104,7 +107,11 @@ enum SelectedBenchmark {
 }
 
 // Allow us to select a benchmark from the list of available benchmarks.
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark
+where
+	<T as Trait>::AuthorityId : core::default::Default,
+	<<T as Trait>::AuthorityId as RuntimeAppPublic>::Signature : core::default::Default,
+{
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		match self {
 			Self::Heartbeat => <Heartbeat as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&Heartbeat),
@@ -120,7 +127,11 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	}
 }
 
-impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
+impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T>
+where
+	<T as Trait>::AuthorityId : core::default::Default,
+	<<T as Trait>::AuthorityId as RuntimeAppPublic>::Signature : core::default::Default,
+{
 	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
 		// Map the input to the selected benchmark.
 		let selected_benchmark = match extrinsic.as_slice() {

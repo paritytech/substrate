@@ -22,11 +22,11 @@ use codec::{Decode, Encode};
 use frame_system::RawOrigin;
 use frame_system;
 use frame_benchmarking::{
-    BenchmarkResults, BenchmarkParameter, selected_benchmark, benchmarking, Benchmarking,
+    BenchmarkResults, BenchmarkParameter, benchmarking, Benchmarking,
     BenchmarkingSetup,
 };
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Bounded, Dispatchable, Hash, BlakeTwo256};
+use sp_runtime::traits::{Dispatchable, Hash, BlakeTwo256};
 use core::convert::TryInto;
 
 use crate::Module as Utility;
@@ -84,7 +84,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
         &self,
         components: &[(BenchmarkParameter, u32)],
     ) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str> {
-        let a : usize = components.iter()
+        let _a : usize = components.iter()
             .find(|param| param.0 == BenchmarkParameter::A)
             .expect("Must contain param A")
 			.1.try_into().expect("u32 to usize must succeed");
@@ -226,9 +226,11 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where <T as Trait>::
 		benchmarking::commit_db();
 		benchmarking::wipe_db();
 
-		// first one is set_identity.
-		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
-		// results go here
+
+        let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
+
+        sp_io::misc::print_utf8("dafuq".as_bytes());
+
 		let mut results: Vec<BenchmarkResults> = Vec::new();
 		// Select the component we will be benchmarking. Each component will be benchmarked.
 		for (name, low, high) in components.iter() {

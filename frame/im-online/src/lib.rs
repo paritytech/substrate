@@ -328,6 +328,7 @@ decl_module! {
 			if let (false, Some(public)) = (exists, public) {
 				Self::deposit_event(Event::<T>::HeartbeatReceived(public.clone()));
 
+				sp_io::misc::print_utf8("XXXX done".as_bytes());
 				let network_state = heartbeat.network_state.encode();
 				<ReceivedHeartbeats>::insert(
 					&current_session,
@@ -335,8 +336,10 @@ decl_module! {
 					&network_state
 				);
 			} else if exists {
+				sp_io::misc::print_utf8("XXXX Already exists".as_bytes());
 				Err(Error::<T>::DuplicatedHeartbeat)?
 			} else {
+				sp_io::misc::print_utf8("XXXX Invalid key".as_bytes());
 				Err(Error::<T>::InvalidKey)?
 			}
 		}

@@ -20,13 +20,13 @@ use super::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::{
-	BenchmarkResults, BenchmarkParameter, selected_benchmark, benchmarking, Benchmarking,
+	BenchmarkResults, BenchmarkParameter, benchmarking, Benchmarking,
     BenchmarkingSetup,
 };
-use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Bounded, Dispatchable, Header};
 
-use crate::Module as Authorship;
+use sp_runtime::traits::{Dispatchable, Header};
+
+
 
 
 const MAX_UNCLES : u32 = 10;
@@ -47,7 +47,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		]
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)])
+	fn instance(&self, _components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
         let headers = (0..10).into_iter().map(|idx| {
