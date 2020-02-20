@@ -19,9 +19,13 @@
 use super::*;
 
 use frame_system::RawOrigin;
+use frame_benchmarking::{
+	BenchmarkResults, BenchmarkParameter, selected_benchmark, benchmarking, Benchmarking,
+    BenchmarkingSetup,
+};
 use sp_io::hashing::blake2_256;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter};
-use sp_runtime::traits::{Bounded, Benchmarking, BenchmarkingSetup, Dispatchable, Header};
+use sp_runtime::traits::{Bounded, Dispatchable, Header};
+
 use crate::Module as Authorship;
 
 
@@ -85,12 +89,12 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		// Map the input to the selected benchmark.
 		let selected_benchmark = match extrinsic.as_slice() {
 			b"set_uncles" => SelectedBenchmark::SetUncles,
-			_ => return Err("Could not find extrinsic."), // TODO is this really an extrinisic here?
+			_ => return Err("Could not find extrinsic."),
 		};
 
 		// Warm up the DB
-		sp_io::benchmarking::commit_db();
-		sp_io::benchmarking::wipe_db();
+		benchmarking::commit_db();
+		benchmarking::wipe_db();
 
 		// first one is set_identity.
 		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
@@ -117,15 +121,15 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
 					// Commit the externalities to the database, flushing the DB cache.
 					// This will enable worst case scenario for reading from the database.
-					sp_io::benchmarking::commit_db();
+					benchmarking::commit_db();
 					// Run the benchmark.
-					let start = sp_io::benchmarking::current_time();
+					let start = benchmarking::current_time();
 					call.dispatch(caller.into())?;
-					let finish = sp_io::benchmarking::current_time();
+					let finish = benchmarking::current_time();
 					let elapsed = finish - start;
 					results.push((c.clone(), elapsed));
 					// Wipe the DB back to the genesis state.
-					sp_io::benchmarking::wipe_db();
+					benchmarking::wipe_db();
 				}
 			}
 		}

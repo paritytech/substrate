@@ -19,10 +19,14 @@
 use super::*;
 
 use frame_system::RawOrigin;
+use frame_benchmarking::{
+	BenchmarkResults, BenchmarkParameter, selected_benchmark, benchmarking, Benchmarking,
+    BenchmarkingSetup,
+};
 use sp_io::hashing::blake2_256;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter};
-use sp_runtime::traits::{Bounded, Benchmarking, BenchmarkingSetup, Dispatchable};
+use sp_runtime::traits::{Bounded, Dispatchable};
 use sp_application_crypto::{key_types,RuntimePublic, RuntimeAppPublic};
+
 use codec::{Encode, Decode};
 
 use crate::Module as ImOnline;
@@ -58,13 +62,30 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// unused
-			(BenchmarkParameter::X, 1, 2),
+			(BenchmarkParameter::X, 1, 10),
 		]
 	}
 
 	fn instance(&self, components: &[(BenchmarkParameter, u32)])
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
+		// let signature = Default::default();
+		// let heartbeat_data = pallet_im_online::Heartbeat {
+		// 	block_number: 1,
+		// 	network_state: Default::default(),
+		// 	session_index: 1,
+		// 	authority_index: 0,
+		// };
+
+		// let call = pallet_im_online::Call::heartbeat(heartbeat_data, signature);
+		// <SubmitTransaction as SubmitUnsignedTransaction<Runtime, Call>>
+		// 	::submit_unsigned(call)
+		// 	.unwrap();
+
+		// assert_eq!(state.read().transactions.len(), 1)
+		// });
+
+
 		let seed = Some(vec![1,2,3,4]);
 
 		let hb = heartbeat::<T>();
@@ -75,8 +96,6 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 		Ok((crate::Call::<T>::heartbeat(hb, signature), RawOrigin::None))
 	}
 }
-
-
 
 
 // The list of available benchmarks for this pallet.
@@ -110,9 +129,10 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		};
 
 		// Warm up the DB
-		sp_io::benchmarking::commit_db();
-		sp_io::benchmarking::wipe_db();
+		benchmarking::commit_db();
+		benchmarking::wipe_db();
 
+		// first one is set_identity.
 		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
 		// results go here
 		let mut results: Vec<BenchmarkResults> = Vec::new();
@@ -137,15 +157,15 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
 					// Commit the externalities to the database, flushing the DB cache.
 					// This will enable worst case scenario for reading from the database.
-					sp_io::benchmarking::commit_db();
+					benchmarking::commit_db();
 					// Run the benchmark.
-					let start = sp_io::benchmarking::current_time();
+					let start = benchmarking::current_time();
 					call.dispatch(caller.into())?;
-					let finish = sp_io::benchmarking::current_time();
+					let finish = benchmarking::current_time();
 					let elapsed = finish - start;
 					results.push((c.clone(), elapsed));
 					// Wipe the DB back to the genesis state.
-					sp_io::benchmarking::wipe_db();
+					benchmarking::wipe_db();
 				}
 			}
 		}

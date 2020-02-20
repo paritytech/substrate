@@ -21,9 +21,12 @@ use super::*;
 use codec::{Decode, Encode};
 use frame_system::RawOrigin;
 use frame_system;
+use frame_benchmarking::{
+    BenchmarkResults, BenchmarkParameter, selected_benchmark, benchmarking, Benchmarking,
+    BenchmarkingSetup,
+};
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Benchmarking, BenchmarkingSetup, Bounded, Dispatchable, Hash, BlakeTwo256};
-use sp_runtime::{BenchmarkParameter, BenchmarkResults};
+use sp_runtime::traits::{Bounded, Dispatchable, Hash, BlakeTwo256};
 use core::convert::TryInto;
 
 use crate::Module as Utility;
@@ -98,7 +101,9 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 
 // Benchmark `as_sub` util extrinsic.
 struct ApproveAsMulti;
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ApproveAsMulti where <T as Trait>::Call : core::convert::From<crate::Call<T>> + Encode {
+impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ApproveAsMulti
+    where <T as Trait>::Call : core::convert::From<crate::Call<T>> + Encode {
+
     fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
         vec![
             // multisig number of signatures
@@ -217,63 +222,47 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where <T as Trait>::
             _ => return Err("Could not find extrinsic."),
         };
 
-        // Warm up the DB
-        sp_io::benchmarking::commit_db();
-        sp_io::benchmarking::wipe_db();
+		// Warm up the DB
+		benchmarking::commit_db();
+		benchmarking::wipe_db();
 
-        let components = <SelectedBenchmark as BenchmarkingSetup<
-            T,
-            crate::Call<T>,
-            RawOrigin<T::AccountId>,
-        >>::components(&selected_benchmark);
-        // results go here
-        let mut results: Vec<BenchmarkResults> = Vec::new();
-        // Select the component we will be benchmarking. Each component will be benchmarked.
-        for (name, low, high) in components.iter() {
-            // Create up to `STEPS` steps for that component between high and low.
-            let step_size = ((high - low) / steps).max(1);
-            let num_of_steps = (high - low) / step_size;
-            for s in 0..num_of_steps {
-                // This is the value we will be testing for component `name`
-                let component_value = low + step_size * s;
+		// first one is set_identity.
+		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
+		// results go here
+		let mut results: Vec<BenchmarkResults> = Vec::new();
+		// Select the component we will be benchmarking. Each component will be benchmarked.
+		for (name, low, high) in components.iter() {
+			// Create up to `STEPS` steps for that component between high and low.
+			let step_size = ((high - low) / steps).max(1);
+			let num_of_steps = (high - low) / step_size;
+			for s in 0..num_of_steps {
+				// This is the value we will be testing for component `name`
+				let component_value = low + step_size * s;
 
-                // Select the mid value for all the other components.
-                let c: Vec<(BenchmarkParameter, u32)> = components
-                    .iter()
-                    .map(|(n, l, h)| {
-                        (
-                            *n,
-                            if n == name {
-                                component_value
-                            } else {
-                                (h - l) / 2 + l
-                            },
-                        )
-                    })
-                    .collect();
+				// Select the mid value for all the other components.
+				let c: Vec<(BenchmarkParameter, u32)> = components.iter()
+					.map(|(n, l, h)|
+						(*n, if n == name { component_value } else { (h - l) / 2 + l })
+					).collect();
 
-                // Run the benchmark `repeat` times.
-                for _ in 0..repeat {
-                    // Set up the externalities environment for the setup we want to benchmark.
-                    let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<
-                        T,
-                        crate::Call<T>,
-                        RawOrigin<T::AccountId>,
-                    >>::instance(&selected_benchmark, &c)?;
-                    // Commit the externalities to the database, flushing the DB cache.
-                    // This will enable worst case scenario for reading from the database.
-                    sp_io::benchmarking::commit_db();
-                    // Run the benchmark.
-                    let start = sp_io::benchmarking::current_time();
-                    call.dispatch(caller.into())?;
-                    let finish = sp_io::benchmarking::current_time();
-                    let elapsed = finish - start;
-                    results.push((c.clone(), elapsed));
-                    // Wipe the DB back to the genesis state.
-                    sp_io::benchmarking::wipe_db();
-                }
-            }
-        }
-        return Ok(results);
-    }
+				// Run the benchmark `repeat` times.
+				for _ in 0..repeat {
+					// Set up the externalities environment for the setup we want to benchmark.
+					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
+					// Commit the externalities to the database, flushing the DB cache.
+					// This will enable worst case scenario for reading from the database.
+					benchmarking::commit_db();
+					// Run the benchmark.
+					let start = benchmarking::current_time();
+					call.dispatch(caller.into())?;
+					let finish = benchmarking::current_time();
+					let elapsed = finish - start;
+					results.push((c.clone(), elapsed));
+					// Wipe the DB back to the genesis state.
+					benchmarking::wipe_db();
+				}
+			}
+		}
+		return Ok(results);
+	}
 }
