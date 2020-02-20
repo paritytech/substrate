@@ -541,7 +541,7 @@ mod tests {
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 211)],
 		}.assimilate_storage(&mut t).unwrap();
-		let xt = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
+		let xt = TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
 		let weight = xt.get_dispatch_info().weight as u64;
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
@@ -621,7 +621,7 @@ mod tests {
 	fn bad_extrinsic_not_inserted() {
 		let mut t = new_test_ext(1);
 		// bad nonce check!
-		let xt = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 30, 0), Call::Balances(BalancesCall::transfer(33, 69)));
+		let xt = TestXt::new_signed(sign_extra(1, 30, 0), Call::Balances(BalancesCall::transfer(33, 69)));
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -639,7 +639,7 @@ mod tests {
 	fn block_weight_limit_enforced() {
 		let mut t = new_test_ext(10000);
 		// given: TestXt uses the encoded len as fixed Len:
-		let xt = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)));
+		let xt = TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)));
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
 		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get() - 175;
@@ -656,7 +656,7 @@ mod tests {
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 175);
 
 			for nonce in 0..=num_to_exhaust_block {
-				let xt = sp_runtime::testing::TestXt::new_signed(
+				let xt = TestXt::new_signed(
 					sign_extra(1, nonce.into(), 0), Call::Balances(BalancesCall::transfer(33, 0)),
 				);
 				let res = Executive::apply_extrinsic(xt);
@@ -676,14 +676,14 @@ mod tests {
 
 	#[test]
 	fn block_weight_and_size_is_stored_per_tx() {
-		let xt = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)));
-		let x1 = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 1, 0), Call::Balances(BalancesCall::transfer(33, 0)));
-		let x2 = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 2, 0), Call::Balances(BalancesCall::transfer(33, 0)));
+		let xt = TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)));
+		let x1 = TestXt::new_signed(sign_extra(1, 1, 0), Call::Balances(BalancesCall::transfer(33, 0)));
+		let x2 = TestXt::new_signed(sign_extra(1, 2, 0), Call::Balances(BalancesCall::transfer(33, 0)));
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 0);
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 0);
 
 			assert!(Executive::apply_extrinsic(xt.clone()).unwrap().is_ok());
 			assert!(Executive::apply_extrinsic(x1.clone()).unwrap().is_ok());
@@ -702,7 +702,7 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned() {
-		let xt = sp_runtime::testing::TestXt::new_unsigned(Call::Balances(BalancesCall::set_balance(33, 69, 69)));
+		let xt = TestXt::new_unsigned(Call::Balances(BalancesCall::set_balance(33, 69, 69)));
 		let mut t = new_test_ext(1);
 
 		t.execute_with(|| {
@@ -712,8 +712,25 @@ mod tests {
 	}
 
 	#[test]
+	fn unsigned_weight_is_noted_when_applied() {
+		let xt = TestXt::new_unsigned(Call::Balances(BalancesCall::set_balance(33, 69, 69)));
+		let len = xt.clone().encode().len() as u32;
+		let mut t = new_test_ext(1);
+		t.execute_with(|| {
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 0);
+
+			// This is okay -- balances transfer will panic since it requires ensure_signed.
+			assert_eq!(Executive::apply_extrinsic(xt), Ok(Err(DispatchError::BadOrigin)));
+
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), len);
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), len);
+		});
+	}
+
+	#[test]
 	fn apply_trusted_skips_signature_check_but_not_others() {
-		let xt1 = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)))
+		let xt1 = TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)))
 			.badly_signed();
 
 		let mut t = new_test_ext(1);
@@ -722,7 +739,7 @@ mod tests {
 			assert_eq!(Executive::apply_trusted_extrinsic(xt1), Ok(Ok(())));
 		});
 
-		let xt2 = sp_runtime::testing::TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)))
+		let xt2 = TestXt::new_signed(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)))
 			.invalid(TransactionValidityError::Invalid(InvalidTransaction::Call));
 
 		t.execute_with(|| {
@@ -745,7 +762,7 @@ mod tests {
 					110,
 					lock,
 				);
-				let xt = sp_runtime::testing::TestXt::new_signed(
+				let xt = TestXt::new_signed(
 					sign_extra(1, 0, 0),
 					Call::System(SystemCall::remark(vec![1u8])),
 				);
