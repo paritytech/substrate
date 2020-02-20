@@ -734,7 +734,8 @@ pub trait VestingSchedule<AccountId> {
 	type Currency: Currency<AccountId>;
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
-	fn vesting_balance(who: &AccountId) -> <Self::Currency as Currency<AccountId>>::Balance;
+	/// Returns `None` if the account has no vesting schedule.
+	fn vesting_balance(who: &AccountId) -> Option<<Self::Currency as Currency<AccountId>>::Balance>;
 
 	/// Adds a vesting schedule to a given account.
 	///
