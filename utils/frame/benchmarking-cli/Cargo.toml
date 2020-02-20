@@ -1,0 +1,17 @@
+[package]
+name = "frame-benchmarking-cli"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0"
+
+[dependencies]
+frame-benchmarking = { version = "2.0.0", path = "../../../frame/benchmarking" }
+sc-service = { version = "0.8.0", path = "../../../client/service" }
+sc-cli = { version = "0.8.0", path = "../../../client/cli" }
+sc-client = { version = "0.8.0", path = "../../../client" }
+sc-client-db = { version = "0.8.0", path = "../../../client/db" }
+sc-executor = { version = "0.8.0", path = "../../../client/executor" }
+sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+structopt = "0.3.8"
+codec = { version = "1.1.2", package = "parity-scale-codec" }

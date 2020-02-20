@@ -25,7 +25,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData};
 
 use libp2p::build_multiaddr;
 use log::trace;
-use sc_network::FinalityProofProvider;
+use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
 	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId}, Info as BlockchainInfo,
 };
@@ -52,11 +52,11 @@ use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProof
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
-use sc_network::ProtocolConfig;
+use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
-use sc_network::TransactionPool;
+use sc_network::config::TransactionPool;
 use sc_network::specialization::NetworkSpecialization;
 use substrate_test_runtime_client::{self, AccountKeyring};
 
