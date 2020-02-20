@@ -172,7 +172,7 @@ impl Iterator for SetupIterator {
 
 		self.current += 1;
 
-		let size = self.current*self.multiplier;
+		let size = self.current * self.multiplier;
 		let mut db = BenchDb::new(size);
 		let block = db.generate_block(size);
 		Some(Setup { db, block })
