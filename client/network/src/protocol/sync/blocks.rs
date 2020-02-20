@@ -22,7 +22,7 @@ use std::collections::hash_map::Entry;
 use log::trace;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, NumberFor, One};
-use crate::message;
+use crate::protocol::message;
 
 /// Block data with origin.
 #[derive(Debug, Clone, PartialEq, Eq)]

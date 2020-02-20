@@ -21,8 +21,11 @@ use super::*;
 use sp_std::prelude::*;
 
 use frame_system::RawOrigin;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter, selected_benchmark};
-use sp_runtime::traits::{Benchmarking, BenchmarkingSetup, Dispatchable};
+use frame_benchmarking::{
+	BenchmarkResults, BenchmarkParameter, selected_benchmark, benchmarking,
+	Benchmarking, BenchmarkingSetup,
+};
+use sp_runtime::traits::Dispatchable;
 
 /// Benchmark `set` extrinsic.
 struct Set;
@@ -54,10 +57,10 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 			b"set" => SelectedBenchmark::Set,
 			_ => return Err("Could not find extrinsic."),
 		};
-		
+
 		// Warm up the DB
-		sp_io::benchmarking::commit_db();
-		sp_io::benchmarking::wipe_db();
+		benchmarking::commit_db();
+		benchmarking::wipe_db();
 
 		let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
 		let mut results: Vec<BenchmarkResults> = Vec::new();
@@ -87,15 +90,15 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 					>>::instance(&selected_benchmark, &c)?;
 					// Commit the externalities to the database, flushing the DB cache.
 					// This will enable worst case scenario for reading from the database.
-					sp_io::benchmarking::commit_db();
+					benchmarking::commit_db();
 					// Run the benchmark.
-					let start = sp_io::benchmarking::current_time();
+					let start = benchmarking::current_time();
 					call.dispatch(caller.into())?;
-					let finish = sp_io::benchmarking::current_time();
+					let finish = benchmarking::current_time();
 					let elapsed = finish - start;
 					results.push((c.clone(), elapsed));
 					// Wipe the DB back to the genesis state.
-					sp_io::benchmarking::wipe_db();
+					benchmarking::wipe_db();
 				}
 			}
 		}

@@ -44,19 +44,11 @@ pub(crate) struct TestNetwork {
 	sender: mpsc::UnboundedSender<Event>,
 }
 
-impl TestNetwork {
-	fn event_stream_03(&self) -> Pin<Box<dyn futures::Stream<Item = NetworkEvent> + Send>> {
+impl sc_network_gossip::Network<Block> for TestNetwork {
+	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
 		let (tx, rx) = mpsc::unbounded();
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::pin(rx)
-	}
-}
-
-impl sc_network_gossip::Network<Block> for TestNetwork {
-	fn event_stream(&self) -> Box<dyn futures01::Stream<Item = NetworkEvent, Error = ()> + Send> {
-		Box::new(
-			self.event_stream_03().map(Ok::<_, ()>).compat()
-		)
 	}
 
 	fn report_peer(&self, who: sc_network::PeerId, cost_benefit: sc_network::ReputationChange) {

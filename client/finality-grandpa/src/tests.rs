@@ -171,7 +171,7 @@ impl TestNetFactory for GrandpaTestNet {
 	fn make_finality_proof_provider(
 		&self,
 		client: PeersClient
-	) -> Option<Arc<dyn sc_network::FinalityProofProvider<Block>>> {
+	) -> Option<Arc<dyn sc_network::config::FinalityProofProvider<Block>>> {
 		match client {
 			PeersClient::Full(_, ref backend)  => {
 				let authorities_provider = Arc::new(self.test_config.clone());

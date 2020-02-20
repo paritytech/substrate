@@ -21,11 +21,12 @@ mod peersstate;
 
 use std::{collections::{HashSet, HashMap}, collections::VecDeque};
 use futures::{prelude::*, channel::mpsc};
-use libp2p::PeerId;
 use log::{debug, error, trace};
 use serde_json::json;
 use std::{pin::Pin, task::Context, task::Poll};
 use wasm_timer::Instant;
+
+pub use libp2p::PeerId;
 
 /// We don't accept nodes whose reputation is under this value.
 const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
@@ -45,7 +46,7 @@ enum Action {
 	RemoveFromPriorityGroup(String, PeerId),
 }
 
-/// Shared handle to the peer set manager (PSM). Distributed around the code.
+/// Description of a reputation adjustment for a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReputationChange {
 	/// Reputation delta.
