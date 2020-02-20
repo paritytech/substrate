@@ -18,6 +18,7 @@
 
 use super::*;
 use mock::{new_test_ext, Babe, Test};
+use sp_std::convert::TryInto;
 use sp_runtime::{traits::OnFinalize, testing::{Digest, DigestItem}};
 use pallet_session::ShouldEndSession;
 
@@ -38,8 +39,8 @@ fn make_pre_digest(
 		sp_consensus_babe::digests::PrimaryPreDigest {
 			authority_index,
 			slot_number,
-			vrf_output: vrf_output.into(),
-			vrf_proof: vrf_proof.into(),
+			vrf_output: vrf_output.try_into().unwrap(),
+			vrf_proof: vrf_proof.try_into().unwrap(),
 		}
 	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());

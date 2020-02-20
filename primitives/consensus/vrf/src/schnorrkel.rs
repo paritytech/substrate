@@ -29,21 +29,24 @@ use schnorrkel::{SignatureError, errors::MultiSignatureStage};
 #[cfg(feature = "std")]
 pub use schnorrkel::vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH};
 
- /// The length of the VRF proof. 
+/// The length of the VRF proof.
 #[cfg(not(feature = "std"))]
 pub const VRF_PROOF_LENGTH: usize = 64;
 
- /// The length of the VRF output.
+/// The length of the VRF output.
 #[cfg(not(feature = "std"))]
 pub const VRF_OUTPUT_LENGTH: usize = 32;
 
+/// Raw VRF output.
 #[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
 pub struct RawVRFOutput(pub [u8; VRF_OUTPUT_LENGTH]);
 
+/// VRF output type available for `std` environment, suitable for schnorrkel operations.
 #[cfg(feature = "std")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VRFOutput(pub schnorrkel::vrf::VRFOutput);
 
+/// VRF output type available for `no_std` environment. Alias for `RawVRFOutput`.
 #[cfg(not(feature = "std"))]
 pub type VRFOutput = RawVRFOutput;
 
@@ -77,6 +80,15 @@ impl Decode for VRFOutput {
 }
 
 #[cfg(feature = "std")]
+impl TryFrom<[u8; VRF_OUTPUT_LENGTH]> for VRFOutput {
+	type Error = SignatureError;
+
+	fn try_from(raw: RawVRFOutput) -> Result<VRFOutput, Self::Error> {
+		schnorrkel::vrf::VRFOutput::from_bytes(&raw.0).map(VRFOutput)
+	}
+}
+
+#[cfg(feature = "std")]
 impl TryFrom<RawVRFOutput> for VRFOutput {
 	type Error = SignatureError;
 
@@ -92,6 +104,7 @@ impl From<VRFOutput> for RawVRFOutput {
 	}
 }
 
+/// Raw VRF proof.
 #[derive(Clone, Encode, Decode)]
 pub struct RawVRFProof(pub [u8; VRF_PROOF_LENGTH]);
 
@@ -110,6 +123,7 @@ impl core::cmp::PartialEq for RawVRFProof {
 
 impl core::cmp::Eq for RawVRFProof { }
 
+/// VRF proof type available for `std` environment, suitable for schnorrkel operations.
 #[cfg(feature = "std")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VRFProof(pub schnorrkel::vrf::VRFProof);
@@ -128,6 +142,7 @@ impl Ord for VRFProof {
 	}
 }
 
+/// VRF proof type available for `no_std` environment. Alias of `RawVRFProof`.
 #[cfg(not(feature = "std"))]
 pub type VRFProof = RawVRFProof;
 
@@ -157,6 +172,15 @@ impl Decode for VRFProof {
 	fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
 		let decoded = <[u8; VRF_PROOF_LENGTH]>::decode(i)?;
 		Ok(Self(schnorrkel::vrf::VRFProof::from_bytes(&decoded).map_err(convert_error)?))
+	}
+}
+
+#[cfg(feature = "std")]
+impl TryFrom<[u8; VRF_PROOF_LENGTH]> for VRFProof {
+	type Error = SignatureError;
+
+	fn try_from(raw: RawVRFProof) -> Result<VRFProof, Self::Error> {
+		schnorrkel::vrf::VRFProof::from_bytes(&raw.0).map(VRFProof)
 	}
 }
 
@@ -207,4 +231,5 @@ fn convert_error(e: SignatureError) -> codec::Error {
 	}
 }
 
+/// Schnorrkel randomness value. Same size as `VRFOutput`.
 pub type Randomness = [u8; VRF_OUTPUT_LENGTH];
