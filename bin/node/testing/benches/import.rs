@@ -37,7 +37,7 @@ use sc_client_api::backend::Backend;
 
 criterion_group!(
 	name = benches;
-	config = Criterion::default().sample_size(50).warm_up_time(std::time::Duration::from_secs(20));
+	config = Criterion::default().sample_size(20).warm_up_time(std::time::Duration::from_secs(20));
 	targets = bench_block_import
 );
 criterion_group!(
@@ -50,7 +50,7 @@ criterion_group!(
 	config = Criterion::default().sample_size(10);
 	targets = profile_block_import
 );
-criterion_main!(benches, profile, wasm_size);
+criterion_main!(benches, profile);
 
 fn bench_block_import(c: &mut Criterion) {
 	sc_cli::init_logger("");
