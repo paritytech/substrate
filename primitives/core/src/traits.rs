@@ -30,6 +30,7 @@ use std::{
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
 /// BareCryptoStore error
+#[derive(Debug)]
 pub enum Error {
 	/// Public key type is not supported
 	KeyNotSupported,
