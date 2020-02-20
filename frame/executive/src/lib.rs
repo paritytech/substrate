@@ -21,9 +21,9 @@
 //!
 //! ## Overview
 //!
-//! The executive module is not a typical SRML module providing functionality around a specific feature.
-//! It is a cross-cutting framework component for the SRML. It works in conjunction with the
-//! [SRML System module](../frame_system/index.html) to perform these cross-cutting functions.
+//! The executive module is not a typical pallet providing functionality around a specific feature.
+//! It is a cross-cutting framework component for the FRAME. It works in conjunction with the
+//! [FRAME System module](../frame_system/index.html) to perform these cross-cutting functions.
 //!
 //! The Executive module provides functions to:
 //!
@@ -39,7 +39,7 @@
 //! The Executive module provides the following implementations:
 //!
 //! - `ExecuteBlock`: Trait that can be used to execute a block.
-//! - `Executive`: Type that can be used to make the SRML available from the runtime.
+//! - `Executive`: Type that can be used to make the FRAME available from the runtime.
 //!
 //! ## Usage
 //!
