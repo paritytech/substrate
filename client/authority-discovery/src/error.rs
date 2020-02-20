@@ -16,8 +16,6 @@
 
 //! Authority discovery errors.
 
-use sp_core::crypto::CryptoTypePublicPair;
-
 /// AuthorityDiscovery Result.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -49,5 +47,5 @@ pub enum Error {
 	/// Failed to parse a libp2p multi address.
 	ParsingMultiaddress(libp2p::core::multiaddr::Error),
 	/// Failed to sign using a specific public key
-	MissingSignature(CryptoTypePublicPair)
+	MissingSignature(usize)
 }
