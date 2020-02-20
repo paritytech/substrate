@@ -113,8 +113,12 @@ pub trait RuntimeInfo {
 	/// Native runtime information.
 	fn native_version(&self) -> &NativeVersion;
 
-	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities> (&self, ext: &mut E) -> error::Result<RuntimeVersion>;
+	/// Extract [`RuntimeVersion`](sp_version::RuntimeVersion) of the given `runtime_wasm_code`.
+	fn runtime_version<E: Externalities>(
+		&self,
+		ext: &mut E,
+		runtime_wasm_code: &sp_core::traits::RuntimeWasmCode,
+	) -> error::Result<RuntimeVersion>;
 }
 
 #[cfg(test)]

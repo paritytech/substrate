@@ -20,7 +20,7 @@ use log::warn;
 use hash_db::Hasher;
 use codec::Encode;
 
-use sp_core::storage::{ChildInfo, OwnedChildInfo};
+use sp_core::{traits::RuntimeWasmCode, storage::{ChildInfo, OwnedChildInfo}};
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 
 use crate::{

@@ -25,7 +25,7 @@ use sp_state_machine::{
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
-use sp_core::{NativeOrEncoded, NeverNativeValue, traits::CodeExecutor};
+use sp_core::{NativeOrEncoded, NeverNativeValue, traits::{CodeExecutor, RuntimeWasmCode}};
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor};
 
@@ -197,7 +197,8 @@ where
 			changes_trie_state,
 			None,
 		);
-		let version = self.executor.runtime_version(&mut ext);
+		let wasm_code = RuntimeWasmCode::from_externalities(&ext);
+		let version = wasm_code.and_then(|c| self.executor.runtime_version(&mut ext, &c));
 		{
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;

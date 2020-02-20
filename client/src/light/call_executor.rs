@@ -258,22 +258,26 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 	let mut changes = OverlayedChanges::default();
 	let trie_backend = create_proof_check_backend(root, remote_proof)?;
 	let next_header = make_next_header(&request.header);
-	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
-		&trie_backend,
-		&mut changes,
-		executor,
-		"Core_initialize_block",
-		&next_header.encode(),
-	)?;
 
-	// execute method
-	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
-		&trie_backend,
-		&mut changes,
-		executor,
-		&request.method,
-		&request.call_data,
-	).map_err(Into::into)
+	unimplemented!()
+
+	// execution_proof_check_on_trie_backend::<H, Header::Number, _>(
+	// 	&trie_backend,
+	// 	&mut changes,
+	// 	executor,
+	// 	"Core_initialize_block",
+	// 	&next_header.encode(),
+	// )?;
+
+	// // execute method
+	// execution_proof_check_on_trie_backend::<H, Header::Number, _>(
+	// 	&trie_backend,
+	// 	&mut changes,
+	// 	executor,
+	// 	&request.method,
+	// 	&request.call_data,
+	// )
+	// .map_err(Into::into)
 }
 
 #[cfg(test)]

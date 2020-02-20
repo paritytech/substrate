@@ -98,11 +98,73 @@ pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	>(
 		&self,
 		ext: &mut E,
+		wasm_runtime_code: &RuntimeWasmCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
 		native_call: Option<NC>,
 	) -> (Result<crate::NativeOrEncoded<R>, Self::Error>, bool);
+}
+
+
+/// The Wasm code of a Substrate runtime.
+#[derive(Debug, Clone)]
+pub struct RuntimeWasmCode {
+	/// The actual Wasm code as binary blob.
+	pub code: Vec<u8>,
+	/// The optional heap pages this `code` should be executed with.
+	///
+	/// If `None` are given, the default value of the executor will be used.
+	pub heap_pages: Option<u64>,
+	/// The SCALE encoded hash of `code`.
+	pub hash: Vec<u8>,
+}
+
+impl PartialEq for RuntimeWasmCode {
+	fn eq(&self, other: &Self) -> bool {
+		self.hash == other.hash
+	}
+}
+
+impl RuntimeWasmCode {
+	/// Create an `RuntimeWasmCode` instance from the given `Externalities`.
+	///
+	/// Extracts the code and the heap pages using the well known keys.
+	///
+	/// Returns an error if the code could not be found.
+	pub fn from_externalities(ext: &dyn Externalities) -> Result<Self, NoCodeFound> {
+		let code = ext.storage(sp_storage::well_known_keys::CODE).ok_or(NoCodeFound)?;
+		let hash = ext.storage_hash(sp_storage::well_known_keys::CODE).ok_or(NoCodeFound)?;
+		let heap_pages = ext.storage(sp_storage::well_known_keys::HEAP_PAGES)
+			.and_then(|hp| codec::Decode::decode(&mut &hp[..]).ok());
+
+		Ok(Self {
+			code,
+			hash,
+			heap_pages,
+		})
+	}
+
+	/// Create an empty instance.
+	///
+	/// This is only useful for tests that don't want to execute any code.
+	pub fn empty() -> Self {
+		Self {
+			code: Vec::new(),
+			hash: Vec::new(),
+			heap_pages: None,
+		}
+	}
+}
+
+/// Could not find the `:code` in the externalities while initializing the [`RuntimeWasmCode`].
+#[derive(Debug)]
+pub struct NoCodeFound;
+
+impl std::fmt::Display for NoCodeFound {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+		write!(f, "NoCodeFound")
+	}
 }
 
 /// Something that can call a method in a WASM blob.
