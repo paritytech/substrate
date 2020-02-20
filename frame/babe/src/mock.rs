@@ -15,17 +15,15 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Test utilities
-#![allow(dead_code, unused_imports)]
 
 use super::{Trait, Module, GenesisConfig};
-use sp_consensus_babe::AuthorityId;
 use sp_runtime::{
-	traits::IdentityLookup, Perbill, PerThing, testing::{Header, UintAuthorityId}, impl_opaque_keys,
+	traits::IdentityLookup, Perbill, testing::{Header, UintAuthorityId}, impl_opaque_keys,
 };
 use sp_version::RuntimeVersion;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use sp_io;
-use sp_core::{H256, Blake2Hasher};
+use sp_core::H256;
 
 impl_outer_origin!{
 	pub enum Origin for Test  where system = frame_system {}
