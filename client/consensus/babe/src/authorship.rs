@@ -86,16 +86,15 @@ pub(super) fn secondary_slot_author(
 	Some(&expected_author.0)
 }
 
-#[allow(deprecated)]
 pub(super) fn make_transcript(
 	randomness: &[u8],
 	slot_number: u64,
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
-	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
-	transcript.commit_bytes(b"chain randomness", randomness);
+	transcript.append_message(b"slot number", &slot_number.to_le_bytes());
+	transcript.append_message(b"current epoch", &epoch.to_le_bytes());
+	transcript.append_message(b"chain randomness", randomness);
 	transcript
 }
 
