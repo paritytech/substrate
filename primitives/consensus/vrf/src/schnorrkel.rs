@@ -33,6 +33,7 @@ pub use schnorrkel::vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH};
 #[cfg(not(feature = "std"))]
 pub const VRF_PROOF_LENGTH: usize = 64;
 
+ /// The length of the VRF output.
 #[cfg(not(feature = "std"))]
 pub const VRF_OUTPUT_LENGTH: usize = 32;
 
