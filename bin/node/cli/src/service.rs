@@ -238,6 +238,8 @@ macro_rules! new_full {
 				voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			};
 
+			// the GRANDPA voter task is considered infallible, i.e.
+			// if it fails we take down the service with it.
 			service.spawn_essential_task(
 				"grandpa-voter",
 				grandpa::run_grandpa_voter(grandpa_config)?
