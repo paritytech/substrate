@@ -78,7 +78,7 @@ pub use utils::*;
 ///   // first dispatchable: foo; this is a user dispatchable and operates on a `u8` vector of
 ///   // size `l`, which we allow to be initialised as usual.
 ///   foo {
-///     let caller = account::<T>(b"caller", 0, _benchmarks_seed);
+///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let l = ...;
 ///   } _(Origin::Signed(caller), vec![0u8; l])
 ///
@@ -96,13 +96,13 @@ pub use utils::*;
 ///   // of arms. Instancers of common params cannot optimistically draw upon hypothetical variables
 ///   // that the arm's pre-instancing code block might have declared.
 ///   baz1 {
-///     let caller = account::<T>(b"caller", 0, _benchmarks_seed);
+///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c(&caller, c);
 ///   } baz(Origin::Signed(caller))
 ///
 ///   // this is a second benchmark of the baz dispatchable with a different setup.
 ///   baz2 {
-///     let caller = account::<T>(b"caller", 0, _benchmarks_seed);
+///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c_in_some_other_way(&caller, c);
 ///   } baz(Origin::Signed(caller))
 ///
@@ -388,7 +388,6 @@ macro_rules! benchmark_backend {
 			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
 				-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 			{
-				let _benchmarks_seed = 0;
 				$(
 					let $common = $common_from;
 				)*
