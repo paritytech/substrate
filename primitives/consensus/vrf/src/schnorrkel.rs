@@ -29,6 +29,7 @@ use schnorrkel::{SignatureError, errors::MultiSignatureStage};
 #[cfg(feature = "std")]
 pub use schnorrkel::vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH};
 
+ /// The length of the VRF proof. 
 #[cfg(not(feature = "std"))]
 pub const VRF_PROOF_LENGTH: usize = 64;
 
