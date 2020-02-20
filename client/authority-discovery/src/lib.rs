@@ -227,7 +227,7 @@ where
 
 		for (index, signature) in signatures.iter().enumerate() {
 			let mut signed_addresses = vec![];
-			let key = keys.get(index).ok_or(Error::PublicKeyToSignatureMaping)?;
+			let key = keys.get(index).ok_or(Error::PublicKeyToSignatureMapping)?;
 
 			schema::SignedAuthorityAddresses {
 				addresses: serialized_addresses.clone(),
