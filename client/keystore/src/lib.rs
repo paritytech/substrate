@@ -285,16 +285,21 @@ impl BareCryptoStore for Store {
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
-		let ed25519_existing_keys: Vec<Vec<u8>> = self.public_keys_by_type::<ed25519::Public>(id)
-			.map(|keys| {
-				keys.iter().map(|k| k.to_raw_vec()).collect()
-			})
+		let ed25519_existing_keys = self
+			.public_keys_by_type::<ed25519::Public>(id)
 			.map_err(|e| e.to_string())?;
-		let sr25519_existing_keys: Vec<Vec<u8>> = self.public_keys_by_type::<sr25519::Public>(id)
-			.map(|keys| {
-				keys.iter().map(|k| k.to_raw_vec()).collect()
-			})
+		let ed25519_existing_keys: Vec<Vec<u8>>  = ed25519_existing_keys
+			.iter()
+			.map(|k| k.to_raw_vec())
+			.collect();
+
+		let sr25519_existing_keys= self
+			.public_keys_by_type::<sr25519::Public>(id)
 			.map_err(|e| e.to_string())?;
+		let sr25519_existing_keys: Vec<Vec<u8>> = sr25519_existing_keys
+			.iter()
+			.map(|k| k.to_raw_vec())
+			.collect();
 
 		Ok(keys.iter().filter_map(|k| {
 			match k.0 {
@@ -306,24 +311,20 @@ impl BareCryptoStore for Store {
 	}
 
 	fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, String> {
-		let ed25519_existing_keys: Vec<CryptoTypePublicPair> = self
+		let ed25519_existing_keys = self
 			.public_keys_by_type::<ed25519::Public>(id)
-			.map(|keys| {
-				keys.iter().map(|k| (ed25519::ED25519_CRYPTO_ID, k.to_raw_vec())).collect()
-			})
 			.map_err(|e| e.to_string())?;
+		let ed25519_existing_keys = ed25519_existing_keys
+			.iter().map(|k| (ed25519::ED25519_CRYPTO_ID, k.to_raw_vec()));
 
-		let sr25519_existing_keys: Vec<CryptoTypePublicPair> = self
+		let sr25519_existing_keys = self
 			.public_keys_by_type::<sr25519::Public>(id)
-			.map(|keys| {
-				keys.iter().map(|k| (sr25519::SR25519_CRYPTO_ID, k.to_raw_vec())).collect()
-			})
 			.map_err(|e| e.to_string())?;
+		let sr25519_existing_keys = sr25519_existing_keys
+			.iter().map(|k| (sr25519::SR25519_CRYPTO_ID, k.to_raw_vec()));
 
 		Ok(ed25519_existing_keys
-		   .iter()
-		   .chain(sr25519_existing_keys.iter())
-		   .cloned()
+		   .chain(sr25519_existing_keys)
 		   .collect())
 	}
 
