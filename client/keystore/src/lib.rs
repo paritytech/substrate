@@ -314,8 +314,6 @@ impl BareCryptoStore for Store {
 		let ed25519_existing_keys = self
 			.public_keys_by_type::<ed25519::Public>(id)
 			.map_err(|e| e.to_string())?;
-		let ed25519_existing_keys = ed25519_existing_keys
-			.iter().map(|k| (ed25519::ED25519_CRYPTO_ID, k.to_raw_vec()));
 
 		let sr25519_existing_keys = self
 			.public_keys_by_type::<sr25519::Public>(id)
@@ -324,6 +322,7 @@ impl BareCryptoStore for Store {
 			.iter().map(|k| (sr25519::SR25519_CRYPTO_ID, k.to_raw_vec()));
 
 		Ok(ed25519_existing_keys
+		   .iter().map(|k| (ed25519::ED25519_CRYPTO_ID, k.to_raw_vec()))
 		   .chain(sr25519_existing_keys)
 		   .collect())
 	}
