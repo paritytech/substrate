@@ -324,6 +324,10 @@ decl_storage! {
 	// A macro for the Storage trait, and its implementation, for this pallet.
 	// This allows for type-safe usage of the Substrate storage database, so you can
 	// keep things around between blocks.
+	//
+	// It is important to update your storage name so that your pallet's
+	// storage items are isolated from other pallets.
+	// ---------------------------------vvvvvvv
 	trait Store for Module<T: Trait> as Example {
 		// Any storage declarations of the form:
 		//   `pub? Name get(fn getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`

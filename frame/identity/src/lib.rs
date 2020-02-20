@@ -381,7 +381,7 @@ pub struct RegistrarInfo<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Sudo {
+	trait Store for Module<T: Trait> as Identity {
 		/// Information that is pertinent to identify the entity behind an account.
 		pub IdentityOf get(fn identity):
 			map hasher(blake2_256) T::AccountId => Option<Registration<BalanceOf<T>>>;
