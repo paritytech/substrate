@@ -58,7 +58,7 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 
 	/// Creates a new watcher for given verified extrinsic.
 	///
-	/// The watcher can be used to subscribe to lifecycle events of that extrinsic.
+	/// The watcher can be used to subscribe to life-cycle events of that extrinsic.
 	pub fn create_watcher(&mut self, hash: H) -> watcher::Watcher<H, BlockHash<C>> {
 		let sender = self.watchers.entry(hash.clone()).or_insert_with(watcher::Sender::default);
 		sender.new_watcher(hash)

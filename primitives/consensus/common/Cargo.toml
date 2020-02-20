@@ -8,7 +8,7 @@ license = "GPL-3.0"
 
 [dependencies]
 derive_more = "0.99.2"
-libp2p = { version = "0.15.0", default-features = false }
+libp2p = { version = "0.16.0", default-features = false }
 log = "0.4.8"
 sp-core = { path= "../../core" }
 sp-inherents = { version = "2.0.0", path = "../../inherents" }

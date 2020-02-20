@@ -26,7 +26,7 @@ use sp_inherents::{InherentData, CheckInherentsResult};
 ///
 /// These definitions are taken from the 2c58e30246a029b53d51e5b24c31974ac539ee8b git revision.
 #[deprecated(note = "These definitions here are only for compatibility reasons")]
-pub mod compatability_v3 {
+pub mod compatibility_v3 {
 	use sp_runtime::{DispatchOutcome, transaction_validity};
 	use codec::{Encode, Decode};
 
@@ -43,7 +43,7 @@ pub mod compatability_v3 {
 
 sp_api::decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides the required functionality for building a block.
-	#[api_version(4)]
+	#[api_version(5)]
 	pub trait BlockBuilder {
 		/// Compatibility version of `apply_extrinsic` for v3.
 		///
@@ -51,13 +51,17 @@ sp_api::decl_runtime_apis! {
 		#[changed_in(4)]
 		#[allow(deprecated)]
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic)
-			-> self::compatability_v3::ApplyResult;
+			-> self::compatibility_v3::ApplyResult;
 
 		/// Apply the given extrinsic.
 		///
 		/// Returns an inclusion outcome which specifies if this extrinsic is included in
 		/// this block or not.
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult;
+		/// Apply the given extrinsic.
+		///
+		/// Same as `apply_extrinsic`, but skips signature verification.
+		fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult;
 		/// Finish the current block.
 		#[renamed("finalise_block", 3)]
 		fn finalize_block() -> <Block as BlockT>::Header;

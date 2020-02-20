@@ -12,6 +12,7 @@ sp-std = { version = "2.0.0", default-features = false, path = "../../primitives
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
+frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 sp-timestamp = { version = "2.0.0", default-features = false, path = "../../primitives/timestamp" }
@@ -28,6 +29,7 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"sp-runtime/std",
+	"frame-benchmarking/std",
 	"frame-support/std",
 	"serde",
 	"frame-system/std",

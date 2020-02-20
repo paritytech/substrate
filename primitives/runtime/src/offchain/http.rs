@@ -257,7 +257,7 @@ pub enum Error {
 	DeadlineReached,
 	/// Request had timed out.
 	IoError,
-	/// Unknown error has been ecountered.
+	/// Unknown error has been encountered.
 	Unknown,
 }
 

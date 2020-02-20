@@ -38,7 +38,7 @@ fn running_the_node_works_and_can_be_interrupted() {
 		assert_eq!(
 			common::wait_for(&mut cmd, 30).map(|x| x.success()),
 			Some(true),
-			"the pocess must exit gracefully after signal {}",
+			"the process must exit gracefully after signal {}",
 			signal,
 		);
 	}

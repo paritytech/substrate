@@ -28,7 +28,7 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 	fn status(&self) -> Vec<u8>;
 
 	/// Called when a peer successfully handshakes.
-	fn on_connect(&mut self, ctx: &mut dyn Context<B>, who: PeerId, status: crate::message::Status<B>);
+	fn on_connect(&mut self, ctx: &mut dyn Context<B>, who: PeerId, status: crate::protocol::message::Status<B>);
 
 	/// Called when a peer is disconnected. If the peer ID is unknown, it should be ignored.
 	fn on_disconnect(&mut self, ctx: &mut dyn Context<B>, who: PeerId);
@@ -40,14 +40,6 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 		who: PeerId,
 		message: Vec<u8>
 	);
-
-	/// Called when a network-specific event arrives.
-	#[deprecated(note = "This method is never called; please use `with_dht_event_tx` when building the service")]
-	fn on_event(&mut self, _event: Event) {}
-
-	/// Called on abort.
-	#[deprecated(note = "This method is never called; aborting corresponds to dropping the object")]
-	fn on_abort(&mut self) { }
 
 	/// Called periodically to maintain peers and handle timeouts.
 	fn maintain_peers(&mut self, _ctx: &mut dyn Context<B>) { }
@@ -70,7 +62,7 @@ impl<B: BlockT> NetworkSpecialization<B> for DummySpecialization {
 		&mut self,
 		_ctx: &mut dyn Context<B>,
 		_peer_id: PeerId,
-		_status: crate::message::Status<B>
+		_status: crate::protocol::message::Status<B>
 	) {}
 
 	fn on_disconnect(&mut self, _ctx: &mut dyn Context<B>, _peer_id: PeerId) {}
@@ -160,17 +152,6 @@ macro_rules! construct_simple_protocol {
 				_message: Vec<u8>,
 			) {
 				$( self.$sub_protocol_name.on_message(_ctx, _who, _message); )*
-			}
-
-			fn on_event(
-				&mut self,
-				_event: $crate::specialization::Event
-			) {
-				$( self.$sub_protocol_name.on_event(_event); )*
-			}
-
-			fn on_abort(&mut self) {
-				$( self.$sub_protocol_name.on_abort(); )*
 			}
 
 			fn maintain_peers(&mut self, _ctx: &mut $crate::Context<$block>) {

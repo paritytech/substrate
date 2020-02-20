@@ -815,7 +815,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn get_cht_fails_for_non_existant_cht() {
+	fn get_cht_fails_for_non_existent_cht() {
 		let cht_size: u64 = cht::size();
 		assert!(LightStorage::<Block>::new_test().header_cht_root(cht_size, cht_size / 2).unwrap().is_none());
 	}

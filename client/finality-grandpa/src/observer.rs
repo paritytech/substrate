@@ -377,7 +377,7 @@ mod tests {
 	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
 	use sc_network::PeerId;
 
-	use futures::executor::{self, ThreadPool};
+	use futures::executor;
 
 	/// Ensure `Future` implementation of `ObserverWork` is polling its `NetworkBridge`. Regression
 	/// test for bug introduced in d4fbb897c and fixed in b7af8b339.
