@@ -331,6 +331,6 @@ mod tests {
 
 		let public_keys = store.read().keys(SR25519).unwrap();
 
-		assert_eq!(true, public_keys.contains(&(ed25519::SR25519_CRYPTO_ID, key_pair.public().to_raw_vec())));
+		assert_eq!(true, public_keys.contains(&(sr25519::SR25519_CRYPTO_ID, key_pair.public().to_raw_vec())));
 	}
 }

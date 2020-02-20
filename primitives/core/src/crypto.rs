@@ -996,6 +996,8 @@ mod tests {
 	}
 	impl Derive for TestPublic {}
 	impl Public for TestPublic {
+		const CRYPTO_TYPE_ID: CryptoTypeId = CryptoTypeId(*b"test");
+
 		fn from_slice(_bytes: &[u8]) -> Self {
 			Self
 		}
