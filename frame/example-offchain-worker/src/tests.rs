@@ -91,11 +91,18 @@ impl frame_system::offchain::CreateTransaction<Test, Extrinsic> for Test {
 	}
 }
 
+parameter_types! {
+	pub const GracePeriod: u64 = 5;
+	pub const UnsignedInterval: u64 = 128;
+}
+
 impl Trait for Test {
 	type Event = ();
 	type Call = Call<Test>;
 	type SubmitSignedTransaction = SubmitTransaction;
 	type SubmitUnsignedTransaction = SubmitTransaction;
+	type GracePeriod = GracePeriod;
+	type UnsignedInterval = UnsignedInterval;
 }
 
 type Example = Module<Test>;
