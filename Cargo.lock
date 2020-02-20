@@ -3724,6 +3724,12 @@ checksum = "72ef4a56884ca558e5ddb05a1d1e7e1bfd9a68d9ed024c21704cc98872dae1bb"
 
 [[package]]
 name = "nohash-hasher"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "721a2bf1c26159ebf17e0a980bc4ce61f4b2fec5ec3b42d42fddd7a84a9e538f"
+
+[[package]]
+name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
@@ -4143,6 +4149,21 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-example-offchain-worker"
+version = "2.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "serde_json",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6215,7 +6236,7 @@ dependencies = [
  "linked_hash_set",
  "log 0.4.8",
  "lru 0.4.3",
- "nohash-hasher",
+ "nohash-hasher 0.2.0",
  "parity-scale-codec",
  "parking_lot 0.10.0",
  "prost",
@@ -9168,14 +9189,14 @@ checksum = "d089681aa106a86fade1b0128fb5daf07d5867a509ab036d99988dec80429a57"
 
 [[package]]
 name = "yamux"
-version = "0.4.3"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d73295bc9d9acf89dd9336b3b5f5b57731ee72b587857dd4312721a0196b48e5"
+checksum = "902f4cee32c401c211b6b69f4a3f6f4cf3515644db5bd822cf685a7dbd6201f9"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.4",
  "log 0.4.8",
- "nohash-hasher",
+ "nohash-hasher 0.1.3",
  "parking_lot 0.10.0",
  "rand 0.7.3",
  "thiserror",
