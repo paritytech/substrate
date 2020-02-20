@@ -61,7 +61,7 @@ pub use self::validator::{DiscardAll, MessageIntent, Validator, ValidatorContext
 use futures::prelude::*;
 use sc_network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId, ReputationChange};
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
 mod bridge;
 mod state_machine;
@@ -70,7 +70,7 @@ mod validator;
 /// Abstraction over a network.
 pub trait Network<B: BlockT> {
 	/// Returns a stream of events representing what happens on the network.
-	fn event_stream(&self) -> Box<dyn futures01::Stream<Item = Event, Error = ()> + Send>;
+	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
 
 	/// Adjust the reputation of a node.
 	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange);
@@ -97,8 +97,8 @@ pub trait Network<B: BlockT> {
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<NetworkService<B, S, H>> {
-	fn event_stream(&self) -> Box<dyn futures01::Stream<Item = Event, Error = ()> + Send> {
-		Box::new(NetworkService::event_stream(self).map(|v| Ok::<_, ()>(v)).compat())
+	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+		Box::pin(NetworkService::event_stream(self))
 	}
 
 	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange) {

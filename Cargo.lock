@@ -6255,7 +6255,6 @@ dependencies = [
 name = "sc-network-gossip"
 version = "0.8.0"
 dependencies = [
- "futures 0.1.29",
  "futures 0.3.4",
  "futures-timer 3.0.1",
  "libp2p",
