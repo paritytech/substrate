@@ -264,9 +264,7 @@ macro_rules! new_full {
 	}}
 }
 
-#[allow(dead_code)]
 type ConcreteBlock = node_primitives::Block;
-#[allow(dead_code)]
 type ConcreteClient =
 	Client<
 		Backend<ConcreteBlock>,
@@ -275,9 +273,7 @@ type ConcreteClient =
 		ConcreteBlock,
 		node_runtime::RuntimeApi
 	>;
-#[allow(dead_code)]
 type ConcreteBackend = Backend<ConcreteBlock>;
-#[allow(dead_code)]
 type ConcreteTransactionPool = sc_transaction_pool::BasicPool<
 	sc_transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>,
 	ConcreteBlock
