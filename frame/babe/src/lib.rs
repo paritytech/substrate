@@ -159,7 +159,7 @@ decl_storage! {
 }
 
 decl_module! {
-	/// The BABE SRML module
+	/// The BABE Pallet
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// The number of **slots** that an epoch takes. We couple sessions to
 		/// epochs, i.e. we start a new session once the new epoch begins.

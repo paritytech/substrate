@@ -39,6 +39,15 @@ pub use self::digest::{
 use crate::codec::Encode;
 use sp_std::prelude::*;
 
+/// Perform singature check.
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum CheckSignature {
+	/// Perform.
+	Yes,
+	/// Don't perform.
+	No,
+}
+
 fn encode_with_vec_prefix<T: Encode, F: Fn(&mut Vec<u8>)>(encoder: F) -> Vec<u8> {
 	let size = ::sp_std::mem::size_of::<T>();
 	let reserve = match size {

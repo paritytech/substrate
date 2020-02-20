@@ -89,6 +89,7 @@ node-executor = { version = "2.0.0", path = "../executor" }
 
 # CLI-specific dependencies
 sc-cli = { version = "0.8.0", optional = true, path = "../../../client/cli" }
+frame-benchmarking-cli = { version = "2.0.0", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 node-transaction-factory = { version = "0.8.0", optional = true, path = "../transaction-factory" }
 node-inspect = { version = "0.8.0", optional = true, path = "../inspect" }
 
@@ -112,6 +113,7 @@ build-script-utils = { version = "2.0.0", package = "substrate-build-script-util
 structopt = { version = "0.3.8", optional = true }
 node-transaction-factory = { version = "0.8.0", optional = true, path = "../transaction-factory" }
 node-inspect = { version = "0.8.0", optional = true, path = "../inspect" }
+frame-benchmarking-cli = { version = "2.0.0", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 
 [build-dependencies.sc-cli]
 version = "0.8.0"
@@ -135,6 +137,7 @@ cli = [
 	"node-inspect",
 	"node-transaction-factory",
 	"sc-cli",
+	"frame-benchmarking-cli",
 	"sc-service/rocksdb",
 	"structopt",
 	"vergen",
