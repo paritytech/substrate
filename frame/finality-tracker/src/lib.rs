@@ -53,6 +53,11 @@ decl_storage! {
 
 		// when initialized through config this is set in the beginning.
 		Initialized get(fn initialized) build(|_| false): bool;
+
+		/// True if network has been upgraded to this version.
+		///
+		/// True for new networks.
+		IsUpgraded build(|_| true): bool;
 	}
 }
 
@@ -89,6 +94,36 @@ decl_module! {
 		fn on_finalize() {
 			Self::update_hint(<Self as Store>::Update::take())
 		}
+
+		fn on_initialize() {
+			if !IsUpgraded::get() {
+				IsUpgraded::put(true);
+				Self::do_upgrade();
+			}
+		}
+	}
+}
+
+// Migration code to update storage name
+use frame_support::storage::migration::{put_storage_value, take_storage_value};
+impl<T: Trait> Module<T> {
+	pub fn do_upgrade() {
+		sp_runtime::print("Migrating Finality Tracker.");
+
+		let recent_hints = take_storage_value::<Vec<T::BlockNumber>>(b"Timestamp", b"RecentHints", &[]).unwrap_or_default();
+		put_storage_value(b"FinalityTracker", b"RecentHints", &[], recent_hints);
+
+		let ordered_hints = take_storage_value::<Vec<T::BlockNumber>>(b"Timestamp", b"OrderedHints", &[]).unwrap_or_default();
+		put_storage_value(b"FinalityTracker", b"OrderedHints", &[], ordered_hints);
+
+		let median = take_storage_value::<T::BlockNumber>(b"Timestamp", b"Median", &[]).unwrap_or_default();
+		put_storage_value(b"FinalityTracker", b"Median", &[], median);
+
+		let update = take_storage_value::<Option<T::BlockNumber>>(b"Timestamp", b"Update", &[]).unwrap_or_default();
+		put_storage_value(b"FinalityTracker", b"Update", &[], update);
+
+		let initialized = take_storage_value::<bool>(b"Timestamp", b"Initialized", &[]).unwrap_or_default();
+		put_storage_value(b"FinalityTracker", b"Initialized", &[], initialized);
 	}
 }
 
