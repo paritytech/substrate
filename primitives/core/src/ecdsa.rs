@@ -40,9 +40,7 @@ use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive, Cr
 #[cfg(feature = "full_crypto")]
 use secp256k1::{PublicKey, SecretKey};
 
-/// A value which is passed along with the public key
-/// to define which cryptographic algorithm that key
-/// belongs to.
+/// An identifier used to match public keys against ecdsa keys
 pub const ECDSA_CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 
 /// A secret seed (which is bytewise essentially equivalent to a SecretKey).

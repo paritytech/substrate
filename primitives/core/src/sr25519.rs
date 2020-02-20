@@ -54,9 +54,7 @@ use sp_runtime_interface::pass_by::PassByInner;
 #[cfg(feature = "full_crypto")]
 const SIGNING_CTX: &[u8] = b"substrate";
 
-/// A value which is passed along with the public key
-/// to define which cryptographic algorithm that key
-/// belongs to.
+/// An identifier used to match public keys against sr25519 keys
 pub const SR25519_CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.

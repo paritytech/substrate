@@ -42,9 +42,7 @@ use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive, Cr
 use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::ops::Deref;
 
-/// A value which is passed along with the public key
-/// to define which cryptographic algorithm that key
-/// belongs to.
+/// An identifier used to match public keys against ed25519 keys
 pub const ED25519_CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ed25");
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
