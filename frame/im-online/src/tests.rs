@@ -112,7 +112,6 @@ fn heartbeat(
 	authority_index: u32,
 	id: UintAuthorityId,
 ) -> dispatch::DispatchResult {
-	#[allow(deprecated)]
 	use frame_support::unsigned::ValidateUnsigned;
 
 	let heartbeat = Heartbeat {
@@ -126,7 +125,6 @@ fn heartbeat(
 	};
 	let signature = id.sign(&heartbeat.encode()).unwrap();
 
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))
 		.map_err(|e| <&'static str>::from(e))?;
 	ImOnline::heartbeat(
