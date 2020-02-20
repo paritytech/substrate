@@ -49,7 +49,7 @@ use sp_consensus::import_queue::{
 use sc_client_api::backend::AuxStore;
 use sc_client::BlockOf;
 use sp_blockchain::{
-	self, well_known_cache_keys::{self, Id as CacheKeyId},
+	self, Result as CResult, well_known_cache_keys::{self, Id as CacheKeyId},
 	ProvideCache, HeaderBackend,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -87,6 +87,16 @@ type AuthorityId<P> = <P as Pair>::Public;
 
 /// Slot duration type for Aura.
 pub type SlotDuration = sc_consensus_slots::SlotDuration<u64>;
+
+/// Get type of `SlotDuration` for Aura.
+pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
+	A: Codec,
+	B: BlockT,
+	C: AuxStore + ProvideRuntimeApi<B>,
+	C::Api: AuraApi<B, A, Error = sp_blockchain::Error>,
+{
+	SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b))
+}
 
 /// Get slot author for given block along with authorities.
 fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
@@ -906,10 +916,7 @@ mod tests {
 		{
 			match client {
 				PeersClient::Full(client, _) => {
-					let slot_duration = SlotDuration::get_or_compute(
-						&*client,
-						|a, b| a.slot_duration(b)
-					).expect("slot duration available");
+					let slot_duration = slot_duration(&*client).expect("slot duration available");
 					let inherent_data_providers = InherentDataProviders::new();
 					register_aura_inherent_data_provider(
 						&inherent_data_providers,
@@ -977,10 +984,7 @@ mod tests {
 					.for_each(move |_| future::ready(()))
 			);
 
-			let slot_duration = SlotDuration::get_or_compute(
-				&*client,
-				|a, b| a.slot_duration(b)
-			).expect("slot duration available");
+			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
 			let inherent_data_providers = InherentDataProviders::new();
 			register_aura_inherent_data_provider(

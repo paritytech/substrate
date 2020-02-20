@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sp_consensus_aura::{AuraApi, sr25519::{AuthorityPair as AuraPair}};
+use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_cli::{VersionInfo, error};
 use crate::service;
 use crate::chain_spec;
