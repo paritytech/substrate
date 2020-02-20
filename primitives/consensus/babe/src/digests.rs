@@ -47,6 +47,11 @@ pub struct PrimaryPreDigest {
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub struct SecondaryPreDigest {
 	/// Authority index
+	///
+	/// This is not strictly necessary, since the secondary slots
+	/// are assigned based on slot number and epoch randomness. But including
+	/// it makes things easier for higher-level users of the chain data to
+	/// be aware of the author of a secondary-slot block.
 	pub authority_index: AuthorityIndex,
 	/// Slot number
 	pub slot_number: SlotNumber,
