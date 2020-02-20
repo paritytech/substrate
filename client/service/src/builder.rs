@@ -39,7 +39,7 @@ use sc_network::{config::BoxFinalityProofRequestBuilder, specialization::Network
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, SaturatedConversion, HasherFor,
+	Block as BlockT, NumberFor, SaturatedConversion, HasherFor, UniqueSaturatedInto,
 };
 use sp_api::ProvideRuntimeApi;
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
@@ -53,7 +53,43 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
-use grafana_data_source::{self, record_metrics};
+use prometheus_exporter::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
+
+struct ServiceMetrics {
+	block_height_number: GaugeVec<U64>,
+	peers_count: Gauge<U64>,
+	ready_transactions_number: Gauge<U64>,
+	memory_usage_bytes: Gauge<U64>,
+	cpu_usage_percentage: Gauge<F64>,
+	network_per_sec_bytes: GaugeVec<U64>,
+}
+
+impl ServiceMetrics {
+	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			block_height_number: register(GaugeVec::new(
+				Opts::new("block_height_number", "Height of the chain"),
+				&["status"]
+			)?, registry)?,
+			peers_count: register(Gauge::new(
+				"peers_count", "Number of network gossip peers",
+			)?, registry)?,
+			ready_transactions_number: register(Gauge::new(
+				"ready_transactions_number", "Number of transactions in the ready queue",
+			)?, registry)?,
+			memory_usage_bytes: register(Gauge::new(
+				"memory_usage_bytes", "Node memory usage",
+			)?, registry)?,
+			cpu_usage_percentage: register(Gauge::new(
+				"cpu_usage_percentage", "Node CPU usage",
+			)?, registry)?,
+			network_per_sec_bytes: register(GaugeVec::new(
+				Opts::new("network_per_sec_bytes", "Networking bytes per second"),
+				&["direction"]
+			)?, registry)?,
+		})
+	}
+}
 
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
@@ -93,6 +129,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TF
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 	background_tasks: Vec<(&'static str, BackgroundTask)>,
+	prometheus_registry: Option<Registry>
 }
 
 /// Full client type.
@@ -270,6 +307,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			remote_backend: None,
 			background_tasks: Default::default(),
 			marker: PhantomData,
+			prometheus_registry: None,
 		})
 	}
 
@@ -356,6 +394,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			remote_backend: Some(remote_blockchain),
 			background_tasks: Default::default(),
 			marker: PhantomData,
+			prometheus_registry: None,
 		})
 	}
 }
@@ -429,6 +468,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -472,6 +512,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -499,6 +540,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -540,6 +582,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -605,6 +648,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -665,6 +709,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -693,7 +738,30 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TEx
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
+	}
+
+	/// Use an existing prometheus `Registry` to record metrics into.
+	pub fn with_prometheus_registry(self, registry: Registry) -> Self {
+		Self {
+			config: self.config,
+			client: self.client,
+			backend: self.backend,
+			keystore: self.keystore,
+			fetcher: self.fetcher,
+			select_chain: self.select_chain,
+			import_queue: self.import_queue,
+			finality_proof_request_builder: self.finality_proof_request_builder,
+			finality_proof_provider: self.finality_proof_provider,
+			network_protocol: self.network_protocol,
+			transaction_pool: self.transaction_pool,
+			rpc_extensions: self.rpc_extensions,
+			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
+			marker: self.marker,
+			prometheus_registry: Some(registry),
+		}
 	}
 }
 
@@ -807,6 +875,7 @@ ServiceBuilder<
 			rpc_extensions,
 			remote_backend,
 			background_tasks,
+			prometheus_registry,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -998,6 +1067,30 @@ ServiceBuilder<
 			));
 		}
 
+		// Prometheus exporter and metrics
+		let metrics = if let Some(port) = config.prometheus_port {
+			let registry = match prometheus_registry {
+				Some(registry) => registry,
+				None => Registry::new_custom(Some("substrate".into()), None)?
+			};
+
+			let metrics = ServiceMetrics::register(&registry)?;
+
+			let future = select(
+				prometheus_exporter::init_prometheus(port, registry).boxed(),
+				exit.clone()
+			).map(drop);
+
+			let _ = to_spawn_tx.unbounded_send((
+				Box::pin(future),
+				From::from("prometheus-endpoint")
+			));
+
+			Some(metrics)
+		} else {
+			None
+		};
+
 		// Periodically notify the telemetry.
 		let transaction_pool_ = transaction_pool.clone();
 		let client_ = client.clone();
@@ -1014,6 +1107,8 @@ ServiceBuilder<
 			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
 			let bandwidth_download = net_status.average_download_per_sec;
 			let bandwidth_upload = net_status.average_upload_per_sec;
+			let best_seen_block = net_status.best_seen_block
+				.map(|num: NumberFor<TBl>| num.unique_saturated_into() as u64);
 
 			// get cpu usage and memory usage of this process
 			let (cpu_usage, memory) = if let Some(self_pid) = self_pid {
@@ -1042,25 +1137,22 @@ ServiceBuilder<
 				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
 				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
-			#[cfg(not(target_os = "unknown"))]
-			let memory_transaction_pool = parity_util_mem::malloc_size(&*transaction_pool_);
-			#[cfg(target_os = "unknown")]
-			let memory_transaction_pool = 0;
-			let _ = record_metrics!(
-				"peers" => num_peers,
-				"height" => best_number,
-				"txcount" => txpool_status.ready,
-				"cpu" => cpu_usage,
-				"memory" => memory,
-				"finalized_height" => finalized_number,
-				"bandwidth_download" => bandwidth_download,
-				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => info.usage.as_ref().map(|usage| usage.memory.state_cache).unwrap_or(0),
-				"used_db_cache_size" => info.usage.as_ref().map(|usage| usage.memory.database_cache).unwrap_or(0),
-				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
-				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
-				"memory_transaction_pool" => memory_transaction_pool,
-			);
+			if let Some(metrics) = metrics.as_ref() {
+				metrics.memory_usage_bytes.set(memory);
+				metrics.cpu_usage_percentage.set(f64::from(cpu_usage));
+				metrics.ready_transactions_number.set(txpool_status.ready as u64);
+				metrics.peers_count.set(num_peers as u64);
+
+				metrics.network_per_sec_bytes.with_label_values(&["download"]).set(net_status.average_download_per_sec);
+				metrics.network_per_sec_bytes.with_label_values(&["upload"]).set(net_status.average_upload_per_sec);
+
+				metrics.block_height_number.with_label_values(&["finalized"]).set(finalized_number);
+				metrics.block_height_number.with_label_values(&["best"]).set(best_number);
+
+				if let Some(best_seen_block) = best_seen_block {
+					metrics.block_height_number.with_label_values(&["sync_target"]).set(best_seen_block);
+				}
+			}
 
 			ready(())
 		});
@@ -1216,16 +1308,6 @@ ServiceBuilder<
 			).map(drop)), From::from("telemetry-worker")));
 			telemetry
 		});
-
-		// Grafana data source
-		if let Some(port) = config.grafana_port {
-			let future = select(
-				grafana_data_source::run_server(port).boxed(),
-				exit.clone()
-			).map(drop);
-
-			let _ = to_spawn_tx.unbounded_send((Box::pin(future), From::from("grafana-server")));
-		}
 
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {

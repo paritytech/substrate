@@ -118,11 +118,11 @@ pub struct RunCmd {
 	#[structopt(long = "unsafe-ws-external")]
 	pub unsafe_ws_external: bool,
 
-	/// Listen to all Grafana data source interfaces.
+	/// Listen to all Prometheus data source interfaces.
 	///
 	/// Default is local.
-	#[structopt(long = "grafana-external")]
-	pub grafana_external: bool,
+	#[structopt(long = "prometheus-external")]
+	pub prometheus_external: bool,
 
 	/// Specify HTTP RPC server TCP port.
 	#[structopt(long = "rpc-port", value_name = "PORT")]
@@ -146,9 +146,15 @@ pub struct RunCmd {
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
-	/// Specify Grafana data source server TCP Port.
-	#[structopt(long = "grafana-port", value_name = "PORT")]
-	pub grafana_port: Option<u16>,
+	/// Specify Prometheus data source server TCP Port.
+	#[structopt(long = "prometheus-port", value_name = "PORT")]
+	pub prometheus_port: Option<u16>,
+
+	/// Do not expose a Prometheus metric endpoint.
+	///
+	/// Prometheus metric endpoint is enabled by default.
+	#[structopt(long = "no-prometheus")]
+	pub no_prometheus: bool,
 
 	/// The human-readable name for this node.
 	///
@@ -391,13 +397,6 @@ impl RunCmd {
 			config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), self.ws_port)?);
 		}
 
-		if config.grafana_port.is_none() || self.grafana_port.is_some() {
-			let grafana_interface: &str = if self.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
-			config.grafana_port = Some(
-				parse_address(&format!("{}:{}", grafana_interface, 9955), self.grafana_port)?
-			);
-		}
-
 		config.rpc_ws_max_connections = self.ws_max_connections;
 		config.rpc_cors = self.rpc_cors.clone().unwrap_or_else(|| if is_dev {
 			log::warn!("Running in --dev mode, RPC CORS has been disabled.");
@@ -420,6 +419,15 @@ impl RunCmd {
 			config.telemetry_endpoints = Some(
 				TelemetryEndpoints::new(self.telemetry_endpoints.clone())
 			);
+		}
+
+		// Override prometheus
+		if self.no_prometheus {
+			config.prometheus_port = None;
+		} else if config.prometheus_port.is_none() {
+			let prometheus_interface: &str = if self.prometheus_external { "0.0.0.0" } else { "127.0.0.1" };
+			config.prometheus_port = Some(
+			parse_address(&format!("{}:{}", prometheus_interface, 9615), self.prometheus_port)?);
 		}
 
 		config.tracing_targets = self.import_params.tracing_targets.clone().into();
