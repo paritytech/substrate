@@ -1022,6 +1022,36 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+pub trait Dispatcher {
+	/// Decrease the amount of weight consumed by the current dispatchable.
+	///
+	/// This function can only meaningfully called within `Self::dispatch`. Otherwise,
+	/// it does nothing and returns `Err`.
+	///
+	/// The total weight returned from the dispatchable cannot exceed its total requested weight.
+	fn return_unspent_weight(unspent: Weight) -> Result<(), ()>;
+
+	/// Dispatch a given `Dispatchable` with a given origin.
+	fn dispatch<D: sp_runtime::traits::Dispatchable>(
+		origin: D::Origin,
+		dispatchable: D,
+	) -> (Weight, sp_runtime::DispatchResult);
+}
+
+impl<T: Trait> Dispatcher for Module<T> {
+	fn return_unspent_weight(unspent: Weight) -> Result<(), ()> {
+		todo!()
+	}
+
+	/// Dispatch a given `Dispatchable` with a given origin.
+	fn dispatch<D: sp_runtime::traits::Dispatchable>(
+		origin: D::Origin,
+		dispatchable: D,
+	) -> (Weight, sp_runtime::DispatchResult) {
+		todo!()
+	}
+}
+
 /// Event handler which calls on_created_account when it happens.
 pub struct CallOnCreatedAccount<T>(PhantomData<T>);
 impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {

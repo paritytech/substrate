@@ -27,6 +27,7 @@ use sp_runtime::{
 	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput},
 };
 
+use crate::weights::Weight;
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
 
