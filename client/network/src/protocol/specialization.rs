@@ -28,7 +28,7 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 	fn status(&self) -> Vec<u8>;
 
 	/// Called when a peer successfully handshakes.
-	fn on_connect(&mut self, ctx: &mut dyn Context<B>, who: PeerId, status: crate::message::Status<B>);
+	fn on_connect(&mut self, ctx: &mut dyn Context<B>, who: PeerId, status: crate::protocol::message::Status<B>);
 
 	/// Called when a peer is disconnected. If the peer ID is unknown, it should be ignored.
 	fn on_disconnect(&mut self, ctx: &mut dyn Context<B>, who: PeerId);
@@ -62,7 +62,7 @@ impl<B: BlockT> NetworkSpecialization<B> for DummySpecialization {
 		&mut self,
 		_ctx: &mut dyn Context<B>,
 		_peer_id: PeerId,
-		_status: crate::message::Status<B>
+		_status: crate::protocol::message::Status<B>
 	) {}
 
 	fn on_disconnect(&mut self, _ctx: &mut dyn Context<B>, _peer_id: PeerId) {}
