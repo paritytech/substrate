@@ -69,7 +69,7 @@ pub struct BenchmarkCmd {
 
 impl BenchmarkCmd {
 	/// Initialize
-	pub fn init(&self, version: &sc_cli::VersionInfo) -> sc_cli::Result<()>
+	pub fn init(&self, version: &sc_cli::VersionInfo) -> sc_cli::Result<()> {
 	{
 		self.shared_params.init(version)
 	}
