@@ -16,6 +16,7 @@
 
 use structopt::StructOpt;
 use sc_service::Configuration;
+use crate::error;
 
 /// Parameters used to create the pool configuration.
 #[derive(Debug, StructOpt, Clone)]
