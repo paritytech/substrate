@@ -1,10 +1,12 @@
 [package]
 description = "Prometheus exporter server"
 name = "prometheus-exporter"
-version = "0.8.0"
+version = "0.8.0-dev"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 log = "0.4.8"

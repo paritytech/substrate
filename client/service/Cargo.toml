@@ -1,9 +1,11 @@
 [package]
 name = "sc-service"
-version = "0.8.0"
+version = "0.8.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [features]
 default = ["rocksdb"]
@@ -30,37 +32,37 @@ serde = "1.0.101"
 serde_json = "1.0.41"
 sysinfo = "0.9.5"
 target_info = "0.1.0"
-sc-keystore = { version = "2.0.0", path = "../keystore" }
-sp-io = { version = "2.0.0", path = "../../primitives/io" }
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-session = { version = "2.0.0", path = "../../primitives/session" }
-sp-application-crypto = { version = "2.0.0", path = "../../primitives/application-crypto" }
-sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
-sc-network = { version = "0.8", path = "../network" }
-sc-chain-spec = { version = "2.0.0", path = "../chain-spec" }
-sc-client-api = { version = "2.0.0", path = "../api" }
-sc-client = { version = "0.8", path = "../" }
-sp-api = { version = "2.0.0", path = "../../primitives/api" }
-sc-client-db = { version = "0.8", path = "../db" }
+sc-keystore = { version = "2.0.0-dev", path = "../keystore" }
+sp-io = { version = "2.0.0-dev", path = "../../primitives/io" }
+sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
+sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
+sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
+sp-session = { version = "2.0.0-dev", path = "../../primitives/session" }
+sp-application-crypto = { version = "2.0.0-dev", path = "../../primitives/application-crypto" }
+sp-consensus = { version = "0.8.0-dev", path = "../../primitives/consensus/common" }
+sc-network = { version = "0.8.0-dev", path = "../network" }
+sc-chain-spec = { version = "2.0.0-dev", path = "../chain-spec" }
+sc-client-api = { version = "2.0.0-dev", path = "../api" }
+sc-client = { version = "0.8.0-dev", path = "../" }
+sp-api = { version = "2.0.0-dev", path = "../../primitives/api" }
+sc-client-db = { version = "0.8.0-dev", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sc-executor = { version = "0.8", path = "../executor" }
-sc-transaction-pool = { version = "2.0.0", path = "../transaction-pool" }
-sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
-sc-rpc-server = { version = "2.0.0", path = "../rpc-servers" }
-sc-rpc = { version = "2.0.0", path = "../rpc" }
-sc-telemetry = { version = "2.0.0", path = "../telemetry" }
-sc-offchain = { version = "2.0.0", path = "../offchain" }
+sc-executor = { version = "0.8.0-dev", path = "../executor" }
+sc-transaction-pool = { version = "2.0.0-dev", path = "../transaction-pool" }
+sp-transaction-pool = { version = "2.0.0-dev", path = "../../primitives/transaction-pool" }
+sc-rpc-server = { version = "2.0.0-dev", path = "../rpc-servers" }
+sc-rpc = { version = "2.0.0-dev", path = "../rpc" }
+sc-telemetry = { version = "2.0.0-dev", path = "../telemetry" }
+sc-offchain = { version = "2.0.0-dev", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
-prometheus-exporter = { path = "../../utils/prometheus" }
-sc-tracing = { version = "2.0.0", path = "../tracing" }
+prometheus-exporter = { path = "../../utils/prometheus" , version = "0.8.0-dev"}
+sc-tracing = { version = "2.0.0-dev", path = "../tracing" }
 tracing = "0.1.10"
 parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
-substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-sp-consensus-babe = { version = "0.8", path = "../../primitives/consensus/babe" }
-grandpa = { version = "0.8", package = "sc-finality-grandpa", path = "../finality-grandpa" }
-grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
+substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
+sp-consensus-babe = { version = "0.8.0-dev", path = "../../primitives/consensus/babe" }
+grandpa = { version = "0.8.0-dev", package = "sc-finality-grandpa", path = "../finality-grandpa" }
+grandpa-primitives = { version = "2.0.0-dev", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 tokio = { version = "0.2", features = ["rt-core"] }
