@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
+	config::ProtocolId,
 	debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut, DiscoveryNetBehaviour,
 	Event, protocol::event::DhtEvent, ExHashT,
 };
@@ -84,6 +85,11 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			light_client_handler,
 			events: Vec::new()
 		}
+	}
+
+	/// Enable discovery for the given protocol.
+	pub fn add_discovery(&mut self, p: ProtocolId) {
+		self.discovery.add_discovery(p)
 	}
 
 	/// Returns the list of nodes that we know exist in the network.

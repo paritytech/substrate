@@ -42,7 +42,7 @@ use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
 use crate::{transport, config::NonReservedPeerMode, ReputationChange};
-use crate::config::{Params, TransportConfig};
+use crate::config::{Params, ProtocolId, TransportConfig};
 use crate::error::Error;
 use crate::network_state::{NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer};
 use crate::protocol::{self, Protocol, PeerInfo};
@@ -227,7 +227,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let config = protocol::light_client_handler::Config::new(&params.protocol_id);
 				protocol::LightClientHandler::new(config, params.chain, checker, peerset_handle.clone())
 			};
-			let behaviour = futures::executor::block_on(Behaviour::new(
+			let mut behaviour = futures::executor::block_on(Behaviour::new(
 				protocol,
 				user_agent,
 				local_public,
@@ -244,6 +244,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				block_requests,
 				light_client_handler
 			));
+			// Temporary hack to stay backwards compatible until we migrated to one DHT per protocol.
+			behaviour.add_discovery(ProtocolId::from(libp2p::kad::protocol::DEFAULT_PROTO_NAME));
+			behaviour.add_discovery(params.protocol_id.clone());
 			let (transport, bandwidth) = {
 				let (config_mem, config_wasm, flowctrl) = match params.network_config.transport {
 					TransportConfig::MemoryOnly => (true, None, false),

@@ -45,12 +45,26 @@
 //! of a node's address, you must call `add_self_reported_address`.
 //!
 
-use futures::prelude::*;
+use crate::config::ProtocolId;
+use futures::{future::BoxFuture, prelude::*};
 use futures_timer::Delay;
 use libp2p::core::{nodes::listeners::ListenerId, ConnectedPoint, Multiaddr, PeerId, PublicKey};
-use libp2p::swarm::{ProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::kad::{Kademlia, KademliaEvent, Quorum, Record};
+use libp2p::core::upgrade::{ProtocolName, UpgradeInfo, InboundUpgrade, OutboundUpgrade};
+use libp2p::swarm::{
+	KeepAlive,
+	NegotiatedSubstream,
+	NetworkBehaviour,
+	NetworkBehaviourAction,
+	PollParameters,
+	ProtocolsHandler,
+	ProtocolsHandlerEvent,
+	ProtocolsHandlerUpgrErr,
+	SubstreamProtocol
+};
+use libp2p::kad::{Kademlia, KademliaConfig, KademliaEvent, Quorum, Record};
 use libp2p::kad::GetClosestPeersError;
+use libp2p::kad::handler::KademliaHandler;
+use libp2p::kad::QueryId;
 use libp2p::kad::record::{self, store::MemoryStore};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::{swarm::toggle::Toggle};
@@ -58,7 +72,7 @@ use libp2p::{swarm::toggle::Toggle};
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn, error};
-use std::{cmp, collections::VecDeque, time::Duration};
+use std::{cmp, collections::{HashMap, VecDeque}, time::Duration};
 use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
 
@@ -68,7 +82,7 @@ pub struct DiscoveryBehaviour {
 	/// reserved nodes.
 	user_defined: Vec<(PeerId, Multiaddr)>,
 	/// Kademlia requests and answers.
-	kademlia: Kademlia<MemoryStore>,
+	kademlias: HashMap<ProtocolId, Kademlia<MemoryStore>>,
 	/// Discovers nodes on the local network.
 	#[cfg(not(target_os = "unknown"))]
 	mdns: Toggle<Mdns>,
@@ -105,16 +119,9 @@ impl DiscoveryBehaviour {
 			warn!(target: "sub-libp2p", "mDNS is not available on this platform");
 		}
 
-		let local_id = local_public_key.clone().into_peer_id();
-		let store = MemoryStore::new(local_id.clone());
-		let mut kademlia = Kademlia::new(local_id.clone(), store);
-		for (peer_id, addr) in &user_defined {
-			kademlia.add_address(peer_id, addr.clone());
-		}
-
 		DiscoveryBehaviour {
 			user_defined,
-			kademlia,
+			kademlias: HashMap::new(),
 			next_kad_random_query: Delay::new(Duration::new(0, 0)),
 			duration_to_next_kad: Duration::from_secs(1),
 			discoveries: VecDeque::new(),
@@ -137,9 +144,42 @@ impl DiscoveryBehaviour {
 		}
 	}
 
+	/// Enable discovery for the given protocol.
+	pub fn add_discovery(&mut self, p: ProtocolId) {
+		if self.kademlias.contains_key(&p) {
+			warn!(target: "sub-libp2p", "Discovery already registered for protocol {:?}", p);
+			return
+		}
+
+		let mut config = KademliaConfig::default();
+
+		let proto_name =
+			if libp2p::kad::protocol::DEFAULT_PROTO_NAME == p.as_bytes() {
+				// Temporary hack to retain backwards compatibility. Once this version
+				// has been rolled out we should remove the special handling of
+				// DEFAULT_PROTO_NAME and work only with proper protocol IDs.
+				Vec::from(p.as_bytes())
+			} else {
+				let mut v = vec![b'/'];
+				v.extend_from_slice(p.as_bytes());
+				v.extend_from_slice(b"/kad");
+				v
+			};
+		config.set_protocol_name(proto_name);
+
+		let store = MemoryStore::new(self.local_peer_id.clone());
+		let mut kad = Kademlia::with_config(self.local_peer_id.clone(), store, config);
+
+		for (peer_id, addr) in &self.user_defined {
+			kad.add_address(peer_id, addr.clone());
+		}
+
+		self.kademlias.insert(p, kad);
+	}
+
 	/// Returns the list of nodes that we know exist in the network.
 	pub fn known_peers(&mut self) -> impl Iterator<Item = &PeerId> {
-		self.kademlia.kbuckets_entries()
+		self.kademlias.values_mut().map(|k| k.kbuckets_entries()).flatten()
 	}
 
 	/// Adds a hard-coded address for the given peer, that never expires.
@@ -159,14 +199,18 @@ impl DiscoveryBehaviour {
 	/// **Note**: It is important that you call this method, otherwise the discovery mechanism will
 	/// not properly work.
 	pub fn add_self_reported_address(&mut self, peer_id: &PeerId, addr: Multiaddr) {
-		self.kademlia.add_address(peer_id, addr);
+		for k in self.kademlias.values_mut() {
+			k.add_address(peer_id, addr.clone())
+		}
 	}
 
 	/// Start fetching a record from the DHT.
 	///
 	/// A corresponding `ValueFound` or `ValueNotFound` event will later be generated.
 	pub fn get_value(&mut self, key: &record::Key) {
-		self.kademlia.get_record(key, Quorum::One)
+		for k in self.kademlias.values_mut() {
+			k.get_record(key, Quorum::One)
+		}
 	}
 
 	/// Start putting a record into the DHT. Other nodes can later fetch that value with
@@ -174,7 +218,9 @@ impl DiscoveryBehaviour {
 	///
 	/// A corresponding `ValuePut` or `ValuePutFailed` event will later be generated.
 	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
-		self.kademlia.put_record(Record::new(key, value), Quorum::All);
+		for k in self.kademlias.values_mut() {
+			k.put_record(Record::new(key.clone(), value.clone()), Quorum::All)
+		}
 	}
 }
 
@@ -206,11 +252,16 @@ pub enum DiscoveryOut {
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-	type ProtocolsHandler = <Kademlia<MemoryStore> as NetworkBehaviour>::ProtocolsHandler;
+	type ProtocolsHandler = DiscoveryHandler;
 	type OutEvent = DiscoveryOut;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		NetworkBehaviour::new_handler(&mut self.kademlia)
+		let mut v = Vec::new();
+		for (p, k) in &mut self.kademlias {
+			let h = NetworkBehaviour::new_handler(k);
+			v.push((p.clone(), h))
+		}
+		DiscoveryHandler { handlers: v }
 	}
 
 	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
@@ -219,7 +270,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			.collect::<Vec<_>>();
 
 		{
-			let mut list_to_filter = self.kademlia.addresses_of_peer(peer_id);
+			let mut list_to_filter = Vec::new();
+			for k in self.kademlias.values_mut() {
+				list_to_filter.extend(k.addresses_of_peer(peer_id))
+			}
+
 			#[cfg(not(target_os = "unknown"))]
 			list_to_filter.extend(self.mdns.addresses_of_peer(peer_id));
 
@@ -239,13 +294,23 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		}
 
 		trace!(target: "sub-libp2p", "Addresses of {:?} are {:?}", peer_id, list);
+
 		if list.is_empty() {
-			if self.kademlia.kbuckets_entries().any(|p| p == peer_id) {
-				debug!(target: "sub-libp2p", "Requested dialing to {:?} (peer in k-buckets), \
-					and no address was found", peer_id);
+			let mut has_entry = false;
+			for k in self.kademlias.values_mut() {
+				if k.kbuckets_entries().any(|p| p == peer_id) {
+					has_entry = true;
+					break
+				}
+			}
+			if has_entry {
+				debug!(target: "sub-libp2p",
+					"Requested dialing to {:?} (peer in k-buckets), and no address was found",
+					peer_id);
 			} else {
-				debug!(target: "sub-libp2p", "Requested dialing to {:?} (peer not in k-buckets), \
-					and no address was found", peer_id);
+				debug!(target: "sub-libp2p",
+					"Requested dialing to {:?} (peer not in k-buckets), and no address was found",
+					peer_id);
 			}
 		}
 		list
@@ -253,16 +318,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
 		self.num_connections += 1;
-		NetworkBehaviour::inject_connected(&mut self.kademlia, peer_id, endpoint)
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_connected(k, peer_id.clone(), endpoint.clone())
+		}
 	}
 
 	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
 		self.num_connections -= 1;
-		NetworkBehaviour::inject_disconnected(&mut self.kademlia, peer_id, endpoint)
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_disconnected(k, peer_id, endpoint.clone())
+		}
 	}
 
 	fn inject_replaced(&mut self, peer_id: PeerId, closed: ConnectedPoint, opened: ConnectedPoint) {
-		NetworkBehaviour::inject_replaced(&mut self.kademlia, peer_id, closed, opened)
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_replaced(k, peer_id.clone(), closed.clone(), opened.clone())
+		}
 	}
 
 	fn inject_addr_reach_failure(
@@ -271,45 +342,61 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		addr: &Multiaddr,
 		error: &dyn std::error::Error
 	) {
-		NetworkBehaviour::inject_addr_reach_failure(&mut self.kademlia, peer_id, addr, error)
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_addr_reach_failure(k, peer_id, addr, error)
+		}
 	}
 
 	fn inject_node_event(
 		&mut self,
 		peer_id: PeerId,
-		event: <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
+		(pid, event): <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
 	) {
-		NetworkBehaviour::inject_node_event(&mut self.kademlia, peer_id, event)
+		if let Some(kad) = self.kademlias.get_mut(&pid) {
+			kad.inject_node_event(peer_id, event)
+		}
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		let new_addr = addr.clone()
 			.with(Protocol::P2p(self.local_peer_id.clone().into()));
 		info!(target: "sub-libp2p", "Discovered new external address for our node: {}", new_addr);
-		NetworkBehaviour::inject_new_external_addr(&mut self.kademlia, addr)
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_new_external_addr(k, addr)
+		}
 	}
 
 	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
 		info!(target: "sub-libp2p", "No longer listening on {}", addr);
-		NetworkBehaviour::inject_expired_listen_addr(&mut self.kademlia, addr)
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_expired_listen_addr(k, addr)
+		}
 	}
 
 	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
-		NetworkBehaviour::inject_dial_failure(&mut self.kademlia, peer_id)
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_dial_failure(k, peer_id)
+		}
 	}
 
 	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
-		NetworkBehaviour::inject_new_listen_addr(&mut self.kademlia, addr)
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_new_listen_addr(k, addr)
+		}
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
 		error!(target: "sub-libp2p", "Error on libp2p listener {:?}: {}", id, err);
-		NetworkBehaviour::inject_listener_error(&mut self.kademlia, id, err);
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_listener_error(k, id, err)
+		}
 	}
 
 	fn inject_listener_closed(&mut self, id: ListenerId) {
 		error!(target: "sub-libp2p", "Libp2p listener {:?} closed", id);
-		NetworkBehaviour::inject_listener_closed(&mut self.kademlia, id);
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_listener_closed(k, id)
+		}
 	}
 
 	fn poll(
@@ -332,10 +419,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		while let Poll::Ready(_) = self.next_kad_random_query.poll_unpin(cx) {
 			if self.num_connections < self.discovery_only_if_under_num {
 				let random_peer_id = PeerId::random();
-				debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
-					{:?}", random_peer_id);
-
-				self.kademlia.get_closest_peers(random_peer_id);
+				debug!(target: "sub-libp2p",
+					"Libp2p <= Starting random Kademlia request for {:?}",
+					random_peer_id);
+				for k in self.kademlias.values_mut() {
+					k.get_closest_peers(random_peer_id.clone())
+				}
 			} else {
 				debug!(
 					target: "sub-libp2p",
@@ -351,96 +440,101 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				Duration::from_secs(60));
 		}
 
-		// Poll Kademlia.
-		while let Poll::Ready(ev) = self.kademlia.poll(cx, params) {
-			match ev {
-				NetworkBehaviourAction::GenerateEvent(ev) => match ev {
-					KademliaEvent::UnroutablePeer { peer, .. } => {
-						let ev = DiscoveryOut::UnroutablePeer(peer);
-						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
-					}
-					KademliaEvent::RoutingUpdated { peer, .. } => {
-						let ev = DiscoveryOut::Discovered(peer);
-						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
-					}
-					KademliaEvent::GetClosestPeersResult(res) => {
-						match res {
-							Err(GetClosestPeersError::Timeout { key, peers }) => {
-								debug!(target: "sub-libp2p",
-									"Libp2p => Query for {:?} timed out with {} results",
-									HexDisplay::from(&key), peers.len());
-							},
-							Ok(ok) => {
-								trace!(target: "sub-libp2p",
-									"Libp2p => Query for {:?} yielded {:?} results",
-									HexDisplay::from(&ok.key), ok.peers.len());
-								if ok.peers.is_empty() && self.num_connections != 0 {
-									debug!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
-										results");
+		// Poll Kademlias.
+		for (pid, kademlia) in &mut self.kademlias {
+			while let Poll::Ready(ev) = kademlia.poll(cx, params) {
+				match ev {
+					NetworkBehaviourAction::GenerateEvent(ev) => match ev {
+						KademliaEvent::UnroutablePeer { peer, .. } => {
+							let ev = DiscoveryOut::UnroutablePeer(peer);
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
+						KademliaEvent::RoutingUpdated { peer, .. } => {
+							let ev = DiscoveryOut::Discovered(peer);
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
+						KademliaEvent::GetClosestPeersResult(res) => {
+							match res {
+								Err(GetClosestPeersError::Timeout { key, peers }) => {
+									debug!(target: "sub-libp2p",
+										"Libp2p => Query for {:?} timed out with {} results",
+										HexDisplay::from(&key), peers.len());
+								},
+								Ok(ok) => {
+									trace!(target: "sub-libp2p",
+										"Libp2p => Query for {:?} yielded {:?} results",
+										HexDisplay::from(&ok.key), ok.peers.len());
+									if ok.peers.is_empty() && self.num_connections != 0 {
+										debug!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
+											results");
+									}
 								}
 							}
 						}
-					}
-					KademliaEvent::GetRecordResult(res) => {
-						let ev = match res {
-							Ok(ok) => {
-								let results = ok.records
-									.into_iter()
-									.map(|r| (r.key, r.value))
-									.collect();
+						KademliaEvent::GetRecordResult(res) => {
+							let ev = match res {
+								Ok(ok) => {
+									let results = ok.records
+										.into_iter()
+										.map(|r| (r.key, r.value))
+										.collect();
 
-								DiscoveryOut::ValueFound(results)
-							}
-							Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
-								trace!(target: "sub-libp2p",
-									"Libp2p => Failed to get record: {:?}", e);
-								DiscoveryOut::ValueNotFound(e.into_key())
-							}
-							Err(e) => {
-								warn!(target: "sub-libp2p",
-									"Libp2p => Failed to get record: {:?}", e);
-								DiscoveryOut::ValueNotFound(e.into_key())
-							}
-						};
-						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
-					}
-					KademliaEvent::PutRecordResult(res) => {
-						let ev = match res {
-							Ok(ok) => DiscoveryOut::ValuePut(ok.key),
-							Err(e) => {
-								warn!(target: "sub-libp2p",
-									"Libp2p => Failed to put record: {:?}", e);
-								DiscoveryOut::ValuePutFailed(e.into_key())
-							}
-						};
-						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
-					}
-					KademliaEvent::RepublishRecordResult(res) => {
-						match res {
-							Ok(ok) => debug!(target: "sub-libp2p",
-								"Libp2p => Record republished: {:?}",
-								ok.key),
-							Err(e) => warn!(target: "sub-libp2p",
-								"Libp2p => Republishing of record {:?} failed with: {:?}",
-								e.key(), e)
+									DiscoveryOut::ValueFound(results)
+								}
+								Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
+									trace!(target: "sub-libp2p",
+										"Libp2p => Failed to get record: {:?}", e);
+									DiscoveryOut::ValueNotFound(e.into_key())
+								}
+								Err(e) => {
+									warn!(target: "sub-libp2p",
+										"Libp2p => Failed to get record: {:?}", e);
+									DiscoveryOut::ValueNotFound(e.into_key())
+								}
+							};
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
-					}
-					KademliaEvent::Discovered { .. } => {
-						// We are not interested in these events at the moment.
-					}
-					// We never start any other type of query.
-					e => {
-						warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
-					}
-				},
-				NetworkBehaviourAction::DialAddress { address } =>
-					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				NetworkBehaviourAction::DialPeer { peer_id } =>
-					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				NetworkBehaviourAction::SendEvent { peer_id, event } =>
-					return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
-				NetworkBehaviourAction::ReportObservedAddr { address } =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+						KademliaEvent::PutRecordResult(res) => {
+							let ev = match res {
+								Ok(ok) => DiscoveryOut::ValuePut(ok.key),
+								Err(e) => {
+									warn!(target: "sub-libp2p",
+										"Libp2p => Failed to put record: {:?}", e);
+									DiscoveryOut::ValuePutFailed(e.into_key())
+								}
+							};
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
+						KademliaEvent::RepublishRecordResult(res) => {
+							match res {
+								Ok(ok) => debug!(target: "sub-libp2p",
+									"Libp2p => Record republished: {:?}",
+									ok.key),
+								Err(e) => warn!(target: "sub-libp2p",
+									"Libp2p => Republishing of record {:?} failed with: {:?}",
+									e.key(), e)
+							}
+						}
+						KademliaEvent::Discovered { .. } => {
+							// We are not interested in these events at the moment.
+						}
+						// We never start any other type of query.
+						e => {
+							warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
+						}
+					},
+					NetworkBehaviourAction::DialAddress { address } =>
+						return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
+					NetworkBehaviourAction::DialPeer { peer_id } =>
+						return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+					NetworkBehaviourAction::SendEvent { peer_id, event } =>
+						return Poll::Ready(NetworkBehaviourAction::SendEvent {
+							peer_id,
+							event: (pid.clone(), event)
+						}),
+					NetworkBehaviourAction::ReportObservedAddr { address } =>
+						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+				}
 			}
 		}
 
@@ -476,6 +570,170 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		}
 
 		Poll::Pending
+	}
+}
+
+pub struct DiscoveryHandler {
+	handlers: Vec<(ProtocolId, KademliaHandler<QueryId>)>
+}
+
+impl ProtocolsHandler for DiscoveryHandler {
+	type InEvent = (ProtocolId, <KademliaHandler<QueryId> as ProtocolsHandler>::InEvent);
+	type OutEvent = (ProtocolId, <KademliaHandler<QueryId> as ProtocolsHandler>::OutEvent);
+	type Error = <KademliaHandler<QueryId> as ProtocolsHandler>::Error;
+	type InboundProtocol = KadUpgrade<<KademliaHandler<QueryId> as ProtocolsHandler>::InboundProtocol>;
+	type OutboundProtocol = <KademliaHandler<QueryId> as ProtocolsHandler>::OutboundProtocol;
+	type OutboundOpenInfo = (ProtocolId, <KademliaHandler<QueryId> as ProtocolsHandler>::OutboundOpenInfo);
+
+	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
+		let upgrades = self.handlers.iter()
+			.map(|h| (h.0.clone(), h.1.listen_protocol().into_upgrade().1))
+			.collect();
+		SubstreamProtocol::new(KadUpgrade { upgrades })
+	}
+
+	fn inject_fully_negotiated_outbound
+		( &mut self
+		, protocol: <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output
+		, (pid, rest): Self::OutboundOpenInfo
+		)
+	{
+		if let Some((_, kad)) = self.handlers.iter_mut().find(|p| &p.0 == &pid) {
+			kad.inject_fully_negotiated_outbound(protocol, rest)
+		}
+	}
+
+	fn inject_fully_negotiated_inbound
+		( &mut self
+		, (pid, rest): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
+		)
+	{
+		if let Some((_, kad)) = self.handlers.iter_mut().find(|p| &p.0 == &pid) {
+			kad.inject_fully_negotiated_inbound(rest)
+		}
+	}
+
+	fn inject_event(&mut self, (pid, event): Self::InEvent) {
+		if let Some((_, kad)) = self.handlers.iter_mut().find(|p| &p.0 == &pid) {
+			kad.inject_event(event)
+		}
+	}
+
+	fn inject_dial_upgrade_error
+		( &mut self
+		, (pid, other): Self::OutboundOpenInfo
+		, error: ProtocolsHandlerUpgrErr<Self::Error>
+		)
+	{
+		if let Some((_, kad)) = self.handlers.iter_mut().find(|p| &p.0 == &pid) {
+			kad.inject_dial_upgrade_error(other, error)
+		}
+	}
+
+	fn connection_keep_alive(&self) -> KeepAlive {
+		self.handlers.iter()
+			.map(|x| x.1.connection_keep_alive())
+			.max()
+			.unwrap_or(KeepAlive::No)
+	}
+
+	fn poll
+		( &mut self
+		, cx: &mut Context
+		) -> Poll<ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>>
+	{
+		for (pid, kad) in self.handlers.iter_mut() {
+			if let Poll::Ready(event) = kad.poll(cx) {
+				let event = event
+					.map_outbound_open_info(|i| (pid.clone(), i))
+					.map_custom(|p| (pid.clone(), p));
+				return Poll::Ready(event)
+			}
+		}
+
+		Poll::Pending
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct KadInfo<T>(ProtocolId, T);
+
+impl<T: ProtocolName + Clone> ProtocolName for KadInfo<T> {
+	fn protocol_name(&self) -> &[u8] {
+		self.1.protocol_name()
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct KadUpgrade<T> {
+	upgrades: Vec<(ProtocolId, T)>
+}
+
+impl<T: UpgradeInfo> UpgradeInfo for KadUpgrade<T> {
+    type Info = KadInfo<T::Info>;
+    type InfoIter = Vec<Self::Info>;
+
+    fn protocol_info(&self) -> Self::InfoIter {
+		self.upgrades.iter().map(|(p, i)| std::iter::repeat(p.clone()).zip(i.protocol_info()))
+			.flatten()
+			.map(|(p, i)| KadInfo(p, i))
+			.collect()
+    }
+}
+
+impl<T, C, A, E> InboundUpgrade<C> for KadUpgrade<T>
+where
+    C: AsyncRead + AsyncWrite + Unpin,
+	T: InboundUpgrade<C, Output = A, Error = E>,
+	T::Info: Send + 'static,
+	T::Future: Send + 'static
+{
+    type Output = (ProtocolId, A);
+    type Error  = (ProtocolId, E);
+    type Future = BoxFuture<'static, Result<Self::Output, Self::Error>>;
+
+    fn upgrade_inbound(mut self, resource: C, info: Self::Info) -> Self::Future {
+		let pid = info.0;
+		let upg = info.1;
+		let pos = self.upgrades.iter().position(|i| &i.0 == &pid)
+			.expect("upgrade_inbound is applied to a protocol id from \
+			protocol_info, which only contains ids from the same set of \
+			upgrades we are searching here, therefore looking for this id \
+			is guaranteed to give us a non-empty result; qed");
+		self.upgrades.remove(pos).1.upgrade_inbound(resource, upg)
+			.map(move |out| match out {
+				Ok(o) => Ok((pid, o)),
+				Err(e) => Err((pid, e))
+			})
+			.boxed()
+	}
+}
+
+impl<T, C, A, E> OutboundUpgrade<C> for KadUpgrade<T>
+where
+    C: AsyncRead + AsyncWrite + Unpin,
+	T: OutboundUpgrade<C, Output = A, Error = E>,
+	T::Info: Send + 'static,
+	T::Future: Send + 'static
+{
+    type Output = (ProtocolId, A);
+    type Error  = (ProtocolId, E);
+    type Future = BoxFuture<'static, Result<Self::Output, Self::Error>>;
+
+    fn upgrade_outbound(mut self, resource: C, info: Self::Info) -> Self::Future {
+		let pid = info.0;
+		let upg = info.1;
+		let pos = self.upgrades.iter().position(|i| &i.0 == &pid)
+			.expect("upgrade_outbound is applied to a protocol id from \
+			protocol_info, which only contains ids from the same set of \
+			upgrades we are searching here, therefore looking for this id \
+			is guaranteed to give us a non-empty result; qed");
+		self.upgrades.remove(pos).1.upgrade_outbound(resource, upg)
+			.map(move |out| match out {
+				Ok(o) => Ok((pid, o)),
+				Err(e) => Err((pid, e))
+			})
+			.boxed()
 	}
 }
 
