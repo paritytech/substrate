@@ -1,18 +1,20 @@
 [package]
 name = "sp-phragmen"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "2.0.0-dev", default-features = false, path = "../std" }
+sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 
 [dev-dependencies]
-substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
-sp-io ={ version = "2.0.0", path = "../../primitives/io" }
+substrate-test-utils = { version = "2.0.0-dev", path = "../../test-utils" }
+sp-io ={ version = "2.0.0-dev", path = "../../primitives/io" }
 rand = "0.7.2"
 
 [features]
