@@ -79,33 +79,23 @@ pub use sp_consensus_aura::{
 	},
 };
 pub use sp_consensus::SyncOracle;
-pub use digest::CompatibleDigestItem;
+pub use digests::CompatibleDigestItem;
 
-mod digest;
+mod digests;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
-/// A slot duration. Create with `get_or_compute`.
-#[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
-pub struct SlotDuration(sc_consensus_slots::SlotDuration<u64>);
+/// Slot duration type for Aura.
+pub type SlotDuration = sc_consensus_slots::SlotDuration<u64>;
 
-impl SlotDuration {
-	/// Either fetch the slot duration from disk or compute it from the genesis
-	/// state.
-	pub fn get_or_compute<A, B, C>(client: &C) -> CResult<Self>
-	where
-		A: Codec,
-		B: BlockT,
-		C: AuxStore + ProvideRuntimeApi<B>,
-		C::Api: AuraApi<B, A, Error = sp_blockchain::Error>,
-	{
-		sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
-	}
-
-	/// Get the slot duration in milliseconds.
-	pub fn get(&self) -> u64 {
-		self.0.get()
-	}
+/// Get type of `SlotDuration` for Aura.
+pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
+	A: Codec,
+	B: BlockT,
+	C: AuxStore + ProvideRuntimeApi<B>,
+	C::Api: AuraApi<B, A, Error = sp_blockchain::Error>,
+{
+	SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b))
 }
 
 /// Get slot author for given block along with authorities.
@@ -179,10 +169,10 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	};
 	register_aura_inherent_data_provider(
 		&inherent_data_providers,
-		slot_duration.0.slot_duration()
+		slot_duration.slot_duration()
 	)?;
 	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
-		slot_duration.0,
+		slot_duration,
 		select_chain,
 		worker,
 		sync_oracle,
@@ -926,8 +916,7 @@ mod tests {
 		{
 			match client {
 				PeersClient::Full(client, _) => {
-					let slot_duration = SlotDuration::get_or_compute(&*client)
-						.expect("slot duration available");
+					let slot_duration = slot_duration(&*client).expect("slot duration available");
 					let inherent_data_providers = InherentDataProviders::new();
 					register_aura_inherent_data_provider(
 						&inherent_data_providers,
@@ -995,8 +984,7 @@ mod tests {
 					.for_each(move |_| future::ready(()))
 			);
 
-			let slot_duration = SlotDuration::get_or_compute(&*client)
-				.expect("slot duration available");
+			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
 			let inherent_data_providers = InherentDataProviders::new();
 			register_aura_inherent_data_provider(
