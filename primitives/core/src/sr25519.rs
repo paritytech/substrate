@@ -55,7 +55,7 @@ use sp_runtime_interface::pass_by::PassByInner;
 const SIGNING_CTX: &[u8] = b"substrate";
 
 /// An identifier used to match public keys against sr25519 keys
-pub const SR25519_CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
+pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
@@ -382,7 +382,7 @@ impl Public {
 }
 
 impl TraitPublic for Public {
-	const CRYPTO_TYPE_ID: CryptoTypeId = SR25519_CRYPTO_ID;
+	const CRYPTO_ID: CryptoTypeId = CRYPTO_ID;
 
 	/// A new instance from the given slice that should be 32 bytes long.
 	///

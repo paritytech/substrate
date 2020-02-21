@@ -41,7 +41,7 @@ use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive, Cr
 use secp256k1::{PublicKey, SecretKey};
 
 /// An identifier used to match public keys against ecdsa keys
-pub const ECDSA_CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
+pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 
 /// A secret seed (which is bytewise essentially equivalent to a SecretKey).
 ///
@@ -98,7 +98,7 @@ impl Public {
 }
 
 impl TraitPublic for Public {
-	const CRYPTO_TYPE_ID: CryptoTypeId = ECDSA_CRYPTO_ID;
+	const CRYPTO_ID: CryptoTypeId = CRYPTO_ID;
 	/// A new instance from the given slice that should be 33 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if

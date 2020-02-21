@@ -271,7 +271,7 @@ macro_rules! app_crypto_public_common {
 		}
 
 		impl $crate::Public for Public {
-			const CRYPTO_TYPE_ID: $crate::CryptoTypeId = $crate::CryptoTypeId($key_type.0);
+			const CRYPTO_ID: $crate::CryptoTypeId = $crate::CryptoTypeId($key_type.0);
 
 			fn from_slice(x: &[u8]) -> Self { Self(<$public>::from_slice(x)) }
 		}

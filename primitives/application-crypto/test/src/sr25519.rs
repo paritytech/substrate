@@ -27,7 +27,7 @@ use substrate_test_runtime_client::{
 	runtime::TestAPI,
 };
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::sr25519::{SR25519_CRYPTO_ID, AppPair, AppPublic};
+use sp_application_crypto::sr25519::{CRYPTO_ID, AppPair, AppPublic};
 
 #[test]
 fn sr25519_works_in_runtime() {
@@ -38,6 +38,6 @@ fn sr25519_works_in_runtime() {
 		.expect("Tests `sr25519` crypto.");
 
 	let supported_keys = keystore.read().keys(SR25519).unwrap();
-	assert!(true, supported_keys.contains(&(SR25519_CRYPTO_ID, public.to_raw_vec())));
+	assert!(true, supported_keys.contains(&(CRYPTO_ID, public.to_raw_vec())));
 	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(public)));
 }

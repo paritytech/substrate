@@ -43,7 +43,7 @@ use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::ops::Deref;
 
 /// An identifier used to match public keys against ed25519 keys
-pub const ED25519_CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ed25");
+pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ed25");
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -368,7 +368,7 @@ impl Public {
 }
 
 impl TraitPublic for Public {
-	const CRYPTO_TYPE_ID: CryptoTypeId = ED25519_CRYPTO_ID;
+	const CRYPTO_ID: CryptoTypeId = CRYPTO_ID;
 
 	/// A new instance from the given slice that should be 32 bytes long.
 	///

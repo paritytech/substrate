@@ -518,8 +518,8 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 pub trait Public:
 	AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync
 {
-	/// Each implementation of Public should define its Kind identifier
-	const CRYPTO_TYPE_ID: CryptoTypeId;
+	/// The identifier of this crypto type
+	const CRYPTO_ID: CryptoTypeId;
 
 	/// A new instance from the given slice.
 	///
@@ -662,7 +662,7 @@ mod dummy {
 	impl Derive for Dummy {}
 
 	impl Public for Dummy {
-		const CRYPTO_TYPE_ID: CryptoTypeId = CryptoTypeId(*b"dumm");
+		const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"dumm");
 
 		fn from_slice(_: &[u8]) -> Self { Self }
 		#[cfg(feature = "std")]
@@ -996,7 +996,7 @@ mod tests {
 	}
 	impl Derive for TestPublic {}
 	impl Public for TestPublic {
-		const CRYPTO_TYPE_ID: CryptoTypeId = CryptoTypeId(*b"test");
+		const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"test");
 
 		fn from_slice(_bytes: &[u8]) -> Self {
 			Self

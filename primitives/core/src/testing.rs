@@ -173,14 +173,14 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		msg: &[u8]
 	) -> Result<Vec<u8>, BareCryptoStoreError> {
 		match key.0 {
-			ed25519::ED25519_CRYPTO_ID => {
+			ed25519::CRYPTO_ID => {
 				let key_pair: ed25519::Pair = self
 					.ed25519_key_pair(id, &ed25519::Public::from_slice(key.1.as_slice()))
 					.map(Into::into)
 					.ok_or(BareCryptoStoreError::PairNotFound("ed25519".to_owned()))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			sr25519::SR25519_CRYPTO_ID => {
+			sr25519::CRYPTO_ID => {
 				let key_pair: sr25519::Pair = self
 					.sr25519_key_pair(id, &sr25519::Public::from_slice(key.1.as_slice()))
 					.map(Into::into)
@@ -308,7 +308,7 @@ mod tests {
 
 		let public_keys = store.read().keys(ED25519).unwrap();
 
-		assert_eq!(true, public_keys.contains(&(ed25519::ED25519_CRYPTO_ID, public.to_raw_vec())));
+		assert!(public_keys.contains(&(ed25519::CRYPTO_ID, public.to_raw_vec())));
 	}
 
 	#[test]
@@ -326,6 +326,6 @@ mod tests {
 
 		let public_keys = store.read().keys(SR25519).unwrap();
 
-		assert_eq!(true, public_keys.contains(&(sr25519::SR25519_CRYPTO_ID, key_pair.public().to_raw_vec())));
+		assert!(public_keys.contains(&(sr25519::CRYPTO_ID, key_pair.public().to_raw_vec())));
 	}
 }

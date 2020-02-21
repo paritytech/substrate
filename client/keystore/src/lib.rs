@@ -314,13 +314,13 @@ impl BareCryptoStore for Store {
 			.public_keys_by_type::<ed25519::Public>(id)
 			.map_err(|e| TraitError::from(e))?
 			.into_iter()
-			.map(|k| (ed25519::ED25519_CRYPTO_ID, k.to_raw_vec()));
+			.map(|k| (ed25519::CRYPTO_ID, k.to_raw_vec()));
 
 		let sr25519_existing_keys = self
 			.public_keys_by_type::<sr25519::Public>(id)
 			.map_err(|e| TraitError::from(e))?
 			.into_iter()
-			.map(|k| (sr25519::SR25519_CRYPTO_ID, k.to_raw_vec()));
+			.map(|k| (sr25519::CRYPTO_ID, k.to_raw_vec()));
 
 		Ok(ed25519_existing_keys
 			.chain(sr25519_existing_keys)
@@ -334,7 +334,7 @@ impl BareCryptoStore for Store {
 		msg: &[u8],
 	) -> std::result::Result<Vec<u8>, TraitError> {
 		match key.0 {
-			ed25519::ED25519_CRYPTO_ID => {
+			ed25519::CRYPTO_ID => {
 				let pub_key = ed25519::Public::from_slice(key.1.as_slice());
 				let key_pair: ed25519::Pair = self
 					.key_pair_by_type::<ed25519::Pair>(&pub_key, id)
@@ -342,7 +342,7 @@ impl BareCryptoStore for Store {
 					.map_err(|e| TraitError::from(e))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			sr25519::SR25519_CRYPTO_ID => {
+			sr25519::CRYPTO_ID => {
 				let pub_key = sr25519::Public::from_slice(key.1.as_slice());
 				let key_pair: sr25519::Pair = self
 					.key_pair_by_type::<sr25519::Pair>(&pub_key, id)

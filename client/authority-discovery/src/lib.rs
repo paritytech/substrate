@@ -214,7 +214,7 @@ where
 
 		let keys: Vec<CryptoTypePublicPair> = self.get_own_public_keys_within_authority_set()?
 			.into_iter()
-			.map(|k| (sr25519::SR25519_CRYPTO_ID, k.to_raw_vec()))
+			.map(|k| (sr25519::CRYPTO_ID, k.to_raw_vec()))
 			.collect();
 
 		let signatures = self.key_store
@@ -222,7 +222,7 @@ where
 			.sign_with_all(
 				key_types::AUTHORITY_DISCOVERY,
 				keys.clone(),
-				serialized_addresses.as_slice()
+				serialized_addresses.as_slice(),
 			)
 			.map_err(|_| Error::SigningFailed)?;
 
