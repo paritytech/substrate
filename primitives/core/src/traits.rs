@@ -143,8 +143,8 @@ pub trait BareCryptoStore: Send + Sync {
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8]
-	) -> Vec<Option<Vec<u8>>> {
-		keys.iter().map(|k| self.sign_with(id, k, msg).ok()).collect()
+	) -> Result<Vec<Result<Vec<u8>, Error>>, ()>{
+		Ok(keys.iter().map(|k| self.sign_with(id, k, msg)).collect())
 	}
 }
 
