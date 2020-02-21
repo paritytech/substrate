@@ -71,6 +71,7 @@ members = [
 	"frame/elections",
 	"frame/evm",
 	"frame/example",
+	"frame/example-offchain-worker",
 	"frame/executive",
 	"frame/finality-tracker",
 	"frame/generic-asset",

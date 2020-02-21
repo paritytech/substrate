@@ -50,8 +50,6 @@ fn check_module() {
 	})
 }
 
-type System = frame_system::Module<Test>;
-
 #[test]
 fn first_block_epoch_zero_start() {
 	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
