@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::{VersionInfo, self};
+use sc_cli::VersionInfo;
 use sc_service::{Roles as ServiceRoles};
 use node_transaction_factory::RuntimeAdapter;
 use crate::{Cli, service, ChainSpec, load_spec, Subcommand, factory_impl::FactoryState};
