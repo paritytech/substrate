@@ -6231,6 +6231,7 @@ dependencies = [
  "nohash-hasher",
  "parity-scale-codec",
  "parking_lot 0.10.0",
+ "pin-project",
  "prost",
  "prost-build",
  "quickcheck",
@@ -8564,6 +8565,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b7ffb36714206d2f5f05d61a2bc350415c642f2c54433f0ebf829afbe41d570"
 dependencies = [
  "bytes 0.5.4",
+ "futures 0.3.4",
  "futures_codec",
 ]
 

@@ -886,7 +886,10 @@ pub fn setup_disabled_grandpa<B, E, Block: BlockT, RA, N>(
 	// We register the GRANDPA protocol so that we don't consider it an anomaly
 	// to receive GRANDPA messages on the network. We don't process the
 	// messages.
-	network.register_notifications_protocol(communication::GRANDPA_ENGINE_ID);
+	network.register_notifications_protocol(
+		communication::GRANDPA_ENGINE_ID,
+		From::from(communication::GRANDPA_PROTOCOL_NAME),
+	);
 
 	Ok(())
 }

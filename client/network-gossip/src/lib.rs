@@ -61,7 +61,7 @@ pub use self::validator::{DiscardAll, MessageIntent, Validator, ValidatorContext
 use futures::prelude::*;
 use sc_network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId, ReputationChange};
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
-use std::{pin::Pin, sync::Arc};
+use std::{borrow::Cow, pin::Pin, sync::Arc};
 
 mod bridge;
 mod state_machine;
@@ -86,7 +86,8 @@ pub trait Network<B: BlockT> {
 	/// See the documentation of [`NetworkService:register_notifications_protocol`] for more information.
 	fn register_notifications_protocol(
 		&self,
-		engine_id: ConsensusEngineId
+		engine_id: ConsensusEngineId,
+		protocol_name: Cow<'static, [u8]>,
 	);
 
 	/// Notify everyone we're connected to that we have the given block.
@@ -116,8 +117,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<Netw
 	fn register_notifications_protocol(
 		&self,
 		engine_id: ConsensusEngineId,
+		protocol_name: Cow<'static, [u8]>,
 	) {
-		NetworkService::register_notifications_protocol(self, engine_id)
+		NetworkService::register_notifications_protocol(self, engine_id, protocol_name)
 	}
 
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {

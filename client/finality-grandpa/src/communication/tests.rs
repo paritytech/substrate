@@ -25,7 +25,7 @@ use std::sync::Arc;
 use sp_keyring::Ed25519Keyring;
 use parity_scale_codec::Encode;
 use sp_runtime::{ConsensusEngineId, traits::NumberFor};
-use std::{pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, pin::Pin, task::{Context, Poll}};
 use crate::environment::SharedVoterSetState;
 use sp_finality_grandpa::{AuthorityList, GRANDPA_ENGINE_ID};
 use super::gossip::{self, GossipValidator};
@@ -61,7 +61,7 @@ impl sc_network_gossip::Network<Block> for TestNetwork {
 		let _ = self.sender.unbounded_send(Event::WriteNotification(who, message));
 	}
 
-	fn register_notifications_protocol(&self, _: ConsensusEngineId) {}
+	fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, [u8]>) {}
 
 	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
