@@ -113,7 +113,7 @@ use sp_runtime::{
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure,
+	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnReapAccount, IsDeadAccount, Happened,
 		StoredMap
@@ -990,7 +990,10 @@ impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 		if Account::<T>::contains_key(who) {
 			let account = Account::<T>::take(who);
 			if account.refcount > 0 {
-				sp_runtime::print("WARNING: Referenced account deleted. This is probably a bug.");
+				debug::debug!(
+					target: "system",
+					"WARNING: Referenced account deleted. This is probably a bug."
+				);
 			}
 			Module::<T>::on_killed_account(who.clone());
 		}
@@ -1018,7 +1021,10 @@ impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 		if Account::<T>::contains_key(k) {
 			let account = Account::<T>::take(k);
 			if account.refcount > 0 {
-				sp_runtime::print("WARNING: Referenced account deleted. This is probably a bug.");
+				debug::debug!(
+					target: "system",
+					"WARNING: Referenced account deleted. This is probably a bug."
+				);
 			}
 			Self::on_killed_account(k.clone());
 		}
