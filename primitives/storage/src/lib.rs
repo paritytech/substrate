@@ -133,6 +133,7 @@ pub mod well_known_keys {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub enum ChildInfo {
+	/// This is the one used by default.
 	ParentKeyId(ChildTrie),
 }
 
