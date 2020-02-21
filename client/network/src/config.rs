@@ -126,6 +126,12 @@ impl Roles {
 	}
 }
 
+impl fmt::Display for Roles {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{:?}", self)
+	}
+}
+
 impl codec::Encode for Roles {
 	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())
@@ -247,9 +253,9 @@ impl From<multiaddr::Error> for ParseErr {
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
 	/// Directory path to store general network configuration. None means nothing will be saved.
-	pub config_path: Option<String>,
+	pub config_path: Option<PathBuf>,
 	/// Directory path to store network-specific configuration. None means nothing will be saved.
-	pub net_config_path: Option<String>,
+	pub net_config_path: Option<PathBuf>,
 	/// Multiaddresses to listen for incoming connections.
 	pub listen_addresses: Vec<Multiaddr>,
 	/// Multiaddresses to advertise. Detected automatically if empty.

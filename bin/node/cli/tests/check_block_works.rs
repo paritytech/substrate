@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![cfg(unix)]
+
 use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
@@ -21,21 +23,16 @@ use tempfile::tempdir;
 mod common;
 
 #[test]
-#[cfg(unix)]
-fn purge_chain_works() {
+fn check_block_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
-	common::run_command_for_a_while(base_path.path(), true);
+	common::run_command_for_a_while(base_path.path(), false);
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["purge-chain", "--dev", "-d"])
+		.args(&["check-block", "-d"])
 		.arg(base_path.path())
-		.arg("-y")
+		.arg("1")
 		.status()
 		.unwrap();
 	assert!(status.success());
-
-	// Make sure that the `dev` chain folder exists, but the `db` is deleted.
-	assert!(base_path.path().join("chains/dev/").exists());
-	assert!(!base_path.path().join("chains/dev/db").exists());
 }
