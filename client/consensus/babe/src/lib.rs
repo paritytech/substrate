@@ -891,7 +891,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
 	Inner::Error: Into<ConsensusError>,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>
-	+ AuxStore + ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync,
+		+ AuxStore + ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync,
 	Client::Api: BabeApi<Block> + ApiExt<Block>,
 {
 	type Error = ConsensusError;
