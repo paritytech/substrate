@@ -105,13 +105,13 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 
-	let mut children_keys = BTreeSet::<StorageKey>::new();
+	let mut children_prefixed_keys = BTreeSet::<StorageKey>::new();
 	let mut children_result = BTreeMap::new();
-	for (storage_key, _) in changes.prospective.children.iter()
+	for (_storage_key, (_map, child_info)) in changes.prospective.children.iter()
 		.chain(changes.committed.children.iter()) {
-		children_keys.insert(storage_key.clone());
+		children_prefixed_keys.insert(child_info.prefixed_storage_key());
 	}
-	for storage_key in children_keys {
+	for storage_key in children_prefixed_keys {
 		let child_index = ChildIndex::<Number> {
 			block: block.clone(),
 			storage_key: storage_key.clone(),
@@ -367,8 +367,8 @@ mod test {
 			(vec![104], vec![255]),
 			(vec![105], vec![255]),
 		].into_iter().collect::<std::collections::BTreeMap<_, _>>().into();
-		let child_trie_key1 = child_info_1.storage_key().to_vec();
-		let child_trie_key2 = child_info_2.storage_key().to_vec();
+		let child_trie_key1 = child_info_1.prefixed_storage_key();
+		let child_trie_key2 = child_info_2.prefixed_storage_key();
 		let storage = InMemoryStorage::with_inputs(vec![
 			(zero + 1, vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![100] }, vec![1, 3]),
@@ -485,8 +485,8 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_non_digest_block() {
 		fn test_with_zero(zero: u64) {
-			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").storage_key().to_vec();
-			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").storage_key().to_vec();
+			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").prefixed_storage_key();
+			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").prefixed_storage_key();
 			let (backend, storage, changes, config) = prepare_for_build(zero);
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 4 };
 			let changes_trie_nodes = prepare_input(
@@ -523,8 +523,8 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l1() {
 		fn test_with_zero(zero: u64) {
-			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").storage_key().to_vec();
-			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").storage_key().to_vec();
+			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").prefixed_storage_key();
+			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").prefixed_storage_key();
 			let (backend, storage, changes, config) = prepare_for_build(zero);
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 3 };
 			let changes_trie_nodes = prepare_input(
@@ -570,8 +570,8 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l2() {
 		fn test_with_zero(zero: u64) {
-			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").storage_key().to_vec();
-			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").storage_key().to_vec();
+			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").prefixed_storage_key();
+			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").prefixed_storage_key();
 			let (backend, storage, changes, config) = prepare_for_build(zero);
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 15 };
 			let changes_trie_nodes = prepare_input(
@@ -661,8 +661,8 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_ignores_temporary_storage_values() {
 		fn test_with_zero(zero: u64) {
-			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").storage_key().to_vec();
-			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").storage_key().to_vec();
+			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").prefixed_storage_key();
+			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").prefixed_storage_key();
 			let (backend, storage, mut changes, config) = prepare_for_build(zero);
 
 			// 110: missing from backend, set to None in overlay
@@ -715,8 +715,8 @@ mod test {
 
 	#[test]
 	fn cache_is_used_when_changes_trie_is_built() {
-		let child_trie_key1 = ChildInfo::new_default(b"storage_key1").storage_key().to_vec();
-		let child_trie_key2 = ChildInfo::new_default(b"storage_key2").storage_key().to_vec();
+		let child_trie_key1 = ChildInfo::new_default(b"storage_key1").prefixed_storage_key();
+		let child_trie_key2 = ChildInfo::new_default(b"storage_key2").prefixed_storage_key();
 		let (backend, mut storage, changes, config) = prepare_for_build(0);
 		let parent = AnchorBlockId { hash: Default::default(), number: 15 };
 
