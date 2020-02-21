@@ -1,16 +1,18 @@
 [package]
 name = "sp-version"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 impl-serde = { version = "0.2.3", optional = true }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.1.2", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "2.0.0-dev", default-features = false, path = "../std" }
+sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../runtime" }
 
 [features]
 default = ["std"]
