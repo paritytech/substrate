@@ -209,8 +209,8 @@ pub fn read_trie_value_with<
 	Ok(TrieDB::<L>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
-/// Determine the default child trie root.
-pub fn default_child_trie_root<L: TrieConfiguration>(
+/// Determine the empty child trie root.
+pub fn empty_child_trie_root<L: TrieConfiguration>(
 ) -> <L::Hash as Hasher>::Out {
 	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
 }

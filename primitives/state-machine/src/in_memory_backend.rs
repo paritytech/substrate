@@ -24,7 +24,7 @@ use crate::{
 use std::{error, fmt, collections::{BTreeMap, HashMap}, marker::PhantomData, ops};
 use hash_db::Hasher;
 use sp_trie::{
-	MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration, trie_types::Layout,
+	MemoryDB, child_trie_root, empty_child_trie_root, TrieConfiguration, trie_types::Layout,
 };
 use codec::Codec;
 use sp_core::storage::{ChildInfo, ChildType, Storage};
@@ -272,7 +272,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		let full_transaction = transaction.into_iter().collect();
 
 		let is_default = match child_type {
-			ChildType::ParentKeyId => root == default_child_trie_root::<Layout<H>>(),
+			ChildType::ParentKeyId => root == empty_child_trie_root::<Layout<H>>(),
 		};
 
 		(root, is_default, vec![(child_info, full_transaction)])

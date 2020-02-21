@@ -22,7 +22,7 @@ use codec::{Decode, Encode, Codec};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
-	MemoryDB, default_child_trie_root, read_trie_value_with, read_child_trie_value_with,
+	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
 	record_all_keys
 };
 pub use sp_trie::Recorder;
@@ -149,7 +149,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 		let storage_key = child_info.storage_key();
 		let root = self.storage(storage_key)?
 			.and_then(|r| Decode::decode(&mut &r[..]).ok())
-			.unwrap_or(default_child_trie_root::<Layout<H>>());
+			.unwrap_or(empty_child_trie_root::<Layout<H>>());
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(

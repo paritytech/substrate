@@ -27,7 +27,7 @@ use sp_core::{
 	storage::{well_known_keys::is_child_storage_key, ChildInfo},
 	traits::Externalities, hexdisplay::HexDisplay,
 };
-use sp_trie::{trie_types::Layout, default_child_trie_root};
+use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::Extensions;
 use codec::{Decode, Encode};
 
@@ -490,7 +490,7 @@ where
 				.storage(prefixed_storage_key.as_slice())
 				.and_then(|k| Decode::decode(&mut &k[..]).ok())
 				.unwrap_or(
-					default_child_trie_root::<Layout<H>>()
+					empty_child_trie_root::<Layout<H>>()
 				);
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) (cached) {}",
 				self.id,
@@ -538,7 +538,7 @@ where
 					.storage(prefixed_storage_key.as_slice())
 					.and_then(|k| Decode::decode(&mut &k[..]).ok())
 					.unwrap_or(
-						default_child_trie_root::<Layout<H>>()
+						empty_child_trie_root::<Layout<H>>()
 					);
 				trace!(target: "state-trace", "{:04x}: ChildRoot({}) (no change) {}",
 					self.id,

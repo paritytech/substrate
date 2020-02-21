@@ -22,7 +22,7 @@ use std::sync::Arc;
 use log::{debug, warn};
 use hash_db::{self, Hasher, EMPTY_PREFIX, Prefix};
 use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
-	default_child_trie_root, read_trie_value, read_child_trie_value,
+	empty_child_trie_root, read_trie_value, read_child_trie_value,
 	for_keys_in_child_trie, KeySpacedDB, TrieDBIterator};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
@@ -169,7 +169,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		key: &[u8],
 	) -> Result<Option<StorageValue>, String> {
 		let root = self.child_root(child_info)?
-			.unwrap_or(default_child_trie_root::<Layout<H>>().encode());
+			.unwrap_or(empty_child_trie_root::<Layout<H>>().encode());
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
@@ -190,7 +190,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		f: F,
 	) {
 		let root = match self.child_root(child_info) {
-			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>().encode()),
+			Ok(v) => v.unwrap_or(empty_child_trie_root::<Layout<H>>().encode()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return;
@@ -221,7 +221,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		mut f: F,
 	) {
 		let root_vec = match self.child_root(child_info) {
-			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>().encode()),
+			Ok(v) => v.unwrap_or(empty_child_trie_root::<Layout<H>>().encode()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return;

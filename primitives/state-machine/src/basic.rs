@@ -21,7 +21,7 @@ use std::{
 };
 use crate::{Backend, InMemoryBackend, StorageKey, StorageValue};
 use hash_db::Hasher;
-use sp_trie::{TrieConfiguration, default_child_trie_root};
+use sp_trie::{TrieConfiguration, empty_child_trie_root};
 use sp_trie::trie_types::Layout;
 use sp_core::{
 	storage::{
@@ -260,7 +260,7 @@ impl Externalities for BasicExternalities {
 		// Single child trie implementation currently allows using the same child
 		// empty root for all child trie. Using null storage key until multiple
 		// type of child trie support.
-		let empty_hash = default_child_trie_root::<Layout<Blake2Hasher>>();
+		let empty_hash = empty_child_trie_root::<Layout<Blake2Hasher>>();
 		for (prefixed_storage_key, child_info) in keys {
 			let child_root = self.child_storage_root(&child_info);
 			if &empty_hash[..] == &child_root[..] {
@@ -283,7 +283,7 @@ impl Externalities for BasicExternalities {
 			InMemoryBackend::<Blake2Hasher>::default()
 				.child_storage_root(&child.child_info, delta).0
 		} else {
-			default_child_trie_root::<Layout<Blake2Hasher>>()
+			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}.encode()
 	}
 

@@ -18,7 +18,7 @@
 
 use log::{warn, debug};
 use hash_db::Hasher;
-use sp_trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
+use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use sp_core::storage::{ChildInfo, ChildType};
 use codec::{Codec, Decode};
@@ -198,7 +198,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		H::Out: Ord,
 	{
 		let default_root = match child_info.child_type() {
-			ChildType::ParentKeyId => default_child_trie_root::<Layout<H>>()
+			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>()
 		};
 
 		let mut write_overlay = S::Overlay::default();
