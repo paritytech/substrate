@@ -679,10 +679,17 @@ impl Default for Forcing {
 	fn default() -> Self { Forcing::NotForcing }
 }
 
-const HISTORY_DEPTH: EraIndex = 84;
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
+		/// Set the number of era to keep in history.
+		///
+		/// Information is kept for eras in `[current_era - history_depth + 1; current_era]
+		// TODO TODO: maybe better to make it `[current_era - history_depth; current_era]`
+		///
+		/// Must be more than the number of era delayed by session otherwise.
+		/// i.e. active era must always be in history.
+		/// i.e. `active_era > current_era - history_depth` must be guaranteed.
+		HistoryDepth get(fn history_depth) config(): u32 = 84;
 
 		/// The ideal number of staking participants.
 		pub ValidatorCount get(fn validator_count) config(): u32;
@@ -1419,6 +1426,21 @@ decl_module! {
 
 			Self::update_ledger(&controller, &ledger);
 		}
+
+		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
+		fn set_history_depth(origin, #[compact] new_history_depth: EraIndex) {
+			ensure_root(origin)?;
+			if let Some(current_era) = Self::current_era() {
+				HistoryDepth::mutate(|history_depth| {
+					let last_kept = (current_era + 1).checked_sub(*history_depth).unwrap_or(0);
+					let new_last_kept = (current_era + 1).checked_sub(new_history_depth).unwrap_or(0);
+					for era_index in last_kept..new_last_kept {
+						Self::clear_era_information(era_index);
+					}
+					*history_depth = new_history_depth
+				})
+			}
+		}
 	}
 }
 
@@ -1701,20 +1723,25 @@ impl<T: Trait> Module<T> {
 		ErasStartSessionIndex::insert(&current_era, &start_session_index);
 
 		// Clean old era information.
-		if let Some(old_era) = current_era.checked_sub(HISTORY_DEPTH) {
-			<ErasStakers<T>>::remove_prefix(old_era);
-			<ErasStakersClipped<T>>::remove_prefix(old_era);
-			<ErasValidatorPrefs<T>>::remove_prefix(old_era);
-			<ErasValidatorReward<T>>::remove(old_era);
-			<ErasRewardPoints<T>>::remove(old_era);
-			<ErasTotalStake<T>>::remove(old_era);
-			ErasStartSessionIndex::remove(old_era);
+		if let Some(old_era) = current_era.checked_sub(Self::history_depth()) {
+			Self::clear_era_information(old_era);
 		}
 
 		// Set staking information for new era.
 		let maybe_new_validators = Self::select_validators(current_era);
 
 		maybe_new_validators
+	}
+
+	/// Clear all era information for given era.
+	fn clear_era_information(era_index: EraIndex) {
+		<ErasStakers<T>>::remove_prefix(era_index);
+		<ErasStakersClipped<T>>::remove_prefix(era_index);
+		<ErasValidatorPrefs<T>>::remove_prefix(era_index);
+		<ErasValidatorReward<T>>::remove(era_index);
+		<ErasRewardPoints<T>>::remove(era_index);
+		<ErasTotalStake<T>>::remove(era_index);
+		ErasStartSessionIndex::remove(era_index);
 	}
 
 	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.

@@ -2743,7 +2743,7 @@ fn slash_kicks_validators_not_nominators() {
 #[test]
 fn claim_reward_at_the_last_era() {
 	// should check that:
-	// * rewards get paid until $HISTORY_DEPTH for both validators and nominators
+	// * rewards get paid until history_depth for both validators and nominators
 	ExtBuilder::default().nominate(true).build().execute_with(|| {
 		let init_balance_10 = Balances::total_balance(&10);
 		let init_balance_100 = Balances::total_balance(&100);
@@ -2781,11 +2781,11 @@ fn claim_reward_at_the_last_era() {
 		assert!(total_payout_2 != total_payout_0);
 		assert!(total_payout_2 != total_payout_1);
 
-		start_era(crate::HISTORY_DEPTH);
+		start_era(Staking::history_depth());
 
 		// This is the latest planned era in staking, not the active era
 		let current_era = Staking::current_era().unwrap();
-		assert!(current_era - crate::HISTORY_DEPTH == 0);
+		assert!(current_era - Staking::history_depth() == 0);
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 0));
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 1));
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 2));
@@ -3140,3 +3140,23 @@ fn test_upgrade_from_master_works() {
 		});
 	}
 }
+
+#[test]
+fn set_history_depth_works() {
+	ExtBuilder::default().build().execute_with(|| {
+		start_era(10);
+		Staking::set_history_depth(Origin::ROOT, 20).unwrap();
+		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
+		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
+		Staking::set_history_depth(Origin::ROOT, 5).unwrap();
+		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
+		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
+		Staking::set_history_depth(Origin::ROOT, 4).unwrap();
+		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
+		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
+		Staking::set_history_depth(Origin::ROOT, 8).unwrap();
+		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
+		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
+	});
+}
+
