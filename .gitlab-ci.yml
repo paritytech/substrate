@@ -17,7 +17,6 @@ variables:
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       100
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
-  # SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_INCREMENTAL:               0
   CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
@@ -39,7 +38,7 @@ variables:
     name: parity-build
 
 .docker-env:                       &docker-env
-  image:                           parity/rust-builder:0e1e2f7-20200219
+  image:                           parity/rust-builder:00f5094-20200221
   before_script:
     - rustup show
     - cargo --version
