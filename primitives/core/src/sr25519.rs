@@ -34,12 +34,12 @@ use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{
-	Pair as TraitPair, CryptoTypePublicPair, DeriveJunction, Infallible, SecretStringError
+	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError
 };
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 
-use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
+use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 use crate::hash::{H256, H512};
 use codec::{Encode, Decode};
 use sp_std::ops::Deref;

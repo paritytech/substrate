@@ -33,12 +33,12 @@ use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "full_crypto")]
-use crate::crypto::{Pair as TraitPair, CryptoTypePublicPair, DeriveJunction, SecretStringError};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError};
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
+use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::ops::Deref;
 
