@@ -237,13 +237,13 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 	type Currency = T::Currency;
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
-	fn vesting_balance(who: &T::AccountId) -> BalanceOf<T> {
+	fn vesting_balance(who: &T::AccountId) -> Option<BalanceOf<T>> {
 		if let Some(v) = Self::vesting(who) {
 			let now = <frame_system::Module<T>>::block_number();
 			let locked_now = v.locked_at::<T::BlockNumberToBalance>(now);
-			T::Currency::free_balance(who).min(locked_now)
+			Some(T::Currency::free_balance(who).min(locked_now))
 		} else {
-			Zero::zero()
+			None
 		}
 	}
 
@@ -484,28 +484,28 @@ mod tests {
 				assert_eq!(Vesting::vesting(&12), Some(user12_vesting_schedule)); // Account 12 has a vesting schedule
 
 				// Account 1 has only 128 units vested from their illiquid 256 * 5 units at block 1
-				assert_eq!(Vesting::vesting_balance(&1), 128 * 9);
+				assert_eq!(Vesting::vesting_balance(&1), Some(128 * 9));
 				// Account 2 has their full balance locked
-				assert_eq!(Vesting::vesting_balance(&2), user2_free_balance);
+				assert_eq!(Vesting::vesting_balance(&2), Some(user2_free_balance));
 				// Account 12 has only their illiquid funds locked
-				assert_eq!(Vesting::vesting_balance(&12), user12_free_balance - 256 * 5);
+				assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - 256 * 5));
 
 				System::set_block_number(10);
 				assert_eq!(System::block_number(), 10);
 
 				// Account 1 has fully vested by block 10
-				assert_eq!(Vesting::vesting_balance(&1), 0);
+				assert_eq!(Vesting::vesting_balance(&1), Some(0));
 				// Account 2 has started vesting by block 10
-				assert_eq!(Vesting::vesting_balance(&2), user2_free_balance);
+				assert_eq!(Vesting::vesting_balance(&2), Some(user2_free_balance));
 				// Account 12 has started vesting by block 10
-				assert_eq!(Vesting::vesting_balance(&12), user12_free_balance - 256 * 5);
+				assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - 256 * 5));
 
 				System::set_block_number(30);
 				assert_eq!(System::block_number(), 30);
 
-				assert_eq!(Vesting::vesting_balance(&1), 0); // Account 1 is still fully vested, and not negative
-				assert_eq!(Vesting::vesting_balance(&2), 0); // Account 2 has fully vested by block 30
-				assert_eq!(Vesting::vesting_balance(&12), 0); // Account 2 has fully vested by block 30
+				assert_eq!(Vesting::vesting_balance(&1), Some(0)); // Account 1 is still fully vested, and not negative
+				assert_eq!(Vesting::vesting_balance(&2), Some(0)); // Account 2 has fully vested by block 30
+				assert_eq!(Vesting::vesting_balance(&12), Some(0)); // Account 2 has fully vested by block 30
 
 			});
 	}
@@ -520,7 +520,7 @@ mod tests {
 				let user1_free_balance = Balances::free_balance(&1);
 				assert_eq!(user1_free_balance, 100); // Account 1 has free balance
 				// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
-				assert_eq!(Vesting::vesting_balance(&1), 45);
+				assert_eq!(Vesting::vesting_balance(&1), Some(45));
 				assert_noop!(
 					Balances::transfer(Some(1).into(), 2, 56),
 					pallet_balances::Error::<Test, _>::LiquidityRestrictions,
@@ -538,7 +538,7 @@ mod tests {
 				let user1_free_balance = Balances::free_balance(&1);
 				assert_eq!(user1_free_balance, 100); // Account 1 has free balance
 				// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
-				assert_eq!(Vesting::vesting_balance(&1), 45);
+				assert_eq!(Vesting::vesting_balance(&1), Some(45));
 				assert_ok!(Vesting::vest(Some(1).into()));
 				assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
 			});
@@ -554,7 +554,7 @@ mod tests {
 				let user1_free_balance = Balances::free_balance(&1);
 				assert_eq!(user1_free_balance, 100); // Account 1 has free balance
 				// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
-				assert_eq!(Vesting::vesting_balance(&1), 45);
+				assert_eq!(Vesting::vesting_balance(&1), Some(45));
 				assert_ok!(Vesting::vest_other(Some(2).into(), 1));
 				assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
 			});
@@ -577,12 +577,12 @@ mod tests {
 				assert_eq!(user2_free_balance, 300); // Account 2 has 100 more free balance than normal
 
 				// Account 1 has only 5 units vested at block 1 (plus 150 unvested)
-				assert_eq!(Vesting::vesting_balance(&1), 45);
+				assert_eq!(Vesting::vesting_balance(&1), Some(45));
 				assert_ok!(Vesting::vest(Some(1).into()));
 				assert_ok!(Balances::transfer(Some(1).into(), 3, 155)); // Account 1 can send extra units gained
 
 				// Account 2 has no units vested at block 1, but gained 100
-				assert_eq!(Vesting::vesting_balance(&2), 200);
+				assert_eq!(Vesting::vesting_balance(&2), Some(200));
 				assert_ok!(Vesting::vest(Some(2).into()));
 				assert_ok!(Balances::transfer(Some(2).into(), 3, 100)); // Account 2 can send extra units gained
 			});
@@ -599,7 +599,7 @@ mod tests {
 
 				assert_eq!(user12_free_balance, 2560); // Account 12 has free balance
 				// Account 12 has liquid funds
-				assert_eq!(Vesting::vesting_balance(&12), user12_free_balance - 256 * 5);
+				assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - 256 * 5));
 
 				// Account 12 has delayed vesting
 				let user12_vesting_schedule = VestingInfo {

@@ -199,20 +199,14 @@ impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<
 }
 
 pub struct BabeTestNet {
-	peers: Vec<Peer<Option<PeerData>, DummySpecialization>>,
+	peers: Vec<Peer<Option<PeerData>>>,
 }
 
 type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
-	inner: BabeVerifier<
-		substrate_test_runtime_client::Backend,
-		substrate_test_runtime_client::Executor,
-		TestBlock,
-		substrate_test_runtime_client::runtime::RuntimeApi,
-		PeersFullClient,
-	>,
+	inner: BabeVerifier<TestBlock, PeersFullClient>,
 	mutator: Mutator,
 }
 
@@ -242,7 +236,6 @@ pub struct PeerData {
 }
 
 impl TestNetFactory for BabeTestNet {
-	type Specialization = DummySpecialization;
 	type Verifier = TestVerifier;
 	type PeerData = Option<PeerData>;
 
@@ -269,7 +262,6 @@ impl TestNetFactory for BabeTestNet {
 		let config = Config::get_or_compute(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(
 			config,
-			client.clone(),
 			client.clone(),
 			client.clone(),
 		).expect("can initialize block-import");
@@ -305,7 +297,6 @@ impl TestNetFactory for BabeTestNet {
 		TestVerifier {
 			inner: BabeVerifier {
 				client: client.clone(),
-				api: client,
 				inherent_data_providers: data.inherent_data_providers.clone(),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
@@ -315,17 +306,17 @@ impl TestNetFactory for BabeTestNet {
 		}
 	}
 
-	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, DummySpecialization> {
+	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData> {
 		trace!(target: "babe", "Retrieving a peer");
 		&mut self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Peer<Self::PeerData, DummySpecialization>> {
+	fn peers(&self) -> &Vec<Peer<Self::PeerData>> {
 		trace!(target: "babe", "Retrieving peers");
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, DummySpecialization>>)>(
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData>>)>(
 		&mut self,
 		closure: F,
 	) {

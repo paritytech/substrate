@@ -107,6 +107,7 @@ futures = "0.3.1"
 tempfile = "3.1.0"
 assert_cmd = "0.12"
 nix = "0.17"
+serde_json = "1.0"
 
 [build-dependencies]
 build-script-utils = { version = "2.0.0", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
