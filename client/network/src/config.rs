@@ -43,7 +43,7 @@ use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathB
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
-pub struct Params<B: BlockT, S, H: ExHashT> {
+pub struct Params<B: BlockT, H: ExHashT> {
 	/// Assigned roles for our node (full, light, ...).
 	pub roles: Roles,
 
@@ -87,9 +87,6 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// The import queue is the component that verifies that blocks received from other nodes are
 	/// valid.
 	pub import_queue: Box<dyn ImportQueue<B>>,
-
-	/// Customization of the network. Use this to plug additional networking capabilities.
-	pub specialization: S,
 
 	/// Type to check incoming block announcements.
 	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
