@@ -25,7 +25,8 @@ use libp2p::swarm::{PollParameters, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::{PeerId, Multiaddr, Transport};
 use rand::seq::SliceRandom;
 use std::{error, io, task::Context, task::Poll, time::Duration};
-use crate::message::Message;
+use std::collections::HashSet;
+use crate::message::{generic::BlockResponse, Message};
 use crate::protocol::generic_proto::{GenericProto, GenericProtoOut};
 use sp_test_primitives::Block;
 
@@ -227,7 +228,10 @@ fn two_nodes_transfer_lots_of_packets() {
 					for n in 0 .. NUM_PACKETS {
 						service1.send_packet(
 							&peer_id,
-							Message::<Block>::ChainSpecific(vec![(n % 256) as u8]).encode()
+							Message::<Block>::BlockResponse(BlockResponse {
+								id: n as _,
+								blocks: Vec::new(),
+							}).encode()
 						);
 					}
 				},
@@ -243,8 +247,8 @@ fn two_nodes_transfer_lots_of_packets() {
 				Some(GenericProtoOut::CustomProtocolOpen { .. }) => {},
 				Some(GenericProtoOut::CustomMessage { message, .. }) => {
 					match Message::<Block>::decode(&mut &message[..]).unwrap() {
-						Message::<Block>::ChainSpecific(message) => {
-							assert_eq!(message.len(), 1);
+						Message::<Block>::BlockResponse(BlockResponse { id: _, blocks }) => {
+							assert!(blocks.is_empty());
 							packet_counter += 1;
 							if packet_counter == NUM_PACKETS {
 								return Poll::Ready(())
@@ -270,9 +274,21 @@ fn basic_two_nodes_requests_in_parallel() {
 	// Generate random messages with or without a request id.
 	let mut to_send = {
 		let mut to_send = Vec::new();
+		let mut existing_ids = HashSet::new();
 		for _ in 0..200 { // Note: don't make that number too high or the CPU usage will explode.
-			let msg = (0..10).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-			to_send.push(Message::<Block>::ChainSpecific(msg));
+			let req_id = loop {
+				let req_id = rand::random::<u64>();
+
+				// ensure uniqueness - odds of randomly sampling collisions
+				// is unlikely, but possible to cause spurious test failures.
+				if existing_ids.insert(req_id) {
+					break req_id;
+				}
+			};
+
+			to_send.push(Message::<Block>::BlockResponse(
+				BlockResponse { id: req_id, blocks: Vec::new() }
+			));
 		}
 		to_send
 	};

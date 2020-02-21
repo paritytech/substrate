@@ -6,7 +6,6 @@ use sc_client::LongestChain;
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use sp_inherents::InherentDataProviders;
-use sc_network::{construct_simple_protocol};
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
@@ -18,11 +17,6 @@ native_executor_instance!(
 	node_template_runtime::api::dispatch,
 	node_template_runtime::native_version,
 );
-
-construct_simple_protocol! {
-	/// Demo protocol attachment for substrate.
-	pub struct NodeProtocol where Block = Block { }
-}
 
 /// Starts a `ServiceBuilder` for a full service.
 ///
@@ -95,7 +89,7 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 		import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-	let service = builder.with_network_protocol(|_| Ok(NodeProtocol::new()))?
+	let service = builder
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
@@ -228,7 +222,6 @@ pub fn new_light(config: Configuration<GenesisConfig>)
 
 			Ok((import_queue, finality_proof_request_builder))
 		})?
-		.with_network_protocol(|_| Ok(NodeProtocol::new()))?
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
