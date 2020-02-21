@@ -1,17 +1,19 @@
 [package]
 name = "pallet-transaction-payment-rpc-runtime-api"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-api = { version = "2.0.0", default-features = false, path = "../../../../primitives/api" }
+sp-api = { version = "2.0.0-dev", default-features = false, path = "../../../../primitives/api" }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0", default-features = false, path = "../../../../primitives/std" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../../../primitives/runtime" }
-frame-support = { version = "2.0.0", default-features = false, path = "../../../support" }
+sp-std = { version = "2.0.0-dev", default-features = false, path = "../../../../primitives/std" }
+sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../../../primitives/runtime" }
+frame-support = { version = "2.0.0-dev", default-features = false, path = "../../../support" }
 
 [dev-dependencies]
 serde_json = "1.0.41"
