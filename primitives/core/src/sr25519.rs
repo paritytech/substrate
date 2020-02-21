@@ -382,8 +382,6 @@ impl Public {
 }
 
 impl TraitPublic for Public {
-	const CRYPTO_ID: CryptoTypeId = CRYPTO_ID;
-
 	/// A new instance from the given slice that should be 32 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if

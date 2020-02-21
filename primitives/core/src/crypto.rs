@@ -518,9 +518,6 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 pub trait Public:
 	AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync
 {
-	/// The identifier of this crypto type
-	const CRYPTO_ID: CryptoTypeId;
-
 	/// A new instance from the given slice.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -662,8 +659,6 @@ mod dummy {
 	impl Derive for Dummy {}
 
 	impl Public for Dummy {
-		const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"dumm");
-
 		fn from_slice(_: &[u8]) -> Self { Self }
 		#[cfg(feature = "std")]
 		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
@@ -996,8 +991,6 @@ mod tests {
 	}
 	impl Derive for TestPublic {}
 	impl Public for TestPublic {
-		const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"test");
-
 		fn from_slice(_bytes: &[u8]) -> Self {
 			Self
 		}
