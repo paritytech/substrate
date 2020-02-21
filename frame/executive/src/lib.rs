@@ -60,9 +60,7 @@
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
 //! # use sp_runtime::transaction_validity::{TransactionValidity, UnknownTransaction};
-//!	# #[allow(deprecated)]
 //! # use sp_runtime::traits::ValidateUnsigned;
-//!	# #[allow(deprecated)]
 //! # impl ValidateUnsigned for Runtime {
 //! # 	type Call = ();
 //! #
@@ -88,7 +86,6 @@ use sp_runtime::{
 	transaction_validity::TransactionValidity,
 };
 use sp_runtime::generic::CheckSignature;
-#[allow(deprecated)]
 use sp_runtime::traits::ValidateUnsigned;
 use codec::{Codec, Encode};
 use frame_system::{extrinsics_root, DigestOf};
@@ -107,7 +104,6 @@ pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
 );
 
-#[allow(deprecated)] // Allow ValidateUnsigned, remove the attribute when the trait is removed.
 impl<
 	System: frame_system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
@@ -133,7 +129,6 @@ where
 	}
 }
 
-#[allow(deprecated)] // Allow ValidateUnsigned, remove the attribute when the trait is removed.
 impl<
 	System: frame_system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
@@ -501,7 +496,6 @@ mod tests {
 	}
 	impl custom::Trait for Runtime {}
 
-	#[allow(deprecated)]
 	impl ValidateUnsigned for Runtime {
 		type Call = Call;
 
