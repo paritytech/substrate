@@ -15,10 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use legacy_proto::{LegacyProto, LegacyProtoOut};
 use crate::utils::interval;
 use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
+use generic_proto::{GenericProto, GenericProtoOut};
 use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
@@ -36,13 +36,14 @@ use sp_runtime::traits::{
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
-use message::generic::{Message as GenericMessage, ConsensusMessage};
+use message::generic::Message as GenericMessage;
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{BoxFinalityProofRequestBuilder, Roles};
 use rustc_hex::ToHex;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::fmt::Write;
@@ -64,7 +65,7 @@ pub mod api {
 	}
 }
 
-mod legacy_proto;
+mod generic_proto;
 mod util;
 
 pub mod block_requests;
@@ -158,9 +159,11 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// When asked for a proof of finality, we use this struct to build one.
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
-	behaviour: LegacyProto,
-	/// List of notification protocols that have been registered.
-	registered_notif_protocols: HashSet<ConsensusEngineId>,
+	behaviour: GenericProto,
+	/// For each legacy gossiping engine ID, the corresponding new protocol name.
+	protocol_name_by_engine: HashMap<ConsensusEngineId, Cow<'static, [u8]>>,
+	/// For each protocol name, the legacy gossiping engine ID.
+	protocol_engine_by_name: HashMap<Cow<'static, [u8]>, ConsensusEngineId>,
 }
 
 #[derive(Default)]
@@ -207,7 +210,7 @@ pub struct PeerInfo<B: BlockT> {
 }
 
 struct LightDispatchIn<'a> {
-	behaviour: &'a mut LegacyProto,
+	behaviour: &'a mut GenericProto,
 	peerset: sc_peerset::PeersetHandle,
 }
 
@@ -347,7 +350,7 @@ pub trait Context<B: BlockT> {
 
 /// Protocol context.
 struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
-	behaviour: &'a mut LegacyProto,
+	behaviour: &'a mut GenericProto,
 	context_data: &'a mut ContextData<B, H>,
 	peerset_handle: &'a sc_peerset::PeersetHandle,
 }
@@ -355,7 +358,7 @@ struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
 impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	fn new(
 		context_data: &'a mut ContextData<B, H>,
-		behaviour: &'a mut LegacyProto,
+		behaviour: &'a mut GenericProto,
 		peerset_handle: &'a sc_peerset::PeersetHandle,
 	) -> Self {
 		ProtocolContext { context_data, peerset_handle, behaviour }
@@ -442,7 +445,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		let (peerset, peerset_handle) = sc_peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
+		let behaviour = GenericProto::new(protocol_id, versions, peerset);
 
 		let protocol = Protocol {
 			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
@@ -463,7 +466,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			finality_proof_provider,
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
-			registered_notif_protocols: HashSet::new(),
+			protocol_name_by_engine: HashMap::new(),
+			protocol_engine_by_name: HashMap::new(),
 		};
 
 		Ok((protocol, peerset_handle))
@@ -646,7 +650,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteReadChildRequest(request) =>
 				self.on_remote_read_child_request(who, request),
 			GenericMessage::Consensus(msg) =>
-				return if self.registered_notif_protocols.contains(&msg.engine_id) {
+				return if self.protocol_name_by_engine.contains_key(&msg.engine_id) {
 					CustomMessageOutcome::NotificationsReceived {
 						remote: who.clone(),
 						messages: vec![(msg.engine_id, From::from(msg.data))],
@@ -659,7 +663,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				let messages = messages
 					.into_iter()
 					.filter_map(|msg| {
-						if self.registered_notif_protocols.contains(&msg.engine_id) {
+						if self.protocol_name_by_engine.contains_key(&msg.engine_id) {
 							Some((msg.engine_id, From::from(msg.data)))
 						} else {
 							warn!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
@@ -1060,7 +1064,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		// Notify all the notification protocols as open.
 		CustomMessageOutcome::NotificationStreamOpened {
 			remote: who,
-			protocols: self.registered_notif_protocols.iter().cloned().collect(),
+			protocols: self.protocol_name_by_engine.keys().cloned().collect(),
 			roles: info.roles,
 		}
 	}
@@ -1075,18 +1079,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		engine_id: ConsensusEngineId,
 		message: impl Into<Vec<u8>>
 	) {
-		if !self.registered_notif_protocols.contains(&engine_id) {
+		if let Some(protocol_name) = self.protocol_name_by_engine.get(&engine_id) {
+			self.behaviour.write_notification(&target, engine_id, protocol_name.clone(), message);
+		} else {
 			error!(
 				target: "sub-libp2p",
 				"Sending a notification with a protocol that wasn't registered: {:?}",
 				engine_id
 			);
 		}
-
-		self.send_message(&target, GenericMessage::Consensus(ConsensusMessage {
-			engine_id,
-			data: message.into(),
-		}));
 	}
 
 	/// Registers a new notifications protocol.
@@ -1096,9 +1097,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	pub fn register_notifications_protocol(
 		&mut self,
 		engine_id: ConsensusEngineId,
+		protocol_name: impl Into<Cow<'static, [u8]>>,
 	) -> Vec<event::Event> {
-		if !self.registered_notif_protocols.insert(engine_id) {
-			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", engine_id);
+		let protocol_name = protocol_name.into();
+		if self.protocol_name_by_engine.insert(engine_id, protocol_name.clone()).is_some() {
+			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol_name);
+		} else {
+			self.behaviour.register_notif_protocol(protocol_name.clone(), engine_id, Vec::new());
+			self.protocol_engine_by_name.insert(protocol_name, engine_id);
 		}
 
 		// Registering a protocol while we already have open connections isn't great, but for now
@@ -1833,7 +1839,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 }
 
 fn send_request<B: BlockT, H: ExHashT>(
-	behaviour: &mut LegacyProto,
+	behaviour: &mut GenericProto,
 	stats: &mut HashMap<&'static str, PacketStats>,
 	peers: &mut HashMap<PeerId, Peer<B, H>>,
 	who: &PeerId,
@@ -1854,7 +1860,7 @@ fn send_request<B: BlockT, H: ExHashT>(
 }
 
 fn send_message<B: BlockT>(
-	behaviour: &mut LegacyProto,
+	behaviour: &mut GenericProto,
 	stats: &mut HashMap<&'static str, PacketStats>,
 	who: &PeerId,
 	message: Message<B>,
@@ -1868,7 +1874,7 @@ fn send_message<B: BlockT>(
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviour for
 Protocol<B, S, H> {
-	type ProtocolsHandler = <LegacyProto as NetworkBehaviour>::ProtocolsHandler;
+	type ProtocolsHandler = <GenericProto as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
@@ -1954,25 +1960,21 @@ Protocol<B, S, H> {
 		};
 
 		let outcome = match event {
-			LegacyProtoOut::CustomProtocolOpen { peer_id, version, .. } => {
-				debug_assert!(
-					version <= CURRENT_VERSION as u8
-					&& version >= MIN_VERSION as u8
-				);
+			GenericProtoOut::CustomProtocolOpen { peer_id, .. } => {
 				self.on_peer_connected(peer_id.clone());
 				CustomMessageOutcome::None
 			}
-			LegacyProtoOut::CustomProtocolClosed { peer_id, .. } => {
+			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
 				self.on_peer_disconnected(peer_id.clone());
 				// Notify all the notification protocols as closed.
 				CustomMessageOutcome::NotificationStreamClosed {
 					remote: peer_id,
-					protocols: self.registered_notif_protocols.iter().cloned().collect(),
+					protocols: self.protocol_name_by_engine.keys().cloned().collect(),
 				}
 			},
-			LegacyProtoOut::CustomMessage { peer_id, message } =>
+			GenericProtoOut::CustomMessage { peer_id, message } =>
 				self.on_custom_message(peer_id, message),
-			LegacyProtoOut::Clogged { peer_id, messages } => {
+			GenericProtoOut::Clogged { peer_id, messages } => {
 				debug!(target: "sync", "{} clogging messages:", messages.len());
 				for msg in messages.into_iter().take(5) {
 					let message: Option<Message<B>> = Decode::decode(&mut &msg[..]).ok();
