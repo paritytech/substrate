@@ -23,7 +23,6 @@ mod params;
 mod arg_enums;
 mod error;
 mod runtime;
-mod node_key;
 mod commands;
 
 pub use sc_service::config::VersionInfo;
