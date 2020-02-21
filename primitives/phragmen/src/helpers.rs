@@ -39,7 +39,7 @@ pub fn assignment_ratio_to_staked<A: IdentifierT, T: PerThing, FS>(
 		.collect()
 }
 
-/// Converts a vector of ratio assignments into ones with absolute budget value.
+/// Converts a vector of staked assignments into ones with ratio values.
 pub fn assignment_staked_to_ratio<A: IdentifierT, T: PerThing>(
 	ratio: Vec<StakedAssignment<A>>,
 ) -> Vec<Assignment<A, T>> where ExtendedBalance: From<<T as PerThing>::Inner>

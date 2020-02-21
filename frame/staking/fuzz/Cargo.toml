@@ -1,10 +1,16 @@
+
 [package]
-name = "pallet-staking-fuzzer"
-version = "2.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
+name = "pallet-staking-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
 edition = "2018"
 
+[package.metadata]
+cargo-fuzz = true
+
 [dependencies]
+libfuzzer-sys = "0.3"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 pallet-staking = { version = "2.0.0", path = "..", features = ["testing-utils"] }
 pallet-staking-reward-curve = { version = "2.0.0",  path = "../reward-curve" }
@@ -19,13 +25,12 @@ sp-io ={ version = "2.0.0", path = "../../../primitives/io" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-phragmen = { version = "2.0.0", path = "../../../primitives/phragmen" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-# honggfuzz = "0.5"
-honggfuzz = { path = "../../../../honggfuzz-rs"}
 rand = "0.7.3"
 
+# Prevent this from interfering with workspaces
 [workspace]
+members = ["."]
 
 [[bin]]
 name = "submit_solution"
-path = "src/submit_solution.rs"
-
+path = "fuzz_targets/submit_solution.rs"

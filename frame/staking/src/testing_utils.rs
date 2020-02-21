@@ -114,6 +114,7 @@ pub fn setup_chain_stakers<T: Trait>(
 	edge_per_voter: u32,
 ) where T::Lookup: StaticLookup<Source=AddressOf<T>> {
 	(0..num_validators).for_each(|i| {
+		// println!("bonding validator {}/{}", i, num_validators);
 		bond_validator::<T>(
 			account::<T>(i),
 			i + CTRL_PREFIX,
@@ -129,6 +130,7 @@ pub fn setup_chain_stakers<T: Trait>(
 			let target = all_targets.remove(random(0, all_targets.len() as u32 - 1) as usize);
 			targets.push(target);
 		});
+		// println!("bonding voter {}/{}", i, num_voters);
 		bond_nominator::<T>(
 			account::<T>(i + NOMINATOR_PREFIX),
 			i + NOMINATOR_PREFIX + CTRL_PREFIX,

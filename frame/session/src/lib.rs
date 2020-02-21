@@ -393,6 +393,7 @@ decl_storage! {
 					<Module<T>>::load_keys(&who).is_none(),
 					"genesis config contained duplicate validator {:?}", who,
 				);
+
 				<Module<T>>::do_set_keys(&who, keys)
 					.expect("genesis config must not contain duplicates; qed");
 			}
