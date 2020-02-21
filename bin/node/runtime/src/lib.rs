@@ -315,7 +315,8 @@ parameter_types! {
 	pub const BondingDuration: pallet_staking::EraIndex = 24 * 28;
 	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
-	pub const ElectionLookahead: BlockNumber = 150;
+	/// This means that the offchain election is disabled for now.
+	pub const ElectionLookahead: BlockNumber = 0;
 }
 
 impl pallet_staking::Trait for Runtime {
