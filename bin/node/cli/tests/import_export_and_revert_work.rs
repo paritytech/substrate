@@ -14,28 +14,46 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![cfg(unix)]
+
 use assert_cmd::cargo::cargo_bin;
-use std::process::Command;
+use std::{process::Command, fs};
 use tempfile::tempdir;
 
 mod common;
 
 #[test]
-#[cfg(unix)]
-fn purge_chain_works() {
+fn import_export_and_revert_work() {
 	let base_path = tempdir().expect("could not create a temp dir");
+	let exported_blocks = base_path.path().join("exported_blocks");
 
-	common::run_command_for_a_while(base_path.path(), true);
+	common::run_command_for_a_while(base_path.path(), false);
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["purge-chain", "--dev", "-d"])
+		.args(&["export-blocks", "-d"])
 		.arg(base_path.path())
-		.arg("-y")
+		.arg(&exported_blocks)
 		.status()
 		.unwrap();
 	assert!(status.success());
 
-	// Make sure that the `dev` chain folder exists, but the `db` is deleted.
-	assert!(base_path.path().join("chains/dev/").exists());
-	assert!(!base_path.path().join("chains/dev/db").exists());
+	let metadata = fs::metadata(&exported_blocks).unwrap();
+	assert!(metadata.len() > 0, "file exported_blocks should not be empty");
+
+	let _ = fs::remove_dir_all(base_path.path().join("db"));
+
+	let status = Command::new(cargo_bin("substrate"))
+		.args(&["import-blocks", "-d"])
+		.arg(base_path.path())
+		.arg(&exported_blocks)
+		.status()
+		.unwrap();
+	assert!(status.success());
+
+	let status = Command::new(cargo_bin("substrate"))
+		.args(&["revert", "-d"])
+		.arg(base_path.path())
+		.status()
+		.unwrap();
+	assert!(status.success());
 }
