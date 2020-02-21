@@ -6,6 +6,7 @@ description = "Substrate CLI interface."
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 clap = "2.33.0"

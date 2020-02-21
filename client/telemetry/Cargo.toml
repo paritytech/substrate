@@ -6,6 +6,7 @@ description = "Telemetry utils"
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 bytes = "0.5"

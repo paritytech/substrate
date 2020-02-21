@@ -4,6 +4,7 @@ edition = '2018'
 name = 'pallet-template'
 version = "2.0.0-dev"
 homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }

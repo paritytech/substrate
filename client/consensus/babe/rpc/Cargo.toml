@@ -6,6 +6,7 @@ description = "RPC extensions for the BABE consensus algorithm"
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 sc-consensus-babe = { version = "0.8.0-dev", path = "../" }

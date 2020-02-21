@@ -6,6 +6,7 @@ license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [build-dependencies]
 prost-build = "0.6.1"

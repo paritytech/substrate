@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>", "Andrew Dirksen <andrew@dirk
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 futures = { version = "0.3.0", features = ["compat"] }

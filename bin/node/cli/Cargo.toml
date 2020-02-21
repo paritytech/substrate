@@ -8,6 +8,7 @@ edition = "2018"
 license = "GPL-3.0"
 default-run = "substrate"
 homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [package.metadata.wasm-pack.profile.release]
 # `wasm-opt` has some problems on linux, see

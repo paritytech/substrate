@@ -6,6 +6,7 @@ edition = "2018"
 license = "Unlicense"
 build = "build.rs"
 homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [[bin]]
 name = "node-template"

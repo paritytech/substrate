@@ -7,6 +7,7 @@ description = "Integration tests for application-crypto"
 license = "GPL-3.0"
 publish = false
 homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 sp-core = { version = "2.0.0-dev", default-features = false, path = "../../core" }

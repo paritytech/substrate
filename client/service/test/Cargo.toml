@@ -6,6 +6,7 @@ edition = "2018"
 license = "GPL-3.0"
 publish = false
 homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 tempfile = "3.1.0"
