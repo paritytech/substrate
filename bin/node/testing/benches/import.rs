@@ -37,7 +37,7 @@ use sc_client_api::backend::Backend;
 
 criterion_group!(
 	name = benches;
-	config = Criterion::default().sample_size(20).warm_up_time(std::time::Duration::from_secs(20));
+	config = Criterion::default().sample_size(50).warm_up_time(std::time::Duration::from_secs(20));
 	targets = bench_block_import
 );
 criterion_group!(
