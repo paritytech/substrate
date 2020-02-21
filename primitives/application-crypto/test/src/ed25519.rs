@@ -17,13 +17,16 @@
 //! Integration tests for ed25519
 
 use sp_runtime::generic::BlockId;
-use sp_core::{testing::KeyStore, crypto::Pair};
+use sp_core::{
+	crypto::{Pair, Public},
+	testing::{KeyStore, ED25519},
+};
 use substrate_test_runtime_client::{
 	TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
 	runtime::TestAPI,
 };
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::ed25519::{AppPair, AppPublic};
+use sp_application_crypto::ed25519::{ED25519_CRYPTO_ID, AppPair, AppPublic};
 
 #[test]
 fn ed25519_works_in_runtime() {
@@ -33,5 +36,7 @@ fn ed25519_works_in_runtime() {
 		.test_ed25519_crypto(&BlockId::Number(0))
 		.expect("Tests `ed25519` crypto.");
 
+	let supported_keys = keystore.read().keys(ED25519).unwrap();
+	assert!(true, supported_keys.contains(&(ED25519_CRYPTO_ID, public.to_raw_vec())));
 	assert!(AppPair::verify(&signature, "ed25519", &AppPublic::from(public)));
 }

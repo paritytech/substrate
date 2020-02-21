@@ -18,13 +18,16 @@
 
 
 use sp_runtime::generic::BlockId;
-use sp_core::{testing::KeyStore, crypto::Pair};
+use sp_core::{
+	crypto::{Pair, Public},
+	testing::{KeyStore, SR25519},
+};
 use substrate_test_runtime_client::{
 	TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
 	runtime::TestAPI,
 };
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::sr25519::{AppPair, AppPublic};
+use sp_application_crypto::sr25519::{SR25519_CRYPTO_ID, AppPair, AppPublic};
 
 #[test]
 fn sr25519_works_in_runtime() {
@@ -34,5 +37,7 @@ fn sr25519_works_in_runtime() {
 		.test_sr25519_crypto(&BlockId::Number(0))
 		.expect("Tests `sr25519` crypto.");
 
+	let supported_keys = keystore.read().keys(SR25519).unwrap();
+	assert!(true, supported_keys.contains(&(SR25519_CRYPTO_ID, public.to_raw_vec())));
 	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(public)));
 }
