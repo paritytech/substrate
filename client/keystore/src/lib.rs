@@ -21,7 +21,7 @@
 use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
-	traits::{BareCryptoStore, Error as TraitError}
+	traits::{BareCryptoStore, BareCryptoStoreError as TraitError}
 };
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
 use parking_lot::RwLock;

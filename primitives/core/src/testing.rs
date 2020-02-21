@@ -21,7 +21,7 @@ use crate::crypto::{KeyTypeId, CryptoTypePublicPair};
 use crate::{
 	crypto::{Pair, Public},
 	ed25519, sr25519,
-	traits::Error
+	traits::BareCryptoStoreError
 };
 #[cfg(feature = "std")]
 use std::collections::HashSet;
@@ -143,23 +143,23 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
-	) -> std::result::Result<HashSet<CryptoTypePublicPair>, Error> {
+	) -> std::result::Result<HashSet<CryptoTypePublicPair>, BareCryptoStoreError> {
 		let keys = keys.into_iter().collect::<HashSet<_>>();
 		let all_keys = self.keys(id)?;
 
 		Ok(keys.intersection(&all_keys).cloned().collect())
 	}
 
-	fn keys(&self, id: KeyTypeId) -> std::result::Result<HashSet<CryptoTypePublicPair>, Error> {
+	fn keys(&self, id: KeyTypeId) -> std::result::Result<HashSet<CryptoTypePublicPair>, BareCryptoStoreError> {
 		let ed25519_existing_keys = self
     		.ed25519_public_keys(id)
 			.into_iter()
-			.map(|k| (ed25519::ED25519_CRYPTO_ID, k.to_raw_vec()));
+			.map(|k| (ed25519::CRYPTO_ID, k.to_raw_vec()));
 
 		let sr25519_existing_keys = self
 			.sr25519_public_keys(id)
 			.into_iter()
-			.map(|k| (sr25519::SR25519_CRYPTO_ID, k.to_raw_vec()));
+			.map(|k| (sr25519::CRYPTO_ID, k.to_raw_vec()));
 
 		Ok(ed25519_existing_keys
 			.chain(sr25519_existing_keys)
@@ -171,23 +171,23 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8]
-	) -> Result<Vec<u8>, Error> {
+	) -> Result<Vec<u8>, BareCryptoStoreError> {
 		match key.0 {
 			ed25519::ED25519_CRYPTO_ID => {
 				let key_pair: ed25519::Pair = self
 					.ed25519_key_pair(id, &ed25519::Public::from_slice(key.1.as_slice()))
 					.map(Into::into)
-					.ok_or(Error::PairNotFound("ed25519".to_owned()))?;
+					.ok_or(BareCryptoStoreError::PairNotFound("ed25519".to_owned()))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
 			sr25519::SR25519_CRYPTO_ID => {
 				let key_pair: sr25519::Pair = self
 					.sr25519_key_pair(id, &sr25519::Public::from_slice(key.1.as_slice()))
 					.map(Into::into)
-					.ok_or(Error::PairNotFound("sr25519".to_owned()))?;
+					.ok_or(BareCryptoStoreError::PairNotFound("sr25519".to_owned()))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			_ => Err(Error::KeyNotSupported)
+			_ => Err(BareCryptoStoreError::KeyNotSupported)
 		}
 	}
 }

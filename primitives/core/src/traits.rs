@@ -32,7 +32,7 @@ pub use sp_externalities::{Externalities, ExternalitiesExt};
 
 /// BareCryptoStore error
 #[derive(Debug)]
-pub enum Error {
+pub enum BareCryptoStoreError {
 	/// Public key type is not supported
 	KeyNotSupported,
 	/// Pair not found for public key and KeyTypeId
@@ -86,11 +86,11 @@ pub trait BareCryptoStore: Send + Sync {
 	///
 	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
 	/// a filtered set of public keys which are supported by the keystore.
-	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<HashSet<CryptoTypePublicPair>, Error>;
+	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<HashSet<CryptoTypePublicPair>, BareCryptoStoreError>;
 	/// List all supported keys
 	///
 	/// Returns a set of public keys the signer supports.
-	fn keys(&self, id: KeyTypeId) -> Result<HashSet<CryptoTypePublicPair>, Error>;
+	fn keys(&self, id: KeyTypeId) -> Result<HashSet<CryptoTypePublicPair>, BareCryptoStoreError>;
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.
@@ -105,7 +105,7 @@ pub trait BareCryptoStore: Send + Sync {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> Result<Vec<u8>, Error>;
+	) -> Result<Vec<u8>, BareCryptoStoreError>;
 
 	/// Sign with any key
 	///
@@ -118,7 +118,7 @@ pub trait BareCryptoStore: Send + Sync {
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8]
-	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
+	) -> Result<(CryptoTypePublicPair, Vec<u8>), BareCryptoStoreError> {
 		if keys.len() == 1 {
 			return self.sign_with(id, &keys[0], msg).map(|s| (keys[0].clone(), s));
 		} else {
@@ -128,7 +128,7 @@ pub trait BareCryptoStore: Send + Sync {
 				}
 			}
 		}
-		Err(Error::KeyNotSupported)
+		Err(BareCryptoStoreError::KeyNotSupported)
 	}
 
 	/// Sign with all keys
@@ -143,7 +143,7 @@ pub trait BareCryptoStore: Send + Sync {
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8]
-	) -> Result<Vec<Result<Vec<u8>, Error>>, ()>{
+	) -> Result<Vec<Result<Vec<u8>, BareCryptoStoreError>>, ()>{
 		Ok(keys.iter().map(|k| self.sign_with(id, k, msg)).collect())
 	}
 }
