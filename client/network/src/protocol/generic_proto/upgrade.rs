@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,15 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Implementation of libp2p's `NetworkBehaviour` trait that opens a single substream with the
-//! remote and then allows any communication with them.
-//!
-//! The `Protocol` struct uses `LegacyProto` in order to open substreams with the rest of the
-//! network, then performs the Substrate protocol handling on top.
+pub use self::collec::UpgradeCollec;
+pub use self::legacy::{
+	RegisteredProtocol,
+	RegisteredProtocolEvent,
+	RegisteredProtocolName,
+	RegisteredProtocolSubstream
+};
+pub use self::notifications::{
+	NotificationsIn,
+	NotificationsInSubstream,
+	NotificationsOut,
+	NotificationsOutSubstream,
+	NotificationsHandshakeError,
+	NotificationsOutError,
+};
 
-pub use self::behaviour::{LegacyProto, LegacyProtoOut};
-
-mod behaviour;
-mod handler;
-mod upgrade;
-mod tests;
+mod collec;
+mod legacy;
+mod notifications;

@@ -25,7 +25,7 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::poll`].
 
-use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
+use std::{borrow::Cow, collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 use std::pin::Pin;
 use std::task::Poll;
@@ -490,9 +490,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	pub fn register_notifications_protocol(
 		&self,
 		engine_id: ConsensusEngineId,
+		protocol_name: impl Into<Cow<'static, [u8]>>,
 	) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::RegisterNotifProtocol {
 			engine_id,
+			protocol_name: protocol_name.into(),
 		});
 	}
 
@@ -710,6 +712,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT, S: NetworkSpecialization<B>> {
 	},
 	RegisterNotifProtocol {
 		engine_id: ConsensusEngineId,
+		protocol_name: Cow<'static, [u8]>,
 	},
 	DisconnectPeer(PeerId),
 }
@@ -791,8 +794,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 					this.event_streams.push(sender),
 				ServiceToWorkerMsg::WriteNotification { message, engine_id, target } =>
 					this.network_service.user_protocol_mut().write_notification(target, engine_id, message),
-				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id } => {
-					let events = this.network_service.user_protocol_mut().register_notifications_protocol(engine_id);
+				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id, protocol_name } => {
+					let events = this.network_service.user_protocol_mut().register_notifications_protocol(engine_id, protocol_name);
 					for event in events {
 						this.event_streams.retain(|sender| sender.unbounded_send(event.clone()).is_ok());
 					}

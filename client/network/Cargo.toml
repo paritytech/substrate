@@ -36,6 +36,7 @@ sc-block-builder = { version = "0.8", path = "../block-builder" }
 sc-client = { version = "0.8", path = "../" }
 sc-client-api = { version = "2.0.0", path = "../api" }
 sc-peerset = { version = "2.0.0", path = "../peerset" }
+pin-project = "0.4.6"
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
 slog = { version = "2.5.2", features = ["nested-values"] }
@@ -51,7 +52,7 @@ sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 substrate-test-client = { version = "2.0.0", optional = true, path = "../../test-utils/client" }
 substrate-test-runtime-client = { version = "2.0.0", optional = true, path = "../../test-utils/runtime/client" }
 thiserror = "1"
-unsigned-varint = { version = "0.3.0", features = ["futures-codec"] }
+unsigned-varint = { version = "0.3.1", features = ["futures", "futures-codec"] }
 void = "1.0.2"
 zeroize = "1.0.0"
 
