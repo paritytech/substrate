@@ -45,7 +45,7 @@ use sc_client::{
 	BlockchainEvents, Client, CallExecutor,
 	light::{
 		blockchain::{future_header, RemoteBlockchain},
-		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadDefaultChildRequest},
+		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest},
 	},
 };
 use sp_core::{
@@ -246,29 +246,32 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		)
 	}
 
-	fn default_child_storage_keys(
+	fn child_storage_keys(
 		&self,
 		_block: Option<Block::Hash>,
 		_storage_key: StorageKey,
+		_child_type: u32,
 		_prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
-	fn default_child_storage(
+	fn child_storage(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
 		let block = self.block_or_best(block);
 		let fetcher = self.fetcher.clone();
 		let child_storage = resolve_header(&*self.remote_blockchain, &*self.fetcher, block)
 			.then(move |result| match result {
-				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadDefaultChildRequest {
+				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadChildRequest {
 					block,
 					header,
 					storage_key: storage_key.0,
+					child_type,
 					keys: vec![key.0.clone()],
 					retry_count: Default::default(),
 				}).then(move |result| ready(result
@@ -285,14 +288,14 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		Box::new(child_storage.boxed().compat())
 	}
 
-	fn default_child_storage_hash(
+	fn child_storage_hash(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
-		Box::new(self
-			.default_child_storage(block, storage_key, key)
+		Box::new(self.child_storage(block, storage_key, child_type, key)
 			.and_then(|maybe_storage|
 				result(Ok(maybe_storage.map(|storage| HasherFor::<Block>::hash(&storage.0))))
 			)

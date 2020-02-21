@@ -105,37 +105,41 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 
 	/// Returns the keys with prefix from a defaultchild storage,
 	/// leave empty to get all the keys
-	fn default_child_storage_keys(
+	fn child_storage_keys(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
+		child_type: u32,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a child storage entry at a specific block's state.
-	fn default_child_storage(
+	fn child_storage(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>>;
 
 	/// Returns the hash of a child storage entry at a block's state.
-	fn default_child_storage_hash(
+	fn child_storage_hash(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>>;
 
 	/// Returns the size of a child storage entry at a block's state.
-	fn default_child_storage_size(
+	fn child_storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>> {
-		Box::new(self.default_child_storage(block, storage_key, key)
+		Box::new(self.child_storage(block, storage_key, child_type, key)
 			.map(|x| x.map(|x| x.0.len() as u64)))
 	}
 
@@ -293,40 +297,44 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		self.backend.storage_size(block, key)
 	}
 
-	fn default_child_storage(
+	fn child_storage(
 		&self,
 		storage_key: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Option<StorageData>> {
-		self.backend.default_child_storage(block, storage_key, key)
+		self.backend.child_storage(block, storage_key, child_type, key)
 	}
 
-	fn default_child_storage_keys(
+	fn child_storage_keys(
 		&self,
 		storage_key: StorageKey,
+		child_type: u32,
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageKey>> {
-		self.backend.default_child_storage_keys(block, storage_key, key_prefix)
+		self.backend.child_storage_keys(block, storage_key, child_type, key_prefix)
 	}
 
-	fn default_child_storage_hash(
+	fn child_storage_hash(
 		&self,
 		storage_key: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Option<Block::Hash>> {
-		self.backend.default_child_storage_hash(block, storage_key, key)
+		self.backend.child_storage_hash(block, storage_key, child_type, key)
 	}
 
-	fn default_child_storage_size(
+	fn child_storage_size(
 		&self,
 		storage_key: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Option<u64>> {
-		self.backend.default_child_storage_size(block, storage_key, key)
+		self.backend.child_storage_size(block, storage_key, child_type, key)
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {

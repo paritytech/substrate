@@ -170,7 +170,7 @@ pub enum Request<B: Block> {
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
 	ReadDefaultChild {
-		request: fetcher::RemoteReadDefaultChildRequest<B::Header>,
+		request: fetcher::RemoteReadChildRequest<B::Header>,
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
 	Call {
@@ -369,7 +369,7 @@ where
 					}
 					Request::ReadDefaultChild { request, .. } => {
 						let proof = Decode::decode(&mut response.proof.as_ref())?;
-						let reply = self.checker.check_read_default_child_proof(&request, proof)?;
+						let reply = self.checker.check_read_child_proof(&request, proof)?;
 						Ok(Reply::MapVecU8OptVecU8(reply))
 					}
 					_ => Err(Error::UnexpectedResponse)
@@ -496,7 +496,7 @@ where
 		( &mut self
 		, peer: &PeerId
 		, request_id: u64
-		, request: &api::v1::light::RemoteReadDefaultChildRequest
+		, request: &api::v1::light::RemoteReadChildRequest
 		) -> Result<api::v1::light::Response, Error>
 	{
 		if request.keys.is_empty() {
@@ -692,7 +692,7 @@ where
 						self.on_remote_read_request(&peer, request.id, r),
 					Some(api::v1::light::request::Request::RemoteHeaderRequest(r)) =>
 						self.on_remote_header_request(&peer, request.id, r),
-					Some(api::v1::light::request::Request::RemoteReadDefaultChildRequest(r)) =>
+					Some(api::v1::light::request::Request::RemoteReadChildRequest(r)) =>
 						self.on_remote_read_child_request(&peer, request.id, r),
 					Some(api::v1::light::request::Request::RemoteChangesRequest(r)) =>
 						self.on_remote_changes_request(&peer, request.id, r),
@@ -919,12 +919,13 @@ fn serialize_request<B: Block>(id: u64, request: &Request<B>) -> api::v1::light:
 			api::v1::light::request::Request::RemoteReadRequest(r)
 		}
 		Request::ReadDefaultChild { request, .. } => {
-			let r = api::v1::light::RemoteReadDefaultChildRequest {
+			let r = api::v1::light::RemoteReadChildRequest {
 				block: request.block.encode(),
 				storage_key: request.storage_key.clone(),
+				child_type: request.child_type,
 				keys: request.keys.clone(),
 			};
-			api::v1::light::request::Request::RemoteReadDefaultChildRequest(r)
+			api::v1::light::request::Request::RemoteReadChildRequest(r)
 		}
 		Request::Call { request, .. } => {
 			let r = api::v1::light::RemoteCallRequest {
@@ -1620,10 +1621,11 @@ mod tests {
 	#[test]
 	fn receives_remote_read_child_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteReadDefaultChildRequest {
+		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			storage_key: b":child_storage:sub".to_vec(),
+			child_type: 1,
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};
@@ -1720,16 +1722,17 @@ mod tests {
 	#[test]
 	fn send_receive_read_child() {
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteReadDefaultChildRequest {
+		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			storage_key: b"sub".to_vec(),
+			child_type: 1,
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};
 		send_receive(Request::ReadDefaultChild { request, sender: chan.0 });
 		assert_eq!(Some(vec![42]), task::block_on(chan.1).unwrap().unwrap().remove(&b":key"[..]).unwrap());
-		//                   ^--- from `DummyFetchChecker::check_read_default_child_proof`
+		//                   ^--- from `DummyFetchChecker::check_read_child_proof`
 	}
 
 	#[test]

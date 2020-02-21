@@ -75,13 +75,15 @@ pub struct RemoteReadRequest<Header: HeaderT> {
 
 /// Remote storage read child request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RemoteReadDefaultChildRequest<Header: HeaderT> {
+pub struct RemoteReadChildRequest<Header: HeaderT> {
 	/// Read at state of given block.
 	pub block: Header::Hash,
 	/// Header of block at which read is performed.
 	pub header: Header,
 	/// Storage key for child.
 	pub storage_key: Vec<u8>,
+	/// Child type.
+	pub child_type: u32,
 	/// Child storage key to read.
 	pub keys: Vec<Vec<u8>>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
@@ -175,7 +177,7 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Fetch remote storage child value.
 	fn remote_read_child(
 		&self,
-		request: RemoteReadDefaultChildRequest<Block::Header>
+		request: RemoteReadChildRequest<Block::Header>
 	) -> Self::RemoteReadResult;
 	/// Fetch remote call result.
 	fn remote_call(&self, request: RemoteCallRequest<Block::Header>) -> Self::RemoteCallResult;
@@ -205,9 +207,9 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
 	/// Check remote storage read proof.
-	fn check_read_default_child_proof(
+	fn check_read_child_proof(
 		&self,
-		request: &RemoteReadDefaultChildRequest<Block::Header>,
+		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
 	/// Check remote method execution proof.
@@ -330,7 +332,7 @@ pub mod tests {
 			not_implemented_in_tests()
 		}
 
-		fn remote_read_child(&self, _request: RemoteReadDefaultChildRequest<Header>) -> Self::RemoteReadResult {
+		fn remote_read_child(&self, _request: RemoteReadChildRequest<Header>) -> Self::RemoteReadResult {
 			not_implemented_in_tests()
 		}
 

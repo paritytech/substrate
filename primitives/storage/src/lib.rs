@@ -258,7 +258,7 @@ pub enum ChildType {
 
 impl ChildType {
 	/// Try to get a child type from its `u32` representation.
-	fn new(repr: u32) -> Option<ChildType> {
+	pub fn new(repr: u32) -> Option<ChildType> {
 		Some(match repr {
 			r if r == ChildType::ParentKeyId as u32 => ChildType::ParentKeyId,
 			_ => return None,

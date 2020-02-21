@@ -65,7 +65,7 @@ fn should_return_storage() {
 	);
 	assert_eq!(
 		core.block_on(
-			client.default_child_storage(storage_key, key, Some(genesis_hash).into())
+			client.child_storage(storage_key, 1, key, Some(genesis_hash).into())
 				.map(|x| x.map(|x| x.0.len()))
 		).unwrap().unwrap() as usize,
 		CHILD_VALUE.len(),
@@ -87,24 +87,27 @@ fn should_return_child_storage() {
 
 
 	assert_matches!(
-		client.default_child_storage(
+		client.child_storage(
 			child_key.clone(),
+			1,
 			key.clone(),
 			Some(genesis_hash).into(),
 		).wait(),
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
 	assert_matches!(
-		client.default_child_storage_hash(
+		client.child_storage_hash(
 			child_key.clone(),
+			1,
 			key.clone(),
 			Some(genesis_hash).into(),
 		).wait().map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_matches!(
-		client.default_child_storage_size(
+		client.child_storage_size(
 			child_key.clone(),
+			1,
 			key.clone(),
 			None,
 		).wait(),

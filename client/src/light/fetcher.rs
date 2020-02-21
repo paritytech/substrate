@@ -23,7 +23,7 @@ use std::marker::PhantomData;
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
 use sp_core::{convert_hash, traits::CodeExecutor};
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildType};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	AtLeast32Bit, CheckedConversion,
@@ -39,7 +39,7 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use crate::cht;
 pub use sc_client_api::{
 	light::{
-		RemoteCallRequest, RemoteHeaderRequest, RemoteReadRequest, RemoteReadDefaultChildRequest,
+		RemoteCallRequest, RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
 		RemoteChangesRequest, ChangesProof, RemoteBodyRequest, Fetcher, FetchChecker,
 		Storage as BlockchainStorage,
 	},
@@ -236,16 +236,19 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		).map_err(Into::into)
 	}
 
-	fn check_read_default_child_proof(
+	fn check_read_child_proof(
 		&self,
-		request: &RemoteReadDefaultChildRequest<Block::Header>,
+		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
-		let child_trie = ChildInfo::new_default(&request.storage_key);
+		let child_info = match ChildType::new(request.child_type) {
+			Some(ChildType::ParentKeyId) => ChildInfo::new_default(&request.storage_key[..]),
+			None => return Err("Invalid child type".into()),
+		};
 		read_child_proof_check::<H, _>(
 			convert_hash(request.header.state_root()),
 			remote_proof,
-			&child_trie,
+			&child_info,
 			request.keys.iter(),
 		).map_err(Into::into)
 	}
@@ -502,11 +505,12 @@ pub mod tests {
 			remote_read_proof,
 			result,
 		) = prepare_for_read_child_proof_check();
-		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_default_child_proof(
-			&RemoteReadDefaultChildRequest::<Header> {
+		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_child_proof(
+			&RemoteReadChildRequest::<Header> {
 				block: remote_block_header.hash(),
 				header: remote_block_header,
 				storage_key: b"child1".to_vec(),
+				child_type: 1,
 				keys: vec![b"key1".to_vec()],
 				retry_count: None,
 			},

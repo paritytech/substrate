@@ -37,7 +37,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Numb
 use sc_client::{
 	light::fetcher::{
 		Fetcher,
-		RemoteHeaderRequest, RemoteReadRequest, RemoteReadDefaultChildRequest,
+		RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
 		RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest,
 	},
 };
@@ -313,7 +313,7 @@ impl Fetcher<substrate_test_runtime::Block> for LightFetcher {
 
 	fn remote_read_child(
 		&self,
-		_: RemoteReadDefaultChildRequest<substrate_test_runtime::Header>,
+		_: RemoteReadChildRequest<substrate_test_runtime::Header>,
 	) -> Self::RemoteReadResult {
 		unimplemented!()
 	}
