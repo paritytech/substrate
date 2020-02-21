@@ -237,8 +237,6 @@ impl<AccountId> StakedAssignment<AccountId>
 	/// NOTE: it is quite critical that this attempt always works. The data type returned here will
 	/// potentially get used to create a compact type; a compact type requires sum of ratios to be
 	/// less than 100% upon un-compacting.
-	/// TODO: isolate this process into something like `normalise_assignments` which makes sure all
-	/// is okay.
 	///
 	/// If an edge stake is so small that it cannot be represented in `T`, it is ignored. This edge
 	/// can never be re-created and does not mean anything useful anymore.

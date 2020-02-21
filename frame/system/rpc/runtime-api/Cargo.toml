@@ -1,12 +1,14 @@
 [package]
 name = "frame-system-rpc-runtime-api"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-api = { version = "2.0.0", default-features = false, path = "../../../../primitives/api" }
+sp-api = { version = "2.0.0-dev", default-features = false, path = "../../../../primitives/api" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 
 [features]
