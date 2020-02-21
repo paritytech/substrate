@@ -33,7 +33,7 @@ use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "full_crypto")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError};
+use crate::crypto::{Pair as TraitPair, CryptoTypePublicPair, DeriveJunction, SecretStringError};
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
@@ -380,6 +380,18 @@ impl TraitPublic for Public {
 }
 
 impl Derive for Public {}
+
+impl From<Public> for CryptoTypePublicPair {
+    fn from(key: Public) -> Self {
+        return key.into()
+    }
+}
+
+impl From<&Public> for CryptoTypePublicPair {
+    fn from(key: &Public) -> Self {
+        return (CRYPTO_ID, key.to_raw_vec())
+    }
+}
 
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]

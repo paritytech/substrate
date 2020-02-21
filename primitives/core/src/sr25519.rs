@@ -34,7 +34,7 @@ use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{
-	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError
+	Pair as TraitPair, CryptoTypePublicPair, DeriveJunction, Infallible, SecretStringError
 };
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
@@ -391,6 +391,18 @@ impl TraitPublic for Public {
 		r.copy_from_slice(data);
 		Public(r)
 	}
+}
+
+impl From<Public> for CryptoTypePublicPair {
+    fn from(key: Public) -> Self {
+        return key.into()
+    }
+}
+
+impl From<&Public> for CryptoTypePublicPair {
+    fn from(key: &Public) -> Self {
+        return (CRYPTO_ID, key.to_raw_vec())
+    }
 }
 
 #[cfg(feature = "std")]

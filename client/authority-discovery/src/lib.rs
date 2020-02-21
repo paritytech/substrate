@@ -214,7 +214,7 @@ where
 
 		let keys: Vec<CryptoTypePublicPair> = self.get_own_public_keys_within_authority_set()?
 			.into_iter()
-			.map(|k| (sr25519::CRYPTO_ID, k.to_raw_vec()))
+			.map(Into::into)
 			.collect();
 
 		let signatures = self.key_store

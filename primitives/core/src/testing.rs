@@ -154,12 +154,12 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		let ed25519_existing_keys = self
     		.ed25519_public_keys(id)
 			.into_iter()
-			.map(|k| (ed25519::CRYPTO_ID, k.to_raw_vec()));
+			.map(Into::into);
 
 		let sr25519_existing_keys = self
 			.sr25519_public_keys(id)
 			.into_iter()
-			.map(|k| (sr25519::CRYPTO_ID, k.to_raw_vec()));
+			.map(Into::into);
 
 		Ok(ed25519_existing_keys
 			.chain(sr25519_existing_keys)
@@ -308,7 +308,7 @@ mod tests {
 
 		let public_keys = store.read().keys(ED25519).unwrap();
 
-		assert!(public_keys.contains(&(ed25519::CRYPTO_ID, public.to_raw_vec())));
+		assert!(public_keys.contains(&public.into()));
 	}
 
 	#[test]
@@ -326,6 +326,6 @@ mod tests {
 
 		let public_keys = store.read().keys(SR25519).unwrap();
 
-		assert!(public_keys.contains(&(sr25519::CRYPTO_ID, key_pair.public().to_raw_vec())));
+		assert!(public_keys.contains(&key_pair.public().into()));
 	}
 }

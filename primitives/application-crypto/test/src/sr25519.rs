@@ -38,6 +38,6 @@ fn sr25519_works_in_runtime() {
 		.expect("Tests `sr25519` crypto.");
 
 	let supported_keys = keystore.read().keys(SR25519).unwrap();
-	assert!(true, supported_keys.contains(&(CRYPTO_ID, public.to_raw_vec())));
+	assert!(true, supported_keys.contains(&public.into()));
 	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(public)));
 }
