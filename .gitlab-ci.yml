@@ -539,7 +539,16 @@ publish-gh-doc:
   after_script:
     - rm -vrf ${HOME}/.gitconfig
 
-
+publish-draft-release:
+  stage:                           publish
+  image:                           parity/tools:latest
+  only:
+    - tags
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    - ./scripts/gitlab/publish_draft_release.sh
+  interruptible:                   true
+  allow_failure:                   true
 
 .deploy-template:                  &deploy
   stage:                           kubernetes
