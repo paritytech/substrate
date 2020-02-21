@@ -5,6 +5,7 @@ version = "0.8.0-dev"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+publish = false
 
 [dependencies]
 sc-network = { version = "0.8.0-dev", path = "../" }

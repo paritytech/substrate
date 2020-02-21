@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
 license = "GPL-3.0"
+publish = false
 
 [dependencies]
 sp-std = { version = "2.0.0-dev", default-features = false, path = "../../../primitives/std" }
