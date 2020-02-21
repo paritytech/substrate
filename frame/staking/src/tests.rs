@@ -2781,11 +2781,12 @@ fn claim_reward_at_the_last_era() {
 		assert!(total_payout_2 != total_payout_0);
 		assert!(total_payout_2 != total_payout_1);
 
-		start_era(Staking::history_depth());
+		start_era(Staking::history_depth() + 1);
 
 		// This is the latest planned era in staking, not the active era
 		let current_era = Staking::current_era().unwrap();
-		assert!(current_era - Staking::history_depth() == 0);
+		// Last kept is 1:
+		assert!(current_era - Staking::history_depth() == 1);
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 0));
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 1));
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 2));
@@ -3148,10 +3149,10 @@ fn set_history_depth_works() {
 		Staking::set_history_depth(Origin::ROOT, 20).unwrap();
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::ROOT, 5).unwrap();
+		Staking::set_history_depth(Origin::ROOT, 4).unwrap();
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::ROOT, 4).unwrap();
+		Staking::set_history_depth(Origin::ROOT, 3).unwrap();
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
 		Staking::set_history_depth(Origin::ROOT, 8).unwrap();

@@ -681,10 +681,9 @@ impl Default for Forcing {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
-		/// Set the number of era to keep in history.
+		/// Number of era to keep in history.
 		///
-		/// Information is kept for eras in `[current_era - history_depth + 1; current_era]
-		// TODO TODO: maybe better to make it `[current_era - history_depth; current_era]`
+		/// Information is kept for eras in `[current_era - history_depth; current_era]
 		///
 		/// Must be more than the number of era delayed by session otherwise.
 		/// i.e. active era must always be in history.
@@ -1432,8 +1431,8 @@ decl_module! {
 			ensure_root(origin)?;
 			if let Some(current_era) = Self::current_era() {
 				HistoryDepth::mutate(|history_depth| {
-					let last_kept = (current_era + 1).checked_sub(*history_depth).unwrap_or(0);
-					let new_last_kept = (current_era + 1).checked_sub(new_history_depth).unwrap_or(0);
+					let last_kept = current_era.checked_sub(*history_depth).unwrap_or(0);
+					let new_last_kept = current_era.checked_sub(new_history_depth).unwrap_or(0);
 					for era_index in last_kept..new_last_kept {
 						Self::clear_era_information(era_index);
 					}
@@ -1723,7 +1722,7 @@ impl<T: Trait> Module<T> {
 		ErasStartSessionIndex::insert(&current_era, &start_session_index);
 
 		// Clean old era information.
-		if let Some(old_era) = current_era.checked_sub(Self::history_depth()) {
+		if let Some(old_era) = current_era.checked_sub(Self::history_depth() + 1) {
 			Self::clear_era_information(old_era);
 		}
 
