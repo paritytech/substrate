@@ -96,7 +96,6 @@ mod voting_rule;
 pub use finality_proof::FinalityProofProvider;
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
-pub use observer::run_grandpa_observer;
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
@@ -551,7 +550,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 	Client<B, E, Block, RA>: AuxStore,
 {
 	let GrandpaParams {
-		config,
+		mut config,
 		link,
 		network,
 		inherent_data_providers,
@@ -559,6 +558,12 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 		telemetry_on_connect,
 		voting_rule,
 	} = grandpa_params;
+
+	// NOTE: we have recently removed `run_grandpa_observer` from the public
+	// API, I felt it is easier to just ignore this field rather than removing
+	// it from the config temporarily. This should be removed after #5013 is
+	// fixed and we re-add the observer to the public API.
+	config.observer_enabled = false;
 
 	let LinkHalf {
 		client,
@@ -857,25 +862,6 @@ where
 	}
 }
 
-#[deprecated(since = "1.1.0", note = "Please switch to run_grandpa_voter.")]
-pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
-) -> sp_blockchain::Result<impl Future<Output=()> + Send + 'static> where
-	Block::Hash: Ord,
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: NetworkT<Block> + Send + Sync + Clone + 'static,
-	SC: SelectChain<Block> + 'static,
-	NumberFor<Block>: BlockNumberOps,
-	DigestFor<Block>: Encode,
-	RA: Send + Sync + 'static,
-	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
-	X: futures::Future<Output=()> + Clone + Send + Unpin + 'static,
-	Client<B, E, Block, RA>: AuxStore,
-{
-	run_grandpa_voter(grandpa_params)
-}
-
 /// When GRANDPA is not initialized we still need to register the finality
 /// tracker inherent provider which might be expected by the runtime for block
 /// authoring. Additionally, we register a gossip message validator that
@@ -900,7 +886,10 @@ pub fn setup_disabled_grandpa<B, E, Block: BlockT, RA, N>(
 	// We register the GRANDPA protocol so that we don't consider it an anomaly
 	// to receive GRANDPA messages on the network. We don't process the
 	// messages.
-	network.register_notifications_protocol(communication::GRANDPA_ENGINE_ID);
+	network.register_notifications_protocol(
+		communication::GRANDPA_ENGINE_ID,
+		From::from(communication::GRANDPA_PROTOCOL_NAME),
+	);
 
 	Ok(())
 }

@@ -154,7 +154,7 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	}
 }
 
-impl<B, Block> sc_network::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
+impl<B, Block> sc_network::config::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
 	where
 		Block: BlockT,
 		NumberFor<Block>: BlockNumberOps,

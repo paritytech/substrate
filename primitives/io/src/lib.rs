@@ -474,7 +474,10 @@ pub trait Crypto {
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
-	/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
+	///
+	/// - `sig` is passed in RSV format. V should be either `0/1` or `27/28`.
+	/// - `msg` is the blake2-256 hash of the message.
+	///
 	/// Returns `Err` if the signature is bad, otherwise the 64-byte pubkey
 	/// (doesn't include the 0x04 prefix).
 	fn secp256k1_ecdsa_recover(
@@ -493,8 +496,11 @@ pub trait Crypto {
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
-	/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
-	/// - returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
+	///
+	/// - `sig` is passed in RSV format. V should be either `0/1` or `27/28`.
+	/// - `msg` is the blake2-256 hash of the message.
+	///
+	/// Returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
 	fn secp256k1_ecdsa_recover_compressed(
 		sig: &[u8; 65],
 		msg: &[u8; 32],
@@ -768,30 +774,6 @@ pub trait Logging {
 				message,
 			)
 		}
-	}
-}
-
-/// Interface that provides functions for benchmarking the runtime.
-#[runtime_interface]
-pub trait Benchmarking {
-	/// Get the number of nanoseconds passed since the UNIX epoch
-	///
-	/// WARNING! This is a non-deterministic call. Do not use this within
-	/// consensus critical logic.
-	fn current_time() -> u128 {
-		std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
-			.expect("Unix time doesn't go backwards; qed")
-			.as_nanos()
-	}
-
-	/// Reset the trie database to the genesis state.
-	fn wipe_db(&mut self) {
-		self.wipe()
-	}
-
-	/// Commit pending storage changes to the trie database and clear the database cache.
-	fn commit_db(&mut self) {
-		self.commit()
 	}
 }
 

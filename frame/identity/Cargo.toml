@@ -12,6 +12,7 @@ enumflags2 = { version = "0.6.2" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 
@@ -27,6 +28,7 @@ std = [
 	"sp-std/std",
 	"sp-io/std",
 	"sp-runtime/std",
+	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
 ]

@@ -28,15 +28,22 @@
 //! to much configuring - just block full of randomized transactions.
 //! It is not supposed to measure runtime modules weight correctness
 
+use std::fmt;
 use node_testing::bench::{BenchDb, Profile};
+use node_primitives::Block;
 use sp_runtime::generic::BlockId;
 use criterion::{Criterion, criterion_group, criterion_main};
 use sc_client_api::backend::Backend;
 
 criterion_group!(
 	name = benches;
-	config = Criterion::default().sample_size(50).warm_up_time(std::time::Duration::from_secs(20));
+	config = Criterion::default().sample_size(20).warm_up_time(std::time::Duration::from_secs(20));
 	targets = bench_block_import
+);
+criterion_group!(
+	name = wasm_size;
+	config = Criterion::default().sample_size(10);
+	targets = bench_wasm_size_import
 );
 criterion_group!(
 	name = profile;
@@ -137,5 +144,62 @@ fn profile_block_import(c: &mut Criterion) {
 				criterion::BatchSize::PerIteration,
 			);
 		},
+	);
+}
+
+struct Setup {
+	db: BenchDb,
+	block: Block,
+}
+
+struct SetupIterator {
+	current: usize,
+	finish: usize,
+	multiplier: usize,
+}
+
+impl SetupIterator {
+	fn new(current: usize, finish: usize, multiplier: usize) -> Self {
+		SetupIterator { current, finish, multiplier }
+	}
+}
+
+impl Iterator for SetupIterator {
+	type Item = Setup;
+
+	fn next(&mut self) -> Option<Setup> {
+		if self.current >= self.finish { return None }
+
+		self.current += 1;
+
+		let size = self.current * self.multiplier;
+		let mut db = BenchDb::new(size);
+		let block = db.generate_block(size);
+		Some(Setup { db, block })
+	}
+}
+
+impl fmt::Debug for Setup {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Setup: {} tx/block", self.block.extrinsics.len())
+    }
+}
+
+fn bench_wasm_size_import(c: &mut Criterion) {
+	sc_cli::init_logger("");
+
+	c.bench_function_over_inputs("wasm_size_import",
+		move |bencher, setup| {
+			bencher.iter_batched(
+				|| {
+					setup.db.create_context(Profile::Wasm)
+				},
+				|mut context| {
+					context.import_block(setup.block.clone());
+				},
+				criterion::BatchSize::PerIteration,
+			);
+		},
+		SetupIterator::new(5, 15, 50),
 	);
 }
