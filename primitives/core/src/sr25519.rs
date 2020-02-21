@@ -601,7 +601,7 @@ impl CryptoType for Pair {
 #[cfg(test)]
 mod compatibility_test {
 	use super::*;
-	use crate::crypto::{DEV_PHRASE};
+	use crate::crypto::DEV_PHRASE;
 	use hex_literal::hex;
 
 	// NOTE: tests to ensure addresses that are created with the `0.1.x` version (pre-audit) are

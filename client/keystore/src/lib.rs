@@ -324,7 +324,7 @@ impl BareCryptoStore for Store {
 
 		Ok(ed25519_existing_keys
 			.chain(sr25519_existing_keys)
-			.collect::<HashSet<_>>())
+			.collect())
 	}
 
 	fn sign_with(

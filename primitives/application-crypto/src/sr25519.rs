@@ -19,16 +19,35 @@
 use crate::{RuntimePublic, KeyTypeId};
 
 use sp_std::vec::Vec;
+use sp_core::crypto::CryptoTypeId;
 
 pub use sp_core::sr25519::*;
 
+/// An identifier used to match public keys against sr25519 keys
+pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
+
 mod app {
+    use sp_core::crypto::{CryptoTypePublicPair, Public as TraitPublic};
 	use sp_core::testing::SR25519;
+    use crate::sr25519::CRYPTO_ID;
+
 	crate::app_crypto!(super, SR25519);
 
 	impl crate::traits::BoundToRuntimeAppPublic for Public {
 		type Public = Self;
 	}
+
+    impl From<Public> for CryptoTypePublicPair {
+        fn from(key: Public) -> Self {
+            return key.into()
+        }
+    }
+
+    impl From<&Public> for CryptoTypePublicPair {
+        fn from(key: &Public) -> Self {
+            return (CRYPTO_ID, key.to_raw_vec())
+        }
+    }
 }
 
 pub use app::{Public as AppPublic, Signature as AppSignature};

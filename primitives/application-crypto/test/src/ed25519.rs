@@ -18,7 +18,7 @@
 
 use sp_runtime::generic::BlockId;
 use sp_core::{
-	crypto::{Pair, Public},
+	crypto::Pair,
 	testing::{KeyStore, ED25519},
 };
 use substrate_test_runtime_client::{
@@ -26,7 +26,7 @@ use substrate_test_runtime_client::{
 	runtime::TestAPI,
 };
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::ed25519::{CRYPTO_ID, AppPair, AppPublic};
+use sp_application_crypto::ed25519::{AppPair, AppPublic};
 
 #[test]
 fn ed25519_works_in_runtime() {
