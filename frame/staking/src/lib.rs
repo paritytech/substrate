@@ -712,10 +712,7 @@ decl_storage! {
 			linked_map hasher(blake2_256) T::AccountId => ValidatorPrefs;
 
 		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
-		///
-		/// NOTE: is private so that we can ensure upgraded before all typical accesses.
-		/// Direct storage APIs can still bypass this protection.
-		Nominators get(fn nominators):
+		pub Nominators get(fn nominators):
 			linked_map hasher(blake2_256) T::AccountId => Option<Nominations<T::AccountId>>;
 
 		/// The current era index.
