@@ -108,7 +108,7 @@ pub trait SessionManager<ValidatorId, FullIdentification>: crate::SessionManager
 	/// If there was a validator set change, its returns the set of new validators along with their
 	/// full identifications.
 	fn new_session(new_index: SessionIndex) -> Option<Vec<(ValidatorId, FullIdentification)>>;
-	fn start_session(end_index: SessionIndex);
+	fn start_session(start_index: SessionIndex);
 	fn end_session(end_index: SessionIndex);
 }
 
@@ -147,8 +147,8 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 
 		new_validators
 	}
-	fn start_session(end_index: SessionIndex) {
-		<I as SessionManager<_, _>>::start_session(end_index)
+	fn start_session(start_index: SessionIndex) {
+		<I as SessionManager<_, _>>::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
 		<I as SessionManager<_, _>>::end_session(end_index)
