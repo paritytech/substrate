@@ -114,7 +114,7 @@ pub struct RunCmd {
 
 	/// Listen to all Websocket interfaces.
 	///
-	/// Same as `--ws-external`.
+	/// Same as `--ws-external` but doesn't warn you about it.
 	#[structopt(long = "unsafe-ws-external")]
 	pub unsafe_ws_external: bool,
 
