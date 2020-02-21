@@ -14,24 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Timestamp pallet benchmarking.
+pub use self::group::{NotifsHandlerProto, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut};
 
-use super::*;
-
-use sp_std::prelude::*;
-
-use frame_system::RawOrigin;
-use frame_benchmarking::benchmarks;
-use sp_runtime::traits::Dispatchable;
-
-const MAX_TIME: u32 = 100;
-
-benchmarks! {
-	_ {
-		let n in 1 .. MAX_TIME => ();
-	}
-
-	set {
-		let n in ...;
-	}: _(RawOrigin::None, n.into())
-}
+mod group;
+mod legacy;
+mod notif_in;
+mod notif_out;

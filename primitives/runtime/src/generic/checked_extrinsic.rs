@@ -20,7 +20,6 @@
 use crate::traits::{
 	self, Member, MaybeDisplay, SignedExtension, Dispatchable,
 };
-#[allow(deprecated)]
 use crate::traits::ValidateUnsigned;
 use crate::transaction_validity::TransactionValidity;
 
@@ -54,7 +53,6 @@ where
 		self.signed.as_ref().map(|x| &x.0)
 	}
 
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
 		&self,
 		info: Self::DispatchInfo,
@@ -69,7 +67,6 @@ where
 		}
 	}
 
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: Self::DispatchInfo,

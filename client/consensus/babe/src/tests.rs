@@ -206,13 +206,7 @@ type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
-	inner: BabeVerifier<
-		substrate_test_runtime_client::Backend,
-		substrate_test_runtime_client::Executor,
-		TestBlock,
-		substrate_test_runtime_client::runtime::RuntimeApi,
-		PeersFullClient,
-	>,
+	inner: BabeVerifier<TestBlock, PeersFullClient>,
 	mutator: Mutator,
 }
 
@@ -270,7 +264,6 @@ impl TestNetFactory for BabeTestNet {
 			config,
 			client.clone(),
 			client.clone(),
-			client.clone(),
 		).expect("can initialize block-import");
 
 		let block_import = PanickingBlockImport(block_import);
@@ -304,7 +297,6 @@ impl TestNetFactory for BabeTestNet {
 		TestVerifier {
 			inner: BabeVerifier {
 				client: client.clone(),
-				api: client,
 				inherent_data_providers: data.inherent_data_providers.clone(),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
