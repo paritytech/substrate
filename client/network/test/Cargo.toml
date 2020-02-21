@@ -6,6 +6,7 @@ license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 publish = false
+homepage = "https://substrate.dev"
 
 [dependencies]
 sc-network = { version = "0.8.0-dev", path = "../" }

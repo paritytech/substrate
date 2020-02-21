@@ -5,6 +5,7 @@ authors = ["Anonymous"]
 edition = "2018"
 license = "Unlicense"
 build = "build.rs"
+homepage = "https://substrate.dev"
 
 [[bin]]
 name = "node-template"

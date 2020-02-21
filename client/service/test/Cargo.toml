@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 publish = false
+homepage = "https://substrate.dev"
 
 [dependencies]
 tempfile = "3.1.0"

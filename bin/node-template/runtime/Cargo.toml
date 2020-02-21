@@ -4,6 +4,7 @@ version = "2.0.0-dev"
 authors = ["Anonymous"]
 edition = "2018"
 license = "Unlicense"
+homepage = "https://substrate.dev"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
