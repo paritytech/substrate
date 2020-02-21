@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[doc(hidden)]
-#[allow(deprecated)]
 pub use crate::sp_runtime::traits::ValidateUnsigned;
 #[doc(hidden)]
 pub use crate::sp_runtime::transaction_validity::{
@@ -66,7 +65,6 @@ macro_rules! impl_outer_validate_unsigned {
 			$( $module:ident )*
 		}
 	) => {
-		#[allow(deprecated)] // Allow ValidateUnsigned
 		impl $crate::unsigned::ValidateUnsigned for $runtime {
 			type Call = Call;
 
@@ -109,7 +107,6 @@ mod test_partial_and_full_call {
 	pub mod timestamp {
 		pub struct Module;
 
-		#[allow(deprecated)] // Allow ValidateUnsigned
 		impl super::super::ValidateUnsigned for Module {
 			type Call = Call;
 
