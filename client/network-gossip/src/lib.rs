@@ -59,7 +59,7 @@ pub use self::state_machine::TopicNotification;
 pub use self::validator::{DiscardAll, MessageIntent, Validator, ValidatorContext, ValidationResult};
 
 use futures::prelude::*;
-use sc_network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId, ReputationChange};
+use sc_network::{Event, ExHashT, NetworkService, PeerId, ReputationChange};
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{borrow::Cow, pin::Pin, sync::Arc};
 
@@ -97,7 +97,7 @@ pub trait Network<B: BlockT> {
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>);
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<NetworkService<B, S, H>> {
+impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 		Box::pin(NetworkService::event_stream(self))
 	}
