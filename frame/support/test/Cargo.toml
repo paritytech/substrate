@@ -14,7 +14,7 @@ frame-support = { version = "2.0.0", default-features = false, path = "../" }
 sp-inherents = { version = "2.0.0", default-features = false, path = "../../../primitives/inherents" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
-trybuild = "1.0.17"
+trybuild = "=1.0.17"
 pretty_assertions = "0.6.1"
 
 [features]
