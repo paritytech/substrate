@@ -40,7 +40,7 @@ impl FromStr for BlockNumber {
 		if block_number.chars().any(|d| !d.is_digit(10)) {
 			Err(format!(
 				"Invalid block number: {}, expected decimal formatted unsigned integer",
-				block_number
+				block_number,
 			))
 		} else {
 			Ok(Self(block_number.to_owned()))
