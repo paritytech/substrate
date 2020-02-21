@@ -49,5 +49,5 @@ pub enum Error {
 	/// Failed to sign using a specific public key
 	MissingSignature(usize),
 	/// Failed to sign using all public keys
-	SigningFailed
+	SigningFailed,
 }

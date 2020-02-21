@@ -42,7 +42,7 @@ pub enum BareCryptoStoreError {
 	/// Keystore unavailable
 	Unavailable,
 	/// Programming errors
-	Error(String)
+	Other(String)
 }
 
 /// Something that generates, stores and provides access to keys.

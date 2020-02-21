@@ -68,8 +68,8 @@ impl From<Error> for TraitError {
 				TraitError::ValidationError(error.to_string())
 			},
 			Error::Unavailable => TraitError::Unavailable,
-			Error::Io(e) => TraitError::Error(e.to_string()),
-			Error::Json(e) => TraitError::Error(e.to_string()),
+			Error::Io(e) => TraitError::Other(e.to_string()),
+			Error::Json(e) => TraitError::Other(e.to_string()),
 		}
 	}
 }
@@ -340,7 +340,7 @@ impl BareCryptoStore for Store {
 					.key_pair_by_type::<ed25519::Pair>(&pub_key, id)
 					.map(Into::into)
 					.map_err(|e| TraitError::from(e))?;
-				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
+				Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec())
 			}
 			sr25519::CRYPTO_ID => {
 				let pub_key = sr25519::Public::from_slice(key.1.as_slice());
@@ -348,7 +348,7 @@ impl BareCryptoStore for Store {
 					.key_pair_by_type::<sr25519::Pair>(&pub_key, id)
 					.map(Into::into)
 					.map_err(|e| TraitError::from(e))?;
-				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
+				Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec())
 			}
 			_ => Err(TraitError::KeyNotSupported)
 		}
