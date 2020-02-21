@@ -24,7 +24,7 @@ fn build_spec_works() {
 
 	let output = Command::new(cargo_bin("substrate"))
 		.args(&["build-spec", "--dev", "-d"])
-		.arg(base_path.path().as_os_str())
+		.arg(base_path.path())
 		.output()
 		.unwrap();
 	assert!(output.status.success());
