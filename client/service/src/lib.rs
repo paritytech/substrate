@@ -534,6 +534,30 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
 	}
 }
 
+#[cfg(not(target_os = "unknown"))]
+// Wrapper for HTTP and WS servers that makes sure they are properly shut down.
+mod waiting {
+	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
+	impl Drop for HttpServer {
+		fn drop(&mut self) {
+			if let Some(server) = self.0.take() {
+				server.close_handle().close();
+				server.wait();
+			}
+		}
+	}
+
+	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
+	impl Drop for WsServer {
+		fn drop(&mut self) {
+			if let Some(server) = self.0.take() {
+				server.close_handle().close();
+				let _ = server.wait();
+			}
+		}
+	}
+}
+
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
@@ -562,7 +586,7 @@ fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metad
 		maybe_start_server(
 			config.rpc_http,
 			|address| sc_rpc_server::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
-		)?,
+		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
 			config.rpc_ws,
 			|address| sc_rpc_server::start_ws(
@@ -571,7 +595,7 @@ fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metad
 				config.rpc_cors.as_ref(),
 				gen_handler(),
 			),
-		)?.map(Mutex::new),
+		)?.map(|s| waiting::WsServer(Some(s))).map(Mutex::new),
 	)))
 }
 
