@@ -8349,9 +8349,9 @@ checksum = "e604eb7b43c06650e854be16a2a03155743d3752dd1c943f6829e26b7a36e382"
 
 [[package]]
 name = "trybuild"
-version = "1.0.21"
+version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f5b3f750c701725331ac78e389b5d143b7d25f6b6ffffd0d419759a9063ac5f"
+checksum = "e6851bf8351876984fbab8a2391de6378947b898410d8714edd12164d2137127"
 dependencies = [
  "glob 0.3.0",
  "lazy_static",
