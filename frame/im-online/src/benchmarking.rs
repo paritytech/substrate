@@ -70,7 +70,7 @@ where
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// unused
-			(BenchmarkParameter::X, 1, 10),
+			(BenchmarkParameter::x, 1, 10),
 		]
 	}
 
@@ -78,7 +78,7 @@ where
 		-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
 	{
         let _x : u32 = components.iter()
-            .find(|param| param.0 == BenchmarkParameter::X)
+            .find(|param| param.0 == BenchmarkParameter::x)
             .expect("Must contain param S")
 			.1.try_into().unwrap();
 

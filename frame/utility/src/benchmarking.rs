@@ -25,6 +25,7 @@ use frame_benchmarking::{
     BenchmarkResults, BenchmarkParameter, benchmarking, Benchmarking,
     BenchmarkingSetup,
 };
+use frame_benchmarking::benchmarks;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Dispatchable, Hash, BlakeTwo256};
 use core::convert::TryInto;
@@ -41,230 +42,74 @@ fn nop_call<T: Trait>() -> <T as Trait>::Call where <T as Trait>::Call: core::co
     crate::Call::<T>::batch(vec![]).into()
 }
 
-// Benchmark `batch` util extrinsic.
-struct Batch;
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for Batch where <T as Trait>::Call : core::convert::From<crate::Call<T>> + Encode {
-    fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-        vec![
-            // number of elements in the vector to use
-            (BenchmarkParameter::N, 1, 64),
-        ]
+benchmarks! {
+    _ {
+        let n in 0 .. 64 => { n };
+        let i in 0 .. 64 => { i };
+        let a in 0 .. 64 => { a };
+        let s in 0 .. 64 => { s };
+        let t in 0 .. 64 => { t };
     }
 
-    fn instance(
-        &self,
-        components: &[(BenchmarkParameter, u32)],
-    ) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str> {
-        let n: usize  = components.iter()
-            .find(|param| param.0 == BenchmarkParameter::N)
-            .expect("Must contain param N")
-            .1.try_into().unwrap();
+    batch {
+        let n in ...;
+        let i in _ .. _ => ();
+        let a in _ .. _ => ();
+        let s in _ .. _ => ();
+        let t in _ .. _ => ();
+
+
         let calls: Vec<<T as Trait>::Call> = core::iter::repeat_with(|| {
-                nop_call::<T>()
-            } )
-            .take(n)
-            .collect::<Vec<_>>();
+            nop_call::<T>()
+        })
+        .take(n as usize)
+        .collect::<Vec<_>>();
 
-        Ok((crate::Call::<T>::batch(calls), RawOrigin::Signed(account::<T>("Bud Spencer", 1961)) ))
-    }
-}
+    }: _(RawOrigin::Signed(account::<T>("Bud Spencer", 1961)), calls)
 
-// Benchmark `as_sub` util extrinsic.
-struct AsSub;
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for AsSub where <T as Trait>::Call : core::convert::From<crate::Call<T>> + Encode {
-    fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-        vec![
-            // number of elements in the vector to use
-            (BenchmarkParameter::A, 1, 32),
-			(BenchmarkParameter::I, 1, 32),
-        ]
-    }
 
-    fn instance(
-        &self,
-        components: &[(BenchmarkParameter, u32)],
-    ) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str> {
-        let _a : usize = components.iter()
-            .find(|param| param.0 == BenchmarkParameter::A)
-            .expect("Must contain param A")
-			.1.try_into().expect("u32 to usize must succeed");
-		let index = components.iter()
-            .find(|param| param.0 == BenchmarkParameter::I)
-            .expect("Must contain param I")
-            .1.try_into().expect("u32 to u16 must succeed");
+    as_sub {
+        let n in _ .. _ => ();
+        let i in ...;
+        let a in ...;
+        let s in _ .. _ => ();
+        let t in _ .. _ => ();
+
+        let idx : u16 = i.try_into().unwrap();
+
         let call: Box<<T as Trait>::Call> = Box::new(
             nop_call::<T>()
         );
-	Ok((crate::Call::<T>::as_sub(index, call), RawOrigin::Signed(account::<T>("Jackie Chan", 111)) ))
-    }
-}
+    } : _( RawOrigin::Signed(account::<T>("Jackie Chan", 111)), idx, call)
 
-// Benchmark `as_sub` util extrinsic.
-struct ApproveAsMulti;
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for ApproveAsMulti
-    where <T as Trait>::Call : core::convert::From<crate::Call<T>> + Encode {
 
-    fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-        vec![
-            // multisig number of signatures
-            (BenchmarkParameter::S, 0, 64),
-            // multisig number of signatures threshold, must be at least one
-            (BenchmarkParameter::T, 1, 64),
-            // TODO height
-        ]
-    }
+    approve_as_multi {
+        let n in _ .. _ => ();
+        let i in _ .. _ => ();
+        let a in _ .. _ => ();
+        let s in ...;
+        let t in ...;
 
-    fn instance(
-        &self,
-        components: &[(BenchmarkParameter, u32)],
-    ) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str> {
-
-        let signatories_count : u32 = components.iter()
-            .find(|param| param.0 == BenchmarkParameter::S)
-            .expect("Must contain param S")
-            .1.try_into().unwrap();
-        let threshold : u16 = components.iter()
-            .find(|param| param.0 == BenchmarkParameter::T)
-            .expect("Must contain param T")
-            .1.try_into().unwrap();
-
+        let signatories_count : u32 = s.try_into().unwrap();
         let other_signatories = (1u32..=signatories_count).into_iter().map(|idx| account::<T>("Tester", idx))
             .take(signatories_count.try_into().unwrap())
             .collect::<Vec<_>>();
 
+        let threshold : u16 = t.try_into().unwrap();
         let timepoint : Timepoint<T::BlockNumber> = Utility::<T>::timepoint();
 
-
-        // TODO does this have to be made known before approve_as_multi can be used?
         let call : <T as Trait>::Call = nop_call::<T>();
-        //let call_hash = <<T as frame_system::Trait>::Hashing>::hash_of(&call);
+
         let call_hash = BlakeTwo256::hash_of(&call);
         let call_hash : [u8;32] = call_hash.as_ref().try_into().expect("Signature length mismatch");
 
         call.dispatch(RawOrigin::Signed(account::<T>("Peter Pan", 1981)).into())?;
+    } : _(
+        RawOrigin::Signed(account::<T>("Alfred J. Kwak", 9999)),
+        threshold,
+        other_signatories,
+        Some(timepoint),
+        call_hash
+    )
 
-        Ok((
-            crate::Call::<T>::approve_as_multi(
-                threshold,
-                other_signatories,
-                Some(timepoint),
-                call_hash,
-            ),
-            RawOrigin::Signed(account::<T>("Alfred J. Kwak", 9999)),
-        ))
-    }
-}
-
-// The list of available benchmarks for this pallet.
-enum SelectedBenchmark {
-    Batch,
-    AsSub,
-    ApproveAsMulti,
-}
-
-// Allow us to select a benchmark from the list of available benchmarks.
-impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark  where <T as Trait>::Call : core::convert::From<crate::Call<T>> + Encode{
-    fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-        match self {
-            Self::Batch => {
-                <Batch as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(
-                    &Batch,
-                )
-            }
-            Self::AsSub => {
-                <AsSub as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(
-                    &AsSub,
-                )
-            }
-            Self::ApproveAsMulti => {
-                <ApproveAsMulti as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(
-                    &ApproveAsMulti,
-                )
-            }
-        }
-    }
-
-    fn instance(
-        &self,
-        components: &[(BenchmarkParameter, u32)],
-    ) -> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str> {
-        match self {
-            Self::Batch => {
-                <Batch as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(
-                    &Batch, components,
-                )
-            }
-            Self::AsSub => {
-                <AsSub as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(
-                    &AsSub, components,
-                )
-            }
-            Self::ApproveAsMulti => {
-                <ApproveAsMulti as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(
-                    &ApproveAsMulti, components,
-                )
-            }
-        }
-    }
-}
-
-impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> where <T as Trait>::Call : core::convert::From<crate::Call<T>> {
-    fn run_benchmark(
-        extrinsic: Vec<u8>,
-        steps: u32,
-        repeat: u32,
-    ) -> Result<Vec<BenchmarkResults>, &'static str> {
-        // Map the input to the selected benchmark.
-        let selected_benchmark = match extrinsic.as_slice() {
-            b"batch" => SelectedBenchmark::Batch,
-            b"as_sub" => SelectedBenchmark::AsSub,
-            b"approve_as_multi" => SelectedBenchmark::ApproveAsMulti,
-            _ => return Err("Could not find extrinsic."),
-        };
-
-		// Warm up the DB
-		benchmarking::commit_db();
-		benchmarking::wipe_db();
-
-
-        let components = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
-
-        sp_io::misc::print_utf8("dafuq".as_bytes());
-
-		let mut results: Vec<BenchmarkResults> = Vec::new();
-		// Select the component we will be benchmarking. Each component will be benchmarked.
-		for (name, low, high) in components.iter() {
-			// Create up to `STEPS` steps for that component between high and low.
-			let step_size = ((high - low) / steps).max(1);
-			let num_of_steps = (high - low) / step_size;
-			for s in 0..num_of_steps {
-				// This is the value we will be testing for component `name`
-				let component_value = low + step_size * s;
-
-				// Select the mid value for all the other components.
-				let c: Vec<(BenchmarkParameter, u32)> = components.iter()
-					.map(|(n, l, h)|
-						(*n, if n == name { component_value } else { (h - l) / 2 + l })
-					).collect();
-
-				// Run the benchmark `repeat` times.
-				for _ in 0..repeat {
-					// Set up the externalities environment for the setup we want to benchmark.
-					let (call, caller) = <SelectedBenchmark as BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
-					// Commit the externalities to the database, flushing the DB cache.
-					// This will enable worst case scenario for reading from the database.
-					benchmarking::commit_db();
-					// Run the benchmark.
-					let start = benchmarking::current_time();
-					call.dispatch(caller.into())?;
-					let finish = benchmarking::current_time();
-					let elapsed = finish - start;
-					results.push((c.clone(), elapsed));
-					// Wipe the DB back to the genesis state.
-					benchmarking::wipe_db();
-				}
-			}
-		}
-		return Ok(results);
-	}
 }

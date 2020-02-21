@@ -43,7 +43,7 @@ impl<T: Trait> BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// uncles
-			(BenchmarkParameter::U, 1, MAX_UNCLES),
+			(BenchmarkParameter::u, 1, MAX_UNCLES),
 		]
 	}
 
