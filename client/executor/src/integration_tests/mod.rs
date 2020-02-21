@@ -180,7 +180,7 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
 		],
-		children: map![],
+		children_default: map![],
 	});
 	assert_eq!(ext, expected);
 }
@@ -214,7 +214,7 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
 		],
-		children: map![],
+		children_default: map![],
 	});
 	assert_eq!(expected, ext);
 }

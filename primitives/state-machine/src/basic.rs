@@ -64,7 +64,7 @@ impl BasicExternalities {
 	) -> R {
 		let mut ext = Self { inner: Storage {
 			top: std::mem::replace(&mut storage.top, Default::default()),
-			children: std::mem::replace(&mut storage.children, Default::default()),
+			children_default: std::mem::replace(&mut storage.children_default, Default::default()),
 		}};
 
 		let r = ext.execute_with(f);
@@ -85,7 +85,7 @@ impl BasicExternalities {
 impl PartialEq for BasicExternalities {
 	fn eq(&self, other: &BasicExternalities) -> bool {
 		self.inner.top.eq(&other.inner.top)
-			&& self.inner.children.eq(&other.inner.children)
+			&& self.inner.children_default.eq(&other.inner.children_default)
 	}
 }
 
@@ -105,7 +105,7 @@ impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 	fn from(hashmap: BTreeMap<StorageKey, StorageValue>) -> Self {
 		BasicExternalities { inner: Storage {
 			top: hashmap,
-			children: Default::default(),
+			children_default: Default::default(),
 		}}
 	}
 }
@@ -132,7 +132,7 @@ impl Externalities for BasicExternalities {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
-		self.inner.children.get(child_info.storage_key())
+		self.inner.children_default.get(child_info.storage_key())
 			.and_then(|child| child.data.get(key)).cloned()
 	}
 
@@ -171,7 +171,7 @@ impl Externalities for BasicExternalities {
 		key: &[u8],
 	) -> Option<StorageKey> {
 		let range = (Bound::Excluded(key), Bound::Unbounded);
-		self.inner.children.get(child_info.storage_key())
+		self.inner.children_default.get(child_info.storage_key())
 			.and_then(|child| child.data.range::<[u8], _>(range).next().map(|(k, _)| k).cloned())
 	}
 
@@ -193,7 +193,7 @@ impl Externalities for BasicExternalities {
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
-		let child_map = self.inner.children.entry(child_info.storage_key().to_vec())
+		let child_map = self.inner.children_default.entry(child_info.storage_key().to_vec())
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
 				child_info: child_info.to_owned(),
@@ -209,7 +209,7 @@ impl Externalities for BasicExternalities {
 		&mut self,
 		child_info: &ChildInfo,
 	) {
-		self.inner.children.remove(child_info.storage_key());
+		self.inner.children_default.remove(child_info.storage_key());
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -237,7 +237,7 @@ impl Externalities for BasicExternalities {
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) {
-		if let Some(child) = self.inner.children.get_mut(child_info.storage_key()) {
+		if let Some(child) = self.inner.children_default.get_mut(child_info.storage_key()) {
 			let to_remove = child.data.range::<[u8], _>((Bound::Included(prefix), Bound::Unbounded))
 				.map(|(k, _)| k)
 				.take_while(|k| k.starts_with(prefix))
@@ -254,14 +254,14 @@ impl Externalities for BasicExternalities {
 
 	fn storage_root(&mut self) -> Vec<u8> {
 		let mut top = self.inner.top.clone();
-		let keys: Vec<_> = self.inner.children.iter().map(|(_k, v)| {
+		let prefixed_keys: Vec<_> = self.inner.children_default.iter().map(|(_k, v)| {
 			(v.child_info.prefixed_storage_key(), v.child_info.clone())
 		}).collect();
 		// Single child trie implementation currently allows using the same child
 		// empty root for all child trie. Using null storage key until multiple
 		// type of child trie support.
 		let empty_hash = empty_child_trie_root::<Layout<Blake2Hasher>>();
-		for (prefixed_storage_key, child_info) in keys {
+		for (prefixed_storage_key, child_info) in prefixed_keys {
 			let child_root = self.child_storage_root(&child_info);
 			if &empty_hash[..] == &child_root[..] {
 				top.remove(prefixed_storage_key.as_slice());
@@ -277,7 +277,7 @@ impl Externalities for BasicExternalities {
 		&mut self,
 		child_info: &ChildInfo,
 	) -> Vec<u8> {
-		if let Some(child) = self.inner.children.get(child_info.storage_key()) {
+		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.clone().into_iter().map(|(k, v)| (k, Some(v)));
 
 			InMemoryBackend::<Blake2Hasher>::default()
@@ -334,7 +334,7 @@ mod tests {
 		let child_info = &child_info;
 		let mut ext = BasicExternalities::new(Storage {
 			top: Default::default(),
-			children: map![
+			children_default: map![
 				child_info.storage_key().to_vec() => StorageChild {
 					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
 					child_info: child_info.to_owned(),
@@ -359,6 +359,6 @@ mod tests {
 		// Make sure no values are set by default in `BasicExternalities`.
 		let storage = BasicExternalities::new(Default::default()).into_storages();
 		assert!(storage.top.is_empty());
-		assert!(storage.children.is_empty());
+		assert!(storage.children_default.is_empty());
 	}
 }

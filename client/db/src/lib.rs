@@ -581,7 +581,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 			return Err(sp_blockchain::Error::GenesisInvalid.into());
 		}
 
-		let child_delta = storage.children.into_iter().map(|(_storage_key, child_content)|(
+		let child_delta = storage.children_default.into_iter().map(|(_storage_key, child_content)|(
 			child_content.child_info,
 			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
 		));
@@ -1782,7 +1782,7 @@ pub(crate) mod tests {
 
 			op.reset_storage(Storage {
 				top: storage.iter().cloned().collect(),
-				children: Default::default(),
+				children_default: Default::default(),
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -1867,7 +1867,7 @@ pub(crate) mod tests {
 
 			op.reset_storage(Storage {
 				top: storage.iter().cloned().collect(),
-				children: Default::default(),
+				children_default: Default::default(),
 			}).unwrap();
 
 			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");

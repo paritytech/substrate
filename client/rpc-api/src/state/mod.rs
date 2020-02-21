@@ -73,8 +73,8 @@ pub trait StateApi<Hash> {
 	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<u64>>;
 
 	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
-	#[rpc(name = "state_getChildKeys")]
-	fn child_storage_keys(
+	#[rpc(name = "state_getDefaultChildKeys")]
+	fn default_child_storage_keys(
 		&self,
 		child_storage_key: StorageKey,
 		prefix: StorageKey,
@@ -82,8 +82,8 @@ pub trait StateApi<Hash> {
 	) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a child storage entry at a specific block's state.
-	#[rpc(name = "state_getChildStorage")]
-	fn child_storage(
+	#[rpc(name = "state_getDefaultChildStorage")]
+	fn default_child_storage(
 		&self,
 		child_storage_key: StorageKey,
 		key: StorageKey,
@@ -91,8 +91,8 @@ pub trait StateApi<Hash> {
 	) -> FutureResult<Option<StorageData>>;
 
 	/// Returns the hash of a child storage entry at a block's state.
-	#[rpc(name = "state_getChildStorageHash")]
-	fn child_storage_hash(
+	#[rpc(name = "state_getDefaultChildStorageHash")]
+	fn default_child_storage_hash(
 		&self,
 		child_storage_key: StorageKey,
 		key: StorageKey,
@@ -100,8 +100,8 @@ pub trait StateApi<Hash> {
 	) -> FutureResult<Option<Hash>>;
 
 	/// Returns the size of a child storage entry at a block's state.
-	#[rpc(name = "state_getChildStorageSize")]
-	fn child_storage_size(
+	#[rpc(name = "state_getDefaultChildStorageSize")]
+	fn default_child_storage_size(
 		&self,
 		child_storage_key: StorageKey,
 		key: StorageKey,

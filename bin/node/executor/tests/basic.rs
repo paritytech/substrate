@@ -173,7 +173,7 @@ fn panic_execution_with_foreign_code_gives_error() {
 				vec![0u8; 32]
 			}
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -209,7 +209,7 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 				vec![0u8; 32]
 			}
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -243,7 +243,7 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 			},
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -285,7 +285,7 @@ fn successful_execution_with_foreign_code_gives_ok() {
 			},
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -706,7 +706,7 @@ fn panic_execution_gives_error() {
 			},
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -740,7 +740,7 @@ fn successful_execution_gives_ok() {
 			},
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(

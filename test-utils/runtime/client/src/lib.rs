@@ -37,7 +37,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Numb
 use sc_client::{
 	light::fetcher::{
 		Fetcher,
-		RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
+		RemoteHeaderRequest, RemoteReadRequest, RemoteReadDefaultChildRequest,
 		RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest,
 	},
 };
@@ -123,7 +123,7 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 
 		let mut storage = self.genesis_config().genesis_map();
 
-		let child_roots = storage.children.iter().map(|(_sk, child_content)| {
+		let child_roots = storage.children_default.iter().map(|(_sk, child_content)| {
 			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 				child_content.data.clone().into_iter().collect()
 			);
@@ -203,7 +203,7 @@ pub trait TestClientBuilderExt<B>: Sized {
 		let key = key.into();
 		assert!(!storage_key.is_empty());
 		assert!(!key.is_empty());
-		self.genesis_init_mut().extra_storage.children
+		self.genesis_init_mut().extra_storage.children_default
 			.entry(storage_key)
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
@@ -311,7 +311,10 @@ impl Fetcher<substrate_test_runtime::Block> for LightFetcher {
 		unimplemented!()
 	}
 
-	fn remote_read_child(&self, _: RemoteReadChildRequest<substrate_test_runtime::Header>) -> Self::RemoteReadResult {
+	fn remote_read_child(
+		&self,
+		_: RemoteReadDefaultChildRequest<substrate_test_runtime::Header>,
+	) -> Self::RemoteReadResult {
 		unimplemented!()
 	}
 

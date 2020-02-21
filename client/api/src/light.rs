@@ -75,7 +75,7 @@ pub struct RemoteReadRequest<Header: HeaderT> {
 
 /// Remote storage read child request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RemoteReadChildRequest<Header: HeaderT> {
+pub struct RemoteReadDefaultChildRequest<Header: HeaderT> {
 	/// Read at state of given block.
 	pub block: Header::Hash,
 	/// Header of block at which read is performed.
@@ -175,7 +175,7 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Fetch remote storage child value.
 	fn remote_read_child(
 		&self,
-		request: RemoteReadChildRequest<Block::Header>
+		request: RemoteReadDefaultChildRequest<Block::Header>
 	) -> Self::RemoteReadResult;
 	/// Fetch remote call result.
 	fn remote_call(&self, request: RemoteCallRequest<Block::Header>) -> Self::RemoteCallResult;
@@ -205,9 +205,9 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
 	/// Check remote storage read proof.
-	fn check_read_child_proof(
+	fn check_read_default_child_proof(
 		&self,
-		request: &RemoteReadChildRequest<Block::Header>,
+		request: &RemoteReadDefaultChildRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
 	/// Check remote method execution proof.
@@ -330,7 +330,7 @@ pub mod tests {
 			not_implemented_in_tests()
 		}
 
-		fn remote_read_child(&self, _request: RemoteReadChildRequest<Header>) -> Self::RemoteReadResult {
+		fn remote_read_child(&self, _request: RemoteReadDefaultChildRequest<Header>) -> Self::RemoteReadResult {
 			not_implemented_in_tests()
 		}
 

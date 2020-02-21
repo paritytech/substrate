@@ -77,7 +77,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		};
 
 		state.reopen()?;
-		let child_delta = genesis.children.into_iter().map(|(_storage_key, child_content)| (
+		let child_delta = genesis.children_default.into_iter().map(|(_storage_key, child_content)| (
 			child_content.child_info,
 			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
 		));

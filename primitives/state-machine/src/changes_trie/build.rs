@@ -107,8 +107,8 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 
 	let mut children_prefixed_keys = BTreeSet::<StorageKey>::new();
 	let mut children_result = BTreeMap::new();
-	for (_storage_key, (_map, child_info)) in changes.prospective.children.iter()
-		.chain(changes.committed.children.iter()) {
+	for (_storage_key, (_map, child_info)) in changes.prospective.children_default.iter()
+		.chain(changes.committed.children_default.iter()) {
 		children_prefixed_keys.insert(child_info.prefixed_storage_key());
 	}
 	for storage_key in children_prefixed_keys {
@@ -140,8 +140,8 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	let (committed, prospective, child_info) = if let Some(sk) = storage_key.as_ref() {
 		let child_info = changes.default_child_info(sk).cloned();
 		(
-			changes.committed.children.get(sk).map(|c| &c.0),
-			changes.prospective.children.get(sk).map(|c| &c.0),
+			changes.committed.children_default.get(sk).map(|c| &c.0),
+			changes.prospective.children_default.get(sk).map(|c| &c.0),
 			child_info,
 		)
 	} else {
@@ -429,7 +429,7 @@ mod test {
 					extrinsics: Some(vec![0, 1].into_iter().collect())
 				}),
 			].into_iter().collect(),
-				children: vec![
+				children_default: vec![
 					(child_trie_key1.clone(), (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![200]),
@@ -458,7 +458,7 @@ mod test {
 					extrinsics: Some(vec![1].into_iter().collect())
 				}),
 			].into_iter().collect(),
-				children: vec![
+				children_default: vec![
 					(child_trie_key1, (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![202]),

@@ -45,7 +45,7 @@ use sc_client::{
 	BlockchainEvents, Client, CallExecutor,
 	light::{
 		blockchain::{future_header, RemoteBlockchain},
-		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest},
+		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadDefaultChildRequest},
 	},
 };
 use sp_core::{
@@ -246,7 +246,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		)
 	}
 
-	fn child_storage_keys(
+	fn default_child_storage_keys(
 		&self,
 		_block: Option<Block::Hash>,
 		_storage_key: StorageKey,
@@ -255,7 +255,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
-	fn child_storage(
+	fn default_child_storage(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
@@ -265,7 +265,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		let fetcher = self.fetcher.clone();
 		let child_storage = resolve_header(&*self.remote_blockchain, &*self.fetcher, block)
 			.then(move |result| match result {
-				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadChildRequest {
+				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadDefaultChildRequest {
 					block,
 					header,
 					storage_key: storage_key.0,
@@ -285,14 +285,14 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		Box::new(child_storage.boxed().compat())
 	}
 
-	fn child_storage_hash(
+	fn default_child_storage_hash(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(self
-			.child_storage(block, storage_key, key)
+			.default_child_storage(block, storage_key, key)
 			.and_then(|maybe_storage|
 				result(Ok(maybe_storage.map(|storage| HasherFor::<Block>::hash(&storage.0))))
 			)

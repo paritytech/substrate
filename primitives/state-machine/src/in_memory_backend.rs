@@ -122,7 +122,7 @@ impl<H: Hasher> From<HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValu
 impl<H: Hasher> From<Storage> for InMemory<H> {
 	fn from(inners: Storage) -> Self {
 		let mut inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>
-			= inners.children.into_iter().map(|(_k, c)| (Some(c.child_info), c.data)).collect();
+			= inners.children_default.into_iter().map(|(_k, c)| (Some(c.child_info), c.data)).collect();
 		inner.insert(None, inners.top);
 		InMemory {
 			inner,

@@ -20,7 +20,7 @@ message Request {
 		RemoteCallRequest remote_call_request = 2;
 		RemoteReadRequest remote_read_request = 3;
 		RemoteHeaderRequest remote_header_request = 4;
-		RemoteReadChildRequest remote_read_child_request = 5;
+		RemoteReadDefaultChildRequest remote_read_default_child_request = 5;
 		RemoteChangesRequest remote_changes_request = 6;
 	}
 }
@@ -68,13 +68,13 @@ message RemoteReadResponse {
 }
 
 // Remote storage read child request.
-message RemoteReadChildRequest {
+message RemoteReadDefaultChildRequest {
 	// Block at which to perform call.
 	bytes block = 2;
 	// Child Storage key.
 	bytes storage_key = 3;
 	// Storage keys.
-	repeated bytes keys = 4;
+	repeated bytes keys = 6;
 }
 
 // Remote header request.

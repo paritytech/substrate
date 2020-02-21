@@ -305,7 +305,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 				.map_err(client_err)))
 	}
 
-	fn child_storage_keys(
+	fn default_child_storage_keys(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
@@ -324,7 +324,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 				.map_err(client_err)))
 	}
 
-	fn child_storage(
+	fn default_child_storage(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
@@ -343,7 +343,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 				.map_err(client_err)))
 	}
 
-	fn child_storage_hash(
+	fn default_child_storage_hash(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,

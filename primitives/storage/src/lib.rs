@@ -66,7 +66,7 @@ pub struct Storage {
 	/// The key does not including prefix, for the `default`
 	/// trie kind, so this is exclusively for the `ChildType::ParentKeyId`
 	/// tries.
-	pub children: std::collections::HashMap<Vec<u8>, StorageChild>,
+	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
 }
 
 /// Storage change set
@@ -134,7 +134,7 @@ pub mod well_known_keys {
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub enum ChildInfo {
 	/// This is the one used by default.
-	ParentKeyId(ChildTrie),
+	ParentKeyId(ChildTrieParentKeyId),
 }
 
 impl ChildInfo {
@@ -143,12 +143,12 @@ impl ChildInfo {
 	/// storage key.
 	pub fn new_default(storage_key: &[u8]) -> Self {
 		let data = storage_key.to_vec();
-		ChildInfo::ParentKeyId(ChildTrie { data })
+		ChildInfo::ParentKeyId(ChildTrieParentKeyId { data })
 	}
 
 	/// Same as `new_default` but with `Vec<u8>` as input.
 	pub fn new_default_from_vec(storage_key: Vec<u8>) -> Self {
-		ChildInfo::ParentKeyId(ChildTrie {
+		ChildInfo::ParentKeyId(ChildTrieParentKeyId {
 			data: storage_key,
 		})
 	}
@@ -178,7 +178,7 @@ impl ChildInfo {
 	/// This can be use as input for `resolve_child_info`.
 	pub fn info(&self) -> (&[u8], u32) {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrie {
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
 				data,
 			}) => (data, ChildType::ParentKeyId as u32),
 		}
@@ -187,7 +187,7 @@ impl ChildInfo {
 	/// Owned variant of `info`.
 	pub fn into_info(self) -> (Vec<u8>, u32) {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrie {
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
 				data,
 			}) => (data, ChildType::ParentKeyId as u32),
 		}
@@ -207,7 +207,7 @@ impl ChildInfo {
 	/// child trie.
 	pub fn storage_key(&self) -> &[u8] {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrie {
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
 				data,
 			}) => &data[..],
 		}
@@ -217,7 +217,7 @@ impl ChildInfo {
 	/// this trie.
 	pub fn prefixed_storage_key(&self) -> Vec<u8> {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrie {
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
 				data,
 			}) => ChildType::ParentKeyId.new_prefixed_key(data.as_slice()),
 		}
@@ -227,7 +227,7 @@ impl ChildInfo {
 	/// this trie.
 	pub fn into_prefixed_storage_key(self) -> Vec<u8> {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrie {
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
 				mut data,
 			}) => {
 				ChildType::ParentKeyId.do_prefix_key(&mut data);
@@ -303,12 +303,12 @@ impl ChildType {
 /// that will be use only once.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
-pub struct ChildTrie {
+pub struct ChildTrieParentKeyId {
 	/// Data is the full prefixed storage key.
 	data: Vec<u8>,
 }
 
-impl ChildTrie {
+impl ChildTrieParentKeyId {
 	/// Try to update with another instance, return false if both instance
 	/// are not compatible.
 	fn try_update(&mut self, other: &ChildInfo) -> bool {

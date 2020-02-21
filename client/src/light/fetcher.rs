@@ -39,7 +39,7 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use crate::cht;
 pub use sc_client_api::{
 	light::{
-		RemoteCallRequest, RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
+		RemoteCallRequest, RemoteHeaderRequest, RemoteReadRequest, RemoteReadDefaultChildRequest,
 		RemoteChangesRequest, ChangesProof, RemoteBodyRequest, Fetcher, FetchChecker,
 		Storage as BlockchainStorage,
 	},
@@ -236,9 +236,9 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		).map_err(Into::into)
 	}
 
-	fn check_read_child_proof(
+	fn check_read_default_child_proof(
 		&self,
-		request: &RemoteReadChildRequest<Block::Header>,
+		request: &RemoteReadDefaultChildRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
 		let child_trie = ChildInfo::new_default(&request.storage_key);
@@ -502,8 +502,8 @@ pub mod tests {
 			remote_read_proof,
 			result,
 		) = prepare_for_read_child_proof_check();
-		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_child_proof(
-			&RemoteReadChildRequest::<Header> {
+		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_default_child_proof(
+			&RemoteReadDefaultChildRequest::<Header> {
 				block: remote_block_header.hash(),
 				header: remote_block_header,
 				storage_key: b"child1".to_vec(),

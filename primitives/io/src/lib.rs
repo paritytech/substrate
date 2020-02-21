@@ -68,6 +68,14 @@ pub enum EcdsaVerifyError {
 	BadSignature,
 }
 
+/// Deprecated function, ensure that this is a default prefixed key.
+#[cfg(feature = "std")]
+fn child_storage_key_or_panic(storage_key: &[u8]) {
+	if !storage_key.starts_with(&ChildInfo::new_default(&[]).prefixed_storage_key()[..]) {
+		panic!("child storage key is invalid")
+	}
+}
+
 /// Interface for accessing the storage from within the runtime.
 #[runtime_interface]
 pub trait Storage {
@@ -134,6 +142,146 @@ pub trait Storage {
 	/// Get the next key in storage after the given one in lexicographic order.
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		self.next_storage_key(&key)
+	}
+
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_get(
+		&self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.child_storage(&child_info, key).map(|s| s.to_vec())
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_read(
+		&self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+		value_out: &mut [u8],
+		value_offset: u32,
+	) -> Option<u32> {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.child_storage(&child_info, key)
+			.map(|value| {
+				let value_offset = value_offset as usize;
+				let data = &value[value_offset.min(value.len())..];
+				let written = std::cmp::min(data.len(), value_out.len());
+				value_out[..written].copy_from_slice(&data[..written]);
+				value.len() as u32
+			})
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_set(
+		&mut self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+		value: &[u8],
+	) {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_clear(
+		&mut self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.clear_child_storage(&child_info, key);
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_storage_kill(
+		&mut self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+	) {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.kill_child_storage(&child_info);
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_exists(
+		&self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) -> bool {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.exists_child_storage(&child_info, key)
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_clear_prefix(
+		&mut self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		prefix: &[u8],
+	) {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.clear_child_prefix(&child_info, prefix);
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_root(
+		&mut self,
+		storage_key: &[u8],
+	) -> Vec<u8> {
+		child_storage_key_or_panic(storage_key);
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage_root(&child_info)
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_next_key(
+		&mut self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.next_child_storage_key(&child_info, key)
 	}
 
 }
@@ -911,7 +1059,7 @@ mod tests {
 
 		t = BasicExternalities::new(Storage {
 			top: map![b"foo".to_vec() => b"bar".to_vec()],
-			children: map![],
+			children_default: map![],
 		});
 
 		t.execute_with(|| {
@@ -924,7 +1072,7 @@ mod tests {
 	fn read_storage_works() {
 		let mut t = BasicExternalities::new(Storage {
 			top: map![b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()],
-			children: map![],
+			children_default: map![],
 		});
 
 		t.execute_with(|| {
@@ -946,7 +1094,7 @@ mod tests {
 				b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 			],
-			children: map![],
+			children_default: map![],
 		});
 
 		t.execute_with(|| {

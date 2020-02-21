@@ -502,11 +502,11 @@ where
 
 			if let Some(child_info) = self.overlay.default_child_info(storage_key).cloned() {
 				let (root, is_empty, _) = {
-					let delta = self.overlay.committed.children.get(storage_key)
+					let delta = self.overlay.committed.children_default.get(storage_key)
 						.into_iter()
 						.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
 						.chain(
-							self.overlay.prospective.children.get(storage_key)
+							self.overlay.prospective.children_default.get(storage_key)
 								.into_iter()
 								.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
 						);
@@ -708,7 +708,7 @@ mod tests {
 				vec![20] => vec![20],
 				vec![40] => vec![40]
 			],
-			children: map![]
+			children_default: map![]
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -744,7 +744,7 @@ mod tests {
 		overlay.set_child_storage(child_info, vec![30], Some(vec![31]));
 		let backend = Storage {
 			top: map![],
-			children: map![
+			children_default: map![
 				child_info.storage_key().to_vec() => StorageChild {
 					data: map![
 						vec![10] => vec![10],
@@ -789,7 +789,7 @@ mod tests {
 		overlay.set_child_storage(child_info, vec![30], Some(vec![31]));
 		let backend = Storage {
 			top: map![],
-			children: map![
+			children_default: map![
 				child_info.storage_key().to_vec() => StorageChild {
 					data: map![
 						vec![10] => vec![10],

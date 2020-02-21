@@ -245,7 +245,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 		self.behaviour.send_packet(who, message.encode())
 	}
 
-	fn send_read_child_request(
+	fn send_read_default_child_request(
 		&mut self,
 		who: &PeerId,
 		id: RequestId,
@@ -253,12 +253,13 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 		storage_key: Vec<u8>,
 		keys: Vec<Vec<u8>>,
 	) {
-		let message: Message<B> = message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {
-			id,
-			block,
-			storage_key,
-			keys,
-		});
+		let message: Message<B> = message::generic::Message::RemoteReadDefaultChildRequest(
+			message::RemoteReadDefaultChildRequest {
+				id,
+				block,
+				storage_key,
+				keys,
+			});
 
 		self.behaviour.send_packet(who, message.encode())
 	}
@@ -639,7 +640,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.on_finality_proof_request(who, request),
 			GenericMessage::FinalityProofResponse(response) =>
 				return self.on_finality_proof_response(who, response),
-			GenericMessage::RemoteReadChildRequest(request) =>
+			GenericMessage::RemoteReadDefaultChildRequest(request) =>
 				self.on_remote_read_child_request(who, request),
 			GenericMessage::Consensus(msg) =>
 				return if self.registered_notif_protocols.contains(&msg.engine_id) {
@@ -1547,7 +1548,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	fn on_remote_read_child_request(
 		&mut self,
 		who: PeerId,
-		request: message::RemoteReadChildRequest<B::Hash>,
+		request: message::RemoteReadDefaultChildRequest<B::Hash>,
 	) {
 		if request.keys.is_empty() {
 			debug!(target: "sync", "Invalid remote child read request sent by {}", who);

@@ -24,7 +24,7 @@ pub use self::generic::{
 	RemoteHeaderRequest, RemoteHeaderResponse,
 	RemoteChangesRequest, RemoteChangesResponse,
 	FinalityProofRequest, FinalityProofResponse,
-	FromBlock, RemoteReadChildRequest,
+	FromBlock, RemoteReadDefaultChildRequest,
 };
 use sc_client_api::StorageProof;
 
@@ -212,7 +212,7 @@ pub mod generic {
 		/// Remote changes response.
 		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
 		/// Remote child storage read request.
-		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
+		RemoteReadDefaultChildRequest(RemoteReadDefaultChildRequest<Hash>),
 		/// Finality proof request.
 		FinalityProofRequest(FinalityProofRequest<Hash>),
 		/// Finality proof response.
@@ -242,7 +242,7 @@ pub mod generic {
 				Message::RemoteHeaderResponse(_) => "RemoteHeaderResponse",
 				Message::RemoteChangesRequest(_) => "RemoteChangesRequest",
 				Message::RemoteChangesResponse(_) => "RemoteChangesResponse",
-				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
+				Message::RemoteReadDefaultChildRequest(_) => "RemoteReadDefaultChildRequest",
 				Message::FinalityProofRequest(_) => "FinalityProofRequest",
 				Message::FinalityProofResponse(_) => "FinalityProofResponse",
 				Message::ConsensusBatch(_) => "ConsensusBatch",
@@ -417,7 +417,7 @@ pub mod generic {
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	/// Remote storage read child request.
-	pub struct RemoteReadChildRequest<H> {
+	pub struct RemoteReadDefaultChildRequest<H> {
 		/// Unique request id.
 		pub id: RequestId,
 		/// Block at which to perform call.

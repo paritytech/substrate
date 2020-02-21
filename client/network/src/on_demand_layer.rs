@@ -23,7 +23,7 @@ use parking_lot::Mutex;
 use sp_blockchain::Error as ClientError;
 use sc_client_api::{
 	Fetcher, FetchChecker, RemoteHeaderRequest, RemoteCallRequest, RemoteReadRequest,
-	RemoteChangesRequest, RemoteReadChildRequest, RemoteBodyRequest,
+	RemoteChangesRequest, RemoteReadDefaultChildRequest, RemoteBodyRequest,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
@@ -103,10 +103,10 @@ impl<B> Fetcher<B> for OnDemand<B> where
 
 	fn remote_read_child(
 		&self,
-		request: RemoteReadChildRequest<B::Header>
+		request: RemoteReadDefaultChildRequest<B::Header>
 	) -> Self::RemoteReadResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteReadChild(request, sender));
+		let _ = self.requests_send.unbounded_send(RequestData::RemoteReadDefaultChild(request, sender));
 		RemoteResponse { receiver }
 	}
 

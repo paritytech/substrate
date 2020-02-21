@@ -316,12 +316,12 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		storage.insert(None, input.top);
 
 		// create a list of children keys to re-compute roots for
-		let child_delta = input.children.iter()
+		let child_delta = input.children_default.iter()
 			.map(|(_storage_key, storage_child)| (storage_child.child_info.clone(), None))
 			.collect::<Vec<_>>();
 
 		// make sure to persist the child storage
-		for (_child_key, storage_child) in input.children {
+		for (_child_key, storage_child) in input.children_default {
 			storage.insert(Some(storage_child.child_info), storage_child.data);
 		}
 
