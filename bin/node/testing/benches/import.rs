@@ -104,7 +104,7 @@ fn bench_block_import(c: &mut Criterion) {
 							.expect("RocksDB backend always provides usage info!"),
 					);
 				},
-				criterion::BatchSize::PerIteration,
+				criterion::BatchSize::LargeInput,
 			);
 		},
 		vec![Profile::Wasm, Profile::Native],
