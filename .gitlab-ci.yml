@@ -174,6 +174,9 @@ test-dependency-rules:
       - $DEPLOY_TAG
   script:
     - .maintain/ensure-deps.sh
+    # FIXME set to release
+    - cargo install cargo-unleash --version=1.0.0-alpha2
+    - cargo unleash check
 
 test-frame-staking:
   stage:                           test
@@ -547,6 +550,20 @@ publish-draft-release:
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - ./scripts/gitlab/publish_draft_release.sh
+  interruptible:                   true
+  allow_failure:                   true
+
+publish-to-crates-io:
+  stage:                           publish
+  image:                           parity/tools:latest
+# FIXME disabled for testing
+#  only:
+#    - tags
+#    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    # FIXME set to release
+    - cargo install cargo-unleash --version=1.0.0-alpha2
+    - cargo unleash em-dragons --dry-run -skip node-template -skip node-* -skip subkey -s chain-spec-builder
   interruptible:                   true
   allow_failure:                   true
 
