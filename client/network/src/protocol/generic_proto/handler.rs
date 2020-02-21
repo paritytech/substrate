@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,31 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use grafana_data_source::{run_server, record_metrics};
-use std::time::Duration;
-use rand::Rng;
-use futures::{future::join, executor};
+pub use self::group::{NotifsHandlerProto, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut};
 
-async fn randomness() {
-	loop {
-		futures_timer::Delay::new(Duration::from_secs(1)).await;
-
-		let random = rand::thread_rng().gen_range(0.0, 1000.0);
-
-		let result = record_metrics!(
-			"random data" => random,
-			"random^2" => random * random,
-		);
-
-		if let Err(error) = result {
-			eprintln!("{}", error);
-		}
-	}
-}
-
-fn main() {
-	executor::block_on(join(
-		run_server("127.0.0.1:9955".parse().unwrap()),
-		randomness()
-	)).0.unwrap();
-}
+mod group;
+mod legacy;
+mod notif_in;
+mod notif_out;

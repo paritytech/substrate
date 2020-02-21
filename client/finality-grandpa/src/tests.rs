@@ -171,7 +171,7 @@ impl TestNetFactory for GrandpaTestNet {
 	fn make_finality_proof_provider(
 		&self,
 		client: PeersClient
-	) -> Option<Arc<dyn sc_network::FinalityProofProvider<Block>>> {
+	) -> Option<Arc<dyn sc_network::config::FinalityProofProvider<Block>>> {
 		match client {
 			PeersClient::Full(_, ref backend)  => {
 				let authorities_provider = Arc::new(self.test_config.clone());
@@ -1376,7 +1376,7 @@ fn finalize_3_voters_1_light_observer() {
 
 	run_to_completion_with(&mut runtime, 20, net.clone(), authorities, |executor| {
 		executor.spawn(
-			run_grandpa_observer(
+			observer::run_grandpa_observer(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,

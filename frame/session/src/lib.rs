@@ -80,7 +80,7 @@
 //!
 //! ## Usage
 //!
-//! ### Example from the SRML
+//! ### Example from the FRAME
 //!
 //! The [Staking pallet](../pallet_staking/index.html) uses the Session pallet to get the validator set.
 //!

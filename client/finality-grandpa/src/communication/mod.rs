@@ -65,6 +65,7 @@ mod periodic;
 pub(crate) mod tests;
 
 pub use sp_finality_grandpa::GRANDPA_ENGINE_ID;
+pub const GRANDPA_PROTOCOL_NAME: &[u8] = b"/paritytech/grandpa/1";
 
 // cost scalars for reporting peers.
 mod cost {
@@ -185,7 +186,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 
 		let validator = Arc::new(validator);
-		let gossip_engine = GossipEngine::new(service.clone(), GRANDPA_ENGINE_ID, validator.clone());
+		let gossip_engine = GossipEngine::new(
+			service.clone(),
+			GRANDPA_ENGINE_ID,
+			GRANDPA_PROTOCOL_NAME,
+			validator.clone()
+		);
 
 		{
 			// register all previous votes with the gossip service so that they're

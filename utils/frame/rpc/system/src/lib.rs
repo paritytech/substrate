@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! System SRML specific RPC methods.
+//! System FRAME specific RPC methods.
 
 use std::sync::Arc;
 

@@ -46,7 +46,7 @@ use futures::{
 	task::{Spawn, FutureObj, SpawnError},
 };
 use sc_network::{
-	NetworkService, NetworkState, specialization::NetworkSpecialization,
+	NetworkService, network_state::NetworkState, specialization::NetworkSpecialization,
 	PeerId, ReportHandle,
 };
 use log::{log, warn, debug, error, Level};
@@ -71,7 +71,7 @@ pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use sc_network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
+pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -534,6 +534,30 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
 	}
 }
 
+#[cfg(not(target_os = "unknown"))]
+// Wrapper for HTTP and WS servers that makes sure they are properly shut down.
+mod waiting {
+	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
+	impl Drop for HttpServer {
+		fn drop(&mut self) {
+			if let Some(server) = self.0.take() {
+				server.close_handle().close();
+				server.wait();
+			}
+		}
+	}
+
+	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
+	impl Drop for WsServer {
+		fn drop(&mut self) {
+			if let Some(server) = self.0.take() {
+				server.close_handle().close();
+				let _ = server.wait();
+			}
+		}
+	}
+}
+
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
@@ -562,7 +586,7 @@ fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metad
 		maybe_start_server(
 			config.rpc_http,
 			|address| sc_rpc_server::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
-		)?,
+		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
 			config.rpc_ws,
 			|address| sc_rpc_server::start_ws(
@@ -571,7 +595,7 @@ fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metad
 				config.rpc_cors.as_ref(),
 				gen_handler(),
 			),
-		)?.map(Mutex::new),
+		)?.map(|s| waiting::WsServer(Some(s))).map(Mutex::new),
 	)))
 }
 
@@ -634,10 +658,10 @@ where
 		.collect()
 }
 
-impl<B, H, C, Pool, E> sc_network::TransactionPool<H, B> for
+impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for
 	TransactionPoolAdapter<C, Pool>
 where
-	C: sc_network::ClientHandle<B> + Send + Sync,
+	C: sc_network::config::Client<B> + Send + Sync,
 	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
@@ -705,6 +729,7 @@ mod tests {
 	use futures::executor::block_on;
 	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
+	use sp_runtime::generic::CheckSignature;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 
@@ -733,7 +758,7 @@ mod tests {
 
 		// then
 		assert_eq!(transactions.len(), 1);
-		assert!(transactions[0].1.clone().check().is_ok());
+		assert!(transactions[0].1.clone().check(CheckSignature::Yes).is_ok());
 		// this should not panic
 		let _ = transactions[0].1.transfer();
 	}

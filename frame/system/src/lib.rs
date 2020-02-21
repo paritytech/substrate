@@ -17,14 +17,14 @@
 //! # System Module
 //!
 //! The System module provides low-level access to core types and cross-cutting utilities.
-//! It acts as the base layer for other SRML modules to interact with the Substrate framework components.
+//! It acts as the base layer for other pallets to interact with the Substrate framework components.
 //!
 //! - [`system::Trait`](./trait.Trait.html)
 //!
 //! ## Overview
 //!
 //! The System module defines the core data types used in a Substrate runtime.
-//! It also provides several utility functions (see [`Module`](./struct.Module.html)) for other runtime modules.
+//! It also provides several utility functions (see [`Module`](./struct.Module.html)) for other FRAME pallets.
 //!
 //! In addition, it manages the storage items for extrinsics data, indexes, event records, and digest items,
 //! among other things that support the execution of the current block.
@@ -44,7 +44,7 @@
 //!
 //! ### Signed Extensions
 //!
-//! The system module defines the following extensions:
+//! The System module defines the following extensions:
 //!
 //!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
 //!     exceed the limits.
@@ -117,7 +117,7 @@ use frame_support::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnReapAccount, IsDeadAccount, Happened,
 		StoredMap
 	},
-	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
+	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -414,11 +414,15 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-		/// A big dispatch that will disallow any other transaction to be included.
+		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = SimpleDispatchInfo::MaxOperational]
-		fn fill_block(origin) {
+		#[weight = FunctionOf(
+			|(ratio,): (&Perbill,)| *ratio * T::MaximumBlockWeight::get(),
+			DispatchClass::Operational,
+			true,
+		)]
+		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
 
@@ -1080,6 +1084,34 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	pub fn new() -> Self {
 		Self(PhantomData)
 	}
+
+	/// Do the pre-dispatch checks. This can be applied to both signed and unsigned.
+	///
+	/// It checks and notes the new weight and length.
+	fn do_pre_dispatch(
+		info: <Self as SignedExtension>::DispatchInfo,
+		len: usize,
+	) -> Result<(), TransactionValidityError> {
+		let next_len = Self::check_block_length(info, len)?;
+		let next_weight = Self::check_weight(info)?;
+		AllExtrinsicsLen::put(next_len);
+		AllExtrinsicsWeight::put(next_weight);
+		Ok(())
+	}
+
+	/// Do the validate checks. This can be applied to both signed and unsigned.
+	///
+	/// It only checks that the block weight and length limit will not exceed.
+	fn do_validate(
+		info: <Self as SignedExtension>::DispatchInfo,
+		len: usize,
+	) -> TransactionValidity {
+		// ignore the next weight and length. If they return `Ok`, then it is below the limit.
+		let _ = Self::check_block_length(info, len)?;
+		let _ = Self::check_weight(info)?;
+
+		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
+	}
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
@@ -1099,11 +1131,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
-		let next_len = Self::check_block_length(info, len)?;
-		AllExtrinsicsLen::put(next_len);
-		let next_weight = Self::check_weight(info)?;
-		AllExtrinsicsWeight::put(next_weight);
-		Ok(())
+		Self::do_pre_dispatch(info, len)
 	}
 
 	fn validate(
@@ -1113,18 +1141,23 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
-		// There is no point in writing to storage here since changes are discarded. This basically
-		// discards any transaction which is bigger than the length or weight limit **alone**, which
-		// is a guarantee that it will fail in the pre-dispatch phase.
-		if let Err(e) = Self::check_block_length(info, len) {
-			return Err(e);
-		}
+		Self::do_validate(info, len)
+	}
 
-		if let Err(e) = Self::check_weight(info) {
-			return Err(e);
-		}
+	fn pre_dispatch_unsigned(
+		_call: &Self::Call,
+		info: Self::DispatchInfo,
+		len: usize,
+	) -> Result<(), TransactionValidityError> {
+		Self::do_pre_dispatch(info, len)
+	}
 
-		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
+	fn validate_unsigned(
+		_call: &Self::Call,
+		info: Self::DispatchInfo,
+		len: usize,
+	) -> TransactionValidity {
+		Self::do_validate(info, len)
 	}
 }
 
