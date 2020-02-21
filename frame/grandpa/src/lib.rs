@@ -481,7 +481,6 @@ struct GrandpaTimeSlot {
 
 // TODO [slashing]: Integrate this.
 /// A grandpa equivocation offence report.
-#[allow(dead_code)]
 struct GrandpaEquivocationOffence<FullIdentification> {
 	/// Time slot at which this incident happened.
 	time_slot: GrandpaTimeSlot,
