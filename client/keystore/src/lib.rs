@@ -18,7 +18,7 @@
 
 #![warn(missing_docs)]
 
-use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
+use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
 	traits::{BareCryptoStore, Error as TraitError}
@@ -302,45 +302,29 @@ impl BareCryptoStore for Store {
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
-	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
-		let ed25519_existing_keys: Vec<Vec<u8>> = self
-			.public_keys_by_type::<ed25519::Public>(id)
-			.map_err(|e| TraitError::from(e))?
-			.into_iter()
-			.map(|k| k.to_raw_vec())
-			.collect();
+	) -> std::result::Result<HashSet<CryptoTypePublicPair>, TraitError> {
+		let keys = keys.into_iter().collect::<HashSet<_>>();
+		let all_keys = self.keys(id)?;
 
-		let sr25519_existing_keys: Vec<Vec<u8>> = self
-			.public_keys_by_type::<sr25519::Public>(id)
-			.map_err(|e| TraitError::from(e))?
-			.into_iter()
-			.map(|k| k.to_raw_vec())
-			.collect();
-
-		Ok(keys.into_iter().filter_map(|k| {
-			match k.0 {
-				sr25519::SR25519_CRYPTO_ID if sr25519_existing_keys.contains(&k.1.to_vec()) => Some(k),
-				ed25519::ED25519_CRYPTO_ID if ed25519_existing_keys.contains(&k.1.to_vec()) => Some(k),
-				_ => None
-			}
-		}).collect::<Vec<_>>())
+		Ok(keys.intersection(&all_keys).cloned().collect())
 	}
 
-	fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
+	fn keys(&self, id: KeyTypeId) -> std::result::Result<HashSet<CryptoTypePublicPair>, TraitError> {
 		let ed25519_existing_keys = self
 			.public_keys_by_type::<ed25519::Public>(id)
-			.map_err(|e| TraitError::from(e))?;
+			.map_err(|e| TraitError::from(e))?
+			.into_iter()
+			.map(|k| (ed25519::ED25519_CRYPTO_ID, k.to_raw_vec()));
 
 		let sr25519_existing_keys = self
 			.public_keys_by_type::<sr25519::Public>(id)
-			.map_err(|e| TraitError::from(e))?;
-		let sr25519_existing_keys = sr25519_existing_keys
-			.iter().map(|k| (sr25519::SR25519_CRYPTO_ID, k.to_raw_vec()));
+			.map_err(|e| TraitError::from(e))?
+			.into_iter()
+			.map(|k| (sr25519::SR25519_CRYPTO_ID, k.to_raw_vec()));
 
 		Ok(ed25519_existing_keys
-		   .iter().map(|k| (ed25519::ED25519_CRYPTO_ID, k.to_raw_vec()))
-		   .chain(sr25519_existing_keys)
-		   .collect())
+			.chain(sr25519_existing_keys)
+			.collect::<HashSet<_>>())
 	}
 
 	fn sign_with(

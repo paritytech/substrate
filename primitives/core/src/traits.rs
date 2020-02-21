@@ -23,6 +23,7 @@ use crate::{
 
 use std::{
 	fmt::{Debug, Display},
+	collections::HashSet,
 	panic::UnwindSafe,
 	sync::Arc,
 };
@@ -84,12 +85,12 @@ pub trait BareCryptoStore: Send + Sync {
 	/// Find intersection between provided keys and supported keys
 	///
 	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
-	/// a filtered list of public keys which are supported by the keystore.
-	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, Error>;
+	/// a filtered set of public keys which are supported by the keystore.
+	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<HashSet<CryptoTypePublicPair>, Error>;
 	/// List all supported keys
 	///
-	/// Get a list of public keys the signer supports.
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error>;
+	/// Returns a set of public keys the signer supports.
+	fn keys(&self, id: KeyTypeId) -> Result<HashSet<CryptoTypePublicPair>, Error>;
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.

@@ -23,6 +23,8 @@ use crate::{
 	ed25519, sr25519,
 	traits::Error
 };
+#[cfg(feature = "std")]
+use std::collections::HashSet;
 
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
@@ -137,35 +139,31 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		public_keys.iter().all(|(k, t)| self.keys.get(&t).and_then(|s| s.get(k)).is_some())
 	}
 
-	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, Error> {
-		let ed25519_existing_keys: Vec<Vec<u8>> = self.ed25519_public_keys(id).iter()
-								.map(|k| k.to_raw_vec()).collect();
-		let sr25519_existing_keys: Vec<Vec<u8>> = self.sr25519_public_keys(id).iter()
-								.map(|k| k.to_raw_vec()).collect();
+	fn supported_keys(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>
+	) -> std::result::Result<HashSet<CryptoTypePublicPair>, Error> {
+		let keys = keys.into_iter().collect::<HashSet<_>>();
+		let all_keys = self.keys(id)?;
 
-		Ok(keys.into_iter().filter_map(|k| {
-			match k.0 {
-				sr25519::SR25519_CRYPTO_ID if sr25519_existing_keys.contains(&k.1.to_vec()) => Some(k),
-				ed25519::ED25519_CRYPTO_ID if ed25519_existing_keys.contains(&k.1.to_vec()) => Some(k),
-				_ => None
-			}
-		}).collect::<Vec<_>>())
+		Ok(keys.intersection(&all_keys).cloned().collect())
 	}
 
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
-		let ed25519_existing_keys = self.ed25519_public_keys(id);
-		let ed25519_existing_keys = ed25519_existing_keys
-			.iter()
+	fn keys(&self, id: KeyTypeId) -> std::result::Result<HashSet<CryptoTypePublicPair>, Error> {
+		let ed25519_existing_keys = self
+    		.ed25519_public_keys(id)
+			.into_iter()
 			.map(|k| (ed25519::ED25519_CRYPTO_ID, k.to_raw_vec()));
 
-		let sr25519_existing_keys = self.sr25519_public_keys(id);
-		let sr25519_existing_keys = sr25519_existing_keys
-			.iter()
+		let sr25519_existing_keys = self
+			.sr25519_public_keys(id)
+			.into_iter()
 			.map(|k| (sr25519::SR25519_CRYPTO_ID, k.to_raw_vec()));
 
 		Ok(ed25519_existing_keys
-		   .chain(sr25519_existing_keys)
-		   .collect())
+			.chain(sr25519_existing_keys)
+			.collect::<HashSet<_>>())
 	}
 
 	fn sign_with(
