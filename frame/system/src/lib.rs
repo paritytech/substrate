@@ -1009,7 +1009,7 @@ impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 	}
 	fn insert(k: &T::AccountId, data: T::AccountData) {
 		let existed = Account::<T>::contains_key(k);
-		Account::<T>::insert(k, AccountInfo{ nonce: Default::default(), refcount: 0, data });
+		Account::<T>::mutate(k, |a| a.data = data);
 		if !existed {
 			Self::on_created_account(k.clone());
 		}
