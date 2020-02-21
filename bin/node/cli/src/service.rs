@@ -79,7 +79,6 @@ macro_rules! new_full_start {
 					sc_consensus_babe::Config::get_or_compute(&*client)?,
 					grandpa_block_import,
 					client.clone(),
-					client.clone(),
 				)?;
 
 				let import_queue = sc_consensus_babe::import_queue(
@@ -87,7 +86,6 @@ macro_rules! new_full_start {
 					block_import.clone(),
 					Some(Box::new(justification_import)),
 					None,
-					client.clone(),
 					client,
 					inherent_data_providers.clone(),
 				)?;
@@ -337,7 +335,6 @@ pub fn new_light(config: NodeConfiguration)
 				sc_consensus_babe::Config::get_or_compute(&*client)?,
 				grandpa_block_import,
 				client.clone(),
-				client.clone(),
 			)?;
 
 			let import_queue = sc_consensus_babe::import_queue(
@@ -346,7 +343,6 @@ pub fn new_light(config: NodeConfiguration)
 				None,
 				Some(Box::new(finality_proof_import)),
 				client.clone(),
-				client,
 				inherent_data_providers.clone(),
 			)?;
 
@@ -495,7 +491,7 @@ mod tests {
 			|config| {
 				let mut setup_handles = None;
 				new_full!(config, |
-					block_import: &sc_consensus_babe::BabeBlockImport<_, _, Block, _, _, _>,
+					block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
 					babe_link: &sc_consensus_babe::BabeLink<Block>,
 				| {
 					setup_handles = Some((block_import.clone(), babe_link.clone()));
