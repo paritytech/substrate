@@ -14,13 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![cfg(unix)]
-
 use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
-
-mod common;
 
 #[test]
 fn build_spec_works() {
