@@ -6255,7 +6255,6 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-test-primitives",
- "substrate-test-client",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
