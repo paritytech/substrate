@@ -69,7 +69,7 @@ pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0-dev", default-fe
 pallet-vesting = { version = "2.0.0-dev", default-features = false, path = "../../../frame/vesting" }
 
 [build-dependencies]
-wasm-builder-runner = { version = "1.0.5-dev", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
 
 [dev-dependencies]
 sp-io = { version = "2.0.0-dev", path = "../../../primitives/io" }
