@@ -271,7 +271,6 @@ impl<G, E> Configuration<G, E> {
 	/// This function returns an error if the keystore is already set to something different than
 	/// `KeystoreConfig::None`.
 	pub fn use_in_memory_keystore(&mut self) -> Result<(), String> {
-	{
 		match &mut self.keystore {
 			cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
 			_ => Err("Keystore config specified when it should not be!".into()),
