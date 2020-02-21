@@ -1,11 +1,13 @@
 [package]
 name = "sp-externalities"
-version = "0.8.0"
+version = "0.8.0-dev"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-storage = { version = "2.0.0", path = "../storage" }
-sp-std = { version = "2.0.0", path = "../std" }
+sp-storage = { version = "2.0.0-dev", path = "../storage" }
+sp-std = { version = "2.0.0-dev", path = "../std" }
 environmental = { version = "1.1.1" }
