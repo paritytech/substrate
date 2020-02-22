@@ -584,6 +584,7 @@ impl CryptoType for Pair {
 }
 
 
+/// Batch verification.
 #[cfg(feature = "std")]
 pub fn verify_batch(
 	messages: Vec<&[u8]>,

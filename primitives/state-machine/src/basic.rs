@@ -47,6 +47,7 @@ impl BasicExternalities {
 		BasicExternalities { inner, extensions: Default::default() }
 	}
 
+	/// New basic externalities with empty storage.
 	pub fn new_empty() -> Self {
 		Self::new(Storage::default())
 	}
@@ -90,6 +91,7 @@ impl BasicExternalities {
 		sp_externalities::set_and_run_with_externalities(self, f)
 	}
 
+	/// List of active extensions.
 	pub fn extensions(&mut self) -> &mut Extensions {
 		&mut self.extensions
 	}
@@ -370,7 +372,7 @@ mod tests {
 	#[test]
 	fn basic_externalities_is_empty() {
 		// Make sure no values are set by default in `BasicExternalities`.
-		let storage = BasicExternalities::new(Default::default()).into_storages();
+		let storage = BasicExternalities::new_empty().into_storages();
 		assert!(storage.top.is_empty());
 		assert!(storage.children.is_empty());
 	}

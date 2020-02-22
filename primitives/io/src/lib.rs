@@ -603,6 +603,7 @@ pub trait Hashing {
 	}
 }
 
+#[cfg(feature = "std")]
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
 	pub struct VerificationExt(BatchVerifier);
@@ -611,10 +612,12 @@ sp_externalities::decl_extension! {
 /// Interface for activating dynamic extensions.
 #[runtime_interface]
 pub trait Extensions {
+	/// Start verification extension.
 	fn start_verification_extension(&mut self) {
 		self.register_extension(VerificationExt(BatchVerifier::new()));
 	}
 
+	/// Remove and drop verification extension.
 	fn drop_verification_extension(&mut self) {
 		self.deregister_extension::<VerificationExt>();
 	}
