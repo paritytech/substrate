@@ -1122,6 +1122,37 @@ mod tests {
 				&Default::default(),
 			);
 			assert!(!crypto::batch_verify());
+
+			// 1 valid ed25519, 2 valid sr25519
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Ed25519 batching";
+			let signature = pair.sign(msg);
+			crypto::batch_push_ed25519(&signature, msg, &pair.public());
+
+			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Schnorrkel rules";
+			let signature = pair.sign(msg);
+			crypto::batch_push_sr25519(&signature, msg, &pair.public());
+
+			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Schnorrkel batches!";
+			let signature = pair.sign(msg);
+			crypto::batch_push_sr25519(&signature, msg, &pair.public());
+
+			assert!(crypto::batch_verify());
+
+			// 1 valid sr25519, 1 invalid sr25519
+			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Schnorrkel!";
+			let signature = pair.sign(msg);
+			crypto::batch_push_sr25519(&signature, msg, &pair.public());
+
+			crypto::batch_push_sr25519(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+			assert!(!crypto::batch_verify());
 		});
 	}
 }
