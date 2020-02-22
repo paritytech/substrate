@@ -554,6 +554,22 @@ pub trait Hashing {
 	}
 }
 
+sp_externalities::decl_extension! {
+	/// The keystore extension to register/retrieve from the externalities.
+	pub struct VerificationExt(u32);
+}
+
+#[runtime_interface]
+pub trait Extensions {
+	fn start_verification_extension(&mut self) {
+		self.register_extension(VerificationExt(0));
+	}
+
+	fn drop_verification_extension(&mut self) {
+		self.deregister_extension::<VerificationExt>();
+	}
+}
+
 /// Interface that provides functions to access the offchain functionality.
 #[runtime_interface]
 pub trait Offchain {

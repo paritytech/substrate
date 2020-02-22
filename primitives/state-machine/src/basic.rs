@@ -283,6 +283,14 @@ impl sp_externalities::ExtensionStore for BasicExternalities {
 		warn!("Extensions are not supported by `BasicExternalities`.");
 		None
 	}
+
+	fn register_extension_with_type_id(&mut self, _: TypeId, _: Box<dyn sp_externalities::Extension>) {
+		warn!("Extensions are not supported by `BasicExternalities`.");
+	}
+
+	fn deregister_extension_by_type_id(&mut self, _: TypeId) {
+		warn!("Extensions are not supported by `BasicExternalities`.");
+	}
 }
 
 #[cfg(test)]

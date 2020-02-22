@@ -22,6 +22,7 @@
 //! It is required that each extension implements the [`Extension`] trait.
 
 use std::{collections::HashMap, any::{Any, TypeId}, ops::DerefMut};
+use crate::Error;
 
 /// Marker trait for types that should be registered as [`Externalities`](crate::Externalities) extension.
 ///
@@ -87,6 +88,10 @@ pub trait ExtensionStore {
 	/// It is advised to use [`ExternalitiesExt::extension`](crate::ExternalitiesExt::extension)
 	/// instead of this function to get type system support and automatic type downcasting.
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any>;
+
+	fn register_extension_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>);
+
+	fn deregister_extension_by_type_id(&mut self, type_id: TypeId);
 }
 
 /// Stores extensions that should be made available through the externalities.
@@ -106,9 +111,23 @@ impl Extensions {
 		self.extensions.insert(ext.type_id(), Box::new(ext));
 	}
 
+	/// Register extension `ext`.
+	pub fn register_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) -> Result<(), Error> {
+		if self.extensions.contains_key(&type_id) {
+			return Err(Error::ExtensionAlreadyRegistered);
+		}
+		self.extensions.insert(type_id, extension);
+		Ok(())
+	}
+
 	/// Return a mutable reference to the requested extension.
 	pub fn get_mut(&mut self, ext_type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.get_mut(&ext_type_id).map(DerefMut::deref_mut).map(Extension::as_mut_any)
+	}
+
+	/// Deregister extension of type `E`.
+	pub fn deregister(&mut self, type_id: TypeId) -> Option<Box<dyn Extension>> {
+		self.extensions.remove(&type_id)
 	}
 }
 

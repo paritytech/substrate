@@ -232,12 +232,17 @@ where
 		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
+	fn register_dynamic_extensions() {
+	}
+
 	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
 		Self::initialize_block(block.header());
 
 		// any initial checks
 		Self::initial_checks(&block);
+
+		Self::register_dynamic_extensions();
 
 		// execute extrinsics
 		let (header, extrinsics) = block.deconstruct();
