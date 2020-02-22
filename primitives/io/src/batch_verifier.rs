@@ -16,18 +16,26 @@
 
 //! This is part of the Substrate runtime.
 
-use sp_core::{ed25519, crypto::Pair};
+use sp_core::{ed25519, sr25519, crypto::Pair};
 
 #[derive(Debug, Clone)]
 struct Ed25519BatchItem {
-	sig: ed25519::Signature,
+	signature: ed25519::Signature,
 	pub_key: ed25519::Public,
+	message: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+struct Sr25519BatchItem {
+	signature: sr25519::Signature,
+	pub_key: sr25519::Public,
 	message: Vec<u8>,
 }
 
 #[derive(Debug, Default)]
 pub struct BatchVerifier {
 	ed25519_items: Vec<Ed25519BatchItem>,
+	sr25519_items: Vec<Sr25519BatchItem>,
 }
 
 impl BatchVerifier {
@@ -37,20 +45,38 @@ impl BatchVerifier {
 
 	pub fn push_ed25519(
 		&mut self,
-		sig: ed25519::Signature,
+		signature: ed25519::Signature,
 		pub_key: ed25519::Public,
-		message: Vec<u8>)
-	{
-		self.ed25519_items.push(Ed25519BatchItem { sig, pub_key, message });
+		message: Vec<u8>,
+	) {
+		self.ed25519_items.push(Ed25519BatchItem { signature, pub_key, message });
+	}
+
+	pub fn push_sr25519(
+		&mut self,
+		signature: sr25519::Signature,
+		pub_key: sr25519::Public,
+		message: Vec<u8>,
+	) {
+		self.sr25519_items.push(Sr25519BatchItem { signature, pub_key, message });
 	}
 
 	pub fn verify_and_clear(&mut self) -> bool {
+		// TODO: parallel
 		for ed25519_item in self.ed25519_items.drain(..) {
-			if !ed25519::Pair::verify(&ed25519_item.sig, &ed25519_item.message, &ed25519_item.pub_key) {
+			if !ed25519::Pair::verify(&ed25519_item.signature, &ed25519_item.message, &ed25519_item.pub_key) {
 				return false;
 			}
 		}
 
-		true
+		let sr25519_batch_result = {
+			let messages = self.sr25519_items.iter().map(|item| &item.message[..]).collect();
+			let signatures = self.sr25519_items.iter().map(|item| &item.signature).collect();
+			let pub_keys = self.sr25519_items.iter().map(|item| &item.pub_key).collect();
+
+			sr25519::verify_batch(messages, signatures, pub_keys)
+		};
+
+		sr25519_batch_result
 	}
 }

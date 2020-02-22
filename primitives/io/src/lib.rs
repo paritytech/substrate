@@ -448,6 +448,22 @@ pub trait Crypto {
 			);
 	}
 
+	/// Push `sr25519` signature for batch verification.
+	fn batch_push_sr25519(
+		&mut self,
+		sig: &sr25519::Signature,
+		msg: &[u8],
+		pub_key: &sr25519::Public
+	) {
+		self.extension::<VerificationExt>()
+			.expect("No verification extension in current context!")
+			.push_sr25519(
+				sig.clone(),
+				pub_key.clone(),
+				msg.to_vec(),
+			);
+	}
+
 	/// Verify signatures batch.
 	///
 	/// Verify all signatures which were previously pushed in batch.

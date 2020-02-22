@@ -583,6 +583,43 @@ impl CryptoType for Pair {
 	type Pair = Pair;
 }
 
+
+#[cfg(feature = "std")]
+pub fn verify_batch(
+	messages: Vec<&[u8]>,
+	signatures: Vec<&Signature>,
+	pub_keys: Vec<&Public>,
+) -> bool {
+	let mut sr_pub_keys = Vec::new();
+	for pub_key in pub_keys {
+		match schnorrkel::PublicKey::from_bytes(pub_key.as_ref()) {
+			Ok(pk) => sr_pub_keys.push(pk),
+			Err(_) => return false,
+		};
+	}
+
+	let mut sr_signatures = Vec::new();
+	for signature in signatures {
+		match schnorrkel::Signature::from_bytes(signature.as_ref()) {
+			Ok(s) => sr_signatures.push(s),
+			Err(_) => return false
+		};
+	}
+
+	let mut messages: Vec<merlin::Transcript> = messages.into_iter().map(
+		|msg| signing_context(SIGNING_CTX).bytes(msg)
+	).collect();
+
+	match schnorrkel::verify_batch(
+		&mut messages,
+		&sr_signatures,
+		&sr_pub_keys,
+	) {
+		Ok(_) => true,
+		Err(_) => false,
+	}
+}
+
 #[cfg(test)]
 mod compatibility_test {
 	use super::*;
