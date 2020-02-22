@@ -1089,7 +1089,7 @@ mod tests {
 		ext.execute_with(|| {
 			extensions::start_verification_extension();
 
-			// invalid signature
+			// invalid ed25519 signature
 			crypto::batch_push_ed25519(
 				&Default::default(),
 				&Vec::new(),
@@ -1097,7 +1097,7 @@ mod tests {
 			);
 			assert!(!crypto::batch_verify());
 
-			// 2 valid signatures
+			// 2 valid ed25519 signatures
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
 			let signature = pair.sign(msg);
@@ -1110,7 +1110,7 @@ mod tests {
 
 			assert!(crypto::batch_verify());
 
-			// 1 valid, 1 invalid signature
+			// 1 valid, 1 invalid ed25519 signature
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
 			let signature = pair.sign(msg);
