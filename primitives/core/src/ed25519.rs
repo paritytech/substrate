@@ -545,18 +545,6 @@ impl CryptoType for Pair {
 	type Pair = Pair;
 }
 
-pub fn verify_batch(
-	messages: impl IntoIterator<Item=&[u8]>,
-	signatures: impl IntoIterator<Item=&Signature>,
-	pub_keys: impl IntoIterator<Item=&Public>
-) {
-	ed25519_dalek::verify_batch(
-		&messages.into_iter().collect(),
-		&signatures.into_iter().map(From::from).collect(),
-		&pub_keys.into_iter().map(From::from).collect(),
-	)
-}
-
 #[cfg(test)]
 mod test {
 	use super::*;
