@@ -1066,4 +1066,46 @@ mod tests {
 
 		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_none());
 	}
+
+	#[test]
+	fn batching_works() {
+		let mut ext = BasicExternalities::new_empty();
+		ext.execute_with(|| {
+			extensions::start_verification_extension();
+
+			// invalid signature
+			crypto::batch_push_ed25519(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+			assert!(!crypto::batch_verify());
+
+			// 2 valid signatures
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Important message";
+			let signature = pair.sign(msg);
+			crypto::batch_push_ed25519(&signature, msg, &pair.public());
+
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Even more important message";
+			let signature = pair.sign(msg);
+			crypto::batch_push_ed25519(&signature, msg, &pair.public());
+
+			assert!(crypto::batch_verify());
+
+			// 1 valid, 1 invalid signature
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Important message";
+			let signature = pair.sign(msg);
+			crypto::batch_push_ed25519(&signature, msg, &pair.public());
+
+			crypto::batch_push_ed25519(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+			assert!(!crypto::batch_verify());
+		});
+	}
 }
