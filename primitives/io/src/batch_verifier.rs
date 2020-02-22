@@ -77,6 +77,8 @@ impl BatchVerifier {
 			sr25519::verify_batch(messages, signatures, pub_keys)
 		};
 
+		self.sr25519_items.clear();
+
 		sr25519_batch_result
 	}
 }
