@@ -145,6 +145,11 @@ fn generate_impl_calls(
 	let mut impl_calls = Vec::new();
 
 	for impl_ in impls {
+		// TODO: FIXME.
+		if !impl_.attrs.is_empty() {
+			continue;
+		}
+
 		let impl_trait_path = extract_impl_trait(impl_)?;
 		let impl_trait = extend_with_runtime_decl_path(impl_trait_path.clone());
 		let impl_trait_ident = &impl_trait_path
