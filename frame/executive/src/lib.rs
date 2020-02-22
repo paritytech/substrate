@@ -232,9 +232,6 @@ where
 		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
-	fn register_dynamic_extensions() {
-	}
-
 	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
 		Self::initialize_block(block.header());
@@ -242,11 +239,16 @@ where
 		// any initial checks
 		Self::initial_checks(&block);
 
-		Self::register_dynamic_extensions();
+		sp_io::extensions::start_verification_extension();
 
 		// execute extrinsics
 		let (header, extrinsics) = block.deconstruct();
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+
+		if !sp_io::crypto::batch_verify() {
+			panic!("Signature verification failed.")
+		}
+		sp_io::extensions::drop_verification_extension();
 
 		// any final checks
 		Self::final_checks(&header);

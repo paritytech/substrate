@@ -83,6 +83,19 @@ pub enum BatchResult {
 	Immediate(bool),
 }
 
+impl BatchResult {
+	/// Is verification ok.
+	///
+	/// Returns true if verification is either produced immediate positive outcome or
+	/// is batched.
+	pub fn ok(&self) -> bool {
+		match self {
+			Self::Ok => true,
+			Self::Immediate(val) => *val,
+		}
+	}
+}
+
 /// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
@@ -119,6 +132,11 @@ impl Verify for sp_core::sr25519::Signature {
 
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::sr25519::Public) -> bool {
 		sp_io::crypto::sr25519_verify(self, msg.get(), signer)
+	}
+
+	fn batch_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> BatchResult {
+		sp_io::crypto::batch_push_sr25519(self, msg.get(), signer);
+		BatchResult::Ok
 	}
 }
 

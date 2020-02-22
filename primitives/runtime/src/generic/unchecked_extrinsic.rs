@@ -24,7 +24,8 @@ use crate::{
 		self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, ExtrinsicMetadata,
 		IdentifyAccount,
 	},
-	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
+	generic::{CheckSignature, CheckedExtrinsic},
+	transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
 
 const TRANSACTION_VERSION: u8 = 4;
@@ -131,7 +132,25 @@ where
 					return Err(InvalidTransaction::BadProof.into())
 				}
 
+<<<<<<< HEAD
 				let (function, extra, _) = raw_payload.deconstruct();
+=======
+				let (function, extra) = if let CheckSignature::No = check_signature {
+					(self.function, extra)
+				} else {
+					let raw_payload = SignedPayload::new(self.function, extra)?;
+
+					if !raw_payload.using_encoded(|payload| {
+						signature.batch_verify(payload, &signed).ok()
+					}) {
+						return Err(InvalidTransaction::BadProof.into())
+					}
+					let (function, extra, _) = raw_payload.deconstruct();
+
+					(function, extra)
+				};
+
+>>>>>>> executive batching
 				CheckedExtrinsic {
 					signed: Some((signed, extra)),
 					function,
