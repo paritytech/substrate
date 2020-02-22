@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! This is part of the Substrate runtime.
+//! I/O host interface for substrate runtime.
 
 #![warn(missing_docs)]
 
@@ -56,6 +56,12 @@ use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use sp_externalities::{ExternalitiesExt, Externalities};
+
+#[cfg(feature = "std")]
+mod batch_verifier;
+
+#[cfg(feature = "std")]
+use batch_verifier::BatchVerifier;
 
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
@@ -426,6 +432,33 @@ pub trait Crypto {
 		ed25519::Pair::verify(sig, msg, pub_key)
 	}
 
+	/// Push `ed25519` signature for batch verification.
+	fn batch_push_ed25519(
+		&mut self,
+		sig: &ed25519::Signature,
+		msg: &[u8],
+		pub_key: &ed25519::Public
+	) {
+		self.extension::<VerificationExt>()
+			.expect("No verification extension in current context!")
+			.push_ed25519(
+				sig.clone(),
+				pub_key.clone(),
+				msg.to_vec(),
+			);
+	}
+
+	/// Verify signatures batch.
+	///
+	/// Verify all signatures which were previously pushed in batch.
+	/// Use `batch_push_ed25519`/`batch_push_sr25519` to push collection of signatures
+	/// to the host, and then use this function to verify them all at once.
+	fn batch_verify(&mut self) -> bool {
+		self.extension::<VerificationExt>()
+			.expect("No verification extension in current context!")
+			.verify_and_clear()
+	}
+
 	/// Returns all `sr25519` public keys for the given key id from the keystore.
 	fn sr25519_public_keys(&mut self, id: KeyTypeId) -> Vec<sr25519::Public> {
 		self.extension::<KeystoreExt>()
@@ -556,13 +589,14 @@ pub trait Hashing {
 
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
-	pub struct VerificationExt(u32);
+	pub struct VerificationExt(BatchVerifier);
 }
 
+/// Interface for activating dynamic extensions.
 #[runtime_interface]
 pub trait Extensions {
 	fn start_verification_extension(&mut self) {
-		self.register_extension(VerificationExt(0));
+		self.register_extension(VerificationExt(BatchVerifier::new()));
 	}
 
 	fn drop_verification_extension(&mut self) {
@@ -945,6 +979,7 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
+	extensions::HostFunctions,
 );
 
 #[cfg(test)]
