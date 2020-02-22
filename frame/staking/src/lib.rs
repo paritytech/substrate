@@ -744,7 +744,7 @@ decl_storage! {
 		/// This is keyed first by the era index to allow bulk deletion and then the stash account.
 		///
 		/// Is it removed after `HISTORY_DEPTH` eras.
-		// If stakers hasn't been set or has been removed then empty exposure is returned.
+		/// If stakers hasn't been set or has been removed then empty exposure is returned.
 		pub ErasStakers get(fn eras_stakers):
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> Exposure<T::AccountId, BalanceOf<T>>;
@@ -758,7 +758,7 @@ decl_storage! {
 		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
 		///
 		/// Is it removed after `HISTORY_DEPTH` eras.
-		// If stakers hasn't been set or has been removed then empty exposure is returned.
+		/// If stakers hasn't been set or has been removed then empty exposure is returned.
 		pub ErasStakersClipped get(fn eras_stakers_clipped):
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> Exposure<T::AccountId, BalanceOf<T>>;
@@ -773,19 +773,19 @@ decl_storage! {
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> ValidatorPrefs;
 
-		/// The per-validator era payout for one in the last `HISTORY_DEPTH` eras.
+		/// The total validator era payout for the last `HISTORY_DEPTH` eras.
 		///
 		/// Eras that haven't finished yet doesn't have reward.
 		pub ErasValidatorReward get(fn eras_validator_reward):
 			map hasher(blake2_256) EraIndex => BalanceOf<T>;
 
 		/// Rewards for the last `HISTORY_DEPTH` eras.
-		// If reward hasn't been set or has been removed then 0 reward is returned.
+		/// If reward hasn't been set or has been removed then 0 reward is returned.
 		pub ErasRewardPoints get(fn eras_reward_points):
 			map hasher(blake2_256) EraIndex => EraRewardPoints<T::AccountId>;
 
 		/// The total amount staked for the last `HISTORY_DEPTH` eras.
-		// If total hasn't been set or has been removed then 0 stake is returned.
+		/// If total hasn't been set or has been removed then 0 stake is returned.
 		pub ErasTotalStake get(fn eras_total_stake):
 			map hasher(blake2_256) EraIndex => BalanceOf<T>;
 
@@ -1569,9 +1569,6 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Ensures storage is upgraded to most recent necessary state.
-	///
-	/// Right now it's a no-op as all networks that are supported by Substrate Frame Core are
-	/// running with the latest staking storage scheme.
 	fn ensure_storage_upgraded() {
 		if !IsUpgraded::get() {
 			IsUpgraded::put(true);
@@ -1634,7 +1631,7 @@ impl<T: Trait> Module<T> {
 	fn start_session(start_session: SessionIndex) {
 		let next_active_era = Self::active_era().map(|e| e + 1).unwrap_or(0);
 		if let Some(next_active_era_start_session_index) = Self::eras_start_session_index(next_active_era) {
-			if next_active_era_start_session_index == start_session {
+			if next_active_era_start_session_index <= start_session {
 				Self::start_era(start_session);
 			}
 		}
