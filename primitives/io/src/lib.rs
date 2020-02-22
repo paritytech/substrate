@@ -988,6 +988,7 @@ mod tests {
 	use sp_core::map;
 	use sp_state_machine::BasicExternalities;
 	use sp_core::storage::Storage;
+	use std::any::TypeId;
 
 	#[test]
 	fn storage_works() {
@@ -1048,5 +1049,21 @@ mod tests {
 			assert!(storage::get(b":abcd").is_none());
 			assert!(storage::get(b":abc").is_none());
 		});
+	}
+
+	#[test]
+	fn dynamic_extensions_work() {
+		let mut ext = BasicExternalities::new_empty();
+		ext.execute_with(|| {
+			extensions::start_verification_extension();
+		});
+
+		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_some());
+
+		ext.execute_with(|| {
+			extensions::drop_verification_extension();
+		});
+
+		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_none());
 	}
 }

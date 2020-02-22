@@ -47,6 +47,10 @@ impl BasicExternalities {
 		BasicExternalities { inner, extensions: Default::default() }
 	}
 
+	pub fn new_empty() -> Self {
+		Self::new(Storage::default())
+	}
+
 	/// Insert key/value
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) -> Option<StorageValue> {
 		self.inner.top.insert(k, v)
@@ -84,6 +88,10 @@ impl BasicExternalities {
 	/// Returns the result of the given closure.
 	pub fn execute_with<R>(&mut self, f: impl FnOnce() -> R) -> R {
 		sp_externalities::set_and_run_with_externalities(self, f)
+	}
+
+	pub fn extensions(&mut self) -> &mut Extensions {
+		&mut self.extensions
 	}
 }
 
