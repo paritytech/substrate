@@ -2004,12 +2004,6 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1de41fb8dba9714efd92241565cdff73f78508c95697dd56787d3cba27e2353"
-
-[[package]]
-name = "hashbrown"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e6073d0ca812575946eb5f35ff68dbe519907b25c42530389ff946dc84c6ead"
@@ -2762,7 +2756,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log 0.4.8",
- "lru 0.4.3",
+ "lru",
  "prost",
  "prost-build",
  "rand 0.7.3",
@@ -3124,20 +3118,11 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.1.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d8f669d42c72d18514dfca8115689c5f6370a17d980cb5bd777a67f404594c8"
-dependencies = [
- "hashbrown 0.5.0",
-]
-
-[[package]]
-name = "lru"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0609345ddee5badacf857d4f547e0e5a2e987db77085c24cd887f73573a04237"
 dependencies = [
- "hashbrown 0.6.3",
+ "hashbrown",
 ]
 
 [[package]]
@@ -3184,7 +3169,7 @@ checksum = "198831fe8722331a395bc199a5d08efbc197497ef354cb4c77b969c02ffc0fc4"
 dependencies = [
  "ahash",
  "hash-db",
- "hashbrown 0.6.3",
+ "hashbrown",
  "parity-util-mem",
 ]
 
@@ -6202,7 +6187,7 @@ dependencies = [
  "linked-hash-map",
  "linked_hash_set",
  "log 0.4.8",
- "lru 0.4.3",
+ "lru",
  "nohash-hasher",
  "parity-scale-codec",
  "parking_lot 0.10.0",
@@ -6247,7 +6232,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "libp2p",
  "log 0.4.8",
- "lru 0.1.17",
+ "lru",
  "parking_lot 0.10.0",
  "sc-network",
  "sp-runtime",
@@ -7042,7 +7027,7 @@ version = "2.0.0-dev"
 dependencies = [
  "derive_more",
  "log 0.4.8",
- "lru 0.4.3",
+ "lru",
  "parity-scale-codec",
  "parking_lot 0.10.0",
  "sp-block-builder",
@@ -8367,7 +8352,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de9222c50cc325855621271157c973da27a0dcd26fa06f8edf81020bd2333df0"
 dependencies = [
  "hash-db",
- "hashbrown 0.6.3",
+ "hashbrown",
  "log 0.4.8",
  "rustc-hex",
  "smallvec 1.2.0",
