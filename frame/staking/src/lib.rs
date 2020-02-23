@@ -1518,7 +1518,7 @@ impl<T: Trait> Module<T> {
 		<Ledger<T>>::insert(&who, &ledger);
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
-		let commission = Self::validators(&ledger.stash).commission;
+		let commission = Self::eras_validator_prefs(&era, &ledger.stash).commission;
 		let exposure = <ErasStakers<T>>::get(&era, &ledger.stash);
 
 		let exposure_part = Perbill::from_rational_approximation(
