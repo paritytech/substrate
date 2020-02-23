@@ -65,7 +65,7 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
-	type OnReapAccount = ();
+	type OnKilledAccount = ();
 	type OnNewAccount = ();
 	type AccountData = ();
 }
