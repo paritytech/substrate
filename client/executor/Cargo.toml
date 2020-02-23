@@ -1,28 +1,30 @@
 [package]
 name = "sc-executor"
-version = "0.8.0"
+version = "0.8.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 derive_more = "0.99.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sp-io = { version = "2.0.0", path = "../../primitives/io" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
-sp-serializer = { version = "2.0.0", path = "../../primitives/serializer" }
-sp-version = { version = "2.0.0", path = "../../primitives/version" }
-sp-panic-handler = { version = "2.0.0", path = "../../primitives/panic-handler" }
+sp-io = { version = "2.0.0-dev", path = "../../primitives/io" }
+sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
+sp-trie = { version = "2.0.0-dev", path = "../../primitives/trie" }
+sp-serializer = { version = "2.0.0-dev", path = "../../primitives/serializer" }
+sp-version = { version = "2.0.0-dev", path = "../../primitives/version" }
+sp-panic-handler = { version = "2.0.0-dev", path = "../../primitives/panic-handler" }
 wasmi = "0.6.2"
 parity-wasm = "0.41.0"
 lazy_static = "1.4.0"
-sp-wasm-interface = { version = "2.0.0", path = "../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "2.0.0", path = "../../primitives/runtime-interface" }
-sp-externalities = { version = "0.8.0", path = "../../primitives/externalities" }
-sc-executor-common = { version = "0.8", path = "common" }
-sc-executor-wasmi = { version = "0.8", path = "wasmi" }
-sc-executor-wasmtime = { version = "0.8", path = "wasmtime", optional = true }
+sp-wasm-interface = { version = "2.0.0-dev", path = "../../primitives/wasm-interface" }
+sp-runtime-interface = { version = "2.0.0-dev", path = "../../primitives/runtime-interface" }
+sp-externalities = { version = "0.8.0-dev", path = "../../primitives/externalities" }
+sc-executor-common = { version = "0.8.0-dev", path = "common" }
+sc-executor-wasmi = { version = "0.8.0-dev", path = "wasmi" }
+sc-executor-wasmtime = { version = "0.8.0-dev", path = "wasmtime", optional = true }
 parking_lot = "0.10.0"
 log = "0.4.8"
 libsecp256k1 = "0.3.4"
@@ -31,9 +33,9 @@ libsecp256k1 = "0.3.4"
 assert_matches = "1.3.0"
 wabt = "0.9.2"
 hex-literal = "0.2.1"
-sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
-substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
-sp-state-machine = { version = "0.8", path = "../../primitives/state-machine" }
+sc-runtime-test = { version = "2.0.0-dev", path = "runtime-test" }
+substrate-test-runtime = { version = "2.0.0-dev", path = "../../test-utils/runtime" }
+sp-state-machine = { version = "0.8.0-dev", path = "../../primitives/state-machine" }
 test-case = "0.3.3"
 
 [features]

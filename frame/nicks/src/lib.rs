@@ -104,7 +104,7 @@ decl_error! {
 		TooShort,
 		/// A name is too long.
 		TooLong,
-		/// An account in't named.
+		/// An account isn't named.
 		Unnamed,
 	}
 }
@@ -257,9 +257,9 @@ mod tests {
 		pub enum Origin for Test  where system = frame_system {}
 	}
 
-	// For testing the module, we construct most of a mock runtime. This means
+	// For testing the pallet, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of modules we want to use.
+	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -285,20 +285,19 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnReapAccount = Balances;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const CreationFee: u64 = 0;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 	parameter_types! {
 		pub const ReservationFee: u64 = 2;

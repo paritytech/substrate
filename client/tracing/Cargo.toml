@@ -1,9 +1,11 @@
 [package]
 name = "sc-tracing"
-version = "2.0.0"
+version = "2.0.0-dev"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 erased-serde = "0.3.9"
@@ -14,8 +16,7 @@ serde_json = "1.0.41"
 slog = { version = "2.5.2", features = ["nested-values"] }
 tracing-core = "0.1.7"
 
-sc-telemetry = { version = "2.0.0", path = "../telemetry" }
-grafana-data-source = { version = "0.8", path = "../../utils/grafana-data-source" }
+sc-telemetry = { version = "2.0.0-dev", path = "../telemetry" }
 
 [dev-dependencies]
 tracing = "0.1.10"

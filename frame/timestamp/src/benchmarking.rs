@@ -21,28 +21,17 @@ use super::*;
 use sp_std::prelude::*;
 
 use frame_system::RawOrigin;
-use sp_runtime::{BenchmarkResults, BenchmarkParameter, selected_benchmark};
-use sp_runtime::traits::{Benchmarking, BenchmarkingSetup, Dispatchable};
+use frame_benchmarking::benchmarks;
+use sp_runtime::traits::Dispatchable;
 
-/// Benchmark `set` extrinsic.
-struct Set;
-impl<T: Trait> BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for Set {
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-		vec![
-			// Current time ("Now")
-			(BenchmarkParameter::N, 1, 100),
-		]
+const MAX_TIME: u32 = 100;
+
+benchmarks! {
+	_ {
+		let n in 1 .. MAX_TIME => ();
 	}
 
-	fn instance(&self, components: &[(BenchmarkParameter, u32)])
-		-> Result<(Call<T>, RawOrigin<T::AccountId>), &'static str>
-	{
-		let user_origin = RawOrigin::None;
-		let now = components.iter().find(|&c| c.0 == BenchmarkParameter::N).unwrap().1;
-
-		// Return the `set` call
-		Ok((Call::<T>::set(now.into()), user_origin))
-	}
+	set {
+		let n in ...;
+	}: _(RawOrigin::None, n.into())
 }
-
-selected_benchmarks!(Set);

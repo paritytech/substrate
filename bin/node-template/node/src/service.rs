@@ -6,7 +6,6 @@ use sc_client::LongestChain;
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use sp_inherents::InherentDataProviders;
-use sc_network::{construct_simple_protocol};
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
@@ -18,11 +17,6 @@ native_executor_instance!(
 	node_template_runtime::api::dispatch,
 	node_template_runtime::native_version,
 );
-
-construct_simple_protocol! {
-	/// Demo protocol attachment for substrate.
-	pub struct NodeProtocol where Block = Block { }
-}
 
 /// Starts a `ServiceBuilder` for a full service.
 ///
@@ -41,8 +35,7 @@ macro_rules! new_full_start {
 			})?
 			.with_transaction_pool(|config, client, _fetcher| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
-				let pool = sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api));
-				Ok(pool)
+				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api)))
 			})?
 			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
 				let select_chain = select_chain.take()
@@ -58,7 +51,7 @@ macro_rules! new_full_start {
 				);
 
 				let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
-					sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
+					sc_consensus_aura::slot_duration(&*client)?,
 					aura_block_import,
 					Some(Box::new(grandpa_block_import.clone())),
 					None,
@@ -96,7 +89,7 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 		import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-	let service = builder.with_network_protocol(|_| Ok(NodeProtocol::new()))?
+	let service = builder
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
@@ -116,7 +109,7 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
 		let aura = sc_consensus_aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
-			sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
+			sc_consensus_aura::slot_duration(&*client)?,
 			client,
 			select_chain,
 			block_import,
@@ -146,44 +139,41 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 		gossip_duration: Duration::from_millis(333),
 		justification_period: 512,
 		name: Some(name),
-		observer_enabled: true,
+		observer_enabled: false,
 		keystore,
 		is_authority,
 	};
 
-	match (is_authority, disable_grandpa) {
-		(false, false) => {
-			// start the lightweight GRANDPA observer
-			service.spawn_task("grandpa-observer", grandpa::run_grandpa_observer(
-				grandpa_config,
-				grandpa_link,
-				service.network(),
-				service.on_exit(),
-			)?);
-		},
-		(true, false) => {
-			// start the full GRANDPA voter
-			let voter_config = grandpa::GrandpaParams {
-				config: grandpa_config,
-				link: grandpa_link,
-				network: service.network(),
-				inherent_data_providers: inherent_data_providers.clone(),
-				on_exit: service.on_exit(),
-				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
-				voting_rule: grandpa::VotingRulesBuilder::default().build(),
-			};
+	let enable_grandpa = !disable_grandpa;
+	if enable_grandpa {
+		// start the full GRANDPA voter
+		// NOTE: non-authorities could run the GRANDPA observer protocol, but at
+		// this point the full voter should provide better guarantees of block
+		// and vote data availability than the observer. The observer has not
+		// been tested extensively yet and having most nodes in a network run it
+		// could lead to finality stalls.
+		let grandpa_config = grandpa::GrandpaParams {
+			config: grandpa_config,
+			link: grandpa_link,
+			network: service.network(),
+			inherent_data_providers: inherent_data_providers.clone(),
+			on_exit: service.on_exit(),
+			telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
+			voting_rule: grandpa::VotingRulesBuilder::default().build(),
+		};
 
-			// the GRANDPA voter task is considered infallible, i.e.
-			// if it fails we take down the service with it.
-			service.spawn_essential_task("grandpa", grandpa::run_grandpa_voter(voter_config)?);
-		},
-		(_, true) => {
-			grandpa::setup_disabled_grandpa(
-				service.client(),
-				&inherent_data_providers,
-				service.network(),
-			)?;
-		},
+		// the GRANDPA voter task is considered infallible, i.e.
+		// if it fails we take down the service with it.
+		service.spawn_essential_task(
+			"grandpa-voter",
+			grandpa::run_grandpa_voter(grandpa_config)?
+		);
+	} else {
+		grandpa::setup_disabled_grandpa(
+			service.client(),
+			&inherent_data_providers,
+			service.network(),
+		)?;
 	}
 
 	Ok(service)
@@ -221,7 +211,7 @@ pub fn new_light(config: Configuration<GenesisConfig>)
 				finality_proof_import.create_finality_proof_request_builder();
 
 			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, ()>(
-				sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
+				sc_consensus_aura::slot_duration(&*client)?,
 				grandpa_block_import,
 				None,
 				Some(Box::new(finality_proof_import)),
@@ -232,7 +222,6 @@ pub fn new_light(config: Configuration<GenesisConfig>)
 
 			Ok((import_queue, finality_proof_request_builder))
 		})?
-		.with_network_protocol(|_| Ok(NodeProtocol::new()))?
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?

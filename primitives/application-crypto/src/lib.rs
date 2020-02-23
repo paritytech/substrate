@@ -436,3 +436,30 @@ macro_rules! wrap {
 		}
 	}
 }
+
+/// Generate the given code if the pair type is available.
+///
+/// The pair type is available when `feature = "std"` || `feature = "full_crypto"`.
+///
+/// # Example
+///
+/// ```
+/// sp_application_crypto::with_pair! {
+///     pub type Pair = ();
+/// }
+/// ```
+#[macro_export]
+#[cfg(any(feature = "std", feature = "full_crypto"))]
+macro_rules! with_pair {
+	( $( $def:tt )* ) => {
+		$( $def )*
+	}
+}
+
+
+#[doc(hidden)]
+#[macro_export]
+#[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
+macro_rules! with_pair {
+	( $( $def:tt )* ) => {}
+}

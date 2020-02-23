@@ -93,12 +93,9 @@ use sp_consensus_babe::inherents::BabeInherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use sp_consensus::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use sc_client_api::{
-	backend::{AuxStore, Backend},
-	call_executor::CallExecutor,
+	backend::AuxStore,
 	BlockchainEvents, ProvideUncles,
 };
-use sc_client::Client;
-
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 use futures::prelude::*;
@@ -119,7 +116,7 @@ use sp_api::ApiExt;
 
 mod aux_schema;
 mod verification;
-mod authorship;
+pub mod authorship;
 #[cfg(test)]
 mod tests;
 
@@ -487,27 +484,16 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			let signature = pair.sign(header_hash.as_ref());
 			let digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
 
-			BlockImportParams {
-				origin: BlockOrigin::Own,
-				header,
-				justification: None,
-				post_digests: vec![digest_item],
-				body: Some(body),
-				storage_changes: Some(storage_changes),
-				finalized: false,
-				auxiliary: Vec::new(), // block-weight is written in block import.
-				intermediates: {
-					let mut intermediates = HashMap::new();
-					intermediates.insert(
-						Cow::from(INTERMEDIATE_KEY),
-						Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
-					);
-					intermediates
-				},
-				fork_choice: None,
-				allow_missing_state: false,
-				import_existing: false,
-			}
+			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
+			import_block.post_digests.push(digest_item);
+			import_block.body = Some(body);
+			import_block.storage_changes = Some(storage_changes);
+			import_block.intermediates.insert(
+				Cow::from(INTERMEDIATE_KEY),
+				Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+			);
+
+			import_block
 		})
 	}
 
@@ -666,27 +652,28 @@ impl<Block: BlockT> BabeLink<Block> {
 }
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA> {
-	client: Arc<Client<B, E, Block, RA>>,
-	api: Arc<PRA>,
+pub struct BabeVerifier<Block: BlockT, Client> {
+	client: Arc<Client>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	config: Config,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	time_source: TimeSource,
 }
 
-impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
+impl<Block, Client> BabeVerifier<Block, Client>
+	where
+		Block: BlockT,
+		Client: HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
+		Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+{
 	fn check_inherents(
 		&self,
 		block: Block,
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
 	) -> Result<(), Error<Block>>
-		where
-			PRA: ProvideRuntimeApi<Block>,
-			PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
 	{
-		let inherent_res = self.api.runtime_api().check_inherents(
+		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
 			block,
 			inherent_data,
@@ -704,57 +691,11 @@ impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
 	}
 }
 
-#[allow(dead_code)]
-fn median_algorithm(
-	median_required_blocks: u64,
-	slot_duration: u64,
-	slot_number: u64,
-	slot_now: u64,
-	time_source: &mut (Option<Duration>, Vec<(Instant, u64)>),
-) {
-	let num_timestamps = time_source.1.len();
-	if num_timestamps as u64 >= median_required_blocks && median_required_blocks > 0 {
-		let mut new_list: Vec<_> = time_source.1.iter().map(|&(t, sl)| {
-			let offset: u128 = u128::from(slot_duration)
-				.checked_mul(1_000_000u128) // self.config.slot_duration returns milliseconds
-				.and_then(|x| {
-					x.checked_mul(u128::from(slot_number).saturating_sub(u128::from(sl)))
-				})
-				.expect("we cannot have timespans long enough for this to overflow; qed");
-
-			const NANOS_PER_SEC: u32 = 1_000_000_000;
-			let nanos = (offset % u128::from(NANOS_PER_SEC)) as u32;
-			let secs = (offset / u128::from(NANOS_PER_SEC)) as u64;
-
-			t + Duration::new(secs, nanos)
-		}).collect();
-
-		// Use a partial sort to move the median timestamp to the middle of the list
-		pdqselect::select(&mut new_list, num_timestamps / 2);
-
-		let &median = new_list
-			.get(num_timestamps / 2)
-			.expect("we have at least one timestamp, so this is a valid index; qed");
-
-		let now = Instant::now();
-		if now >= median {
-			time_source.0.replace(now - median);
-		}
-
-		time_source.1.clear();
-	} else {
-		time_source.1.push((Instant::now(), slot_now))
-	}
-}
-
-impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA> where
+impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 	Block: BlockT,
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
-	RA: Send + Sync,
-	PRA: ProvideRuntimeApi<Block> + Send + Sync + AuxStore + ProvideCache<Block>,
-	PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
-		+ BabeApi<Block, Error = sp_blockchain::Error>,
+	Client: HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
+	+ Send + Sync + AuxStore + ProvideCache<Block>,
+	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error> + BabeApi<Block, Error = sp_blockchain::Error>,
 {
 	fn verify(
 		&mut self,
@@ -823,7 +764,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 				// the header is valid but let's check if there was something else already
 				// proposed at the same slot by the given author
 				if let Some(equivocation_proof) = check_equivocation(
-					&*self.api,
+					&*self.client,
 					slot_now,
 					babe_pre_digest.slot_number(),
 					&header,
@@ -861,30 +802,17 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 
-				let mut intermediates = HashMap::new();
-				intermediates.insert(
+				let mut import_block = BlockImportParams::new(origin, pre_header);
+				import_block.post_digests.push(verified_info.seal);
+				import_block.body = body;
+				import_block.justification = justification;
+				import_block.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate {
-						epoch,
-					}) as Box<dyn Any>,
+					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
 				);
+				import_block.post_hash = Some(hash);
 
-				let block_import_params = BlockImportParams {
-					origin,
-					header: pre_header,
-					post_digests: vec![verified_info.seal],
-					body,
-					storage_changes: None,
-					finalized: false,
-					justification,
-					auxiliary: Vec::new(),
-					intermediates,
-					fork_choice: None,
-					allow_missing_state: false,
-					import_existing: false,
-				};
-
-				Ok((block_import_params, Default::default()))
+				Ok((import_block, Default::default()))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
@@ -924,37 +852,33 @@ fn register_babe_inherent_data_provider(
 /// it is missing.
 ///
 /// The epoch change tree should be pruned as blocks are finalized.
-pub struct BabeBlockImport<B, E, Block: BlockT, I, RA, PRA> {
+pub struct BabeBlockImport<Block: BlockT, Client, I> {
 	inner: I,
-	client: Arc<Client<B, E, Block, RA>>,
-	api: Arc<PRA>,
+	client: Arc<Client>,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	config: Config,
 }
 
-impl<B, E, Block: BlockT, I: Clone, RA, PRA> Clone for BabeBlockImport<B, E, Block, I, RA, PRA> {
+impl<Block: BlockT, I: Clone, Client> Clone for BabeBlockImport<Block, Client, I> {
 	fn clone(&self) -> Self {
 		BabeBlockImport {
 			inner: self.inner.clone(),
 			client: self.client.clone(),
-			api: self.api.clone(),
 			epoch_changes: self.epoch_changes.clone(),
 			config: self.config.clone(),
 		}
 	}
 }
 
-impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
+impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I> {
 	fn new(
-		client: Arc<Client<B, E, Block, RA>>,
-		api: Arc<PRA>,
+		client: Arc<Client>,
 		epoch_changes: SharedEpochChanges<Block, Epoch>,
 		block_import: I,
 		config: Config,
 	) -> Self {
 		BabeBlockImport {
 			client,
-			api,
 			inner: block_import,
 			epoch_changes,
 			config,
@@ -962,26 +886,23 @@ impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 	}
 }
 
-impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, RA, PRA> where
+impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client, Inner> where
 	Block: BlockT,
-	I: BlockImport<Block, Transaction = sp_api::TransactionFor<PRA, Block>> + Send + Sync,
-	I::Error: Into<ConsensusError>,
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
-	Client<B, E, Block, RA>: AuxStore,
-	RA: Send + Sync,
-	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block>,
-	PRA::Api: BabeApi<Block> + ApiExt<Block, StateBackend = B::State>,
+	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
+	Inner::Error: Into<ConsensusError>,
+	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ AuxStore + ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync,
+	Client::Api: BabeApi<Block> + ApiExt<Block>,
 {
 	type Error = ConsensusError;
-	type Transaction = sp_api::TransactionFor<PRA, Block>;
+	type Transaction = sp_api::TransactionFor<Client, Block>;
 
 	fn import_block(
 		&mut self,
 		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		let hash = block.post_header().hash();
+		let hash = block.post_hash();
 		let number = block.header.number().clone();
 
 		// early exit if block already in chain, otherwise the check for
@@ -998,7 +919,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		let slot_number = pre_digest.slot_number();
 
 		let parent_hash = *block.header.parent_hash();
-		let parent_header = self.client.header(&BlockId::Hash(parent_hash))
+		let parent_header = self.client.header(BlockId::Hash(parent_hash))
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 			.ok_or_else(|| ConsensusError::ChainLookup(babe_err(
 				Error::<Block>::ParentUnavailable(parent_hash, hash)
@@ -1070,7 +991,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
-		let info = self.client.chain_info();
+		let info = self.client.info();
 
 		if let Some(next_epoch_descriptor) = next_epoch_digest {
 			let next_epoch = epoch.increment(next_epoch_descriptor);
@@ -1090,7 +1011,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			// imported.
 			let prune_and_import = || {
 				prune_finalized(
-					&self.client,
+					self.client.clone(),
 					&mut epoch_changes,
 				)?;
 
@@ -1176,19 +1097,17 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 }
 
 /// Gets the best finalized block and its slot, and prunes the given epoch tree.
-fn prune_finalized<B, E, Block, RA>(
-	client: &Client<B, E, Block, RA>,
+fn prune_finalized<Block, Client>(
+	client: Arc<Client>,
 	epoch_changes: &mut EpochChangesFor<Block, Epoch>,
 ) -> Result<(), ConsensusError> where
 	Block: BlockT,
-	E: CallExecutor<Block> + Send + Sync,
-	B: Backend<Block>,
-	RA: Send + Sync,
+	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
-	let info = client.chain_info();
+	let info = client.info();
 
 	let finalized_slot = {
-		let finalized_header = client.header(&BlockId::Hash(info.finalized_hash))
+		let finalized_header = client.header(BlockId::Hash(info.finalized_hash))
 			.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?
 			.expect("best finalized hash was given by client; \
 				 finalized headers must exist in db; qed");
@@ -1214,16 +1133,12 @@ fn prune_finalized<B, E, Block, RA>(
 ///
 /// Also returns a link object used to correctly instantiate the import queue
 /// and background worker.
-pub fn block_import<B, E, Block: BlockT, I, RA, PRA>(
+pub fn block_import<Client, Block: BlockT, I>(
 	config: Config,
 	wrapped_block_import: I,
-	client: Arc<Client<B, E, Block, RA>>,
-	api: Arc<PRA>,
-) -> ClientResult<(BabeBlockImport<B, E, Block, I, RA, PRA>, BabeLink<Block>)> where
-	B: Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync,
-	RA: Send + Sync,
-	Client<B, E, Block, RA>: AuxStore,
+	client: Arc<Client>,
+) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)> where
+	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
 	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client)?;
 	let link = BabeLink {
@@ -1236,13 +1151,12 @@ pub fn block_import<B, E, Block: BlockT, I, RA, PRA>(
 	// epoch tree it is useful as a migration, so that nodes prune long trees on
 	// startup rather than waiting until importing the next epoch change block.
 	prune_finalized(
-		&client,
+		client.clone(),
 		&mut epoch_changes.lock(),
 	)?;
 
 	let import = BabeBlockImport::new(
 		client,
-		api,
 		epoch_changes,
 		wrapped_block_import,
 		config,
@@ -1260,28 +1174,24 @@ pub fn block_import<B, E, Block: BlockT, I, RA, PRA>(
 ///
 /// The block import object provided must be the `BabeBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
-pub fn import_queue<B, E, Block: BlockT, I, RA, PRA>(
+pub fn import_queue<Block: BlockT, Client, Inner>(
 	babe_link: BabeLink<Block>,
-	block_import: I,
+	block_import: Inner,
 	justification_import: Option<BoxJustificationImport<Block>>,
 	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
-	client: Arc<Client<B, E, Block, RA>>,
-	api: Arc<PRA>,
+	client: Arc<Client>,
 	inherent_data_providers: InherentDataProviders,
-) -> ClientResult<BabeImportQueue<Block, sp_api::TransactionFor<PRA, Block>>> where
-	B: Backend<Block> + 'static,
-	I: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<PRA, Block>>
+) -> ClientResult<BabeImportQueue<Block, sp_api::TransactionFor<Client, Block>>> where
+	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
-	E: CallExecutor<Block> + Clone + Send + Sync + 'static,
-	RA: Send + Sync + 'static,
-	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
-	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
+	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
+	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
+	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
 
 	let verifier = BabeVerifier {
 		client: client.clone(),
-		api,
 		inherent_data_providers,
 		config: babe_link.config,
 		epoch_changes: babe_link.epoch_changes,

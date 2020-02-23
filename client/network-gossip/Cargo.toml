@@ -1,19 +1,20 @@
 [package]
 description = "Gossiping for the Substrate network protocol"
 name = "sc-network-gossip"
-version = "0.8.0"
+version = "0.8.0-dev"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-log = "0.4.8"
-futures = { version = "0.3.1", features = ["compat"] }
-wasm-timer = "0.2"
+futures = "0.3.1"
 futures-timer = "3.0.1"
-futures01 = { package = "futures", version = "0.1.29" }
-libp2p = { version = "0.15.0", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { version = "0.16.1", default-features = false, features = ["libp2p-websocket"] }
+log = "0.4.8"
 lru = "0.1.2"
 parking_lot = "0.10.0"
-sc-network = { version = "0.8", path = "../network" }
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+sc-network = { version = "0.8.0-dev", path = "../network" }
+sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
+wasm-timer = "0.2"

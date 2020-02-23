@@ -592,6 +592,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				// Light client does not track those
 				state_reads: 0,
 				state_reads_cache: 0,
+				state_writes: 0,
 			}
 		})
 	}
@@ -814,7 +815,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn get_cht_fails_for_non_existant_cht() {
+	fn get_cht_fails_for_non_existent_cht() {
 		let cht_size: u64 = cht::size();
 		assert!(LightStorage::<Block>::new_test().header_cht_root(cht_size, cht_size / 2).unwrap().is_none());
 	}

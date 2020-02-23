@@ -19,7 +19,7 @@
 use super::*;
 use environment::HasVoted;
 use sc_network_test::{
-	Block, DummySpecialization, Hash, TestNetFactory, BlockImportAdapter, Peer,
+	Block, Hash, TestNetFactory, BlockImportAdapter, Peer,
 	PeersClient, PassThroughVerifier,
 };
 use sc_network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
@@ -68,7 +68,7 @@ type PeerData =
 			>
 		>
 	>;
-type GrandpaPeer = Peer<PeerData, DummySpecialization>;
+type GrandpaPeer = Peer<PeerData>;
 
 struct GrandpaTestNet {
 	peers: Vec<GrandpaPeer>,
@@ -90,7 +90,6 @@ impl GrandpaTestNet {
 }
 
 impl TestNetFactory for GrandpaTestNet {
-	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = PeerData;
 
@@ -147,7 +146,7 @@ impl TestNetFactory for GrandpaTestNet {
 				use crate::light_import::tests::light_block_import_without_justifications;
 
 				let authorities_provider = Arc::new(self.test_config.clone());
-				// forbid direct finalization using justification that cames with the block
+				// forbid direct finalization using justification that came with the block
 				// => light clients will try to fetch finality proofs
 				let import = light_block_import_without_justifications(
 					client.clone(),
@@ -171,7 +170,7 @@ impl TestNetFactory for GrandpaTestNet {
 	fn make_finality_proof_provider(
 		&self,
 		client: PeersClient
-	) -> Option<Arc<dyn sc_network::FinalityProofProvider<Block>>> {
+	) -> Option<Arc<dyn sc_network::config::FinalityProofProvider<Block>>> {
 		match client {
 			PeersClient::Full(_, ref backend)  => {
 				let authorities_provider = Arc::new(self.test_config.clone());
@@ -982,7 +981,7 @@ fn force_change_to_new_set() {
 
 	// it will only finalize if the forced transition happens.
 	// we add_blocks after the voters are spawned because otherwise
-	// the link-halfs have the wrong AuthoritySet
+	// the link-halves have the wrong AuthoritySet
 	run_to_completion(&mut runtime, 25, net, peers_a);
 }
 
@@ -1011,20 +1010,11 @@ fn allows_reimporting_change_blocks() {
 
 	let block = || {
 		let block = block.clone();
-		BlockImportParams {
-			origin: BlockOrigin::File,
-			header: block.header,
-			justification: None,
-			post_digests: Vec::new(),
-			body: Some(block.extrinsics),
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		}
+		let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
+		import.body = Some(block.extrinsics);
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+
+		import
 	};
 
 	assert_eq!(
@@ -1071,20 +1061,12 @@ fn test_bad_justification() {
 
 	let block = || {
 		let block = block.clone();
-		BlockImportParams {
-			origin: BlockOrigin::File,
-			header: block.header,
-			justification: Some(Vec::new()),
-			post_digests: Vec::new(),
-			body: Some(block.extrinsics),
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		}
+		let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
+		import.justification = Some(Vec::new());
+		import.body = Some(block.extrinsics);
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+
+		import
 	};
 
 	assert_eq!(
@@ -1393,7 +1375,7 @@ fn finalize_3_voters_1_light_observer() {
 
 	run_to_completion_with(&mut runtime, 20, net.clone(), authorities, |executor| {
 		executor.spawn(
-			run_grandpa_observer(
+			observer::run_grandpa_observer(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,
@@ -1805,23 +1787,13 @@ fn imports_justification_for_regular_blocks_on_import() {
 	};
 
 	// we import the block with justification attached
-	let block = BlockImportParams {
-		origin: BlockOrigin::File,
-		header: block.header,
-		justification: Some(justification.encode()),
-		post_digests: Vec::new(),
-		body: Some(block.extrinsics),
-		storage_changes: None,
-		finalized: false,
-		auxiliary: Vec::new(),
-		intermediates: Default::default(),
-		fork_choice: Some(ForkChoiceStrategy::LongestChain),
-		allow_missing_state: false,
-		import_existing: false,
-	};
+	let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
+	import.justification = Some(justification.encode());
+	import.body = Some(block.extrinsics);
+	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 	assert_eq!(
-		block_import.import_block(block, HashMap::new()).unwrap(),
+		block_import.import_block(import, HashMap::new()).unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: false,
 			clear_justification_requests: false,
