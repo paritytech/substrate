@@ -1408,6 +1408,19 @@ impl<T: Trait> Lookup for ChainContext<T> {
 	}
 }
 
+impl<T: Trait> StaticLookup for Module<T> {
+	type Source = T::AccountId;
+	type Target = T::AccountId;
+
+	fn lookup(a: Self::Source) -> Result<T::AccountId, LookupError> {
+		Ok(a)
+	}
+
+	fn unlookup(a: Self::Target) -> Self::Source {
+		a
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
