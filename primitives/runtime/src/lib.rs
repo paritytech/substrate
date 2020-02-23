@@ -318,7 +318,7 @@ impl Verify for MultiSignature {
 			(MultiSignature::Sr25519(ref sig), who) => sig.batch_verify(msg, &sr25519::Public::from_slice(who.as_ref())),
 			_ => {
 				BatchResult::Immediate(self.verify(msg, signer))
-			}
+			},
 		}
 	}
 }
@@ -350,7 +350,7 @@ impl Verify for AnySignature {
 			},
 			Ok(signature) => {
 				signature.batch_verify(msg, signer)
-			}
+			},
 		}
 	}
 }
