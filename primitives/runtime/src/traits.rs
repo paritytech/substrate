@@ -122,7 +122,9 @@ impl Verify for sp_core::ed25519::Signature {
 	}
 
 	fn batch_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> BatchResult {
-		sp_io::crypto::batch_push_ed25519(self, msg.get(), signer);
+		if !sp_io::crypto::batch_push_ed25519(self, msg.get(), signer) {
+			return BatchResult::Immediate(false)
+		}
 		BatchResult::Ok
 	}
 }
@@ -135,7 +137,9 @@ impl Verify for sp_core::sr25519::Signature {
 	}
 
 	fn batch_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> BatchResult {
-		sp_io::crypto::batch_push_sr25519(self, msg.get(), signer);
+		if !sp_io::crypto::batch_push_sr25519(self, msg.get(), signer) {
+			return BatchResult::Immediate(false)
+		}
 		BatchResult::Ok
 	}
 }

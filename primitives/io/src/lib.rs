@@ -433,35 +433,47 @@ pub trait Crypto {
 	}
 
 	/// Push `ed25519` signature for batch verification.
+	///
+	/// If no batching verification extension registered,
+	/// it will return the result of verification immeidately.
 	fn batch_push_ed25519(
 		&mut self,
 		sig: &ed25519::Signature,
 		msg: &[u8],
-		pub_key: &ed25519::Public
-	) {
-		self.extension::<VerificationExt>()
-			.expect("No verification extension in current context!")
-			.push_ed25519(
+		pub_key: &ed25519::Public,
+	) -> bool {
+		if let Some(extension) = self.extension::<VerificationExt>() {
+			extension.push_ed25519(
 				sig.clone(),
 				pub_key.clone(),
 				msg.to_vec(),
 			);
+			true
+		} else {
+			crypto::ed25519_verify(sig, msg, pub_key)
+		}
 	}
 
 	/// Push `sr25519` signature for batch verification.
+	///
+	/// If no batching verification extension registered,
+	/// it will return the result of verification immeidately.
 	fn batch_push_sr25519(
 		&mut self,
 		sig: &sr25519::Signature,
 		msg: &[u8],
-		pub_key: &sr25519::Public
-	) {
-		self.extension::<VerificationExt>()
-			.expect("No verification extension in current context!")
-			.push_sr25519(
+		pub_key: &sr25519::Public,
+	) -> bool {
+		if let Some(extension) = self.extension::<VerificationExt>() {
+			extension.push_sr25519(
 				sig.clone(),
 				pub_key.clone(),
 				msg.to_vec(),
 			);
+			true
+		} else {
+			crypto::sr25519_verify(sig, msg, pub_key)
+		}
 	}
 
 	/// Verify signatures batch.
