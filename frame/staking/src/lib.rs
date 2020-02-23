@@ -1631,7 +1631,12 @@ impl<T: Trait> Module<T> {
 	fn start_session(start_session: SessionIndex) {
 		let next_active_era = Self::active_era().map(|e| e + 1).unwrap_or(0);
 		if let Some(next_active_era_start_session_index) = Self::eras_start_session_index(next_active_era) {
-			if next_active_era_start_session_index <= start_session {
+			if next_active_era_start_session_index == start_session {
+				Self::start_era(start_session);
+			} else if next_active_era_start_session_index < start_session {
+				// This arm should never happen, but better handle it than to stall the
+				// staking pallet.
+				frame_support::print("Warning: A session appears to have been skipped.");
 				Self::start_era(start_session);
 			}
 		}
