@@ -89,7 +89,7 @@ pub trait ExtensionStore {
 	/// instead of this function to get type system support and automatic type downcasting.
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any>;
 
-	fn register_extension_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>);
+	fn register_extension_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) -> Result<(), Error>;
 
 	fn deregister_extension_by_type_id(&mut self, type_id: TypeId);
 }

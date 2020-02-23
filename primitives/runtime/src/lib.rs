@@ -343,7 +343,7 @@ impl Verify for AnySignature {
 	fn batch_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> BatchResult {
 		let msg = msg.get();
 		match sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref()) {
-			Err(e) => {
+			Err(_) => {
 				ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 					.map(|s| s.batch_verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
 					.unwrap_or(BatchResult::Immediate(false))

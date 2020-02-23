@@ -301,8 +301,12 @@ impl sp_externalities::ExtensionStore for BasicExternalities {
 		self.extensions.get_mut(type_id)
 	}
 
-	fn register_extension_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn sp_externalities::Extension>) {
-		self.extensions.register_with_type_id(type_id, extension).unwrap();
+	fn register_extension_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn sp_externalities::Extension>,
+	) -> Result<(), sp_externalities::Error> {
+		self.extensions.register_with_type_id(type_id, extension)
 	}
 
 	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) {

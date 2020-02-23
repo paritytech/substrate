@@ -549,10 +549,16 @@ where
 		self.extensions.as_mut().and_then(|exts| exts.get_mut(type_id))
 	}
 
-	fn register_extension_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) {
+	fn register_extension_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+	) -> Result<(), sp_externalities::Error> {
 		if let Some(ref mut extensions) = self.extensions {
 			// TODO: error
-			extensions.register_with_type_id(type_id, extension).unwrap();
+			extensions.register_with_type_id(type_id, extension)
+		} else {
+			Err(sp_externalities::Error::ExtensionsAreNotSupported)
 		}
 	}
 

@@ -192,8 +192,12 @@ impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
 		self.extensions.get_mut(type_id)
 	}
 
-	fn register_extension_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) {
-		self.extensions.register_with_type_id(type_id, extension).expect("TODO: ERROR");
+	fn register_extension_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+	) -> Result<(), sp_externalities::Error> {
+		self.extensions.register_with_type_id(type_id, extension)
 	}
 
 	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) {

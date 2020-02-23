@@ -614,7 +614,8 @@ sp_externalities::decl_extension! {
 pub trait Extensions {
 	/// Start verification extension.
 	fn start_verification_extension(&mut self) {
-		self.register_extension(VerificationExt(BatchVerifier::new()));
+		self.register_extension(VerificationExt(BatchVerifier::new()))
+			.expect("Failed to register required extension: VerificationExt");
 	}
 
 	/// Remove and drop verification extension.
