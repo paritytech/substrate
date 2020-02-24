@@ -105,8 +105,9 @@ use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
 use sp_staking::SessionIndex;
-use frame_support::{dispatch, ConsensusEngineId, decl_module, decl_event, decl_storage, decl_error};
-use frame_support::{ensure, traits::{OnReapAccount, Get, FindAuthor, ValidatorRegistration}, Parameter};
+use frame_support::{ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId};
+use frame_support::{traits::{Get, FindAuthor, ValidatorRegistration}, Parameter};
+use frame_support::dispatch::{self, DispatchResult, DispatchError};
 use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
@@ -361,6 +362,7 @@ decl_storage! {
 		///
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
+		// TODO: Migrate to a normal map now https://github.com/paritytech/substrate/issues/4917
 		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) T::ValidatorId
 			=> Option<T::Keys>;
 
@@ -368,11 +370,12 @@ decl_storage! {
 		///
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
+		// TODO: Migrate to a normal map now https://github.com/paritytech/substrate/issues/4917
 		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) (KeyTypeId, Vec<u8>)
 			=> Option<T::ValidatorId>;
 	}
 	add_extra_genesis {
-		config(keys): Vec<(T::ValidatorId, T::Keys)>;
+		config(keys): Vec<(T::AccountId, T::ValidatorId, T::Keys)>;
 		build(|config: &GenesisConfig<T>| {
 			if T::SessionHandler::KEY_TYPE_IDS.len() != T::Keys::key_ids().len() {
 				panic!("Number of keys in session handler and session keys does not match");
@@ -388,21 +391,17 @@ decl_storage! {
 					}
 				});
 
-			for (who, keys) in config.keys.iter().cloned() {
-				assert!(
-					<Module<T>>::load_keys(&who).is_none(),
-					"genesis config contained duplicate validator {:?}", who,
-				);
-
-				<Module<T>>::do_set_keys(&who, keys)
+			for (account, val, keys) in config.keys.iter().cloned() {
+				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
+				system::Module::<T>::inc_ref(&account);
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
 				.unwrap_or_else(|| {
 					frame_support::print("No initial validator provided by `SessionManager`, use \
 						session config keys to generate initial validator set.");
-					config.keys.iter().map(|(ref v, _)| v.clone()).collect()
+					config.keys.iter().map(|x| x.1.clone()).collect()
 				});
 			assert!(!initial_validators_0.is_empty(), "Empty validator set for session 0 in genesis block!");
 
@@ -445,6 +444,8 @@ decl_error! {
 		NoAssociatedValidatorId,
 		/// Registered duplicate key.
 		DuplicatedKey,
+		/// No keys are associated with this account.
+		NoKeys,
 	}
 }
 
@@ -467,6 +468,8 @@ decl_module! {
 		/// # <weight>
 		/// - O(log n) in number of accounts.
 		/// - One extra DB entry.
+		/// - Increases system account refs by one on success iff there were previously no keys set.
+		///   In this case, purge_keys will need to be called before the account can be removed.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
 		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
@@ -474,11 +477,25 @@ decl_module! {
 
 			ensure!(keys.ownership_proof_is_valid(&proof), Error::<T>::InvalidProof);
 
-			let who = T::ValidatorIdOf::convert(who).ok_or(Error::<T>::NoAssociatedValidatorId)?;
-
 			Self::do_set_keys(&who, keys)?;
 
 			Ok(())
+		}
+
+		/// Removes any session key(s) of the function caller.
+		/// This doesn't take effect until the next session.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// # <weight>
+		/// - O(N) in number of key types.
+		/// - Removes N + 1 DB entries.
+		/// - Reduces system account refs by one on success.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
+		fn purge_keys(origin) {
+			let who = ensure_signed(origin)?;
+			Self::do_purge_keys(&who)?;
 		}
 
 		/// Called when a block is initialized. Will rotate session if it is the last
@@ -612,10 +629,30 @@ impl<T: Trait> Module<T> {
 		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
 
-	// perform the set_key operation, checking for duplicates.
-	// does not set `Changed`.
-	fn do_set_keys(who: &T::ValidatorId, keys: T::Keys) -> dispatch::DispatchResult {
-		let old_keys = Self::load_keys(&who);
+	/// Perform the set_key operation, checking for duplicates. Does not set `Changed`.
+	///
+	/// This ensures that the reference counter in system is incremented appropriately and as such
+	/// must accept an account ID, rather than a validator ID.
+	fn do_set_keys(account: &T::AccountId, keys: T::Keys) -> dispatch::DispatchResult {
+		let who = T::ValidatorIdOf::convert(account.clone())
+			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
+
+		let old_keys = Self::inner_set_keys(&who, keys)?;
+		if old_keys.is_none() {
+			system::Module::<T>::inc_ref(&account);
+		}
+
+		Ok(())
+	}
+
+	/// Perform the set_key operation, checking for duplicates. Does not set `Changed`.
+	///
+	/// The old keys for this validator are returned, or `None` if there were none.
+	///
+	/// This does not ensure that the reference counter in system is incremented appropriately, it
+	/// must be done by the caller or the keys will be leaked in storage.
+	fn inner_set_keys(who: &T::ValidatorId, keys: T::Keys) -> Result<Option<T::Keys>, DispatchError> {
+		let old_keys = Self::load_keys(who);
 
 		for id in T::Keys::key_ids() {
 			let key = keys.get_raw(*id);
@@ -634,21 +671,25 @@ impl<T: Trait> Module<T> {
 				Self::clear_key_owner(*id, old);
 			}
 
-			Self::put_key_owner(*id, key, &who);
+			Self::put_key_owner(*id, key, who);
 		}
 
-		Self::put_keys(&who, &keys);
-
-		Ok(())
+		Self::put_keys(who, &keys);
+		Ok(old_keys)
 	}
 
-	fn prune_dead_keys(who: &T::ValidatorId) {
-		if let Some(old_keys) = Self::take_keys(who) {
-			for id in T::Keys::key_ids() {
-				let key_data = old_keys.get_raw(*id);
-				Self::clear_key_owner(*id, key_data);
-			}
+	fn do_purge_keys(account: &T::AccountId) -> DispatchResult {
+		let who = T::ValidatorIdOf::convert(account.clone())
+			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
+
+		let old_keys = Self::take_keys(&who).ok_or(Error::<T>::NoKeys)?;
+		for id in T::Keys::key_ids() {
+			let key_data = old_keys.get_raw(*id);
+			Self::clear_key_owner(*id, key_data);
 		}
+		system::Module::<T>::dec_ref(&account);
+
+		Ok(())
 	}
 
 	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
@@ -673,12 +714,6 @@ impl<T: Trait> Module<T> {
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
 		<KeyOwner<T>>::remove(DEDUP_KEY_PREFIX, (id, key_data));
-	}
-}
-
-impl<T: Trait> OnReapAccount<T::ValidatorId> for Module<T> {
-	fn on_reap_account(who: &T::ValidatorId) {
-		Self::prune_dead_keys(who);
 	}
 }
 
@@ -716,7 +751,7 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
+				l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
 			),
 		}.assimilate_storage(&mut t).unwrap();
 		sp_io::TestExternalities::new(t)
@@ -754,7 +789,10 @@ mod tests {
 			let id = DUMMY;
 			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
 
-			Session::on_reap_account(&1);
+			assert!(!System::allow_death(&1));
+			assert_ok!(Session::purge_keys(Origin::signed(1)));
+			assert!(System::allow_death(&1));
+
 			assert_eq!(Session::load_keys(&1), None);
 			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), None);
 		})

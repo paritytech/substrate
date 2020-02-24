@@ -60,5 +60,5 @@ pub fn run_command_for_a_while(base_path: &Path, dev: bool) {
 
 	// Stop the process
 	kill(Pid::from_raw(cmd.id().try_into().unwrap()), SIGINT).unwrap();
-	assert!(wait_for(&mut cmd, 20).map(|x| x.success()).unwrap_or_default());
+	assert!(wait_for(&mut cmd, 40).map(|x| x.success()).unwrap_or_default());
 }
