@@ -394,8 +394,8 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
 	pub unlocking: Vec<UnlockChunk<Balance>>,
-	/// The next era at which the staker can claim reward.
-	pub next_reward: EraIndex,
+	/// The latest and highest era which the staker has claimed reward for.
+	pub last_reward: Option<EraIndex>,
 }
 
 impl<
@@ -420,7 +420,7 @@ impl<
 			total,
 			active: self.active,
 			unlocking,
-			next_reward: self.next_reward
+			last_reward: self.last_reward
 		}
 	}
 
@@ -1012,7 +1012,7 @@ decl_module! {
 				total: value,
 				active: value,
 				unlocking: vec![],
-				next_reward: Self::current_era().unwrap_or(0),
+				last_reward: Self::current_era(),
 			};
 			Self::update_ledger(&controller, &item);
 		}
@@ -1457,11 +1457,13 @@ impl<T: Trait> Module<T> {
 		-> DispatchResult
 	{
 		let mut nominator_ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
-		if nominator_ledger.next_reward > era {
+
+		if nominator_ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
 			return Err(Error::<T>::InvalidEraToReward.into());
 		}
 
-		nominator_ledger.next_reward = era + 1;
+		// Note: This means that the reward for EraIndex::max() can be called indefinitely.
+		nominator_ledger.last_reward = Some(era);
 		<Ledger<T>>::insert(&who, &nominator_ledger);
 
 		let mut reward = Perbill::zero();
@@ -1510,11 +1512,11 @@ impl<T: Trait> Module<T> {
 
 	fn do_payout_validator(who: T::AccountId, era: EraIndex) -> DispatchResult {
 		let mut ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
-		if ledger.next_reward > era {
+		if ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
 			return Err(Error::<T>::InvalidEraToReward.into());
 		}
 
-		ledger.next_reward = era + 1;
+		ledger.last_reward = Some(era);
 		<Ledger<T>>::insert(&who, &ledger);
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
@@ -2010,7 +2012,7 @@ impl<T: Trait> Module<T> {
 				total: old.total,
 				active: old.active,
 				unlocking: old.unlocking,
-				next_reward: 0,
+				last_reward: None,
 			}
 		);
 		if let Err(e) = res {

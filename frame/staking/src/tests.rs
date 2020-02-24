@@ -70,12 +70,12 @@ fn basic_setup_works() {
 		// Account 10 controls the stash from account 11, which is 100 * balance_factor units
 		assert_eq!(
 			Staking::ledger(&10),
-			Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![], next_reward: 0 })
+			Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![], last_reward: None })
 		);
 		// Account 20 controls the stash from account 21, which is 200 * balance_factor units
 		assert_eq!(
 			Staking::ledger(&20),
-			Some(StakingLedger { stash: 21, total: 1000, active: 1000, unlocking: vec![], next_reward: 0 })
+			Some(StakingLedger { stash: 21, total: 1000, active: 1000, unlocking: vec![], last_reward: None })
 		);
 		// Account 1 does not control any stash
 		assert_eq!(Staking::ledger(&1), None);
@@ -89,7 +89,7 @@ fn basic_setup_works() {
 
 		assert_eq!(
 			Staking::ledger(100),
-			Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![], next_reward: 0 })
+			Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![], last_reward: None })
 		);
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 
@@ -270,6 +270,7 @@ fn staking_should_work() {
 			start_session(2);
 			// add a new candidate for being a validator. account 3 controlled by 4.
 			assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
+			let current_era_at_bond = Staking::current_era();
 			assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
 
 			// No effects will be seen so far.
@@ -311,7 +312,13 @@ fn staking_should_work() {
 			// Note: the stashed value of 4 is still lock
 			assert_eq!(
 				Staking::ledger(&4),
-				Some(StakingLedger { stash: 3, total: 1500, active: 1500, unlocking: vec![], next_reward: 1 })
+				Some(StakingLedger {
+					stash: 3,
+					total: 1500,
+					active: 1500,
+					unlocking: vec![],
+					last_reward: current_era_at_bond,
+				})
 			);
 			// e.g. it cannot spend more than 500 that it has free from the total 2000
 			assert_noop!(
@@ -848,7 +855,7 @@ fn reward_destination_works() {
 			total: 1000,
 			active: 1000,
 			unlocking: vec![],
-			next_reward: 0,
+			last_reward: None,
 		}));
 
 		// Compute total payout now for whole duration as other parameter won't change
@@ -869,7 +876,7 @@ fn reward_destination_works() {
 			total: 1000 + total_payout_0,
 			active: 1000 + total_payout_0,
 			unlocking: vec![],
-			next_reward: 1,
+			last_reward: Some(0),
 		}));
 
 		//Change RewardDestination to Stash
@@ -895,7 +902,7 @@ fn reward_destination_works() {
 			total: 1000 + total_payout_0,
 			active: 1000 + total_payout_0,
 			unlocking: vec![],
-			next_reward: 2,
+			last_reward: Some(1),
 		}));
 
 		// Change RewardDestination to Controller
@@ -922,7 +929,7 @@ fn reward_destination_works() {
 			total: 1000 + total_payout_0,
 			active: 1000 + total_payout_0,
 			unlocking: vec![],
-			next_reward: 3,
+			last_reward: Some(2),
 		}));
 		// Check that amount in staked account is NOT increased.
 		assert_eq!(Balances::free_balance(11), recorded_stash_balance);
@@ -988,7 +995,7 @@ fn bond_extra_works() {
 			total: 1000,
 			active: 1000,
 			unlocking: vec![],
-			next_reward: 0,
+			last_reward: None,
 		}));
 
 		// Give account 11 some large free balance greater than total
@@ -1002,7 +1009,7 @@ fn bond_extra_works() {
 			total: 1000 + 100,
 			active: 1000 + 100,
 			unlocking: vec![],
-			next_reward: 0,
+			last_reward: None,
 		}));
 
 		// Call the bond_extra function with a large number, should handle it
@@ -1013,7 +1020,7 @@ fn bond_extra_works() {
 			total: 1000000,
 			active: 1000000,
 			unlocking: vec![],
-			next_reward: 0,
+			last_reward: None,
 		}));
 	});
 }
@@ -1048,7 +1055,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			total: 1000,
 			active: 1000,
 			unlocking: vec![],
-			next_reward: 0,
+			last_reward: None,
 		}));
 		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11), Exposure { total: 1000, own: 1000, others: vec![] });
 
@@ -1060,7 +1067,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			total: 1000 + 100,
 			active: 1000 + 100,
 			unlocking: vec![],
-			next_reward: 0,
+			last_reward: None,
 		}));
 		// Exposure is a snapshot! only updated after the next era update.
 		assert_ne!(Staking::eras_stakers(Staking::active_era().unwrap(), 11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
@@ -1076,7 +1083,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			total: 1000 + 100,
 			active: 1000 + 100,
 			unlocking: vec![],
-			next_reward: 0,
+			last_reward: None,
 		}));
 		// Exposure is now updated.
 		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
@@ -1084,13 +1091,13 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// Unbond almost all of the funds in stash.
 		Staking::unbond(Origin::signed(10), 1000).unwrap();
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], next_reward: 0 })
+			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], last_reward: None })
 		);
 
 		// Attempting to free the balances now will fail. 2 eras need to pass.
 		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], next_reward: 0 }));
+			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], last_reward: None }));
 
 		// trigger next era.
 		start_era(3);
@@ -1098,7 +1105,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// nothing yet
 		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], next_reward: 0 }));
+			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], last_reward: None }));
 
 		// trigger next era.
 		start_era(5);
@@ -1106,7 +1113,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
 		// Now the value is free and the staking ledger is updated.
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 100, active: 100, unlocking: vec![], next_reward: 0 }));
+			stash: 11, total: 100, active: 100, unlocking: vec![], last_reward: None }));
 	})
 }
 
@@ -1167,7 +1174,7 @@ fn rebond_works() {
 					total: 1000,
 					active: 1000,
 					unlocking: vec![],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 
@@ -1192,7 +1199,7 @@ fn rebond_works() {
 						value: 900,
 						era: 2 + 3,
 					}],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 
@@ -1205,7 +1212,7 @@ fn rebond_works() {
 					total: 1000,
 					active: 1000,
 					unlocking: vec![],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 
@@ -1218,7 +1225,7 @@ fn rebond_works() {
 					total: 1000,
 					active: 100,
 					unlocking: vec![UnlockChunk { value: 900, era: 5 }],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 
@@ -1231,7 +1238,7 @@ fn rebond_works() {
 					total: 1000,
 					active: 600,
 					unlocking: vec![UnlockChunk { value: 400, era: 5 }],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 
@@ -1244,7 +1251,7 @@ fn rebond_works() {
 					total: 1000,
 					active: 1000,
 					unlocking: vec![],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 
@@ -1263,7 +1270,7 @@ fn rebond_works() {
 						UnlockChunk { value: 300, era: 5 },
 						UnlockChunk { value: 300, era: 5 },
 					],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 
@@ -1279,7 +1286,7 @@ fn rebond_works() {
 						UnlockChunk { value: 300, era: 5 },
 						UnlockChunk { value: 100, era: 5 },
 					],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 		})
@@ -1312,7 +1319,7 @@ fn rebond_is_fifo() {
 					total: 1000,
 					active: 1000,
 					unlocking: vec![],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 
@@ -1329,7 +1336,7 @@ fn rebond_is_fifo() {
 					unlocking: vec![
 						UnlockChunk { value: 400, era: 2 + 3 },
 					],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 
@@ -1347,7 +1354,7 @@ fn rebond_is_fifo() {
 						UnlockChunk { value: 400, era: 2 + 3 },
 						UnlockChunk { value: 300, era: 3 + 3 },
 					],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 
@@ -1366,7 +1373,7 @@ fn rebond_is_fifo() {
 						UnlockChunk { value: 300, era: 3 + 3 },
 						UnlockChunk { value: 200, era: 4 + 3 },
 					],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 
@@ -1382,7 +1389,7 @@ fn rebond_is_fifo() {
 						UnlockChunk { value: 400, era: 2 + 3 },
 						UnlockChunk { value: 100, era: 3 + 3 },
 					],
-					next_reward: 0,
+					last_reward: None,
 				})
 			);
 		})
@@ -1408,7 +1415,7 @@ fn reward_to_stake_works() {
 
 		// Now lets lower account 20 stake
 		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap(), 21).total, 69);
-		<Ledger<Test>>::insert(&20, StakingLedger { stash: 21, total: 69, active: 69, unlocking: vec![], next_reward: 0 });
+		<Ledger<Test>>::insert(&20, StakingLedger { stash: 21, total: 69, active: 69, unlocking: vec![], last_reward: None });
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
@@ -1628,6 +1635,7 @@ fn bond_with_no_staked_value() {
 			);
 			// bonded with absolute minimum value possible.
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::Controller));
+			let current_era_at_bond = Staking::current_era();
 			assert_eq!(Balances::locks(&1)[0].amount, 5);
 
 			// unbonding even 1 will cause all to be unbonded.
@@ -1639,7 +1647,7 @@ fn bond_with_no_staked_value() {
 					active: 0,
 					total: 5,
 					unlocking: vec![UnlockChunk {value: 5, era: 3}],
-					next_reward: 0,
+					last_reward: current_era_at_bond,
 				})
 			);
 
