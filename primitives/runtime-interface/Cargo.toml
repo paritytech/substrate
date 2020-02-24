@@ -1,24 +1,26 @@
 [package]
 name = "sp-runtime-interface"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-wasm-interface = { version = "2.0.0", path = "../wasm-interface", default-features = false }
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
-sp-runtime-interface-proc-macro = { version = "2.0.0", path = "proc-macro" }
-sp-externalities = { version = "0.8.0", optional = true, path = "../externalities" }
+sp-wasm-interface = { version = "2.0.0-dev", path = "../wasm-interface", default-features = false }
+sp-std = { version = "2.0.0-dev", default-features = false, path = "../std" }
+sp-runtime-interface-proc-macro = { version = "2.0.0-dev", path = "proc-macro" }
+sp-externalities = { version = "0.8.0-dev", optional = true, path = "../externalities" }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
 static_assertions = "1.0.0"
 primitive-types = { version = "0.6.2", default-features = false }
 
 [dev-dependencies]
-sp-runtime-interface-test-wasm = { version = "2.0.0", path = "test-wasm" }
-sp-state-machine = { version = "0.8", path = "../../primitives/state-machine" }
-sp-core = { version = "2.0.0", path = "../core" }
-sp-io = { version = "2.0.0", path = "../io" }
+sp-runtime-interface-test-wasm = { version = "2.0.0-dev", path = "test-wasm" }
+sp-state-machine = { version = "0.8.0-dev", path = "../../primitives/state-machine" }
+sp-core = { version = "2.0.0-dev", path = "../core" }
+sp-io = { version = "2.0.0-dev", path = "../io" }
 rustversion = "1.0.0"
 trybuild = "1.0.17"
 

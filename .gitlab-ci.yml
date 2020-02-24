@@ -5,6 +5,21 @@
 # pipelines can be triggered manually in the web
 # setting DEPLOY_TAG will only deploy the tagged image
 
+# SAMPLE JOB TEMPLATE - This is not a complete example but is enough to build a
+# simple CI job. For full documentation, visit https://docs.gitlab.com/ee/ci/yaml/
+#
+# my-example-job:
+#   stage:                           test # One of the stages listed below this job (required)
+#   image:                           parity/tools:latest # Any docker image (required)
+#   allow_failure:                   true # Allow the pipeline to continue if this job fails (default: false)
+#   dependencies:
+#     - build-rust-doc-release # Any jobs that are required to run before this job (optional)
+#   variables:
+#     MY_ENVIRONMENT_VARIABLE:       "some useful value" # Environment variables passed to the job (optional)
+#   script:
+#     - echo "List of shell commands to run in your job"
+#     - echo "You can also just specify a script here, like so:"
+#     - ./scripts/gitlab/my_amazing_script.sh
 
 stages:
   - test
@@ -524,7 +539,16 @@ publish-gh-doc:
   after_script:
     - rm -vrf ${HOME}/.gitconfig
 
-
+publish-draft-release:
+  stage:                           publish
+  image:                           parity/tools:latest
+  only:
+    - tags
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    - ./scripts/gitlab/publish_draft_release.sh
+  interruptible:                   true
+  allow_failure:                   true
 
 .deploy-template:                  &deploy
   stage:                           kubernetes

@@ -23,9 +23,9 @@
 //! need some strong assumptions about the particular runtime.
 //!
 //! The RPCs available in this crate however can make some assumptions
-//! about how the runtime is constructed and what `SRML` modules
+//! about how the runtime is constructed and what FRAME pallets
 //! are part of it. Therefore all node-runtime-specific RPCs can
-//! be placed here or imported from corresponding `SRML` RPC definitions.
+//! be placed here or imported from corresponding FRAME RPC definitions.
 
 #![warn(missing_docs)]
 

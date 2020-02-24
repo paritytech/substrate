@@ -19,11 +19,6 @@ use structopt::StructOpt;
 
 /// An overarching CLI command definition.
 #[derive(Clone, Debug, StructOpt)]
-#[structopt(settings = &[
-	structopt::clap::AppSettings::GlobalVersion,
-	structopt::clap::AppSettings::ArgsNegateSubcommands,
-	structopt::clap::AppSettings::SubcommandsNegateReqs,
-])]
 pub struct Cli {
 	/// Possible subcommand with parameters.
 	#[structopt(subcommand)]
@@ -53,6 +48,13 @@ pub enum Subcommand {
 		about = "Decode given block or extrinsic using current native runtime."
 	)]
 	Inspect(node_inspect::cli::InspectCmd),
+
+	/// The custom benchmark subcommmand benchmarking runtime pallets.
+	#[structopt(
+		name = "benchmark",
+		about = "Benchmark runtime pallets."
+	)]
+	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 }
 
 /// The `factory` command used to generate transactions.

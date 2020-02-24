@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Traits for SRML.
+//! Traits for FRAME.
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
@@ -734,7 +734,8 @@ pub trait VestingSchedule<AccountId> {
 	type Currency: Currency<AccountId>;
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
-	fn vesting_balance(who: &AccountId) -> <Self::Currency as Currency<AccountId>>::Balance;
+	/// Returns `None` if the account has no vesting schedule.
+	fn vesting_balance(who: &AccountId) -> Option<<Self::Currency as Currency<AccountId>>::Balance>;
 
 	/// Adds a vesting schedule to a given account.
 	///

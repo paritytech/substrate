@@ -1,16 +1,18 @@
 [package]
 name = "node-primitives"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-core = { version = "2.0.0-dev", default-features = false, path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-sp-serializer = { version = "2.0.0", path = "../../../primitives/serializer" }
+sp-serializer = { version = "2.0.0-dev", path = "../../../primitives/serializer" }
 pretty_assertions = "0.6.1"
 
 [features]

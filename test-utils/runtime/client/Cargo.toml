@@ -1,19 +1,21 @@
 [package]
 name = "substrate-test-runtime-client"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sc-block-builder = { version = "0.8", path = "../../../client/block-builder" }
-substrate-test-client = { version = "2.0.0", path = "../../client" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-substrate-test-runtime = { version = "2.0.0", path = "../../runtime" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sp-api = { version = "2.0.0", path = "../../../primitives/api" }
-sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
+sc-block-builder = { version = "0.8.0-dev", path = "../../../client/block-builder" }
+substrate-test-client = { version = "2.0.0-dev", path = "../../client" }
+sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
+substrate-test-runtime = { version = "2.0.0-dev", path = "../../runtime" }
+sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
+sp-api = { version = "2.0.0-dev", path = "../../../primitives/api" }
+sp-blockchain = { version = "2.0.0-dev", path = "../../../primitives/blockchain" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sc-client-api = { version = "2.0.0", path = "../../../client/api" }
-sc-client = { version = "0.8", path = "../../../client/" }
+sc-client-api = { version = "2.0.0-dev", path = "../../../client/api" }
+sc-client = { version = "0.8.0-dev", path = "../../../client/" }
 futures = "0.3.1"
