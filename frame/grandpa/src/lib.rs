@@ -78,16 +78,14 @@ pub trait Trait: frame_system::Trait {
 pub trait HandleEquivocation<T: Trait> {
 	type KeyOwnerProof: Clone + Debug + Decode + Encode + PartialEq;
 	type KeyOwnerIdentification;
+	type Offence: GrandpaOffence<Self::KeyOwnerIdentification>;
 
 	fn check_proof(
 		equivocation_report: &EquivocationReport<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
 	) -> Option<(Self::KeyOwnerIdentification, SessionIndex, u32)>;
 
-	fn report_offence(
-		reporters: Vec<T::AccountId>,
-		offence: GrandpaEquivocationOffence<Self::KeyOwnerIdentification>,
-	);
+	fn report_offence(reporters: Vec<T::AccountId>, offence: Self::Offence);
 
 	fn submit_equivocation_report(
 		equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
@@ -98,6 +96,7 @@ pub trait HandleEquivocation<T: Trait> {
 impl<T: Trait> HandleEquivocation<T> for () {
 	type KeyOwnerProof = ();
 	type KeyOwnerIdentification = ();
+	type Offence = GrandpaEquivocationOffence<Self::KeyOwnerIdentification>;
 
 	fn check_proof(
 		_equivocation_report: &EquivocationReport<T::Hash, T::BlockNumber>,
@@ -121,11 +120,19 @@ impl<T: Trait> HandleEquivocation<T> for () {
 	}
 }
 
-pub struct EquivocationHandler<P, S, R, K> {
-	_phantom: sp_std::marker::PhantomData<(P, S, R, K)>,
+pub struct EquivocationHandler<
+	P,
+	S,
+	R,
+	K,
+	O = GrandpaEquivocationOffence<
+		<P as KeyOwnerProofSystem<(KeyTypeId, Vec<u8>)>>::IdentificationTuple,
+	>,
+> {
+	_phantom: sp_std::marker::PhantomData<(P, S, O, R, K)>,
 }
 
-impl<P, S, R, K> Default for EquivocationHandler<P, S, R, K> {
+impl<P, S, R, K, O> Default for EquivocationHandler<P, S, R, K, O> {
 	fn default() -> Self {
 		Self {
 			_phantom: Default::default(),
@@ -133,23 +140,18 @@ impl<P, S, R, K> Default for EquivocationHandler<P, S, R, K> {
 	}
 }
 
-impl<T, P, S, R, K> HandleEquivocation<T> for EquivocationHandler<P, S, R, K> where
-	T: Trait<HandleEquivocation=Self>,
+impl<T, P, S, R, K, O> HandleEquivocation<T> for EquivocationHandler<P, S, R, K, O>
+where
+	T: Trait<HandleEquivocation = Self>,
 	// A system for proving ownership of keys, i.e. that a given key was part
 	// of a validator set, needed for validating equivocation reports. The
 	// session index and validator count of the session are part of the proof
 	// as extra data.
-	P: KeyOwnerProofSystem<
-		(KeyTypeId, Vec<u8>),
-		ExtraData = (SessionIndex, u32),
-	>,
+	P: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), ExtraData = (SessionIndex, u32)>,
 	// A transaction submitter. Used for submitting equivocation reports.
 	S: SubmitSignedTransaction<T, <T as Trait>::Call>,
-	R: ReportOffence<
-		T::AccountId,
-		P::IdentificationTuple,
-		GrandpaEquivocationOffence<P::IdentificationTuple>,
-	>,
+	O: GrandpaOffence<P::IdentificationTuple>,
+	R: ReportOffence<T::AccountId, P::IdentificationTuple, O>,
 	// Key type to use when signing equivocation report transactions, must be
 	// convertible to and from an account id since that's what we need to use
 	// to sign transactions.
@@ -157,6 +159,7 @@ impl<T, P, S, R, K> HandleEquivocation<T> for EquivocationHandler<P, S, R, K> wh
 {
 	type KeyOwnerProof = P::Proof;
 	type KeyOwnerIdentification = P::IdentificationTuple;
+	type Offence = O;
 
 	fn check_proof(
 		equivocation_report: &EquivocationReport<T::Hash, T::BlockNumber>,
@@ -171,14 +174,8 @@ impl<T, P, S, R, K> HandleEquivocation<T> for EquivocationHandler<P, S, R, K> wh
 		Some((offender, session_index, validator_set_count))
 	}
 
-	fn report_offence(
-		reporters: Vec<T::AccountId>,
-		offence: GrandpaEquivocationOffence<Self::KeyOwnerIdentification>,
-	) {
-		R::report_offence(
-			reporters,
-			offence,
-		);
+	fn report_offence(reporters: Vec<T::AccountId>, offence: O) {
+		R::report_offence(reporters, offence);
 	}
 
 	fn submit_equivocation_report(
@@ -407,15 +404,13 @@ decl_module! {
 			// report to the offences module rewarding the sender.
 			T::HandleEquivocation::report_offence(
 				vec![reporter_id],
-				GrandpaEquivocationOffence {
+				<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
 					session_index,
 					validator_set_count,
 					offender,
-					time_slot: GrandpaTimeSlot {
-						set_id,
-						round: equivocation_report.round(),
-					},
-				},
+					set_id,
+					equivocation_report.round(),
+				),
 			);
 		}
 
@@ -728,7 +723,38 @@ pub struct GrandpaEquivocationOffence<FullIdentification> {
 	offender: FullIdentification,
 }
 
-impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocationOffence<FullIdentification> {
+pub trait GrandpaOffence<FullIdentification>: Offence<FullIdentification> {
+	fn new(
+		session_index: SessionIndex,
+		validator_set_count: u32,
+		offender: FullIdentification,
+		set_id: SetId,
+		round: RoundNumber,
+	) -> Self;
+}
+
+impl<FullIdentification: Clone> GrandpaOffence<FullIdentification>
+	for GrandpaEquivocationOffence<FullIdentification>
+{
+	fn new(
+		session_index: SessionIndex,
+		validator_set_count: u32,
+		offender: FullIdentification,
+		set_id: SetId,
+		round: RoundNumber,
+	) -> Self {
+		GrandpaEquivocationOffence {
+			session_index,
+			validator_set_count,
+			offender,
+			time_slot: GrandpaTimeSlot { set_id, round },
+		}
+	}
+}
+
+impl<FullIdentification: Clone> Offence<FullIdentification>
+	for GrandpaEquivocationOffence<FullIdentification>
+{
 	const ID: Kind = *b"grandpa:equivoca";
 	type TimeSlot = GrandpaTimeSlot;
 
