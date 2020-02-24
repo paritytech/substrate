@@ -172,9 +172,10 @@ pub trait BlockImportOperation<Block: BlockT> {
 /// trait for performing operations on the backend
 pub trait ClientBackend<Block: BlockT, B: Backend<Block>> {
 	/// Lock the import lock, and run operations inside.
-	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err> where
-		F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
-		Err: From<sp_blockchain::Error>;
+	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err>
+		where
+			F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
+			Err: From<sp_blockchain::Error>;
 }
 
 /// Finalize Facilities
