@@ -81,8 +81,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 224,
-	impl_version: 2,
+	spec_version: 225,
+	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -131,7 +131,7 @@ impl frame_system::Trait for Runtime {
 	type ModuleToIndex = ModuleToIndex;
 	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
-	type OnReapAccount = (Balances, Staking, Contracts, Session, Recovery);
+	type OnKilledAccount = ();
 }
 
 parameter_types! {
