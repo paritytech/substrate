@@ -108,6 +108,24 @@ impl Clone for BenchDb {
 	}
 }
 
+/// Type of block for generation
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum BlockType {
+	/// Bunch of random transfers.
+	RandomTransfers(usize),
+	/// Bunch of random transfers that drain all of the source balance.
+	RandomTransfersReaping(usize),
+}
+
+impl BlockType {
+	/// Number of transactions for this block type.
+	pub fn transactions(&self) -> usize {
+		match self {
+			Self::RandomTransfers(v) | Self::RandomTransfersReaping(v) => *v,
+		}
+	}
+}
+
 impl BenchDb {
 	/// New immutable benchmarking database.
 	///
@@ -162,7 +180,7 @@ impl BenchDb {
 	}
 
 	/// Generate new block using this database.
-	pub fn generate_block(&mut self, transactions: usize) -> Block {
+	pub fn generate_block(&mut self, block_type: BlockType) -> Block {
 		let (client, _backend) = Self::bench_client(
 			self.directory_guard.path(),
 			Profile::Wasm,
@@ -202,7 +220,7 @@ impl BenchDb {
 
 		let mut iteration = 0;
 		let start = std::time::Instant::now();
-		for _ in 0..transactions {
+		for _ in 0..block_type.transactions() {
 
 			let sender = self.keyring.at(iteration);
 			let receiver = get_account_id_from_seed::<sr25519::Public>(
@@ -215,7 +233,10 @@ impl BenchDb {
 					function: Call::Balances(
 						BalancesCall::transfer(
 							pallet_indices::address::Address::Id(receiver),
-							1*DOLLARS
+							match block_type {
+								BlockType::RandomTransfers(_) => 1*DOLLARS,
+								BlockType::RandomTransfersReaping(_) => 99*DOLLARS,
+							}
 						)
 					),
 				},
