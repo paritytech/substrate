@@ -159,11 +159,12 @@ mod benchmarking;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
+use sp_io::hashing::twox_64;
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
 	weights::SimpleDispatchInfo, traits::{
-		Currency, OnReapAccount, OnUnbalanced, TryDrop, StoredMap,
+		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
 		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status
@@ -178,7 +179,7 @@ use sp_runtime::{
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 use frame_support::storage::migration::{
-	get_storage_value, take_storage_value, put_storage_value, StorageIterator
+	get_storage_value, take_storage_value, put_storage_value, StorageIterator, have_storage_value
 };
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
@@ -609,7 +610,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		for (hash, balances) in StorageIterator::<AccountData<T::Balance>>::new(b"Balances", b"Account").drain() {
 			let nonce = take_storage_value::<T::Index>(b"System", b"AccountNonce", &hash).unwrap_or_default();
-			put_storage_value(b"System", b"Account", &hash, (nonce, balances));
+			let mut refs: system::RefCount = 0;
+			// The items in Kusama that would result in a ref count being incremented.
+			if have_storage_value(b"Democracy", b"Proxy", &hash) { refs += 1 }
+			// We skip Recovered since it's being replaced anyway.
+			let mut prefixed_hash = twox_64(&b":session:keys"[..]).to_vec();
+			prefixed_hash.extend(&b":session:keys"[..]);
+			prefixed_hash.extend(&hash[..]);
+			if have_storage_value(b"Session", b"NextKeys", &prefixed_hash) { refs += 1 }
+			if have_storage_value(b"Staking", b"Bonded", &hash) { refs += 1 }
+			put_storage_value(b"System", b"Account", &hash, (nonce, refs, &balances));
 		}
 	}
 
@@ -721,14 +731,21 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				}
 			}
 		});
-		Locks::<T, I>::insert(who, locks);
-	}
-}
 
-impl<T: Trait<I>, I: Instance> OnReapAccount<T::AccountId> for Module<T, I> {
-	fn on_reap_account(who: &T::AccountId) {
-		Locks::<T, I>::remove(who);
-		Account::<T, I>::remove(who);
+		let existed = Locks::<T, I>::contains_key(who);
+		if locks.is_empty() {
+			Locks::<T, I>::remove(who);
+			if existed {
+				// TODO: use Locks::<T, I>::hashed_key
+				// https://github.com/paritytech/substrate/issues/4969
+				system::Module::<T>::dec_ref(who);
+			}
+		} else {
+			Locks::<T, I>::insert(who, locks);
+			if !existed {
+				system::Module::<T>::inc_ref(who);
+			}
+		}
 	}
 }
 
@@ -923,7 +940,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type Version = T::Version;
 	type ModuleToIndex = T::ModuleToIndex;
 	type OnNewAccount = T::OnNewAccount;
-	type OnReapAccount = T::OnReapAccount;
+	type OnKilledAccount = T::OnKilledAccount;
 	type AccountData = T::AccountData;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
@@ -1040,6 +1057,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 				)?;
 
 				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
+				let allow_death = allow_death && system::Module::<T>::allow_death(transactor);
 				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
 
 				Ok(())
@@ -1280,6 +1298,17 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 				Ok(value - actual)
 			})
 		})
+	}
+}
+
+/// Implement `OnKilledAccount` to remove the local account, if using local account storage.
+///
+/// NOTE: You probably won't need to use this! This only needs to be "wired in" to System module
+/// if you're using the local balance storage. **If you're using the composite system account
+/// storage (which is the default in most examples and tests) then there's no need.**
+impl<T: Trait<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
+	fn on_killed_account(who: &T::AccountId) {
+		Account::<T, I>::remove(who);
 	}
 }
 
