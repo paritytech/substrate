@@ -327,7 +327,7 @@ decl_storage! {
 
 		/// Digest of the current block, also part of the block header.
 		///
-		/// Put in on_initialize and removed in on_finalize, thus returns Default in between
+		/// Put in `on_initialize` and removed in `on_finalize`, thus returns Default in between
 		/// blocks.
 		Digest get(fn digest): DigestOf<T>;
 

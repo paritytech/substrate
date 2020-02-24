@@ -189,7 +189,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let base_fee = T::TransactionBaseFee::get();
 			base_fee.saturating_add(adjusted_fee)
 		} else {
-			0u32.into()
+			Zero::zero()
 		}
 	}
 }
