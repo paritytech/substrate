@@ -1464,12 +1464,10 @@ impl<T: Trait> Module<T> {
 			return Err(Error::<T>::InvalidNumberOfNominations.into());
 		}
 
-		let era_payout = match <ErasValidatorReward<T>>::get(&era) {
-			Some(era_payout) => era_payout,
-			// Note: Era has no reward to be claimed, era may be futur. better not to update
-			// `ledger.last_reward` in this case.
-			None => return Err(Error::<T>::InvalidEraToReward.into())
-		};
+		// Note: if era has no reward to be claimed, era may be futur. better not to update
+		// `nominator_ledger.last_reward` in this case.
+		let era_payout = <ErasValidatorReward<T>>::get(&era)
+			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
 
 		let mut nominator_ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
 
@@ -1522,12 +1520,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn do_payout_validator(who: T::AccountId, era: EraIndex) -> DispatchResult {
-		let era_payout = match <ErasValidatorReward<T>>::get(&era) {
-			Some(era_payout) => era_payout,
-			// Note: Era has no reward to be claimed, era may be futur. better not to update
-			// `ledger.last_reward` in this case.
-			None => return Err(Error::<T>::InvalidEraToReward.into())
-		};
+		// Note: if era has no reward to be claimed, era may be futur. better not to update
+		// `ledger.last_reward` in this case.
+		let era_payout = <ErasValidatorReward<T>>::get(&era)
+			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
 
 		let mut ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
 		if ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
