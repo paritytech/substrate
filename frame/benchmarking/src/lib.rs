@@ -20,6 +20,8 @@
 
 mod utils;
 pub use utils::*;
+#[doc(hidden)]
+pub use sp_io::storage::root as storage_root;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -177,12 +179,17 @@ macro_rules! impl_benchmark {
 							// Commit the externalities to the database, flushing the DB cache.
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
-							// Run the benchmark.
-							let start = $crate::benchmarking::current_time();
+							// Time the extrinsic logic.
+							let start_extrinsic = $crate::benchmarking::current_time();
 							call.dispatch(caller.into())?;
-							let finish = $crate::benchmarking::current_time();
-							let elapsed = finish - start;
-							results.push((c.clone(), elapsed));
+							let finish_extrinsic = $crate::benchmarking::current_time();
+							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
+							// Time the storage root recalculation.
+							let start_storage_root = $crate::benchmarking::current_time();
+							$crate::storage_root();
+							let finish_storage_root = $crate::benchmarking::current_time();
+							let elapsed_storage_root = finish_storage_root - start_storage_root;
+							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
 							// Wipe the DB back to the genesis state.
 							$crate::benchmarking::wipe_db();
 						}
