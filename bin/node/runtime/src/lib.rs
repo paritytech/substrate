@@ -587,10 +587,15 @@ impl pallet_society::Trait for Runtime {
 	type ChallengePeriod = ChallengePeriod;
 }
 
+parameter_types! {
+	pub const VestingDeposit = 100 * DOLLARS;
+}
+
 impl pallet_vesting::Trait for Runtime {
 	type Event = Event;
 	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;
+	type VestingDeposit = VestingDeposit;
 }
 
 construct_runtime!(

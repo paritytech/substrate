@@ -52,9 +52,10 @@ use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
 	StaticLookup, Zero, AtLeast32Bit, MaybeSerializeDeserialize, Convert
 }};
-use frame_support::{decl_module, decl_event, decl_storage, decl_error};
+use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
 use frame_support::traits::{
-	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier, ExistenceRequirement
+	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier, ExistenceRequirement,
+	Get,
 };
 use frame_support::weights::SimpleDispatchInfo;
 use frame_system::{self as system, ensure_signed};
@@ -70,6 +71,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// Convert the block number into a balance.
 	type BlockNumberToBalance: Convert<Self::BlockNumber, BalanceOf<Self>>;
+
+	/// The minimum amount to be transferred to create a new vesting schedule.
+	type VestingDeposit: Get<BalanceOf<Self>>;
 }
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
@@ -159,6 +163,8 @@ decl_error! {
 		NotVesting,
 		/// An existing vesting schedule already exists for this account that cannot be clobbered.
 		ExistingVestingSchedule,
+		/// Amount being transferred is too low to create a vesting schedule.
+		AmountLow,
 	}
 }
 
@@ -166,6 +172,9 @@ decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
+
+		/// The minimum amount to be transferred to create a new vesting schedule.
+		const VestingDeposit: BalanceOf<T> = T::VestingDeposit::get();
 
 		fn deposit_event() = default;
 
@@ -229,6 +238,8 @@ decl_module! {
 		) -> DispatchResult {
 			let transactor = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(target)?;
+
+			ensure!(schedule.locked >= T::VestingDeposit::get(), Error::<T>::AmountLow);
 
 			Self::add_vesting_schedule(&who, schedule.locked, schedule.per_block, schedule.starting_block)?;
 
@@ -378,10 +389,14 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 	}
+	parameter_types! {
+		pub const VestingDeposit: u64 = 256 * 2;
+	}
 	impl Trait for Test {
 		type Event = ();
 		type Currency = Balances;
 		type BlockNumberToBalance = Identity;
+		type VestingDeposit = VestingDeposit;
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
@@ -672,19 +687,19 @@ mod tests {
 				let user4_free_balance_updated = Balances::free_balance(&4);
 				assert_eq!(user4_free_balance_updated, 256 * 45);
 				// Account 4 has 5 * 256 locked.
-				assert_eq!(Vesting::vesting_balance(&4), 256 * 5);
+				assert_eq!(Vesting::vesting_balance(&4), Some(256 * 5));
 
 				System::set_block_number(20);
 				assert_eq!(System::block_number(), 20);
 
 				// Account 4 has 5 * 64 unites vested by block 20.
-				assert_eq!(Vesting::vesting_balance(&4), 10 * 64);
+				assert_eq!(Vesting::vesting_balance(&4), Some(10 * 64));
 
 				System::set_block_number(30);
 				assert_eq!(System::block_number(), 30);
 
 				// Account 4 has fully vested.
-				assert_eq!(Vesting::vesting_balance(&4), 0);
+				assert_eq!(Vesting::vesting_balance(&4), Some(0));
 			});
 	}
 
@@ -707,7 +722,7 @@ mod tests {
 				};
 				assert_eq!(Vesting::vesting(&2), Some(user2_vesting_schedule));
 
-				// The vesting schedule we will try to create.
+				// The vesting schedule we will try to create, fails due to pre-existence of schedule.
 				let new_vesting_schedule = VestingInfo {
 					locked: 256 * 5,
 					per_block: 64, // Vesting over 20 blocks
@@ -715,8 +730,20 @@ mod tests {
 				};
 				assert_noop!(
 					Vesting::vested_transfer(Some(4).into(), 2, new_vesting_schedule),
-					Error::<Test>::ExistingVestingSchedule
+					Error::<Test>::ExistingVestingSchedule,
 				);
+
+				// Fails due to too low transfer amount.
+				let new_vesting_schedule_too_low = VestingInfo {
+					locked: 256 * 1,
+					per_block: 64,
+					starting_block: 10,
+				};
+				assert_noop!(
+					Vesting::vested_transfer(Some(3).into(), 4, new_vesting_schedule_too_low),
+					Error::<Test>::AmountLow,
+				);
+
 				// Verify no currency transfer happened.
 				assert_eq!(user2_free_balance, 256 * 20);
 				assert_eq!(user4_free_balance, 256 * 40);
