@@ -588,7 +588,7 @@ impl pallet_society::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const VestingDeposit = 100 * DOLLARS;
+	pub const VestingDeposit: Balance = 100 * DOLLARS;
 }
 
 impl pallet_vesting::Trait for Runtime {
