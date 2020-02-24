@@ -2749,9 +2749,11 @@ fn slash_kicks_validators_not_nominators() {
 }
 
 #[test]
-fn claim_reward_at_the_last_era() {
+fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 	// should check that:
 	// * rewards get paid until history_depth for both validators and nominators
+	// * an invalid era to claim doesn't update last_reward
+	// * double claim of one era fails
 	ExtBuilder::default().nominate(true).build().execute_with(|| {
 		let init_balance_10 = Balances::total_balance(&10);
 		let init_balance_100 = Balances::total_balance(&100);
@@ -2791,18 +2793,51 @@ fn claim_reward_at_the_last_era() {
 
 		start_era(Staking::history_depth() + 1);
 
+		let active_era = Staking::active_era().unwrap();
+
 		// This is the latest planned era in staking, not the active era
 		let current_era = Staking::current_era().unwrap();
+
 		// Last kept is 1:
 		assert!(current_era - Staking::history_depth() == 1);
-		assert_ok!(Staking::payout_validator(Origin::signed(10), 0));
+		assert_noop!(
+			Staking::payout_validator(Origin::signed(10), 0),
+			// Fail: Era out of history
+			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+		);
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 1));
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 2));
-		assert_ok!(Staking::payout_nominator(Origin::signed(100), 0, vec![(11, 0)]));
+		assert_noop!(
+			Staking::payout_validator(Origin::signed(10), 2),
+			// Fail: Double claim
+			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+		);
+		assert_noop!(
+			Staking::payout_validator(Origin::signed(10), active_era),
+			// Fail: Era not finished yet
+			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+		);
+
+		assert_noop!(
+			Staking::payout_nominator(Origin::signed(100), 0, vec![(11, 0)]),
+			// Fail: Era out of history
+			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+		);
 		assert_ok!(Staking::payout_nominator(Origin::signed(100), 1, vec![(11, 0)]));
 		assert_ok!(Staking::payout_nominator(Origin::signed(100), 2, vec![(11, 0)]));
+		assert_noop!(
+			Staking::payout_nominator(Origin::signed(100), 2, vec![(11, 0)]),
+			// Fail: Double claim
+			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+		);
+		assert_noop!(
+			Staking::payout_nominator(Origin::signed(100), active_era, vec![(11, 0)]),
+			// Fail: Era not finished yet
+			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+		);
 		
-		// Era 0 can't be rewarded anymore, only era 1 and 2 can be rewarded
+		// Era 0 can't be rewarded anymore and current era can't be rewarded yet
+		// only era 1 and 2 can be rewarded.
 
 		assert_eq!(
 			Balances::total_balance(&10),

@@ -775,9 +775,9 @@ decl_storage! {
 
 		/// The total validator era payout for the last `HISTORY_DEPTH` eras.
 		///
-		/// Eras that haven't finished yet doesn't have reward.
+		/// Eras that haven't finished yet or has been removed doesn't have reward.
 		pub ErasValidatorReward get(fn eras_validator_reward):
-			map hasher(blake2_256) EraIndex => BalanceOf<T>;
+			map hasher(blake2_256) EraIndex => Option<BalanceOf<T>>;
 
 		/// Rewards for the last `HISTORY_DEPTH` eras.
 		/// If reward hasn't been set or has been removed then 0 reward is returned.
@@ -936,6 +936,8 @@ decl_error! {
 		InvalidEraToReward,
 		/// Can not rebond without unlocking chunks.
 		NoUnlockChunk,
+		/// Invalid number of nominations.
+		InvalidNumberOfNominations,
 	}
 }
 
@@ -1456,6 +1458,19 @@ impl<T: Trait> Module<T> {
 	fn do_payout_nominator(who: T::AccountId, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
 		-> DispatchResult
 	{
+		// validators len must not exceed `MAX_NOMINATIONS` to avoid querying more validator
+		// exposure than necessary.
+		if validators.len() > MAX_NOMINATIONS {
+			return Err(Error::<T>::InvalidNumberOfNominations.into());
+		}
+
+		let era_payout = match <ErasValidatorReward<T>>::get(&era) {
+			Some(era_payout) => era_payout,
+			// Note: Era has no reward to be claimed, era may be futur. better not to update
+			// `ledger.last_reward` in this case.
+			None => return Err(Error::<T>::InvalidEraToReward.into())
+		};
+
 		let mut nominator_ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
 
 		if nominator_ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
@@ -1469,9 +1484,7 @@ impl<T: Trait> Module<T> {
 		let mut reward = Perbill::zero();
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 
-		// Note: iterator take only `MAX_NOMINATIONS` to avoid querying more validator exposure
-		// than necessary. Anyway a nominator can't validate more than `MAX_NOMINATIONS`.
-		for (validator, nominator_index) in validators.into_iter().take(MAX_NOMINATIONS) {
+		for (validator, nominator_index) in validators.into_iter() {
 			let commission = Self::eras_validator_prefs(&era, &validator).commission;
 			let validator_exposure = <ErasStakersClipped<T>>::get(&era, &validator);
 
@@ -1501,8 +1514,6 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		// Note: this is zero if the era is not finished yet.
-		let era_payout = <ErasValidatorReward<T>>::get(&era);
 		if let Some(imbalance) = Self::make_payout(&nominator_ledger.stash, reward * era_payout) {
 			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
 		}
@@ -1511,6 +1522,13 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn do_payout_validator(who: T::AccountId, era: EraIndex) -> DispatchResult {
+		let era_payout = match <ErasValidatorReward<T>>::get(&era) {
+			Some(era_payout) => era_payout,
+			// Note: Era has no reward to be claimed, era may be futur. better not to update
+			// `ledger.last_reward` in this case.
+			None => return Err(Error::<T>::InvalidEraToReward.into())
+		};
+
 		let mut ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
 		if ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
 			return Err(Error::<T>::InvalidEraToReward.into());
@@ -1540,8 +1558,6 @@ impl<T: Trait> Module<T> {
 			)
 		);
 
-		// This is zero if the era is not finished yet.
-		let era_payout = <ErasValidatorReward<T>>::get(&era);
 		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
 			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
 		}
