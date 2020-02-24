@@ -15,11 +15,12 @@ function log(msg) {
 async function start() {
 	log('Loading WASM');
 	await init('./pkg/node_cli_bg.wasm');
-	log('Successfully loaded WASM');
+	log('Fetching chain spec');
+	const chain_spec_response = await fetch("https://raw.githubusercontent.com/paritytech/substrate/master/bin/node/cli/res/flaming-fir.json");
+	const chain_spec_text = await chain_spec_response.text();
 
 	// Build our client.
-	log('Starting client');
-	let client = await start_client(ws());
+	let client = await start_client(chain_spec_text, 'info', ws());
 	log('Client started');
 
 	client.rpcSubscribe('{"method":"chain_subscribeNewHead","params":[],"id":1,"jsonrpc":"2.0"}',

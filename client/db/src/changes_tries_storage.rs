@@ -48,7 +48,7 @@ pub fn extract_new_configuration<Header: HeaderT>(header: &Header) -> Option<&Op
 /// Opaque configuration cache transaction. During its lifetime, no-one should modify cache. This is currently
 /// guaranteed because import lock is held during block import/finalization.
 pub struct DbChangesTrieStorageTransaction<Block: BlockT> {
-	/// Cache operations that must be performed after db transaction is comitted.
+	/// Cache operations that must be performed after db transaction is committed.
 	cache_ops: DbCacheTransactionOps<Block>,
 	/// New configuration (if changed at current block).
 	new_config: Option<Option<ChangesTrieConfiguration>>,

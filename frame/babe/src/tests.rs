@@ -17,7 +17,7 @@
 //! Consensus extension module tests for BABE consensus.
 
 use super::*;
-use mock::{new_test_ext, Babe, Test};
+use mock::{new_test_ext, Babe, System};
 use sp_runtime::{traits::OnFinalize, testing::{Digest, DigestItem}};
 use pallet_session::ShouldEndSession;
 
@@ -34,7 +34,7 @@ fn make_pre_digest(
 	vrf_output: [u8; sp_consensus_babe::VRF_OUTPUT_LENGTH],
 	vrf_proof: [u8; sp_consensus_babe::VRF_PROOF_LENGTH],
 ) -> Digest {
-	let digest_data = sp_consensus_babe::RawBabePreDigest::Primary {
+	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary {
 		authority_index,
 		slot_number,
 		vrf_output,
@@ -65,8 +65,6 @@ fn check_module() {
 			"BABE does not include the block number in epoch calculations");
 	})
 }
-
-type System = frame_system::Module<Test>;
 
 #[test]
 fn first_block_epoch_zero_start() {
@@ -110,7 +108,7 @@ fn first_block_epoch_zero_start() {
 
 		let authorities = Babe::authorities();
 		let consensus_log = sp_consensus_babe::ConsensusLog::NextEpochData(
-			sp_consensus_babe::NextEpochDescriptor {
+			sp_consensus_babe::digests::NextEpochDescriptor {
 				authorities,
 				randomness: Babe::randomness(),
 			}

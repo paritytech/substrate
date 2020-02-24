@@ -35,7 +35,7 @@ use sp_consensus::{BlockOrigin, BlockStatus,
 };
 use crate::{
 	config::{Roles, BoxFinalityProofRequestBuilder},
-	message::{self, generic::FinalityProofRequest, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
+	protocol::message::{self, generic::FinalityProofRequest, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
 	FinalityProofResponse},
 };
 use either::Either;
@@ -751,7 +751,7 @@ impl<B: BlockT> ChainSync<B> {
 						| PeerSyncState::DownloadingFinalityProof(..) => Vec::new()
 					}
 				} else {
-					// When request.is_none() just acccept blocks
+					// When request.is_none() just accept blocks
 					blocks.into_iter().map(|b| {
 						IncomingBlock {
 							hash: b.hash,
@@ -813,7 +813,7 @@ impl<B: BlockT> ChainSync<B> {
 			peer.state = PeerSyncState::Available;
 
 			// We only request one justification at a time
-			if let Some(block) = response.blocks.into_iter().next() {
+			let justification = if let Some(block) = response.blocks.into_iter().next() {
 				if hash != block.hash {
 					info!(
 						target: "sync",
@@ -821,13 +821,22 @@ impl<B: BlockT> ChainSync<B> {
 					);
 					return Err(BadPeer(who, rep::BAD_JUSTIFICATION));
 				}
-				if let Some((peer, hash, number, j)) = self.extra_justifications.on_response(who, block.justification) {
-					return Ok(OnBlockJustification::Import { peer, hash, number, justification: j })
-				}
+
+				block.justification
 			} else {
-				// we might have asked the peer for a justification on a block that we thought it had
-				// (regardless of whether it had a justification for it or not).
-				trace!(target: "sync", "Peer {:?} provided empty response for justification request {:?}", who, hash)
+				// we might have asked the peer for a justification on a block that we assumed it
+				// had but didn't (regardless of whether it had a justification for it or not).
+				trace!(target: "sync",
+					"Peer {:?} provided empty response for justification request {:?}",
+					who,
+					hash,
+				);
+
+				None
+			};
+
+			if let Some((peer, hash, number, j)) = self.extra_justifications.on_response(who, justification) {
+				return Ok(OnBlockJustification::Import { peer, hash, number, justification: j })
 			}
 		}
 
@@ -955,7 +964,7 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				Err(BlockImportError::MissingState) => {
 					// This may happen if the chain we were requesting upon has been discarded
-					// in the meantime becasue other chain has been finalized.
+					// in the meantime because other chain has been finalized.
 					// Don't mark it as bad as it still may be synced if explicitly requested.
 					trace!(target: "sync", "Obsolete block");
 				},
@@ -1352,4 +1361,94 @@ fn fork_sync_request<B: BlockT>(
 		}
 	}
 	None
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use super::message::FromBlock;
+	use substrate_test_runtime_client::{
+		runtime::Block,
+		DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
+	};
+	use sp_blockchain::HeaderBackend;
+	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
+
+	#[test]
+	fn processes_empty_response_on_justification_request_for_unknown_block() {
+		// if we ask for a justification for a given block to a peer that doesn't know that block
+		// (different from not having a justification), the peer will reply with an empty response.
+		// internally we should process the response as the justification not being available.
+
+		let client = Arc::new(TestClientBuilder::new().build());
+		let info = client.info();
+		let block_announce_validator = Box::new(DefaultBlockAnnounceValidator::new(client.clone()));
+		let peer_id = PeerId::random();
+
+		let mut sync = ChainSync::new(
+			Roles::AUTHORITY,
+			client.clone(),
+			&info,
+			None,
+			block_announce_validator,
+			1,
+		);
+
+		let (a1_hash, a1_number) = {
+			let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+			(a1.hash(), *a1.header.number())
+		};
+
+		// add a new peer with the same best block
+		sync.new_peer(peer_id.clone(), a1_hash, a1_number).unwrap();
+
+		// and request a justification for the block
+		sync.request_justification(&a1_hash, a1_number);
+
+		// the justification request should be scheduled to that peer
+		assert!(
+			sync.justification_requests().any(|(who, request)| {
+				who == peer_id && request.from == FromBlock::Hash(a1_hash)
+			})
+		);
+
+		// there are no extra pending requests
+		assert_eq!(
+			sync.extra_justifications.pending_requests().count(),
+			0,
+		);
+
+		// there's one in-flight extra request to the expected peer
+		assert!(
+			sync.extra_justifications.active_requests().any(|(who, (hash, number))| {
+				*who == peer_id && *hash == a1_hash && *number == a1_number
+			})
+		);
+
+		// if the peer replies with an empty response (i.e. it doesn't know the block),
+		// the active request should be cleared.
+		assert_eq!(
+			sync.on_block_justification(
+				peer_id.clone(),
+				BlockResponse::<Block> {
+					id: 0,
+					blocks: vec![],
+				}
+			),
+			Ok(OnBlockJustification::Nothing),
+		);
+
+		// there should be no in-flight requests
+		assert_eq!(
+			sync.extra_justifications.active_requests().count(),
+			0,
+		);
+
+		// and the request should now be pending again, waiting for reschedule
+		assert!(
+			sync.extra_justifications.pending_requests().any(|(hash, number)| {
+				*hash == a1_hash && *number == a1_number
+			})
+		);
+	}
 }

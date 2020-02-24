@@ -28,6 +28,27 @@ use sp_core::crypto::Protected;
 use target_info::Target;
 use sc_telemetry::TelemetryEndpoints;
 
+/// Executable version. Used to pass version information from the root crate.
+#[derive(Clone)]
+pub struct VersionInfo {
+	/// Implementation name.
+	pub name: &'static str,
+	/// Implementation version.
+	pub version: &'static str,
+	/// SCM Commit hash.
+	pub commit: &'static str,
+	/// Executable file name.
+	pub executable_name: &'static str,
+	/// Executable file description.
+	pub description: &'static str,
+	/// Executable file author.
+	pub author: &'static str,
+	/// Support URL.
+	pub support_url: &'static str,
+	/// Copyright starting year (x-current year)
+	pub copyright_start_year: i32,
+}
+
 /// Service configuration.
 pub struct Configuration<G, E = NoExtension> {
 	/// Implementation name
@@ -39,7 +60,7 @@ pub struct Configuration<G, E = NoExtension> {
 	/// Node roles.
 	pub roles: Roles,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
+	pub task_executor: Option<Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>>,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -49,7 +70,7 @@ pub struct Configuration<G, E = NoExtension> {
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
 	/// Configuration for the database.
-	pub database: DatabaseConfig,
+	pub database: Option<DatabaseConfig>,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
@@ -72,8 +93,8 @@ pub struct Configuration<G, E = NoExtension> {
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
-	/// Grafana data source http port. `None` if disabled.
-	pub grafana_port: Option<SocketAddr>,
+	/// Prometheus exporter Port. `None` if disabled.
+	pub prometheus_port: Option<SocketAddr>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
@@ -116,7 +137,7 @@ pub enum KeystoreConfig {
 		password: Option<Protected<String>>
 	},
 	/// In-memory keystore. Recommended for in-browser nodes.
-	InMemory
+	InMemory,
 }
 
 impl KeystoreConfig {
@@ -147,7 +168,7 @@ pub enum DatabaseConfig {
 impl<G, E> Default for Configuration<G, E> {
 	/// Create a default config
 	fn default() -> Self {
-		let configuration = Configuration {
+		Configuration {
 			impl_name: "parity-substrate",
 			impl_version: "0.0.0",
 			impl_commit: "",
@@ -159,10 +180,7 @@ impl<G, E> Default for Configuration<G, E> {
 			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore: KeystoreConfig::None,
-			database: DatabaseConfig::Path {
-				path: Default::default(),
-				cache_size: Default::default(),
-			},
+			database: None,
 			state_cache_size: Default::default(),
 			state_cache_child_ratio: Default::default(),
 			pruning: PruningMode::default(),
@@ -172,7 +190,7 @@ impl<G, E> Default for Configuration<G, E> {
 			rpc_ws: None,
 			rpc_ws_max_connections: None,
 			rpc_cors: Some(vec![]),
-			grafana_port: None,
+			prometheus_port: None,
 			telemetry_endpoints: None,
 			telemetry_external_transport: None,
 			default_heap_pages: None,
@@ -183,14 +201,21 @@ impl<G, E> Default for Configuration<G, E> {
 			dev_key_seed: None,
 			tracing_targets: Default::default(),
 			tracing_receiver: Default::default(),
-		};
-
-		configuration
+		}
 	}
-
 }
 
 impl<G, E> Configuration<G, E> {
+	/// Create a default config using `VersionInfo`
+	pub fn from_version(version: &VersionInfo) -> Self {
+		let mut config = Configuration::default();
+		config.impl_name = version.name;
+		config.impl_version = version.version;
+		config.impl_commit = version.commit;
+
+		config
+	}
+
 	/// Returns full version string of this configuration.
 	pub fn full_version(&self) -> String {
 		full_version_from_strs(self.impl_version, self.impl_commit)
@@ -219,6 +244,37 @@ impl<G, E> Configuration<G, E> {
 	/// This method panic if the `chain_spec` is `None`
 	pub fn expect_chain_spec(&self) -> &ChainSpec<G, E> {
 		self.chain_spec.as_ref().expect("chain_spec must be specified")
+	}
+
+	/// Return a reference to the `DatabaseConfig` of this `Configuration`.
+	///
+	/// ### Panics
+	///
+	/// This method panic if the `database` is `None`
+	pub fn expect_database(&self) -> &DatabaseConfig {
+		self.database.as_ref().expect("database must be specified")
+	}
+
+	/// Returns a string displaying the node role, special casing the sentry mode
+	/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
+	/// doesn't participate.
+	pub fn display_role(&self) -> String {
+		if self.sentry_mode {
+			"SENTRY".to_string()
+		} else {
+			self.roles.to_string()
+		}
+	}
+
+	/// Use in memory keystore config when it is not required at all.
+	///
+	/// This function returns an error if the keystore is already set to something different than
+	/// `KeystoreConfig::None`.
+	pub fn use_in_memory_keystore(&mut self) -> Result<(), String> {
+		match &mut self.keystore {
+			cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
+			_ => Err("Keystore config specified when it should not be!".into()),
+		}
 	}
 }
 

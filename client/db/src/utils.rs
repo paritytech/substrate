@@ -36,6 +36,7 @@ use crate::{DatabaseSettings, DatabaseSettingsSrc};
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
+#[cfg(any(feature = "kvdb-rocksdb", feature = "test-helpers", test))]
 pub const NUM_COLUMNS: u32 = 11;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
@@ -320,7 +321,9 @@ pub fn require_header<Block: BlockT>(
 	id: BlockId<Block>,
 ) -> sp_blockchain::Result<Block::Header> {
 	read_header(db, col_index, col, id)
-		.and_then(|header| header.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", id))))
+		.and_then(|header| header.ok_or_else(||
+			sp_blockchain::Error::UnknownBlock(format!("Require header: {}", id))
+		))
 }
 
 /// Read meta from the database.

@@ -38,7 +38,7 @@
 //! should be paid.
 //!
 //! A group of `Tippers` is determined through the config `Trait`. After half of these have declared
-//! some amount that they believe a particular reported reason deserves, then a countfown period is
+//! some amount that they believe a particular reported reason deserves, then a countdown period is
 //! entered where any remaining members can declare their tip amounts also. After the close of the
 //! countdown period, the median of all declared tips is paid to the reported beneficiary, along
 //! with any finders fee, in case of a public (and bonded) original report.
@@ -371,7 +371,7 @@ decl_module! {
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
-			ensure!(<Proposals<T>>::exists(proposal_id), Error::<T>::InvalidProposalIndex);
+			ensure!(<Proposals<T>>::contains_key(proposal_id), Error::<T>::InvalidProposalIndex);
 
 			Approvals::mutate(|v| v.push(proposal_id));
 		}
@@ -403,9 +403,9 @@ decl_module! {
 			ensure!(reason.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
-			ensure!(!Reasons::<T>::exists(&reason_hash), Error::<T>::AlreadyKnown);
+			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
-			ensure!(!Tips::<T>::exists(&hash), Error::<T>::AlreadyKnown);
+			ensure!(!Tips::<T>::contains_key(&hash), Error::<T>::AlreadyKnown);
 
 			let deposit = T::TipReportDepositBase::get()
 				+ T::TipReportDepositPerByte::get() * (reason.len() as u32).into();
@@ -474,7 +474,7 @@ decl_module! {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
-			ensure!(!Reasons::<T>::exists(&reason_hash), Error::<T>::AlreadyKnown);
+			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 
 			Reasons::<T>::insert(&reason_hash, &reason);
@@ -590,7 +590,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Remove any non-members of `Tippers` from a `tips` vectr. `O(T)`.
+	/// Remove any non-members of `Tippers` from a `tips` vector. `O(T)`.
 	fn retain_active_tips(tips: &mut Vec<(T::AccountId, BalanceOf<T>)>) {
 		let members = T::Tippers::sorted_members();
 		let mut members_iter = members.iter();
@@ -724,7 +724,9 @@ mod tests {
 	use frame_support::traits::Contains;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, OnFinalize, IdentityLookup, BadOrigin}, testing::Header, Perbill
+		Perbill,
+		testing::Header,
+		traits::{BlakeTwo256, OnFinalize, IdentityLookup, BadOrigin},
 	};
 
 	impl_outer_origin! {
@@ -756,20 +758,19 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnReapAccount = Balances;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const CreationFee: u64 = 0;
-	}
+}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnNewAccount = ();
-		type OnReapAccount = System;
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 	pub struct TenToFourteen;
 	impl Contains<u64> for TenToFourteen {
@@ -1051,14 +1052,14 @@ mod tests {
 	}
 
 	#[test]
-	fn reject_non_existant_spend_proposal_fails() {
+	fn reject_non_existent_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 
 	#[test]
-	fn accept_non_existant_spend_proposal_fails() {
+	fn accept_non_existent_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
@@ -1134,9 +1135,9 @@ mod tests {
 	}
 
 	// In case treasury account is not existing then it works fine.
-	// This is usefull for chain that will just update runtime.
+	// This is useful for chain that will just update runtime.
 	#[test]
-	fn inexisting_account_works() {
+	fn inexistent_account_works() {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],

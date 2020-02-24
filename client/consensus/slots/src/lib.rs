@@ -81,7 +81,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	type Claim: Send + 'static;
 
 	/// Epoch data necessary for authoring.
-	type EpochData;
+	type EpochData: Send + 'static;
 
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
@@ -119,6 +119,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Vec<B::Extrinsic>,
 			StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 			Self::Claim,
+			Self::EpochData,
 		) -> sp_consensus::BlockImportParams<
 			B,
 			<Self::BlockImport as BlockImport<B>>::Transaction
@@ -280,18 +281,19 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				body,
 				proposal.storage_changes,
 				claim,
+				epoch_data,
 			);
 
 			info!(
 				"Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 				header_num,
-				block_import_params.post_header().hash(),
+				block_import_params.post_hash(),
 				header_hash,
 			);
 
 			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";
 				"header_num" => ?header_num,
-				"hash_now" => ?block_import_params.post_header().hash(),
+				"hash_now" => ?block_import_params.post_hash(),
 				"hash_previously" => ?header_hash,
 			);
 

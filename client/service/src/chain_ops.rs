@@ -27,13 +27,14 @@ use sp_runtime::traits::{
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
-use sc_client::Client;
-use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
-use sp_consensus::BlockOrigin;
+use sc_client::{Client, LocalCallExecutor};
+use sp_consensus::{
+	BlockOrigin,
+	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
+};
+use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
-
-use sc_network::message;
 
 /// Build a chain spec json
 pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<String> where
@@ -45,19 +46,21 @@ pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<Strin
 
 impl<
 	TBl, TRtApi, TGen, TCSExt, TBackend,
-	TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP,
+	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp,
 	TExPool, TRpc, Backend
 > ServiceBuilderCommand for ServiceBuilder<
-	TBl, TRtApi, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
-	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
+	TBl, TRtApi, TGen, TCSExt,
+	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
+	TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend
 > where
 	TBl: BlockT,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
+	TExecDisp: 'static + NativeExecutionDispatch,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
 {
 	type Block = TBl;
+	type NativeDispatch = TExecDisp;
 
 	fn import_blocks(
 		self,
@@ -136,21 +139,13 @@ impl<
 					Ok(signed) => {
 						let (header, extrinsics) = signed.block.deconstruct();
 						let hash = header.hash();
-						let block  = message::BlockData::<Self::Block> {
-							hash,
-							justification: signed.justification,
-							header: Some(header),
-							body: Some(extrinsics),
-							receipt: None,
-							message_queue: None
-						};
 						// import queue handles verification and importing it into the client
 						queue.import_blocks(BlockOrigin::File, vec![
 							IncomingBlock::<Self::Block> {
-								hash: block.hash,
-								header: block.header,
-								body: block.body,
-								justification: block.justification,
+								hash,
+								header: Some(header),
+								body: Some(extrinsics),
+								justification: signed.justification,
 								origin: None,
 								allow_missing_state: false,
 								import_existing: force,

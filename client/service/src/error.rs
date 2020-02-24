@@ -42,7 +42,7 @@ pub enum Error {
 	SelectChainRequired,
 	/// Tasks executor is missing.
 	#[display(fmt="Tasks executor hasn't been provided.")]
-	TasksExecutorRequired,
+	TaskExecutorRequired,
 	/// Other error.
 	Other(String),
 }
@@ -50,6 +50,12 @@ pub enum Error {
 impl<'a> From<&'a str> for Error {
 	fn from(s: &'a str) -> Self {
 		Error::Other(s.into())
+	}
+}
+
+impl From<prometheus_exporter::PrometheusError> for Error {
+	fn from(e: prometheus_exporter::PrometheusError) -> Self {
+		Error::Other(format!("Prometheus error: {}", e))
 	}
 }
 
