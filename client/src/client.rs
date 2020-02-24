@@ -218,14 +218,16 @@ impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
 	type Type = Block;
 }
 
-impl<B, E, Block, RA> ClientBackend<Block, B> for Client<B, E, Block, RA> where
-	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
-	Block: BlockT,
+impl<B, E, Block, RA> ClientBackend<Block, B> for Client<B, E, Block, RA>
+	where
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
 {
-	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err> where
-		F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
-		Err: From<sp_blockchain::Error>,
+	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err>
+		where
+			F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
+			Err: From<sp_blockchain::Error>,
 	{
 		let inner = || {
 			let _import_lock = self.backend.get_import_lock().write();
@@ -256,14 +258,16 @@ impl<B, E, Block, RA> ClientBackend<Block, B> for Client<B, E, Block, RA> where
 	}
 }
 
-impl<B, E, Block, RA> ClientBackend<Block, B> for &Client<B, E, Block, RA> where
-	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
-	Block: BlockT,
+impl<B, E, Block, RA> ClientBackend<Block, B> for &Client<B, E, Block, RA>
+	where
+		Block: BlockT,
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
 {
-	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err> where
-		F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
-		Err: From<sp_blockchain::Error>,
+	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err>
+		where
+			F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
+			Err: From<sp_blockchain::Error>,
 	{
 		(**self).lock_import_and_run(f)
 	}
