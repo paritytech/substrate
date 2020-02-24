@@ -139,11 +139,10 @@ impl WasmBuilderSelectSource {
 		version: &'static str,
 		path: &'static str,
 	) -> WasmBuilder {
-		WasmBuilder {
-			source: WasmBuilderSource::CratesOrPath { version, path },
-			rust_flags: Vec::new(),
-			file_name: None,
-			project_cargo_toml: self.0,
+		if Path::new(path).exists() {
+			self.with_wasm_builder_from_path(path)
+		} else {
+			self.with_wasm_builder_from_crates(version)
 		}
 	}
 
@@ -280,11 +279,6 @@ pub enum WasmBuilderSource {
 	},
 	/// Use the given version released on crates.io.
 	Crates(&'static str),
-	/// Use the given version released on crates.io or from the given path.
-	CratesOrPath {
-		version: &'static str,
-		path: &'static str,
-	}
 }
 
 impl WasmBuilderSource {
@@ -301,15 +295,6 @@ impl WasmBuilderSource {
 			}
 			WasmBuilderSource::Crates(version) => {
 				format!("version = \"{}\"", version)
-			}
-			WasmBuilderSource::CratesOrPath { version, path } => {
-				replace_back_slashes(
-					format!(
-						"path = \"{}\", version = \"{}\"",
-						manifest_dir.join(path).display(),
-						version
-					)
-				)
 			}
 		}
 	}
