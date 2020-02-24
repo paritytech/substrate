@@ -695,7 +695,7 @@ mod tests {
 				System::set_block_number(20);
 				assert_eq!(System::block_number(), 20);
 
-				// Account 4 has 5 * 64 unites vested by block 20.
+				// Account 4 has 5 * 64 units vested by block 20.
 				assert_eq!(Vesting::vesting_balance(&4), Some(10 * 64));
 
 				System::set_block_number(30);
