@@ -27,7 +27,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
 use syn::{
-	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, Path, Signature,
+	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, Path, Signature, Attribute,
 	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument, TypePath,
 	fold::{self, Fold}, parse_quote,
 };
@@ -141,15 +141,10 @@ fn extract_runtime_block_ident(trait_: &Path) -> Result<&TypePath> {
 fn generate_impl_calls(
 	impls: &[ItemImpl],
 	input: &Ident
-) -> Result<Vec<(Ident, Ident, TokenStream)>> {
+) -> Result<Vec<(Ident, Ident, TokenStream, Vec<Attribute>)>> {
 	let mut impl_calls = Vec::new();
 
 	for impl_ in impls {
-		// TODO: FIXME.
-		if !impl_.attrs.is_empty() {
-			continue;
-		}
-
 		let impl_trait_path = extract_impl_trait(impl_)?;
 		let impl_trait = extend_with_runtime_decl_path(impl_trait_path.clone());
 		let impl_trait_ident = &impl_trait_path
@@ -168,7 +163,7 @@ fn generate_impl_calls(
 				)?;
 
 				impl_calls.push(
-					(impl_trait_ident.clone(), method.sig.ident.clone(), impl_call)
+					(impl_trait_ident.clone(), method.sig.ident.clone(), impl_call, impl_.attrs.clone())
 				);
 			}
 		}
@@ -183,9 +178,12 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let impl_calls = generate_impl_calls(impls, &data)?
 		.into_iter()
-		.map(|(trait_, fn_name, impl_)| {
+		.map(|(trait_, fn_name, impl_, attributes)| {
 			let name = prefix_function_with_trait(&trait_, &fn_name);
-			quote!( #name => Some(#c::Encode::encode(&{ #impl_ })), )
+			quote!(
+				#( #attributes )*
+				#name => Some(#c::Encode::encode(&{ #impl_ })),
+			)
 		});
 
 	Ok(quote!(
@@ -205,13 +203,14 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let impl_calls = generate_impl_calls(impls, &input)?
 		.into_iter()
-		.map(|(trait_, fn_name, impl_)| {
+		.map(|(trait_, fn_name, impl_, attributes)| {
 			let fn_name = Ident::new(
 				&prefix_function_with_trait(&trait_, &fn_name),
 				Span::call_site()
 			);
 
 			quote!(
+				#( #attributes )*
 				#[cfg(not(feature = "std"))]
 				#[no_mangle]
 				pub fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
@@ -700,8 +699,12 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 		let id: Path = parse_quote!( #path ID );
 		let version: Path = parse_quote!( #path VERSION );
+		let attributes = impl_.attrs.clone();
 
-		result.push(quote!( (#id, #version) ));
+		result.push(quote!(
+			#( #attributes )*
+			(#id, #version)
+		));
 	}
 
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
