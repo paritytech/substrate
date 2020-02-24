@@ -1,14 +1,16 @@
 [package]
 name = "sp-allocator"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-std = { version = "2.0.0", path = "../std", default-features = false }
-sp-core = { version = "2.0.0", path = "../core", default-features = false }
-sp-wasm-interface = { version = "2.0.0", path = "../wasm-interface", default-features = false }
+sp-std = { version = "2.0.0-dev", path = "../std", default-features = false }
+sp-core = { version = "2.0.0-dev", path = "../core", default-features = false }
+sp-wasm-interface = { version = "2.0.0-dev", path = "../wasm-interface", default-features = false }
 log = { version = "0.4.8", optional = true }
 derive_more = { version = "0.99.2", optional = true }
 

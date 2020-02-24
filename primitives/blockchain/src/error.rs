@@ -19,8 +19,6 @@
 use std::{self, error, result};
 use sp_state_machine;
 use sp_runtime::transaction_validity::TransactionValidityError;
-#[allow(deprecated)]
-use sp_block_builder::compatibility_v3;
 use sp_consensus;
 use derive_more::{Display, From};
 use codec::Error as CodecError;
@@ -147,17 +145,6 @@ impl error::Error for Error {
 impl<'a> From<&'a str> for Error {
 	fn from(s: &'a str) -> Self {
 		Error::Msg(s.into())
-	}
-}
-
-#[allow(deprecated)]
-impl From<compatibility_v3::ApplyError> for ApplyExtrinsicFailed {
-	fn from(e: compatibility_v3::ApplyError) -> Self {
-		use self::compatibility_v3::ApplyError::*;
-		match e {
-			Validity(tx_validity) => Self::Validity(tx_validity),
-			e => Self::Msg(format!("Apply extrinsic failed: {:?}", e)),
-		}
 	}
 }
 

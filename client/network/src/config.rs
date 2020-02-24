@@ -43,7 +43,7 @@ use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathB
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
-pub struct Params<B: BlockT, S, H: ExHashT> {
+pub struct Params<B: BlockT, H: ExHashT> {
 	/// Assigned roles for our node (full, light, ...).
 	pub roles: Roles,
 
@@ -88,9 +88,6 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// valid.
 	pub import_queue: Box<dyn ImportQueue<B>>,
 
-	/// Customization of the network. Use this to plug additional networking capabilities.
-	pub specialization: S,
-
 	/// Type to check incoming block announcements.
 	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 }
@@ -123,6 +120,12 @@ impl Roles {
 	/// Does this role represents a client that does not hold full chain data locally?
 	pub fn is_light(&self) -> bool {
 		!self.is_full()
+	}
+}
+
+impl fmt::Display for Roles {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{:?}", self)
 	}
 }
 
@@ -247,9 +250,9 @@ impl From<multiaddr::Error> for ParseErr {
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
 	/// Directory path to store general network configuration. None means nothing will be saved.
-	pub config_path: Option<String>,
+	pub config_path: Option<PathBuf>,
 	/// Directory path to store network-specific configuration. None means nothing will be saved.
-	pub net_config_path: Option<String>,
+	pub net_config_path: Option<PathBuf>,
 	/// Multiaddresses to listen for incoming connections.
 	pub listen_addresses: Vec<Multiaddr>,
 	/// Multiaddresses to advertise. Detected automatically if empty.

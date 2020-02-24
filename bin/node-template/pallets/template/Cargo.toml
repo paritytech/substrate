@@ -2,7 +2,9 @@
 authors = ['Anonymous']
 edition = '2018'
 name = 'pallet-template'
-version = '2.0.0'
+version = "2.0.0-dev"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
@@ -10,28 +12,28 @@ safe-mix = { default-features = false, version = '1.0.0' }
 
 [dependencies.frame-support]
 default-features = false
-version = '2.0.0'
+version = "2.0.0-dev"
 path = "../../../../frame/support"
 
 [dependencies.system]
 default-features = false
 package = 'frame-system'
-version = '2.0.0'
+version = "2.0.0-dev"
 path = "../../../../frame/system"
 
 [dev-dependencies.sp-core]
 default-features = false
-version = '2.0.0'
+version = "2.0.0-dev"
 path = "../../../../primitives/core"
 
 [dev-dependencies.sp-io]
 default-features = false
-version = '2.0.0'
+version = "2.0.0-dev"
 path = "../../../../primitives/io"
 
 [dev-dependencies.sp-runtime]
 default-features = false
-version = '2.0.0'
+version = "2.0.0-dev"
 path = "../../../../primitives/runtime"
 
 [features]

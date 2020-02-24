@@ -1,21 +1,23 @@
 [package]
 name = "sp-consensus-babe"
-version = "0.8.0"
+version = "0.8.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for BABE consensus"
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../application-crypto" }
+sp-application-crypto = { version = "2.0.0-dev", default-features = false, path = "../../application-crypto" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-sp-std = { version = "2.0.0", default-features = false, path = "../../std" }
+sp-std = { version = "2.0.0-dev", default-features = false, path = "../../std" }
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], optional = true }
-sp-api = { version = "2.0.0", default-features = false, path = "../../api" }
-sp-consensus = { version = "0.8", optional = true, path = "../common" }
-sp-inherents = { version = "2.0.0", default-features = false, path = "../../inherents" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../runtime" }
-sp-timestamp = { version = "2.0.0", default-features = false, path = "../../timestamp" }
+sp-api = { version = "2.0.0-dev", default-features = false, path = "../../api" }
+sp-consensus = { version = "0.8.0-dev", optional = true, path = "../common" }
+sp-inherents = { version = "2.0.0-dev", default-features = false, path = "../../inherents" }
+sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../runtime" }
+sp-timestamp = { version = "2.0.0-dev", default-features = false, path = "../../timestamp" }
 
 [features]
 default = ["std"]

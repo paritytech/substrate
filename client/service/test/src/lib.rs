@@ -141,7 +141,7 @@ fn node_config<G, E: Clone> (
 {
 	let root = root.path().join(format!("node-{}", index));
 
-	let config_path = Some(String::from(root.join("network").to_str().unwrap()));
+	let config_path = Some(root.join("network"));
 	let net_config_path = config_path.clone();
 
 	let network_config = NetworkConfiguration {

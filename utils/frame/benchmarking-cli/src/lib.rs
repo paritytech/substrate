@@ -16,9 +16,9 @@
 
 use sp_runtime::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sc_client::StateMachine;
-use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
+use sc_cli::{ExecutionStrategy, WasmExecutionMethod, VersionInfo};
 use sc_client_db::BenchmarkingState;
-use sc_service::{RuntimeGenesis, ChainSpecExtension};
+use sc_service::{RuntimeGenesis, ChainSpecExtension, Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::fmt::Debug;
 use codec::{Encode, Decode};
@@ -68,26 +68,16 @@ pub struct BenchmarkCmd {
 }
 
 impl BenchmarkCmd {
-	/// Parse CLI arguments and initialize given config.
-	pub fn init<G, E>(
-		&self,
-		config: &mut sc_service::config::Configuration<G, E>,
-		spec_factory: impl FnOnce(&str) -> Result<Option<sc_service::ChainSpec<G, E>>, String>,
-		version: &sc_cli::VersionInfo,
-	) -> sc_cli::error::Result<()> where
-		G: sc_service::RuntimeGenesis,
-		E: sc_service::ChainSpecExtension,
-	{
-		sc_cli::init_config(config, &self.shared_params, version, spec_factory)?;
-		// make sure to configure keystore
-		sc_cli::fill_config_keystore_in_memory(config).map_err(Into::into)
+	/// Initialize
+	pub fn init(&self, version: &sc_cli::VersionInfo) -> sc_cli::Result<()> {
+		self.shared_params.init(version)
 	}
 
 	/// Runs the command and benchmarks the chain.
 	pub fn run<G, E, BB, ExecDispatch>(
 		self,
-		config: sc_service::Configuration<G, E>,
-	) -> sc_cli::error::Result<()>
+		config: Configuration<G, E>,
+	) -> sc_cli::Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -146,6 +136,24 @@ impl BenchmarkCmd {
 		} else {
 			eprintln!("No Results.");
 		}
+
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<G, E>(
+		&self,
+		mut config: &mut Configuration<G, E>,
+		spec_factory: impl FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		version: &VersionInfo,
+	) -> sc_cli::Result<()> where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+
+		// make sure to configure keystore
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

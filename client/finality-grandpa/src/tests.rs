@@ -19,7 +19,7 @@
 use super::*;
 use environment::HasVoted;
 use sc_network_test::{
-	Block, DummySpecialization, Hash, TestNetFactory, BlockImportAdapter, Peer,
+	Block, Hash, TestNetFactory, BlockImportAdapter, Peer,
 	PeersClient, PassThroughVerifier,
 };
 use sc_network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
@@ -68,7 +68,7 @@ type PeerData =
 			>
 		>
 	>;
-type GrandpaPeer = Peer<PeerData, DummySpecialization>;
+type GrandpaPeer = Peer<PeerData>;
 
 struct GrandpaTestNet {
 	peers: Vec<GrandpaPeer>,
@@ -90,7 +90,6 @@ impl GrandpaTestNet {
 }
 
 impl TestNetFactory for GrandpaTestNet {
-	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = PeerData;
 
@@ -1376,7 +1375,7 @@ fn finalize_3_voters_1_light_observer() {
 
 	run_to_completion_with(&mut runtime, 20, net.clone(), authorities, |executor| {
 		executor.spawn(
-			run_grandpa_observer(
+			observer::run_grandpa_observer(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,
