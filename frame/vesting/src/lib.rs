@@ -241,10 +241,11 @@ decl_module! {
 			let who = T::Lookup::lookup(target)?;
 
 			ensure!(schedule.locked >= T::VestingDeposit::get(), Error::<T>::AmountLow);
+			ensure!(!Vesting::<T>::contains_key(&who), Error::<T>::ExistingVestingSchedule);
+			
+			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
 
 			Self::add_vesting_schedule(&who, schedule.locked, schedule.per_block, schedule.starting_block)?;
-
-			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
 			
 			Ok(())
 		}
