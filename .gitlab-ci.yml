@@ -555,7 +555,10 @@ publish-draft-release:
 
 publish-to-crates-io:
   stage:                           publish
-  image:                           parity/tools:latest
+  <<:                              *docker-env
+  dependencies:
+    - build-linux-substrate
+    - test-dependency-rules
 # FIXME disabled for testing
 #  only:
 #    - tags
