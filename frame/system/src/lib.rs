@@ -108,6 +108,7 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, BadOrigin, SaturatedConversion,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
+		Dispatchable
 	},
 };
 
@@ -118,7 +119,7 @@ use frame_support::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap
 	},
-	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
+	weights::{Weight, DispatchInfo, GetDispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -347,6 +348,9 @@ decl_storage! {
 
 		/// Total weight for all extrinsics put together, for the current block.
 		AllExtrinsicsWeight: Option<Weight>;
+
+		/// The weight taken by the current executing disptachable.
+		CurrentDispatchableWeight: Option<Weight>;
 
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
@@ -1022,33 +1026,54 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-pub trait Dispatcher {
+impl<T: Trait> Module<T> {
+	pub fn spent_weight() -> Option<Weight> {
+		CurrentDispatchableWeight::get()
+	}
+
 	/// Decrease the amount of weight consumed by the current dispatchable.
 	///
 	/// This function can only meaningfully called within `Self::dispatch`. Otherwise,
 	/// it does nothing and returns `Err`.
 	///
 	/// The total weight returned from the dispatchable cannot exceed its total requested weight.
-	fn return_unspent_weight(unspent: Weight) -> Result<(), ()>;
-
-	/// Dispatch a given `Dispatchable` with a given origin.
-	fn dispatch<D: sp_runtime::traits::Dispatchable>(
-		origin: D::Origin,
-		dispatchable: D,
-	) -> (Weight, sp_runtime::DispatchResult);
+	pub fn return_unspent_weight(unspent: Weight) -> Result<(), ()> {
+		let weight = CurrentDispatchableWeight::take().ok_or(())?;
+		let next_weight = weight.checked_sub(unspent).ok_or(())?;
+		CurrentDispatchableWeight::put(next_weight);
+		Ok(())
+	}
 }
 
-impl<T: Trait> Dispatcher for Module<T> {
-	fn return_unspent_weight(unspent: Weight) -> Result<(), ()> {
-		todo!()
-	}
-
-	/// Dispatch a given `Dispatchable` with a given origin.
-	fn dispatch<D: sp_runtime::traits::Dispatchable>(
-		origin: D::Origin,
-		dispatchable: D,
+impl<T: Trait> Module<T>
+where
+	<T as Trait>::Call: GetDispatchInfo + Dispatchable,
+{
+	/// Dispatch a given `T::Call` with a given origin.
+	///
+	/// Returns how much weight was actually unspent by the call.
+	pub fn dispatch_call(
+		origin: <T::Call as Dispatchable>::Origin,
+		call: T::Call,
 	) -> (Weight, sp_runtime::DispatchResult) {
-		todo!()
+		// First, replace the current weight counter with the incoming call weight.
+		let prev_weight = CurrentDispatchableWeight::get();
+		let call_weight = call.get_dispatch_info().weight;
+		CurrentDispatchableWeight::put(call_weight);
+
+		// Then, dispatch the call.
+		let result = call.dispatch(origin);
+
+		// Finally, get the actual spent weight.
+		let spent_weight = CurrentDispatchableWeight::take().unwrap_or_default();
+		if let Some(prev_weight) = prev_weight {
+			CurrentDispatchableWeight::put(prev_weight);
+		} else {
+			CurrentDispatchableWeight::kill();
+		}
+
+		let unspent_weight = call_weight.saturating_sub(spent_weight);
+		(unspent_weight, result)
 	}
 }
 
@@ -1275,6 +1300,16 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		len: usize,
 	) -> TransactionValidity {
 		Self::do_validate(info, len)
+	}
+
+	fn post_dispatch(_pre: Self::Pre, info: Self::DispatchInfo, _len: usize) {
+		let spent = CurrentDispatchableWeight::get().unwrap_or(info.weight);
+		let reserved = info.weight;
+		let unspent = spent - reserved;
+		AllExtrinsicsWeight::mutate(|weight| {
+			let next_weight = weight.map(|weight| weight - unspent);
+			*weight = next_weight;
+		});
 	}
 }
 

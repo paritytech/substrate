@@ -31,22 +31,22 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use frame_support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason, Imbalance},
 	weights::{Weight, DispatchInfo, GetDispatchInfo},
 };
-use sp_runtime::{
-	Fixed64,
-	transaction_validity::{
-		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
-		TransactionValidity,
-	},
-	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert},
-};
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+use sp_runtime::{
+	traits::{Convert, SaturatedConversion, Saturating, SignedExtension, Zero},
+	transaction_validity::{
+		InvalidTransaction, TransactionPriority, TransactionValidity, TransactionValidityError,
+		ValidTransaction,
+	},
+	Fixed64,
+};
+use sp_std::prelude::*;
 
 mod migration;
 
@@ -127,12 +127,32 @@ impl<T: Trait> Module<T> {
 	{
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
-		let partial_fee =
-			<ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
+		let weight_fee = {
+			// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
+			// maximum of its data type, which is not desired.
+			let capped_weight = dispatch_info
+				.weight
+				.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
+			T::WeightToFee::convert(capped_weight)
+		};
+		let partial_fee = <ChargeTransactionPayment<T>>::compute_final_fee(
+			len,
+			dispatch_info,
+			0u32.into(),
+			weight_fee,
+		);
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
 		RuntimeDispatchInfo { weight, class, partial_fee }
 	}
+}
+
+/// Data which is collected during the pre-dispatch phase and needed at the post_dispatch phase.
+pub struct PendingRefund<AccountId, Balance, NegativeImbalance> {
+	transactor: AccountId,
+	weight_fee: Balance,
+	tip: Balance,
+	imbalance: NegativeImbalance,
 }
 
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
@@ -144,6 +164,18 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(fee: BalanceOf<T>) -> Self {
 		Self(fee)
+	}
+
+	fn weight_fee(info: &<Self as SignedExtension>::DispatchInfo) -> BalanceOf<T>
+	where
+		BalanceOf<T>: Sync + Send,
+	{
+		// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
+		// maximum of its data type, which is not desired.
+		let capped_weight = info
+			.weight
+			.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
+		T::WeightToFee::convert(capped_weight)
 	}
 
 	/// Compute the final fee value for a particular transaction.
@@ -160,10 +192,11 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	///      transactions can have a tip.
 	///
 	/// final_fee = base_fee + targeted_fee_adjustment(len_fee + weight_fee) + tip;
-	pub fn compute_fee(
+	pub fn compute_final_fee(
 		len: u32,
 		info: <Self as SignedExtension>::DispatchInfo,
 		tip: BalanceOf<T>,
+		weight_fee: BalanceOf<T>,
 	) -> BalanceOf<T>
 	where
 		BalanceOf<T>: Sync + Send,
@@ -172,14 +205,6 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
 			let len_fee = per_byte.saturating_mul(len);
-
-			let weight_fee = {
-				// cap the weight to the maximum defined in runtime, otherwise it will be the
-				// `Bounded` maximum of its data type, which is not desired.
-				let capped_weight = info.weight
-					.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
-				T::WeightToFee::convert(capped_weight)
-			};
 
 			// the adjustable part of the fee
 			let adjustable_fee = len_fee.saturating_add(weight_fee);
@@ -191,6 +216,38 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			base_fee.saturating_add(adjusted_fee).saturating_add(tip)
 		} else {
 			tip
+		}
+	}
+
+	fn withdraw_fee(
+		who: &T::AccountId,
+		tip: BalanceOf<T>,
+		fee: BalanceOf<T>,
+		weight_fee: BalanceOf<T>,
+	) -> Result<Option<PendingRefund<T::AccountId, BalanceOf<T>, NegativeImbalanceOf<T>>>, ()> {
+		// Only mess with balances if fee is not zero.
+		if !fee.is_zero() {
+			let imbalance = match T::Currency::withdraw(
+				who,
+				fee,
+				if tip.is_zero() {
+					WithdrawReason::TransactionPayment.into()
+				} else {
+					WithdrawReason::TransactionPayment | WithdrawReason::Tip
+				},
+				ExistenceRequirement::KeepAlive,
+			) {
+				Ok(imbalance) => imbalance,
+				Err(_) => return Err(()),
+			};
+			Ok(Some(PendingRefund {
+				transactor: who.clone(),
+				imbalance,
+				tip,
+				weight_fee,
+			}))
+		} else {
+			Ok(None)
 		}
 	}
 }
@@ -207,15 +264,32 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
-	where BalanceOf<T>: Send + Sync
+where
+	BalanceOf<T>: Send + Sync,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
 	type DispatchInfo = DispatchInfo;
-	type Pre = ();
-	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
+	type Pre = Option<PendingRefund<T::AccountId, BalanceOf<T>, NegativeImbalanceOf<T>>>;
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
+		Ok(())
+	}
+
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		_call: &Self::Call,
+		info: Self::DispatchInfo,
+		len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		let tip = self.0;
+		let weight_fee = Self::weight_fee(&info);
+		let total_fee = Self::compute_final_fee(len as u32, info, tip, weight_fee);
+		Self::withdraw_fee(who, tip, total_fee, weight_fee)
+			.map_err(|()| InvalidTransaction::Payment.into())
+	}
 
 	fn validate(
 		&self,
@@ -224,34 +298,44 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
-		// pay any fees.
 		let tip = self.0;
-		let fee = Self::compute_fee(len as u32, info, tip);
-		// Only mess with balances if fee is not zero.
-		if !fee.is_zero() {
-			let imbalance = match T::Currency::withdraw(
-				who,
-				fee,
-				if tip.is_zero() {
-					WithdrawReason::TransactionPayment.into()
-				} else {
-					WithdrawReason::TransactionPayment | WithdrawReason::Tip
-				},
-				ExistenceRequirement::KeepAlive,
-			) {
-				Ok(imbalance) => imbalance,
-				Err(_) => return InvalidTransaction::Payment.into(),
-			};
-			let imbalances = imbalance.split(tip);
-			T::OnTransactionPayment::on_unbalanceds(Some(imbalances.0).into_iter()
-				.chain(Some(imbalances.1)));
-		}
+		let weight_fee = Self::weight_fee(&info);
+		let total_fee = Self::compute_final_fee(len as u32, info, tip, weight_fee);
+		let _ = Self::withdraw_fee(who, tip, total_fee, weight_fee)
+			.map_err(|()| TransactionValidityError::from(InvalidTransaction::Payment))?;
 
 		let mut r = ValidTransaction::default();
 		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
 		// will be a bit more than setting the priority to tip. For now, this is enough.
-		r.priority = fee.saturated_into::<TransactionPriority>();
+		r.priority = total_fee.saturated_into::<TransactionPriority>();
 		Ok(r)
+	}
+
+	fn post_dispatch(pre: Self::Pre, info: Self::DispatchInfo, _len: usize) {
+		let (transactor, weight_fee, tip, imbalance) = match pre {
+			Some(PendingRefund {
+				transactor,
+				weight_fee,
+				tip,
+				imbalance,
+			}) => (transactor, weight_fee, tip, imbalance),
+			_ => return,
+		};
+
+		let spent_weight = <frame_system::Module<T>>::spent_weight().unwrap_or(info.weight);
+		let actual_weight_fee = T::WeightToFee::convert(spent_weight);
+
+		// NB: We substract the fee not from the imbalance but from the `weight_fee`.
+		let refund = weight_fee.saturating_sub(actual_weight_fee);
+		if refund > 0.into() {
+			panic!();
+		}
+		let refund_imbalance = T::Currency::deposit_creating(&transactor, refund);
+		if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
+			let imbalances = imbalance.split(tip);
+			T::OnTransactionPayment::on_unbalanceds(Some(imbalances.0).into_iter()
+				.chain(Some(imbalances.1)));
+		}
 	}
 }
 
@@ -593,25 +677,28 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: false,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 10), 10);
+			let weight_fee = ChargeTransactionPayment::<Runtime>::weight_fee(&dispatch_info);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_final_fee(0, dispatch_info, 10, weight_fee), 10);
 			// No tip, only base fee works
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 100);
+			let weight_fee = ChargeTransactionPayment::<Runtime>::weight_fee(&dispatch_info);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_final_fee(0, dispatch_info, 0, weight_fee), 100);
 			// Tip + base fee works
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 69), 169);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_final_fee(0, dispatch_info, 69, weight_fee), 169);
 			// Len (byte fee) + base fee works
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(42, dispatch_info, 0), 520);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_final_fee(42, dispatch_info, 0, weight_fee), 520);
 			// Weight fee + base fee works
 			let dispatch_info = DispatchInfo {
 				weight: 1000,
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 1100);
+			let weight_fee = ChargeTransactionPayment::<Runtime>::weight_fee(&dispatch_info);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_final_fee(0, dispatch_info, 0, weight_fee), 1100);
 		});
 	}
 
@@ -632,7 +719,8 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 100);
+			let weight_fee = ChargeTransactionPayment::<Runtime>::weight_fee(&dispatch_info);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_final_fee(0, dispatch_info, 0, weight_fee), 100);
 
 			// Everything works together :)
 			let dispatch_info = DispatchInfo {
@@ -640,11 +728,12 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
+			let weight_fee = ChargeTransactionPayment::<Runtime>::weight_fee(&dispatch_info);
 			// 123 weight, 456 length, 100 base
 			// adjustable fee = (123 * 1) + (456 * 10) = 4683
 			// adjusted fee = (4683 * .5) + 4683 = 7024.5 -> 7024
 			// final fee = 100 + 7024 + 789 tip = 7913
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(456, dispatch_info, 789), 7913);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_final_fee(456, dispatch_info, 789, weight_fee), 7913);
 		});
 	}
 
@@ -663,11 +752,13 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
+			let weight_fee = ChargeTransactionPayment::<Runtime>::weight_fee(&dispatch_info);
 			assert_eq!(
-				ChargeTransactionPayment::<Runtime>::compute_fee(
+				ChargeTransactionPayment::<Runtime>::compute_final_fee(
 					<u32>::max_value(),
 					dispatch_info,
-					<u64>::max_value()
+					<u64>::max_value(),
+					weight_fee,
 				),
 				<u64>::max_value()
 			);

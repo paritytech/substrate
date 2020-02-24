@@ -18,16 +18,14 @@
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
-use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
-use codec::{FullCodec, Codec, Encode, Decode};
+use codec::{Codec, Decode, Encode, FullCodec};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeDebug,
-	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput},
+	traits::{AtLeast32Bit, MaybeSerializeDeserialize, Saturating, TrailingZeroInput},
+	ConsensusEngineId, DispatchError, DispatchResult, RuntimeDebug,
 };
+use sp_std::{fmt::Debug, marker::PhantomData, ops::Div, prelude::*, result};
 
-use crate::weights::Weight;
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
 
