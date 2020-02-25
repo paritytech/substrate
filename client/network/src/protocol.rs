@@ -131,6 +131,8 @@ mod rep {
 	pub const BAD_PROTOCOL: Rep = Rep::new_fatal("Unsupported protocol");
 	/// Peer role does not match (e.g. light peer connecting to another light peer).
 	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
+	/// Peer response data does not have requested bits.
+	pub const BAD_RESPONSE: Rep = Rep::new(-(1 << 12), "Incomplete response");
 }
 
 // Lock must always be taken in order declared here.
@@ -701,12 +703,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		peer: PeerId,
 		request: message::BlockRequest<B>
 	) {
-		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}",
+		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?} for {:?}",
 			request.id,
 			peer,
 			request.from,
 			request.to,
-			request.max);
+			request.max,
+			request.fields,
+		);
 
 		// sending block requests to the node that is unable to serve it is considered a bad behavior
 		if !self.config.roles.is_full() {
@@ -754,6 +758,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				message_queue: None,
 				justification,
 			};
+			// Stop if we don't have requested block body
+			if get_body && block_data.body.is_none() {
+				trace!(target: "sync", "Missing data for block request.");
+				break;
+			}
 			blocks.push(block_data);
 			match request.direction {
 				message::Direction::Ascending => id = BlockId::Number(number + One::one()),
@@ -784,7 +793,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>,
 	) -> CustomMessageOutcome<B> {
-		let blocks_range = match (
+		let blocks_range = || match (
 			response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
 			response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
 		) {
@@ -796,7 +805,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			response.id,
 			peer,
 			response.blocks.len(),
-			blocks_range
+			blocks_range(),
 		);
 
 		if request.fields == message::BlockAttributes::JUSTIFICATION {
@@ -811,6 +820,20 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				}
 			}
 		} else {
+			// Validate fields against the request.
+			if request.fields.contains(message::BlockAttributes::HEADER) && response.blocks.iter().any(|b| b.header.is_none()) {
+				self.behaviour.disconnect_peer(&peer);
+				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
+				trace!(target: "sync", "Missing header for a block");
+				return CustomMessageOutcome::None
+			}
+			if request.fields.contains(message::BlockAttributes::BODY) && response.blocks.iter().any(|b| b.body.is_none()) {
+				self.behaviour.disconnect_peer(&peer);
+				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
+				trace!(target: "sync", "Missing body for a block");
+				return CustomMessageOutcome::None
+			}
+
 			match self.sync.on_block_data(peer, Some(request), response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
