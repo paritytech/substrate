@@ -238,7 +238,7 @@ decl_module! {
 			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 		) -> DispatchResult {
 			let transactor = ensure_signed(origin)?;
-			let who = T::Lookup::lookup(target)?;
+			ensure!(schedule.locked >= T::VestingDeposit::get(), Error::<T>::AmountLow);
 
 			ensure!(schedule.locked >= T::VestingDeposit::get(), Error::<T>::AmountLow);
 			ensure!(!Vesting::<T>::contains_key(&who), Error::<T>::ExistingVestingSchedule);
