@@ -235,7 +235,7 @@ decl_module! {
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,
-			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>
+			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 		) -> DispatchResult {
 			let transactor = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(target)?;
