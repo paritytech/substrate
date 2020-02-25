@@ -27,13 +27,18 @@ use nix::unistd::Pid;
 ///
 /// Returns the `Some(exit status)` or `None` if the process did not finish in the given time.
 pub fn wait_for(child: &mut Child, secs: usize) -> Option<ExitStatus> {
-	for _ in 0..secs {
+	for i in 0..secs {
 		match child.try_wait().unwrap() {
-			Some(status) => return Some(status),
+			Some(status) => {
+				if i > 5 {
+					eprintln!("Child process took {} seconds to exit gracefully", i);
+				}
+				return Some(status)
+			},
 			None => thread::sleep(Duration::from_secs(1)),
 		}
 	}
-	eprintln!("Took to long to exit. Killing...");
+	eprintln!("Took too long to exit (> {} seconds). Killing...", secs);
 	let _ = child.kill();
 	child.wait().unwrap();
 
@@ -41,14 +46,11 @@ pub fn wait_for(child: &mut Child, secs: usize) -> Option<ExitStatus> {
 }
 
 /// Run the node for a while (30 seconds)
-pub fn run_command_for_a_while(base_path: &Path, dev: bool) {
+pub fn run_dev_node_for_a_while(base_path: &Path) {
 	let mut cmd = Command::new(cargo_bin("substrate"));
 
-	if dev {
-		cmd.arg("--dev");
-	}
-
 	let mut cmd = cmd
+		.args(&["--dev"])
 		.arg("-d")
 		.arg(base_path)
 		.spawn()
