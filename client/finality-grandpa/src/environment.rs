@@ -947,7 +947,8 @@ fn report_equivocation<Block, B, PRA, SC>(
 	authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
 	select_chain: &SC,
 	equivocation: Equivocation<Block::Hash, NumberFor<Block>>,
-) -> Result<(), String> where
+) -> Result<(), String>
+where
 	Block: BlockT,
 	B: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	PRA: ProvideRuntimeApi<Block>,
@@ -1014,13 +1015,13 @@ fn report_equivocation<Block, B, PRA, SC>(
 		equivocation,
 	);
 
-	// api.runtime_api()
-	// 	.submit_report_equivocation_extrinsic(
-	// 		&BlockId::Hash(best_header.hash()),
-	// 		equivocation_report,
-	// 		membership_proof.encode(),
-	// 	)
-	// 	.unwrap();
+	api.runtime_api()
+		.submit_report_equivocation_extrinsic(
+			&BlockId::Hash(best_header.hash()),
+			equivocation_report,
+			membership_proof.encode(),
+		)
+		.unwrap();
 
 	Ok(())
 }
