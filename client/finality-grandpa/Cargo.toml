@@ -31,6 +31,7 @@ sc-network = { version = "0.8.0-dev", path = "../network" }
 sc-network-gossip = { version = "0.8.0-dev", path = "../network-gossip" }
 sp-finality-tracker = { version = "2.0.0-dev", path = "../../primitives/finality-tracker" }
 sp-finality-grandpa = { version = "2.0.0-dev", path = "../../primitives/finality-grandpa" }
+prometheus-exporter = { path = "../../utils/prometheus", version = "0.8.0-dev" }
 finality-grandpa = { version = "0.11.1", features = ["derive-codec"] }
 pin-project = "0.4.6"
 

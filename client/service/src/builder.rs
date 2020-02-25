@@ -1031,7 +1031,7 @@ ServiceBuilder<
 		}
 
 		// Prometheus metrics
-		let metrics = if let Some((registry, port)) = prometheus_registry_and_port {
+		let metrics = if let Some((registry, port)) = prometheus_registry_and_port.clone() {
 			let metrics = ServiceMetrics::register(&registry)?;
 
 			metrics.node_roles.set(u64::from(config.roles.bits()));
@@ -1302,6 +1302,7 @@ ServiceBuilder<
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			keystore,
 			marker: PhantomData::<TBl>,
+			prometheus_registry: prometheus_registry_and_port.map(|(r, _)| r)
 		})
 	}
 }

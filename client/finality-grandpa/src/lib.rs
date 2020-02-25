@@ -101,7 +101,7 @@ pub use voting_rule::{
 };
 
 use aux_schema::PersistentData;
-use environment::{Environment, VoterSetState};
+use environment::{Environment, VoterSetState, Metrics};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::{NetworkBridge, Network as NetworkT};
@@ -530,6 +530,8 @@ pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X> {
 	pub telemetry_on_connect: Option<futures::channel::mpsc::UnboundedReceiver<()>>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
+	/// The prometheus metrics registry.
+	pub prometheus_registry: Option<prometheus_exporter::Registry>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -557,6 +559,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 		on_exit,
 		telemetry_on_connect,
 		voting_rule,
+		prometheus_registry,
 	} = grandpa_params;
 
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
@@ -615,6 +618,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 		voting_rule,
 		persistent_data,
 		voter_commands_rx,
+		prometheus_registry,
 	);
 
 	let voter_work = voter_work
@@ -656,6 +660,7 @@ where
 		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+		prometheus_registry: Option<prometheus_exporter::Registry>,
 	) -> Self {
 
 		let voters = persistent_data.authority_set.current_authorities();
@@ -670,6 +675,7 @@ where
 			authority_set: persistent_data.authority_set.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state.clone(),
+			metrics: prometheus_registry.map(|registry| Metrics::register(&registry).unwrap()),
 		});
 
 		let mut work = VoterWork {
@@ -789,6 +795,7 @@ where
 					consensus_changes: self.env.consensus_changes.clone(),
 					network: self.env.network.clone(),
 					voting_rule: self.env.voting_rule.clone(),
+					metrics: self.env.metrics.clone()
 				});
 
 				self.rebuild_voter();

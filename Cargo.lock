@@ -6150,6 +6150,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.10.0",
  "pin-project",
+ "prometheus-exporter",
  "rand 0.7.3",
  "sc-client",
  "sc-client-api",

@@ -62,6 +62,7 @@ use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
 use sp_finality_grandpa::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
+use prometheus_exporter::{Gauge, U64, register, PrometheusError};
 
 type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -376,6 +377,23 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	}
 }
 
+/// Prometheus metrics for GRANDPA.
+#[derive(Clone)]
+pub(crate) struct Metrics {
+	finality_grandpa_round: Gauge<U64>,
+}
+
+impl Metrics {
+	pub(crate) fn register(registry: &prometheus_exporter::Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			finality_grandpa_round: register(Gauge::new(
+				"finality_grandpa_round", "Highest completed GRANDPA round.",
+			)?, registry)?,
+		})
+	}
+}
+
+
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 	pub(crate) client: Arc<Client<B, E, Block, RA>>,
@@ -388,6 +406,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, V
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
+	pub(crate) metrics: Option<Metrics>
 }
 
 impl<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> Environment<B, E, Block, N, RA, SC, VR> {
@@ -400,6 +419,17 @@ impl<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> Environment<B, E, Bloc
 		self.voter_set_state.with(|voter_set_state| {
 			if let Some(set_state) = f(&voter_set_state)? {
 				*voter_set_state = set_state;
+
+				if let Some(metrics) = self.metrics.as_ref() {
+					if let VoterSetState::Live { completed_rounds, .. } = voter_set_state {
+						let highest = completed_rounds.rounds.iter()
+							.map(|round| round.number)
+							.max()
+							.expect("There is always one completed round (genesis); qed");
+
+						metrics.finality_grandpa_round.set(highest);
+					}
+				}
 			}
 			Ok(())
 		})
