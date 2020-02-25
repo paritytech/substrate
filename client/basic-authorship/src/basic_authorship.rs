@@ -323,10 +323,7 @@ mod tests {
 			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)])
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory {
-			client: client.clone(),
-			transaction_pool: txpool.clone(),
-		};
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
 
 		let cell = Mutex::new(time::Instant::now());
 		let mut proposer = proposer_factory.init_with_now(
@@ -367,10 +364,7 @@ mod tests {
 			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0)]),
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory {
-			client: client.clone(),
-			transaction_pool: txpool.clone(),
-		};
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
 
 		let mut proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),

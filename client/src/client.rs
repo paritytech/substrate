@@ -1378,7 +1378,7 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 		E: CallExecutor<Block> + Send + Sync + 'static,
 		Block: BlockT,
 		Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
-		Self::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
+		<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 			+ BlockBuilderApi<Block, Error = Error>,
 {
 	fn new_block_at<R: Into<RecordProof>>(
