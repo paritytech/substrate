@@ -760,7 +760,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			};
 			// Stop if we don't have requested block body
 			if get_body && block_data.body.is_none() {
-				trace!(target: "sync", "Missing data for block request. BODY: {}", block_data.body.is_some());
+				trace!(target: "sync", "Missing data for block request.");
 				break;
 			}
 			blocks.push(block_data);
