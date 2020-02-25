@@ -131,7 +131,7 @@ impl frame_system::Trait for Runtime {
 	type ModuleToIndex = ModuleToIndex;
 	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
-	type OnReapAccount = (Balances, Staking, Contracts, Session, Recovery);
+	type OnKilledAccount = ();
 }
 
 parameter_types! {
@@ -820,7 +820,7 @@ impl_runtime_apis! {
 		fn dispatch_benchmark(
 			module: Vec<u8>,
 			extrinsic: Vec<u8>,
-			steps: u32,
+			steps: Vec<u32>,
 			repeat: u32,
 		) -> Option<Vec<frame_benchmarking::BenchmarkResults>> {
 			use frame_benchmarking::Benchmarking;
