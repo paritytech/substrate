@@ -88,6 +88,6 @@ pub mod report {
 		}
 	}
 
-    /// Identity of the equivocation/misbehavior reporter.
+	/// Identity of the equivocation/misbehavior reporter.
 	pub type ReporterId = app::Public;
 }
