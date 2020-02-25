@@ -562,9 +562,9 @@ publish-to-crates-io:
   dependencies:
     - build-linux-substrate
     - test-dependency-rules
- only:
-   - tags
-   - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  only:
+    - tags
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}
