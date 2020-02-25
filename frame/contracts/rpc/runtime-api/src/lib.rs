@@ -76,7 +76,7 @@ sp_api::decl_runtime_apis! {
 
 		/// Returns the projected time a given contract will be able to sustain paying its rent.
 		///
-		/// The returned projection is relevent for the current block, i.e. it is as if the contract
+		/// The returned projection is relevant for the current block, i.e. it is as if the contract
 		/// was accessed at the current block.
 		///
 		/// Returns `Err` if the contract is in a tombstone state or doesn't exist.

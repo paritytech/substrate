@@ -1,9 +1,11 @@
 [package]
 name = "sc-transaction-pool"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0" }
@@ -13,16 +15,17 @@ futures-diagnose = "1.0"
 log = "0.4.8"
 parking_lot = "0.10.0"
 wasm-timer = "0.2"
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-api = { version = "2.0.0", path = "../../primitives/api" }
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sc-transaction-graph = { version = "2.0.0", path = "./graph" }
-sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
-sc-client-api = { version = "2.0.0", path = "../api" }
-sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
+sp-api = { version = "2.0.0-dev", path = "../../primitives/api" }
+sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
+sc-transaction-graph = { version = "2.0.0-dev", path = "./graph" }
+sp-transaction-pool = { version = "2.0.0-dev", path = "../../primitives/transaction-pool" }
+sc-client-api = { version = "2.0.0-dev", path = "../api" }
+sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
+futures-timer = "2.0"
 parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
-sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
-substrate-test-runtime-transaction-pool = { version = "2.0.0", path = "../../test-utils/runtime/transaction-pool" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+sp-keyring = { version = "2.0.0-dev", path = "../../primitives/keyring" }
+substrate-test-runtime-transaction-pool = { version = "2.0.0-dev", path = "../../test-utils/runtime/transaction-pool" }
+substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }

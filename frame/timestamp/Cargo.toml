@@ -1,25 +1,28 @@
 [package]
 name = "pallet-timestamp"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
-sp-timestamp = { version = "2.0.0", default-features = false, path = "../../primitives/timestamp" }
+sp-std = { version = "2.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "2.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-inherents = { version = "2.0.0-dev", default-features = false, path = "../../primitives/inherents" }
+frame-benchmarking = { version = "2.0.0-dev", default-features = false, path = "../benchmarking" }
+frame-support = { version = "2.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-dev", default-features = false, path = "../system" }
+sp-timestamp = { version = "2.0.0-dev", default-features = false, path = "../../primitives/timestamp" }
 impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
-sp-io ={ version = "2.0.0", path = "../../primitives/io" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-io ={ version = "2.0.0-dev", path = "../../primitives/io" }
+sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 
 [features]
 default = ["std"]
@@ -28,6 +31,7 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"sp-runtime/std",
+	"frame-benchmarking/std",
 	"frame-support/std",
 	"serde",
 	"frame-system/std",

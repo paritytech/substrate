@@ -83,12 +83,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{print, DispatchResult, DispatchError, traits::{Zero, StaticLookup, Convert}};
+use sp_runtime::{
+	print, DispatchResult, DispatchError, Perbill,
+	traits::{Zero, StaticLookup, Convert},
+};
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error, weights::SimpleDispatchInfo,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
-		ChangeMembers, OnUnbalanced, WithdrawReason, Contains
+		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus
 	}
 };
 use sp_phragmen::ExtendedBalance;
@@ -311,7 +314,7 @@ decl_module! {
 			let valid = Self::is_defunct_voter(&target);
 			if valid {
 				// reporter will get the voting bond of the target
-				T::Currency::repatriate_reserved(&target, &reporter, T::VotingBond::get())?;
+				T::Currency::repatriate_reserved(&target, &reporter, T::VotingBond::get(), BalanceStatus::Free)?;
 				// remove the target. They are defunct.
 				Self::do_remove_voter(&target, false);
 			} else {
@@ -637,7 +640,7 @@ impl<T: Trait> Module<T> {
 		let voters_and_votes = <VotesOf<T>>::enumerate()
 			.map(|(v, i)| (v, i))
 			.collect::<Vec<(T::AccountId, Vec<T::AccountId>)>>();
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote>(
+		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote, Perbill>(
 			num_to_elect,
 			0,
 			candidates,
@@ -664,7 +667,7 @@ impl<T: Trait> Module<T> {
 				.filter_map(|(m, a)| if a.is_zero() { None } else { Some(m) } )
 				.collect::<Vec<T::AccountId>>();
 
-			let support_map = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
+			let support_map = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote, Perbill>(
 				&new_set,
 				&phragmen_result.assignments,
 				Self::locked_stake_of,
@@ -811,23 +814,22 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
 	}
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const CreationFee: u64 = 0;
-	}
+}
 
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnNewAccount = ();
-		type OnReapAccount = System;
 		type Event = Event;
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
-	}
+		type AccountStore = frame_system::Module<Test>;
+}
 
 	parameter_types! {
 		pub const CandidacyBond: u64 = 3;
@@ -934,7 +936,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: system::{Module, Call, Event},
+			System: system::{Module, Call, Event<T>},
 			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 			Elections: elections::{Module, Call, Event<T>},
 		}
@@ -1424,7 +1426,7 @@ mod tests {
 
 			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 3));
 			assert_eq!(
-				System::events()[1].event,
+				System::events()[7].event,
 				Event::elections(RawEvent::VoterReported(3, 5, true))
 			);
 
@@ -1453,7 +1455,7 @@ mod tests {
 
 			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 4));
 			assert_eq!(
-				System::events()[1].event,
+				System::events()[7].event,
 				Event::elections(RawEvent::VoterReported(4, 5, false))
 			);
 
@@ -1864,7 +1866,7 @@ mod tests {
 			assert_eq!(balances(&5), (45, 2));
 
 			assert_eq!(
-				System::events()[0].event,
+				System::events()[6].event,
 				Event::elections(RawEvent::NewTerm(vec![(4, 40), (5, 50)])),
 			);
 		})

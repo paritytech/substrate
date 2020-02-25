@@ -30,7 +30,7 @@ use sp_blockchain::Error as ClientError;
 use sc_client_api::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
 	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
-use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
+use crate::protocol::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 use libp2p::PeerId;
 use crate::config::Roles;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
@@ -227,7 +227,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 impl<B: BlockT> LightDispatch<B> where
 	B::Header: HeaderT,
 {
-	/// Creates new light client requests processer.
+	/// Creates new light client requests processor.
 	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
 		LightDispatch {
 			checker,
@@ -504,7 +504,7 @@ impl<B: BlockT> LightDispatch<B> where
 	}
 
 	pub fn is_light_response(&self, peer: &PeerId, request_id: message::RequestId) -> bool {
-		self.active_peers.get(&peer).map_or(false, |r| r.id == request_id)
+		self.active_peers.get(peer).map_or(false, |r| r.id == request_id)
 	}
 
 	fn remove(&mut self, peer: PeerId, id: u64) -> Option<Request<B>> {
@@ -567,7 +567,7 @@ impl<B: BlockT> LightDispatch<B> where
 				// return peer to the back of the queue
 				self.idle_peers.push_back(peer.clone());
 
-				// we have enumerated all peers and noone can handle request
+				// we have enumerated all peers and no one can handle request
 				if Some(peer) == last_peer {
 					let request = self.pending_requests.pop_front().expect("checked in loop condition; qed");
 					unhandled_requests.push_back(request);

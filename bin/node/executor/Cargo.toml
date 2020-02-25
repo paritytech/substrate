@@ -1,39 +1,42 @@
 [package]
 name = "node-executor"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node implementation in Rust."
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-node-primitives = { version = "2.0.0", path = "../primitives" }
-node-runtime = { version = "2.0.0", path = "../runtime" }
-sc-executor = { version = "0.8", path = "../../../client/executor" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-io = { version = "2.0.0", path = "../../../primitives/io" }
-sp-state-machine = { version = "0.8", path = "../../../primitives/state-machine" }
-sp-trie = { version = "2.0.0", path = "../../../primitives/trie" }
+node-primitives = { version = "2.0.0-dev", path = "../primitives" }
+node-runtime = { version = "2.0.0-dev", path = "../runtime" }
+sc-executor = { version = "0.8.0-dev", path = "../../../client/executor" }
+sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
+sp-io = { version = "2.0.0-dev", path = "../../../primitives/io" }
+sp-state-machine = { version = "0.8.0-dev", path = "../../../primitives/state-machine" }
+sp-trie = { version = "2.0.0-dev", path = "../../../primitives/trie" }
 trie-root = "0.16.0"
+frame-benchmarking = { version = "2.0.0-dev", path = "../../../frame/benchmarking" }
 
 [dev-dependencies]
 criterion = "0.3.0"
-frame-support = { version = "2.0.0", path = "../../../frame/support" }
-frame-system = { version = "2.0.0", path = "../../../frame/system" }
-node-testing = { version = "2.0.0", path = "../testing" }
-pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
-pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
-pallet-grandpa = { version = "2.0.0", path = "../../../frame/grandpa" }
-pallet-im-online = { version = "2.0.0", path = "../../../frame/im-online" }
-pallet-indices = { version = "2.0.0", path = "../../../frame/indices" }
-pallet-session = { version = "2.0.0", path = "../../../frame/session" }
-pallet-timestamp = { version = "2.0.0", path = "../../../frame/timestamp" }
-pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
-pallet-treasury = { version = "2.0.0", path = "../../../frame/treasury" }
-sp-application-crypto = { version = "2.0.0", path = "../../../primitives/application-crypto" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
+frame-support = { version = "2.0.0-dev", path = "../../../frame/support" }
+frame-system = { version = "2.0.0-dev", path = "../../../frame/system" }
+node-testing = { version = "2.0.0-dev", path = "../testing" }
+pallet-balances = { version = "2.0.0-dev", path = "../../../frame/balances" }
+pallet-contracts = { version = "2.0.0-dev", path = "../../../frame/contracts" }
+pallet-grandpa = { version = "2.0.0-dev", path = "../../../frame/grandpa" }
+pallet-im-online = { version = "2.0.0-dev", path = "../../../frame/im-online" }
+pallet-indices = { version = "2.0.0-dev", path = "../../../frame/indices" }
+pallet-session = { version = "2.0.0-dev", path = "../../../frame/session" }
+pallet-timestamp = { version = "2.0.0-dev", path = "../../../frame/timestamp" }
+pallet-transaction-payment = { version = "2.0.0-dev", path = "../../../frame/transaction-payment" }
+pallet-treasury = { version = "2.0.0-dev", path = "../../../frame/treasury" }
+sp-application-crypto = { version = "2.0.0-dev", path = "../../../primitives/application-crypto" }
+sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
+substrate-test-client = { version = "2.0.0-dev", path = "../../../test-utils/client" }
 wabt = "0.9.2"
 
 [features]

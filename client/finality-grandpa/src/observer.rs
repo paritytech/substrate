@@ -150,6 +150,9 @@ fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 /// listening for and validating GRANDPA commits instead of following the full
 /// protocol. Provide configuration and a link to a block import worker that has
 /// already been instantiated with `block_import`.
+/// NOTE: this is currently not part of the crate's public API since we don't consider
+/// it stable enough to use on a live network.
+#[allow(unused)]
 pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA, SC>,
@@ -377,7 +380,7 @@ mod tests {
 	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
 	use sc_network::PeerId;
 
-	use futures::executor::{self, ThreadPool};
+	use futures::executor;
 
 	/// Ensure `Future` implementation of `ObserverWork` is polling its `NetworkBridge`. Regression
 	/// test for bug introduced in d4fbb897c and fixed in b7af8b339.

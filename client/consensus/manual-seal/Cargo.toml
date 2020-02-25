@@ -1,10 +1,12 @@
 [package]
 name = "sc-consensus-manual-seal"
-version = "0.8.0"
+version = "0.8.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Manual sealing engine for Substrate"
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 derive_more = "0.99.2"
@@ -16,19 +18,19 @@ log = "0.4.8"
 parking_lot = "0.10.0"
 serde = { version = "1.0", features=["derive"] }
 
-sc-client = { path = "../../../client" }
-sc-client-api = { path = "../../../client/api" }
-sc-transaction-pool = { path = "../../transaction-pool" }
-sp-blockchain = { path = "../../../primitives/blockchain" }
-sp-consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
-sp-inherents = { path = "../../../primitives/inherents" }
-sp-runtime = {  path = "../../../primitives/runtime" }
-sp-transaction-pool = { path = "../../../primitives/transaction-pool" }
+sc-client = { path = "../../../client" , version = "0.8.0-dev"}
+sc-client-api = { path = "../../../client/api" , version = "2.0.0-dev"}
+sc-transaction-pool = { path = "../../transaction-pool" , version = "2.0.0-dev"}
+sp-blockchain = { path = "../../../primitives/blockchain" , version = "2.0.0-dev"}
+sp-consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common" , version = "0.8.0-dev"}
+sp-inherents = { path = "../../../primitives/inherents" , version = "2.0.0-dev"}
+sp-runtime = {  path = "../../../primitives/runtime" , version = "2.0.0-dev"}
+sp-transaction-pool = { path = "../../../primitives/transaction-pool" , version = "2.0.0-dev"}
 
 [dev-dependencies]
-sc-basic-authorship = { path = "../../basic-authorship" }
-substrate-test-runtime-client = { path = "../../../test-utils/runtime/client" }
-substrate-test-runtime-transaction-pool = { path = "../../../test-utils/runtime/transaction-pool" }
+sc-basic-authorship = { path = "../../basic-authorship" , version = "0.8.0-dev"}
+substrate-test-runtime-client = { path = "../../../test-utils/runtime/client" , version = "2.0.0-dev"}
+substrate-test-runtime-transaction-pool = { path = "../../../test-utils/runtime/transaction-pool" , version = "2.0.0-dev"}
 tokio = { version = "0.2", features = ["rt-core", "macros"] }
 env_logger = "0.7.0"
 tempfile = "3.1.0"

@@ -1,10 +1,12 @@
 [package]
 name = "sc-authority-discovery"
-version = "0.8.0"
+version = "0.8.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [build-dependencies]
 prost-build = "0.6.1"
@@ -15,22 +17,22 @@ codec = { package = "parity-scale-codec", default-features = false, version = "1
 derive_more = "0.99.2"
 futures = "0.3.1"
 futures-timer = "3.0.1"
-libp2p = { version = "0.15.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
+libp2p = { version = "0.16.1", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"
 prost = "0.6.1"
 rand = "0.7.2"
-sc-client-api = { version = "2.0.0", path = "../api" }
-sc-keystore = { version = "2.0.0", path = "../keystore" }
-sc-network = { version = "0.8", path = "../network" }
+sc-client-api = { version = "2.0.0-dev", path = "../api" }
+sc-keystore = { version = "2.0.0-dev", path = "../keystore" }
+sc-network = { version = "0.8.0-dev", path = "../network" }
 serde_json = "1.0.41"
-sp-authority-discovery = { version = "2.0.0", path = "../../primitives/authority-discovery" }
-sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sp-api = { version = "2.0.0", path = "../../primitives/api" }
+sp-authority-discovery = { version = "2.0.0-dev", path = "../../primitives/authority-discovery" }
+sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
+sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
+sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
+sp-api = { version = "2.0.0-dev", path = "../../primitives/api" }
 
 [dev-dependencies]
 env_logger = "0.7.0"
 quickcheck = "0.9.0"
-sc-peerset = { version = "2.0.0", path = "../peerset" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client"}
+sc-peerset = { version = "2.0.0-dev", path = "../peerset" }
+substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client"}

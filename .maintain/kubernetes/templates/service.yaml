@@ -33,7 +33,7 @@ spec:
     app: {{ .Values.GitlabEnvSlug | default .Values.app }}
   sessionAffinity: None
   type: NodePort
-  # don't route exteral traffic to non-local pods
+  # don't route external traffic to non-local pods
   externalTrafficPolicy: Local
 {{- else if .Values.validator.keys }}
 {{- $root := . -}}

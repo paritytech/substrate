@@ -69,7 +69,7 @@ impl Decode for NodeHeader {
 }
 
 /// Returns an iterator over encoded bytes for node header and size.
-/// Size encoding allows unlimited, length unefficient, representation, but
+/// Size encoding allows unlimited, length inefficient, representation, but
 /// is bounded to 16 bit maximum value to avoid possible DOS.
 pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8) -> impl Iterator<Item = u8> {
 	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);

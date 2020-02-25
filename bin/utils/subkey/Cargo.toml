@@ -1,34 +1,36 @@
 [package]
 name = "subkey"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 futures = "0.1.29"
-sp-core = { version = "*", path = "../../../primitives/core" }
-node-runtime = { version = "*", path = "../../node/runtime" }
-node-primitives = { version = "*", path = "../../node/primitives" }
-sp-runtime = { version = "*", path = "../../../primitives/runtime" }
+sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
+node-runtime = { version = "2.0.0-dev", path = "../../node/runtime" }
+node-primitives = { version = "2.0.0-dev", path = "../../node/primitives" }
+sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
 rand = "0.7.2"
 clap = "2.33.0"
-tiny-bip39 = "0.6.2"
+tiny-bip39 = "0.7"
 rustc-hex = "2.0.1"
 substrate-bip39 = "0.3.1"
 hex = "0.4.0"
 hex-literal = "0.2.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-frame-system = { version = "2.0.0", path = "../../../frame/system" }
-pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
-pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
+frame-system = { version = "2.0.0-dev", path = "../../../frame/system" }
+pallet-balances = { version = "2.0.0-dev", path = "../../../frame/balances" }
+pallet-transaction-payment = { version = "2.0.0-dev", path = "../../../frame/transaction-payment" }
 rpassword = "4.0.1"
 itertools = "0.8.2"
 derive_more = { version = "0.99.2" }
-sc-rpc = { version = "2.0.0", path = "../../../client/rpc" }
+sc-rpc = { version = "2.0.0-dev", path = "../../../client/rpc" }
 jsonrpc-core-client = { version = "14.0.3", features = ["http"] }
 hyper = "0.12.35"
-libp2p = "0.15.0"
+libp2p = "0.16.1"
 serde_json = "1.0"
 
 [features]

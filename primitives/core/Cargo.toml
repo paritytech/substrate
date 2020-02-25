@@ -1,34 +1,36 @@
 [package]
 name = "sp-core"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+sp-std = { version = "2.0.0-dev", default-features = false, path = "../std" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 rustc-hex = { version = "2.0.1", default-features = false }
 log = { version = "0.4.8", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 byteorder = { version = "1.3.2", default-features = false }
 primitive-types = { version = "0.6.2", default-features = false, features = ["codec"] }
-impl-serde = { version = "0.2.3", optional = true }
+impl-serde = { version = "0.3.0", optional = true }
 wasmi = { version = "0.6.2", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
 base58 = { version = "0.1.0", optional = true }
 rand = { version = "0.7.2", optional = true }
 substrate-bip39 = { version = "0.3.1", optional = true }
-tiny-bip39 = { version = "0.6.2", optional = true }
+tiny-bip39 = { version = "0.7", optional = true }
 regex = { version = "1.3.1", optional = true }
 num-traits = { version = "0.2.8", default-features = false }
 zeroize = { version = "1.0.0", default-features = false }
 lazy_static = { version = "1.4.0", default-features = false, optional = true }
 parking_lot = { version = "0.10.0", optional = true }
-sp-debug-derive = { version = "2.0.0", path = "../debug-derive" }
-sp-externalities = { version = "0.8.0", optional = true, path = "../externalities" }
-sp-storage = { version = "2.0.0", default-features = false, path = "../storage" }
+sp-debug-derive = { version = "2.0.0-dev", path = "../debug-derive" }
+sp-externalities = { version = "0.8.0-dev", optional = true, path = "../externalities" }
+sp-storage = { version = "2.0.0-dev", default-features = false, path = "../storage" }
 libsecp256k1 = { version = "0.3.2", default-features = false, features = ["hmac"] }
 parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
 
@@ -41,10 +43,10 @@ sha2 = { version = "0.8.0", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
 twox-hash = { version = "1.5.0", default-features = false, optional = true }
 
-sp-runtime-interface = { version = "2.0.0", default-features = false, path = "../runtime-interface" }
+sp-runtime-interface = { version = "2.0.0-dev", default-features = false, path = "../runtime-interface" }
 
 [dev-dependencies]
-sp-serializer = { version = "2.0.0", path = "../serializer" }
+sp-serializer = { version = "2.0.0-dev", path = "../serializer" }
 pretty_assertions = "0.6.1"
 hex-literal = "0.2.1"
 rand = "0.7.2"
