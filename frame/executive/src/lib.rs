@@ -81,7 +81,7 @@ use sp_runtime::{
 	ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating,
+		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating, OnRuntimeUpgrade,
 	},
 	transaction_validity::TransactionValidity,
 };
@@ -110,6 +110,7 @@ impl<
 	Context: Default,
 	UnsignedValidator,
 	AllModules:
+		OnRuntimeUpgrade<System::RuntimeVersion> +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber> +
@@ -135,6 +136,7 @@ impl<
 	Context: Default,
 	UnsignedValidator,
 	AllModules:
+		OnRuntimeUpgrade<System::RuntimeVersion> +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber> +
@@ -176,6 +178,7 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
+		<AllModules as OnRuntimeUpgrade<System::RuntimeVersion>>::on_runtime_upgrade();
 		<frame_system::Module<System>>::initialize(
 			block_number,
 			parent_hash,
