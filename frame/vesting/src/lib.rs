@@ -246,7 +246,7 @@ decl_module! {
 			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
 
 			Self::add_vesting_schedule(&who, schedule.locked, schedule.per_block, schedule.starting_block)
-			.expect("user does not have an existing vesting schedule; q.e.d.");
+				.expect("user does not have an existing vesting schedule; q.e.d.");
 			
 			Ok(())
 		}
