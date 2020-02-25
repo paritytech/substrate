@@ -22,15 +22,14 @@ use log::info;
 use structopt::StructOpt;
 use sc_service::{
 	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
-	config::DatabaseConfig,
+	config::DatabaseConfig, Roles,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
 use crate::VersionInfo;
 use crate::runtime::run_until_exit;
-use crate::params::SharedParams;
-use crate::params::BlockNumber;
+use crate::params::{SharedParams, BlockNumber, PruningParams};
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -58,6 +57,10 @@ pub struct ExportBlocksCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub pruning_params: PruningParams,
 }
 
 impl ExportBlocksCmd {
@@ -106,6 +109,7 @@ impl ExportBlocksCmd {
 		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		self.pruning_params.update_config(&mut config, Roles::FULL, true)?;
 		config.use_in_memory_keystore()?;
 
 		Ok(())
