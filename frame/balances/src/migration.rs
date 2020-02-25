@@ -1,14 +1,15 @@
 use super::*;
 use sp_runtime::traits::OnRuntimeUpgrade;
 
-impl<T: Trait<I>, I: Instance> OnRuntimeUpgrade<T::Version> for Module<T, I> {
-	
-		// Upgrade from the pre-#4649 balances/vesting into the new balances.
-		fn on_runtime_upgrade(version: T::Version) {
-			if version.spec_version < 225 { return };
+impl<T: Trait<I>, I: Instance> OnRuntimeUpgrade for Module<T, I> {
+	// Upgrade from the pre-#4649 balances/vesting into the new balances.
+	fn on_runtime_upgrade() {
+		let current_version = ModuleVersion::<I>::get();
 
-			IsUpgraded::<I>::put(true);
-
+		if current_version == 1 {
+			return
+		} else if current_version == 0 {
+			ModuleVersion::<I>::put(1);
 			sp_runtime::print("Upgrading account balances...");
 			// First, migrate from old FreeBalance to new Account.
 			// We also move all locks across since only accounts with FreeBalance values have locks.
@@ -81,5 +82,9 @@ impl<T: Trait<I>, I: Instance> OnRuntimeUpgrade<T::Version> for Module<T, I> {
 				if have_storage_value(b"Staking", b"Bonded", &hash) { refs += 1 }
 				put_storage_value(b"System", b"Account", &hash, (nonce, refs, &balances));
 			}
+
+			// Recursively call the upgrade function to apply all upgrades.
+			Self::on_runtime_upgrade()
 		}
+	}
 }

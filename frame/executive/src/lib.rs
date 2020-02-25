@@ -110,7 +110,7 @@ impl<
 	Context: Default,
 	UnsignedValidator,
 	AllModules:
-		OnRuntimeUpgrade<System::RuntimeVersion> +
+		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber> +
@@ -136,7 +136,7 @@ impl<
 	Context: Default,
 	UnsignedValidator,
 	AllModules:
-		OnRuntimeUpgrade<System::RuntimeVersion> +
+		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber> +
@@ -178,7 +178,7 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
-		<AllModules as OnRuntimeUpgrade<System::RuntimeVersion>>::on_runtime_upgrade();
+		<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
 		<frame_system::Module<System>>::initialize(
 			block_number,
 			parent_hash,

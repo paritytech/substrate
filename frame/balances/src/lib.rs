@@ -367,10 +367,10 @@ decl_storage! {
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
 		pub Locks get(fn locks): map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
-		/// True if network has been upgraded to this version.
+		/// Module version number.
 		///
-		/// True for new networks.
-		IsUpgraded build(|_: &GenesisConfig<T, I>| true): bool;
+		/// Default to version 1 for new networks.
+		ModuleVersion build(|_: &GenesisConfig<T, I>| 1): u8;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
