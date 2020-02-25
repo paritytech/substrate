@@ -18,7 +18,7 @@
 
 use futures::{prelude::*, ready};
 use codec::{Encode, Decode};
-use libp2p::core::nodes::listeners::ListenerId;
+use libp2p::core::connection::{ConnectionId, ListenerId};
 use libp2p::core::ConnectedPoint;
 use libp2p::swarm::{Swarm, ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{PollParameters, NetworkBehaviour, NetworkBehaviourAction};
@@ -156,12 +156,13 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		self.inner.inject_disconnected(peer_id, endpoint)
 	}
 
-	fn inject_node_event(
+	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
+		connection: ConnectionId,
 		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
 	) {
-		self.inner.inject_node_event(peer_id, event)
+		self.inner.inject_event(peer_id, connection, event)
 	}
 
 	fn poll(
@@ -175,10 +176,6 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		>
 	> {
 		self.inner.poll(cx, params)
-	}
-
-	fn inject_replaced(&mut self, peer_id: PeerId, closed_endpoint: ConnectedPoint, new_endpoint: ConnectedPoint) {
-		self.inner.inject_replaced(peer_id, closed_endpoint, new_endpoint)
 	}
 
 	fn inject_addr_reach_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn std::error::Error) {

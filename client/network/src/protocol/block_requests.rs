@@ -35,6 +35,7 @@ use libp2p::{
 		ConnectedPoint,
 		Multiaddr,
 		PeerId,
+		connection::ConnectionId,
 		upgrade::{InboundUpgrade, ReadOneError, UpgradeInfo, Negotiated},
 		upgrade::{DeniedUpgrade, read_one, write_one}
 	},
@@ -270,7 +271,12 @@ where
 	fn inject_disconnected(&mut self, _peer: &PeerId, _info: ConnectedPoint) {
 	}
 
-	fn inject_node_event(&mut self, peer: PeerId, Request(request, mut stream): Request<NegotiatedSubstream>) {
+	fn inject_event(
+		&mut self,
+		peer: PeerId,
+		connection: ConnectionId,
+		Request(request, mut stream): Request<NegotiatedSubstream>
+	) {
 		match self.on_block_request(&peer, &request) {
 			Ok(res) => {
 				log::trace!("enqueueing block response for peer {} with {} blocks", peer, res.blocks.len());
