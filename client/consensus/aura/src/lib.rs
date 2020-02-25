@@ -890,7 +890,7 @@ mod tests {
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair, ()>;
+		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
