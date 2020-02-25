@@ -6,6 +6,7 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+publish = false
 
 [dependencies]
 sc-block-builder = { version = "0.8.0-dev", path = "../../../client/block-builder" }

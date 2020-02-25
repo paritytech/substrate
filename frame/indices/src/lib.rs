@@ -264,7 +264,7 @@ impl<T: Trait> StaticLookup for Module<T> {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 
-	fn lookup(a: Self::Source) -> Result<T::AccountId, LookupError> {
+	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {
 		Self::lookup_address(a).ok_or(LookupError)
 	}
 
