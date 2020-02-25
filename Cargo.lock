@@ -1469,6 +1469,7 @@ dependencies = [
  "sc-executor",
  "sc-service",
  "sp-runtime",
+ "sp-state-machine",
  "structopt",
 ]
 

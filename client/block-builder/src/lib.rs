@@ -155,7 +155,7 @@ where
 					ExecutionContext::BlockConstruction,
 					xt.clone(),
 				)?
-			} else  {
+			} else {
 				api.apply_extrinsic_with_context(
 					block_id,
 					ExecutionContext::BlockConstruction,

@@ -98,7 +98,7 @@ pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	>(
 		&self,
 		ext: &mut E,
-		wasm_runtime_code: &RuntimeCode,
+		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,

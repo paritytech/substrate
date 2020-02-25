@@ -202,14 +202,14 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	>(
 		&self,
 		ext: &mut E,
-		wasm_runtime_code: &RuntimeCode,
+		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
 		native_call: Option<NC>,
 	) -> (Result<NativeOrEncoded<R>>, bool) {
 		let mut used_native = false;
-		let result = self.with_runtime(ext, wasm_runtime_code, |mut runtime, onchain_version, mut ext| {
+		let result = self.with_runtime(ext, runtime_code, |mut runtime, onchain_version, mut ext| {
 			match (
 				use_native,
 				onchain_version.can_call_with(&self.native_version.runtime_version),
