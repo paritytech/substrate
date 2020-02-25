@@ -104,6 +104,16 @@ check-runtime:
   interruptible:                   true
   allow_failure:                   true
 
+check-signed-tag:
+  stage:                           test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - tags
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    - ./.maintain/gitlab/check_signed.sh
+  allow_failure:                   false
 
 check-line-width:
   stage:                           test
