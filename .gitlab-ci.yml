@@ -19,7 +19,7 @@
 #   script:
 #     - echo "List of shell commands to run in your job"
 #     - echo "You can also just specify a script here, like so:"
-#     - ./scripts/gitlab/my_amazing_script.sh
+#     - ./.maintain/gitlab/my_amazing_script.sh
 
 stages:
   - test
@@ -187,7 +187,6 @@ unleash-check:
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
-
 
 test-frame-staking:
   stage:                           test
@@ -560,7 +559,7 @@ publish-draft-release:
     - tags
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
-    - ./scripts/gitlab/publish_draft_release.sh
+    - ./.maintain/gitlab/publish_draft_release.sh
   interruptible:                   true
   allow_failure:                   true
 
