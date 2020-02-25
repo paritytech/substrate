@@ -23,7 +23,7 @@ use sp_consensus::{BlockImport, BlockStatus, Error as ConsensusError};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::generic::{BlockId};
 use sp_runtime::Justification;
-use sp_core::storage::{StorageKey, ChildInfo, well_known_keys};
+use sp_core::storage::{StorageKey, ChildInfo};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
@@ -157,17 +157,7 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		method: &str,
 		data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), Error> {
-		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
-		// backwards compatible.
-		//
-		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
-		let code_proof = self.read_proof(
-			&BlockId::Hash(block.clone()),
-			&[well_known_keys::CODE.to_vec(), well_known_keys::HEAP_PAGES.to_vec()],
-		)?;
-
 		SubstrateClient::execution_proof(self, &BlockId::Hash(block.clone()), method, data)
-			.map(|p| (p.0, StorageProof::merge(vec![p.1, code_proof])))
 	}
 
 	fn key_changes_proof(

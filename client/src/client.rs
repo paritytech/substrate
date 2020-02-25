@@ -427,9 +427,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		method: &str,
 		call_data: &[u8]
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
+		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
+		// backwards compatible.
+		//
+		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
+		let code_proof = self.read_proof(
+			id,
+			&[well_known_keys::CODE.to_vec(), well_known_keys::HEAP_PAGES.to_vec()],
+		)?;
+
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
 		prove_execution(state, header, &self.executor, method, call_data)
+			.map(|p| (p.0, StorageProof::merge(vec![p.1, code_proof])))
 	}
 
 	/// Reads given header and generates CHT-based header proof.
