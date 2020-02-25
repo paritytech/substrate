@@ -50,7 +50,7 @@ pub fn run_command_for_a_while(base_path: &Path, dev: bool) {
 	let mut cmd = Command::new(cargo_bin("substrate"));
 
 	if dev {
-		cmd.arg("--dev");
+		cmd.args(&["--dev", "--pruning", "archive"]);
 	}
 
 	let mut cmd = cmd
