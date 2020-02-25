@@ -27,13 +27,18 @@ use nix::unistd::Pid;
 ///
 /// Returns the `Some(exit status)` or `None` if the process did not finish in the given time.
 pub fn wait_for(child: &mut Child, secs: usize) -> Option<ExitStatus> {
-	for _ in 0..secs {
+	for i in 0..secs {
 		match child.try_wait().unwrap() {
-			Some(status) => return Some(status),
+			Some(status) => {
+				if i > 5 {
+					eprintln!("Child process took {} seconds to exit gracefully", i);
+				}
+				return Some(status)
+			},
 			None => thread::sleep(Duration::from_secs(1)),
 		}
 	}
-	eprintln!("Took to long to exit. Killing...");
+	eprintln!("Took too long to exit (> {} seconds). Killing...", secs);
 	let _ = child.kill();
 	child.wait().unwrap();
 
@@ -60,5 +65,5 @@ pub fn run_command_for_a_while(base_path: &Path, dev: bool) {
 
 	// Stop the process
 	kill(Pid::from_raw(cmd.id().try_into().unwrap()), SIGINT).unwrap();
-	assert!(wait_for(&mut cmd, 40).map(|x| x.success()).unwrap_or_default());
+	assert!(wait_for(&mut cmd, 120).map(|x| x.success()).unwrap_or_default());
 }
