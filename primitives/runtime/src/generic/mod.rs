@@ -24,6 +24,7 @@ mod checked_extrinsic;
 mod header;
 mod block;
 mod digest;
+mod execution_context;
 #[cfg(test)]
 mod tests;
 
@@ -35,6 +36,7 @@ pub use self::block::{Block, SignedBlock, BlockId};
 pub use self::digest::{
 	Digest, DigestItem, DigestItemRef, OpaqueDigestItemId, ChangesTrieSignal,
 };
+pub use self::execution_context::ExecutionContext;
 
 use crate::codec::Encode;
 use sp_std::prelude::*;

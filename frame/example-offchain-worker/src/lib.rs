@@ -196,7 +196,8 @@ decl_module! {
 		/// be cases where some blocks are skipped, or for some the worker runs twice (re-orgs),
 		/// so the code should be able to handle that.
 		/// You can use `Local Storage` API to coordinate runs of the worker.
-		fn offchain_worker(block_number: T::BlockNumber) {
+		fn offchain_worker(context: &ExecutionContext<T::Block::Header>) {
+			let block_number = context.block_number();
 			// It's a good idea to add logs to your offchain workers.
 			// Using the `frame_support::debug` module you have access to the same API exposed by
 			// the `log` crate.

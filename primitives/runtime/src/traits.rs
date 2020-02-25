@@ -30,7 +30,7 @@ use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
-use crate::generic::{Digest, DigestItem, CheckSignature};
+use crate::generic::{Digest, DigestItem, CheckSignature, ExecutionContext};
 pub use sp_arithmetic::traits::{
 	AtLeast32Bit, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -356,14 +356,14 @@ pub trait OnInitialize<BlockNumber> {
 /// not forbidden, but they are not persisted in any way after the worker
 /// has finished.
 #[impl_for_tuples(30)]
-pub trait OffchainWorker<BlockNumber> {
+pub trait OffchainWorker<Block: self::Block> {
 	/// This function is being called after every block import (when fully synced).
 	///
 	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
 	/// to perform off-chain computations, calls and submit transactions
 	/// with results to trigger any on-chain changes.
 	/// Any state alterations are lost and are not persisted.
-	fn offchain_worker(_n: BlockNumber) {}
+	fn offchain_worker(_c: &ExecutionContext<Block::Header>) {}
 }
 
 /// Abstraction around hashing

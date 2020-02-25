@@ -112,7 +112,7 @@ impl<
 	AllModules:
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber> +
+		OffchainWorker<System::Block> +
 		WeighBlock<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
@@ -137,7 +137,7 @@ impl<
 	AllModules:
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber> +
+		OffchainWorker<System::Block> +
 		WeighBlock<System::BlockNumber>,
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
@@ -357,7 +357,7 @@ where
 		// also when running WASM.
 		frame_support::debug::RuntimeLogger::init();
 
-		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(
+		<AllModules as OffchainWorker<System::Block>>::offchain_worker(
 			// to maintain backward compatibility we call module offchain workers
 			// with parent block number.
 			header.number().saturating_sub(1.into())

@@ -993,10 +993,10 @@ macro_rules! decl_module {
 		fn offchain_worker() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::Block>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn offchain_worker(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
+			fn offchain_worker(_c: &$crate::sp_runtime::generic::ExecutionContext<$trait_instance::Header>) { $( $impl )* }
 		}
 	};
 
@@ -1006,7 +1006,7 @@ macro_rules! decl_module {
 		fn offchain_worker($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::Block>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn offchain_worker($param: $param_ty) { $( $impl )* }
@@ -1018,7 +1018,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::Block>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
 	};
