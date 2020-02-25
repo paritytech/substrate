@@ -19,7 +19,7 @@
 #   script:
 #     - echo "List of shell commands to run in your job"
 #     - echo "You can also just specify a script here, like so:"
-#     - ./scripts/gitlab/my_amazing_script.sh
+#     - ./.maintain/gitlab/my_amazing_script.sh
 
 stages:
   - test
@@ -104,6 +104,16 @@ check-runtime:
   interruptible:                   true
   allow_failure:                   true
 
+check-signed-tag:
+  stage:                           test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - tags
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    - ./.maintain/gitlab/check_signed.sh
+  allow_failure:                   false
 
 check-line-width:
   stage:                           test
@@ -177,7 +187,14 @@ test-dependency-rules:
       - $DEPLOY_TAG
   script:
     - .maintain/ensure-deps.sh
-    # FIXME set to release
+
+unleash-check:
+  stage:                           test
+  <<:                              *docker-env
+  only:
+    - master
+    - tags
+  script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
 
@@ -552,16 +569,13 @@ publish-draft-release:
     - tags
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
-    - ./scripts/gitlab/publish_draft_release.sh
+    - ./.maintain/gitlab/publish_draft_release.sh
   interruptible:                   true
   allow_failure:                   true
 
 publish-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
-  dependencies:
-    - build-linux-substrate
-    - test-dependency-rules
   only:
     - tags
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
