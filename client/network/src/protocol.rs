@@ -822,6 +822,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		} else {
 			// Validate fields against the request.
 			if request.fields.contains(message::BlockAttributes::HEADER) && response.blocks.iter().any(|b| b.header.is_none()) {
+				self.behaviour.disconnect_peer(&peer);
 				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
 				trace!(target: "sync", "Missing header for a block");
 				return CustomMessageOutcome::None
