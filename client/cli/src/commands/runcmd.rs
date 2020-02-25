@@ -17,6 +17,8 @@
 use std::path::PathBuf;
 use std::net::SocketAddr;
 use std::fs;
+use std::error::Error;
+use std::fmt;
 use log::info;
 use structopt::{StructOpt, clap::arg_enum};
 use names::{Generator, Name};
@@ -172,8 +174,7 @@ pub struct RunCmd {
 	///
 	/// This flag can be passed multiple times as a mean to specify multiple
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
-	/// the least verbosity. If no verbosity level is specified the default is
-	/// 0.
+	/// the least verbosity.
 	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
@@ -562,13 +563,34 @@ fn interface_str(
 	}
 }
 
-/// Default to verbosity level 0, if none is provided.
+/// Utility error for returning custom errors that implement the std::error::Error trait.
+#[derive(Debug)]
+struct TelemetryParsingError {
+    details: String
+}
+
+impl TelemetryParsingError {
+    fn new(msg: &str) -> TelemetryParsingError {
+        TelemetryParsingError{details: msg.to_string()}
+    }
+}
+
+impl fmt::Display for TelemetryParsingError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.details)
+    }
+}
+
+impl Error for TelemetryParsingError {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
+
 fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<dyn std::error::Error>> {
 	let pos = s.find(' ');
 	match pos {
-		None => {
-			Ok((s.to_owned(), 0))
-		},
+		None => Err(Box::new(TelemetryParsingError::new("Verbosity level missing"))),
 		Some(pos_) => {
 			let verbosity = s[pos_ + 1..].parse()?;
 			let url = s[..pos_].parse()?;
