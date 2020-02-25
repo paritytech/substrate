@@ -20,3 +20,4 @@ codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
+sp-trie = { version = "2.0.0-dev", path = "../../primitives/trie" }
