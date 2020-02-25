@@ -32,10 +32,10 @@
 
 use sp_std::{fmt::Debug, prelude::*};
 
-use app_crypto::{key_types::GRANDPA, RuntimeAppPublic};
 use codec::{self as codec, Decode, Encode};
 use frame_support::traits::KeyOwnerProofSystem;
 use frame_system::offchain::SubmitSignedTransaction;
+use sp_application_crypto::{key_types::GRANDPA, RuntimeAppPublic};
 use sp_finality_grandpa::{EquivocationReport, RoundNumber, SetId};
 use sp_runtime::{traits::IdentifyAccount, DispatchResult, KeyTypeId, PerThing, Perbill};
 use sp_staking::{

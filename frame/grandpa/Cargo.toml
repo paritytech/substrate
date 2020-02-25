@@ -6,9 +6,9 @@ edition = "2018"
 license = "GPL-3.0"
 
 [dependencies]
-app-crypto = { package = "sp-application-crypto", path = "../../primitives/application-crypto", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-finality-grandpa = { version = "2.0.0", default-features = false, path = "../../primitives/finality-grandpa" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
@@ -25,9 +25,9 @@ sp-io ={ version = "2.0.0", path = "../../primitives/io" }
 [features]
 default = ["std"]
 std = [
-	"app-crypto/std",
 	"serde",
 	"codec/std",
+	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-finality-grandpa/std",
 	"sp-std/std",
