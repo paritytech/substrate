@@ -7,6 +7,7 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+publish = true
 
 [dependencies]
 pallet-balances = { version = "2.0.0-dev", path = "../../../frame/balances" }
@@ -43,7 +44,7 @@ sp-block-builder = { version = "2.0.0-dev", path = "../../../primitives/block-bu
 sp-inherents = { version = "2.0.0-dev", path = "../../../primitives/inherents" }
 sp-blockchain = { version = "2.0.0-dev", path = "../../../primitives/blockchain" }
 log = "0.4.8"
-tempdir = "0.3"
+tempfile = "3.1.0"
 fs_extra = "1"
 
 [dev-dependencies]

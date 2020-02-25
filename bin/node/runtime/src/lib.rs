@@ -82,7 +82,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 225,
-	impl_version: 0,
+	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -819,7 +819,7 @@ impl_runtime_apis! {
 		fn dispatch_benchmark(
 			module: Vec<u8>,
 			extrinsic: Vec<u8>,
-			steps: u32,
+			steps: Vec<u32>,
 			repeat: u32,
 		) -> Option<Vec<frame_benchmarking::BenchmarkResults>> {
 			use frame_benchmarking::Benchmarking;
