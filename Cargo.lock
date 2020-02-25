@@ -8199,6 +8199,7 @@ version = "2.0.0-rc6"
 dependencies = [
  "futures 0.3.5",
  "hash-db",
+ "lazy_static",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
@@ -8211,6 +8212,7 @@ dependencies = [
  "sp-tracing",
  "sp-trie",
  "sp-wasm-interface",
+ "spin",
 ]
 
 [[package]]

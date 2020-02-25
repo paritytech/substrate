@@ -26,8 +26,10 @@ sp-trie = { version = "2.0.0-rc6", optional = true, path = "../../primitives/tri
 sp-externalities = { version = "0.8.0-rc6", optional = true, path = "../externalities" }
 sp-tracing = { version = "2.0.0-rc6", default-features = false, path = "../tracing" }
 log = { version = "0.4.8", optional = true }
-futures = { version = "0.3.1", features = ["thread-pool"], optional = true }
+futures = { version = "0.3.1", default-features = false, features = ["thread-pool"], optional = true }
 parking_lot = { version = "0.10.0", optional = true }
+lazy_static = "1.0"
+spin = "0.5"
 
 [features]
 default = ["std"]
