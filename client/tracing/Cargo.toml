@@ -1,6 +1,6 @@
 [package]
 name = "sc-tracing"
-version = "2.0.0-dev"
+version = "2.0.0-alpha.1"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -16,7 +16,7 @@ serde_json = "1.0.41"
 slog = { version = "2.5.2", features = ["nested-values"] }
 tracing-core = "0.1.7"
 
-sc-telemetry = { version = "2.0.0-dev", path = "../telemetry" }
+sc-telemetry = { version = "2.0.0-alpha.1", path = "../telemetry" }
 
 [dev-dependencies]
 tracing = "0.1.10"
