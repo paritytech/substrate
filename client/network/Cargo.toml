@@ -53,6 +53,7 @@ sp-keyring = { version = "2.0.0-dev", optional = true, path = "../../primitives/
 sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
 substrate-test-client = { version = "2.0.0-dev", optional = true, path = "../../test-utils/client" }
 substrate-test-runtime-client = { version = "2.0.0-dev", optional = true, path = "../../test-utils/runtime/client" }
+prometheus-exporter = { version = "0.8.0-dev", path = "../../utils/prometheus" }
 thiserror = "1"
 unsigned-varint = { version = "0.3.1", features = ["futures", "futures-codec"] }
 void = "1.0.2"

@@ -57,11 +57,11 @@ use prometheus_exporter::{register, Gauge, U64, F64, Registry, PrometheusError, 
 
 struct ServiceMetrics {
 	block_height_number: GaugeVec<U64>,
-	peers_count: Gauge<U64>,
 	ready_transactions_number: Gauge<U64>,
 	memory_usage_bytes: Gauge<U64>,
 	cpu_usage_percentage: Gauge<F64>,
 	network_per_sec_bytes: GaugeVec<U64>,
+	node_roles: Gauge<U64>,
 }
 
 impl ServiceMetrics {
@@ -70,9 +70,6 @@ impl ServiceMetrics {
 			block_height_number: register(GaugeVec::new(
 				Opts::new("block_height_number", "Height of the chain"),
 				&["status"]
-			)?, registry)?,
-			peers_count: register(Gauge::new(
-				"peers_count", "Number of network gossip peers",
 			)?, registry)?,
 			ready_transactions_number: register(Gauge::new(
 				"ready_transactions_number", "Number of transactions in the ready queue",
@@ -87,6 +84,10 @@ impl ServiceMetrics {
 				Opts::new("network_per_sec_bytes", "Networking bytes per second"),
 				&["direction"]
 			)?, registry)?,
+			node_roles: register(Gauge::new(
+				"node_roles", "The roles the node is running as",
+			)?, registry)?,
+
 		})
 	}
 }
@@ -887,6 +888,14 @@ ServiceBuilder<
 		let block_announce_validator =
 			Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator::new(client.clone()));
 
+		let prometheus_registry_and_port = match config.prometheus_port {
+			Some(port) => match prometheus_registry {
+				Some(registry) => Some((registry, port)),
+				None => Some((Registry::new_custom(Some("substrate".into()), None)?, port))
+			},
+			None => None
+		};
+
 		let network_params = sc_network::config::Params {
 			roles: config.roles,
 			executor: {
@@ -906,6 +915,7 @@ ServiceBuilder<
 			import_queue,
 			protocol_id,
 			block_announce_validator,
+			metrics_registry: prometheus_registry_and_port.as_ref().map(|(r, _)| r.clone())
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
@@ -1020,14 +1030,11 @@ ServiceBuilder<
 			));
 		}
 
-		// Prometheus exporter and metrics
-		let metrics = if let Some(port) = config.prometheus_port {
-			let registry = match prometheus_registry {
-				Some(registry) => registry,
-				None => Registry::new_custom(Some("substrate".into()), None)?
-			};
-
+		// Prometheus metrics
+		let metrics = if let Some((registry, port)) = prometheus_registry_and_port {
 			let metrics = ServiceMetrics::register(&registry)?;
+
+			metrics.node_roles.set(u64::from(config.roles.bits()));
 
 			let future = select(
 				prometheus_exporter::init_prometheus(port, registry).boxed(),
@@ -1043,7 +1050,6 @@ ServiceBuilder<
 		} else {
 			None
 		};
-
 		// Periodically notify the telemetry.
 		let transaction_pool_ = transaction_pool.clone();
 		let client_ = client.clone();
@@ -1094,7 +1100,6 @@ ServiceBuilder<
 				metrics.memory_usage_bytes.set(memory);
 				metrics.cpu_usage_percentage.set(f64::from(cpu_usage));
 				metrics.ready_transactions_number.set(txpool_status.ready as u64);
-				metrics.peers_count.set(num_peers as u64);
 
 				metrics.network_per_sec_bytes.with_label_values(&["download"]).set(net_status.average_download_per_sec);
 				metrics.network_per_sec_bytes.with_label_values(&["upload"]).set(net_status.average_upload_per_sec);
