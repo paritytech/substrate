@@ -166,3 +166,9 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+# libp2p = { path = "../rust-libp2p" }
+libp2p = { git = "https://github.com/romanb/rust-libp2p", branch = "multicon" }
+
+

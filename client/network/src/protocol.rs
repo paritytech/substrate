@@ -20,7 +20,7 @@ use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use generic_proto::{GenericProto, GenericProtoOut};
 use libp2p::{Multiaddr, PeerId};
-use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
+use libp2p::core::{ConnectedPoint, connection::{ConnectionId, ListenerId}};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use sp_core::storage::{StorageKey, ChildInfo};
@@ -1835,12 +1835,13 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		self.behaviour.inject_disconnected(peer_id, endpoint)
 	}
 
-	fn inject_node_event(
+	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
+		connection: ConnectionId,
 		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
 	) {
-		self.behaviour.inject_node_event(peer_id, event)
+		self.behaviour.inject_event(peer_id, connection, event)
 	}
 
 	fn poll(
@@ -1895,8 +1896,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
 			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
 				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-			Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-				return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
+			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
+				return Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }),
 			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
 				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 		};
@@ -1932,10 +1933,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		} else {
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
 		}
-	}
-
-	fn inject_replaced(&mut self, peer_id: PeerId, closed_endpoint: ConnectedPoint, new_endpoint: ConnectedPoint) {
-		self.behaviour.inject_replaced(peer_id, closed_endpoint, new_endpoint)
 	}
 
 	fn inject_addr_reach_failure(

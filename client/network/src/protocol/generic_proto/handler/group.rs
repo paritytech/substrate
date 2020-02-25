@@ -145,7 +145,7 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 }
 
 /// Event that can be received by a `NotifsHandler`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NotifsHandlerIn {
 	/// The node should start using custom protocols.
 	Enable,
@@ -186,13 +186,25 @@ pub enum NotifsHandlerIn {
 /// Event that can be emitted by a `NotifsHandler`.
 #[derive(Debug)]
 pub enum NotifsHandlerOut {
-	/// Opened the substreams with the remote.
-	Open,
+	/// The connection handler is requesting initialisation, i.e.
+	/// to be either enabled or disabled.
+	///
+	/// This is always the first event emitted by a handler and it is only
+	/// emitted once.
+	Init,
 
-	/// Closed the substreams with the remote.
+	/// The connection is open for custom protocols.
+	Open {
+		/// The endpoint of the connection that is open for custom protocols.
+		endpoint: ConnectedPoint,
+	},
+
+	/// The connection is closed for custom protocols.
 	Closed {
-		/// Reason why the substream closed, for diagnostic purposes.
+		/// The reason for closing, for diagnostic purposes.
 		reason: Cow<'static, str>,
+		/// The endpoint of the connection that closed for custom protocols.
+		endpoint: ConnectedPoint,
 	},
 
 	/// Received a non-gossiping message on the legacy substream.
@@ -493,13 +505,17 @@ impl ProtocolsHandler for NotifsHandler {
 						protocol: protocol.map_upgrade(EitherUpgrade::B),
 						info: None,
 					}),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { .. }) =>
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::Init) =>
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Open
+						NotifsHandlerOut::Init
 					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { reason }) =>
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, .. }) =>
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Closed { reason }
+						NotifsHandlerOut::Open { endpoint }
+					)),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { endpoint, reason }) =>
+					return Poll::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::Closed { endpoint, reason }
 					)),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) =>
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(

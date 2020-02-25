@@ -17,7 +17,7 @@
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::Multiaddr;
-use libp2p::core::nodes::listeners::ListenerId;
+use libp2p::core::connection::{ConnectionId, ListenerId};
 use libp2p::core::{ConnectedPoint, either::EitherOutput, PeerId, PublicKey};
 use libp2p::swarm::{IntoProtocolsHandler, IntoProtocolsHandlerSelect, ProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
@@ -205,26 +205,15 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 		}
 	}
 
-	fn inject_node_event(
+	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
+		connection: ConnectionId,
 		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
 	) {
 		match event {
-			EitherOutput::First(event) => self.ping.inject_node_event(peer_id, event),
-			EitherOutput::Second(event) => self.identify.inject_node_event(peer_id, event),
-		}
-	}
-
-	fn inject_replaced(&mut self, peer_id: PeerId, closed_endpoint: ConnectedPoint, new_endpoint: ConnectedPoint) {
-		self.ping.inject_replaced(peer_id.clone(), closed_endpoint.clone(), new_endpoint.clone());
-		self.identify.inject_replaced(peer_id.clone(), closed_endpoint, new_endpoint.clone());
-
-		if let Some(entry) = self.nodes_info.get_mut(&peer_id) {
-			entry.endpoint = new_endpoint;
-		} else {
-			error!(target: "sub-libp2p",
-				"Disconnected from node we were not connected to {:?}", peer_id);
+			EitherOutput::First(event) => self.ping.inject_event(peer_id, connection, event),
+			EitherOutput::Second(event) => self.identify.inject_event(peer_id, connection, event),
 		}
 	}
 
@@ -285,9 +274,10 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
 				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
 					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-					return Poll::Ready(NetworkBehaviourAction::SendEvent {
+				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
+					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,
+						handler,
 						event: EitherOutput::First(event)
 					}),
 				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
@@ -314,9 +304,10 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
 				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
 					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-					return Poll::Ready(NetworkBehaviourAction::SendEvent {
+				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
+					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,
+						handler,
 						event: EitherOutput::Second(event)
 					}),
 				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>

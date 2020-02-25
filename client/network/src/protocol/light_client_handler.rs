@@ -37,6 +37,7 @@ use libp2p::{
 		ConnectedPoint,
 		Multiaddr,
 		PeerId,
+		connection::ConnectionId,
 		upgrade::{InboundUpgrade, ReadOneError, UpgradeInfo, Negotiated},
 		upgrade::{OutboundUpgrade, read_one, write_one}
 	},
@@ -44,6 +45,7 @@ use libp2p::{
 		NegotiatedSubstream,
 		NetworkBehaviour,
 		NetworkBehaviourAction,
+		NotifyHandler,
 		OneShotHandler,
 		PollParameters,
 		SubstreamProtocol
@@ -678,7 +680,7 @@ where
 		self.remove_peer(peer)
 	}
 
-	fn inject_node_event(&mut self, peer: PeerId, event: Event<NegotiatedSubstream>) {
+	fn inject_event(&mut self, peer: PeerId, _: ConnectionId, event: Event<NegotiatedSubstream>) {
 		match event {
 			// An incoming request from remote has been received.
 			Event::Request(request, mut stream) => {
@@ -842,7 +844,11 @@ where
 						peer: peer.clone(),
 					};
 					self.outstanding.insert(id, rw);
-					return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id: peer, event: protocol })
+					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+						peer_id: peer,
+						handler: NotifyHandler::Any,
+						event: protocol
+					})
 				}
 			} else {
 				self.pending_requests.push_front(request);
@@ -1106,6 +1112,7 @@ mod tests {
 		Multiaddr,
 		core::{
 			ConnectedPoint,
+			connection::ConnectionId,
 			identity,
 			muxing::{StreamMuxerBox, SubstreamRef},
 			transport::{Transport, boxed::Boxed, memory::MemoryTransport},
@@ -1262,7 +1269,7 @@ mod tests {
 		assert_eq!(1, behaviour.pending_requests.len());
 
 		// The behaviour should now attempt to send the request.
-		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, .. }) => {
+		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, .. }) => {
 			assert!(peer_id == peer0 || peer_id == peer1)
 		});
 
@@ -1330,7 +1337,8 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, response));
+		let conn = ConnectionId::new(0);
+		behaviour.inject_event(peer.clone(), conn, Event::Response(request_id, response));
 		assert!(behaviour.peers.is_empty());
 
 		poll(&mut behaviour); // More progress
@@ -1359,7 +1367,8 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(2347895932, response));
+		let conn = ConnectionId::new(0);
+		behaviour.inject_event(peer.clone(), conn, Event::Response(2347895932, response));
 
 		assert!(behaviour.peers.is_empty());
 		poll(&mut behaviour);
@@ -1401,7 +1410,8 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, response));
+		let conn = ConnectionId::new(0);
+		behaviour.inject_event(peer.clone(), conn, Event::Response(request_id, response));
 		assert!(behaviour.peers.is_empty());
 
 		poll(&mut behaviour); // More progress
@@ -1439,11 +1449,11 @@ mod tests {
 
 		assert_eq!(1, behaviour.pending_requests.len());
 		assert_eq!(0, behaviour.outstanding.len());
-		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::SendEvent { .. }));
+		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::NotifyHandler { .. }));
 		assert_eq!(0, behaviour.pending_requests.len());
 		assert_eq!(1, behaviour.outstanding.len());
 
-		for _ in 0 .. 3 {
+		for i in 0 .. 3 {
 			// Construct an invalid response
 			let request_id = *behaviour.outstanding.keys().next().unwrap();
 			let responding_peer = behaviour.outstanding.values().next().unwrap().peer.clone();
@@ -1453,8 +1463,9 @@ mod tests {
 					response: Some(api::v1::light::response::Response::RemoteCallResponse(r))
 				}
 			};
-			behaviour.inject_node_event(responding_peer, Event::Response(request_id, response.clone()));
-			assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::SendEvent { .. }));
+			let conn = ConnectionId::new(i);
+			behaviour.inject_event(responding_peer, conn, Event::Response(request_id, response.clone()));
+			assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::NotifyHandler { .. }));
 			assert_matches!(chan.1.try_recv(), Ok(None))
 		}
 		// Final invalid response
@@ -1466,7 +1477,8 @@ mod tests {
 				response: Some(api::v1::light::response::Response::RemoteCallResponse(r)),
 			}
 		};
-		behaviour.inject_node_event(responding_peer, Event::Response(request_id, response));
+		let conn = ConnectionId::new(3);
+		behaviour.inject_event(responding_peer, conn, Event::Response(request_id, response));
 		assert_matches!(poll(&mut behaviour), Poll::Pending);
 		assert_matches!(chan.1.try_recv(), Ok(Some(Err(ClientError::RemoteFetchFailed))))
 	}
@@ -1524,12 +1536,13 @@ mod tests {
 
 		assert_eq!(1, behaviour.pending_requests.len());
 		assert_eq!(0, behaviour.outstanding.len());
-		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::SendEvent { .. }));
+		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::NotifyHandler { .. }));
 		assert_eq!(0, behaviour.pending_requests.len());
 		assert_eq!(1, behaviour.outstanding.len());
 		assert_eq!(1, *behaviour.outstanding.keys().next().unwrap());
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(1, response));
+		let conn = ConnectionId::new(0);
+		behaviour.inject_event(peer.clone(), conn, Event::Response(1, response));
 
 		poll(&mut behaviour);
 
