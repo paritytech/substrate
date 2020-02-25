@@ -538,7 +538,7 @@ impl<T: Trait> Module<T> {
 	pub fn timepoint() -> Timepoint<T::BlockNumber> {
 		Timepoint {
 			height: <system::Module<T>>::block_number(),
-			index: <system::Module<T>>::extrinsic_count(),
+			index: <system::Module<T>>::extrinsic_index().unwrap_or_default(),
 		}
 	}
 
