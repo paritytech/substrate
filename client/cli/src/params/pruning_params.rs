@@ -29,15 +29,6 @@ pub struct PruningParams {
 	/// 256 blocks.
 	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
 	pub pruning: Option<String>,
-
-	/// Force start with unsafe pruning settings.
-	///
-	/// When running as a validator it is highly recommended to disable state
-	/// pruning (i.e. 'archive') which is the default. The node will refuse to
-	/// start as a validator if pruning is enabled unless this option is set.
-	#[structopt(long = "unsafe-pruning")]
-	pub unsafe_pruning: bool,
-
 }
 
 impl PruningParams {
@@ -46,6 +37,7 @@ impl PruningParams {
 		&self,
 		mut config: &mut Configuration<G, E>,
 		role: sc_service::Roles,
+		unsafe_pruning: bool,
 	) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
@@ -59,7 +51,7 @@ impl PruningParams {
 			None if role == sc_service::Roles::AUTHORITY => PruningMode::ArchiveAll,
 			None => PruningMode::default(),
 			Some(s) => {
-				if role == sc_service::Roles::AUTHORITY && !self.unsafe_pruning {
+				if role == sc_service::Roles::AUTHORITY && !unsafe_pruning {
 					return Err(error::Error::Input(
 						"Validators should run with state pruning disabled (i.e. archive). \
 						You can ignore this check with `--unsafe-pruning`.".to_string()

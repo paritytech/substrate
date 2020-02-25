@@ -32,6 +32,14 @@ pub struct ImportParams {
 	#[structopt(flatten)]
 	pub pruning_params: PruningParams,
 
+	/// Force start with unsafe pruning settings.
+	///
+	/// When running as a validator it is highly recommended to disable state
+	/// pruning (i.e. 'archive') which is the default. The node will refuse to
+	/// start as a validator if pruning is enabled unless this option is set.
+	#[structopt(long = "unsafe-pruning")]
+	pub unsafe_pruning: bool,
+
 	/// Method for executing Wasm runtime code.
 	#[structopt(
 		long = "wasm-execution",
@@ -88,7 +96,7 @@ impl ImportParams {
 
 		config.state_cache_size = self.state_cache_size;
 
-		self.pruning_params.update_config(&mut config, role)?;
+		self.pruning_params.update_config(&mut config, role, self.unsafe_pruning)?;
 
 		config.wasm_method = self.wasm_method.into();
 

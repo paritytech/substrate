@@ -109,7 +109,7 @@ impl ExportBlocksCmd {
 		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.pruning_params.update_config(&mut config, Roles::FULL)?;
+		self.pruning_params.update_config(&mut config, Roles::FULL, true)?;
 		config.use_in_memory_keystore()?;
 
 		Ok(())
