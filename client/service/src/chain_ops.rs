@@ -98,9 +98,9 @@ pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
 	} else {
 		info!("No Results.");
 	}
+
 	Ok(())
 }
-
 
 impl<
 	TBl, TRtApi, TGen, TCSExt, TBackend,

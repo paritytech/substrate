@@ -187,7 +187,8 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 					local_cht_root,
 					block,
 					remote_changes_trie_root,
-					&proving_backend)?;
+					&proving_backend,
+				)?;
 
 				// and return the storage to use in following checks
 				storage = proving_backend.into_storage();
@@ -270,7 +271,7 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		body: Vec<Block::Extrinsic>
 	) -> ClientResult<Vec<Block::Extrinsic>> {
 		// TODO: #2621
-		let	extrinsics_root = HashFor::<Block>::ordered_trie_root(
+		let extrinsics_root = HashFor::<Block>::ordered_trie_root(
 			body.iter().map(Encode::encode).collect(),
 		);
 		if *request.header.extrinsics_root() == extrinsics_root {
@@ -294,7 +295,7 @@ struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
 impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a, Number, Hash>
 	where
 		H: Hasher,
-		Number: ::std::fmt::Display + ::std::hash::Hash + Clone + SimpleArithmetic + Encode + Decode + Send + Sync + 'static,
+		Number: std::fmt::Display + std::hash::Hash + Clone + SimpleArithmetic + Encode + Decode + Send + Sync + 'static,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
 	fn build_anchor(

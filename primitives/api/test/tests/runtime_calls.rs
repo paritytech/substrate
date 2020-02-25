@@ -191,5 +191,6 @@ fn record_proof_works() {
 		&executor,
 		"Core_execute_block",
 		&block.encode(),
+		&sp_state_machine::backend::get_runtime_code(&backend).expect("Code should be part of the externalities"),
 	).expect("Executes block while using the proof backend");
 }

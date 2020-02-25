@@ -20,7 +20,7 @@ use crate::{
 };
 use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
-use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities, RuntimeWasmCode}};
+use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities, RuntimeCode}};
 use log::trace;
 use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc};
 use sp_wasm_interface::{HostFunctions, Function};
@@ -134,7 +134,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	fn with_runtime<E, R>(
 		&self,
 		ext: &mut E,
-		runtime_wasm_code: &RuntimeWasmCode,
+		runtime_code: &RuntimeCode,
 		f: impl for<'a> FnOnce(
 			AssertUnwindSafe<&'a mut (dyn WasmRuntime + 'static)>,
 			&'a RuntimeVersion,
@@ -145,7 +145,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			let mut cache = cache.borrow_mut();
 			let (runtime, version) = cache.fetch_runtime(
 				ext,
-				runtime_wasm_code,
+				runtime_code,
 				self.fallback_method,
 				self.default_heap_pages,
 				&*self.host_functions,
@@ -157,7 +157,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			match f(runtime, version, ext) {
 				Ok(res) => res,
 				Err(e) => {
-					cache.invalidate_runtime(self.fallback_method, runtime_wasm_code.hash.clone());
+					cache.invalidate_runtime(self.fallback_method, runtime_code.hash.clone());
 					Err(e)
 				}
 			}
@@ -185,9 +185,9 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	fn runtime_version<E: Externalities>(
 		&self,
 		ext: &mut E,
-		runtime_wasm_code: &RuntimeWasmCode,
+		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.with_runtime(ext, runtime_wasm_code, |_runtime, version, _ext| Ok(Ok(version.clone())))
+		self.with_runtime(ext, runtime_code, |_runtime, version, _ext| Ok(Ok(version.clone())))
 	}
 }
 
@@ -202,7 +202,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	>(
 		&self,
 		ext: &mut E,
-		wasm_runtime_code: &RuntimeWasmCode,
+		wasm_runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,

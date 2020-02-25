@@ -24,7 +24,7 @@ use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
 use sp_core::{
 	storage::ChildInfo, NativeOrEncoded, NeverNativeValue, hexdisplay::HexDisplay,
-	traits::{CodeExecutor, CallInWasmExt, RuntimeWasmCode},
+	traits::{CodeExecutor, CallInWasmExt, RuntimeCode},
 };
 use overlayed_changes::OverlayedChangeSet;
 use sp_externalities::Extensions;
@@ -190,7 +190,7 @@ pub struct StateMachine<'a, B, H, N, Exec>
 	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 	_marker: PhantomData<(H, N)>,
 	storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
-	runtime_wasm_code: &'a RuntimeWasmCode,
+	runtime_code: &'a RuntimeCode,
 }
 
 impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
@@ -209,7 +209,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		method: &'a str,
 		call_data: &'a [u8],
 		mut extensions: Extensions,
-		runtime_wasm_code: &'a RuntimeWasmCode,
+		runtime_code: &'a RuntimeCode,
 	) -> Self {
 		extensions.register(CallInWasmExt::new(exec.clone()));
 
@@ -223,7 +223,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			changes_trie_state,
 			_marker: PhantomData,
 			storage_transaction_cache: None,
-			runtime_wasm_code,
+			runtime_code,
 		}
 	}
 
@@ -294,7 +294,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 
 		let (result, was_native) = self.exec.call(
 			&mut ext,
-			self.runtime_wasm_code,
+			self.runtime_code,
 			self.method,
 			self.call_data,
 			use_native,
@@ -439,7 +439,7 @@ pub fn prove_execution<B, H, N, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	runtime_wasm_code: &RuntimeWasmCode,
+	runtime_code: &RuntimeCode,
 ) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 where
 	B: Backend<H>,
@@ -456,7 +456,7 @@ where
 		exec,
 		method,
 		call_data,
-		runtime_wasm_code,
+		runtime_code,
 	)
 }
 
@@ -475,7 +475,7 @@ pub fn prove_execution_on_trie_backend<S, H, N, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	runtime_wasm_code: &RuntimeWasmCode,
+	runtime_code: &RuntimeCode,
 ) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
@@ -493,7 +493,7 @@ where
 		method,
 		call_data,
 		Extensions::default(),
-		runtime_wasm_code,
+		runtime_code,
 	);
 
 	let result = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -512,7 +512,7 @@ pub fn execution_proof_check<H, N, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	runtime_wasm_code: &RuntimeWasmCode,
+	runtime_code: &RuntimeCode,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher,
@@ -527,7 +527,7 @@ where
 		exec,
 		method,
 		call_data,
-		runtime_wasm_code,
+		runtime_code,
 	)
 }
 
@@ -538,7 +538,7 @@ pub fn execution_proof_check_on_trie_backend<H, N, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	runtime_wasm_code: &RuntimeWasmCode,
+	runtime_code: &RuntimeCode,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher,
@@ -554,7 +554,7 @@ where
 		method,
 		call_data,
 		Extensions::default(),
-		runtime_wasm_code,
+		runtime_code,
 	);
 
 	sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -728,7 +728,7 @@ mod tests {
 	use super::ext::Ext;
 	use super::changes_trie::Configuration as ChangesTrieConfig;
 	use sp_core::{
-		Blake2Hasher, map, traits::{Externalities, RuntimeWasmCode}, storage::ChildStorageKey,
+		Blake2Hasher, map, traits::{Externalities, RuntimeCode}, storage::ChildStorageKey,
 	};
 
 	#[derive(Clone)]
@@ -751,7 +751,7 @@ mod tests {
 		>(
 			&self,
 			ext: &mut E,
-			_: &RuntimeWasmCode,
+			_: &RuntimeCode,
 			_method: &str,
 			_data: &[u8],
 			use_native: bool,
@@ -805,7 +805,7 @@ mod tests {
 	fn execute_works() {
 		let backend = trie_backend::tests::test_trie();
 		let mut overlayed_changes = Default::default();
-		let wasm_code = RuntimeWasmCode::empty();
+		let wasm_code = RuntimeCode::empty();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
@@ -834,7 +834,7 @@ mod tests {
 	fn execute_works_with_native_else_wasm() {
 		let backend = trie_backend::tests::test_trie();
 		let mut overlayed_changes = Default::default();
-		let wasm_code = RuntimeWasmCode::empty();
+		let wasm_code = RuntimeCode::empty();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
@@ -860,7 +860,7 @@ mod tests {
 		let mut consensus_failed = false;
 		let backend = trie_backend::tests::test_trie();
 		let mut overlayed_changes = Default::default();
-		let wasm_code = RuntimeWasmCode::empty();
+		let wasm_code = RuntimeCode::empty();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
@@ -908,7 +908,7 @@ mod tests {
 			&executor,
 			"test",
 			&[],
-			&RuntimeWasmCode::empty(),
+			&RuntimeCode::empty(),
 		).unwrap();
 
 		// check proof locally
@@ -919,7 +919,7 @@ mod tests {
 			&executor,
 			"test",
 			&[],
-			&RuntimeWasmCode::empty(),
+			&RuntimeCode::empty(),
 		).unwrap();
 
 		// check that both results are correct

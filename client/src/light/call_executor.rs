@@ -259,25 +259,28 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 	let trie_backend = create_proof_check_backend(root, remote_proof)?;
 	let next_header = make_next_header(&request.header);
 
-	unimplemented!()
+	// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
+	let runtime_code = sp_state_machine::backend::get_runtime_code(&trie_backend)?;
 
-	// execution_proof_check_on_trie_backend::<H, Header::Number, _>(
-	// 	&trie_backend,
-	// 	&mut changes,
-	// 	executor,
-	// 	"Core_initialize_block",
-	// 	&next_header.encode(),
-	// )?;
+	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
+		&trie_backend,
+		&mut changes,
+		executor,
+		"Core_initialize_block",
+		&next_header.encode(),
+		&runtime_code,
+	)?;
 
-	// // execute method
-	// execution_proof_check_on_trie_backend::<H, Header::Number, _>(
-	// 	&trie_backend,
-	// 	&mut changes,
-	// 	executor,
-	// 	&request.method,
-	// 	&request.call_data,
-	// )
-	// .map_err(Into::into)
+	// execute method
+	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
+		&trie_backend,
+		&mut changes,
+		executor,
+		&request.method,
+		&request.call_data,
+		&runtime_code,
+	)
+	.map_err(Into::into)
 }
 
 #[cfg(test)]

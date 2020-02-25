@@ -22,7 +22,7 @@
 use crate::error::{Error, WasmError};
 use log::{trace, warn};
 use codec::Decode;
-use sp_core::traits::{Externalities, RuntimeWasmCode};
+use sp_core::traits::{Externalities, RuntimeCode};
 use sp_version::RuntimeVersion;
 use std::{collections::hash_map::{Entry, HashMap}, panic::AssertUnwindSafe};
 use sc_executor_common::wasm_runtime::WasmRuntime;
@@ -86,7 +86,7 @@ impl RuntimesCache {
 	///
 	/// `ext` - Externalities to use for the runtime.
 	///
-	/// `runtime_wasm_code` - The runtime wasm code used setup the runtime.
+	/// `runtime_code` - The runtime wasm code used setup the runtime.
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	///
@@ -106,14 +106,14 @@ impl RuntimesCache {
 	pub fn fetch_runtime<E: Externalities>(
 		&mut self,
 		ext: &mut E,
-		runtime_wasm_code: &RuntimeWasmCode,
+		runtime_code: &RuntimeCode,
 		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
 		host_functions: &[&'static dyn Function],
 	) -> Result<(&mut (dyn WasmRuntime + 'static), &RuntimeVersion), Error> {
-		let heap_pages = runtime_wasm_code.heap_pages.unwrap_or(default_heap_pages);
+		let heap_pages = runtime_code.heap_pages.unwrap_or(default_heap_pages);
 
-		let result = match self.instances.entry((wasm_method, runtime_wasm_code.hash.clone())) {
+		let result = match self.instances.entry((wasm_method, runtime_code.hash.clone())) {
 			Entry::Occupied(o) => {
 				let result = o.into_mut();
 				if let Ok(ref mut cached_runtime) = result {
@@ -135,7 +135,7 @@ impl RuntimesCache {
 						*result = create_versioned_wasm_runtime(
 							ext,
 							wasm_method,
-							runtime_wasm_code,
+							runtime_code,
 							heap_pages,
 							host_functions.into(),
 						);
@@ -151,7 +151,7 @@ impl RuntimesCache {
 				let result = create_versioned_wasm_runtime(
 					ext,
 					wasm_method,
-					runtime_wasm_code,
+					runtime_code,
 					heap_pages,
 					host_functions.into(),
 				);
@@ -204,14 +204,14 @@ pub fn create_wasm_runtime_with_code(
 fn create_versioned_wasm_runtime<E: Externalities>(
 	ext: &mut E,
 	wasm_method: WasmExecutionMethod,
-	runtime_wasm_code: &RuntimeWasmCode,
+	runtime_code: &RuntimeCode,
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
 ) -> Result<VersionedRuntime, WasmError> {
 	let mut runtime = create_wasm_runtime_with_code(
 		wasm_method,
 		heap_pages,
-		&runtime_wasm_code.code,
+		&runtime_code.code,
 		host_functions,
 		false,
 	)?;

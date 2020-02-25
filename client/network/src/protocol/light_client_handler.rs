@@ -249,13 +249,12 @@ where
 	B: Block,
 {
 	/// Construct a new light client handler.
-	pub fn new
-		( cfg: Config
-		, chain: Arc<dyn Client<B>>
-		, checker: Arc<dyn fetcher::FetchChecker<B>>
-		, peerset: sc_peerset::PeersetHandle
-		) -> Self
-	{
+	pub fn new(
+		cfg: Config,
+		chain: Arc<dyn Client<B>>,
+		checker: Arc<dyn fetcher::FetchChecker<B>>,
+		peerset: sc_peerset::PeersetHandle,
+	) -> Self {
 		LightClientHandler {
 			config: cfg,
 			chain,
@@ -339,13 +338,12 @@ where
 	///
 	/// If successful, this will give us the actual, checked data we should be
 	/// sending back to the client, otherwise an error.
-	fn on_response
-		( &mut self
-		, peer: &PeerId
-		, request: &Request<B>
-		, response: api::v1::light::Response
-		) -> Result<Reply<B>, Error>
-	{
+	fn on_response(
+		&mut self,
+		peer: &PeerId,
+		request: &Request<B>,
+		response: api::v1::light::Response,
+	) -> Result<Reply<B>, Error> {
 		log::trace!("response {} from {}", response.id, peer);
 		use api::v1::light::response::Response;
 		match response.response {
@@ -412,30 +410,33 @@ where
 		}
 	}
 
-	fn on_remote_call_request
-		( &mut self
-		, peer: &PeerId
-		, request_id: u64
-		, request: &api::v1::light::RemoteCallRequest
-		) -> Result<api::v1::light::Response, Error>
-	{
-		log::trace!("remote call request {} from {} ({} at {:?})",
+	fn on_remote_call_request(
+		&mut self,
+		peer: &PeerId,
+		request_id: u64,
+		request: &api::v1::light::RemoteCallRequest,
+	) -> Result<api::v1::light::Response, Error> {
+		log::trace!(
+			"remote call request {} from {} ({} at {:?})",
 			request_id,
 			peer,
 			request.method,
-			request.block);
+			request.block,
+		);
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
 		let proof = match self.chain.execution_proof(&block, &request.method, &request.data) {
 			Ok((_, proof)) => proof,
 			Err(e) => {
-				log::trace!("remote call request {} from {} ({} at {:?}) failed with: {}",
+				log::trace!(
+					"remote call request {} from {} ({} at {:?}) failed with: {}",
 					request_id,
 					peer,
 					request.method,
 					request.block,
-					e);
+					e,
+				);
 				StorageProof::empty()
 			}
 		};

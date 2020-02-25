@@ -98,7 +98,7 @@ pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	>(
 		&self,
 		ext: &mut E,
-		wasm_runtime_code: &RuntimeWasmCode,
+		wasm_runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
@@ -108,8 +108,8 @@ pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 
 
 /// The Wasm code of a Substrate runtime.
-#[derive(Debug, Clone)]
-pub struct RuntimeWasmCode {
+#[derive(Debug, Clone, codec::Encode, codec::Decode)]
+pub struct RuntimeCode {
 	/// The actual Wasm code as binary blob.
 	pub code: Vec<u8>,
 	/// The optional heap pages this `code` should be executed with.
@@ -117,24 +117,27 @@ pub struct RuntimeWasmCode {
 	/// If `None` are given, the default value of the executor will be used.
 	pub heap_pages: Option<u64>,
 	/// The SCALE encoded hash of `code`.
+	///
+	/// The hashing algorithm isn't that important, as long as all runtime
+	/// code instances use the same.
 	pub hash: Vec<u8>,
 }
 
-impl PartialEq for RuntimeWasmCode {
+impl PartialEq for RuntimeCode {
 	fn eq(&self, other: &Self) -> bool {
 		self.hash == other.hash
 	}
 }
 
-impl RuntimeWasmCode {
-	/// Create an `RuntimeWasmCode` instance from the given `Externalities`.
+impl RuntimeCode {
+	/// Create an `RuntimeCode` instance from the given `Externalities`.
 	///
 	/// Extracts the code and the heap pages using the well known keys.
 	///
 	/// Returns an error if the code could not be found.
-	pub fn from_externalities(ext: &dyn Externalities) -> Result<Self, NoCodeFound> {
-		let code = ext.storage(sp_storage::well_known_keys::CODE).ok_or(NoCodeFound)?;
-		let hash = ext.storage_hash(sp_storage::well_known_keys::CODE).ok_or(NoCodeFound)?;
+	pub fn from_externalities(ext: &dyn Externalities) -> Result<Self, CodeNotFound> {
+		let code = ext.storage(sp_storage::well_known_keys::CODE).ok_or(CodeNotFound)?;
+		let hash = ext.storage_hash(sp_storage::well_known_keys::CODE).ok_or(CodeNotFound)?;
 		let heap_pages = ext.storage(sp_storage::well_known_keys::HEAP_PAGES)
 			.and_then(|hp| codec::Decode::decode(&mut &hp[..]).ok());
 
@@ -157,13 +160,13 @@ impl RuntimeWasmCode {
 	}
 }
 
-/// Could not find the `:code` in the externalities while initializing the [`RuntimeWasmCode`].
+/// Could not find the `:code` in the externalities while initializing the [`RuntimeCode`].
 #[derive(Debug)]
-pub struct NoCodeFound;
+pub struct CodeNotFound;
 
-impl std::fmt::Display for NoCodeFound {
+impl std::fmt::Display for CodeNotFound {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-		write!(f, "NoCodeFound")
+		write!(f, "CodeNotFound")
 	}
 }
 
