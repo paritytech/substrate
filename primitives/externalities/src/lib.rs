@@ -209,7 +209,7 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Wipes all changes from caches and the database.
 	///
-	/// The state will be resetted to genesis.
+	/// The state will be reset to genesis.
 	fn wipe(&mut self);
 
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
