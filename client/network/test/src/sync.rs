@@ -663,7 +663,7 @@ fn does_not_sync_announced_old_best_block() {
 
 #[test]
 fn full_sync_requires_block_body() {
-	// Check that we don't sync heders-only in full mode.
+	// Check that we don't sync headers-only in full mode.
 	let _ = ::env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(2);
