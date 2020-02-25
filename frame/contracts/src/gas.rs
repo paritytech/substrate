@@ -298,7 +298,7 @@ macro_rules! match_tokens {
 #[cfg(test)]
 mod tests {
 	use super::{GasMeter, Token};
-	use crate::tests::Test;
+	use crate::{tests::Test, gas::approx_gas_for_balance};
 
 	/// A trivial token that charges the specified number of gas units.
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -385,5 +385,23 @@ mod tests {
 	fn charge_exact_amount() {
 		let mut gas_meter = GasMeter::<Test>::with_limit(25, 10);
 		assert!(!gas_meter.charge(&(), SimpleToken(25)).is_out_of_gas());
+	}
+
+	// A unit test for `fn approx_gas_for_balance()`, and makes
+	// sure setting gas_price 0 does not cause `div by zero` error.
+	#[test]
+	fn approx_gas_for_balance_works() {
+		let tests = vec![
+			(approx_gas_for_balance(0_u64, 123), 0),
+			(approx_gas_for_balance(0_u64, 456), 0),
+			(approx_gas_for_balance(1_u64, 123), 123),
+			(approx_gas_for_balance(1_u64, 456), 456),
+			(approx_gas_for_balance(100_u64, 900), 9),
+			(approx_gas_for_balance(123_u64, 900), 7),
+		];
+
+		for (lhs, rhs) in tests {
+			assert_eq!(lhs, rhs);
+		}
 	}
 }
