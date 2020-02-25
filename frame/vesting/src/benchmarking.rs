@@ -39,20 +39,7 @@ fn add_locks<T: Trait>(l: u32) {
 	}
 }
 
-benchmarks! {
-	_ {
-		// Current block. It allows to hit different paths of `update_lock`.
-		// It doesn't seems to influence the timings which branch is taken.
-		let b in 0 .. 1 => ();
-		// Number of previous locks.
-		// It doesn't seems to influence the timings for lower values.
-		let l in 0 .. MAX_LOCKS => add_locks::<T>(l);
-	}
-
-	vest {
-		let b in ...;
-		let l in ...;
-
+fn setup<T: Trait>(b: u32) -> T::AccountId {
 		let locked = 1;
 		let per_block = 1;
 		let starting_block = 0;
@@ -67,10 +54,29 @@ benchmarks! {
 			starting_block.into(),
 		);
 
+		// Set lock and block number to take different code paths.
 		let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
 		T::Currency::set_lock(VESTING_ID, &caller, locked.into(), reasons);
-
 		System::<T>::set_block_number(b.into());
+
+		caller
+}
+
+benchmarks! {
+	_ {
+		// Current block. It allows to hit different paths of `update_lock`.
+		// It doesn't seems to influence the timings which branch is taken.
+		let b in 0 .. 1 => ();
+		// Number of previous locks.
+		// It doesn't seems to influence the timings for lower values.
+		let l in 0 .. MAX_LOCKS => add_locks::<T>(l);
+	}
+
+	vest {
+		let b in ...;
+		let l in ...;
+
+		let caller = setup::<T>(b);
 
 	}: _(RawOrigin::Signed(caller))
 
@@ -78,26 +84,10 @@ benchmarks! {
 		let b in ...;
 		let l in ...;
 
-		let locked = 1;
-		let per_block = 1;
-		let starting_block = 0;
-
-		let caller = account("caller", 0, SEED);
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
 
-		// Add schedule to avoid `NotVesting` error.
-		let _ = Vesting::<T>::add_vesting_schedule(
-			&other,
-			locked.into(),
-			per_block.into(),
-			starting_block.into(),
-		);
-
-		let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
-		T::Currency::set_lock(VESTING_ID, &caller, locked.into(), reasons);
-
-		System::<T>::set_block_number(b.into());
+		let caller = setup::<T>(b);
 
 	}: _(RawOrigin::Signed(caller), other_lookup)
 }
