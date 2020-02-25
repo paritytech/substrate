@@ -470,36 +470,14 @@ impl pallet_offences::Trait for Runtime {
 
 impl pallet_authority_discovery::Trait for Runtime {}
 
-// move to own crate
-pub mod report {
-	pub mod app {
-		use sp_application_crypto::{app_crypto, sr25519, KeyTypeId};
-
-		pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"rprt");
-		app_crypto!(sr25519, KEY_TYPE);
-
-		impl sp_runtime::traits::IdentifyAccount for Public {
-			type AccountId = sp_runtime::AccountId32;
-
-			fn into_account(self) -> Self::AccountId {
-				sp_runtime::MultiSigner::from(self.0).into_account()
-			}
-		}
-	}
-
-	pub type ReporterId = app::Public;
-}
-
-use report::ReporterId;
-
 impl pallet_grandpa::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type HandleEquivocation = pallet_grandpa::EquivocationHandler<
 		Historical,
-		TransactionSubmitter<ReporterId, Runtime, UncheckedExtrinsic>,
+		TransactionSubmitter<node_primitives::report::ReporterId, Runtime, UncheckedExtrinsic>,
 		Offences,
-		ReporterId,
+		node_primitives::report::ReporterId,
 	>;
 }
 

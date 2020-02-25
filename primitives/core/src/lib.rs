@@ -108,7 +108,7 @@ impl ExecutionContext {
 		match self {
 			Importing | Syncing | BlockConstruction =>
 				offchain::Capabilities::none(),
-			// Enable keystore and transaction pool by default for offchain calls. CC @bkchr
+			// Enable keystore and transaction pool by default for offchain calls.
 			OffchainCall(None) => [
 				offchain::Capability::Keystore,
 				offchain::Capability::TransactionPool,

@@ -62,3 +62,32 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, OpaqueExtrinsic>;
 /// Block ID.
 pub type BlockId = generic::BlockId<Block>;
+
+/// App-specific crypto used for reporting equivocation/misbehavior in BABE and
+/// GRANDPA. The crypto used is sr25519 and the account must be minimally funded
+/// in order to pay for transaction fees. Any rewards for misbehavior reporting
+/// will be paid out to this account.
+pub mod report {
+	use sp_core::crypto::KeyTypeId;
+
+	/// Key type for the reporting module. Used for reporting BABE and GRANDPA
+	/// equivocations.
+	pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"fish");
+
+	mod app {
+		use sp_application_crypto::{app_crypto, sr25519};
+
+		app_crypto!(sr25519, super::KEY_TYPE);
+
+		impl sp_runtime::traits::IdentifyAccount for Public {
+			type AccountId = sp_runtime::AccountId32;
+
+			fn into_account(self) -> Self::AccountId {
+				sp_runtime::MultiSigner::from(self.0).into_account()
+			}
+		}
+	}
+
+    /// Identity of the equivocation/misbehavior reporter.
+	pub type ReporterId = app::Public;
+}

@@ -15,7 +15,6 @@ rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0.102", optional = true }
 
 # primitives
-sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../../primitives/application-crypto" }
 sp-authority-discovery = { version = "2.0.0", default-features = false, path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.8", default-features = false, path = "../../../primitives/consensus/babe" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false}
@@ -77,7 +76,6 @@ sp-io = { version = "2.0.0", path = "../../../primitives/io" }
 [features]
 default = ["std"]
 std = [
-	"sp-application-crypto/std",
 	"sp-authority-discovery/std",
 	"pallet-authority-discovery/std",
 	"pallet-authorship/std",

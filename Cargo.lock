@@ -3464,7 +3464,9 @@ dependencies = [
 name = "node-primitives"
 version = "2.0.0"
 dependencies = [
+ "parity-scale-codec",
  "pretty_assertions",
+ "sp-application-crypto",
  "sp-core",
  "sp-runtime",
  "sp-serializer",
@@ -3543,7 +3545,6 @@ dependencies = [
  "rustc-hex",
  "serde",
  "sp-api",
- "sp-application-crypto",
  "sp-authority-discovery",
  "sp-block-builder",
  "sp-consensus-babe",
