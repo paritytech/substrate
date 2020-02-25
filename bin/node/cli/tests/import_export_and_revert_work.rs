@@ -27,7 +27,7 @@ fn import_export_and_revert_work() {
 	let base_path = tempdir().expect("could not create a temp dir");
 	let exported_blocks = base_path.path().join("exported_blocks");
 
-	common::run_command_for_a_while(base_path.path(), true);
+	common::run_command_for_a_while(base_path.path());
 
 	let status = Command::new(cargo_bin("substrate"))
 		.args(&["export-blocks", "--dev", "--pruning", "archive", "-d"])
