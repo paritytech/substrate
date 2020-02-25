@@ -49,10 +49,7 @@ sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.8.0-dev", path = "../../primitives/consensus/common" }
 sp-consensus-babe = { version = "0.8.0-dev", path = "../../primitives/consensus/babe" }
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
-sp-keyring = { version = "2.0.0-dev", optional = true, path = "../../primitives/keyring" }
 sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
-substrate-test-client = { version = "2.0.0-dev", optional = true, path = "../../test-utils/client" }
-substrate-test-runtime-client = { version = "2.0.0-dev", optional = true, path = "../../test-utils/runtime/client" }
 thiserror = "1"
 unsigned-varint = { version = "0.3.1", features = ["futures", "futures-codec"] }
 void = "1.0.2"
@@ -72,4 +69,4 @@ tempfile = "3.1.0"
 
 [features]
 default = []
-test-helpers = ["sp-keyring", "substrate-test-runtime-client"]
+
