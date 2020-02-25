@@ -240,7 +240,7 @@ decl_module! {
 			let transactor = ensure_signed(origin)?;
 			ensure!(schedule.locked >= T::VestingDeposit::get(), Error::<T>::AmountLow);
 
-			ensure!(schedule.locked >= T::VestingDeposit::get(), Error::<T>::AmountLow);
+			let who = T::Lookup::lookup(target)?;
 			ensure!(!Vesting::<T>::contains_key(&who), Error::<T>::ExistingVestingSchedule);
 			
 			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
