@@ -455,7 +455,6 @@ impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Event = Event;
 	type Call = Call;
-	type SubmitTransaction = SubmitTransaction;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
 }

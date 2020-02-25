@@ -23,6 +23,250 @@ use sp_runtime::app_crypto::{RuntimeAppPublic, AppPublic, AppSignature};
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
 use frame_support::{debug, storage::StorageMap};
 
+
+pub mod new {
+	use super::*;
+
+	pub enum ForAll {}
+	pub enum ForAny {}
+
+	pub struct Signer<T: SigningTypes, X = ForAny> {
+		accounts: Vec<T::Public>,
+		_phantom: std::marker::PhantomData<X>,
+	}
+
+	impl<T: SigningTypes, X> Signer<T, X> {
+		pub fn accounts(accounts: Vec<T::Public>) -> Self {
+			Signer {
+				accounts,
+				_phantom: Default::default(),
+			}
+		}
+
+		pub fn with_all(self) -> Signer<T, ForAll> {
+			Signer {
+				accounts: self.accounts,
+				_phantom: Default::default(),
+			}
+		}
+
+		pub fn with_any(self) -> Signer<T, ForAny> {
+			Signer {
+				accounts: self.accounts,
+				_phantom: Default::default(),
+			}
+		}
+	}
+
+	impl<
+		T: SigningTypes + SubmitTransactionTypes<C>,
+		X,
+		C,
+	> SendRawUnsignedTransaction<T, C> for Signer<T, X> {
+		fn send_raw_unsigned_transaction(_call: T::Call) -> Result<(), ()> {
+			unimplemented!()
+		}
+	}
+
+	impl<T: SigningTypes> SignMessage<T> for Signer<T, ForAll> {
+		type Result = Vec<T::Signature>;
+
+		// fn sign_message(&self, message: &[u8]) -> Self::Result {
+		//     self.accounts
+		//         .iter()
+		//         .filter_map(|key| {
+		//             let runtime_key = T::RuntimeAppPublic::from(key.clone());
+		//             runtime_key.sign(message)
+		//         })
+		//         .collect()
+		// }
+
+		fn sign<TPayload, F>(&self, f: F) -> Self::Result where
+			F: Fn(T::AccountId, T::Public) -> TPayload,
+			TPayload: SignedPayload<T>,
+		{
+			self.accounts
+				.iter()
+				.filter_map(|key| {
+					let account_id = key.clone().into_account();
+					let payload = f(account_id, key.clone());
+					payload.sign()
+				})
+			.collect()
+		}
+	}
+
+	impl<T: SigningTypes> SignMessage<T> for Signer<T, ForAny> {
+		type Result = Option<T::Signature>;
+
+		// fn sign_message(&self, message: &[u8]) -> Self::Result {
+		//     self.accounts
+		//         .iter()
+		//         .filter_map(|key| {
+		//             let runtime_key = T::RuntimeAppPublic::from(key.clone());
+		//             runtime_key.sign(message)
+		//         })
+		//         .collect()
+		// }
+
+		fn sign<TPayload, F>(&self, f: F) -> Self::Result where
+			F: Fn(T::AccountId, T::Public) -> TPayload,
+			TPayload: SignedPayload<T>,
+		{
+			for key in &self.accounts {
+				let account_id = key.clone().into_account();
+				let payload = f(account_id, key.clone());
+				let res = payload.sign();
+				if res.is_some() {
+					return res
+				}
+			}
+
+			None
+		}
+	}
+
+	impl<
+		T: SigningTypes + SubmitTransactionTypes<C>,
+		C
+	> SendSignedTransaction<T, C> for Signer<T, ForAny> {
+		type Result = (T::Public, Result<(), ()>);
+
+		fn send_signed_transaction(
+			&self,
+			_f: impl Fn(T::AccountId, T::Public) -> T::Call,
+		) -> Self::Result {
+			unimplemented!()
+		}
+	}
+
+	impl<
+		T: SigningTypes + SubmitTransactionTypes<C>,
+		C,
+	> SendSignedTransaction<T, C> for Signer<T, ForAll> {
+		type Result = Vec<(T::Public, Result<(), ()>)>;
+
+		fn send_signed_transaction(
+			&self,
+			_f: impl Fn(T::AccountId, T::Public) -> T::Call,
+		) -> Self::Result {
+			unimplemented!()
+		}
+	}
+
+	impl<
+		T: SigningTypes + SubmitTransactionTypes<C>,
+		C,
+	> SendUnsignedTransaction<T, C> for Signer<T, ForAny> {
+		type Result = Option<T::Signature>;
+
+		fn send_unsigned_transaction<TPayload, F>(
+			&self,
+			_f: F,
+			_f2: impl Fn(TPayload, T::Signature) -> T::Call,
+		) -> Self::Result
+		where
+			F: Fn(T::AccountId, T::Public) -> TPayload,
+			TPayload: SignedPayload<T> {
+				unimplemented!()
+		}
+	}
+
+	impl<
+		T: SigningTypes + SubmitTransactionTypes<C>,
+		C,
+	> SendUnsignedTransaction<T, C> for Signer<T, ForAll> {
+		type Result = Vec<Option<T::Signature>>;
+
+		fn send_unsigned_transaction<TPayload, F>(
+			&self,
+			_f: F,
+			_f2: impl Fn(TPayload, T::Signature) -> T::Call,
+		) -> Self::Result
+		where
+			F: Fn(T::AccountId, T::Public) -> TPayload,
+			TPayload: SignedPayload<T> {
+				unimplemented!()
+		}
+	}
+
+
+	/// traits
+
+	// pub trait Sign<T: Types>: Sized {
+	//     type WithAll;
+	//     type WithAny;
+
+	//     fn accounts(public: Vec<T::Public>) -> Self;
+
+	//     fn with_all(self) -> Self::WithAll;
+	//     fn with_any(self) -> Self::WithAny;
+	// }
+
+	pub trait SigningTypes {
+		type AccountId;
+		type Public: Clone + IdentifyAccount<AccountId = Self::AccountId>;
+		type RuntimeAppPublic: From<Self::Public> + RuntimeAppPublic;
+		type Signature: Into<<Self::RuntimeAppPublic as RuntimeAppPublic>::Signature>
+			+ From<<Self::RuntimeAppPublic as RuntimeAppPublic>::Signature>;
+	}
+
+	pub trait SubmitTransactionTypes<LocalCall> {
+		type Call: From<LocalCall>;
+	}
+
+	pub trait SignMessage<T: SigningTypes> {
+		type Result;
+
+		// fn sign_message(&self, message: &[u8]) -> Self::Result;
+
+		fn sign<TPayload, F>(&self, f: F) -> Self::Result where
+			F: Fn(T::AccountId, T::Public) -> TPayload,
+			TPayload: SignedPayload<T>,
+			;
+	}
+
+	pub trait SendSignedTransaction<T: SigningTypes + SubmitTransactionTypes<C>, C> {
+		type Result;
+
+		fn send_signed_transaction(
+			&self,
+			f: impl Fn(T::AccountId, T::Public) -> T::Call,
+		) -> Self::Result;
+	}
+
+	pub trait SendUnsignedTransaction<T: SigningTypes + SubmitTransactionTypes<C>, C> {
+		type Result;
+
+		fn send_unsigned_transaction<TPayload, F>(
+			&self,
+			f: F,
+			f2: impl Fn(TPayload, T::Signature) -> T::Call,
+		) -> Self::Result
+		where
+			F: Fn(T::AccountId, T::Public) -> TPayload,
+			TPayload: SignedPayload<T>;
+	}
+
+	pub trait SendRawUnsignedTransaction<T: SubmitTransactionTypes<C>, C> {
+		fn send_raw_unsigned_transaction(call: T::Call) -> Result<(), ()>;
+	}
+
+	pub trait SignedPayload<T: SigningTypes>: Encode {
+		fn public(&self) -> T::Public;
+
+		fn sign(&self) -> Option<T::Signature> {
+			let x = T::RuntimeAppPublic::from(self.public());
+			x.sign(&self.encode()).map(Into::into)
+		}
+
+		fn verify(&self, signature: T::Signature) -> bool {
+			let x = T::RuntimeAppPublic::from(self.public());
+			x.verify(&self.encode(), &signature.into())
+		}
+	}
+}
+
 /// Creates runtime-specific signed transaction.
 ///
 /// This trait should be implemented by your `Runtime` to be able

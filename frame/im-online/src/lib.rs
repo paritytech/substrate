@@ -94,7 +94,7 @@ use frame_support::{
 	traits::Get,
 };
 use frame_system::{self as system, ensure_none};
-use frame_system::offchain::SubmitUnsignedTransaction;
+use frame_system::offchain::new::{self, SendRawUnsignedTransaction};
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -224,11 +224,8 @@ pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
-	/// A dispatchable call type.
-	type Call: From<Call<Self>>;
-
-	/// A transaction submitter.
-	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
+	/// A transaction submitter / signing types.
+	type Types: new::SigningTypes + new::SubmitTransactionTypes<Call<Self>>;
 
 	/// An expected duration of the session.
 	///
@@ -455,7 +452,9 @@ impl<T: Trait> Module<T> {
 				session_index,
 				authority_index,
 			};
+
 			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
+
 			Ok(Call::heartbeat(heartbeat_data, signature))
 		};
 
@@ -480,7 +479,8 @@ impl<T: Trait> Module<T> {
 					call,
 				);
 
-				T::SubmitTransaction::submit_unsigned(call)
+				new::Signer::<T::Types>
+					::send_raw_unsigned_transaction(call.into())
 					.map_err(|_| OffchainErr::SubmitTransaction)?;
 
 				Ok(())
