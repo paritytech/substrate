@@ -341,7 +341,7 @@ mod tests {
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = Balances;
+		type OnKilledAccount = ();
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;

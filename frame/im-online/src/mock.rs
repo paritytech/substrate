@@ -117,7 +117,7 @@ impl frame_system::Trait for Runtime {
 	type ModuleToIndex = ();
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnReapAccount = ();
+	type OnKilledAccount = ();
 }
 
 parameter_types! {
