@@ -121,28 +121,29 @@ where H: PartialEq,
 
 impl<H: Eq, N> AuthoritySet<H, N>
 where
-	N: Add<Output=N> + Ord + Clone + Debug,
-	H: Clone + Debug
+	N: Add<Output = N> + Ord + Clone + Debug,
+	H: Clone + Debug,
 {
-	/// Returns the block height at which the next pending change in the given
-	/// chain (i.e. it includes `best_hash`) was signalled, `None` if there are
-	/// no pending changes for the given chain.
+	/// Returns the block hash and height at which the next pending change in
+	/// the given chain (i.e. it includes `best_hash`) was signalled, `None` if
+	/// there are no pending changes for the given chain.
 	///
 	/// This is useful since we know that when a change is signalled the
 	/// underlying runtime authority set management module (e.g. session module)
 	/// has updated its internal state (e.g. a new session started).
-	pub(crate) fn next_change_height<F, E>(
+	pub(crate) fn next_change<F, E>(
 		&self,
 		best_hash: &H,
 		is_descendent_of: &F,
-	) -> Result<Option<N>, fork_tree::Error<E>> where
+	) -> Result<Option<(H, N)>, fork_tree::Error<E>>
+	where
 		F: Fn(&H, &H) -> Result<bool, E>,
-		E:  std::error::Error,
+		E: std::error::Error,
 	{
 		let mut forced = None;
 		for change in &self.pending_forced_changes {
 			if is_descendent_of(&change.canon_hash, best_hash)? {
-				forced = Some(change.canon_height.clone());
+				forced = Some((change.canon_hash.clone(), change.canon_height.clone()));
 				break;
 			}
 		}
@@ -150,28 +151,33 @@ where
 		let mut standard = None;
 		for (_, _, change) in self.pending_standard_changes.roots() {
 			if is_descendent_of(&change.canon_hash, best_hash)? {
-				standard = Some(change.canon_height.clone());
+				standard = Some((change.canon_hash.clone(), change.canon_height.clone()));
 				break;
 			}
 		}
 
-		let n = match (standard, forced) {
-			(Some(standard), Some(forced)) => Some(standard.min(forced)),
-			(Some(standard), None) => Some(standard),
-			(None, Some(forced)) => Some(forced),
+		let earliest = match (forced, standard) {
+			(Some(forced), Some(standard)) => Some(if forced.1 < standard.1 {
+				forced
+			} else {
+				standard
+			}),
+			(Some(forced), None) => Some(forced),
+			(None, Some(standard)) => Some(standard),
 			(None, None) => None,
 		};
 
-		Ok(n)
+		Ok(earliest)
 	}
 
 	fn add_standard_change<F, E>(
 		&mut self,
 		pending: PendingChange<H, N>,
 		is_descendent_of: &F,
-	) -> Result<(), fork_tree::Error<E>> where
+	) -> Result<(), fork_tree::Error<E>>
+	where
 		F: Fn(&H, &H) -> Result<bool, E>,
-		E:  std::error::Error,
+		E: std::error::Error,
 	{
 		let hash = pending.canon_hash.clone();
 		let number = pending.canon_height.clone();
@@ -876,7 +882,7 @@ mod tests {
 	}
 
 	#[test]
-	fn next_change_height_works() {
+	fn next_change_works() {
 		let mut authorities = AuthoritySet {
 			current_authorities: Vec::new(),
 			set_id: 0,
@@ -937,20 +943,20 @@ mod tests {
         // the earliest change at block `best_a` should be the change at A0 (#5)
 		assert_eq!(
 			authorities
-				.next_change_height(&"best_a", &is_descendent_of)
+				.next_change(&"best_a", &is_descendent_of)
 				.unwrap(),
-			Some(5),
+			Some(("hash_a0", 5)),
 		);
 
-        // the earliest change at block `best_b` should be the change at B (#4)
+		// the earliest change at block `best_b` should be the change at B (#4)
 		assert_eq!(
 			authorities
-				.next_change_height(&"best_b", &is_descendent_of)
+				.next_change(&"best_b", &is_descendent_of)
 				.unwrap(),
-			Some(4),
+			Some(("hash_b", 4)),
 		);
 
-        // we apply the change at A0 which should prune it and the fork at B
+		// we apply the change at A0 which should prune it and the fork at B
 		authorities
 			.apply_standard_changes("hash_a0", 5, &is_descendent_of)
 			.unwrap();
@@ -958,15 +964,15 @@ mod tests {
         // the next change is now at A1 (#10)
 		assert_eq!(
 			authorities
-				.next_change_height(&"best_a", &is_descendent_of)
+				.next_change(&"best_a", &is_descendent_of)
 				.unwrap(),
-			Some(10),
+			Some(("hash_a1", 10)),
 		);
 
-        // there's no longer any pending change at `best_b` fork
+		// there's no longer any pending change at `best_b` fork
 		assert_eq!(
 			authorities
-				.next_change_height(&"best_b", &is_descendent_of)
+				.next_change(&"best_b", &is_descendent_of)
 				.unwrap(),
 			None,
 		);
@@ -989,9 +995,9 @@ mod tests {
         // it should take precedence over the change at A1 (#10)
 		assert_eq!(
 			authorities
-				.next_change_height(&"best_a", &is_descendent_of)
+				.next_change(&"best_a", &is_descendent_of)
 				.unwrap(),
-			Some(8),
+			Some(("hash_a10", 8)),
 		);
 	}
 }

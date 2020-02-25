@@ -563,10 +563,10 @@ where
 	Block: 'static,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + 'static + Send + Sync,
- 	N: NetworkT<Block> + 'static + Send,
+	N: NetworkT<Block> + 'static + Send,
 	RA: 'static + Send + Sync,
 	PRA: ProvideRuntimeApi<Block>,
-	PRA::Api: GrandpaApi<Block> + SessionMembership<Block>,
+	PRA::Api: GrandpaApi<Block> + SessionMembership<Block, Error = sp_blockchain::Error>,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	NumberFor<Block>: BlockNumberOps,
@@ -911,105 +911,121 @@ where
 	fn prevote_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: finality_grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
+		equivocation: finality_grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>,
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		report_equivocation(
+		match report_equivocation(
 			&*self.client,
 			&*self.api,
 			&self.authority_set.inner().read(),
 			&self.select_chain,
 			equivocation.into(),
-		);
+		) {
+			Ok(_) => {}
+			Err(err) => {
+				warn!(target: "afg", "Error reporting prevote equivocation: {:?}", err);
+			}
+		};
 	}
 
 	fn precommit_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: finality_grandpa::Equivocation<Self::Id, Precommit<Block>, Self::Signature>
+		equivocation: finality_grandpa::Equivocation<Self::Id, Precommit<Block>, Self::Signature>,
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		report_equivocation(
+		match report_equivocation(
 			&*self.client,
 			&*self.api,
 			&self.authority_set.inner().read(),
 			&self.select_chain,
 			equivocation.into(),
-		);
+		) {
+			Ok(_) => {}
+			Err(err) => {
+				warn!(target: "afg", "Error reporting precommit equivocation: {:?}", err);
+			}
+		};
 	}
 }
 
-// TODO: how to make this optional?
-
+/// Report the given equivocation to the GRANDPA runtime module. This method
+/// generates a session membership proof of the offender and then submits an
+/// extrinsic to report the equivocation. In particular, the session membership
+/// proof must be generated at the block at which the given set was active which
+/// isn't necessarily the best block if there are pending authority set changes.
 fn report_equivocation<Block, B, PRA, SC>(
 	backend: &B,
 	api: &PRA,
 	authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
 	select_chain: &SC,
 	equivocation: Equivocation<Block::Hash, NumberFor<Block>>,
-) -> Result<(), String>
+) -> Result<(), Error>
 where
 	Block: BlockT,
 	B: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	PRA: ProvideRuntimeApi<Block>,
-	PRA::Api: GrandpaApi<Block> + SessionMembership<Block>,
+	PRA::Api: GrandpaApi<Block> + SessionMembership<Block, Error = sp_blockchain::Error>,
 	SC: SelectChain<Block> + 'static,
 {
 	let is_descendent_of = is_descendent_of(backend, None);
 
-	let best_header = select_chain.best_chain().unwrap();
-	let next_change_height = authority_set.next_change_height(
-		&best_header.hash(),
-		&is_descendent_of,
-	).unwrap();
+	let best_header = select_chain
+		.best_chain()
+		.map_err(|e| Error::Blockchain(e.to_string()))?;
 
-	let current_set_latest_height = match next_change_height {
-		Some(n) if n.is_zero() =>
-			return Err("Authority set change signalled at genesis.".to_string()),
+	// block hash and number of the next pending authority set change in the
+	// given best chain.
+	let next_change = authority_set
+		.next_change(&best_header.hash(), &is_descendent_of)
+		.map_err(|e| Error::Safety(e.to_string()))?;
+
+	// find the hash of the latest block in the current set
+	let current_set_latest_hash = match next_change {
+		Some((_, n)) if n.is_zero() => {
+			return Err(Error::Safety(
+				"Authority set change signalled at genesis.".to_string(),
+			))
+		}
 		// the next set starts at `n` so the current one lasts until `n - 1`. if
 		// `n` is later than the best block, then the current set is still live
 		// at best block.
-		Some(n) if n > *best_header.number() => *best_header.number(),
-		Some(n) => n - One::one(),
+		Some((_, n)) if n > *best_header.number() => best_header.hash(),
+		Some((h, _)) => {
+            // this is the header at which the new set will start
+			let header = backend.header(BlockId::Hash(h))?.expect(
+				"got block hash from registered pending change; \
+				pending changes are only registered on block import; qed.",
+			);
+
+            // its parent block is the last block in the current set
+			*header.parent_hash()
+		}
 		// there is no pending change, the latest block for the current set is
 		// the best block.
-		None => *best_header.number(),
-	};
-
-	// FIXME: clean up
-	// find the header of the latest block in the current set
-	let current_set_latest_header = {
-		if current_set_latest_height == *best_header.number() {
-			best_header.clone()
-		} else {
-			let h = backend.header(BlockId::Number(current_set_latest_height)).unwrap().unwrap();
-
-			// make sure that the given block is in the same chain as "best"
-			if is_descendent_of(&h.hash(), &best_header.hash()).unwrap() {
-				h
-			} else {
-				let mut current = best_header.clone();
-				loop {
-					if *current.number() == current_set_latest_height {
-						break;
-					}
-					current = backend.header(BlockId::Hash(*current.parent_hash())).unwrap().unwrap();
-				}
-				current
-			}
-		}
+		None => best_header.hash(),
 	};
 
 	// generate membership proof at that block
-	let membership_proof = api.runtime_api()
+	let membership_proof = match api
+		.runtime_api()
 		.generate_session_membership_proof(
-			&BlockId::Hash(current_set_latest_header.hash()),
-			(sp_finality_grandpa::KEY_TYPE, equivocation.offender().encode()),
+			&BlockId::Hash(current_set_latest_hash),
+			(
+				sp_finality_grandpa::KEY_TYPE,
+				equivocation.offender().encode(),
+			),
 		)
-		.unwrap()
-		.unwrap();
+		.map_err(Error::Client)?
+	{
+		Some(proof) => proof,
+		None => {
+			debug!(target: "afg", "Equivocation offender is not part of the authority set.");
+			return Ok(());
+		}
+	};
 
-	// submit equivocation report at best block
+	// submit equivocation report at **best** block
 	let equivocation_report = EquivocationReport::new(
 		authority_set.set_id,
 		equivocation,
@@ -1020,8 +1036,7 @@ where
 			&BlockId::Hash(best_header.hash()),
 			equivocation_report,
 			membership_proof.encode(),
-		)
-		.unwrap();
+		).map_err(Error::Client)?;
 
 	Ok(())
 }

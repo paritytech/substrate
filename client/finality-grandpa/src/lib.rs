@@ -554,8 +554,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, PRA, SC, VR, X>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi<Block> + Send + Sync + 'static,
-	PRA::Api: GrandpaApi<Block> + SessionMembership<Block>,
-	X: futures::Future<Output=()> + Clone + Send + Unpin + 'static,
+	PRA::Api: GrandpaApi<Block> + SessionMembership<Block, Error = sp_blockchain::Error>,
+	X: futures::Future<Output = ()> + Clone + Send + Unpin + 'static,
 	Client<B, E, Block, RA>: AuxStore,
 {
 	let GrandpaParams {
@@ -648,7 +648,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi<Block> + Send + Sync + 'static,
-	PRA::Api: GrandpaApi<Block> + SessionMembership<Block>,
+	PRA::Api: GrandpaApi<Block> + SessionMembership<Block, Error = sp_blockchain::Error>,
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	B: Backend<Block> + 'static,
 	SC: SelectChain<Block> + 'static,
@@ -829,7 +829,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi<Block> + Send + Sync + 'static,
-	PRA::Api: GrandpaApi<Block> + SessionMembership<Block>,
+	PRA::Api: GrandpaApi<Block> + SessionMembership<Block, Error = sp_blockchain::Error>,
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	B: Backend<Block> + 'static,
 	SC: SelectChain<Block> + 'static,
@@ -886,9 +886,9 @@ pub fn run_grandpa<B, E, Block: BlockT, N, RA, PRA, SC, VR, X>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi<Block> + Send + Sync + 'static,
-	PRA::Api: GrandpaApi<Block> + SessionMembership<Block>,
+	PRA::Api: GrandpaApi<Block> + SessionMembership<Block, Error = sp_blockchain::Error>,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
-	X: futures::Future<Output=()> + Clone + Send + Unpin + 'static,
+	X: futures::Future<Output = ()> + Clone + Send + Unpin + 'static,
 	Client<B, E, Block, RA>: AuxStore,
 {
 	run_grandpa_voter(grandpa_params)
