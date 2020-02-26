@@ -154,7 +154,7 @@ decl_storage! {
 		/// DEPRECATED
 		///
 		/// This used to store the current authority set, which has been migrated to the well-known
-		/// GRANDPA_AUTHORITES_KEY unhashed key.
+		/// GRANDPA_AUTHORITIES_KEY unhashed key.
 		#[cfg(feature = "migrate-authorities")]
 		pub(crate) Authorities get(fn authorities): AuthorityList;
 
@@ -435,7 +435,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		// Always issue a change if `session` says that the validators have changed.
-		// Even if their session keys are the same as before, the underyling economic
+		// Even if their session keys are the same as before, the underlying economic
 		// identities have changed.
 		let current_set_id = if changed {
 			let next_authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
@@ -481,7 +481,6 @@ struct GrandpaTimeSlot {
 
 // TODO [slashing]: Integrate this.
 /// A grandpa equivocation offence report.
-#[allow(dead_code)]
 struct GrandpaEquivocationOffence<FullIdentification> {
 	/// Time slot at which this incident happened.
 	time_slot: GrandpaTimeSlot,

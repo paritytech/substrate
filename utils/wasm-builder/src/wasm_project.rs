@@ -431,7 +431,7 @@ fn generate_rerun_if_changed_instructions(
 		.exec()
 		.expect("`cargo metadata` can not fail!");
 
-	// Make sure that if any file/folder of a depedency change, we need to rerun the `build.rs`
+	// Make sure that if any file/folder of a dependency change, we need to rerun the `build.rs`
 	metadata.packages.into_iter()
 		.filter(|package| !package.manifest_path.starts_with(wasm_workspace))
 		.for_each(|package| {
@@ -453,6 +453,7 @@ fn generate_rerun_if_changed_instructions(
 	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_TYPE_ENV);
 	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_RUSTFLAGS_ENV);
 	println!("cargo:rerun-if-env-changed={}", crate::WASM_TARGET_DIRECTORY);
+	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_TOOLCHAIN);
 }
 
 /// Copy the WASM binary to the target directory set in `WASM_TARGET_DIRECTORY` environment variable.

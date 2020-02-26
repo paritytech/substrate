@@ -398,7 +398,7 @@ impl<B, E, Block: BlockT, RA, SC> BlockImport<Block>
 		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		let hash = block.post_header().hash();
+		let hash = block.post_hash();
 		let number = block.header.number().clone();
 
 		// early exit if block already in chain, otherwise the check for

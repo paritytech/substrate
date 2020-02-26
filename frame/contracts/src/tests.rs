@@ -117,7 +117,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnReapAccount = (Balances, Contracts);
+	type OnKilledAccount = Contracts;
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
@@ -597,7 +597,7 @@ fn dispatch_call() {
 				topics: vec![],
 			},
 
-			// Event emited as a result of dispatch.
+			// Event emitted as a result of dispatch.
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::contracts(RawEvent::Dispatched(BOB, true)),
@@ -720,6 +720,51 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 			// ABSENCE of events which would be caused by dispatched Balances::transfer call
 		]);
 	});
+}
+
+const CODE_RUN_OUT_OF_GAS: &str = r#"
+(module
+	(func (export "call")
+		(loop $inf (br $inf)) ;; just run out of gas
+		(unreachable)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+#[test]
+fn run_out_of_gas() {
+	let (wasm, code_hash) = compile_module::<Test>(CODE_RUN_OUT_OF_GAS).unwrap();
+
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+
+			assert_ok!(Contracts::instantiate(
+				Origin::signed(ALICE),
+				100,
+				100_000,
+				code_hash.into(),
+				vec![],
+			));
+
+			// Call the contract with a fixed gas limit. It must run out of gas because it just
+			// loops forever.
+			assert_err!(
+				Contracts::call(
+					Origin::signed(ALICE),
+					BOB, // newly created account
+					0,
+					1000,
+					vec![],
+				),
+				"ran out of gas during contract execution"
+			);
+		});
 }
 
 const CODE_SET_RENT: &str = r#"
@@ -1007,7 +1052,7 @@ fn claim_surcharge_malus() {
 }
 
 /// Claim surcharge with the given trigger_call at the given blocks.
-/// if removes is true then assert that the contract is a tombstonedead
+/// If `removes` is true then assert that the contract is a tombstone.
 fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
@@ -1561,7 +1606,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::system(system::RawEvent::ReapedAccount(DJANGO)),
+					event: MetaEvent::system(system::RawEvent::KilledAccount(DJANGO)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -2074,11 +2119,11 @@ const CODE_SELF_DESTRUCT: &str = r#"
 				;; Read own address into memory.
 				(call $ext_scratch_read
 					(i32.const 16)	;; Pointer to write address to
-					(i32.const 0)	;; Offset into scrach buffer
+					(i32.const 0)	;; Offset into scratch buffer
 					(i32.const 8)	;; Length of encoded address
 				)
 
-				;; Recursively call self with empty imput data.
+				;; Recursively call self with empty input data.
 				(call $assert
 					(i32.eq
 						(call $ext_call
@@ -2110,7 +2155,7 @@ const CODE_SELF_DESTRUCT: &str = r#"
 		;; Read balance into memory.
 		(call $ext_scratch_read
 			(i32.const 8)	;; Pointer to write balance to
-			(i32.const 0)	;; Offset into scrach buffer
+			(i32.const 0)	;; Offset into scratch buffer
 			(i32.const 8)	;; Length of encoded balance
 		)
 
@@ -2439,7 +2484,7 @@ const CODE_SELF_DESTRUCTING_CONSTRUCTOR: &str = r#"
 		;; Read balance into memory.
 		(call $ext_scratch_read
 			(i32.const 8)	;; Pointer to write balance to
-			(i32.const 0)	;; Offset into scrach buffer
+			(i32.const 0)	;; Offset into scratch buffer
 			(i32.const 8)	;; Length of encoded balance
 		)
 

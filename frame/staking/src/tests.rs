@@ -235,7 +235,7 @@ fn multi_era_reward_should_work() {
 
 		// Compute now as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
-		assert!(total_payout_0 > 10); // Test is meaningfull if reward something
+		assert!(total_payout_0 > 10); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_session(0);
@@ -249,7 +249,7 @@ fn multi_era_reward_should_work() {
 		start_session(4);
 
 		let total_payout_1 = current_total_payout_for_duration(3000);
-		assert!(total_payout_1 > 10); // Test is meaningfull if reward something
+		assert!(total_payout_1 > 10); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 101)]);
 
 		// new era is triggered here.
@@ -458,7 +458,7 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 0
 			let total_payout_0 = current_total_payout_for_duration(3000);
-			assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_0 > 100); // Test is meaningful if reward something
 			<Module<Test>>::reward_by_ids(vec![(41, 1)]);
 			<Module<Test>>::reward_by_ids(vec![(31, 1)]);
 			<Module<Test>>::reward_by_ids(vec![(21, 10)]); // must be no-op
@@ -506,7 +506,7 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 1
 			let total_payout_1 = current_total_payout_for_duration(3000);
-			assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_1 > 100); // Test is meaningful if reward something
 			<Module<Test>>::reward_by_ids(vec![(41, 10)]); // must be no-op
 			<Module<Test>>::reward_by_ids(vec![(31, 10)]); // must be no-op
 			<Module<Test>>::reward_by_ids(vec![(21, 2)]);
@@ -575,7 +575,7 @@ fn nominators_also_get_slashed() {
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
 
 		let total_payout = current_total_payout_for_duration(3000);
-		assert!(total_payout > 100); // Test is meaningfull if reward something
+		assert!(total_payout > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		// new era, pay rewards,
@@ -850,7 +850,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
-		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(1);
@@ -872,7 +872,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(3000);
-		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_1 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(2);
@@ -899,7 +899,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_2 = current_total_payout_for_duration(3000);
-		assert!(total_payout_2 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_2 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(3);
@@ -949,7 +949,7 @@ fn validator_payment_prefs_work() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
-		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(1);
@@ -1393,7 +1393,7 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
-		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 		<Module<Test>>::reward_by_ids(vec![(21, 1)]);
 
@@ -1456,6 +1456,9 @@ fn on_free_balance_zero_stash_removes_validator() {
 		// Check total balance of stash
 		assert_eq!(Balances::total_balance(&11), 0);
 
+		// Reap the stash
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
+
 		// Check storage items do not exist
 		assert!(!<Ledger<Test>>::contains_key(&10));
 		assert!(!<Bonded<Test>>::contains_key(&11));
@@ -1508,6 +1511,9 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		let _ = Balances::slash(&11, u64::max_value());
 		// Check total balance of stash
 		assert_eq!(Balances::total_balance(&11), 0);
+
+		// Reap the stash
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
 
 		// Check storage items do not exist
 		assert!(!<Ledger<Test>>::contains_key(&10));
@@ -1678,7 +1684,7 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 			assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
 			let total_payout_0 = current_total_payout_for_duration(3000);
-			assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_0 > 100); // Test is meaningful if reward something
 			reward_all_elected();
 			start_era(1);
 
@@ -1693,7 +1699,7 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 			assert_eq!(Balances::free_balance(2), init_balance_2);
 
 			let total_payout_1 = current_total_payout_for_duration(3000);
-			assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_1 > 100); // Test is meaningful if reward something
 			reward_all_elected();
 			start_era(2);
 
@@ -2303,6 +2309,10 @@ fn garbage_collection_after_slashing() {
 		// so we don't test those here.
 
 		assert_eq!(Balances::free_balance(11), 0);
+		assert_eq!(Balances::total_balance(&11), 0);
+
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
+
 		assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
 		assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &0);
 	})

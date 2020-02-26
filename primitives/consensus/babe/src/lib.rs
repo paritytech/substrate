@@ -139,5 +139,8 @@ sp_api::decl_runtime_apis! {
 		///
 		/// Dynamic configuration may be supported in the future.
 		fn configuration() -> BabeConfiguration;
+
+		/// Returns the slot number that started the current epoch.
+		fn current_epoch_start() -> SlotNumber;
 	}
 }

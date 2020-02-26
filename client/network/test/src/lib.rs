@@ -25,7 +25,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData};
 
 use libp2p::build_multiaddr;
 use log::trace;
-use sc_network::FinalityProofProvider;
+use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
 	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId}, Info as BlockchainInfo,
 };
@@ -52,17 +52,14 @@ use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProof
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
-use sc_network::ProtocolConfig;
+use sc_network::config::{ProtocolConfig, TransactionPool};
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
-use sc_network::TransactionPool;
-use sc_network::specialization::NetworkSpecialization;
 use substrate_test_runtime_client::{self, AccountKeyring};
 
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
-pub use sc_network::specialization::DummySpecialization;
 
 type AuthorityId = sp_consensus_babe::AuthorityId;
 
@@ -85,21 +82,13 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 				.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
 			)
 			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
+		let mut import = BlockImportParams::new(origin, header);
+		import.body = body;
+		import.finalized = self.0;
+		import.justification = justification;
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		Ok((BlockImportParams {
-			origin,
-			header,
-			body,
-			storage_changes: None,
-			finalized: self.0,
-			justification,
-			post_digests: vec![],
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		}, maybe_keys))
+		Ok((import, maybe_keys))
 	}
 }
 
@@ -186,23 +175,23 @@ impl PeersClient {
 	}
 }
 
-pub struct Peer<D, S: NetworkSpecialization<Block>> {
+pub struct Peer<D> {
 	pub data: D,
 	client: PeersClient,
 	/// We keep a copy of the verifier so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
-	verifier: VerifierAdapter<dyn Verifier<Block>>,
+	verifier: VerifierAdapter<Block>,
 	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
 	block_import: BlockImportAdapter<()>,
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
-	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
+	network: NetworkWorker<Block, <Block as BlockT>::Hash>,
 	imported_blocks_stream: Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>,
 	finality_notification_stream: Box<dyn Stream<Item = FinalityNotification<Block>, Error = ()> + Send>,
 }
 
-impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
+impl<D> Peer<D> {
 	/// Get this peer ID.
 	pub fn id(&self) -> PeerId {
 		self.network.service().local_peer_id()
@@ -291,7 +280,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(hash, header, Vec::new(), true);
+			self.network.on_block_imported(header, Vec::new(), true);
 			at = hash;
 		}
 
@@ -344,7 +333,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Get a reference to the network service.
-	pub fn network_service(&self) -> &Arc<NetworkService<Block, S, <Block as BlockT>::Hash>> {
+	pub fn network_service(&self) -> &Arc<NetworkService<Block, <Block as BlockT>::Hash>> {
 		&self.network.service()
 	}
 
@@ -367,6 +356,11 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		self.backend.as_ref().map(
 			|backend| backend.blocks_count()
 		).unwrap_or(0)
+	}
+
+	/// Return a collection of block hashes that failed verification
+	pub fn failed_verifications(&self) -> HashMap<<Block as BlockT>::Hash, String> {
+		self.verifier.failed_verifications.lock().clone()
 	}
 }
 
@@ -393,16 +387,6 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
 
 	fn transaction(&self, _h: &Hash) -> Option<Extrinsic> { None }
-}
-
-pub trait SpecializationFactory {
-	fn create() -> Self;
-}
-
-impl SpecializationFactory for DummySpecialization {
-	fn create() -> DummySpecialization {
-		DummySpecialization
-	}
 }
 
 /// Implements `BlockImport` for any `Transaction`. Internally the transaction is
@@ -493,15 +477,13 @@ impl<Transaction> BlockImport<Block> for BlockImportAdapter<Transaction> {
 }
 
 /// Implements `Verifier` on an `Arc<Mutex<impl Verifier>>`. Used internally.
-struct VerifierAdapter<T: ?Sized>(Arc<Mutex<Box<T>>>);
-
-impl<T: ?Sized> Clone for VerifierAdapter<T> {
-	fn clone(&self) -> Self {
-		VerifierAdapter(self.0.clone())
-	}
+#[derive(Clone)]
+struct VerifierAdapter<B: BlockT> {
+	verifier: Arc<Mutex<Box<dyn Verifier<B>>>>,
+	failed_verifications: Arc<Mutex<HashMap<B::Hash, String>>>,
 }
 
-impl<B: BlockT, T: ?Sized + Verifier<B>> Verifier<B> for VerifierAdapter<T> {
+impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
 	fn verify(
 		&mut self,
 		origin: BlockOrigin,
@@ -509,12 +491,24 @@ impl<B: BlockT, T: ?Sized + Verifier<B>> Verifier<B> for VerifierAdapter<T> {
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		self.0.lock().verify(origin, header, justification, body)
+		let hash = header.hash();
+		self.verifier.lock().verify(origin, header, justification, body).map_err(|e| {
+			self.failed_verifications.lock().insert(hash, e.clone());
+			e
+		})
+	}
+}
+
+impl<B: BlockT> VerifierAdapter<B> {
+	fn new(verifier: Arc<Mutex<Box<dyn Verifier<B>>>>) -> VerifierAdapter<B> {
+		VerifierAdapter {
+			verifier,
+			failed_verifications: Default::default(),
+		}
 	}
 }
 
 pub trait TestNetFactory: Sized {
-	type Specialization: NetworkSpecialization<Block> + SpecializationFactory;
 	type Verifier: 'static + Verifier<Block>;
 	type PeerData: Default;
 
@@ -528,9 +522,9 @@ pub trait TestNetFactory: Sized {
 	) -> Self::Verifier;
 
 	/// Get reference to peer.
-	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::Specialization>;
-	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::Specialization>>;
-	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::Specialization>>)>(
+	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData>;
+	fn peers(&self) -> &Vec<Peer<Self::PeerData>>;
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData>>)>(
 		&mut self,
 		closure: F,
 	);
@@ -600,7 +594,7 @@ pub trait TestNetFactory: Sized {
 			config,
 			&data,
 		);
-		let verifier = VerifierAdapter(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
+		let verifier = VerifierAdapter::new(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
@@ -628,7 +622,6 @@ pub trait TestNetFactory: Sized {
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
-			specialization: self::SpecializationFactory::create(),
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
 		}).unwrap();
 
@@ -676,7 +669,7 @@ pub trait TestNetFactory: Sized {
 			&config,
 			&data,
 		);
-		let verifier = VerifierAdapter(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
+		let verifier = VerifierAdapter::new(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
@@ -704,7 +697,6 @@ pub trait TestNetFactory: Sized {
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
-			specialization: self::SpecializationFactory::create(),
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
 		}).unwrap();
 
@@ -758,7 +750,7 @@ pub trait TestNetFactory: Sized {
 
 	/// Blocks the current thread until we are sync'ed.
 	///
-	/// Calls `poll_until_sync` repeatidely with the runtime passed as parameter.
+	/// Calls `poll_until_sync` repeatedly with the runtime passed as parameter.
 	fn block_until_sync(&mut self, runtime: &mut tokio::runtime::current_thread::Runtime) {
 		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(self.poll_until_sync()))).unwrap();
 	}
@@ -776,7 +768,6 @@ pub trait TestNetFactory: Sized {
 				// We poll `imported_blocks_stream`.
 				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {
 					peer.network.on_block_imported(
-						notification.hash,
 						notification.header,
 						Vec::new(),
 						true,
@@ -797,11 +788,10 @@ pub trait TestNetFactory: Sized {
 }
 
 pub struct TestNet {
-	peers: Vec<Peer<(), DummySpecialization>>,
+	peers: Vec<Peer<()>>,
 }
 
 impl TestNetFactory for TestNet {
-	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = ();
 
@@ -818,15 +808,15 @@ impl TestNetFactory for TestNet {
 		PassThroughVerifier(false)
 	}
 
-	fn peer(&mut self, i: usize) -> &mut Peer<(), Self::Specialization> {
+	fn peer(&mut self, i: usize) -> &mut Peer<()> {
 		&mut self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Peer<(), Self::Specialization>> {
+	fn peers(&self) -> &Vec<Peer<()>> {
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<Peer<(), Self::Specialization>>)>(&mut self, closure: F) {
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<()>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 }
@@ -850,7 +840,6 @@ impl JustificationImport<Block> for ForceFinalized {
 pub struct JustificationTestNet(TestNet);
 
 impl TestNetFactory for JustificationTestNet {
-	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = ();
 
@@ -862,17 +851,16 @@ impl TestNetFactory for JustificationTestNet {
 		self.0.make_verifier(client, config, peer_data)
 	}
 
-	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::Specialization> {
+	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData> {
 		self.0.peer(i)
 	}
 
-	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::Specialization>> {
+	fn peers(&self) -> &Vec<Peer<Self::PeerData>> {
 		self.0.peers()
 	}
 
 	fn mut_peers<F: FnOnce(
-		&mut Vec<Peer<Self::PeerData,
-		Self::Specialization>>,
+		&mut Vec<Peer<Self::PeerData>>,
 	)>(&mut self, closure: F) {
 		self.0.mut_peers(closure)
 	}

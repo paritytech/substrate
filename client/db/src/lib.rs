@@ -741,7 +741,7 @@ impl<T: Clone> FrozenForDuration<T> {
 
 /// Disk backend.
 ///
-/// Disk backend keps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
+/// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
 /// Otherwise, trie nodes are kept only from some recent blocks.
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
@@ -878,7 +878,7 @@ impl<Block: BlockT> Backend<Block> {
 		inmem
 	}
 
-	/// Returns total numbet of blocks (headers) in the block DB.
+	/// Returns total number of blocks (headers) in the block DB.
 	#[cfg(feature = "test-helpers")]
 	pub fn blocks_count(&self) -> u64 {
 		self.blockchain.db.iter(columns::HEADER).count() as u64
@@ -1000,7 +1000,7 @@ impl<Block: BlockT> Backend<Block> {
 		Ok((*hash, number, false, true))
 	}
 
-	// performs forced canonicaliziation with a delay after importing a non-finalized block.
+	// performs forced canonicalization with a delay after importing a non-finalized block.
 	fn force_delayed_canonicalize(
 		&self,
 		transaction: &mut DBTransaction,
