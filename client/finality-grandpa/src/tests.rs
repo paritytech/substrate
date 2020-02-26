@@ -452,6 +452,7 @@ fn run_to_completion_with<F>(
 			on_exit: Exit,
 			telemetry_on_connect: None,
 			voting_rule: (),
+			prometheus_registry: None,
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -583,6 +584,7 @@ fn finalize_3_voters_1_full_observer() {
 			on_exit: Exit,
 			telemetry_on_connect: None,
 			voting_rule: (),
+			prometheus_registry: None,
 		};
 
 		voters.push(run_grandpa_voter(grandpa_params).expect("all in order with client and network"));
@@ -746,6 +748,7 @@ fn transition_3_voters_twice_1_full_observer() {
 			on_exit: Exit,
 			telemetry_on_connect: None,
 			voting_rule: (),
+			prometheus_registry: None,
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -1171,6 +1174,7 @@ fn voter_persists_its_votes() {
 							on_exit: Exit,
 							telemetry_on_connect: None,
 							voting_rule: VotingRulesBuilder::default().build(),
+							prometheus_registry: None,
 						};
 
 						let voter = run_grandpa_voter(grandpa_params)
@@ -1520,6 +1524,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			on_exit: Exit,
 			telemetry_on_connect: None,
 			voting_rule: (),
+			prometheus_registry: None,
 		};
 
 		Box::pin(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
@@ -1654,6 +1659,7 @@ fn grandpa_environment_respects_voting_rules() {
 			voters: Arc::new(authority_set.current_authorities()),
 			network,
 			voting_rule,
+			metrics: None,
 		}
 	};
 
