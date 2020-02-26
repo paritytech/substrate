@@ -1,38 +1,39 @@
 [package]
 name = "sc-client"
-version = "0.8.0-alpha.1"
+version = "0.8.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Substrate Client and associated logic."
 
 [dependencies]
-sc-block-builder = { version = "0.8.0-alpha.1", path = "block-builder" }
-sc-client-api = { version = "2.0.0-alpha.1", path = "api" }
+sc-block-builder = { version = "0.8.0-alpha.2", path = "block-builder" }
+sc-client-api = { version = "2.0.0-alpha.2", path = "api" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-sp-consensus = { version = "0.8.0-alpha.1", path = "../primitives/consensus/common" }
+sp-consensus = { version = "0.8.0-alpha.2", path = "../primitives/consensus/common" }
 derive_more = { version = "0.99.2" }
-sc-executor = { version = "0.8.0-alpha.1", path = "executor" }
-sp-externalities = { version = "0.8.0-alpha.1", path = "../primitives/externalities" }
+sc-executor = { version = "0.8.0-alpha.2", path = "executor" }
+sp-externalities = { version = "0.8.0-alpha.2", path = "../primitives/externalities" }
 fnv = { version = "1.0.6" }
 futures = { version = "0.3.1", features = ["compat"] }
 hash-db = { version = "0.15.2" }
 hex-literal = { version = "0.2.1" }
-sp-inherents = { version = "2.0.0-alpha.1", path = "../primitives/inherents" }
-sp-keyring = { version = "2.0.0-alpha.1", path = "../primitives/keyring" }
+sp-inherents = { version = "2.0.0-alpha.2", path = "../primitives/inherents" }
+sp-keyring = { version = "2.0.0-alpha.2", path = "../primitives/keyring" }
 kvdb = "0.4.0"
 log = { version = "0.4.8" }
 parking_lot = "0.10.0"
-sp-core = { version = "2.0.0-alpha.1", path = "../primitives/core" }
-sp-std = { version = "2.0.0-alpha.1", path = "../primitives/std" }
-sp-version = { version = "2.0.0-alpha.1", path = "../primitives/version" }
-sp-api = { version = "2.0.0-alpha.1", path = "../primitives/api" }
-sp-runtime = { version = "2.0.0-alpha.1", path = "../primitives/runtime" }
-sp-blockchain = { version = "2.0.0-alpha.1", path = "../primitives/blockchain" }
-sp-state-machine = { version = "0.8.0-alpha.1", path = "../primitives/state-machine" }
-sc-telemetry = { version = "2.0.0-alpha.1", path = "telemetry" }
-sp-trie = { version = "2.0.0-alpha.1", path = "../primitives/trie" }
+sp-core = { version = "2.0.0-alpha.2", path = "../primitives/core" }
+sp-std = { version = "2.0.0-alpha.2", path = "../primitives/std" }
+sp-version = { version = "2.0.0-alpha.2", path = "../primitives/version" }
+sp-api = { version = "2.0.0-alpha.2", path = "../primitives/api" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../primitives/runtime" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../primitives/blockchain" }
+sp-state-machine = { version = "0.8.0-alpha.2", path = "../primitives/state-machine" }
+sc-telemetry = { version = "2.0.0-alpha.2", path = "telemetry" }
+sp-trie = { version = "2.0.0-alpha.2", path = "../primitives/trie" }
 tracing = "0.1.10"
 
 [dev-dependencies]
@@ -40,4 +41,4 @@ env_logger = "0.7.0"
 tempfile = "3.1.0"
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../test-utils/runtime/client" }
 kvdb-memorydb = "0.4.0"
-sp-panic-handler = { version = "2.0.0-alpha.1", path = "../primitives/panic-handler" }
+sp-panic-handler = { version = "2.0.0-alpha.2", path = "../primitives/panic-handler" }

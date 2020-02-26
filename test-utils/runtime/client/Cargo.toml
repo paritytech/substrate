@@ -9,14 +9,14 @@ repository = "https://github.com/paritytech/substrate/"
 publish = false
 
 [dependencies]
-sc-block-builder = { version = "0.8.0-alpha.1", path = "../../../client/block-builder" }
+sc-block-builder = { version = "0.8.0-alpha.2", path = "../../../client/block-builder" }
 substrate-test-client = { version = "2.0.0-dev", path = "../../client" }
-sp-core = { version = "2.0.0-alpha.1", path = "../../../primitives/core" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
 substrate-test-runtime = { version = "2.0.0-dev", path = "../../runtime" }
-sp-runtime = { version = "2.0.0-alpha.1", path = "../../../primitives/runtime" }
-sp-api = { version = "2.0.0-alpha.1", path = "../../../primitives/api" }
-sp-blockchain = { version = "2.0.0-alpha.1", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
+sp-api = { version = "2.0.0-alpha.2", path = "../../../primitives/api" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockchain" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sc-client-api = { version = "2.0.0-alpha.1", path = "../../../client/api" }
-sc-client = { version = "0.8.0-alpha.1", path = "../../../client/" }
+sc-client-api = { version = "2.0.0-alpha.2", path = "../../../client/api" }
+sc-client = { version = "0.8.0-alpha.2", path = "../../../client/" }
 futures = "0.3.1"

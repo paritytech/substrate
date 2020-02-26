@@ -1,6 +1,6 @@
 [package]
 name = "node-cli"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node implementation in Rust."
 build = "build.rs"
@@ -42,68 +42,68 @@ structopt = { version = "0.3.8", optional = true }
 tracing = "0.1.10"
 
 # primitives
-sp-authority-discovery = { version = "2.0.0-alpha.1",  path = "../../../primitives/authority-discovery" }
-sp-consensus-babe = { version = "0.8.0-alpha.1", path = "../../../primitives/consensus/babe" }
-grandpa-primitives = { version = "2.0.0-alpha.1", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
-sp-core = { version = "2.0.0-alpha.1", path = "../../../primitives/core" }
-sp-runtime = { version = "2.0.0-alpha.1", path = "../../../primitives/runtime" }
-sp-timestamp = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/timestamp" }
-sp-finality-tracker = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/finality-tracker" }
-sp-inherents = { version = "2.0.0-alpha.1", path = "../../../primitives/inherents" }
-sp-keyring = { version = "2.0.0-alpha.1", path = "../../../primitives/keyring" }
-sp-io = { version = "2.0.0-alpha.1", path = "../../../primitives/io" }
-sp-consensus = { version = "0.8.0-alpha.1", path = "../../../primitives/consensus/common" }
+sp-authority-discovery = { version = "2.0.0-alpha.2",  path = "../../../primitives/authority-discovery" }
+sp-consensus-babe = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/babe" }
+grandpa-primitives = { version = "2.0.0-alpha.2", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
+sp-timestamp = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/timestamp" }
+sp-finality-tracker = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/finality-tracker" }
+sp-inherents = { version = "2.0.0-alpha.2", path = "../../../primitives/inherents" }
+sp-keyring = { version = "2.0.0-alpha.2", path = "../../../primitives/keyring" }
+sp-io = { version = "2.0.0-alpha.2", path = "../../../primitives/io" }
+sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/common" }
 
 # client dependencies
-sc-client-api = { version = "2.0.0-alpha.1", path = "../../../client/api" }
-sc-client = { version = "0.8.0-alpha.1", path = "../../../client/" }
-sc-chain-spec = { version = "2.0.0-alpha.1", path = "../../../client/chain-spec" }
-sc-transaction-pool = { version = "2.0.0-alpha.1", path = "../../../client/transaction-pool" }
-sp-transaction-pool = { version = "2.0.0-alpha.1", path = "../../../primitives/transaction-pool" }
-sc-network = { version = "0.8.0-alpha.1", path = "../../../client/network" }
-sc-consensus-babe = { version = "0.8.0-alpha.1", path = "../../../client/consensus/babe" }
-grandpa = { version = "0.8.0-alpha.1", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
-sc-client-db = { version = "0.8.0-alpha.1", default-features = false, path = "../../../client/db" }
-sc-offchain = { version = "2.0.0-alpha.1", path = "../../../client/offchain" }
-sc-rpc = { version = "2.0.0-alpha.1", path = "../../../client/rpc" }
-sc-basic-authorship = { version = "0.8.0-alpha.1", path = "../../../client/basic-authorship" }
-sc-service = { version = "0.8.0-alpha.1", default-features = false, path = "../../../client/service" }
-sc-tracing = { version = "2.0.0-alpha.1", path = "../../../client/tracing" }
-sc-telemetry = { version = "2.0.0-alpha.1", path = "../../../client/telemetry" }
-sc-authority-discovery = { version = "0.8.0-alpha.1",  path = "../../../client/authority-discovery" }
+sc-client-api = { version = "2.0.0-alpha.2", path = "../../../client/api" }
+sc-client = { version = "0.8.0-alpha.2", path = "../../../client/" }
+sc-chain-spec = { version = "2.0.0-alpha.2", path = "../../../client/chain-spec" }
+sc-transaction-pool = { version = "2.0.0-alpha.2", path = "../../../client/transaction-pool" }
+sp-transaction-pool = { version = "2.0.0-alpha.2", path = "../../../primitives/transaction-pool" }
+sc-network = { version = "0.8.0-alpha.2", path = "../../../client/network" }
+sc-consensus-babe = { version = "0.8.0-alpha.2", path = "../../../client/consensus/babe" }
+grandpa = { version = "0.8.0-alpha.2", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
+sc-client-db = { version = "0.8.0-alpha.2", default-features = false, path = "../../../client/db" }
+sc-offchain = { version = "2.0.0-alpha.2", path = "../../../client/offchain" }
+sc-rpc = { version = "2.0.0-alpha.2", path = "../../../client/rpc" }
+sc-basic-authorship = { version = "0.8.0-alpha.2", path = "../../../client/basic-authorship" }
+sc-service = { version = "0.8.0-alpha.2", default-features = false, path = "../../../client/service" }
+sc-tracing = { version = "2.0.0-alpha.2", path = "../../../client/tracing" }
+sc-telemetry = { version = "2.0.0-alpha.2", path = "../../../client/telemetry" }
+sc-authority-discovery = { version = "0.8.0-alpha.2",  path = "../../../client/authority-discovery" }
 
 # frame dependencies
-pallet-indices = { version = "2.0.0-alpha.1", path = "../../../frame/indices" }
-pallet-timestamp = { version = "2.0.0-alpha.1", default-features = false, path = "../../../frame/timestamp" }
-pallet-contracts = { version = "2.0.0-alpha.1", path = "../../../frame/contracts" }
-frame-system = { version = "2.0.0-alpha.1", path = "../../../frame/system" }
-pallet-balances = { version = "2.0.0-alpha.1", path = "../../../frame/balances" }
-pallet-transaction-payment = { version = "2.0.0-alpha.1", path = "../../../frame/transaction-payment" }
-frame-support = { version = "2.0.0-alpha.1", default-features = false, path = "../../../frame/support" }
-pallet-im-online = { version = "2.0.0-alpha.1", default-features = false, path = "../../../frame/im-online" }
-pallet-authority-discovery = { version = "2.0.0-alpha.1",  path = "../../../frame/authority-discovery" }
+pallet-indices = { version = "2.0.0-alpha.2", path = "../../../frame/indices" }
+pallet-timestamp = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/timestamp" }
+pallet-contracts = { version = "2.0.0-alpha.2", path = "../../../frame/contracts" }
+frame-system = { version = "2.0.0-alpha.2", path = "../../../frame/system" }
+pallet-balances = { version = "2.0.0-alpha.2", path = "../../../frame/balances" }
+pallet-transaction-payment = { version = "2.0.0-alpha.2", path = "../../../frame/transaction-payment" }
+frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/support" }
+pallet-im-online = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/im-online" }
+pallet-authority-discovery = { version = "2.0.0-alpha.2",  path = "../../../frame/authority-discovery" }
 
 # node-specific dependencies
-node-runtime = { version = "2.0.0-alpha.1", path = "../runtime" }
-node-rpc = { version = "2.0.0-alpha.1", path = "../rpc" }
-node-primitives = { version = "2.0.0-alpha.1", path = "../primitives" }
-node-executor = { version = "2.0.0-alpha.1", path = "../executor" }
+node-runtime = { version = "2.0.0-alpha.2", path = "../runtime" }
+node-rpc = { version = "2.0.0-alpha.2", path = "../rpc" }
+node-primitives = { version = "2.0.0-alpha.2", path = "../primitives" }
+node-executor = { version = "2.0.0-alpha.2", path = "../executor" }
 
 # CLI-specific dependencies
-sc-cli = { version = "0.8.0-alpha.1", optional = true, path = "../../../client/cli" }
-frame-benchmarking-cli = { version = "2.0.0-alpha.1", optional = true, path = "../../../utils/frame/benchmarking-cli" }
-node-transaction-factory = { version = "0.8.0-alpha.1", optional = true, path = "../transaction-factory" }
-node-inspect = { version = "0.8.0-alpha.1", optional = true, path = "../inspect" }
+sc-cli = { version = "0.8.0-alpha.2", optional = true, path = "../../../client/cli" }
+frame-benchmarking-cli = { version = "2.0.0-alpha.2", optional = true, path = "../../../utils/frame/benchmarking-cli" }
+node-transaction-factory = { version = "0.8.0-alpha.2", optional = true, path = "../transaction-factory" }
+node-inspect = { version = "0.8.0-alpha.2", optional = true, path = "../inspect" }
 
 # WASM-specific dependencies
 wasm-bindgen = { version = "0.2.57", optional = true }
 wasm-bindgen-futures = { version = "0.4.7", optional = true }
-browser-utils = { path = "../../../utils/browser", optional = true , version = "0.8.0-alpha.1"}
+browser-utils = { path = "../../../utils/browser", optional = true , version = "0.8.0-alpha.2"}
 
 [dev-dependencies]
-sc-keystore = { version = "2.0.0-alpha.1", path = "../../../client/keystore" }
-sc-consensus-babe = { version = "0.8.0-alpha.1", features = ["test-helpers"], path = "../../../client/consensus/babe" }
-sc-consensus-epochs = { version = "0.8.0-alpha.1", path = "../../../client/consensus/epochs" }
+sc-keystore = { version = "2.0.0-alpha.2", path = "../../../client/keystore" }
+sc-consensus-babe = { version = "0.8.0-alpha.2", features = ["test-helpers"], path = "../../../client/consensus/babe" }
+sc-consensus-epochs = { version = "0.8.0-alpha.2", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0-dev", path = "../../../client/service/test" }
 futures = "0.3.1"
 tempfile = "3.1.0"
@@ -112,14 +112,14 @@ nix = "0.17"
 serde_json = "1.0"
 
 [build-dependencies]
-build-script-utils = { version = "2.0.0-alpha.1", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
+build-script-utils = { version = "2.0.0-alpha.2", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
 structopt = { version = "0.3.8", optional = true }
-node-transaction-factory = { version = "0.8.0-alpha.1", optional = true, path = "../transaction-factory" }
-node-inspect = { version = "0.8.0-alpha.1", optional = true, path = "../inspect" }
-frame-benchmarking-cli = { version = "2.0.0-alpha.1", optional = true, path = "../../../utils/frame/benchmarking-cli" }
+node-transaction-factory = { version = "0.8.0-alpha.2", optional = true, path = "../transaction-factory" }
+node-inspect = { version = "0.8.0-alpha.2", optional = true, path = "../inspect" }
+frame-benchmarking-cli = { version = "2.0.0-alpha.2", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 
 [build-dependencies.sc-cli]
-version = "0.8.0-alpha.1"
+version = "0.8.0-alpha.2"
 package = "sc-cli"
 path = "../../../client/cli"
 optional = true
