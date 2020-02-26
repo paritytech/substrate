@@ -76,16 +76,8 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 			Genesis::Runtime(gc) => gc.build_storage(),
 			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-<<<<<<< HEAD
-				children: children_map.into_iter().map(|(sk, child_content)| {
-					let child_info = ChildInfo::resolve_child_info(
-						child_content.child_type,
-						child_content.child_info.as_slice(),
-					).expect("chain spec contains correct content");
-=======
 				children_default: children_map.into_iter().map(|(storage_key, child_content)| {
 					let child_info = ChildInfo::new_default(storage_key.0.as_slice());
->>>>>>> child_trie_w3_change
 					(
 						storage_key.0,
 						StorageChild {
@@ -281,21 +273,6 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 				let top = storage.top.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
-<<<<<<< HEAD
-				let children = storage.children.into_iter()
-					.map(|(sk, child)| {
-						let (info, ci_type) = child.child_info.info();
-						(
-							StorageKey(sk),
-							ChildRawStorage {
-								data: child.data.into_iter()
-									.map(|(k, v)| (StorageKey(k), StorageData(v)))
-									.collect(),
-								child_info: info.to_vec(),
-								child_type: ci_type,
-							},
-					)})
-=======
 				let children_default = storage.children_default.into_iter()
 					.map(|(sk, child)| (
 						StorageKey(sk),
@@ -303,7 +280,6 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 							.map(|(k, v)| (StorageKey(k), StorageData(v)))
 							.collect(),
 					))
->>>>>>> child_trie_w3_change
 					.collect();
 
 				Genesis::Raw(RawGenesis { top, children_default })

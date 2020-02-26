@@ -315,15 +315,6 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(
 			self.block_or_best(block)
-<<<<<<< HEAD
-				.and_then(|block| self.client.child_storage_keys(
-					&BlockId::Hash(block),
-					&child_storage_key,
-					&ChildInfo::resolve_child_info(child_type, &child_info.0[..])
-						.ok_or_else(child_resolution_error)?,
-					&prefix,
-				))
-=======
 				.and_then(|block| {
 					let child_info = match ChildType::new(child_type) {
 						Some(ChildType::ParentKeyId) => ChildInfo::new_default_from_vec(storage_key.0),
@@ -335,7 +326,6 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 						&prefix,
 					)
 				})
->>>>>>> child_trie_w3_change
 				.map_err(client_err)))
 	}
 
@@ -348,15 +338,6 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	) -> FutureResult<Option<StorageData>> {
 		Box::new(result(
 			self.block_or_best(block)
-<<<<<<< HEAD
-				.and_then(|block| self.client.child_storage(
-					&BlockId::Hash(block),
-					&child_storage_key,
-					&ChildInfo::resolve_child_info(child_type, &child_info.0[..])
-						.ok_or_else(child_resolution_error)?,
-					&key,
-				))
-=======
 				.and_then(|block| {
 					let child_info = match ChildType::new(child_type) {
 						Some(ChildType::ParentKeyId) => ChildInfo::new_default_from_vec(storage_key.0),
@@ -368,7 +349,6 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 						&key,
 					)
 				})
->>>>>>> child_trie_w3_change
 				.map_err(client_err)))
 	}
 
@@ -381,15 +361,6 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(result(
 			self.block_or_best(block)
-<<<<<<< HEAD
-				.and_then(|block| self.client.child_storage_hash(
-					&BlockId::Hash(block),
-					&child_storage_key,
-					&ChildInfo::resolve_child_info(child_type, &child_info.0[..])
-						.ok_or_else(child_resolution_error)?,
-					&key,
-				))
-=======
 				.and_then(|block| {
 					let child_info = match ChildType::new(child_type) {
 						Some(ChildType::ParentKeyId) => ChildInfo::new_default_from_vec(storage_key.0),
@@ -401,7 +372,6 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 						&key,
 					)
 				})
->>>>>>> child_trie_w3_change
 				.map_err(client_err)))
 	}
 

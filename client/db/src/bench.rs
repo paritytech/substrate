@@ -146,10 +146,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -162,10 +158,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn exists_child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
@@ -178,10 +170,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn next_child_storage_key(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -202,10 +190,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		f: F,
 	) {
@@ -216,10 +200,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
@@ -237,10 +217,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn child_storage_root<I>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction) where
@@ -259,10 +235,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 
 	fn child_keys(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
@@ -283,7 +255,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 			let mut keyspace = crate::Keyspaced::new(&[]);
 			for (info, mut updates) in transaction.into_iter() {
 				// child info with strong unique id are using the same state-db with prefixed key
-				if info.child_type() != ChildType::CryptoUniqueId {
+				if info.child_type() != ChildType::ParentKeyId {
 					// Unhandled child kind
 					unimplemented!(
 						"Data for {:?} without a backend implementation",

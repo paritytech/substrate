@@ -312,11 +312,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		self.changes_trie_config_update = Some(changes_trie_config);
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
-<<<<<<< HEAD
-		let mut storage: HashMap<Option<(Vec<u8>, ChildInfo)>, _> = HashMap::new();
-=======
 		let mut storage: HashMap<Option<ChildInfo>, _> = HashMap::new();
->>>>>>> child_trie_w3_change
 		storage.insert(None, input.top);
 
 		// create a list of children keys to re-compute roots for
@@ -390,10 +386,6 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> ClientResult<Option<Vec<u8>>> {
@@ -414,10 +406,6 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn next_child_storage_key(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -446,10 +434,6 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn for_keys_in_child_storage<A: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		action: A,
 	) {
@@ -462,10 +446,6 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn for_child_keys_with_prefix<A: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		action: A,
@@ -490,10 +470,6 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn child_storage_root<I>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)

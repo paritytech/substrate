@@ -129,12 +129,7 @@ impl Externalities for BasicExternalities {
 
 	fn child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: ChildStorageKey,
-		_child_info: &ChildInfo,
-=======
 		child_info: &ChildInfo,
->>>>>>> child_trie_w3_change
 		key: &[u8],
 	) -> Option<StorageValue> {
 		self.inner.children_default.get(child_info.storage_key())
@@ -143,10 +138,6 @@ impl Externalities for BasicExternalities {
 
 	fn child_storage_hash(
 		&self,
-<<<<<<< HEAD
-		storage_key: ChildStorageKey,
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
@@ -155,10 +146,6 @@ impl Externalities for BasicExternalities {
 
 	fn original_child_storage_hash(
 		&self,
-<<<<<<< HEAD
-		storage_key: ChildStorageKey,
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
@@ -167,10 +154,6 @@ impl Externalities for BasicExternalities {
 
 	fn original_child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: ChildStorageKey,
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
@@ -184,12 +167,7 @@ impl Externalities for BasicExternalities {
 
 	fn next_child_storage_key(
 		&self,
-<<<<<<< HEAD
-		storage_key: ChildStorageKey,
-		_child_info: &ChildInfo,
-=======
 		child_info: &ChildInfo,
->>>>>>> child_trie_w3_change
 		key: &[u8],
 	) -> Option<StorageKey> {
 		let range = (Bound::Excluded(key), Bound::Unbounded);
@@ -211,10 +189,6 @@ impl Externalities for BasicExternalities {
 
 	fn place_child_storage(
 		&mut self,
-<<<<<<< HEAD
-		storage_key: ChildStorageKey,
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: StorageKey,
 		value: Option<StorageValue>,
@@ -233,12 +207,7 @@ impl Externalities for BasicExternalities {
 
 	fn kill_child_storage(
 		&mut self,
-<<<<<<< HEAD
-		storage_key: ChildStorageKey,
-		_child_info: &ChildInfo,
-=======
 		child_info: &ChildInfo,
->>>>>>> child_trie_w3_change
 	) {
 		self.inner.children_default.remove(child_info.storage_key());
 	}
@@ -265,12 +234,7 @@ impl Externalities for BasicExternalities {
 
 	fn clear_child_prefix(
 		&mut self,
-<<<<<<< HEAD
-		storage_key: ChildStorageKey,
-		_child_info: &ChildInfo,
-=======
 		child_info: &ChildInfo,
->>>>>>> child_trie_w3_change
 		prefix: &[u8],
 	) {
 		if let Some(child) = self.inner.children_default.get_mut(child_info.storage_key()) {
@@ -317,11 +281,7 @@ impl Externalities for BasicExternalities {
 			let delta = child.data.clone().into_iter().map(|(k, v)| (k, Some(v)));
 
 			InMemoryBackend::<Blake2Hasher>::default()
-<<<<<<< HEAD
-				.child_storage_root(storage_key.as_ref(), &child.child_info, delta).0
-=======
 				.child_storage_root(&child.child_info, delta).0
->>>>>>> child_trie_w3_change
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}.encode()
@@ -374,42 +334,18 @@ mod tests {
 
 	#[test]
 	fn children_works() {
-<<<<<<< HEAD
-		let child_info1 = ChildInfo::new_default(b"unique_id_1");
-		let child_storage = b":child_storage:default:test".to_vec();
-
-=======
 		let child_info = ChildInfo::new_default(b"storage_key");
 		let child_info = &child_info;
->>>>>>> child_trie_w3_change
 		let mut ext = BasicExternalities::new(Storage {
 			top: Default::default(),
 			children_default: map![
 				child_info.storage_key().to_vec() => StorageChild {
 					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
-<<<<<<< HEAD
-					child_info: child_info1.clone(),
-=======
-					child_info: child_info.to_owned(),
->>>>>>> child_trie_w3_change
+					child_info: child_info.clone(),
 				}
 			]
 		});
 
-<<<<<<< HEAD
-		let child = || ChildStorageKey::from_vec(child_storage.clone()).unwrap();
-
-		assert_eq!(ext.child_storage(child(), &child_info1, b"doe"), Some(b"reindeer".to_vec()));
-
-		ext.set_child_storage(child(), &child_info1, b"dog".to_vec(), b"puppy".to_vec());
-		assert_eq!(ext.child_storage(child(), &child_info1, b"dog"), Some(b"puppy".to_vec()));
-
-		ext.clear_child_storage(child(), &child_info1, b"dog");
-		assert_eq!(ext.child_storage(child(), &child_info1, b"dog"), None);
-
-		ext.kill_child_storage(child(), &child_info1);
-		assert_eq!(ext.child_storage(child(), &child_info1, b"doe"), None);
-=======
 		assert_eq!(ext.child_storage(child_info, b"doe"), Some(b"reindeer".to_vec()));
 
 		ext.set_child_storage(child_info, b"dog".to_vec(), b"puppy".to_vec());
@@ -420,7 +356,6 @@ mod tests {
 
 		ext.kill_child_storage(child_info);
 		assert_eq!(ext.child_storage(child_info, b"doe"), None);
->>>>>>> child_trie_w3_change
 	}
 
 	#[test]

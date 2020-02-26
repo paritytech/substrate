@@ -539,10 +539,6 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -579,10 +575,6 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn exists_child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
@@ -591,10 +583,6 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		f: F,
 	) {
@@ -607,10 +595,6 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn next_child_storage_key(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -627,10 +611,6 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
@@ -647,10 +627,6 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn child_storage_root<I>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
@@ -670,10 +646,6 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn child_keys(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {

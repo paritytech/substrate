@@ -136,76 +136,6 @@ pub mod well_known_keys {
 	}
 }
 
-<<<<<<< HEAD
-/// A wrapper around a child storage key.
-///
-/// This wrapper ensures that the child storage key is correct and properly used. It is
-/// impossible to create an instance of this struct without providing a correct `storage_key`.
-pub struct ChildStorageKey<'a> {
-	storage_key: Cow<'a, [u8]>,
-}
-
-impl<'a> ChildStorageKey<'a> {
-	/// Create new instance of `Self`.
-	fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
-		if well_known_keys::is_child_trie_key_valid(&storage_key) {
-			Some(ChildStorageKey { storage_key })
-		} else {
-			None
-		}
-	}
-
-	/// Create a new `ChildStorageKey` from a vector.
-	///
-	/// `storage_key` need to start with `:child_storage:default:`
-	/// See `is_child_trie_key_valid` for more details.
-	pub fn from_vec(key: Vec<u8>) -> Option<Self> {
-		Self::new(Cow::Owned(key))
-	}
-
-	/// Create a new `ChildStorageKey` from a slice.
-	///
-	/// `storage_key` need to start with `:child_storage:default:`
-	/// See `is_child_trie_key_valid` for more details.
-	pub fn from_slice(key: &'a [u8]) -> Option<Self> {
-		Self::new(Cow::Borrowed(key))
-	}
-
-	/// Get access to the byte representation of the storage key.
-	///
-	/// This key is guaranteed to be correct.
-	pub fn as_ref(&self) -> &[u8] {
-		&*self.storage_key
-	}
-
-	/// Destruct this instance into an owned vector that represents the storage key.
-	///
-	/// This key is guaranteed to be correct.
-	pub fn into_owned(self) -> Vec<u8> {
-		self.storage_key.into_owned()
-	}
-
-	/// Return true if the variable part of the key is empty.
-	pub fn is_empty(&self) -> bool {
-		well_known_keys::is_child_trie_key_empty(&*self.storage_key)
-	}
-
-}
-
-
-/// Information related to a child state.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ChildInfo {
-	Default(ChildTrie),
-}
-
-impl ChildInfo {
-	/// Create a new child trie information for default
-	/// child type.
-	pub fn new_default(unique_id: &[u8]) -> Self {
-		ChildInfo::Default(ChildTrie {
-			data: unique_id.to_vec(),
-=======
 /// Information related to a child state.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
@@ -227,7 +157,6 @@ impl ChildInfo {
 	pub fn new_default_from_vec(storage_key: Vec<u8>) -> Self {
 		ChildInfo::ParentKeyId(ChildTrieParentKeyId {
 			data: storage_key,
->>>>>>> child_trie_w3_change
 		})
 	}
 
@@ -235,20 +164,7 @@ impl ChildInfo {
 	/// are not compatible.
 	pub fn try_update(&mut self, other: &ChildInfo) -> bool {
 		match self {
-<<<<<<< HEAD
-			ChildInfo::Default(child_trie) => child_trie.try_update(other),
-=======
 			ChildInfo::ParentKeyId(child_trie) => child_trie.try_update(other),
->>>>>>> child_trie_w3_change
-		}
-	}
-
-	/// Create child info from a linear byte packed value and a given type. 
-<<<<<<< HEAD
-	pub fn resolve_child_info(child_type: u32, data: &[u8]) -> Option<Self> {
-		match ChildType::new(child_type) {
-			Some(ChildType::CryptoUniqueId) => Some(ChildInfo::new_default(data)),
-			None => None,
 		}
 	}
 
@@ -262,8 +178,11 @@ impl ChildInfo {
 	/// 0 length unique id.
 	pub fn is_top_trie(&self) -> bool {
 		match self {
-			ChildInfo::Default(ChildTrie { data }) => data.len() == 0
-=======
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) => data.len() == 0,
+		}
+	}
+
+	/// Create child info from a linear byte packed value and a given type. 
 	pub fn resolve_child_info(child_type: u32, info: &[u8]) -> Option<Self> {
 		match ChildType::new(child_type) {
 			Some(ChildType::ParentKeyId) => {
@@ -273,7 +192,6 @@ impl ChildInfo {
 				Some(Self::new_default(info))
 			},
 			None => None,
->>>>>>> child_trie_w3_change
 		}
 	}
 
@@ -316,12 +234,6 @@ impl ChildInfo {
 		}
 	}
 
-<<<<<<< HEAD
-	/// Return type for child trie.
-	pub fn child_type(&self) -> ChildType {
-		match self {
-			ChildInfo::Default(..) => ChildType::CryptoUniqueId,
-=======
 	/// Return a the full location in the direct parent of
 	/// this trie.
 	pub fn prefixed_storage_key(&self) -> Vec<u8> {
@@ -349,7 +261,6 @@ impl ChildInfo {
 	pub fn child_type(&self) -> ChildType {
 		match self {
 			ChildInfo::ParentKeyId(..) => ChildType::ParentKeyId,
->>>>>>> child_trie_w3_change
 		}
 	}
 }
@@ -367,14 +278,6 @@ pub enum ChildType {
 }
 
 impl ChildType {
-<<<<<<< HEAD
-	fn new(repr: u32) -> Option<ChildType> {
-		Some(match repr {
-			r if r == ChildType::CryptoUniqueId as u32 => ChildType::CryptoUniqueId,
-			_ => return None,
-		})
-	}
-=======
 	/// Try to get a child type from its `u32` representation.
 	pub fn new(repr: u32) -> Option<ChildType> {
 		Some(match repr {
@@ -410,24 +313,9 @@ impl ChildType {
 			&ChildType::ParentKeyId => DEFAULT_CHILD_TYPE_PARENT_PREFIX,
 		}
 	}
->>>>>>> child_trie_w3_change
-}
-/// A child trie of default type.
-<<<<<<< HEAD
-/// Default is the same implementation as the top trie.
-/// It share its trie node storage with any kind of key,
-/// and its unique id needs to be collision free (eg strong
-/// crypto hash).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct ChildTrie {
-	/// Data containing unique id.
-	/// Unique id must but unique and free of any possible key collision
-	/// (depending on its storage behavior).
-	data: Vec<u8>,
 }
 
-impl ChildTrie {
-=======
+/// A child trie of default type.
 /// It uses the same default implementation as the top trie,
 /// top trie being a child trie with no keyspace and no storage key.
 /// Its keyspace is the variable (unprefixed) part of its storage key.
@@ -442,7 +330,6 @@ pub struct ChildTrieParentKeyId {
 }
 
 impl ChildTrieParentKeyId {
->>>>>>> child_trie_w3_change
 	/// Try to update with another instance, return false if both instance
 	/// are not compatible.
 	fn try_update(&mut self, other: &ChildInfo) -> bool {
@@ -452,7 +339,6 @@ impl ChildTrieParentKeyId {
 	}
 }
 
-<<<<<<< HEAD
 #[cfg(feature = "std")]
 #[derive(Clone, PartialEq, Eq, Debug)]
 /// Type for storing a map of child trie related information.
@@ -542,7 +428,8 @@ impl<T> IntoIterator for ChildrenMap<T> {
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()
 	}
-=======
+}
+
 const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default:";
 
 #[test]
@@ -551,5 +438,4 @@ fn test_prefix_default_child_info() {
 	let prefix = child_info.child_type().parent_prefix();
 	assert!(prefix.starts_with(well_known_keys::CHILD_STORAGE_KEY_PREFIX));
 	assert!(prefix.starts_with(DEFAULT_CHILD_TYPE_PARENT_PREFIX));
->>>>>>> child_trie_w3_change
 }

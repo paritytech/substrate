@@ -514,29 +514,10 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-<<<<<<< HEAD
-		let proof =
-			if let Some(info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
-				match self.chain.read_child_proof(&block, &request.storage_key, &info, &request.keys) {
-					Ok(proof) => proof,
-					Err(error) => {
-						log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",
-							request_id,
-							peer,
-							request.storage_key.to_hex::<String>(),
-							fmt_keys(request.keys.first(), request.keys.last()),
-							request.block,
-							error);
-						StorageProof::empty()
-					}
-				}
-			} else {
-=======
 		let child_info = ChildInfo::new_default(&request.storage_key);
 		let proof = match self.chain.read_child_proof(&block, &child_info, &request.keys) {
 			Ok(proof) => proof,
 			Err(error) => {
->>>>>>> child_trie_w3_change
 				log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",
 					request_id,
 					peer,
@@ -1150,11 +1131,6 @@ mod tests {
 	use super::{Event, LightClientHandler, Request, OutboundProtocol, PeerStatus};
 	use void::Void;
 
-<<<<<<< HEAD
-	const CHILD_UUID: &[u8] = b"foobarbaz";
-
-=======
->>>>>>> child_trie_w3_change
 	type Block = sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
 	type Handler = LightClientHandler<Block>;
 	type Swarm = libp2p::swarm::Swarm<Handler>;
@@ -1645,11 +1621,6 @@ mod tests {
 
 	#[test]
 	fn receives_remote_read_child_response() {
-<<<<<<< HEAD
-		let child_info = ChildInfo::new_default(CHILD_UUID);
-		let info = child_info.info();
-=======
->>>>>>> child_trie_w3_change
 		let mut chan = oneshot::channel();
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
@@ -1751,11 +1722,6 @@ mod tests {
 
 	#[test]
 	fn send_receive_read_child() {
-<<<<<<< HEAD
-		let child_info = ChildInfo::new_default(CHILD_UUID);
-		let info = child_info.info();
-=======
->>>>>>> child_trie_w3_change
 		let chan = oneshot::channel();
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),

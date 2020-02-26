@@ -277,7 +277,7 @@ pub enum DeferredAction<T: Trait> {
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub parent: Option<&'a ExecutionContext<'a, T, V, L>>,
 	pub self_account: T::AccountId,
-	pub self_trie_info: Option<(TrieId, ChildInfo)>,
+	pub self_trie_info: Option<ChildInfo>,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 	pub deferred: Vec<DeferredAction<T>>,
@@ -314,7 +314,7 @@ where
 		}
 	}
 
-	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_info: Option<(TrieId, ChildInfo)>)
+	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_info: Option<ChildInfo>)
 		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
@@ -531,8 +531,7 @@ where
 	{
 		let (output, change_set, deferred) = {
 			let mut nested = self.nested(dest, trie_id.map(|trie_id| {
-				let child_info = crate::trie_unique_id(&trie_id);
-				(trie_id, child_info)
+				crate::trie_unique_id(&trie_id)
 			}));
 			let output = func(&mut nested)?;
 			(output, nested.overlay.into_change_set(), nested.deferred)
@@ -684,8 +683,7 @@ where
 	type T = T;
 
 	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
-		let trie_id = self.ctx.self_trie_info.as_ref()
-			.map(|info| ((&info.0, &info.1)));
+		let trie_id = self.ctx.self_trie_info.as_ref();
 		self.ctx.overlay.get_storage(
 			&self.ctx.self_account,
 			trie_id,

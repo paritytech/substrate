@@ -17,7 +17,7 @@
 //! Auxiliaries to help with managing partial changes to accounts state.
 
 use super::{
-	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait, TrieId,
+	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait,
 	TrieIdGenerator,
 };
 use crate::exec::StorageKey;
@@ -26,13 +26,8 @@ use sp_std::collections::btree_map::{BTreeMap, Entry};
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Zero};
-<<<<<<< HEAD
-use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
-use frame_support::{storage::child, StorageMap, storage::child::ChildInfo};
-=======
 use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance};
-use frame_support::{storage::child, StorageMap};
->>>>>>> child_trie_w3_change
+use frame_support::{storage::child, StorageMap, storage::child::ChildInfo};
 use frame_system;
 
 // Note: we don't provide Option<Contract> because we can't create
@@ -116,7 +111,7 @@ pub trait AccountDb<T: Trait> {
 	fn get_storage(
 		&self,
 		account: &T::AccountId,
-		trie_id: Option<(&TrieId, &ChildInfo)>,
+		trie_id: Option<&ChildInfo>,
 		location: &StorageKey
 	) -> Option<Vec<u8>>;
 	/// If account has an alive contract then return the code hash associated.
@@ -135,14 +130,10 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(
 		&self,
 		_account: &T::AccountId,
-		trie_id: Option<(&TrieId, &ChildInfo)>,
+		trie_id: Option<&ChildInfo>,
 		location: &StorageKey
 	) -> Option<Vec<u8>> {
-<<<<<<< HEAD
-		trie_id.and_then(|(id, child_info)| child::get_raw(id, child_info, &blake2_256(location)))
-=======
-		trie_id.and_then(|id| child::get_raw(&crate::trie_unique_id(&id[..]), &blake2_256(location)))
->>>>>>> child_trie_w3_change
+		trie_id.and_then(|child_info| child::get_raw(child_info, &blake2_256(location)))
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
@@ -189,21 +180,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					(false, Some(info), _) => info,
 					// Existing contract is being removed.
 					(true, Some(info), None) => {
-<<<<<<< HEAD
-						child::kill_storage(&info.trie_id, &info.child_trie_unique_id());
-=======
 						child::kill_storage(&info.child_trie_unique_id());
->>>>>>> child_trie_w3_change
 						<ContractInfoOf<T>>::remove(&address);
 						continue;
 					}
 					// Existing contract is being replaced by a new one.
 					(true, Some(info), Some(code_hash)) => {
-<<<<<<< HEAD
-						child::kill_storage(&info.trie_id, &info.child_trie_unique_id());
-=======
 						child::kill_storage(&info.child_trie_unique_id());
->>>>>>> child_trie_w3_change
 						AliveContractInfo::<T> {
 							code_hash,
 							storage_size: T::StorageSizeOffset::get(),
@@ -243,27 +226,16 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				let child_info = &new_info.child_trie_unique_id();
 				for (k, v) in changed.storage.into_iter() {
 					if let Some(value) = child::get_raw(
-<<<<<<< HEAD
-						&new_info.trie_id[..],
 						child_info,
-=======
-						&new_info.child_trie_unique_id(),
->>>>>>> child_trie_w3_change
 						&blake2_256(&k),
 					) {
 						new_info.storage_size -= value.len() as u32;
 					}
 					if let Some(value) = v {
 						new_info.storage_size += value.len() as u32;
-<<<<<<< HEAD
-						child::put_raw(&new_info.trie_id[..], child_info, &blake2_256(&k), &value[..]);
+						child::put_raw(child_info, &blake2_256(&k), &value[..]);
 					} else {
-						child::kill(&new_info.trie_id[..], child_info, &blake2_256(&k));
-=======
-						child::put_raw(&new_info.child_trie_unique_id(), &blake2_256(&k), &value[..]);
-					} else {
-						child::kill(&new_info.child_trie_unique_id(), &blake2_256(&k));
->>>>>>> child_trie_w3_change
+						child::kill(child_info, &blake2_256(&k));
 					}
 				}
 
@@ -368,7 +340,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 	fn get_storage(
 		&self,
 		account: &T::AccountId,
-		trie_id: Option<(&TrieId, &ChildInfo)>,
+		trie_id: Option<&ChildInfo>,
 		location: &StorageKey
 	) -> Option<Vec<u8>> {
 		self.local

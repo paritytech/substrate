@@ -195,10 +195,6 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// Panics if the key is empty.
 	fn add_extra_child_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		mut self,
-<<<<<<< HEAD
-		storage_key: SK,
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: K,
 		value: V,

@@ -1517,27 +1517,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
-<<<<<<< HEAD
-		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
-			match self.context_data.chain.read_child_proof(
-				&request.block,
-				&request.storage_key,
-				&child_info,
-				&request.keys,
-			) {
-				Ok(proof) => proof,
-				Err(error) => {
-					trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
-						request.id,
-						who,
-						request.storage_key.to_hex::<String>(),
-						keys_str(),
-						request.block,
-						error
-					);
-					StorageProof::empty()
-				}
-=======
 		let child_info = ChildInfo::new_default(&request.storage_key);
 		let proof = match self.context_data.chain.read_child_proof(
 			&request.block,
@@ -1555,7 +1534,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					error
 				);
 				StorageProof::empty()
->>>>>>> child_trie_w3_change
 			}
 		};
 		self.send_message(

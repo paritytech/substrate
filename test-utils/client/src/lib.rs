@@ -131,11 +131,6 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		mut self,
 		child_info: &ChildInfo,
 		key: impl AsRef<[u8]>,
-<<<<<<< HEAD
-		child_key: impl AsRef<[u8]>,
-		child_info: &ChildInfo,
-=======
->>>>>>> child_trie_w3_change
 		value: impl AsRef<[u8]>,
 	) -> Self {
 		let storage_key = child_info.storage_key();

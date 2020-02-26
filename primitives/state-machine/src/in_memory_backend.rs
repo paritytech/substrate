@@ -24,17 +24,10 @@ use crate::{
 use std::{error, fmt, collections::{BTreeMap, HashMap}, marker::PhantomData, ops};
 use sp_core::{Hasher, InnerHasher};
 use sp_trie::{
-<<<<<<< HEAD
-	MemoryDB, default_child_trie_root, TrieConfiguration, trie_types::Layout,
-};
-use codec::Codec;
-use sp_core::storage::{ChildInfo, Storage};
-=======
-	MemoryDB, child_trie_root, empty_child_trie_root, TrieConfiguration, trie_types::Layout,
+	MemoryDB, empty_child_trie_root, TrieConfiguration, trie_types::Layout,
 };
 use codec::Codec;
 use sp_core::storage::{ChildInfo, ChildType, Storage};
->>>>>>> child_trie_w3_change
 
 /// Error impossible.
 // FIXME: use `!` type when stabilized. https://github.com/rust-lang/rust/issues/35121
@@ -54,11 +47,7 @@ impl error::Error for Void {
 /// In-memory backend. Fully recomputes tries each time `as_trie_backend` is called but useful for
 /// tests and proof checking.
 pub struct InMemory<H: Hasher> {
-<<<<<<< HEAD
-	inner: HashMap<Option<(StorageKey, ChildInfo)>, BTreeMap<StorageKey, StorageValue>>,
-=======
 	inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>,
->>>>>>> child_trie_w3_change
 	// This field is only needed for returning reference in `as_trie_backend`.
 	trie: Option<TrieBackend<MemoryDB<H>, H>>,
 	_hasher: PhantomData<H>,
@@ -99,11 +88,7 @@ impl<H: Hasher> PartialEq for InMemory<H> {
 impl<H: Hasher> InMemory<H> {
 	/// Copy the state, with applied updates
 	pub fn update<
-<<<<<<< HEAD
-		T: IntoIterator<Item = (Option<(StorageKey, ChildInfo)>, StorageCollection)>
-=======
 		T: IntoIterator<Item = (Option<ChildInfo>, StorageCollection)>
->>>>>>> child_trie_w3_change
 	>(
 		&self,
 		changes: T,
@@ -122,17 +107,10 @@ impl<H: Hasher> InMemory<H> {
 	}
 }
 
-<<<<<<< HEAD
-impl<H: Hasher> From<HashMap<Option<(StorageKey, ChildInfo)>, BTreeMap<StorageKey, StorageValue>>>
-	for InMemory<H>
-{
-	fn from(inner: HashMap<Option<(StorageKey, ChildInfo)>, BTreeMap<StorageKey, StorageValue>>) -> Self {
-=======
 impl<H: Hasher> From<HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>>
 	for InMemory<H>
 {
 	fn from(inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>) -> Self {
->>>>>>> child_trie_w3_change
 		InMemory {
 			inner,
 			trie: None,
@@ -143,13 +121,8 @@ impl<H: Hasher> From<HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValu
 
 impl<H: Hasher> From<Storage> for InMemory<H> {
 	fn from(inners: Storage) -> Self {
-<<<<<<< HEAD
-		let mut inner: HashMap<Option<(StorageKey, ChildInfo)>, BTreeMap<StorageKey, StorageValue>>
-			= inners.children.into_iter().map(|(k, c)| (Some((k, c.child_info)), c.data)).collect();
-=======
 		let mut inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>
 			= inners.children_default.into_iter().map(|(_k, c)| (Some(c.child_info), c.data)).collect();
->>>>>>> child_trie_w3_change
 		inner.insert(None, inners.top);
 		InMemory {
 			inner,
@@ -171,21 +144,12 @@ impl<H: Hasher> From<BTreeMap<StorageKey, StorageValue>> for InMemory<H> {
 	}
 }
 
-<<<<<<< HEAD
-impl<H: Hasher> From<Vec<(Option<(StorageKey, ChildInfo)>, StorageCollection)>>
-	for InMemory<H> {
-	fn from(
-		inner: Vec<(Option<(StorageKey, ChildInfo)>, StorageCollection)>,
-	) -> Self {
-		let mut expanded: HashMap<Option<(StorageKey, ChildInfo)>, BTreeMap<StorageKey, StorageValue>>
-=======
 impl<H: Hasher> From<Vec<(Option<ChildInfo>, StorageCollection)>>
 	for InMemory<H> {
 	fn from(
 		inner: Vec<(Option<ChildInfo>, StorageCollection)>,
 	) -> Self {
 		let mut expanded: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>
->>>>>>> child_trie_w3_change
 			= HashMap::new();
 		for (child_info, key_values) in inner {
 			let entry = expanded.entry(child_info).or_default();
@@ -200,28 +164,16 @@ impl<H: Hasher> From<Vec<(Option<ChildInfo>, StorageCollection)>>
 }
 
 impl<H: Hasher> InMemory<H> {
-<<<<<<< HEAD
-	/// child storage key iterator
-	pub fn child_storage_keys(&self) -> impl Iterator<Item=(&[u8], &ChildInfo)> {
-		self.inner.iter().filter_map(|item|
-			item.0.as_ref().map(|v|(&v.0[..], &v.1))
-		)
-=======
 	/// Child storage infos iterator.
 	pub fn child_storage_infos(&self) -> impl Iterator<Item = &ChildInfo> {
 		self.inner.iter().filter_map(|item| item.0.as_ref())
->>>>>>> child_trie_w3_change
 	}
 }
 
 impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	type Error = Void;
 	type Transaction = Vec<(
-<<<<<<< HEAD
-		Option<(StorageKey, ChildInfo)>,
-=======
 		Option<ChildInfo>,
->>>>>>> child_trie_w3_change
 		StorageCollection,
 	)>;
 	type TrieBackendStorage = MemoryDB<H>;
@@ -232,10 +184,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 
 	fn child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
@@ -259,10 +207,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		mut f: F,
 	) {
@@ -272,10 +216,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
@@ -307,10 +247,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 
 	fn child_storage_root<I>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
@@ -326,11 +262,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
-<<<<<<< HEAD
 		let root = Layout::<H>::trie_root(
-=======
-		let root = child_trie_root::<Layout<H>, _, _, _>(
->>>>>>> child_trie_w3_change
 			existing_pairs.chain(transaction.iter().cloned())
 				.collect::<HashMap<_, _>>()
 				.into_iter()
@@ -356,10 +288,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 
 	fn next_child_storage_key(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
@@ -386,10 +314,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 
 	fn child_keys(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<StorageKey> {
@@ -435,12 +359,8 @@ mod tests {
 	#[test]
 	fn in_memory_with_child_trie_only() {
 		let storage = InMemory::<sp_core::Blake2Hasher>::default();
-<<<<<<< HEAD
-		let child_info = ChildInfo::new_default(b"unique_id_1");
-=======
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
->>>>>>> child_trie_w3_change
 		let mut storage = storage.update(
 			vec![(
 				Some(child_info.clone()),
@@ -448,11 +368,7 @@ mod tests {
 			)]
 		);
 		let trie_backend = storage.as_trie_backend().unwrap();
-<<<<<<< HEAD
-		assert_eq!(trie_backend.child_storage(b"1", &child_info, b"2").unwrap(),
-=======
 		assert_eq!(trie_backend.child_storage(child_info, b"2").unwrap(),
->>>>>>> child_trie_w3_change
 			Some(b"3".to_vec()));
 		let storage_key = child_info.prefixed_storage_key();
 		assert!(trie_backend.storage(storage_key.as_slice()).unwrap().is_some());

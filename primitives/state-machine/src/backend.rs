@@ -20,11 +20,7 @@ use log::warn;
 use sp_core::{Hasher, InnerHasher};
 use codec::Encode;
 
-<<<<<<< HEAD
 use sp_core::storage::{ChildInfo, ChildrenMap};
-=======
-use sp_core::storage::ChildInfo;
->>>>>>> child_trie_w3_change
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 use crate::{
 	trie_backend::TrieBackend,
@@ -57,10 +53,6 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Get keyed child storage or None if there is nothing associated.
 	fn child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error>;
@@ -68,10 +60,6 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Get child keyed storage value hash or None if there is nothing associated.
 	fn child_storage_hash(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<H::Out>, Self::Error> {
@@ -86,10 +74,6 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// true if a key exists in child storage.
 	fn exists_child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
@@ -102,10 +86,6 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Return the next key in child storage in lexicographic order or `None` if there is no value.
 	fn next_child_storage_key(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8]
 	) -> Result<Option<StorageKey>, Self::Error>;
@@ -113,10 +93,6 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		f: F,
 	);
@@ -136,10 +112,6 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// call `f` for each of those keys.
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
@@ -158,10 +130,6 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// is true if child storage root equals default storage root.
 	fn child_storage_root<I>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
@@ -182,10 +150,6 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Get all keys of child storage with given prefix
 	fn child_keys(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<StorageKey> {
@@ -211,11 +175,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	where
 		I1: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		I2i: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-<<<<<<< HEAD
-		I2: IntoIterator<Item=(StorageKey, I2i, ChildInfo)>,
-=======
 		I2: IntoIterator<Item=(ChildInfo, I2i)>,
->>>>>>> child_trie_w3_change
 		H::Out: Ord + Encode,
 	{
 		let mut txs: Self::Transaction = Default::default();
@@ -224,30 +184,21 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		// child first
 		for (child_info, child_delta) in child_deltas {
 			let (child_root, empty, child_txs) =
-<<<<<<< HEAD
-				self.child_storage_root(&storage_key[..], &child_info, child_delta);
-			txs.consolidate(child_txs);
-			if empty {
-				if return_child_roots {
-					result_child_roots.push((storage_key.clone(), None));
-				}
-				child_roots.push((storage_key, None));
-			} else {
-				if return_child_roots {
-					child_roots.push((storage_key.clone(), Some(child_root.encode())));
-					result_child_roots.push((storage_key, Some(child_root)));
-				} else {
-					child_roots.push((storage_key, Some(child_root.encode())));
-				}
-=======
 				self.child_storage_root(&child_info, child_delta);
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
+				if return_child_roots {
+					result_child_roots.push((prefixed_storage_key.clone(), None));
+				}
 				child_roots.push((prefixed_storage_key, None));
 			} else {
-				child_roots.push((prefixed_storage_key, Some(child_root.encode())));
->>>>>>> child_trie_w3_change
+				if return_child_roots {
+					child_roots.push((prefixed_storage_key.clone(), Some(child_root.encode())));
+					result_child_roots.push((prefixed_storage_key, Some(child_root)));
+				} else {
+					child_roots.push((prefixed_storage_key, Some(child_root.encode())));
+				}
 			}
 		}
 		let (root, parent_txs) = self.storage_root(
@@ -287,10 +238,6 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
@@ -299,10 +246,6 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		f: F,
 	) {
@@ -315,10 +258,6 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn next_child_storage_key(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
@@ -331,10 +270,6 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
@@ -352,10 +287,6 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn child_storage_root<I>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
@@ -392,11 +323,7 @@ impl Consolidate for () {
 }
 
 impl Consolidate for Vec<(
-<<<<<<< HEAD
-		Option<(StorageKey, ChildInfo)>,
-=======
 		Option<ChildInfo>,
->>>>>>> child_trie_w3_change
 		StorageCollection,
 	)> {
 	fn consolidate(&mut self, mut other: Self) {

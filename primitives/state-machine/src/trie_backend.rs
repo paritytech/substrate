@@ -16,17 +16,10 @@
 
 //! Trie-based state machine backend.
 use log::{warn, debug};
-<<<<<<< HEAD
 use sp_core::Hasher;
-use sp_trie::{Trie, delta_trie_root, default_child_trie_root};
+use sp_trie::{Trie, delta_trie_root, empty_child_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use sp_core::storage::{ChildInfo, ChildrenMap};
-=======
-use hash_db::Hasher;
-use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root};
-use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use sp_core::storage::{ChildInfo, ChildType};
->>>>>>> child_trie_w3_change
+use sp_core::storage::{ChildInfo, ChildType, ChildrenMap};
 use codec::{Codec, Decode};
 use crate::{
 	StorageKey, StorageValue, Backend,
@@ -91,22 +84,14 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
-		if let Some(essence) = self.child_essence(storage_key)? {
+		if let Some(essence) = self.child_essence(child_info)? {
 			essence.storage(child_info, key)
 		} else {
 			Ok(None)
 		}
-=======
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<StorageValue>, Self::Error> {
-		self.essence.child_storage(child_info, key)
->>>>>>> child_trie_w3_change
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
@@ -115,22 +100,14 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn next_child_storage_key(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
-		if let Some(essence) = self.child_essence(storage_key)? {
+		if let Some(essence) = self.child_essence(child_info)? {
 			essence.next_storage_key(child_info, key)
 		} else {
 			Ok(None)
 		}
-=======
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<StorageKey>, Self::Error> {
-		self.essence.next_child_storage_key(child_info, key)
->>>>>>> child_trie_w3_change
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -143,39 +120,23 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		if let Ok(Some(essence)) = self.child_essence(storage_key) {
+		if let Ok(Some(essence)) = self.child_essence(child_info) {
 			essence.for_keys(child_info, f)
 		}
-=======
-		child_info: &ChildInfo,
-		f: F,
-	) {
-		self.essence.for_keys_in_child_storage(child_info, f)
->>>>>>> child_trie_w3_change
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
-<<<<<<< HEAD
-		if let Ok(Some(essence)) = self.child_essence(storage_key) {
+		if let Ok(Some(essence)) = self.child_essence(child_info) {
 			essence.for_keys_with_prefix(child_info, prefix, f)
 		}
-=======
-		self.essence.for_child_keys_with_prefix(child_info, prefix, f)
->>>>>>> child_trie_w3_change
 	}
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
@@ -245,10 +206,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn child_storage_root<I>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
@@ -261,12 +218,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		};
 
 		let mut write_overlay = S::Overlay::default();
-<<<<<<< HEAD
-		let mut root: H::Out = match self.storage(storage_key) {
-=======
 		let prefixed_storage_key = child_info.prefixed_storage_key();
 		let mut root = match self.storage(prefixed_storage_key.as_slice()) {
->>>>>>> child_trie_w3_change
 			Ok(value) =>
 				value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or(default_root.clone()),
 			Err(e) => {
@@ -284,12 +237,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-<<<<<<< HEAD
 			match delta_trie_root::<Layout<H>, _, _, _, _>(
-=======
-			match child_delta_trie_root::<Layout<H>, _, _, _, _, _>(
-				child_info.keyspace(),
->>>>>>> child_trie_w3_change
 				&mut eph,
 				root,
 				delta
@@ -316,9 +264,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where
 {
 	fn child_essence<'a>(
 		&'a self,
-		storage_key: &[u8],
+		child_info: &ChildInfo,
 	) -> Result<Option<TrieBackendEssence<&'a S, H>>, <Self as Backend<H>>::Error> {
-		let root: Option<H::Out> = self.storage(storage_key)?
+		let root: Option<H::Out> = self.storage(&child_info.prefixed_storage_key()[..])?
 			.and_then(|encoded_root| Decode::decode(&mut &encoded_root[..]).ok());
 		Ok(if let Some(root) = root {
 			Some(TrieBackendEssence::new(self.essence.backend_storage(), root))
@@ -336,23 +284,13 @@ pub mod tests {
 	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut};
 	use super::*;
 
-<<<<<<< HEAD
-	const CHILD_KEY_1: &[u8] = b":child_storage:default:sub1";
-
-	const CHILD_UUID_1: &[u8] = b"unique_id_1";
-=======
 	const CHILD_KEY_1: &[u8] = b"sub1";
->>>>>>> child_trie_w3_change
 
 	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256) {
 		let child_info = ChildInfo::new_default(CHILD_KEY_1);
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 		{
-<<<<<<< HEAD
-=======
-			let mut mdb = KeySpacedDBMut::new(&mut mdb, child_info.keyspace());
->>>>>>> child_trie_w3_change
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
 			trie.insert(b"value3", &[142]).expect("insert failed");
 			trie.insert(b"value4", &[124]).expect("insert failed");
@@ -387,14 +325,9 @@ pub mod tests {
 
 	#[test]
 	fn read_from_child_storage_returns_some() {
-		let child_info1 = ChildInfo::new_default(CHILD_UUID_1);
 		let test_trie = test_trie();
 		assert_eq!(
-<<<<<<< HEAD
-			test_trie.child_storage(CHILD_KEY_1, &child_info1, b"value3").unwrap(),
-=======
 			test_trie.child_storage(&ChildInfo::new_default(CHILD_KEY_1), b"value3").unwrap(),
->>>>>>> child_trie_w3_change
 			Some(vec![142u8]),
 		);
 	}

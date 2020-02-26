@@ -138,11 +138,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 	let (committed, prospective, child_info) = if let Some(sk) = storage_key.as_ref() {
-<<<<<<< HEAD
-		let child_info = changes.child_info(sk).clone();
-=======
 		let child_info = changes.default_child_info(sk).cloned();
->>>>>>> child_trie_w3_change
 		(
 			changes.committed.children_default.get(sk).map(|c| &c.0),
 			changes.prospective.children_default.get(sk).map(|c| &c.0),
@@ -162,11 +158,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					if let Some(sk) = storage_key.as_ref() {
 						if !changes.child_storage(sk, k).map(|v| v.is_some()).unwrap_or_default() {
 							if let Some(child_info) = child_info.as_ref() {
-<<<<<<< HEAD
-								if !backend.exists_child_storage(sk, child_info, k)
-=======
 								if !backend.exists_child_storage(&child_info, k)
->>>>>>> child_trie_w3_change
 									.map_err(|e| format!("{}", e))? {
 									return Ok(map);
 								}
@@ -368,14 +360,8 @@ mod test {
 		OverlayedChanges,
 		Configuration,
 	) {
-<<<<<<< HEAD
-
-		let child_info1 = ChildInfo::new_default(b"unique_id_1");
-		let child_info2 = ChildInfo::new_default(b"unique_id_2");
-=======
 		let child_info_1 = ChildInfo::new_default(b"storage_key1");
 		let child_info_2 = ChildInfo::new_default(b"storage_key2");
->>>>>>> child_trie_w3_change
 		let backend: InMemoryBackend<_> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
@@ -452,21 +438,13 @@ mod test {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-<<<<<<< HEAD
-					].into_iter().collect(), child_info1.clone())),
-=======
-					].into_iter().collect(), child_info_1.to_owned())),
->>>>>>> child_trie_w3_change
+					].into_iter().collect(), child_info_1.clone())),
 					(child_trie_key2, (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-<<<<<<< HEAD
-					].into_iter().collect(), child_info2)),
-=======
-					].into_iter().collect(), child_info_2.to_owned())),
->>>>>>> child_trie_w3_change
+					].into_iter().collect(), child_info_2)),
 				].into_iter().collect()
 			},
 			committed: OverlayedChangeSet { top: vec![
@@ -489,11 +467,7 @@ mod test {
 							value: Some(vec![202]),
 							extrinsics: Some(vec![3].into_iter().collect())
 						})
-<<<<<<< HEAD
-					].into_iter().collect(), child_info1)),
-=======
-					].into_iter().collect(), child_info_1.to_owned())),
->>>>>>> child_trie_w3_change
+					].into_iter().collect(), child_info_1)),
 				].into_iter().collect(),
 			},
 			collect_extrinsics: true,

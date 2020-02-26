@@ -356,11 +356,6 @@ pub mod tests {
 	use sp_state_machine::Backend;
 	use super::*;
 
-<<<<<<< HEAD
-	const CHILD_UID_1: &'static [u8] = b"unique_id_1";
-
-=======
->>>>>>> child_trie_w3_change
 	type TestChecker = LightDataChecker<
 		NativeExecutor<substrate_test_runtime_client::LocalExecutor>,
 		Blake2Hasher,
@@ -407,7 +402,6 @@ pub mod tests {
 	}
 
 	fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, Vec<u8>) {
-		let child_info1 = ChildInfo::new_default(CHILD_UID_1);
 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
 		use substrate_test_runtime_client::TestClientBuilderExt;
 		let child_info = ChildInfo::new_default(b"child1");
@@ -415,12 +409,7 @@ pub mod tests {
 		// prepare remote client
 		let remote_client = substrate_test_runtime_client::TestClientBuilder::new()
 			.add_extra_child_storage(
-<<<<<<< HEAD
-				b":child_storage:default:child1".to_vec(),
-				&child_info1,
-=======
 				child_info,
->>>>>>> child_trie_w3_change
 				b"key1".to_vec(),
 				b"value1".to_vec(),
 			).build();
@@ -433,23 +422,13 @@ pub mod tests {
 		// 'fetch' child read proof from remote node
 		let child_value = remote_client.child_storage(
 			&remote_block_id,
-<<<<<<< HEAD
-			&StorageKey(b":child_storage:default:child1".to_vec()),
-			&child_info1,
-=======
 			child_info,
->>>>>>> child_trie_w3_change
 			&StorageKey(b"key1".to_vec()),
 		).unwrap().unwrap().0;
 		assert_eq!(b"value1"[..], child_value[..]);
 		let remote_read_proof = remote_client.read_child_proof(
 			&remote_block_id,
-<<<<<<< HEAD
-			b":child_storage:default:child1",
-			&child_info1,
-=======
 			child_info,
->>>>>>> child_trie_w3_change
 			&[b"key1"],
 		).unwrap();
 
@@ -527,12 +506,6 @@ pub mod tests {
 			remote_read_proof,
 			result,
 		) = prepare_for_read_child_proof_check();
-<<<<<<< HEAD
-
-		let child_info = ChildInfo::new_default(CHILD_UID_1);
-		let child_infos = child_info.info();
-=======
->>>>>>> child_trie_w3_change
 		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_child_proof(
 			&RemoteReadChildRequest::<Header> {
 				block: remote_block_header.hash(),

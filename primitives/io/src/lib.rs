@@ -84,33 +84,6 @@ pub trait Storage {
 		self.storage(key).map(|s| s.to_vec())
 	}
 
-<<<<<<< HEAD
-	/// All Child api uses :
-	/// - A `child_storage_key` to define the anchor point for the child proof
-	/// (commonly the location where the child root is stored in its parent trie).
-	/// - A `child_storage_types` to identify the kind of the child type and how its
-	/// `child definition` parameter is encoded.
-	/// - A `child_definition_parameter` which is the additional information required
-	/// to use the child trie. For instance defaults child tries requires this to
-	/// contain a collision free unique id.
-	///
-	/// This function specifically returns the data for `key` in the child storage or `None`
-	/// if the key can not be found.
-	fn child_get(
-		&self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.child_storage(storage_key, &child_info, key).map(|s| s.to_vec())
-	}
-
-=======
->>>>>>> child_trie_w3_change
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
 	/// bytes that the entry in storage has beyond the offset or `None` if the storage entry
 	/// doesn't exist at all.
@@ -201,11 +174,7 @@ pub trait Storage {
 		if child_type != 1 { panic!("Invalid child definition"); }
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
-<<<<<<< HEAD
-		self.child_storage(storage_key, &child_info, key)
-=======
 		self.child_storage(&child_info, key)
->>>>>>> child_trie_w3_change
 			.map(|value| {
 				let value_offset = value_offset as usize;
 				let data = &value[value_offset.min(value.len())..];
@@ -228,16 +197,7 @@ pub trait Storage {
 		if child_type != 1 { panic!("Invalid child definition"); }
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
-<<<<<<< HEAD
-		self.set_child_storage(storage_key, &child_info, key.to_vec(), value.to_vec());
-	}
-
-	/// Clear the storage of the given `key` and its value.
-	fn clear(&mut self, key: &[u8]) {
-		self.clear_storage(key)
-=======
 		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
->>>>>>> child_trie_w3_change
 	}
 
 	/// Deprecated, please use dedicated runtime apis.
@@ -252,11 +212,7 @@ pub trait Storage {
 		if child_type != 1 { panic!("Invalid child definition"); }
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
-<<<<<<< HEAD
-		self.clear_child_storage(storage_key, &child_info, key);
-=======
 		self.clear_child_storage(&child_info, key);
->>>>>>> child_trie_w3_change
 	}
 
 	/// Deprecated, please use dedicated runtime apis.
@@ -270,11 +226,7 @@ pub trait Storage {
 		if child_type != 1 { panic!("Invalid child definition"); }
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
-<<<<<<< HEAD
-		self.kill_child_storage(storage_key, &child_info);
-=======
 		self.kill_child_storage(&child_info);
->>>>>>> child_trie_w3_change
 	}
 
 	/// Deprecated, please use dedicated runtime apis.
@@ -289,11 +241,7 @@ pub trait Storage {
 		if child_type != 1 { panic!("Invalid child definition"); }
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
-<<<<<<< HEAD
-		self.exists_child_storage(storage_key, &child_info, key)
-=======
 		self.exists_child_storage(&child_info, key)
->>>>>>> child_trie_w3_change
 	}
 
 	/// Deprecated, please use dedicated runtime apis.
@@ -308,11 +256,7 @@ pub trait Storage {
 		if child_type != 1 { panic!("Invalid child definition"); }
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
-<<<<<<< HEAD
-		self.clear_child_prefix(storage_key, &child_info, prefix);
-=======
 		self.clear_child_prefix(&child_info, prefix);
->>>>>>> child_trie_w3_change
 	}
 
 	/// Deprecated, please use dedicated runtime apis.
@@ -452,15 +396,8 @@ pub trait DefaultChildStorage {
 		storage_key: &[u8],
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-<<<<<<< HEAD
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.next_child_storage_key(storage_key, &child_info, key)
-=======
 		let child_info = ChildInfo::new_default(storage_key);
 		self.next_child_storage_key(&child_info, key)
->>>>>>> child_trie_w3_change
 	}
 }
 

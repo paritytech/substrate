@@ -152,10 +152,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -168,10 +164,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn exists_child_storage(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
@@ -184,10 +176,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn next_child_storage_key(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -204,10 +192,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		f: F,
 	) {
@@ -216,10 +200,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
@@ -236,10 +216,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn child_storage_root<I>(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
@@ -259,10 +235,6 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn child_keys(
 		&self,
-<<<<<<< HEAD
-		storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
@@ -1149,7 +1121,7 @@ impl<Block: BlockT> Backend<Block> {
 				let mut keyspace = Keyspaced::new(&[]);
 				for (info, mut updates) in operation.db_updates.into_iter() {
 					// child info with strong unique id are using the same state-db with prefixed key
-					if info.child_type() != ChildType::CryptoUniqueId {
+					if info.child_type() != ChildType::ParentKeyId {
 						// Unhandled child kind
 						return Err(ClientError::Backend(format!(
 							"Data for {:?} without a backend implementation",
@@ -1869,8 +1841,7 @@ pub(crate) mod tests {
 	fn set_state_data() {
 		let db = Backend::<Block>::new_test(2, 0);
 
-		let child_info = sp_core::storage::ChildInfo::new_default(b"unique_id");
-		let storage_key = b":child_storage:default:key1";
+		let child_info = sp_core::storage::ChildInfo::new_default(b"key1");
 
 		let hash = {
 			let mut op = db.begin_operation().unwrap();
@@ -1897,23 +1868,19 @@ pub(crate) mod tests {
 				.iter()
 				.cloned()
 				.map(|(x, y)| (x, Some(y))),
-				vec![(storage_key.to_vec(), child_storage.clone(), child_info.clone())],
+				vec![(child_info.clone(), child_storage.clone())],
 				false,
 			).0.into();
 			let hash = header.hash();
 
-			let mut children = HashMap::default();
-			children.insert(storage_key.to_vec(), sp_core::storage::StorageChild {
+			let mut children_default = HashMap::default();
+			children_default.insert(child_info.storage_key().to_vec(), sp_core::storage::StorageChild {
 				child_info: child_info.clone(),
 				data: child_storage.iter().map(|(k, v)| (k.clone(), v.clone().unwrap())).collect(),
 			});
 			op.reset_storage(Storage {
 				top: storage.iter().cloned().collect(),
-<<<<<<< HEAD
-				children,
-=======
-				children_default: Default::default(),
->>>>>>> child_trie_w3_change
+				children_default,
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -1930,7 +1897,7 @@ pub(crate) mod tests {
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), None);
 			assert_eq!(
-				state.child_storage(&storage_key[..], &child_info, &[2, 3, 5]).unwrap(),
+				state.child_storage(&child_info, &[2, 3, 5]).unwrap(),
 				Some(vec![4, 4, 6]),
 			);
 
@@ -1972,7 +1939,7 @@ pub(crate) mod tests {
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
 			assert_eq!(
-				state.child_storage(&storage_key[..], &child_info, &[2, 3, 5]).unwrap(),
+				state.child_storage(&child_info, &[2, 3, 5]).unwrap(),
 				Some(vec![4, 4, 6]),
 			);
 

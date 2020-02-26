@@ -689,7 +689,7 @@ impl<T: Trait> Module<T> {
 		let maybe_value = AccountDb::<T>::get_storage(
 			&DirectAccountDb,
 			&address,
-			Some((&contract_info.trie_id, &child_info)),
+			Some(&child_info),
 			&key,
 		);
 		Ok(maybe_value)
@@ -805,18 +805,10 @@ impl<T: Trait> Module<T> {
 		let key_values_taken = delta.iter()
 			.filter_map(|key| {
 				child::get_raw(
-<<<<<<< HEAD
-					&origin_contract.trie_id,
-=======
->>>>>>> child_trie_w3_change
 					&origin_contract.child_trie_unique_id(),
 					&blake2_256(key),
 				).map(|value| {
 					child::kill(
-<<<<<<< HEAD
-						&origin_contract.trie_id,
-=======
->>>>>>> child_trie_w3_change
 						&origin_contract.child_trie_unique_id(),
 						&blake2_256(key),
 					);
@@ -838,10 +830,6 @@ impl<T: Trait> Module<T> {
 		if tombstone != dest_tombstone {
 			for (key, value) in key_values_taken {
 				child::put_raw(
-<<<<<<< HEAD
-					&origin_contract.trie_id,
-=======
->>>>>>> child_trie_w3_change
 					&origin_contract.child_trie_unique_id(),
 					&blake2_256(key),
 					&value,
@@ -946,11 +934,7 @@ decl_storage! {
 impl<T: Trait> OnKilledAccount<T::AccountId> for Module<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
-<<<<<<< HEAD
-			child::kill_storage(&info.trie_id, &info.child_trie_unique_id());
-=======
 			child::kill_storage(&info.child_trie_unique_id());
->>>>>>> child_trie_w3_change
 		}
 	}
 }

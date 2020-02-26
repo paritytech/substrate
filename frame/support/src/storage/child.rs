@@ -26,10 +26,6 @@ pub use sp_core::storage::{ChildInfo, ChildType};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 ) -> Option<T> {
@@ -53,10 +49,6 @@ pub fn get<T: Decode + Sized>(
 /// Return the value of the item in storage under `key`, or the type's default if there is no
 /// explicit entry.
 pub fn get_or_default<T: Decode + Sized + Default>(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 ) -> T {
@@ -66,10 +58,6 @@ pub fn get_or_default<T: Decode + Sized + Default>(
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry.
 pub fn get_or<T: Decode + Sized>(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 	default_value: T,
@@ -80,10 +68,6 @@ pub fn get_or<T: Decode + Sized>(
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry.
 pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 	default_value: F,
@@ -93,10 +77,6 @@ pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(
 
 /// Put `value` in storage under `key`.
 pub fn put<T: Encode>(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 	value: &T,
@@ -114,10 +94,6 @@ pub fn put<T: Encode>(
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
 pub fn take<T: Decode + Sized>(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 ) -> Option<T> {
@@ -131,10 +107,6 @@ pub fn take<T: Decode + Sized>(
 /// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 /// the default for its type.
 pub fn take_or_default<T: Codec + Sized + Default>(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 ) -> T {
@@ -144,10 +116,6 @@ pub fn take_or_default<T: Codec + Sized + Default>(
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
 pub fn take_or<T: Codec + Sized>(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 	default_value: T,
@@ -158,10 +126,6 @@ pub fn take_or<T: Codec + Sized>(
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
 pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 	default_value: F,
@@ -171,10 +135,6 @@ pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 ) -> bool {
@@ -188,10 +148,6 @@ pub fn exists(
 
 /// Remove all `storage_key` key/values
 pub fn kill_storage(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 ) {
 	match child_info.child_type() {
@@ -203,10 +159,6 @@ pub fn kill_storage(
 
 /// Ensure `key` has no explicit entry in storage.
 pub fn kill(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 ) {
@@ -222,10 +174,6 @@ pub fn kill(
 
 /// Get a Vec of bytes from storage.
 pub fn get_raw(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 ) -> Option<Vec<u8>> {
@@ -239,10 +187,6 @@ pub fn get_raw(
 
 /// Put a raw byte slice into storage.
 pub fn put_raw(
-<<<<<<< HEAD
-	storage_key: &[u8],
-=======
->>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	key: &[u8],
 	value: &[u8],
