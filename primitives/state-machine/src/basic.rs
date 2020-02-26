@@ -298,6 +298,10 @@ impl Externalities for BasicExternalities {
 	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		Ok(None)
 	}
+
+	fn wipe(&mut self) {}
+
+	fn commit(&mut self) {}
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {
