@@ -432,7 +432,7 @@ dependencies = [
  "console_log",
  "futures 0.1.29",
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "js-sys",
  "kvdb-web",
  "libp2p",
@@ -1776,9 +1776,9 @@ checksum = "a1de7508b218029b0f01662ed8f61b1c964b3ae99d6f25462d0f55a595109df6"
 
 [[package]]
 name = "futures-timer"
-version = "3.0.1"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3de1a2b2a2a33d9e60e17980b60ee061eeaae96a5abe9121db0fdb9af167a1c5"
+checksum = "e64b03909df88034c26dc1547e8970b91f98bdb65165d6a4e9110d94263dbb2c"
 dependencies = [
  "gloo-timers",
  "send_wrapper 0.4.0",
@@ -2670,7 +2670,7 @@ dependencies = [
  "ed25519-dalek",
  "fnv",
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "lazy_static",
  "libsecp256k1",
  "log 0.4.8",
@@ -2967,7 +2967,7 @@ checksum = "f9e80ad4e3535345f3d666554ce347d3100453775611c05c60786bf9a1747a10"
 dependencies = [
  "async-std",
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "get_if_addrs",
  "ipnet",
  "libp2p-core",
@@ -5602,7 +5602,7 @@ dependencies = [
  "derive_more",
  "env_logger 0.7.1",
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "libp2p",
  "log 0.4.8",
  "parity-scale-codec",
@@ -5832,7 +5832,7 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.1.29",
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
@@ -5872,7 +5872,7 @@ dependencies = [
  "fork-tree",
  "futures 0.1.29",
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "log 0.4.8",
  "merlin",
  "num-bigint",
@@ -6004,7 +6004,7 @@ name = "sc-consensus-slots"
 version = "0.8.0-alpha.1"
 dependencies = [
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
@@ -6123,7 +6123,7 @@ dependencies = [
  "fork-tree",
  "futures 0.1.29",
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
@@ -6200,7 +6200,7 @@ dependencies = [
  "fnv",
  "fork-tree",
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "futures_codec",
  "libp2p",
  "linked-hash-map",
@@ -6248,7 +6248,7 @@ name = "sc-network-gossip"
 version = "0.8.0-alpha.1"
 dependencies = [
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "libp2p",
  "log 0.4.8",
  "lru",
@@ -6265,7 +6265,7 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.1.29",
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "libp2p",
  "log 0.4.8",
  "parking_lot 0.10.0",
@@ -6293,7 +6293,7 @@ dependencies = [
  "env_logger 0.7.1",
  "fnv",
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "hyper 0.13.2",
  "hyper-rustls",
  "log 0.4.8",
@@ -6423,7 +6423,7 @@ dependencies = [
  "futures 0.1.29",
  "futures 0.3.4",
  "futures-diagnose",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "lazy_static",
  "log 0.4.8",
  "parity-multiaddr 0.5.0",
@@ -6504,7 +6504,7 @@ version = "2.0.0-alpha.1"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.4",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "libp2p",
  "log 0.4.8",
  "parking_lot 0.10.0",
@@ -6736,9 +6736,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.47"
+version = "1.0.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15913895b61e0be854afd32fd4163fcd2a3df34142cf2cb961b310ce694cbf90"
+checksum = "9371ade75d4c2d6cb154141b9752cf3781ec9c05e0e5cf35060e1e70ee7b9c25"
 dependencies = [
  "itoa",
  "ryu",
@@ -7068,7 +7068,7 @@ dependencies = [
  "derive_more",
  "futures 0.3.4",
  "futures-diagnose",
- "futures-timer 3.0.1",
+ "futures-timer 3.0.2",
  "libp2p",
  "log 0.4.8",
  "parity-scale-codec",
@@ -8755,8 +8755,8 @@ version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97837a6e83ab24a4b3a38d44a257e13335b54f4b4548b2c9d71edd0bf570cb4f"
 dependencies = [
- "proc-macro2 1.0.8",
- "quote 1.0.2",
+ "proc-macro2",
+ "quote",
 ]
 
 [[package]]
