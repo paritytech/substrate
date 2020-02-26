@@ -416,9 +416,7 @@ impl RunCmd {
 		if self.no_telemetry {
 			config.telemetry_endpoints = None;
 		} else if !self.telemetry_endpoints.is_empty() {
-			config.telemetry_endpoints = Some(
-				TelemetryEndpoints::new(self.telemetry_endpoints.clone())
-			);
+			config.telemetry_endpoints = TelemetryEndpoints::new(self.telemetry_endpoints.clone()).ok();
 		}
 
 		// Override prometheus
@@ -686,7 +684,7 @@ mod tests {
 			"test-id",
 			|| (),
 			vec!["boo".to_string()],
-			Some(TelemetryEndpoints::new(vec![("foo".to_string(), 42)])),
+			TelemetryEndpoints::new(vec![("wss://foo/bar".to_string(), 42)]).ok(),
 			None,
 			None,
 			None::<()>,

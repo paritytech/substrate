@@ -159,7 +159,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 		"staging_testnet",
 		staging_testnet_config_genesis,
 		boot_nodes,
-		Some(TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)])),
+		TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)]).ok(),
 		None,
 		None,
 		Default::default(),
