@@ -76,7 +76,7 @@ use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency}, weights::{
-	SimpleDispatchInfo, GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee
+	SimpleDispatchInfo, GetDispatchInfo, DispatchClass, FunctionOf,
 }};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
@@ -235,70 +235,6 @@ decl_event! {
 	}
 }
 
-/// Simple index-based pass through for the weight functions.
-struct MultiPassthrough<Call, AccountId, Timepoint>(
-	sp_std::marker::PhantomData<(Call, AccountId, Timepoint)>
-);
-
-impl<Call, AccountId, Timepoint> MultiPassthrough<Call, AccountId, Timepoint> {
-	fn new() -> Self { Self(Default::default()) }
-}
-impl<Call: GetDispatchInfo, AccountId, Timepoint> WeighData<(&AccountId, &Timepoint, &Box<Call>)>
-for MultiPassthrough<Call, AccountId, Timepoint>
-{
-	fn weigh_data(&self, (_, _, call): (&AccountId, &Timepoint, &Box<Call>)) -> Weight {
-		call.get_dispatch_info().weight
-	}
-}
-impl<Call: GetDispatchInfo, AccountId, Timepoint> ClassifyDispatch<(&AccountId, &Timepoint, &Box<Call>)>
-for MultiPassthrough<Call, AccountId, Timepoint>
-{
-	fn classify_dispatch(&self, (_, _, call): (&AccountId, &Timepoint, &Box<Call>))
-		-> DispatchClass
-	{
-		call.get_dispatch_info().class
-	}
-}
-impl<Call: GetDispatchInfo, AccountId, Timepoint> PaysFee<(&AccountId, &Timepoint, &Box<Call>)>
-for MultiPassthrough<Call, AccountId, Timepoint>
-{
-	fn pays_fee(&self, _: (&AccountId, &Timepoint, &Box<Call>)) -> bool {
-		true
-	}
-}
-
-/// Simple index-based pass through for the weight functions.
-struct SigsLen<AccountId>(
-	sp_std::marker::PhantomData<AccountId>
-);
-
-impl<AccountId> SigsLen<AccountId> {
-	fn new() -> Self { Self(Default::default()) }
-}
-impl<AccountId> WeighData<(&u16, &Vec<AccountId>)>
-for SigsLen<AccountId>
-{
-	fn weigh_data(&self, (_, sigs): (&u16, &Vec<AccountId>)) -> Weight {
-		10_000 * (sigs.len() as u32 + 1)
-	}
-}
-impl<AccountId> ClassifyDispatch<(&u16, &Vec<AccountId>)>
-for SigsLen<AccountId>
-{
-	fn classify_dispatch(&self, _: (&u16, &Vec<AccountId>))
-		-> DispatchClass
-	{
-		DispatchClass::Normal
-	}
-}
-impl<AccountId> PaysFee<(&u16, &Vec<AccountId>)>
-for SigsLen<AccountId>
-{
-	fn pays_fee(&self, _: (&u16, &Vec<AccountId>)) -> bool {
-		true
-	}
-}
-
 /// A module identifier. These are per module and should be stored in a registry somewhere.
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
 struct IndexedMultiAccountModuleId(u16);
@@ -341,7 +277,11 @@ decl_module! {
 		///   deposit taken for its lifetime of
 		///   `MultiAccountDepositBase + other_signatories.len() * MultiAccountDepositFactor`.
 		/// # </weight>
-		#[weight = <SigsLen<T::AccountId>>::new()]
+		#[weight = FunctionOf(
+			|args: (&u16, &Vec<T::AccountId>)| 10_000 * (args.1.len() as u32 + 1),
+			DispatchClass::Normal,
+			true
+		)]
 		fn create(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>
@@ -412,7 +352,11 @@ decl_module! {
 		///   deposit taken for its lifetime of
 		///   `MultiAccountDepositBase + signatories.len() * MultiAccountDepositFactor`.
 		/// # </weight>
-		#[weight = <SigsLen<T::AccountId>>::new()]
+		#[weight = FunctionOf(
+			|args: (&u16, &Vec<T::AccountId>)| 10_000 * (args.1.len() as u32 + 1),
+			DispatchClass::Normal,
+			true
+		)]
 		fn update(origin,
 			threshold: u16,
 			signatories: Vec<T::AccountId>
@@ -527,7 +471,11 @@ decl_module! {
 		///   deposit taken for its lifetime of
 		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
 		/// # </weight>
-		#[weight = <MultiPassthrough<<T as Trait>::Call, T::AccountId, Option<Timepoint<T::BlockNumber>>>>::new()]
+		#[weight = FunctionOf(
+			|args: (&T::AccountId, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| args.2.get_dispatch_info().weight,
+			|args: (&T::AccountId, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| args.2.get_dispatch_info().class,
+			true
+		)]
 		fn call(origin,
 			multi_account_id: T::AccountId,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
