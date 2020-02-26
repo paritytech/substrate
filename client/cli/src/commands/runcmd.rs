@@ -564,24 +564,30 @@ fn interface_str(
 
 #[derive(Debug)]
 enum TelemetryParsingError {
-	MissingVerbosity
+	MissingVerbosity,
+	VerbosityParsingError(std::num::ParseIntError),
+	UrlParsingError(std::convert::Infallible),
 }
 
 impl std::error::Error for TelemetryParsingError {}
 
 impl fmt::Display for TelemetryParsingError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Verbosity level missing")
+		match &*self {
+			TelemetryParsingError::MissingVerbosity => write!(f, "Verbosity level missing"),
+			TelemetryParsingError::VerbosityParsingError(e) => write!(f, "{}", e),
+			TelemetryParsingError::UrlParsingError(e) => write!(f, "{}", e),
+		}
     }
 }
 
-fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<dyn std::error::Error>> {
+fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), TelemetryParsingError> {
 	let pos = s.find(' ');
 	match pos {
-		None => Err(Box::new(TelemetryParsingError::MissingVerbosity)),
+		None => Err(TelemetryParsingError::MissingVerbosity),
 		Some(pos_) => {
-			let verbosity = s[pos_ + 1..].parse()?;
-			let url = s[..pos_].parse()?;
+			let verbosity = s[pos_ + 1..].parse().map_err(TelemetryParsingError::VerbosityParsingError)?;
+			let url = s[..pos_].parse().map_err(TelemetryParsingError::UrlParsingError)?;
 			Ok((url, verbosity))
 		}
 	}
