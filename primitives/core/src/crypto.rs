@@ -928,8 +928,8 @@ pub struct CryptoTypeId(pub [u8; 4]);
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
 
-impl std::fmt::Display for CryptoTypePublicPair {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl sp_std::fmt::Display for CryptoTypePublicPair {
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
         write!(f, "{:#?}-{:x?}", self.0, self.1)
     }
 }

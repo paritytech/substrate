@@ -223,18 +223,15 @@ where
 				keys.clone(),
 				serialized_addresses.as_slice(),
 			)
-			.map_err(|_| Error::SigningFailed)?;
+			.map_err(|_| Error::Signing)?;
 
-		for (index, (sign_result, key)) in signatures.iter().zip(keys).enumerate() {
+		for (sign_result, key) in signatures.iter().zip(keys) {
 			let mut signed_addresses = vec![];
 
-			// sign_with_all returns Option<Signature> where the signature
-			// is None for a public key that is not supported.
+			// sign_with_all returns Result<Signature, Error> signature
+			// is generated for a public key that is supported.
 			// Verify that all signatures exist for all provided keys.
-			if sign_result.is_err() {
-				return Err(Error::MissingSignature(index));
-			}
-			let signature = sign_result.as_ref().unwrap();
+			let signature = sign_result.as_ref().map_err(|_| Error::MissingSignature(key.clone()))?;
 			schema::SignedAuthorityAddresses {
 				addresses: serialized_addresses.clone(),
 				signature: Encode::encode(&signature),
