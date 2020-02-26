@@ -59,6 +59,48 @@ pub mod new {
 		}
 	}
 
+
+	impl<T: SigningTypes> Signer<T, ForAll> {
+		fn for_all<F, R>(&self, f: F) -> Vec<(Account<T>, R)> where
+			F: Fn(&Account<T>) -> Option<R>,
+		{
+			if let Some(ref accounts) = self.accounts {
+				accounts
+					.iter()
+					.enumerate()
+					.filter_map(|(index, key)| {
+						let account_id = key.clone().into_account();
+						let account = Account::new(index, account_id, key.clone());
+						f(&account).map(|res| (account, res))
+					})
+					.collect()
+			} else {
+				unimplemented!()
+			}
+		}
+	}
+
+	impl<T: SigningTypes> Signer<T, ForAny> {
+		fn for_any<F, R>(&self, f: F) -> Option<(Account<T>, R)> where
+			F: Fn(&Account<T>) -> Option<R>,
+		{
+			if let Some(ref accounts) = self.accounts {
+				for (index, key) in accounts.iter().enumerate() {
+					let account_id = key.clone().into_account();
+					let account = Account::new(index, account_id, key.clone());
+					let res = f(&account);
+					if let Some(res) = res {
+						return Some((account, res));
+					}
+				}
+			} else {
+				unimplemented!()
+			}
+
+			None
+		}
+	}
+
 	impl<
 		T: SigningTypes + SendTransactionTypes<C>,
 		X,
@@ -73,69 +115,30 @@ pub mod new {
 	impl<T: SigningTypes> SignMessage<T> for Signer<T, ForAll> {
 		type Result = Vec<(Account<T>, T::Signature)>;
 
-		// fn sign_message(&self, message: &[u8]) -> Self::Result {
-		//     self.accounts
-		//         .iter()
-		//         .filter_map(|key| {
-		//             let runtime_key = T::RuntimeAppPublic::from(key.clone());
-		//             runtime_key.sign(message)
-		//         })
-		//         .collect()
-		// }
+		fn sign_message(&self, message: &[u8]) -> Self::Result {
+			self.for_all(|account| sign::<T>(message, account.public.clone()))
+		}
 
 		fn sign<TPayload, F>(&self, f: F) -> Self::Result where
 			F: Fn(&Account<T>) -> TPayload,
 			TPayload: SignedPayload<T>,
 		{
-			if let Some(ref accounts) = self.accounts {
-				accounts
-					.iter()
-					.enumerate()
-					.filter_map(|(index, key)| {
-						let account_id = key.clone().into_account();
-						let account = Account::new(index, account_id, key.clone());
-						let payload = f(&account);
-						payload.sign().map(|signature| (account, signature))
-					})
-				.collect()
-			} else {
-				unimplemented!()
-			}
+			self.for_all(|account| f(account).sign())
 		}
 	}
 
 	impl<T: SigningTypes> SignMessage<T> for Signer<T, ForAny> {
 		type Result = Option<(Account<T>, T::Signature)>;
 
-		// fn sign_message(&self, message: &[u8]) -> Self::Result {
-		//     self.accounts
-		//         .iter()
-		//         .filter_map(|key| {
-		//             let runtime_key = T::RuntimeAppPublic::from(key.clone());
-		//             runtime_key.sign(message)
-		//         })
-		//         .collect()
-		// }
+		fn sign_message(&self, message: &[u8]) -> Self::Result {
+			self.for_any(|account| sign::<T>(message, account.public.clone()))
+		}
 
 		fn sign<TPayload, F>(&self, f: F) -> Self::Result where
 			F: Fn(&Account<T>) -> TPayload,
 			TPayload: SignedPayload<T>,
 		{
-			if let Some(ref accounts) = self.accounts {
-				for (index, key) in accounts.iter().enumerate() {
-					let account_id = key.clone().into_account();
-					let account = Account::new(index, account_id, key.clone());
-					let payload = f(&account);
-					let res = payload.sign();
-					if let Some(signature) = res {
-						return Some((account, signature))
-					}
-				}
-			} else {
-				unimplemented!()
-			}
-
-			None
+			self.for_any(|account| f(account).sign())
 		}
 	}
 
@@ -242,6 +245,7 @@ pub mod new {
 			+ TryInto<Self::GenericSignature>
 			;
 		type RuntimeAppPublic: RuntimeAppPublic;
+		// TODO [ToDr] The conversions are messy, clean them up.
 		type GenericPublic:
 			From<Self::RuntimeAppPublic>
 			+ Into<Self::RuntimeAppPublic>;
@@ -258,7 +262,7 @@ pub mod new {
 	pub trait SignMessage<T: SigningTypes> {
 		type Result;
 
-		// fn sign_message(&self, message: &[u8]) -> Self::Result;
+		fn sign_message(&self, message: &[u8]) -> Self::Result;
 
 		fn sign<TPayload, F>(&self, f: F) -> Self::Result where
 			F: Fn(&Account<T>) -> TPayload,
@@ -296,14 +300,7 @@ pub mod new {
 		fn public(&self) -> T::Public;
 
 		fn sign(&self) -> Option<T::Signature> {
-			let p: T::GenericPublic = self.public().try_into().ok()?;
-			let x: T::RuntimeAppPublic = p.into();
-			x.sign(&self.encode())
-				.map(|x| {
-					let sig: T::GenericSignature = x.into();
-					sig
-				})
-				.map(From::from)
+			sign::<T>(&self.encode(), self.public())
 		}
 
 		fn verify(&self, signature: T::Signature) -> bool {
@@ -318,6 +315,17 @@ pub mod new {
 			};
 			x.verify(&self.encode(), &signature.into())
 		}
+	}
+
+	fn sign<T: SigningTypes>(payload: &[u8], public: T::Public) -> Option<T::Signature> {
+		let p: T::GenericPublic = public.try_into().ok()?;
+		let x: T::RuntimeAppPublic = p.into();
+		x.sign(&payload)
+			.map(|x| {
+				let sig: T::GenericSignature = x.into();
+				sig
+			})
+		.map(From::from)
 	}
 }
 
