@@ -435,7 +435,7 @@ mod tests {
 		type ModuleToIndex = ();
 		type AccountData = ();
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnKilledAccount = ();
 	}
 	impl Trait<Instance1> for Test {
 		type Origin = Origin;
