@@ -22,7 +22,7 @@ use rpc::futures::future::{result, Future, Either};
 
 use sc_rpc_api::Subscriptions;
 use sc_client::{
-	Client, light::{fetcher::{Fetcher, RemoteBodyRequest}, blockchain::RemoteBlockchain},
+	light::{fetcher::{Fetcher, RemoteBodyRequest}, blockchain::RemoteBlockchain},
 };
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
@@ -30,12 +30,14 @@ use sp_runtime::{
 };
 
 use super::{ChainBackend, client_err, error::FutureResult};
+use sp_blockchain::HeaderBackend;
+use sc_client_api::BlockchainEvents;
 
 /// Blockchain API backend for light nodes. Reads all the data from local
 /// database, if available, or fetches it from remote node otherwise.
-pub struct LightChain<B, E, Block: BlockT, RA, F> {
+pub struct LightChain<Block: BlockT, Client, F> {
 	/// Substrate client.
-	client: Arc<Client<B, E, Block, RA>>,
+	client: Arc<Client>,
 	/// Current subscriptions.
 	subscriptions: Subscriptions,
 	/// Remote blockchain reference
@@ -44,10 +46,10 @@ pub struct LightChain<B, E, Block: BlockT, RA, F> {
 	fetcher: Arc<F>,
 }
 
-impl<B, E, Block: BlockT, RA, F: Fetcher<Block>> LightChain<B, E, Block, RA, F> {
+impl<Block: BlockT, Client, F: Fetcher<Block>> LightChain<Block, Client, F> {
 	/// Create new Chain API RPC handler.
 	pub fn new(
-		client: Arc<Client<B, E, Block, RA>>,
+		client: Arc<Client>,
 		subscriptions: Subscriptions,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
@@ -61,14 +63,12 @@ impl<B, E, Block: BlockT, RA, F: Fetcher<Block>> LightChain<B, E, Block, RA, F> 
 	}
 }
 
-impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Block, RA, F> where
+impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client, F> where
 	Block: BlockT + 'static,
-	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-	E: sc_client::CallExecutor<Block> + Send + Sync + 'static,
-	RA: Send + Sync + 'static,
+	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	F: Fetcher<Block> + Send + Sync + 'static,
 {
-	fn client(&self) -> &Arc<Client<B, E, Block, RA>> {
+	fn client(&self) -> &Arc<Client> {
 		&self.client
 	}
 

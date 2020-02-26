@@ -349,6 +349,7 @@ pub mod tests {
 	use sp_runtime::generic::BlockId;
 	use sp_state_machine::Backend;
 	use super::*;
+	use sc_client_api::StorageProvider;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 

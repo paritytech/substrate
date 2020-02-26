@@ -116,6 +116,7 @@ macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
 		use futures::prelude::*;
 		use sc_network::Event;
+		use sc_client_api::ExecutorProvider;
 
 		let (
 			is_authority,

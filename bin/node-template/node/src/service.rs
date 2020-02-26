@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use sc_client::LongestChain;
+use sc_client_api::ExecutorProvider;
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use sp_inherents::InherentDataProviders;

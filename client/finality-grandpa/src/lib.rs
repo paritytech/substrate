@@ -56,7 +56,7 @@ use futures::prelude::*;
 use futures::StreamExt;
 use log::{debug, info};
 use futures::channel::mpsc;
-use sc_client_api::{BlockchainEvents, CallExecutor, backend::{AuxStore, Backend}, ExecutionStrategy};
+use sc_client_api::{BlockchainEvents, CallExecutor, backend::{AuxStore, Backend}, ExecutionStrategy, ExecutorProvider};
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 use sc_client::Client;
 use parity_scale_codec::{Decode, Encode};

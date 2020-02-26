@@ -21,7 +21,7 @@ use futures::channel::mpsc;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
-	generic::BlockId
+	generic::{BlockId, SignedBlock}
 };
 use sp_consensus::BlockOrigin;
 
@@ -76,9 +76,13 @@ pub trait BlockchainEvents<Block: BlockT> {
 /// Fetch block body by ID.
 pub trait BlockBody<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
-	fn block_body(&self,
+	fn block_body(
+		&self,
 		id: &BlockId<Block>
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
+
+	/// Get full block by id.
+	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
 }
 
 /// Provide a list of potential uncle headers for a given block.

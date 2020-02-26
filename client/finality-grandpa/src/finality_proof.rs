@@ -39,10 +39,7 @@ use std::sync::Arc;
 use log::{trace, warn};
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
-use sc_client_api::{
-	backend::Backend, CallExecutor, StorageProof,
-	light::{FetchChecker, RemoteReadRequest},
-};
+use sc_client_api::{backend::Backend, CallExecutor, StorageProof, light::{FetchChecker, RemoteReadRequest}, StorageProvider};
 use sc_client::Client;
 use parity_scale_codec::{Encode, Decode};
 use finality_grandpa::BlockNumberOps;

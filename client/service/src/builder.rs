@@ -18,12 +18,7 @@ use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
 use crate::config::{Configuration, DatabaseConfig, KeystoreConfig};
-use sc_client_api::{
-	self,
-	BlockchainEvents,
-	backend::RemoteBackend, light::RemoteBlockchain,
-	execution_extensions::ExtensionsFactory,
-};
+use sc_client_api::{self, BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain, execution_extensions::ExtensionsFactory, ExecutorProvider, CallExecutor};
 use sc_client::Client;
 use sc_chain_spec::{RuntimeGenesis, Extension};
 use sp_consensus::import_queue::ImportQueue;
@@ -813,7 +808,9 @@ ServiceBuilder<
 			TBackend::OffchainStorage,
 			TBl
 		>,
-	>, Error> {
+	>, Error>
+		where TExec: CallExecutor<TBl, Backend = TBackend>,
+	{
 		let ServiceBuilder {
 			marker: _,
 			mut config,
