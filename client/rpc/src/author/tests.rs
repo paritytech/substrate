@@ -21,7 +21,8 @@ use assert_matches::assert_matches;
 use codec::Encode;
 use sp_core::{
 	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore},
-	traits::BareCryptoStorePtr, ed25519, sr25519, crypto::{Pair, Public},
+	traits::BareCryptoStorePtr, ed25519, sr25519,
+    crypto::{CryptoTypePublicPair, Pair, Public},
 };
 use rpc::futures::Stream as _;
 use substrate_test_runtime_client::{

@@ -31,13 +31,13 @@ mod app {
 
     impl From<Public> for CryptoTypePublicPair {
         fn from(key: Public) -> Self {
-            return key.into()
+            (&key).into()
         }
     }
 
     impl From<&Public> for CryptoTypePublicPair {
         fn from(key: &Public) -> Self {
-            return CryptoTypePublicPair(sr25519::CRYPTO_ID, key.to_raw_vec())
+            CryptoTypePublicPair(sr25519::CRYPTO_ID, key.to_raw_vec())
         }
     }
 }

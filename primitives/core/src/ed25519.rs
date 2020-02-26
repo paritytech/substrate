@@ -383,13 +383,13 @@ impl Derive for Public {}
 
 impl From<Public> for CryptoTypePublicPair {
     fn from(key: Public) -> Self {
-        return key.into()
+        (&key).into()
     }
 }
 
 impl From<&Public> for CryptoTypePublicPair {
     fn from(key: &Public) -> Self {
-        return CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
+        CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
     }
 }
 
