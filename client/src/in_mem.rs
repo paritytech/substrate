@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, ReentrantMutex};
 use sp_core::storage::well_known_keys;
 use sp_core::offchain::storage::{
 	InMemOffchainStorage as OffchainStorage
@@ -566,7 +566,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 pub struct Backend<Block: BlockT> where Block::Hash: Ord {
 	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HasherFor<Block>>>>,
 	blockchain: Blockchain<Block>,
-	import_lock: RwLock<()>,
+	import_lock: ReentrantMutex<()>,
 }
 
 impl<Block: BlockT> Backend<Block> where Block::Hash: Ord {
@@ -699,7 +699,7 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		Ok(Zero::zero())
 	}
 
-	fn get_import_lock(&self) -> &RwLock<()> {
+	fn get_import_lock(&self) -> &ReentrantMutex<()> {
 		&self.import_lock
 	}
 }

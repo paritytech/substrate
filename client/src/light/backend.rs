@@ -19,7 +19,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, ReentrantMutex};
 
 use codec::{Decode, Encode};
 
@@ -54,7 +54,7 @@ const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type
 pub struct Backend<S, H: Hasher> {
 	blockchain: Arc<Blockchain<S>>,
 	genesis_state: RwLock<Option<InMemoryBackend<H>>>,
-	import_lock: RwLock<()>,
+	import_lock: ReentrantMutex<()>,
 }
 
 /// Light block (header and justification) import operation.
@@ -233,7 +233,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
-	fn get_import_lock(&self) -> &RwLock<()> {
+	fn get_import_lock(&self) -> &ReentrantMutex<()> {
 		&self.import_lock
 	}
 }

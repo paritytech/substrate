@@ -57,7 +57,7 @@ use codec::{Decode, Encode};
 use hash_db::Prefix;
 use kvdb::{KeyValueDB, DBTransaction};
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
-use parking_lot::RwLock;
+use parking_lot::{RwLock, ReentrantMutex};
 use sp_core::{ChangesTrieConfiguration, traits::CodeExecutor};
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_runtime::{
@@ -78,7 +78,7 @@ use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTra
 use sc_client::leaves::{LeafSet, FinalizationDisplaced};
 use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
-use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
+use crate::storage_cache::{CachingState, CachingStateBackend, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
@@ -750,10 +750,10 @@ pub struct Backend<Block: BlockT> {
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block>,
-	import_lock: RwLock<()>,
+	import_lock: Arc<ReentrantMutex<()>>,
 	is_archive: bool,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
-	state_usage: StateUsageStats,
+	state_usage: Arc<StateUsageStats>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -825,7 +825,7 @@ impl<Block: BlockT> Backend<Block> {
 			import_lock: Default::default(),
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
-			state_usage: StateUsageStats::new(),
+			state_usage: Arc::new(StateUsageStats::new()),
 		})
 	}
 
@@ -1127,8 +1127,14 @@ impl<Block: BlockT> Backend<Block> {
 				self.state_usage.tally_writes(ops, bytes);
 
 				let number_u64 = number.saturated_into::<u64>();
-				let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset)
-					.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
+				let commit = self.storage.state_db.insert_block(
+					&hash,
+					number_u64,
+					&pending_block.header.parent_hash(),
+					changeset,
+				).map_err(|e: sc_state_db::Error<io::Error>|
+					sp_blockchain::Error::from(format!("State database error: {:?}", e))
+				)?;
 				apply_state_commit(&mut transaction, commit);
 
 				// Check if need to finalize. Genesis is always finalized instantly.
@@ -1184,9 +1190,20 @@ impl<Block: BlockT> Backend<Block> {
 				displaced_leaf
 			};
 
-			let mut children = children::read_children(&*self.storage.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)?;
+			let mut children = children::read_children(
+				&*self.storage.db,
+				columns::META,
+				meta_keys::CHILDREN_PREFIX,
+				parent_hash,
+			)?;
 			children.push(hash);
-			children::write_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash, children);
+			children::write_children(
+				&mut transaction,
+				columns::META,
+				meta_keys::CHILDREN_PREFIX,
+				parent_hash,
+				children,
+			);
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
@@ -1196,7 +1213,7 @@ impl<Block: BlockT> Backend<Block> {
 		};
 
 		let cache_update = if let Some(set_head) = operation.set_head {
-			if let Some(header) = ::sc_client::blockchain::HeaderBackend::header(&self.blockchain, set_head)? {
+			if let Some(header) = sc_client::blockchain::HeaderBackend::header(&self.blockchain, set_head)? {
 				let number = header.number();
 				let hash = header.hash();
 
@@ -1265,7 +1282,6 @@ impl<Block: BlockT> Backend<Block> {
 
 		Ok(())
 	}
-
 
 	// write stuff to a transaction after a new block is finalized.
 	// this canonicalizes finalized blocks. Fails if called with a block which
@@ -1385,9 +1401,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(())
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation)
-		-> ClientResult<()>
-	{
+	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
 
@@ -1446,7 +1460,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
 		Some(self.offchain_storage.clone())
 	}
-
 
 	fn usage_info(&self) -> Option<UsageInfo> {
 		let (io_stats, state_stats) = self.io_stats.take_or_else(||
@@ -1568,7 +1581,17 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				let root = genesis_storage.0.clone();
 				let db_state = DbState::<Block>::new(Arc::new(genesis_storage), root);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
-				return Ok(CachingState::new(state, self.shared_cache.clone(), None));
+				let backend = CachingStateBackend {
+					lock: self.import_lock.clone(),
+					usage: self.state_usage.clone(),
+					meta: self.blockchain.meta.clone(),
+				};
+				return Ok(CachingState::new(
+					state,
+					self.shared_cache.clone(),
+					None,
+					Some(backend),
+				));
 			},
 			_ => {}
 		}
@@ -1591,7 +1614,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						self.storage.clone(),
 						Some(hash.clone()),
 					);
-					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
+					let backend = CachingStateBackend {
+						lock: self.import_lock.clone(),
+						usage: self.state_usage.clone(),
+						meta: self.blockchain.meta.clone(),
+					};
+					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash), Some(backend)))
 				} else {
 					Err(
 						sp_blockchain::Error::UnknownBlock(
@@ -1626,17 +1654,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		}
 	}
 
-	fn destroy_state(&self, state: Self::State) -> ClientResult<()> {
-		self.state_usage.merge_sm(state.usage_info());
-		if let Some(hash) = state.cache.parent_hash.clone() {
-			let is_best = self.blockchain.meta.read().best_hash == hash;
-			state.release().sync_cache(&[], &[], vec![], vec![], None, None, is_best);
-		}
-		Ok(())
-	}
-
-	fn get_import_lock(&self) -> &RwLock<()> {
-		&self.import_lock
+	fn get_import_lock(&self) -> &ReentrantMutex<()> {
+		&*self.import_lock
 	}
 }
 
@@ -1835,6 +1854,7 @@ pub(crate) mod tests {
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 
+			op.update_storage(storage, Vec::new()).unwrap();
 			op.set_block_data(
 				header,
 				Some(vec![]),

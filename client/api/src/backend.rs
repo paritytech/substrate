@@ -35,7 +35,7 @@ use crate::{
 };
 use sp_blockchain;
 use sp_consensus::BlockOrigin;
-use parking_lot::RwLock;
+use parking_lot::ReentrantMutex;
 
 pub use sp_state_machine::Backend as StateBackend;
 
@@ -292,11 +292,6 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State>;
 
-	/// Destroy state and save any useful data, such as cache.
-	fn destroy_state(&self, _state: Self::State) -> sp_blockchain::Result<()> {
-		Ok(())
-	}
-
 	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set
 	/// it will attempt to revert past any finalized block, this is unsafe and
 	/// can potentially leave the node in an inconsistent state.
@@ -330,7 +325,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// the using components should acquire and hold the lock whenever they do
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
-	fn get_import_lock(&self) -> &RwLock<()>;
+	fn get_import_lock(&self) -> &ReentrantMutex<()>;
 }
 
 /// Changes trie storage that supports pruning.
