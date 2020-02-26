@@ -14,6 +14,14 @@ sanitised_git_logs(){
   sed 's/^/* /g'
 }
 
+# Returns the last published release on github
+# repo: 'organization/repo'
+# Usage: last_github_release "$repo"
+last_github_release(){
+  curl -H "Authorization: token $GITHUB_RELEASE_TOKEN" \
+    -s "$api_base/$1/releases/latest" | jq '.tag_name'
+}
+
 # Checks whether a tag on github has been verified
 # repo: 'organization/repo'
 # tagver: 'v1.2.3'
