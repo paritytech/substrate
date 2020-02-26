@@ -6,6 +6,7 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Runtime API definition required by Contracts RPC extensions."
 
 [dependencies]
 sp-api = { version = "2.0.0-alpha.1", default-features = false, path = "../../../../primitives/api" }

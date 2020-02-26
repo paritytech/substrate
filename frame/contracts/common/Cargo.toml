@@ -6,6 +6,7 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "A crate that hosts a common definitions that are relevant for the pallet-contracts."
 
 [dependencies]
 # This crate should not rely on any of the frame primitives.

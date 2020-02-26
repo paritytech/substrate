@@ -6,6 +6,7 @@ edition = "2018"
 license = "Unlicense"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "FRAME example pallet for offchain worker"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }

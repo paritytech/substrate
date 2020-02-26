@@ -6,6 +6,7 @@ edition = "2018"
 license = "Unlicense"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "FRAME example pallet"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true }

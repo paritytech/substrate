@@ -6,6 +6,7 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "This crate provides means to instantiate and execute wasm modules."
 
 [dependencies]
 wasmi = { version = "0.6.2", optional = true }

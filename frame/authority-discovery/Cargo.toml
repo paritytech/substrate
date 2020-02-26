@@ -6,6 +6,7 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet for authority discovery"
 
 [dependencies]
 sp-authority-discovery = { version = "2.0.0-alpha.1", default-features = false, path = "../../primitives/authority-discovery" }
