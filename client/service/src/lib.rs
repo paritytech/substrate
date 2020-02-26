@@ -326,6 +326,7 @@ fn build_network_future<
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
 	mut rpc_rx: mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
+	default_announce_block: bool,
 ) -> impl Future<Output = ()> {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 	let mut finality_notification_stream = client.finality_notification_stream().fuse();
@@ -333,9 +334,11 @@ fn build_network_future<
 	futures::future::poll_fn(move |cx| {
 		let before_polling = Instant::now();
 
-		// We poll `imported_blocks_stream`.
-		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
-			network.on_block_imported(notification.header, Vec::new(), notification.is_new_best);
+		if default_announce_block {
+			// We poll `imported_blocks_stream`.
+			while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
+				network.on_block_imported(notification.header, Vec::new(), notification.is_new_best);
+			}
 		}
 
 		// We poll `finality_notification_stream`, but we only take the last event.
