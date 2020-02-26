@@ -55,7 +55,7 @@ use sc_client_api::{
 	ExecutionStrategy,
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 };
-use sp_core::{Pair, Public, sr25519};
+use sp_core::{Pair, Public, sr25519, ed25519};
 
 /// Keyring full of accounts for benching.
 ///
@@ -66,7 +66,18 @@ use sp_core::{Pair, Public, sr25519};
 ///     //endowed-user//N
 #[derive(Clone)]
 pub struct BenchKeyring {
-	accounts: BTreeMap<AccountId, sr25519::Pair>,
+	accounts: BTreeMap<AccountId, BenchPair>,
+}
+
+enum BenchPair {
+	Sr25519(sr25519::Pair),
+	Ed25519(ed25519::Pair),
+}
+
+impl BenchPair {
+	fn sign(payload: &[u8]) -> MultiSignature {
+
+	}
 }
 
 /// Pre-initialized benchmarking database.
@@ -113,6 +124,8 @@ impl Clone for BenchDb {
 pub enum BlockType {
 	/// Bunch of random transfers.
 	RandomTransfers(usize),
+	/// Bunch of random transfers signed with ed25519.
+	RandomTransfersEd25519(usize),
 	/// Bunch of random transfers that drain all of the source balance.
 	RandomTransfersReaping(usize),
 }
@@ -287,17 +300,32 @@ impl BenchDb {
 	}
 }
 
+pub enum KeyTypes {
+	Sr25519,
+	Ed25519,
+}
+
 impl BenchKeyring {
 	/// New keyring.
 	///
 	/// `length` is the number of accounts generated.
-	pub fn new(length: usize) -> Self {
+	pub fn new(length: usize, key_types: KeyTypes) -> Self {
 		let mut accounts = BTreeMap::new();
 
 		for n in 0..length {
 			let seed = format!("//endowed-user/{}", n);
-			let pair = sr25519::Pair::from_string(&seed, None).expect("failed to generate pair");
-			let account_id = AccountPublic::from(pair.public()).into_account();
+			let (account_id, pair) = match key_types {
+				Sr25519 => {
+					let pair = sr25519::Pair::from_string(&seed, None).expect("failed to generate pair");
+					let account_id = AccountPublic::from(pair.public()).into_account();
+					(account_id, pair)
+				},
+				Ed25519 => {
+					let pair = ed25519::Pair::from_string(&seed, None).expect("failed to generate pair");
+					let account_id = AccountPublic::from(pair.public()).into_account();
+					(account_id, pair)
+				},
+			}
 			accounts.insert(account_id, pair);
 		}
 

@@ -140,6 +140,33 @@ fn bench_account_reaping(c: &mut Criterion) {
 	);
 }
 
+fn bench_account_ed25519(c: &mut Criterion) {
+	sc_cli::init_logger("");
+
+	let mut bench_db = BenchDb::new(100);
+	let block = bench_db.generate_block(BlockType::RandomTransfersEd25519(200));
+
+	c.bench_function_over_inputs("ed25519 B-0003",
+		move |bencher, profile| {
+			bencher.iter_batched(
+				|| {
+					let context = bench_db.create_context(*profile);
+					let _version = context.client.runtime_version_at(&BlockId::Number(0))
+						.expect("Failed to get runtime version")
+						.spec_version;
+
+					context
+				},
+				|mut context| {
+					context.import_block(block.clone());
+				},
+				criterion::BatchSize::LargeInput,
+			);
+		},
+		vec![Profile::Wasm, Profile::Native],
+	);
+}
+
 // This is not an actual benchmark, so don't use it to measure anything.
 //   It just produces special pattern of cpu load that allows easy picking
 //   the part of block import for the profiling in the tool of choice.
