@@ -93,6 +93,7 @@ use serde::Serialize;
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
+use sp_std::convert::Infallible;
 use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
@@ -112,12 +113,12 @@ use sp_runtime::{
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
+	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
 	traits::{
-		Contains, Get, ModuleToIndex, OnNewAccount, OnReapAccount, IsDeadAccount, Happened,
+		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap
 	},
-	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
+	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -219,7 +220,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// A function that is invoked when an account has been determined to be dead.
 	///
 	/// All resources should be cleaned up associated with the given account.
-	type OnReapAccount: OnReapAccount<Self::AccountId>;
+	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -290,13 +291,29 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 /// which can't contain more than `u32::max_value()` items.
 type EventIndex = u32;
 
+/// Type used to encode the number of references an account has.
+pub type RefCount = u8;
+
+/// Information of an account.
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+pub struct AccountInfo<Index, AccountData> {
+	/// The number of transactions this account has sent.
+	pub nonce: Index,
+	/// The number of other modules that currently depend on this account's existence. The account
+	/// cannot be reaped until this is zero.
+	pub refcount: RefCount,
+	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
+	/// chains.
+	pub data: AccountData,
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
 		// TODO: should be hasher(twox64_concat) - will need staged migration
-		// TODO: should not including T::Index (the nonce)
 		// https://github.com/paritytech/substrate/issues/4917
-		pub Account get(fn account): map hasher(blake2_256) T::AccountId => (T::Index, T::AccountData);
+		pub Account get(fn account):
+			map hasher(blake2_256) T::AccountId => AccountInfo<T::Index, T::AccountData>;
 
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
@@ -384,7 +401,7 @@ decl_event!(
 		/// A new account was created.
 		NewAccount(AccountId),
 		/// An account was reaped.
-		ReapedAccount(AccountId),
+		KilledAccount(AccountId),
 	}
 );
 
@@ -407,6 +424,11 @@ decl_error! {
 		///
 		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
 		FailedToExtractRuntimeVersion,
+
+		/// Suicide called when the account has non-default composite data.
+		NonDefaultComposite,
+		/// There is a non-zero reference count preventing the account from being purged.
+		NonZeroRefCount
 	}
 }
 
@@ -414,11 +436,15 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-		/// A big dispatch that will disallow any other transaction to be included.
+		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = SimpleDispatchInfo::MaxOperational]
-		fn fill_block(origin) {
+		#[weight = FunctionOf(
+			|(ratio,): (&Perbill,)| *ratio * T::MaximumBlockWeight::get(),
+			DispatchClass::Operational,
+			true,
+		)]
+		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
 
@@ -512,6 +538,17 @@ decl_module! {
 		fn kill_prefix(origin, prefix: Key) {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
+		}
+
+		/// Kill the sending account, assuming there are no references outstanding and the composite
+		/// data is equal to its default value.
+		#[weight = SimpleDispatchInfo::FixedOperational(25_000)]
+		fn suicide(origin) {
+			let who = ensure_signed(origin)?;
+			let account = Account::<T>::get(&who);
+			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
+			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
+			Account::<T>::remove(who);
 		}
 	}
 }
@@ -633,13 +670,40 @@ impl Default for InitKind {
 	}
 }
 
+/// Reference status; can be either referenced or unreferenced.
+pub enum RefStatus {
+	Referenced,
+	Unreferenced,
+}
+
 impl<T: Trait> Module<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {
 		Self::deposit_event_indexed(&[], event.into());
 	}
 
-		/// Deposits an event into this block's event record adding this event
+	/// Increment the reference counter on an account.
+	pub fn inc_ref(who: &T::AccountId) {
+		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_add(1));
+	}
+
+	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
+	/// you called `inc_ref` on `who`.
+	pub fn dec_ref(who: &T::AccountId) {
+		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_sub(1));
+	}
+
+	/// The number of outstanding references for the account `who`.
+	pub fn refs(who: &T::AccountId) -> RefCount {
+		Account::<T>::get(who).refcount
+	}
+
+	/// True if the account has no outstanding references.
+	pub fn allow_death(who: &T::AccountId) -> bool {
+		Account::<T>::get(who).refcount == 0
+	}
+
+	/// Deposits an event into this block's event record adding this event
 	/// to the corresponding topic indexes.
 	///
 	/// This will update storage entries that correspond to the specified topics.
@@ -851,12 +915,12 @@ impl<T: Trait> Module<T> {
 
 	/// Retrieve the account transaction counter from storage.
 	pub fn account_nonce(who: impl EncodeLike<T::AccountId>) -> T::Index {
-		Account::<T>::get(who).0
+		Account::<T>::get(who).nonce
 	}
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: impl EncodeLike<T::AccountId>) {
-		Account::<T>::mutate(who, |a| a.0 += T::Index::one());
+		Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
 	}
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this
@@ -908,18 +972,28 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::NewAccount(who));
 	}
 
-	/// Kill the account and reap any related information.
-	pub fn kill_account(who: T::AccountId) {
-		if Account::<T>::contains_key(&who) {
-			Account::<T>::remove(&who);
-			Self::on_killed_account(who);
-		}
-	}
-
 	/// Do anything that needs to be done after an account has been killed.
 	fn on_killed_account(who: T::AccountId) {
-		T::OnReapAccount::on_reap_account(&who);
-		Self::deposit_event(RawEvent::ReapedAccount(who));
+		T::OnKilledAccount::on_killed_account(&who);
+		Self::deposit_event(RawEvent::KilledAccount(who));
+	}
+
+	/// Remove an account from storage. This should only be done when its refs are zero or you'll
+	/// get storage leaks in other modules. Nonetheless we assume that the calling logic knows best.
+	///
+	/// This is a no-op if the account doesn't already exist. If it does then it will ensure
+	/// cleanups (those in `on_killed_account`) take place.
+	fn kill_account(who: &T::AccountId) {
+		if Account::<T>::contains_key(who) {
+			let account = Account::<T>::take(who);
+			if account.refcount > 0 {
+				debug::debug!(
+					target: "system",
+					"WARNING: Referenced account deleted. This is probably a bug."
+				);
+			}
+			Module::<T>::on_killed_account(who.clone());
+		}
 	}
 }
 
@@ -935,7 +1009,7 @@ impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 pub struct CallKillAccount<T>(PhantomData<T>);
 impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
-		Module::<T>::kill_account(who.clone());
+		Module::<T>::kill_account(who)
 	}
 }
 
@@ -944,53 +1018,45 @@ impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 // Anything more complex will need more sophisticated logic.
 impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 	fn get(k: &T::AccountId) -> T::AccountData {
-		Account::<T>::get(k).1
+		Account::<T>::get(k).data
 	}
 	fn is_explicit(k: &T::AccountId) -> bool {
 		Account::<T>::contains_key(k)
 	}
-	fn insert(k: &T::AccountId, t: T::AccountData) {
+	fn insert(k: &T::AccountId, data: T::AccountData) {
 		let existed = Account::<T>::contains_key(k);
-		Account::<T>::insert(k, (T::Index::default(), t));
+		Account::<T>::mutate(k, |a| a.data = data);
 		if !existed {
 			Self::on_created_account(k.clone());
 		}
 	}
 	fn remove(k: &T::AccountId) {
-		if Account::<T>::contains_key(&k) {
-			Self::kill_account(k.clone());
-		}
+		Self::kill_account(k)
 	}
 	fn mutate<R>(k: &T::AccountId, f: impl FnOnce(&mut T::AccountData) -> R) -> R {
 		let existed = Account::<T>::contains_key(k);
-		let r = Account::<T>::mutate(k, |a| f(&mut a.1));
+		let r = Account::<T>::mutate(k, |a| f(&mut a.data));
 		if !existed {
 			Self::on_created_account(k.clone());
 		}
 		r
 	}
 	fn mutate_exists<R>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> R) -> R {
-		let (existed, exists, r) = Account::<T>::mutate_exists(k, |maybe_value| {
-			let existed = maybe_value.is_some();
-			let (maybe_nonce, mut maybe_extra) = split_inner(maybe_value.take(), |v| v);
-			let r = f(&mut maybe_extra);
-			*maybe_value = maybe_extra.map(|extra| (maybe_nonce.unwrap_or_default(), extra));
-			(existed, maybe_value.is_some(), r)
-		});
-		if !existed && exists {
-			Self::on_created_account(k.clone());
-		} else if existed && !exists {
-			Self::on_killed_account(k.clone());
-		}
-		r
+		Self::try_mutate_exists(k, |x| -> Result<R, Infallible> { Ok(f(x)) }).expect("Infallible; qed")
 	}
 	fn try_mutate_exists<R, E>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>) -> Result<R, E> {
 		Account::<T>::try_mutate_exists(k, |maybe_value| {
 			let existed = maybe_value.is_some();
-			let (maybe_nonce, mut maybe_extra) = split_inner(maybe_value.take(), |v| v);
-			f(&mut maybe_extra).map(|v| {
-				*maybe_value = maybe_extra.map(|extra| (maybe_nonce.unwrap_or_default(), extra));
-				(existed, maybe_value.is_some(), v)
+			let (maybe_prefix, mut maybe_data) = split_inner(
+				maybe_value.take(),
+				|account| ((account.nonce, account.refcount), account.data)
+			);
+			f(&mut maybe_data).map(|result| {
+				*maybe_value = maybe_data.map(|data| {
+					let (nonce, refcount) = maybe_prefix.unwrap_or_default();
+					AccountInfo { nonce, refcount, data }
+				});
+				(existed, maybe_value.is_some(), result)
 			})
 		}).map(|(existed, exists, v)| {
 			if !existed && exists {
@@ -1080,6 +1146,34 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	pub fn new() -> Self {
 		Self(PhantomData)
 	}
+
+	/// Do the pre-dispatch checks. This can be applied to both signed and unsigned.
+	///
+	/// It checks and notes the new weight and length.
+	fn do_pre_dispatch(
+		info: <Self as SignedExtension>::DispatchInfo,
+		len: usize,
+	) -> Result<(), TransactionValidityError> {
+		let next_len = Self::check_block_length(info, len)?;
+		let next_weight = Self::check_weight(info)?;
+		AllExtrinsicsLen::put(next_len);
+		AllExtrinsicsWeight::put(next_weight);
+		Ok(())
+	}
+
+	/// Do the validate checks. This can be applied to both signed and unsigned.
+	///
+	/// It only checks that the block weight and length limit will not exceed.
+	fn do_validate(
+		info: <Self as SignedExtension>::DispatchInfo,
+		len: usize,
+	) -> TransactionValidity {
+		// ignore the next weight and length. If they return `Ok`, then it is below the limit.
+		let _ = Self::check_block_length(info, len)?;
+		let _ = Self::check_weight(info)?;
+
+		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
+	}
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
@@ -1099,11 +1193,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
-		let next_len = Self::check_block_length(info, len)?;
-		AllExtrinsicsLen::put(next_len);
-		let next_weight = Self::check_weight(info)?;
-		AllExtrinsicsWeight::put(next_weight);
-		Ok(())
+		Self::do_pre_dispatch(info, len)
 	}
 
 	fn validate(
@@ -1113,18 +1203,23 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
-		// There is no point in writing to storage here since changes are discarded. This basically
-		// discards any transaction which is bigger than the length or weight limit **alone**, which
-		// is a guarantee that it will fail in the pre-dispatch phase.
-		if let Err(e) = Self::check_block_length(info, len) {
-			return Err(e);
-		}
+		Self::do_validate(info, len)
+	}
 
-		if let Err(e) = Self::check_weight(info) {
-			return Err(e);
-		}
+	fn pre_dispatch_unsigned(
+		_call: &Self::Call,
+		info: Self::DispatchInfo,
+		len: usize,
+	) -> Result<(), TransactionValidityError> {
+		Self::do_pre_dispatch(info, len)
+	}
 
-		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
+	fn validate_unsigned(
+		_call: &Self::Call,
+		info: Self::DispatchInfo,
+		len: usize,
+	) -> TransactionValidity {
+		Self::do_validate(info, len)
 	}
 }
 
@@ -1180,17 +1275,18 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> Result<(), TransactionValidityError> {
-		let (expected, extra) = Account::<T>::get(who);
-		if self.0 != expected {
+		let mut account = Account::<T>::get(who);
+		if self.0 != account.nonce {
 			return Err(
-				if self.0 < expected {
+				if self.0 < account.nonce {
 					InvalidTransaction::Stale
 				} else {
 					InvalidTransaction::Future
 				}.into()
 			)
 		}
-		Account::<T>::insert(who, (expected + T::Index::one(), extra));
+		account.nonce += T::Index::one();
+		Account::<T>::insert(who, account);
 		Ok(())
 	}
 
@@ -1202,13 +1298,13 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_len: usize,
 	) -> TransactionValidity {
 		// check index
-		let (expected, _extra) = Account::<T>::get(who);
-		if self.0 < expected {
+		let account = Account::<T>::get(who);
+		if self.0 < account.nonce {
 			return InvalidTransaction::Stale.into()
 		}
 
 		let provides = vec![Encode::encode(&(who, self.0))];
-		let requires = if expected < self.0 {
+		let requires = if account.nonce < self.0 {
 			vec![Encode::encode(&(who, self.0 - One::one()))]
 		} else {
 			vec![]
@@ -1378,6 +1474,7 @@ impl<T: Trait> Lookup for ChainContext<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_std::cell::RefCell;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
 	use frame_support::{impl_outer_origin, parameter_types};
@@ -1404,6 +1501,15 @@ mod tests {
 		};
 	}
 
+	thread_local!{
+		pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	}
+
+	pub struct RecordKilled;
+	impl OnKilledAccount<u64> for RecordKilled {
+		fn on_killed_account(who: &u64) { KILLED.with(|r| r.borrow_mut().push(*who)) }
+	}
+
 	impl Trait for Test {
 		type Origin = Origin;
 		type Call = ();
@@ -1421,9 +1527,9 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = Version;
 		type ModuleToIndex = ();
-		type AccountData = ();
+		type AccountData = u32;
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnKilledAccount = RecordKilled;
 	}
 
 	impl From<Event<Test>> for u16 {
@@ -1458,6 +1564,27 @@ mod tests {
 		let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
 		let x: Result<RawOrigin<u64>, Origin> = o.into();
 		assert_eq!(x, Ok(RawOrigin::<u64>::Signed(1u64)));
+	}
+
+	#[test]
+	fn stored_map_works() {
+		new_test_ext().execute_with(|| {
+			System::insert(&0, 42);
+			assert!(System::allow_death(&0));
+
+			System::inc_ref(&0);
+			assert!(!System::allow_death(&0));
+
+			System::insert(&0, 69);
+			assert!(!System::allow_death(&0));
+
+			System::dec_ref(&0);
+			assert!(System::allow_death(&0));
+
+			assert!(KILLED.with(|r| r.borrow().is_empty()));
+			System::kill_account(&0);
+			assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0u64]);
+		});
 	}
 
 	#[test]
@@ -1612,7 +1739,7 @@ mod tests {
 	#[test]
 	fn signed_ext_check_nonce_works() {
 		new_test_ext().execute_with(|| {
-			Account::<Test>::insert(1, (1, ()));
+			Account::<Test>::insert(1, AccountInfo { nonce: 1, refcount: 0, data: 0 });
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale

@@ -121,7 +121,7 @@ where
 			backend,
 		})
 	}
-	
+
 	/// Push onto the block's list of extrinsics.
 	///
 	/// This will ensure the extrinsic can be validly executed (by executing it).
@@ -131,8 +131,7 @@ where
 
 	/// Push onto the block's list of extrinsics.
 	///
-	/// This will treat incoming extrinsic `xt` as untrusted and perform additional checks
-	/// (currenty checking signature).
+	/// This will treat incoming extrinsic `xt` as trusted and skip signature check (for signed transactions).
 	pub fn push_trusted(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
 		self.push_internal(xt, true)
 	}
@@ -141,60 +140,36 @@ where
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
-		if self
+		let use_trusted = skip_signature && self
 			.api
 			.has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
 				block_id,
-				|version| version < 4,
-			)?
-		{
-			// Run compatibility fallback for v3.
-			self.api.map_api_result(|api| {
-				#[allow(deprecated)]
-				match api.apply_extrinsic_before_version_4_with_context(
+				|version| version >= 5,
+			)?;
+
+		self.api.map_api_result(|api| {
+			let apply_result = if use_trusted {
+				api.apply_trusted_extrinsic_with_context(
 					block_id,
 					ExecutionContext::BlockConstruction,
 					xt.clone(),
-				)? {
-					Ok(_) => {
-						extrinsics.push(xt);
-						Ok(())
-					}
-					Err(e) => Err(ApplyExtrinsicFailed::from(e).into()),
-				}
-			})
-		} else {
-			let use_trusted = skip_signature && self
-				.api
-				.has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
+				)?
+			} else  {
+				api.apply_extrinsic_with_context(
 					block_id,
-					|version| version >= 5,
-				)?;
+					ExecutionContext::BlockConstruction,
+					xt.clone(),
+				)?
+			};
 
-			self.api.map_api_result(|api| {
-				let apply_result = if use_trusted {
-					api.apply_trusted_extrinsic_with_context(
-						block_id,
-						ExecutionContext::BlockConstruction,
-						xt.clone(),
-					)?
-				} else  { 
-					api.apply_extrinsic_with_context(
-						block_id,
-						ExecutionContext::BlockConstruction,
-						xt.clone(),
-					)?
-				};
-
-				match apply_result {
-					Ok(_) => {
-						extrinsics.push(xt);
-						Ok(())
-					}
-					Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
+			match apply_result {
+				Ok(_) => {
+					extrinsics.push(xt);
+					Ok(())
 				}
-			})
-		}
+				Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
+			}
+		})
 	}
 
 	/// Consume the builder to build a valid `Block` containing all pushed extrinsics.

@@ -258,7 +258,7 @@ decl_module! {
 		/// - The weight of the `call` + 10,000.
 		/// # </weight>
 		#[weight = FunctionOf(
-			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000, 
+			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000,
 			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
 			true
 		)]
@@ -410,7 +410,7 @@ decl_module! {
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &[u8; 32])| {
 				10_000 * (args.1.len() as u32 + 1)
-			}, 
+			},
 			DispatchClass::Normal,
 			true
 		)]
@@ -485,7 +485,7 @@ decl_module! {
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Timepoint<T::BlockNumber>, &[u8; 32])| {
 				10_000 * (args.1.len() as u32 + 1)
-			}, 
+			},
 			DispatchClass::Normal,
 			true
 		)]
@@ -624,7 +624,7 @@ mod tests {
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = Balances;
+		type OnKilledAccount = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;

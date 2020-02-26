@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,10 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::params::SharedParams;
+pub use self::collec::UpgradeCollec;
+pub use self::legacy::{
+	RegisteredProtocol,
+	RegisteredProtocolEvent,
+	RegisteredProtocolName,
+	RegisteredProtocolSubstream
+};
+pub use self::notifications::{
+	NotificationsIn,
+	NotificationsInSubstream,
+	NotificationsOut,
+	NotificationsOutSubstream,
+	NotificationsHandshakeError,
+	NotificationsOutError,
+};
 
-/// Supports getting common params.
-pub trait GetSharedParams {
-	/// Returns shared params if any.
-	fn shared_params(&self) -> Option<&SharedParams>;
-}
+mod collec;
+mod legacy;
+mod notifications;

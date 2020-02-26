@@ -341,8 +341,6 @@ decl_module! {
 
 		// Runs after every block.
 		fn offchain_worker(now: T::BlockNumber) {
-			debug::RuntimeLogger::init();
-
 			// Only send messages if we are a potential validator.
 			if sp_io::offchain::is_validator() {
 				for res in Self::send_heartbeats(now).into_iter().flatten() {
@@ -619,7 +617,6 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
-#[allow(deprecated)]
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 

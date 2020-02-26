@@ -207,7 +207,7 @@ impl<G, E> Default for Configuration<G, E> {
 
 impl<G, E> Configuration<G, E> {
 	/// Create a default config using `VersionInfo`
-	pub fn new(version: &VersionInfo) -> Self {
+	pub fn from_version(version: &VersionInfo) -> Self {
 		let mut config = Configuration::default();
 		config.impl_name = version.name;
 		config.impl_version = version.version;
@@ -253,6 +253,28 @@ impl<G, E> Configuration<G, E> {
 	/// This method panic if the `database` is `None`
 	pub fn expect_database(&self) -> &DatabaseConfig {
 		self.database.as_ref().expect("database must be specified")
+	}
+
+	/// Returns a string displaying the node role, special casing the sentry mode
+	/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
+	/// doesn't participate.
+	pub fn display_role(&self) -> String {
+		if self.sentry_mode {
+			"SENTRY".to_string()
+		} else {
+			self.roles.to_string()
+		}
+	}
+
+	/// Use in memory keystore config when it is not required at all.
+	///
+	/// This function returns an error if the keystore is already set to something different than
+	/// `KeystoreConfig::None`.
+	pub fn use_in_memory_keystore(&mut self) -> Result<(), String> {
+		match &mut self.keystore {
+			cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
+			_ => Err("Keystore config specified when it should not be!".into()),
+		}
 	}
 }
 
