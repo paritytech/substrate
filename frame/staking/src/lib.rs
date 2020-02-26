@@ -286,7 +286,6 @@ use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 use sp_phragmen::ExtendedBalance;
-use frame_support::traits::OnReapAccount;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -895,10 +894,12 @@ decl_error! {
 		InsufficientValue,
 		/// Can not schedule more unlock chunks.
 		NoMoreChunks,
-		/// Invalid era to reward.
-		InvalidEraToReward,
 		/// Can not rebond without unlocking chunks.
 		NoUnlockChunk,
+		/// Attempting to target a stash that still has funds.
+		FundedTarget,
+		/// Invalid era to reward.
+		InvalidEraToReward,
 		/// Invalid number of nominations.
 		InvalidNumberOfNominations,
 	}
@@ -969,6 +970,8 @@ decl_module! {
 			// you actually validate/nominate and remove once you unbond __everything__.
 			<Bonded<T>>::insert(&stash, &controller);
 			<Payee<T>>::insert(&stash, payee);
+
+			system::Module::<T>::inc_ref(&stash);
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
@@ -1093,10 +1096,10 @@ decl_module! {
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove this.
 				let stash = ledger.stash;
+				// remove all staking-related information.
+				Self::kill_stash(&stash)?;
 				// remove the lock.
 				T::Currency::remove_lock(STAKING_ID, &stash);
-				// remove all staking-related information.
-				Self::kill_stash(&stash);
 			} else {
 				// This was the consequence of a partial unbond. just update the ledger and move on.
 				Self::update_ledger(&controller, &ledger);
@@ -1268,10 +1271,11 @@ decl_module! {
 		fn force_unstake(origin, stash: T::AccountId) {
 			ensure_root(origin)?;
 
+			// remove all staking-related information.
+			Self::kill_stash(&stash)?;
+
 			// remove the lock.
 			T::Currency::remove_lock(STAKING_ID, &stash);
-			// remove all staking-related information.
-			Self::kill_stash(&stash);
 		}
 
 		/// Force there to be a new era at the end of sessions indefinitely.
@@ -1387,7 +1391,6 @@ decl_module! {
 			);
 
 			let ledger = ledger.rebond(value);
-
 			Self::update_ledger(&controller, &ledger);
 		}
 
@@ -1404,6 +1407,20 @@ decl_module! {
 					*history_depth = new_history_depth
 				})
 			}
+		}
+
+		/// Remove all data structure concerning a staker/stash once its balance is zero.
+		/// This is essentially equivalent to `withdraw_unbonded` except it can be called by anyone
+		/// and the target `stash` must have no funds left.
+		///
+		/// This can be called from any origin.
+		///
+		/// - `stash`: The stash account to reap. Its balance must be zero.
+		fn reap_stash(_origin, stash: T::AccountId) {
+			Self::ensure_storage_upgraded();
+			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
+			Self::kill_stash(&stash)?;
+			T::Currency::remove_lock(STAKING_ID, &stash);
 		}
 	}
 }
@@ -1867,18 +1884,22 @@ impl<T: Trait> Module<T> {
 	///
 	/// Assumes storage is upgraded before calling.
 	///
-	/// This is called :
-	/// - Immediately when an account's balance falls below existential deposit.
+	/// This is called:
 	/// - after a `withdraw_unbond()` call that frees all of a stash's bonded balance.
-	fn kill_stash(stash: &T::AccountId) {
-		if let Some(controller) = <Bonded<T>>::take(stash) {
-			<Ledger<T>>::remove(&controller);
-		}
+	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
+	fn kill_stash(stash: &T::AccountId) -> DispatchResult {
+		let controller = Bonded::<T>::take(stash).ok_or(Error::<T>::NotStash)?;
+		<Ledger<T>>::remove(&controller);
+
 		<Payee<T>>::remove(stash);
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 
 		slashing::clear_stash_metadata::<T>(stash);
+
+		system::Module::<T>::dec_ref(stash);
+
+		Ok(())
 	}
 
 	/// Add reward points to validators using their stash account ID.
@@ -2093,13 +2114,6 @@ impl<T: Trait> SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>
 	}
 	fn end_session(end_index: SessionIndex) {
 		<Self as pallet_session::SessionManager<_>>::end_session(end_index)
-	}
-}
-
-impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
-	fn on_reap_account(stash: &T::AccountId) {
-		Self::ensure_storage_upgraded();
-		Self::kill_stash(stash);
 	}
 }
 

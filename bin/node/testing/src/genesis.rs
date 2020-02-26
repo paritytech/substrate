@@ -69,15 +69,15 @@ pub fn config_endowed(
 		}),
 		pallet_session: Some(SessionConfig {
 			keys: vec![
-				(alice(), to_session_keys(
+				(dave(), alice(), to_session_keys(
 					&Ed25519Keyring::Alice,
 					&Sr25519Keyring::Alice,
 				)),
-				(bob(), to_session_keys(
+				(eve(), bob(), to_session_keys(
 					&Ed25519Keyring::Bob,
 					&Sr25519Keyring::Bob,
 				)),
-				(charlie(), to_session_keys(
+				(ferdie(), charlie(), to_session_keys(
 					&Ed25519Keyring::Charlie,
 					&Sr25519Keyring::Charlie,
 				)),
