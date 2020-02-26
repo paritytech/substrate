@@ -31,35 +31,36 @@ pub mod new {
 	pub enum ForAny {}
 
 	pub struct Signer<T: SigningTypes, X = ForAny> {
-		accounts: Vec<T::Public>,
-		_phantom: std::marker::PhantomData<X>,
+		accounts: Option<Vec<T::Public>>,
+		_phantom: sp_std::marker::PhantomData<X>,
+	}
+
+	impl<T: SigningTypes, X> Default for Signer<T, X> {
+		fn default() -> Self {
+			Self {
+				accounts: Default::default(),
+				_phantom: Default::default(),
+			}
+		}
 	}
 
 	impl<T: SigningTypes, X> Signer<T, X> {
-		pub fn accounts(accounts: Vec<T::Public>) -> Self {
-			Signer {
-				accounts,
-				_phantom: Default::default(),
-			}
+		pub fn all_accounts() -> Signer<T, ForAll> {
+			Default::default()
 		}
 
-		pub fn with_all(self) -> Signer<T, ForAll> {
-			Signer {
-				accounts: self.accounts,
-				_phantom: Default::default(),
-			}
+		pub fn any_account() -> Signer<T, ForAny> {
+			Default::default()
 		}
 
-		pub fn with_any(self) -> Signer<T, ForAny> {
-			Signer {
-				accounts: self.accounts,
-				_phantom: Default::default(),
-			}
+		pub fn with_filter(mut self, accounts: Vec<T::Public>) -> Self {
+			self.accounts = Some(accounts);
+			self
 		}
 	}
 
 	impl<
-		T: SigningTypes + SubmitTransactionTypes<C>,
+		T: SigningTypes + SendTransactionTypes<C>,
 		X,
 		C,
 	> SendRawUnsignedTransaction<T, C> for Signer<T, X> {
@@ -85,14 +86,18 @@ pub mod new {
 			F: Fn(T::AccountId, T::Public) -> TPayload,
 			TPayload: SignedPayload<T>,
 		{
-			self.accounts
-				.iter()
-				.filter_map(|key| {
-					let account_id = key.clone().into_account();
-					let payload = f(account_id, key.clone());
-					payload.sign()
-				})
-			.collect()
+			if let Some(ref accounts) = self.accounts {
+				accounts
+					.iter()
+					.filter_map(|key| {
+						let account_id = key.clone().into_account();
+						let payload = f(account_id, key.clone());
+						payload.sign()
+					})
+				.collect()
+			} else {
+				unimplemented!()
+			}
 		}
 	}
 
@@ -113,13 +118,17 @@ pub mod new {
 			F: Fn(T::AccountId, T::Public) -> TPayload,
 			TPayload: SignedPayload<T>,
 		{
-			for key in &self.accounts {
-				let account_id = key.clone().into_account();
-				let payload = f(account_id, key.clone());
-				let res = payload.sign();
-				if res.is_some() {
-					return res
+			if let Some(ref accounts) = self.accounts {
+				for key in accounts {
+					let account_id = key.clone().into_account();
+					let payload = f(account_id, key.clone());
+					let res = payload.sign();
+					if res.is_some() {
+						return res
+					}
 				}
+			} else {
+				unimplemented!()
 			}
 
 			None
@@ -127,7 +136,7 @@ pub mod new {
 	}
 
 	impl<
-		T: SigningTypes + SubmitTransactionTypes<C>,
+		T: SigningTypes + SendTransactionTypes<C>,
 		C
 	> SendSignedTransaction<T, C> for Signer<T, ForAny> {
 		type Result = (T::Public, Result<(), ()>);
@@ -141,7 +150,7 @@ pub mod new {
 	}
 
 	impl<
-		T: SigningTypes + SubmitTransactionTypes<C>,
+		T: SigningTypes + SendTransactionTypes<C>,
 		C,
 	> SendSignedTransaction<T, C> for Signer<T, ForAll> {
 		type Result = Vec<(T::Public, Result<(), ()>)>;
@@ -155,7 +164,7 @@ pub mod new {
 	}
 
 	impl<
-		T: SigningTypes + SubmitTransactionTypes<C>,
+		T: SigningTypes + SendTransactionTypes<C>,
 		C,
 	> SendUnsignedTransaction<T, C> for Signer<T, ForAny> {
 		type Result = Option<T::Signature>;
@@ -173,7 +182,7 @@ pub mod new {
 	}
 
 	impl<
-		T: SigningTypes + SubmitTransactionTypes<C>,
+		T: SigningTypes + SendTransactionTypes<C>,
 		C,
 	> SendUnsignedTransaction<T, C> for Signer<T, ForAll> {
 		type Result = Vec<Option<T::Signature>>;
@@ -190,28 +199,28 @@ pub mod new {
 		}
 	}
 
-
 	/// traits
-
-	// pub trait Sign<T: Types>: Sized {
-	//     type WithAll;
-	//     type WithAny;
-
-	//     fn accounts(public: Vec<T::Public>) -> Self;
-
-	//     fn with_all(self) -> Self::WithAll;
-	//     fn with_any(self) -> Self::WithAny;
-	// }
 
 	pub trait SigningTypes {
 		type AccountId;
-		type Public: Clone + IdentifyAccount<AccountId = Self::AccountId>;
-		type RuntimeAppPublic: From<Self::Public> + RuntimeAppPublic;
-		type Signature: Into<<Self::RuntimeAppPublic as RuntimeAppPublic>::Signature>
-			+ From<<Self::RuntimeAppPublic as RuntimeAppPublic>::Signature>;
+		type Public: Clone
+			+ IdentifyAccount<AccountId = Self::AccountId>
+			+ From<Self::GenericPublic>
+			+ TryInto<Self::GenericPublic>;
+		type Signature:
+			From<Self::GenericSignature>
+			+ TryInto<Self::GenericSignature>
+			;
+		type RuntimeAppPublic: RuntimeAppPublic;
+		type GenericPublic:
+			From<Self::RuntimeAppPublic>
+			+ Into<Self::RuntimeAppPublic>;
+		type GenericSignature:
+			From<<Self::RuntimeAppPublic as RuntimeAppPublic>::Signature>
+			+ Into<<Self::RuntimeAppPublic as RuntimeAppPublic>::Signature>;
 	}
 
-	pub trait SubmitTransactionTypes<LocalCall> {
+	pub trait SendTransactionTypes<LocalCall> {
 		type Call: From<LocalCall>;
 	}
 
@@ -226,7 +235,7 @@ pub mod new {
 			;
 	}
 
-	pub trait SendSignedTransaction<T: SigningTypes + SubmitTransactionTypes<C>, C> {
+	pub trait SendSignedTransaction<T: SigningTypes + SendTransactionTypes<C>, C> {
 		type Result;
 
 		fn send_signed_transaction(
@@ -235,7 +244,7 @@ pub mod new {
 		) -> Self::Result;
 	}
 
-	pub trait SendUnsignedTransaction<T: SigningTypes + SubmitTransactionTypes<C>, C> {
+	pub trait SendUnsignedTransaction<T: SigningTypes + SendTransactionTypes<C>, C> {
 		type Result;
 
 		fn send_unsigned_transaction<TPayload, F>(
@@ -248,7 +257,7 @@ pub mod new {
 			TPayload: SignedPayload<T>;
 	}
 
-	pub trait SendRawUnsignedTransaction<T: SubmitTransactionTypes<C>, C> {
+	pub trait SendRawUnsignedTransaction<T: SendTransactionTypes<C>, C> {
 		fn send_raw_unsigned_transaction(call: T::Call) -> Result<(), ()>;
 	}
 
@@ -256,12 +265,26 @@ pub mod new {
 		fn public(&self) -> T::Public;
 
 		fn sign(&self) -> Option<T::Signature> {
-			let x = T::RuntimeAppPublic::from(self.public());
-			x.sign(&self.encode()).map(Into::into)
+			let p: T::GenericPublic = self.public().try_into().ok()?;
+			let x: T::RuntimeAppPublic = p.into();
+			x.sign(&self.encode())
+				.map(|x| {
+					let sig: T::GenericSignature = x.into();
+					sig
+				})
+				.map(From::from)
 		}
 
 		fn verify(&self, signature: T::Signature) -> bool {
-			let x = T::RuntimeAppPublic::from(self.public());
+			let p: T::GenericPublic = match self.public().try_into() {
+				Ok(a) => a,
+				_ => return false
+			};
+			let x: T::RuntimeAppPublic = p.into();
+			let signature: T::GenericSignature = match signature.try_into() {
+				Ok(a) => a,
+				_ => return false
+			};
 			x.verify(&self.encode(), &signature.into())
 		}
 	}

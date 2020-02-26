@@ -224,8 +224,8 @@ pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
-	/// A transaction submitter / signing types.
-	type Types: new::SigningTypes + new::SubmitTransactionTypes<Call<Self>>;
+	// A transaction submitter / signing types.
+	type Types: new::SigningTypes + new::SendTransactionTypes<Call<Self>>;
 
 	/// An expected duration of the session.
 	///

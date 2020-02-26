@@ -451,12 +451,28 @@ parameter_types! {
 	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
 }
 
+pub struct SigningTypes;
+impl frame_system::offchain::new::SigningTypes for SigningTypes {
+	type AccountId = <Runtime as frame_system::Trait>::AccountId;
+	type Public = <Signature as traits::Verify>::Signer;
+	type Signature = Signature;
+	type RuntimeAppPublic = ImOnlineId;
+	type GenericSignature = sp_core::sr25519::Signature;
+	type GenericPublic = sp_core::sr25519::Public;
+}
+
+impl<C> frame_system::offchain::new::SendTransactionTypes<C> for SigningTypes where
+	Call: From<C>,
+{
+	type Call = Call;
+}
+
 impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Event = Event;
-	type Call = Call;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
+	type Types = SigningTypes;
 }
 
 impl pallet_offences::Trait for Runtime {
