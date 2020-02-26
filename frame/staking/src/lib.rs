@@ -1394,6 +1394,9 @@ decl_module! {
 			Self::update_ledger(&controller, &ledger);
 		}
 
+		/// Set history_depth value.
+		///
+		/// Origin must be root.
 		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn set_history_depth(origin, #[compact] new_history_depth: EraIndex) {
 			ensure_root(origin)?;
