@@ -3,10 +3,12 @@ description = "Connectivity manager based on reputation"
 homepage = "http://parity.io"
 license = "GPL-3.0"
 name = "sc-peerset"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 repository = "https://github.com/paritytech/substrate/"
+documentation = "https://docs.rs/sc-peerset"
+
 
 [dependencies]
 futures = "0.3.1"

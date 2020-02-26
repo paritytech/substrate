@@ -1,19 +1,21 @@
 [package]
 name = "sc-block-builder"
-version = "0.8.0-alpha.1"
+version = "0.8.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Substrate block builder"
+
 
 [dependencies]
-sp-state-machine = { version = "0.8.0-alpha.1", path = "../../primitives/state-machine" }
-sp-runtime = { version = "2.0.0-alpha.1", path = "../../primitives/runtime" }
-sp-api = { version = "2.0.0-alpha.1", path = "../../primitives/api" }
-sp-consensus = { version = "0.8.0-alpha.1", path = "../../primitives/consensus/common" }
-sp-blockchain = { version = "2.0.0-alpha.1", path = "../../primitives/blockchain" }
-sp-core = { version = "2.0.0-alpha.1", path = "../../primitives/core" }
-sp-block-builder = { version = "2.0.0-alpha.1", path = "../../primitives/block-builder" }
-sc-client-api = { version = "2.0.0-alpha.1", path = "../api" }
+sp-state-machine = { version = "0.8.0-alpha.2", path = "../../primitives/state-machine" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
+sp-api = { version = "2.0.0-alpha.2", path = "../../primitives/api" }
+sp-consensus = { version = "0.8.0-alpha.2", path = "../../primitives/consensus/common" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../../primitives/blockchain" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
+sp-block-builder = { version = "2.0.0-alpha.2", path = "../../primitives/block-builder" }
+sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
 codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive"] }

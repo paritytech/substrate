@@ -1,11 +1,12 @@
 [package]
 name = "frame-support-procedural-tools-derive"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Use to derive parsing for parsing struct."
 
 [lib]
 proc-macro = true

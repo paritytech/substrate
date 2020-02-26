@@ -9,14 +9,14 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-api = { version = "2.0.0-alpha.1", path = "../" }
+sp-api = { version = "2.0.0-alpha.2", path = "../" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }
-sp-version = { version = "2.0.0-alpha.1", path = "../../version" }
-sp-runtime = { version = "2.0.0-alpha.1", path = "../../runtime" }
-sp-blockchain = { version = "2.0.0-alpha.1", path = "../../blockchain" }
-sp-consensus = { version = "0.8.0-alpha.1", path = "../../../primitives/consensus/common" }
+sp-version = { version = "2.0.0-alpha.2", path = "../../version" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../runtime" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../../blockchain" }
+sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/common" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sp-state-machine = { version = "0.8.0-alpha.1", path = "../../../primitives/state-machine" }
+sp-state-machine = { version = "0.8.0-alpha.2", path = "../../../primitives/state-machine" }
 trybuild = "1.0.17"
 rustversion = "1.0.0"
 
