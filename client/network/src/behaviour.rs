@@ -66,7 +66,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 		allow_private_ipv4: bool,
-		discovery_only_if_under_num: u64,
+		allow_out_only_if_under_num: u64,
 		block_requests: protocol::BlockRequests<B>,
 		light_client_handler: protocol::LightClientHandler<B>,
 	) -> Self {
@@ -78,7 +78,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 				known_addresses,
 				enable_mdns,
 				allow_private_ipv4,
-				discovery_only_if_under_num,
+				allow_out_only_if_under_num,
 			).await,
 			block_requests,
 			light_client_handler,

@@ -85,8 +85,11 @@ pub struct DiscoveryBehaviour {
 	/// If false, `addresses_of_peer` won't return any private IPv4 address, except for the ones
 	/// stored in `user_defined`.
 	allow_private_ipv4: bool,
-	/// Number of active connections over which we interrupt the discovery process.
-	discovery_only_if_under_num: u64,
+	/// Number of active connections over which we interrupt the discovery process and pretend to
+	/// have forgotten about all addresses other than the ones of reserved nodes and bootnodes. If
+	/// this module is the only address book provided to the libp2p swarm (which is the case at
+	/// the time of writing), this effectively blocks any new outgoing connection.
+	allow_out_only_if_under_num: u64,
 }
 
 impl DiscoveryBehaviour {
@@ -98,7 +101,7 @@ impl DiscoveryBehaviour {
 		user_defined: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 		allow_private_ipv4: bool,
-		discovery_only_if_under_num: u64,
+		allow_out_only_if_under_num: u64,
 	) -> Self {
 		if enable_mdns {
 			#[cfg(target_os = "unknown")]
@@ -121,7 +124,7 @@ impl DiscoveryBehaviour {
 			local_peer_id: local_public_key.into_peer_id(),
 			num_connections: 0,
 			allow_private_ipv4,
-			discovery_only_if_under_num,
+			allow_out_only_if_under_num,
 			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
 				match Mdns::new() {
@@ -217,6 +220,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		let mut list = self.user_defined.iter()
 			.filter_map(|(p, a)| if p == peer_id { Some(a.clone()) } else { None })
 			.collect::<Vec<_>>();
+
+		// We temporarily enforce a hard-limit on the number of outgoing connections by
+		// pretending we don't know how to reach any other node if the number of connections is
+		// too high.
+		if self.num_connections >= self.allow_out_only_if_under_num {
+			return list;
+		}
 
 		{
 			let mut list_to_filter = self.kademlia.addresses_of_peer(peer_id);
@@ -330,7 +340,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 		// Poll the stream that fires when we need to start a random Kademlia query.
 		while let Poll::Ready(_) = self.next_kad_random_query.poll_unpin(cx) {
-			if self.num_connections < self.discovery_only_if_under_num {
+			if self.num_connections < self.allow_out_only_if_under_num {
 				let random_peer_id = PeerId::random();
 				debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
 					{:?}", random_peer_id);
@@ -451,7 +461,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				NetworkBehaviourAction::GenerateEvent(event) => {
 					match event {
 						MdnsEvent::Discovered(list) => {
-							if self.num_connections >= self.discovery_only_if_under_num {
+							if self.num_connections >= self.allow_out_only_if_under_num {
 								continue;
 							}
 

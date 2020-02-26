@@ -256,6 +256,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			if let Some(spawner) = params.executor {
 				builder = builder.executor_fn(spawner);
 			}
+			builder = builder.incoming_limit(Some(params.network_config.in_peers));
 			(builder.build(), bandwidth)
 		};
 
