@@ -369,7 +369,7 @@ pub fn get_runtime_code<H: Hasher, B: Backend<H>>(backend: &B) -> Result<Runtime
 	let code = backend.storage(well_known_keys::CODE)
 		.ok()
 		.flatten()
-		.ok_or_else(|| "`:code` not found")?;
+		.ok_or("`:code` not found")?;
 	let hash = H::hash(&code).encode();
 	let heap_pages = backend.storage(well_known_keys::HEAP_PAGES)
 		.ok()
