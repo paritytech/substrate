@@ -11,7 +11,9 @@ labels=(
 )
 
 version="$CI_COMMIT_TAG"
-last_version=$(git tag -l | sort -V | grep -B 1 -x "$version" | head -n 1)
+
+# Note that this is not the last *tagged* version, but the last *published* version
+last_version=$(last_github_release 'paritytech/substrate')
 echo "[+] Version: $version; Previous version: $last_version"
 
 all_changes="$(sanitised_git_logs "$last_version" "$version")"
