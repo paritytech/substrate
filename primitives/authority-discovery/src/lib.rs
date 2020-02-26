@@ -37,7 +37,7 @@ mod app {
 
     impl From<&Public> for CryptoTypePublicPair {
         fn from(key: &Public) -> Self {
-            return (sr25519::CRYPTO_ID, key.to_raw_vec())
+            return CryptoTypePublicPair(sr25519::CRYPTO_ID, key.to_raw_vec())
         }
     }
 }

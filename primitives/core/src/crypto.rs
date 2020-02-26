@@ -925,7 +925,8 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 pub struct CryptoTypeId(pub [u8; 4]);
 
 /// A type alias of CryptoTypeId & a public key
-pub type CryptoTypePublicPair = (CryptoTypeId, Vec<u8>);
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
 
 /// Known key types; this also functions as a global registry of key types for projects wishing to
 /// avoid collisions with each other.

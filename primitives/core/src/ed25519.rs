@@ -389,7 +389,7 @@ impl From<Public> for CryptoTypePublicPair {
 
 impl From<&Public> for CryptoTypePublicPair {
     fn from(key: &Public) -> Self {
-        return (CRYPTO_ID, key.to_raw_vec())
+        return CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
     }
 }
 
