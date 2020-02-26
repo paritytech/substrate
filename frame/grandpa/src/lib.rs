@@ -35,7 +35,7 @@ use sp_std::prelude::*;
 use codec::{self as codec, Decode, Encode};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
 use fg_primitives::{
-	ConsensusLog, EquivocationReport, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
+	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
 	GRANDPA_ENGINE_ID,
 };
 use frame_support::{
@@ -216,7 +216,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000_000)]
 		fn report_equivocation(
 			origin,
-			equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
+			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			// key_owner_proof: <T::HandleEquivocation as equivocation::HandleEquivocation<T>>::KeyOwnerProof,
 			key_owner_proof: Vec<u8>,
 		) {
@@ -233,18 +233,18 @@ decl_module! {
 			// validator set count of the session that we're proving membership of
 			let (offender, session_index, validator_set_count) =
 				T::HandleEquivocation::check_proof(
-					&equivocation_report,
+					&equivocation_proof,
 					key_owner_proof,
 				).ok_or("Invalid/outdated key ownership proof.")?;
 
 			// validate equivocation proof (check votes are different and
 			// signatures are valid).
-			fg_primitives::check_equivocation_report(&equivocation_report)
+			fg_primitives::check_equivocation_proof(&equivocation_proof)
 				.map_err(|_| "Invalid equivocation proof.")?;
 
 			// we check the equivocation within the context of its set id (and
 			// associated session).
-			let set_id = equivocation_report.set_id();
+			let set_id = equivocation_proof.set_id();
 
 			// fetch the current and previous sets last session index. on the
 			// genesis set there's no previous set.
@@ -278,7 +278,7 @@ decl_module! {
 					validator_set_count,
 					offender,
 					set_id,
-					equivocation_report.round(),
+					equivocation_proof.round(),
 				),
 			);
 		}
@@ -467,12 +467,12 @@ impl<T: Trait> Module<T> {
 	}
 
 	pub fn submit_report_equivocation_extrinsic(
-		equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
+		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: <T::HandleEquivocation as equivocation::HandleEquivocation<T>>::KeyOwnerProof,
 	) -> Option<()> {
 		use equivocation::HandleEquivocation;
 
-		T::HandleEquivocation::submit_equivocation_report(equivocation_report, key_owner_proof)
+		T::HandleEquivocation::submit_equivocation_report(equivocation_proof, key_owner_proof)
 			.ok()?;
 
 		Some(())

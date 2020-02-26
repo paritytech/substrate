@@ -36,7 +36,7 @@ use codec::{self as codec, Decode, Encode};
 use frame_support::traits::KeyOwnerProofSystem;
 use frame_system::offchain::SubmitSignedTransaction;
 use sp_application_crypto::{key_types::GRANDPA, RuntimeAppPublic};
-use sp_finality_grandpa::{EquivocationReport, RoundNumber, SetId};
+use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
 use sp_runtime::{traits::IdentifyAccount, DispatchResult, KeyTypeId, PerThing, Perbill};
 use sp_staking::{
 	offence::{Kind, Offence, ReportOffence},
@@ -49,14 +49,14 @@ pub trait HandleEquivocation<T: super::Trait> {
 	type Offence: GrandpaOffence<Self::KeyOwnerIdentification>;
 
 	fn check_proof(
-		equivocation_report: &EquivocationReport<T::Hash, T::BlockNumber>,
+		equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
 	) -> Option<(Self::KeyOwnerIdentification, SessionIndex, u32)>;
 
 	fn report_offence(reporters: Vec<T::AccountId>, offence: Self::Offence);
 
 	fn submit_equivocation_report(
-		equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
+		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
 	) -> DispatchResult;
 }
@@ -67,7 +67,7 @@ impl<T: super::Trait> HandleEquivocation<T> for () {
 	type Offence = GrandpaEquivocationOffence<Self::KeyOwnerIdentification>;
 
 	fn check_proof(
-		_equivocation_report: &EquivocationReport<T::Hash, T::BlockNumber>,
+		_equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
 		_key_owner_proof: Self::KeyOwnerProof,
 	) -> Option<(Self::KeyOwnerIdentification, SessionIndex, u32)> {
 		None
@@ -80,7 +80,7 @@ impl<T: super::Trait> HandleEquivocation<T> for () {
 	}
 
 	fn submit_equivocation_report(
-		_equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
+		_equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		_key_owner_proof: Self::KeyOwnerProof,
 	) -> DispatchResult {
 		Ok(())
@@ -129,11 +129,11 @@ where
 	type Offence = O;
 
 	fn check_proof(
-		equivocation_report: &EquivocationReport<T::Hash, T::BlockNumber>,
+		equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
 	) -> Option<(Self::KeyOwnerIdentification, SessionIndex, u32)> {
 		let (offender, (session_index, validator_set_count)) = P::check_proof(
-			(GRANDPA, equivocation_report.offender().encode()),
+			(GRANDPA, equivocation_proof.offender().encode()),
 			key_owner_proof,
 		)?;
 
@@ -145,11 +145,11 @@ where
 	}
 
 	fn submit_equivocation_report(
-		equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
+		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
 	) -> DispatchResult {
 		let call =
-			super::Call::report_equivocation(equivocation_report.clone(), key_owner_proof.encode());
+			super::Call::report_equivocation(equivocation_proof.clone(), key_owner_proof.encode());
 
 		let res = S::submit_signed_from(call, K::all().into_iter().map(|k| k.into_account()));
 

@@ -32,7 +32,7 @@ use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use log::debug;
 
-pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::key_types::GRANDPA;
+pub use sp_application_crypto::key_types::GRANDPA;
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::GRANDPA, ed25519};
@@ -163,16 +163,15 @@ impl<N: Codec> ConsensusLog<N> {
 	}
 }
 
-// FIXME: rename to equivocation proof ?
 #[derive(Clone, Debug, Decode, Encode, PartialEq)]
-pub struct EquivocationReport<H, N> {
+pub struct EquivocationProof<H, N> {
 	set_id: SetId,
 	equivocation: Equivocation<H, N>,
 }
 
-impl<H, N> EquivocationReport<H, N> {
+impl<H, N> EquivocationProof<H, N> {
 	pub fn new(set_id: SetId, equivocation: Equivocation<H, N>) -> Self {
-		EquivocationReport {
+		EquivocationProof {
 			set_id,
 			equivocation,
 		}
@@ -249,9 +248,8 @@ impl<H, N> Equivocation<H, N> {
 	}
 }
 
-pub fn check_equivocation_report<H, N>(
-	report: &EquivocationReport<H, N>,
-) -> Result<(), ()> where
+pub fn check_equivocation_proof<H, N>(report: &EquivocationProof<H, N>) -> Result<(), ()>
+where
 	H: Clone + Encode + PartialEq,
 	N: Clone + Encode + PartialEq,
 {
@@ -479,7 +477,7 @@ sp_api::decl_runtime_apis! {
 
 		#[skip_initialize_block]
 		fn submit_report_equivocation_extrinsic(
-			equivocation_report: EquivocationReport<Block::Hash, NumberFor<Block>>,
+			equivocation_proof: EquivocationProof<Block::Hash, NumberFor<Block>>,
 			key_owner_proof: Vec<u8>,
 		) -> Option<()>;
 	}
