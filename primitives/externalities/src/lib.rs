@@ -24,7 +24,7 @@
 
 use std::any::{Any, TypeId};
 
-use sp_storage::{ChildStorageKey, ChildInfo};
+use sp_storage::ChildInfo;
 
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
 pub use extensions::{Extension, Extensions, ExtensionStore};
@@ -47,7 +47,10 @@ pub trait Externalities: ExtensionStore {
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn child_storage_hash(
 		&self,
+<<<<<<< HEAD
 		storage_key: ChildStorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
@@ -60,7 +63,10 @@ pub trait Externalities: ExtensionStore {
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn original_child_storage(
 		&self,
+<<<<<<< HEAD
 		storage_key: ChildStorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
@@ -77,7 +83,10 @@ pub trait Externalities: ExtensionStore {
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn original_child_storage_hash(
 		&self,
+<<<<<<< HEAD
 		storage_key: ChildStorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
@@ -87,7 +96,10 @@ pub trait Externalities: ExtensionStore {
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn child_storage(
 		&self,
+<<<<<<< HEAD
 		storage_key: ChildStorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
@@ -100,12 +112,15 @@ pub trait Externalities: ExtensionStore {
 	/// Set child storage entry `key` of current contract being called (effective immediately).
 	fn set_child_storage(
 		&mut self,
+<<<<<<< HEAD
 		storage_key: ChildStorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
-		self.place_child_storage(storage_key, child_info, key, Some(value))
+		self.place_child_storage(child_info, key, Some(value))
 	}
 
 	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
@@ -116,11 +131,14 @@ pub trait Externalities: ExtensionStore {
 	/// Clear a child storage entry (`key`) of current contract being called (effective immediately).
 	fn clear_child_storage(
 		&mut self,
+<<<<<<< HEAD
 		storage_key: ChildStorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) {
-		self.place_child_storage(storage_key, child_info, key.to_vec(), None)
+		self.place_child_storage(child_info, key.to_vec(), None)
 	}
 
 	/// Whether a storage entry exists.
@@ -131,11 +149,14 @@ pub trait Externalities: ExtensionStore {
 	/// Whether a child storage entry exists.
 	fn exists_child_storage(
 		&self,
+<<<<<<< HEAD
 		storage_key: ChildStorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> bool {
-		self.child_storage(storage_key, child_info, key).is_some()
+		self.child_storage(child_info, key).is_some()
 	}
 
 	/// Returns the key immediately following the given key, if it exists.
@@ -144,13 +165,20 @@ pub trait Externalities: ExtensionStore {
 	/// Returns the key immediately following the given key, if it exists, in child storage.
 	fn next_child_storage_key(
 		&self,
+<<<<<<< HEAD
 		storage_key: ChildStorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
 	/// Clear an entire child storage.
+<<<<<<< HEAD
 	fn kill_child_storage(&mut self, storage_key: ChildStorageKey, child_info: &ChildInfo);
+=======
+	fn kill_child_storage(&mut self, child_info: &ChildInfo);
+>>>>>>> child_trie_w3_change
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
@@ -158,7 +186,10 @@ pub trait Externalities: ExtensionStore {
 	/// Clear child storage entries which keys are start with the given prefix.
 	fn clear_child_prefix(
 		&mut self,
+<<<<<<< HEAD
 		storage_key: ChildStorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	);
@@ -169,7 +200,10 @@ pub trait Externalities: ExtensionStore {
 	/// Set or clear a child storage entry. Return whether the operation succeeds.
 	fn place_child_storage(
 		&mut self,
+<<<<<<< HEAD
 		storage_key: ChildStorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
@@ -192,24 +226,32 @@ pub trait Externalities: ExtensionStore {
 	/// storage map will be removed.
 	fn child_storage_root(
 		&mut self,
-		storage_key: ChildStorageKey,
+		child_info: &ChildInfo,
 	) -> Vec<u8>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
-	/// `parent` is expects a SCALE endcoded hash.
+	/// `parent` is expects a SCALE encoded hash.
 	///
 	/// The hash is defined by the `Block`.
 	///
 	/// Returns the SCALE encoded hash.
 	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
 
-	fn wipe(&mut self) {
-		unimplemented!()
-	}
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Wipes all changes from caches and the database.
+	///
+	/// The state will be reset to genesis.
+	fn wipe(&mut self);
 
-	fn commit(&mut self) {
-		unimplemented!()
-	}
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Commits all changes to the database and clears all caches.
+	fn commit(&mut self);
 }
 
 /// Extension for the [`Externalities`] trait.

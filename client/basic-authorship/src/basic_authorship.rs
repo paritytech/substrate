@@ -195,7 +195,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 				inherent_data
 			)?
 		{
-			block_builder.push(extrinsic)?;
+			block_builder.push_trusted(extrinsic)?;
 		}
 
 		// proceed with transactions
@@ -218,7 +218,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 			let pending_tx_data = pending_tx.data().clone();
 			let pending_tx_hash = pending_tx.hash().clone();
 			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
-			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
+			match sc_block_builder::BlockBuilder::push_trusted(&mut block_builder, pending_tx_data) {
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
@@ -308,7 +308,7 @@ mod tests {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())))
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
 		);
 
 		futures::executor::block_on(
@@ -350,7 +350,7 @@ mod tests {
 			.build_with_backend();
 		let client = Arc::new(client);
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())))
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
 		);
 		let genesis_hash = client.info().best_hash;
 		let block_id = BlockId::Hash(genesis_hash);

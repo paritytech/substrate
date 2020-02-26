@@ -56,7 +56,10 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	fn read_child_proof(
 		&self,
 		block: &Block::Hash,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		keys: &[Vec<u8>],
 	) -> Result<StorageProof, Error>;
@@ -138,12 +141,15 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	fn read_child_proof(
 		&self,
 		block: &Block::Hash,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		keys: &[Vec<u8>],
 	) -> Result<StorageProof, Error> {
 		(self as &SubstrateClient<B, E, Block, RA>)
-			.read_child_proof(&BlockId::Hash(block.clone()), storage_key, child_info, keys)
+			.read_child_proof(&BlockId::Hash(block.clone()), child_info, keys)
 	}
 
 	fn execution_proof(

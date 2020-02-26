@@ -152,11 +152,14 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn child_storage(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.child_storage(storage_key, child_info, key)
+		self.state.child_storage(child_info, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -165,11 +168,14 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn exists_child_storage(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(storage_key, child_info, key)
+		self.state.exists_child_storage(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -178,11 +184,14 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn next_child_storage_key(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.next_child_storage_key(storage_key, child_info, key)
+		self.state.next_child_storage_key(child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -195,21 +204,27 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		self.state.for_keys_in_child_storage(storage_key, child_info, f)
+		self.state.for_keys_in_child_storage(child_info, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
-		self.state.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+		self.state.for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
@@ -221,14 +236,17 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn child_storage_root<I>(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.child_storage_root(storage_key, child_info, delta)
+		self.state.child_storage_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -241,11 +259,14 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 
 	fn child_keys(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
-		self.state.child_keys(storage_key, child_info, prefix)
+		self.state.child_keys(child_info, prefix)
 	}
 
 	fn as_trie_backend(&mut self)
@@ -591,16 +612,10 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 			return Err(sp_blockchain::Error::GenesisInvalid.into());
 		}
 
-		for child_key in storage.children.keys() {
-			if !well_known_keys::is_child_storage_key(&child_key) {
-				return Err(sp_blockchain::Error::GenesisInvalid.into());
-			}
-		}
-
-		let child_delta = storage.children.into_iter().map(|(storage_key, child_content)|	(
-			storage_key,
-			child_content.data.into_iter().map(|(k, v)| (k, Some(v))), child_content.child_info),
-		);
+		let child_delta = storage.children_default.into_iter().map(|(_storage_key, child_content)|(
+			child_content.child_info,
+			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
+		));
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
 		let (root, transaction, _) = self.old_state.full_storage_root(
@@ -761,7 +776,7 @@ impl<T: Clone> FrozenForDuration<T> {
 
 /// Disk backend.
 ///
-/// Disk backend keps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
+/// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
 /// Otherwise, trie nodes are kept only from some recent blocks.
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
@@ -898,7 +913,7 @@ impl<Block: BlockT> Backend<Block> {
 		inmem
 	}
 
-	/// Returns total numbet of blocks (headers) in the block DB.
+	/// Returns total number of blocks (headers) in the block DB.
 	#[cfg(feature = "test-helpers")]
 	pub fn blocks_count(&self) -> u64 {
 		self.blockchain.db.iter(columns::HEADER).count() as u64
@@ -1020,7 +1035,7 @@ impl<Block: BlockT> Backend<Block> {
 		Ok((*hash, number, false, true))
 	}
 
-	// performs forced canonicaliziation with a delay after importing a non-finalized block.
+	// performs forced canonicalization with a delay after importing a non-finalized block.
 	fn force_delayed_canonicalize(
 		&self,
 		transaction: &mut DBTransaction,
@@ -1513,6 +1528,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				average_transaction_size: io_stats.avg_transaction_size() as u64,
 				state_reads: state_stats.reads.ops,
 				state_reads_cache: state_stats.cache_reads.ops,
+				state_writes: state_stats.writes.ops,
 			},
 		})
 	}
@@ -1893,7 +1909,11 @@ pub(crate) mod tests {
 			});
 			op.reset_storage(Storage {
 				top: storage.iter().cloned().collect(),
+<<<<<<< HEAD
 				children,
+=======
+				children_default: Default::default(),
+>>>>>>> child_trie_w3_change
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -1988,7 +2008,7 @@ pub(crate) mod tests {
 
 			op.reset_storage(Storage {
 				top: storage.iter().cloned().collect(),
-				children: Default::default(),
+				children_default: Default::default(),
 			}).unwrap();
 
 			key = op.db_updates.entry(ChildInfo::top_trie())

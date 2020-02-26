@@ -37,7 +37,7 @@ use sp_core::{
 	traits::{KeystoreExt, CallInWasmExt},
 	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
-	storage::{ChildStorageKey, ChildInfo},
+	storage::ChildInfo,
 };
 
 use sp_core::{
@@ -68,16 +68,11 @@ pub enum EcdsaVerifyError {
 	BadSignature,
 }
 
-/// Returns a `ChildStorageKey` if the given `storage_key` slice is a valid storage
-/// key or panics otherwise.
-///
-/// Panicking here is aligned with what the `without_std` environment would do
-/// in the case of an invalid child storage key.
+/// Deprecated function, ensure that this is a default prefixed key.
 #[cfg(feature = "std")]
-fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey {
-	match ChildStorageKey::from_slice(storage_key) {
-		Some(storage_key) => storage_key,
-		None => panic!("child storage key is invalid"),
+fn child_storage_key_or_panic(storage_key: &[u8]) {
+	if !storage_key.starts_with(&ChildInfo::new_default(&[]).prefixed_storage_key()[..]) {
+		panic!("child storage key is invalid")
 	}
 }
 
@@ -89,6 +84,7 @@ pub trait Storage {
 		self.storage(key).map(|s| s.to_vec())
 	}
 
+<<<<<<< HEAD
 	/// All Child api uses :
 	/// - A `child_storage_key` to define the anchor point for the child proof
 	/// (commonly the location where the child root is stored in its parent trie).
@@ -113,6 +109,8 @@ pub trait Storage {
 		self.child_storage(storage_key, &child_info, key).map(|s| s.to_vec())
 	}
 
+=======
+>>>>>>> child_trie_w3_change
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
 	/// bytes that the entry in storage has beyond the offset or `None` if the storage entry
 	/// doesn't exist at all.
@@ -128,55 +126,9 @@ pub trait Storage {
 		})
 	}
 
-	/// Get `key` from child storage, placing the value into `value_out` and return the number
-	/// of bytes that the entry in storage has beyond the offset or `None` if the storage entry
-	/// doesn't exist at all.
-	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
-	/// are copied into `value_out`.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_read(
-		&self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		key: &[u8],
-		value_out: &mut [u8],
-		value_offset: u32,
-	) -> Option<u32> {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.child_storage(storage_key, &child_info, key)
-			.map(|value| {
-				let value_offset = value_offset as usize;
-				let data = &value[value_offset.min(value.len())..];
-				let written = std::cmp::min(data.len(), value_out.len());
-				value_out[..written].copy_from_slice(&data[..written]);
-				value.len() as u32
-			})
-	}
-
 	/// Set `key` to `value` in the storage.
 	fn set(&mut self, key: &[u8], value: &[u8]) {
 		self.set_storage(key.to_vec(), value.to_vec());
-	}
-
-	/// Set `key` to `value` in the child storage denoted by `child_storage_key`.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_set(
-		&mut self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		key: &[u8],
-		value: &[u8],
-	) {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.set_child_storage(storage_key, &child_info, key.to_vec(), value.to_vec());
 	}
 
 	/// Clear the storage of the given `key` and its value.
@@ -184,77 +136,14 @@ pub trait Storage {
 		self.clear_storage(key)
 	}
 
-	/// Clear the given child storage of the given `key` and its value.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_clear(
-		&mut self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		key: &[u8],
-	) {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.clear_child_storage(storage_key, &child_info, key);
-	}
-
-	/// Clear an entire child storage.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_storage_kill(
-		&mut self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-	) {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.kill_child_storage(storage_key, &child_info);
-	}
-
 	/// Check whether the given `key` exists in storage.
 	fn exists(&self, key: &[u8]) -> bool {
 		self.exists_storage(key)
 	}
 
-	/// Check whether the given `key` exists in storage.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_exists(
-		&self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		key: &[u8],
-	) -> bool {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.exists_child_storage(storage_key, &child_info, key)
-	}
-
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		Externalities::clear_prefix(*self, prefix)
-	}
-
-	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_clear_prefix(
-		&mut self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		prefix: &[u8],
-	) {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.clear_child_prefix(storage_key, &child_info, prefix);
 	}
 
 	/// "Commit" all existing operations and compute the resulting storage root.
@@ -264,21 +153,6 @@ pub trait Storage {
 	/// Returns the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
 		self.storage_root()
-	}
-
-	/// "Commit" all existing operations and compute the resulting child storage root.
-	///
-	/// The hashing algorithm is defined by the `Block`.
-	///
-	/// Returns the SCALE encoded hash.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_root(
-		&mut self,
-		child_storage_key: &[u8],
-	) -> Vec<u8> {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.child_storage_root(storage_key)
 	}
 
 	/// "Commit" all existing operations and get the resulting storage change root.
@@ -297,18 +171,296 @@ pub trait Storage {
 		self.next_storage_key(&key)
 	}
 
-	/// Get the next key in storage after the given one in lexicographic order in child storage.
-	fn child_next_key(
-		&mut self,
-		child_storage_key: &[u8],
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_get(
+		&self,
+		storage_key: &[u8],
 		child_definition: &[u8],
 		child_type: u32,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.child_storage(&child_info, key).map(|s| s.to_vec())
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_read(
+		&self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+		value_out: &mut [u8],
+		value_offset: u32,
+	) -> Option<u32> {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+<<<<<<< HEAD
+		self.child_storage(storage_key, &child_info, key)
+=======
+		self.child_storage(&child_info, key)
+>>>>>>> child_trie_w3_change
+			.map(|value| {
+				let value_offset = value_offset as usize;
+				let data = &value[value_offset.min(value.len())..];
+				let written = std::cmp::min(data.len(), value_out.len());
+				value_out[..written].copy_from_slice(&data[..written]);
+				value.len() as u32
+			})
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_set(
+		&mut self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+		value: &[u8],
+	) {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+<<<<<<< HEAD
+		self.set_child_storage(storage_key, &child_info, key.to_vec(), value.to_vec());
+	}
+
+	/// Clear the storage of the given `key` and its value.
+	fn clear(&mut self, key: &[u8]) {
+		self.clear_storage(key)
+=======
+		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
+>>>>>>> child_trie_w3_change
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_clear(
+		&mut self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+<<<<<<< HEAD
+		self.clear_child_storage(storage_key, &child_info, key);
+=======
+		self.clear_child_storage(&child_info, key);
+>>>>>>> child_trie_w3_change
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_storage_kill(
+		&mut self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+	) {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+<<<<<<< HEAD
+		self.kill_child_storage(storage_key, &child_info);
+=======
+		self.kill_child_storage(&child_info);
+>>>>>>> child_trie_w3_change
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_exists(
+		&self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) -> bool {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+<<<<<<< HEAD
+		self.exists_child_storage(storage_key, &child_info, key)
+=======
+		self.exists_child_storage(&child_info, key)
+>>>>>>> child_trie_w3_change
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_clear_prefix(
+		&mut self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		prefix: &[u8],
+	) {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+<<<<<<< HEAD
+		self.clear_child_prefix(storage_key, &child_info, prefix);
+=======
+		self.clear_child_prefix(&child_info, prefix);
+>>>>>>> child_trie_w3_change
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_root(
+		&mut self,
+		storage_key: &[u8],
+	) -> Vec<u8> {
+		child_storage_key_or_panic(storage_key);
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage_root(&child_info)
+	}
+
+	/// Deprecated, please use dedicated runtime apis.
+	fn child_next_key(
+		&mut self,
+		storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		child_storage_key_or_panic(storage_key);
+		if child_type != 1 { panic!("Invalid child definition"); }
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.next_child_storage_key(&child_info, key)
+	}
+
+}
+
+
+/// Interface for accessing the child storage for default child trie,
+/// from within the runtime.
+#[runtime_interface]
+pub trait DefaultChildStorage {
+	/// `storage_key` is the full location of the root of the child trie in the parent trie.
+	///
+	/// This function specifically returns the data for `key` in the child storage or `None`
+	/// if the key can not be found.
+	fn get(
+		&self,
+		storage_key: &[u8],
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage(&child_info, key).map(|s| s.to_vec())
+	}
+
+	/// Get `key` from child storage, placing the value into `value_out` and return the number
+	/// of bytes that the entry in storage has beyond the offset or `None` if the storage entry
+	/// doesn't exist at all.
+	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
+	/// are copied into `value_out`.
+	fn read(
+		&self,
+		storage_key: &[u8],
+		key: &[u8],
+		value_out: &mut [u8],
+		value_offset: u32,
+	) -> Option<u32> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage(&child_info, key)
+			.map(|value| {
+				let value_offset = value_offset as usize;
+				let data = &value[value_offset.min(value.len())..];
+				let written = std::cmp::min(data.len(), value_out.len());
+				value_out[..written].copy_from_slice(&data[..written]);
+				value.len() as u32
+			})
+	}
+
+	/// Set `key` to `value` in the child storage denoted by `storage_key`.
+	fn set(
+		&mut self,
+		storage_key: &[u8],
+		key: &[u8],
+		value: &[u8],
+	) {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
+	}
+
+	/// Clear the given child storage of the given `key` and its value.
+	fn clear (
+		&mut self,
+		storage_key: &[u8],
+		key: &[u8],
+	) {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.clear_child_storage(&child_info, key);
+	}
+
+	/// Clear an entire child storage.
+	fn storage_kill(
+		&mut self,
+		storage_key: &[u8],
+	) {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.kill_child_storage(&child_info);
+	}
+
+	/// Check whether the given `key` exists in storage.
+	fn exists(
+		&self,
+		storage_key: &[u8],
+		key: &[u8],
+	) -> bool {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.exists_child_storage(&child_info, key)
+	}
+
+	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
+	fn clear_prefix(
+		&mut self,
+		storage_key: &[u8],
+		prefix: &[u8],
+	) {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.clear_child_prefix(&child_info, prefix);
+	}
+
+	/// "Commit" all existing operations and compute the resulting child storage root.
+	///
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns the SCALE encoded hash.
+	fn root(
+		&mut self,
+		storage_key: &[u8],
+	) -> Vec<u8> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage_root(&child_info)
+	}
+
+	/// Get the next key in storage after the given one in lexicographic order in child storage.
+	fn next_key(
+		&mut self,
+		storage_key: &[u8],
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+<<<<<<< HEAD
 		let storage_key = child_storage_key_or_panic(child_storage_key);
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
 		self.next_child_storage_key(storage_key, &child_info, key)
+=======
+		let child_info = ChildInfo::new_default(storage_key);
+		self.next_child_storage_key(&child_info, key)
+>>>>>>> child_trie_w3_change
 	}
 }
 
@@ -474,7 +626,10 @@ pub trait Crypto {
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
-	/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
+	///
+	/// - `sig` is passed in RSV format. V should be either `0/1` or `27/28`.
+	/// - `msg` is the blake2-256 hash of the message.
+	///
 	/// Returns `Err` if the signature is bad, otherwise the 64-byte pubkey
 	/// (doesn't include the 0x04 prefix).
 	fn secp256k1_ecdsa_recover(
@@ -493,8 +648,11 @@ pub trait Crypto {
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
-	/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
-	/// - returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
+	///
+	/// - `sig` is passed in RSV format. V should be either `0/1` or `27/28`.
+	/// - `msg` is the blake2-256 hash of the message.
+	///
+	/// Returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
 	fn secp256k1_ecdsa_recover_compressed(
 		sig: &[u8; 65],
 		msg: &[u8; 32],
@@ -594,7 +752,7 @@ pub trait Offchain {
 
 	/// Returns a random seed.
 	///
-	/// This is a trully random non deterministic seed generated by host environment.
+	/// This is a truly random, non-deterministic seed generated by host environment.
 	/// Obviously fine in the off-chain worker context.
 	fn random_seed(&mut self) -> [u8; 32] {
 		self.extension::<OffchainExt>()
@@ -771,30 +929,6 @@ pub trait Logging {
 	}
 }
 
-/// Interface that provides functions for benchmarking the runtime.
-#[runtime_interface]
-pub trait Benchmarking {
-	/// Get the number of nanoseconds passed since the UNIX epoch
-	///
-	/// WARNING! This is a non-deterministic call. Do not use this within
-	/// consensus critical logic.
-	fn current_time() -> u128 {
-		std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
-			.expect("Unix time doesn't go backwards; qed")
-			.as_nanos()
-	}
-
-	/// Reset the trie database to the genesis state.
-	fn wipe_db(&mut self) {
-		self.wipe()
-	}
-
-	/// Commit pending storage changes to the trie database and clear the database cache.
-	fn commit_db(&mut self) {
-		self.commit()
-	}
-}
-
 /// Wasm-only interface that provides functions for interacting with the sandbox.
 #[runtime_interface(wasm_only)]
 pub trait Sandbox {
@@ -939,6 +1073,7 @@ pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2
 #[cfg(feature = "std")]
 pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
+	default_child_storage::HostFunctions,
 	misc::HostFunctions,
 	offchain::HostFunctions,
 	crypto::HostFunctions,
@@ -969,7 +1104,7 @@ mod tests {
 
 		t = BasicExternalities::new(Storage {
 			top: map![b"foo".to_vec() => b"bar".to_vec()],
-			children: map![],
+			children_default: map![],
 		});
 
 		t.execute_with(|| {
@@ -982,7 +1117,7 @@ mod tests {
 	fn read_storage_works() {
 		let mut t = BasicExternalities::new(Storage {
 			top: map![b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()],
-			children: map![],
+			children_default: map![],
 		});
 
 		t.execute_with(|| {
@@ -1004,7 +1139,7 @@ mod tests {
 				b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 			],
-			children: map![],
+			children_default: map![],
 		});
 
 		t.execute_with(|| {

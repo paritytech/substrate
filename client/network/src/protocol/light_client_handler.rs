@@ -40,7 +40,14 @@ use libp2p::{
 		upgrade::{InboundUpgrade, ReadOneError, UpgradeInfo, Negotiated},
 		upgrade::{OutboundUpgrade, read_one, write_one}
 	},
-	swarm::{NetworkBehaviour, NetworkBehaviourAction, OneShotHandler, PollParameters, SubstreamProtocol}
+	swarm::{
+		NegotiatedSubstream,
+		NetworkBehaviour,
+		NetworkBehaviourAction,
+		OneShotHandler,
+		PollParameters,
+		SubstreamProtocol
+	}
 };
 use nohash_hasher::IntMap;
 use prost::Message;
@@ -56,10 +63,11 @@ use std::{
 	iter,
 	io,
 	sync::Arc,
-	time::{Duration, Instant},
+	time::Duration,
 	task::{Context, Poll}
 };
 use void::Void;
+use wasm_timer::Instant;
 
 /// Configuration options for `LightClientHandler` behaviour.
 #[derive(Debug, Clone)]
@@ -162,7 +170,7 @@ pub enum Request<B: Block> {
 		request: fetcher::RemoteReadRequest<B::Header>,
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
-	ReadChild {
+	ReadDefaultChild {
 		request: fetcher::RemoteReadChildRequest<B::Header>,
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
@@ -220,7 +228,7 @@ enum PeerStatus {
 }
 
 /// The light client handler behaviour.
-pub struct LightClientHandler<T, B: Block> {
+pub struct LightClientHandler<B: Block> {
 	/// This behaviour's configuration.
 	config: Config,
 	/// Blockchain client.
@@ -239,13 +247,10 @@ pub struct LightClientHandler<T, B: Block> {
 	next_request_id: u64,
 	/// Handle to use for reporting misbehaviour of peers.
 	peerset: sc_peerset::PeersetHandle,
-	/// Type witness term.
-	_marker: std::marker::PhantomData<T>
 }
 
-impl<T, B> LightClientHandler<T, B>
+impl<B> LightClientHandler<B>
 where
-	T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	B: Block,
 {
 	/// Construct a new light client handler.
@@ -266,7 +271,6 @@ where
 			outstanding: IntMap::default(),
 			next_request_id: 1,
 			peerset,
-			_marker: std::marker::PhantomData
 		}
 	}
 
@@ -364,7 +368,7 @@ where
 						let reply = self.checker.check_read_proof(&request, proof)?;
 						Ok(Reply::MapVecU8OptVecU8(reply))
 					}
-					Request::ReadChild { request, .. } => {
+					Request::ReadDefaultChild { request, .. } => {
 						let proof = Decode::decode(&mut response.proof.as_ref())?;
 						let reply = self.checker.check_read_child_proof(&request, proof)?;
 						Ok(Reply::MapVecU8OptVecU8(reply))
@@ -510,6 +514,7 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
+<<<<<<< HEAD
 		let proof =
 			if let Some(info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
 				match self.chain.read_child_proof(&block, &request.storage_key, &info, &request.keys) {
@@ -526,16 +531,22 @@ where
 					}
 				}
 			} else {
+=======
+		let child_info = ChildInfo::new_default(&request.storage_key);
+		let proof = match self.chain.read_child_proof(&block, &child_info, &request.keys) {
+			Ok(proof) => proof,
+			Err(error) => {
+>>>>>>> child_trie_w3_change
 				log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",
 					request_id,
 					peer,
 					request.storage_key.to_hex::<String>(),
 					fmt_keys(request.keys.first(), request.keys.last()),
 					request.block,
-					"invalid child info and type"
-				);
+					error);
 				StorageProof::empty()
-			};
+			}
+		};
 
 		let response = {
 			let r = api::v1::light::RemoteReadResponse { proof: proof.encode() };
@@ -646,12 +657,11 @@ where
 	}
 }
 
-impl<T, B> NetworkBehaviour for LightClientHandler<T, B>
+impl<B> NetworkBehaviour for LightClientHandler<B>
 where
-	T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	B: Block
 {
-	type ProtocolsHandler = OneShotHandler<T, InboundProtocol, OutboundProtocol, Event<Negotiated<T>>>;
+	type ProtocolsHandler = OneShotHandler<InboundProtocol, OutboundProtocol, Event<NegotiatedSubstream>>;
 	type OutEvent = Void;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
@@ -690,7 +700,7 @@ where
 		self.remove_peer(peer)
 	}
 
-	fn inject_node_event(&mut self, peer: PeerId, event: Event<Negotiated<T>>) {
+	fn inject_node_event(&mut self, peer: PeerId, event: Event<NegotiatedSubstream>) {
 		match event {
 			// An incoming request from remote has been received.
 			Event::Request(request, mut stream) => {
@@ -834,10 +844,10 @@ where
 			};
 			if let Some(peer) = available_peer {
 				let id = self.next_request_id();
-				let rq = serialise_request(id, &request.request);
+				let rq = serialize_request(id, &request.request);
 				let mut buf = Vec::with_capacity(rq.encoded_len());
 				if let Err(e) = rq.encode(&mut buf) {
-					log::debug!("failed to serialise request {}: {}", id, e);
+					log::debug!("failed to serialize request {}: {}", id, e);
 					send_reply(Err(ClientError::RemoteFetchFailed), request.request)
 				} else {
 					log::trace!("sending request {} to peer {}", id, peer);
@@ -898,7 +908,7 @@ fn required_block<B: Block>(request: &Request<B>) -> NumberFor<B> {
 	match request {
 		Request::Header { request, .. } => request.block,
 		Request::Read { request, .. } => *request.header.number(),
-		Request::ReadChild { request, .. } => *request.header.number(),
+		Request::ReadDefaultChild { request, .. } => *request.header.number(),
 		Request::Call { request, .. } => *request.header.number(),
 		Request::Changes { request, .. } => request.max_block.0,
 	}
@@ -908,14 +918,14 @@ fn retries<B: Block>(request: &Request<B>) -> usize {
 	let rc = match request {
 		Request::Header { request, .. } => request.retry_count,
 		Request::Read { request, .. } => request.retry_count,
-		Request::ReadChild { request, .. } => request.retry_count,
+		Request::ReadDefaultChild { request, .. } => request.retry_count,
 		Request::Call { request, .. } => request.retry_count,
 		Request::Changes { request, .. } => request.retry_count,
 	};
 	rc.unwrap_or(0)
 }
 
-fn serialise_request<B: Block>(id: u64, request: &Request<B>) -> api::v1::light::Request {
+fn serialize_request<B: Block>(id: u64, request: &Request<B>) -> api::v1::light::Request {
 	let request = match request {
 		Request::Header { request, .. } => {
 			let r = api::v1::light::RemoteHeaderRequest { block: request.block.encode() };
@@ -928,12 +938,11 @@ fn serialise_request<B: Block>(id: u64, request: &Request<B>) -> api::v1::light:
 			};
 			api::v1::light::request::Request::RemoteReadRequest(r)
 		}
-		Request::ReadChild { request, .. } => {
+		Request::ReadDefaultChild { request, .. } => {
 			let r = api::v1::light::RemoteReadChildRequest {
 				block: request.block.encode(),
 				storage_key: request.storage_key.clone(),
-				child_type: request.child_type.clone(),
-				child_info: request.child_info.clone(),
+				child_type: request.child_type,
 				keys: request.keys.clone(),
 			};
 			api::v1::light::request::Request::RemoteReadChildRequest(r)
@@ -977,7 +986,7 @@ fn send_reply<B: Block>(result: Result<Reply<B>, ClientError>, request: Request<
 			Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
 			reply => log::error!("invalid reply for read request: {:?}, {:?}", reply, request),
 		}
-		Request::ReadChild { request, sender } => match result {
+		Request::ReadDefaultChild { request, sender } => match result {
 			Err(e) => send(Err(e), sender),
 			Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
 			reply => log::error!("invalid reply for read child request: {:?}, {:?}", reply, request),
@@ -1049,7 +1058,7 @@ where
 /// Sends a request to remote and awaits the response.
 #[derive(Debug, Clone)]
 pub struct OutboundProtocol {
-	/// The serialised protobuf request.
+	/// The serialized protobuf request.
 	request: Vec<u8>,
 	/// The max. request length in bytes.
 	max_data_size: usize,
@@ -1141,11 +1150,14 @@ mod tests {
 	use super::{Event, LightClientHandler, Request, OutboundProtocol, PeerStatus};
 	use void::Void;
 
+<<<<<<< HEAD
 	const CHILD_UUID: &[u8] = b"foobarbaz";
 
+=======
+>>>>>>> child_trie_w3_change
 	type Block = sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
-	type Handler = LightClientHandler<SubstreamRef<Arc<StreamMuxerBox>>, Block>;
-	type Swarm = libp2p::swarm::Swarm<Boxed<(PeerId, StreamMuxerBox), io::Error>, Handler>;
+	type Handler = LightClientHandler<Block>;
+	type Swarm = libp2p::swarm::Swarm<Handler>;
 
 	fn empty_proof() -> Vec<u8> {
 		StorageProof::empty().encode()
@@ -1210,7 +1222,7 @@ mod tests {
 		( ok: bool
 		, ps: sc_peerset::PeersetHandle
 		, cf: super::Config
-		) -> LightClientHandler<futures::io::Cursor<Vec<u8>>, Block>
+		) -> LightClientHandler<Block>
 	{
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let checker = Arc::new(DummyFetchChecker::new(ok));
@@ -1221,10 +1233,7 @@ mod tests {
 		ConnectedPoint::Dialer { address: Multiaddr::empty() }
 	}
 
-	fn poll<T>(mut b: &mut LightClientHandler<T, Block>) -> Poll<NetworkBehaviourAction<OutboundProtocol, Void>>
-	where
-		T: AsyncRead + AsyncWrite + Unpin + Send + 'static
-	{
+	fn poll(mut b: &mut LightClientHandler<Block>) -> Poll<NetworkBehaviourAction<OutboundProtocol, Void>> {
 		let mut p = EmptyPollParams(PeerId::random());
 		match future::poll_fn(|cx| Pin::new(&mut b).poll(cx, &mut p)).now_or_never() {
 			Some(a) => Poll::Ready(a),
@@ -1562,7 +1571,7 @@ mod tests {
 					response: Some(api::v1::light::response::Response::RemoteReadResponse(r)),
 				}
 			}
-			Request::ReadChild{..} => {
+			Request::ReadDefaultChild{..} => {
 				let r = api::v1::light::RemoteReadResponse { proof: empty_proof() };
 				api::v1::light::Response {
 					id: 1,
@@ -1636,19 +1645,21 @@ mod tests {
 
 	#[test]
 	fn receives_remote_read_child_response() {
+<<<<<<< HEAD
 		let child_info = ChildInfo::new_default(CHILD_UUID);
 		let info = child_info.info();
+=======
+>>>>>>> child_trie_w3_change
 		let mut chan = oneshot::channel();
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			storage_key: b":child_storage:sub".to_vec(),
+			child_type: 1,
 			keys: vec![b":key".to_vec()],
-			child_info: info.0.to_vec(),
-			child_type: info.1,
 			retry_count: None,
 		};
-		issue_request(Request::ReadChild { request, sender: chan.0 });
+		issue_request(Request::ReadDefaultChild { request, sender: chan.0 });
 		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
 	}
 
@@ -1740,19 +1751,21 @@ mod tests {
 
 	#[test]
 	fn send_receive_read_child() {
+<<<<<<< HEAD
 		let child_info = ChildInfo::new_default(CHILD_UUID);
 		let info = child_info.info();
+=======
+>>>>>>> child_trie_w3_change
 		let chan = oneshot::channel();
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b":child_storage:sub".to_vec(),
+			storage_key: b"sub".to_vec(),
+			child_type: 1,
 			keys: vec![b":key".to_vec()],
-			child_info: info.0.to_vec(),
-			child_type: info.1,
 			retry_count: None,
 		};
-		send_receive(Request::ReadChild { request, sender: chan.0 });
+		send_receive(Request::ReadDefaultChild { request, sender: chan.0 });
 		assert_eq!(Some(vec![42]), task::block_on(chan.1).unwrap().unwrap().remove(&b":key"[..]).unwrap());
 		//                   ^--- from `DummyFetchChecker::check_read_child_proof`
 	}

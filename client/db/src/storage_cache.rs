@@ -338,7 +338,7 @@ impl<B: BlockT> CacheChanges<B> {
 			is_best,
 		);
 		let cache = &mut *cache;
-		// Filter out commiting block if any.
+		// Filter out committing block if any.
 		let enacted: Vec<_> = enacted
 			.iter()
 			.filter(|h| commit_hash.as_ref().map_or(true, |p| *h != p))
@@ -539,11 +539,14 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn child_storage(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		let key = (storage_key.to_vec(), key.to_vec());
+		let key = (child_info.storage_key().to_vec(), key.to_vec());
 		let local_cache = self.cache.local_cache.upgradable_read();
 		if let Some(entry) = local_cache.child_storage.get(&key).cloned() {
 			trace!("Found in local cache: {:?}", key);
@@ -561,7 +564,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 			}
 		}
 		trace!("Cache miss: {:?}", key);
-		let value = self.state.child_storage(storage_key, child_info, &key.1[..])?;
+		let value = self.state.child_storage(child_info, &key.1[..])?;
 
 		// just pass it through the usage counter
 		let value =	self.usage.tally_child_key_read(&key, value, false);
@@ -576,20 +579,26 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn exists_child_storage(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(storage_key, child_info, key)
+		self.state.exists_child_storage(child_info, key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		self.state.for_keys_in_child_storage(storage_key, child_info, f)
+		self.state.for_keys_in_child_storage(child_info, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -598,11 +607,14 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn next_child_storage_key(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.next_child_storage_key(storage_key, child_info, key)
+		self.state.next_child_storage_key(child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -615,12 +627,15 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
-		self.state.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+		self.state.for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
@@ -632,14 +647,17 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn child_storage_root<I>(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.child_storage_root(storage_key, child_info, delta)
+		self.state.child_storage_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -652,11 +670,14 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 
 	fn child_keys(
 		&self,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
-		self.state.child_keys(storage_key, child_info, prefix)
+		self.state.child_keys(child_info, prefix)
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HasherFor<B>>> {
@@ -1454,7 +1475,7 @@ mod qc {
 
 							self.head_state(
 								self.canon.last()
-								.expect("wasn't forking to emptiness so there shoud be one!")
+								.expect("wasn't forking to emptiness so there should be one!")
 								.hash
 							)
 						},

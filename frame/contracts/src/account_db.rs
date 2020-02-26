@@ -26,8 +26,13 @@ use sp_std::collections::btree_map::{BTreeMap, Entry};
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Zero};
+<<<<<<< HEAD
 use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use frame_support::{storage::child, StorageMap, storage::child::ChildInfo};
+=======
+use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance};
+use frame_support::{storage::child, StorageMap};
+>>>>>>> child_trie_w3_change
 use frame_system;
 
 // Note: we don't provide Option<Contract> because we can't create
@@ -133,7 +138,11 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		trie_id: Option<(&TrieId, &ChildInfo)>,
 		location: &StorageKey
 	) -> Option<Vec<u8>> {
+<<<<<<< HEAD
 		trie_id.and_then(|(id, child_info)| child::get_raw(id, child_info, &blake2_256(location)))
+=======
+		trie_id.and_then(|id| child::get_raw(&crate::trie_unique_id(&id[..]), &blake2_256(location)))
+>>>>>>> child_trie_w3_change
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
@@ -151,10 +160,12 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		let mut total_imbalance = SignedImbalance::zero();
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance() {
-				let (imbalance, outcome) = T::Currency::make_free_balance_be(&address, balance);
+				let existed  = !T::Currency::total_balance(&address).is_zero();
+				let imbalance = T::Currency::make_free_balance_be(&address, balance);
+				let exists  = !T::Currency::total_balance(&address).is_zero();
 				total_imbalance = total_imbalance.merge(imbalance);
-				if let UpdateBalanceOutcome::AccountKilled = outcome {
-					// Account killed. This will ultimately lead to calling `OnReapAccount` callback
+				if existed && !exists {
+					// Account killed. This will ultimately lead to calling `OnKilledAccount` callback
 					// which will make removal of CodeHashOf and AccountStorage for this account.
 					// In order to avoid writing over the deleted properties we `continue` here.
 					continue;
@@ -178,13 +189,21 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					(false, Some(info), _) => info,
 					// Existing contract is being removed.
 					(true, Some(info), None) => {
+<<<<<<< HEAD
 						child::kill_storage(&info.trie_id, &info.child_trie_unique_id());
+=======
+						child::kill_storage(&info.child_trie_unique_id());
+>>>>>>> child_trie_w3_change
 						<ContractInfoOf<T>>::remove(&address);
 						continue;
 					}
 					// Existing contract is being replaced by a new one.
 					(true, Some(info), Some(code_hash)) => {
+<<<<<<< HEAD
 						child::kill_storage(&info.trie_id, &info.child_trie_unique_id());
+=======
+						child::kill_storage(&info.child_trie_unique_id());
+>>>>>>> child_trie_w3_change
 						AliveContractInfo::<T> {
 							code_hash,
 							storage_size: T::StorageSizeOffset::get(),
@@ -224,17 +243,27 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				let child_info = &new_info.child_trie_unique_id();
 				for (k, v) in changed.storage.into_iter() {
 					if let Some(value) = child::get_raw(
+<<<<<<< HEAD
 						&new_info.trie_id[..],
 						child_info,
+=======
+						&new_info.child_trie_unique_id(),
+>>>>>>> child_trie_w3_change
 						&blake2_256(&k),
 					) {
 						new_info.storage_size -= value.len() as u32;
 					}
 					if let Some(value) = v {
 						new_info.storage_size += value.len() as u32;
+<<<<<<< HEAD
 						child::put_raw(&new_info.trie_id[..], child_info, &blake2_256(&k), &value[..]);
 					} else {
 						child::kill(&new_info.trie_id[..], child_info, &blake2_256(&k));
+=======
+						child::put_raw(&new_info.child_trie_unique_id(), &blake2_256(&k), &value[..]);
+					} else {
+						child::kill(&new_info.child_trie_unique_id(), &blake2_256(&k));
+>>>>>>> child_trie_w3_change
 					}
 				}
 

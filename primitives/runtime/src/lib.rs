@@ -68,7 +68,7 @@ pub use sp_application_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
-pub use sp_arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64};
+pub use sp_arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64, PerThing};
 /// Re-export 128 bit helpers.
 pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
@@ -132,15 +132,15 @@ impl BuildStorage for sp_core::storage::Storage {
 		storage: &mut sp_core::storage::Storage,
 	)-> Result<(), String> {
 		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
-		for (k, other_map) in self.children.iter() {
+		for (k, other_map) in self.children_default.iter() {
 			let k = k.clone();
-			if let Some(map) = storage.children.get_mut(&k) {
+			if let Some(map) = storage.children_default.get_mut(&k) {
 				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
 				if !map.child_info.try_update(&other_map.child_info) {
 					return Err("Incompatible child info update".to_string());
 				}
 			} else {
-				storage.children.insert(k, other_map.clone());
+				storage.children_default.insert(k, other_map.clone());
 			}
 		}
 		Ok(())
@@ -214,7 +214,7 @@ impl Default for MultiSigner {
 	}
 }
 
-/// NOTE: This implementations is required by `SimpleAddressDeterminator`,
+/// NOTE: This implementations is required by `SimpleAddressDeterminer`,
 /// we convert the hash into some AccountId, it's fine to use any scheme.
 impl<T: Into<H256>> crypto::UncheckedFrom<T> for MultiSigner {
 	fn unchecked_from(x: T) -> Self {
@@ -458,7 +458,7 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 ///
 /// Examples of reasons preventing inclusion in a block:
 /// - More block weight is required to process the extrinsic than is left in the block being built.
-///   This doesn't neccessarily mean that the extrinsic is invalid, since it can still be
+///   This doesn't necessarily mean that the extrinsic is invalid, since it can still be
 ///   included in the next block if it has enough spare weight available.
 /// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
 ///   a transaction in the block doesn't make sense.
@@ -684,18 +684,6 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 pub fn print(print: impl traits::Printable) {
 	print.print();
 }
-
-/// An alphabet of possible parameters to use for benchmarking.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
-#[allow(missing_docs)]
-pub enum BenchmarkParameter {
-	A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-}
-
-/// Results from running benchmarks on a FRAME pallet.
-/// Contains duration of the function call in nanoseconds along with the benchmark parameters
-/// used for that benchmark result.
-pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128);
 
 #[cfg(test)]
 mod tests {

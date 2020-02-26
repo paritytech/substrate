@@ -21,7 +21,7 @@ use self::error::Error;
 use std::sync::Arc;
 use assert_matches::assert_matches;
 use futures01::stream::Stream;
-use sp_core::{storage::{well_known_keys, ChildInfo}, ChangesTrieConfiguration};
+use sp_core::{storage::ChildInfo, ChangesTrieConfiguration};
 use sp_core::hash::H256;
 use sp_io::hashing::blake2_256;
 use substrate_test_runtime_client::{
@@ -30,26 +30,41 @@ use substrate_test_runtime_client::{
 	runtime,
 };
 
+<<<<<<< HEAD
 const CHILD_UID: &'static [u8] = b"unique_id";
+=======
+const STORAGE_KEY: &[u8] = b"child";
+>>>>>>> child_trie_w3_change
 
 #[test]
 fn should_return_storage() {
 	const KEY: &[u8] = b":mock";
 	const VALUE: &[u8] = b"hello world";
-	const STORAGE_KEY: &[u8] = b":child_storage:default:child";
 	const CHILD_VALUE: &[u8] = b"hello world !";
+<<<<<<< HEAD
 	let child_info1 = ChildInfo::new_default(CHILD_UID);
 	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let client = TestClientBuilder::new()
 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
 		.add_extra_child_storage(STORAGE_KEY.to_vec(), &child_info1, KEY.to_vec(), CHILD_VALUE.to_vec())
+=======
+
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
+	let mut core = tokio::runtime::Runtime::new().unwrap();
+	let client = TestClientBuilder::new()
+		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
+		.add_extra_child_storage(&child_info, KEY.to_vec(), CHILD_VALUE.to_vec())
+>>>>>>> child_trie_w3_change
 		.build();
 	let genesis_hash = client.genesis_hash();
 	let client = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
 	let key = StorageKey(KEY.to_vec());
 	let storage_key = StorageKey(STORAGE_KEY.to_vec());
+<<<<<<< HEAD
 	let (child_info, child_type) = child_info1.info();
 	let child_info = StorageKey(child_info.to_vec());
+=======
+>>>>>>> child_trie_w3_change
 
 	assert_eq!(
 		client.storage(key.clone(), Some(genesis_hash).into()).wait()
@@ -67,7 +82,7 @@ fn should_return_storage() {
 	);
 	assert_eq!(
 		core.block_on(
-			client.child_storage(storage_key, child_info, child_type, key, Some(genesis_hash).into())
+			client.child_storage(storage_key, 1, key, Some(genesis_hash).into())
 				.map(|x| x.map(|x| x.0.len()))
 		).unwrap().unwrap() as usize,
 		CHILD_VALUE.len(),
@@ -77,26 +92,30 @@ fn should_return_storage() {
 
 #[test]
 fn should_return_child_storage() {
+<<<<<<< HEAD
 	let child_info1 = ChildInfo::new_default(CHILD_UID);
 	let (child_info, child_type) = child_info1.info();
 	let child_info = StorageKey(child_info.to_vec());
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new()
 		.add_child_storage("test", "key", &child_info1, vec![42_u8])
+=======
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
+	let core = tokio::runtime::Runtime::new().unwrap();
+	let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new()
+		.add_child_storage(&child_info, "key", vec![42_u8])
+>>>>>>> child_trie_w3_change
 		.build());
 	let genesis_hash = client.genesis_hash();
 	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
-	let child_key = StorageKey(
-		well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect()
-	);
+	let child_key = StorageKey(STORAGE_KEY.to_vec());
 	let key = StorageKey(b"key".to_vec());
 
 
 	assert_matches!(
 		client.child_storage(
 			child_key.clone(),
-			child_info.clone(),
-			child_type,
+			1,
 			key.clone(),
 			Some(genesis_hash).into(),
 		).wait(),
@@ -105,8 +124,7 @@ fn should_return_child_storage() {
 	assert_matches!(
 		client.child_storage_hash(
 			child_key.clone(),
-			child_info.clone(),
-			child_type,
+			1,
 			key.clone(),
 			Some(genesis_hash).into(),
 		).wait().map(|x| x.is_some()),
@@ -115,8 +133,7 @@ fn should_return_child_storage() {
 	assert_matches!(
 		client.child_storage_size(
 			child_key.clone(),
-			child_info.clone(),
-			child_type,
+			1,
 			key.clone(),
 			None,
 		).wait(),
@@ -403,7 +420,7 @@ fn should_return_runtime_version() {
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":1,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",2],\
-		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",1],[\"0x40fe3ad401f8959a\",4],\
+		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",1],[\"0x40fe3ad401f8959a\",5],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",1],\
 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]]}";
 

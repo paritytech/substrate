@@ -249,8 +249,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 	fn child_storage_keys(
 		&self,
 		_block: Option<Block::Hash>,
-		_child_storage_key: StorageKey,
-		_child_info: StorageKey,
+		_storage_key: StorageKey,
 		_child_type: u32,
 		_prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
@@ -260,8 +259,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 	fn child_storage(
 		&self,
 		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
+		storage_key: StorageKey,
 		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
@@ -272,8 +270,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadChildRequest {
 					block,
 					header,
-					storage_key: child_storage_key.0,
-					child_info: child_info.0,
+					storage_key: storage_key.0,
 					child_type,
 					keys: vec![key.0.clone()],
 					retry_count: Default::default(),
@@ -294,13 +291,11 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 	fn child_storage_hash(
 		&self,
 		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
+		storage_key: StorageKey,
 		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
-		Box::new(self
-			.child_storage(block, child_storage_key, child_info, child_type, key)
+		Box::new(self.child_storage(block, storage_key, child_type, key)
 			.and_then(|maybe_storage|
 				result(Ok(maybe_storage.map(|storage| HasherFor::<Block>::hash(&storage.0))))
 			)

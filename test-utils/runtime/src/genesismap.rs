@@ -73,7 +73,7 @@ impl GenesisConfig {
 		map.extend(self.extra_storage.top.clone().into_iter());
 
 		// Assimilate the system genesis config.
-		let mut storage = Storage { top: map, children: self.extra_storage.children.clone()};
+		let mut storage = Storage { top: map, children_default: self.extra_storage.children_default.clone()};
 		let mut config = system::GenesisConfig::default();
 		config.authorities = self.authorities.clone();
 		config.assimilate_storage(&mut storage).expect("Adding `system::GensisConfig` to the genesis");
@@ -85,7 +85,7 @@ impl GenesisConfig {
 pub fn insert_genesis_block(
 	storage: &mut Storage,
 ) -> sp_core::hash::H256 {
-	let child_roots = storage.children.iter().map(|(sk, child_content)| {
+	let child_roots = storage.children_default.iter().map(|(sk, child_content)| {
 		let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			child_content.data.clone().into_iter().collect(),
 		);

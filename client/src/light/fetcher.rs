@@ -24,9 +24,10 @@ use hash_db::{HashDB, EMPTY_PREFIX};
 use sp_core::Hasher;
 use codec::{Decode, Encode};
 use sp_core::{convert_hash, traits::CodeExecutor};
+use sp_core::storage::{ChildInfo, ChildType};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
-	SimpleArithmetic, CheckedConversion,
+	AtLeast32Bit, CheckedConversion,
 };
 use sp_state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
@@ -241,10 +242,14 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
+		let child_info = match ChildType::new(request.child_type) {
+			Some(ChildType::ParentKeyId) => ChildInfo::new_default(&request.storage_key[..]),
+			None => return Err("Invalid child type".into()),
+		};
 		read_child_proof_check::<H, _>(
 			convert_hash(request.header.state_root()),
 			remote_proof,
-			&request.storage_key,
+			&child_info,
 			request.keys.iter(),
 		).map_err(Into::into)
 	}
@@ -287,7 +292,7 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 }
 
 /// A view of BTreeMap<Number, Hash> as a changes trie roots storage.
-struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
+struct RootsStorage<'a, Number: AtLeast32Bit, Hash: 'a> {
 	roots: (Number, &'a [Hash]),
 	prev_roots: &'a BTreeMap<Number, Hash>,
 }
@@ -295,7 +300,7 @@ struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
 impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a, Number, Hash>
 	where
 		H: Hasher,
-		Number: ::std::fmt::Display + ::std::hash::Hash + Clone + SimpleArithmetic + Encode + Decode + Send + Sync + 'static,
+		Number: ::std::fmt::Display + ::std::hash::Hash + Clone + AtLeast32Bit + Encode + Decode + Send + Sync + 'static,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
 	fn build_anchor(
@@ -351,8 +356,11 @@ pub mod tests {
 	use sp_state_machine::Backend;
 	use super::*;
 
+<<<<<<< HEAD
 	const CHILD_UID_1: &'static [u8] = b"unique_id_1";
 
+=======
+>>>>>>> child_trie_w3_change
 	type TestChecker = LightDataChecker<
 		NativeExecutor<substrate_test_runtime_client::LocalExecutor>,
 		Blake2Hasher,
@@ -402,11 +410,17 @@ pub mod tests {
 		let child_info1 = ChildInfo::new_default(CHILD_UID_1);
 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
 		use substrate_test_runtime_client::TestClientBuilderExt;
+		let child_info = ChildInfo::new_default(b"child1");
+		let child_info = &child_info;
 		// prepare remote client
 		let remote_client = substrate_test_runtime_client::TestClientBuilder::new()
 			.add_extra_child_storage(
+<<<<<<< HEAD
 				b":child_storage:default:child1".to_vec(),
 				&child_info1,
+=======
+				child_info,
+>>>>>>> child_trie_w3_change
 				b"key1".to_vec(),
 				b"value1".to_vec(),
 			).build();
@@ -419,15 +433,23 @@ pub mod tests {
 		// 'fetch' child read proof from remote node
 		let child_value = remote_client.child_storage(
 			&remote_block_id,
+<<<<<<< HEAD
 			&StorageKey(b":child_storage:default:child1".to_vec()),
 			&child_info1,
+=======
+			child_info,
+>>>>>>> child_trie_w3_change
 			&StorageKey(b"key1".to_vec()),
 		).unwrap().unwrap().0;
 		assert_eq!(b"value1"[..], child_value[..]);
 		let remote_read_proof = remote_client.read_child_proof(
 			&remote_block_id,
+<<<<<<< HEAD
 			b":child_storage:default:child1",
 			&child_info1,
+=======
+			child_info,
+>>>>>>> child_trie_w3_change
 			&[b"key1"],
 		).unwrap();
 
@@ -505,16 +527,18 @@ pub mod tests {
 			remote_read_proof,
 			result,
 		) = prepare_for_read_child_proof_check();
+<<<<<<< HEAD
 
 		let child_info = ChildInfo::new_default(CHILD_UID_1);
 		let child_infos = child_info.info();
+=======
+>>>>>>> child_trie_w3_change
 		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_child_proof(
 			&RemoteReadChildRequest::<Header> {
 				block: remote_block_header.hash(),
 				header: remote_block_header,
-				storage_key: b":child_storage:default:child1".to_vec(),
-				child_info: child_infos.0.to_vec(),
-				child_type: child_infos.1,
+				storage_key: b"child1".to_vec(),
+				child_type: 1,
 				keys: vec![b"key1".to_vec()],
 				retry_count: None,
 			},

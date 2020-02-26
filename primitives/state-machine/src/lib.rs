@@ -377,7 +377,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 	/// Note: changes to code will be in place if this call is made again. For running partial
 	/// blocks (e.g. a transaction at a time), ensure a different method is used.
 	///
-	/// Returns the result of the executed function either in native reprensentation `R` or
+	/// Returns the result of the executed function either in native representation `R` or
 	/// in SCALE encoded representation.
 	pub fn execute_using_consensus_failure_handler<Handler, R, NC>(
 		&mut self,
@@ -550,7 +550,10 @@ where
 /// Generate child storage read proof.
 pub fn prove_child_read<B, H, I>(
 	mut backend: B,
+<<<<<<< HEAD
 	storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	keys: I,
 ) -> Result<StorageProof, Box<dyn Error>>
@@ -563,7 +566,7 @@ where
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
-	prove_child_read_on_trie_backend(trie_backend, storage_key, child_info, keys)
+	prove_child_read_on_trie_backend(trie_backend, child_info, keys)
 }
 
 /// Generate storage read proof on pre-created trie backend.
@@ -590,7 +593,10 @@ where
 /// Generate storage read proof on pre-created trie backend.
 pub fn prove_child_read_on_trie_backend<S, H, I>(
 	trie_backend: &TrieBackend<S, H>,
+<<<<<<< HEAD
 	storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 	child_info: &ChildInfo,
 	keys: I,
 ) -> Result<StorageProof, Box<dyn Error>>
@@ -604,7 +610,11 @@ where
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
 	for key in keys.into_iter() {
 		proving_backend
+<<<<<<< HEAD
 			.child_storage(storage_key, child_info, key.as_ref())
+=======
+			.child_storage(child_info, key.as_ref())
+>>>>>>> child_trie_w3_change
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
 	Ok(proving_backend.extract_proof())
@@ -635,7 +645,7 @@ where
 pub fn read_child_proof_check<H, I>(
 	root: H::Out,
 	proof: StorageProof,
-	storage_key: &[u8],
+	child_info: &ChildInfo,
 	keys: I,
 ) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, Box<dyn Error>>
 where
@@ -649,7 +659,7 @@ where
 	for key in keys.into_iter() {
 		let value = read_child_proof_check_on_proving_backend(
 			&proving_backend,
-			storage_key,
+			child_info,
 			key.as_ref(),
 		)?;
 		result.insert(key.as_ref().to_vec(), value);
@@ -672,15 +682,19 @@ where
 /// Check child storage read proof on pre-created proving backend.
 pub fn read_child_proof_check_on_proving_backend<H>(
 	proving_backend: &TrieBackend<MemoryDB<H>, H>,
-	storage_key: &[u8],
+	child_info: &ChildInfo,
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Ord + Codec,
 {
+<<<<<<< HEAD
 	// Not a prefixed memory db, using empty unique id and include root resolution.
 	proving_backend.child_storage(storage_key, &ChildInfo::top_trie(), key)
+=======
+	proving_backend.child_storage(child_info, key)
+>>>>>>> child_trie_w3_change
 		.map_err(|e| Box::new(e) as Box<dyn Error>)
 }
 
@@ -692,7 +706,7 @@ mod tests {
 	use super::*;
 	use super::ext::Ext;
 	use super::changes_trie::Configuration as ChangesTrieConfig;
-	use sp_core::{Blake2Hasher, map, traits::Externalities, storage::ChildStorageKey};
+	use sp_core::{Blake2Hasher, map, traits::Externalities};
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
@@ -702,8 +716,11 @@ mod tests {
 		fallback_succeeds: bool,
 	}
 
+<<<<<<< HEAD
 	const CHILD_UID_1: &'static [u8] = b"unique_id_1";
 
+=======
+>>>>>>> child_trie_w3_change
 	impl CodeExecutor for DummyCodeExecutor {
 		type Error = u8;
 
@@ -932,8 +949,13 @@ mod tests {
 
 	#[test]
 	fn set_child_storage_works() {
+<<<<<<< HEAD
 
 		let child_info1 = ChildInfo::new_default(CHILD_UID_1);
+=======
+		let child_info = ChildInfo::new_default(b"sub1");
+		let child_info = &child_info;
+>>>>>>> child_trie_w3_change
 		let mut state = InMemoryBackend::<Blake2Hasher>::default();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
@@ -947,20 +969,29 @@ mod tests {
 		);
 
 		ext.set_child_storage(
+<<<<<<< HEAD
 			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
 			&child_info1,
+=======
+			child_info,
+>>>>>>> child_trie_w3_change
 			b"abc".to_vec(),
 			b"def".to_vec()
 		);
 		assert_eq!(
 			ext.child_storage(
+<<<<<<< HEAD
 				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
 				&child_info1,
+=======
+				child_info,
+>>>>>>> child_trie_w3_change
 				b"abc"
 			),
 			Some(b"def".to_vec())
 		);
 		ext.kill_child_storage(
+<<<<<<< HEAD
 			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
 			&child_info1,
 		);
@@ -968,6 +999,13 @@ mod tests {
 			ext.child_storage(
 				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
 				&child_info1,
+=======
+			child_info,
+		);
+		assert_eq!(
+			ext.child_storage(
+				child_info,
+>>>>>>> child_trie_w3_change
 				b"abc"
 			),
 			None
@@ -976,8 +1014,13 @@ mod tests {
 
 	#[test]
 	fn prove_read_and_proof_check_works() {
+<<<<<<< HEAD
 
 		let child_info1 = ChildInfo::new_default(CHILD_UID_1);
+=======
+		let child_info = ChildInfo::new_default(b"sub1");
+		let child_info = &child_info;
+>>>>>>> child_trie_w3_change
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
@@ -1004,20 +1047,24 @@ mod tests {
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_child_read(
 			remote_backend,
+<<<<<<< HEAD
 			b":child_storage:default:sub1",
 			&child_info1,
+=======
+			child_info,
+>>>>>>> child_trie_w3_change
 			&[b"value3"],
 		).unwrap();
 		let local_result1 = read_child_proof_check::<Blake2Hasher, _>(
 			remote_root,
 			remote_proof.clone(),
-			b":child_storage:default:sub1",
+			child_info,
 			&[b"value3"],
 		).unwrap();
 		let local_result2 = read_child_proof_check::<Blake2Hasher, _>(
 			remote_root,
 			remote_proof.clone(),
-			b":child_storage:default:sub1",
+			child_info,
 			&[b"value2"],
 		).unwrap();
 		assert_eq!(
@@ -1029,4 +1076,42 @@ mod tests {
 			vec![(b"value2".to_vec(), None)],
 		);
 	}
+<<<<<<< HEAD
+=======
+
+	#[test]
+	fn child_storage_uuid() {
+
+		let child_info_1 = ChildInfo::new_default(b"sub_test1");
+		let child_info_2 = ChildInfo::new_default(b"sub_test2");
+
+		use crate::trie_backend::tests::test_trie;
+		let mut overlay = OverlayedChanges::default();
+
+		let mut transaction = {
+			let backend = test_trie();
+			let mut cache = StorageTransactionCache::default();
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut cache,
+				&backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			ext.set_child_storage(&child_info_1, b"abc".to_vec(), b"def".to_vec());
+			ext.set_child_storage(&child_info_2, b"abc".to_vec(), b"def".to_vec());
+			ext.storage_root();
+			cache.transaction.unwrap()
+		};
+		let mut duplicate = false;
+		for (k, (value, rc)) in transaction.drain().iter() {
+			// look for a key inserted twice: transaction rc is 2
+			if *rc == 2 {
+				duplicate = true;
+				println!("test duplicate for {:?} {:?}", k, value);
+			}
+		}
+		assert!(!duplicate);
+	}
+>>>>>>> child_trie_w3_change
 }

@@ -33,7 +33,8 @@ use sc_client::{
 	Client, CallExecutor, BlockchainEvents
 };
 use sp_core::{
-	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
+	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet,
+	ChildInfo, ChildType},
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{
@@ -42,7 +43,7 @@ use sp_runtime::{
 
 use sp_api::{Metadata, ProvideRuntimeApi};
 
-use super::{StateBackend, error::{FutureResult, Error, Result}, client_err, child_resolution_error};
+use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -308,13 +309,13 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	fn child_storage_keys(
 		&self,
 		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
+		storage_key: StorageKey,
 		child_type: u32,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(
 			self.block_or_best(block)
+<<<<<<< HEAD
 				.and_then(|block| self.client.child_storage_keys(
 					&BlockId::Hash(block),
 					&child_storage_key,
@@ -322,19 +323,32 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 						.ok_or_else(child_resolution_error)?,
 					&prefix,
 				))
+=======
+				.and_then(|block| {
+					let child_info = match ChildType::new(child_type) {
+						Some(ChildType::ParentKeyId) => ChildInfo::new_default_from_vec(storage_key.0),
+						None => return Err("Invalid child type".into()),
+					};
+					self.client.child_storage_keys(
+						&BlockId::Hash(block),
+						&child_info,
+						&prefix,
+					)
+				})
+>>>>>>> child_trie_w3_change
 				.map_err(client_err)))
 	}
 
 	fn child_storage(
 		&self,
 		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
+		storage_key: StorageKey,
 		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
 		Box::new(result(
 			self.block_or_best(block)
+<<<<<<< HEAD
 				.and_then(|block| self.client.child_storage(
 					&BlockId::Hash(block),
 					&child_storage_key,
@@ -342,19 +356,32 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 						.ok_or_else(child_resolution_error)?,
 					&key,
 				))
+=======
+				.and_then(|block| {
+					let child_info = match ChildType::new(child_type) {
+						Some(ChildType::ParentKeyId) => ChildInfo::new_default_from_vec(storage_key.0),
+						None => return Err("Invalid child type".into()),
+					};
+					self.client.child_storage(
+						&BlockId::Hash(block),
+						&child_info,
+						&key,
+					)
+				})
+>>>>>>> child_trie_w3_change
 				.map_err(client_err)))
 	}
 
 	fn child_storage_hash(
 		&self,
 		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
+		storage_key: StorageKey,
 		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(result(
 			self.block_or_best(block)
+<<<<<<< HEAD
 				.and_then(|block| self.client.child_storage_hash(
 					&BlockId::Hash(block),
 					&child_storage_key,
@@ -362,6 +389,19 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 						.ok_or_else(child_resolution_error)?,
 					&key,
 				))
+=======
+				.and_then(|block| {
+					let child_info = match ChildType::new(child_type) {
+						Some(ChildType::ParentKeyId) => ChildInfo::new_default_from_vec(storage_key.0),
+						None => return Err("Invalid child type".into()),
+					};
+					self.client.child_storage_hash(
+						&BlockId::Hash(block),
+						&child_info,
+						&key,
+					)
+				})
+>>>>>>> child_trie_w3_change
 				.map_err(client_err)))
 	}
 

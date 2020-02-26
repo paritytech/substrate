@@ -30,7 +30,7 @@ use sp_blockchain::Error as ClientError;
 use sc_client_api::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
 	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
-use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
+use crate::protocol::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 use libp2p::PeerId;
 use crate::config::Roles;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
@@ -70,7 +70,6 @@ pub trait LightDispatchNetwork<B: BlockT> {
 		id: RequestId,
 		block: <B as BlockT>::Hash,
 		storage_key: Vec<u8>,
-		child_info: Vec<u8>,
 		child_type: u32,
 		keys: Vec<Vec<u8>>,
 	);
@@ -149,7 +148,7 @@ pub(crate) enum RequestData<Block: BlockT> {
 		RemoteReadRequest<Block::Header>,
 		OneShotSender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>,
 	),
-	RemoteReadChild(
+	RemoteReadDefaultChild(
 		RemoteReadChildRequest<Block::Header>,
 		OneShotSender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	),
@@ -227,7 +226,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 impl<B: BlockT> LightDispatch<B> where
 	B::Header: HeaderT,
 {
-	/// Creates new light client requests processer.
+	/// Creates new light client requests processor.
 	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
 		LightDispatch {
 			checker,
@@ -405,7 +404,7 @@ impl<B: BlockT> LightDispatch<B> where
 						RequestData::RemoteRead(request, sender)
 					),
 			}},
-			RequestData::RemoteReadChild(request, sender) => {
+			RequestData::RemoteReadDefaultChild(request, sender) => {
 				match checker.check_read_child_proof(&request, response.proof) {
 					Ok(response) => {
 						// we do not bother if receiver has been dropped already
@@ -414,7 +413,7 @@ impl<B: BlockT> LightDispatch<B> where
 					},
 					Err(error) => Accept::CheckFailed(
 						error,
-						RequestData::RemoteReadChild(request, sender)
+						RequestData::RemoteReadDefaultChild(request, sender)
 					),
 			}},
 			data => Accept::Unexpected(data),
@@ -504,7 +503,7 @@ impl<B: BlockT> LightDispatch<B> where
 	}
 
 	pub fn is_light_response(&self, peer: &PeerId, request_id: message::RequestId) -> bool {
-		self.active_peers.get(&peer).map_or(false, |r| r.id == request_id)
+		self.active_peers.get(peer).map_or(false, |r| r.id == request_id)
 	}
 
 	fn remove(&mut self, peer: PeerId, id: u64) -> Option<Request<B>> {
@@ -567,7 +566,7 @@ impl<B: BlockT> LightDispatch<B> where
 				// return peer to the back of the queue
 				self.idle_peers.push_back(peer.clone());
 
-				// we have enumerated all peers and noone can handle request
+				// we have enumerated all peers and no one can handle request
 				if Some(peer) == last_peer {
 					let request = self.pending_requests.pop_front().expect("checked in loop condition; qed");
 					unhandled_requests.push_back(request);
@@ -597,7 +596,7 @@ impl<Block: BlockT> Request<Block> {
 		match self.data {
 			RequestData::RemoteHeader(ref data, _) => data.block,
 			RequestData::RemoteRead(ref data, _) => *data.header.number(),
-			RequestData::RemoteReadChild(ref data, _) => *data.header.number(),
+			RequestData::RemoteReadDefaultChild(ref data, _) => *data.header.number(),
 			RequestData::RemoteCall(ref data, _) => *data.header.number(),
 			RequestData::RemoteChanges(ref data, _) => data.max_block.0,
 			RequestData::RemoteBody(ref data, _) => *data.header.number(),
@@ -619,13 +618,12 @@ impl<Block: BlockT> Request<Block> {
 					data.block,
 					data.keys.clone(),
 				),
-			RequestData::RemoteReadChild(ref data, _) =>
+			RequestData::RemoteReadDefaultChild(ref data, _) =>
 				out.send_read_child_request(
 					peer,
 					self.id,
 					data.block,
 					data.storage_key.clone(),
-					data.child_info.clone(),
 					data.child_type,
 					data.keys.clone(),
 				),
@@ -669,7 +667,7 @@ impl<Block: BlockT> RequestData<Block> {
 			RequestData::RemoteHeader(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteCall(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteRead(_, sender) => { let _ = sender.send(Err(error)); },
-			RequestData::RemoteReadChild(_, sender) => { let _ = sender.send(Err(error)); },
+			RequestData::RemoteReadDefaultChild(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteChanges(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteBody(_, sender) => { let _ = sender.send(Err(error)); },
 		}
@@ -682,7 +680,6 @@ pub mod tests {
 	use std::sync::Arc;
 	use std::time::Instant;
 	use futures::channel::oneshot;
-	use sp_core::storage::ChildInfo;
 	use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use sp_blockchain::{Error as ClientError, Result as ClientResult};
 	use sc_client_api::{FetchChecker, RemoteHeaderRequest,
@@ -823,7 +820,7 @@ pub mod tests {
 		fn send_header_request(&mut self, _: &PeerId, _: RequestId, _: <<B as BlockT>::Header as HeaderT>::Number) {}
 		fn send_read_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<Vec<u8>>) {}
 		fn send_read_child_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<u8>,
-			_: Vec<u8>, _: u32, _: Vec<Vec<u8>>) {}
+			_: u32, _: Vec<Vec<u8>>) {}
 		fn send_call_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: String, _: Vec<u8>) {}
 		fn send_changes_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: <B as BlockT>::Hash,
 			_: <B as BlockT>::Hash, _: <B as BlockT>::Hash, _: Option<Vec<u8>>, _: Vec<u8>) {}
@@ -1045,17 +1042,15 @@ pub mod tests {
 		light_dispatch.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
 		let (tx, response) = oneshot::channel();
-		let child_info = ChildInfo::new_default(b"unique_id_1");
-		let (child_info, child_type) = child_info.info();
-		light_dispatch.add_request(&mut network_interface, RequestData::RemoteReadChild(RemoteReadChildRequest {
-			header: dummy_header(),
-			block: Default::default(),
-			storage_key: b":child_storage:sub".to_vec(),
-			child_info: child_info.to_vec(),
-			child_type,
-			keys: vec![b":key".to_vec()],
-			retry_count: None,
-		}, tx));
+		light_dispatch.add_request(&mut network_interface, RequestData::RemoteReadDefaultChild(
+			RemoteReadChildRequest {
+				header: dummy_header(),
+				block: Default::default(),
+				storage_key: b"sub".to_vec(),
+				child_type: 1,
+				keys: vec![b":key".to_vec()],
+				retry_count: None,
+			}, tx));
 
 		light_dispatch.on_remote_read_response(&mut network_interface,
 			peer0.clone(), message::RemoteReadResponse {

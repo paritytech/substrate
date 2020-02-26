@@ -20,7 +20,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 use serde::{Serialize, Deserialize};
 use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
 use sp_runtime::BuildStorage;
@@ -32,7 +32,7 @@ use sc_telemetry::TelemetryEndpoints;
 enum GenesisSource<G> {
 	File(PathBuf),
 	Binary(Cow<'static, [u8]>),
-	Factory(Rc<dyn Fn() -> G>),
+	Factory(Arc<dyn Fn() -> G + Send + Sync>),
 }
 
 impl<G> Clone for GenesisSource<G> {
@@ -74,17 +74,22 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 	fn build_storage(&self) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(RawGenesis { top: map, children: children_map }) => Ok(Storage {
+			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+<<<<<<< HEAD
 				children: children_map.into_iter().map(|(sk, child_content)| {
 					let child_info = ChildInfo::resolve_child_info(
 						child_content.child_type,
 						child_content.child_info.as_slice(),
 					).expect("chain spec contains correct content");
+=======
+				children_default: children_map.into_iter().map(|(storage_key, child_content)| {
+					let child_info = ChildInfo::new_default(storage_key.0.as_slice());
+>>>>>>> child_trie_w3_change
 					(
-						sk.0,
+						storage_key.0,
 						StorageChild {
-							data: child_content.data.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+							data: child_content.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 							child_info,
 						},
 					)
@@ -106,19 +111,10 @@ type GenesisStorage = HashMap<StorageKey, StorageData>;
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-struct ChildRawStorage {
-	data: GenesisStorage,
-	child_info: Vec<u8>,
-	child_type: u32,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
 /// Storage content for genesis block.
 struct RawGenesis {
-	pub top: GenesisStorage,
-	pub children: HashMap<StorageKey, ChildRawStorage>,
+	top: GenesisStorage,
+	children_default: HashMap<StorageKey, GenesisStorage>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -134,14 +130,14 @@ enum Genesis<G> {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 struct ClientSpec<E> {
-	pub name: String,
-	pub id: String,
-	pub boot_nodes: Vec<String>,
-	pub telemetry_endpoints: Option<TelemetryEndpoints>,
-	pub protocol_id: Option<String>,
-	pub properties: Option<Properties>,
+	name: String,
+	id: String,
+	boot_nodes: Vec<String>,
+	telemetry_endpoints: Option<TelemetryEndpoints>,
+	protocol_id: Option<String>,
+	properties: Option<Properties>,
 	#[serde(flatten)]
-	pub extensions: E,
+	extensions: E,
 	// Never used, left only for backward compatibility.
 	consensus_engine: (),
 	#[serde(skip_serializing)]
@@ -215,7 +211,7 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Create hardcoded spec.
-	pub fn from_genesis<F: Fn() -> G + 'static>(
+	pub fn from_genesis<F: Fn() -> G + 'static + Send + Sync>(
 		name: &str,
 		id: &str,
 		constructor: F,
@@ -239,7 +235,7 @@ impl<G, E> ChainSpec<G, E> {
 
 		ChainSpec {
 			client_spec,
-			genesis: GenesisSource::Factory(Rc::new(constructor)),
+			genesis: GenesisSource::Factory(Arc::new(constructor)),
 		}
 	}
 }
@@ -285,6 +281,7 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 				let top = storage.top.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
+<<<<<<< HEAD
 				let children = storage.children.into_iter()
 					.map(|(sk, child)| {
 						let (info, ci_type) = child.child_info.info();
@@ -298,9 +295,18 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 								child_type: ci_type,
 							},
 					)})
+=======
+				let children_default = storage.children_default.into_iter()
+					.map(|(sk, child)| (
+						StorageKey(sk),
+						child.data.into_iter()
+							.map(|(k, v)| (StorageKey(k), StorageData(v)))
+							.collect(),
+					))
+>>>>>>> child_trie_w3_change
 					.collect();
 
-				Genesis::Raw(RawGenesis { top, children })
+				Genesis::Raw(RawGenesis { top, children_default })
 			},
 			(_, genesis) => genesis,
 		};
@@ -335,7 +341,7 @@ mod tests {
 	type TestSpec = ChainSpec<Genesis>;
 
 	#[test]
-	fn should_deserailize_example_chain_spec() {
+	fn should_deserialize_example_chain_spec() {
 		let spec1 = TestSpec::from_json_bytes(Cow::Owned(
 			include_bytes!("../res/chain_spec.json").to_vec()
 		)).unwrap();

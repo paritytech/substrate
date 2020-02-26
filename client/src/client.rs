@@ -334,12 +334,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_storage_keys(
 		&self,
 		id: &BlockId<Block>,
+<<<<<<< HEAD
 		child_storage_key: &StorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key_prefix: &StorageKey
 	) -> sp_blockchain::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?
-			.child_keys(&child_storage_key.0, child_info, &key_prefix.0)
+			.child_keys(child_info, &key_prefix.0)
 			.into_iter()
 			.map(StorageKey)
 			.collect();
@@ -350,12 +353,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_storage(
 		&self,
 		id: &BlockId<Block>,
+<<<<<<< HEAD
 		storage_key: &StorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
-			.child_storage(&storage_key.0, child_info, &key.0)
+			.child_storage(child_info, &key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 			.map(StorageData))
 	}
@@ -364,12 +370,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_storage_hash(
 		&self,
 		id: &BlockId<Block>,
+<<<<<<< HEAD
 		storage_key: &StorageKey,
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		Ok(self.state_at(id)?
-			.child_storage_hash(&storage_key.0, child_info, &key.0)
+			.child_storage_hash(child_info, &key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 		)
 	}
@@ -406,7 +415,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn read_child_proof<I>(
 		&self,
 		id: &BlockId<Block>,
+<<<<<<< HEAD
 		storage_key: &[u8],
+=======
+>>>>>>> child_trie_w3_change
 		child_info: &ChildInfo,
 		keys: I,
 	) -> sp_blockchain::Result<StorageProof> where
@@ -414,7 +426,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		I::Item: AsRef<[u8]>,
 	{
 		self.state_at(id)
-			.and_then(|state| prove_child_read(state, storage_key, child_info, keys)
+			.and_then(|state| prove_child_read(state, child_info, keys)
 				.map_err(Into::into))
 	}
 
@@ -1196,7 +1208,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// NOTE: we're setting the finalized block as best block, this might
 			// be slightly inaccurate since we might have a "better" block
 			// further along this chain, but since best chain selection logic is
-			// pluggable we cannot make a better choice here. usages that need
+			// plugable we cannot make a better choice here. usages that need
 			// an accurate "best" block need to go through `SelectChain`
 			// instead.
 			operation.op.mark_head(BlockId::Hash(block))?;
@@ -3045,7 +3057,7 @@ pub(crate) mod tests {
 			.unwrap().build().unwrap().block;
 
 		// we will finalize A2 which should make it impossible to import a new
-		// B3 at the same height but that doesnt't include it
+		// B3 at the same height but that doesn't include it
 		ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
 
 		let import_err = client.import(BlockOrigin::Own, b3).err().unwrap();
