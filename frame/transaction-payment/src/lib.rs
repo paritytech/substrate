@@ -119,7 +119,8 @@ impl<T: Trait> Module<T> {
 	{
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
-		let partial_fee = <ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
+		let partial_fee =
+			<ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
 		RuntimeDispatchInfo { weight, class, partial_fee }
@@ -165,9 +166,10 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let len_fee = per_byte.saturating_mul(len);
 
 			let weight_fee = {
-				// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
-				// maximum of its data type, which is not desired.
-				let capped_weight = info.weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
+				// cap the weight to the maximum defined in runtime, otherwise it will be the
+				// `Bounded` maximum of its data type, which is not desired.
+				let capped_weight = info.weight
+					.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
 				T::WeightToFee::convert(capped_weight)
 			};
 
@@ -248,20 +250,21 @@ mod tests {
 	use super::*;
 	use codec::Encode;
 	use frame_support::{
-		parameter_types, impl_outer_origin, impl_outer_dispatch,
+		impl_outer_dispatch, impl_outer_origin, parameter_types,
 		weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
 	};
+	use pallet_balances::Call as BalancesCall;
+	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill,
 		testing::{Header, TestXt},
-		traits::{BlakeTwo256, IdentityLookup, Extrinsic},
+		traits::{BlakeTwo256, Extrinsic, IdentityLookup},
+		Perbill,
 	};
-	use pallet_balances::Call as BalancesCall;
-	use sp_std::cell::RefCell;
-	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+	use std::cell::RefCell;
 
-	const CALL: &<Runtime as frame_system::Trait>::Call = &Call::Balances(BalancesCall::transfer(2, 69));
+	const CALL: &<Runtime as frame_system::Trait>::Call =
+		&Call::Balances(BalancesCall::transfer(2, 69));
 
 	impl_outer_dispatch! {
 		pub enum Call for Runtime where origin: Origin {
@@ -318,7 +321,7 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 	}
-thread_local! {
+	thread_local! {
 		static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
 		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
 		static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);
