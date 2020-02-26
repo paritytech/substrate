@@ -86,7 +86,7 @@ impl RuntimesCache {
 	///
 	/// # Parameters
 	///
-	/// `ext` - Externalities to use for the runtime.
+	/// `ext` - Externalities to use for the getting the runtime's version call.
 	///
 	/// `runtime_code` - The runtime wasm code used setup the runtime.
 	///

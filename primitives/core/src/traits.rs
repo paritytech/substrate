@@ -166,7 +166,7 @@ pub struct CodeNotFound;
 
 impl std::fmt::Display for CodeNotFound {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-		write!(f, "CodeNotFound")
+		write!(f, "the storage entry `:code` doesn't have any code")
 	}
 }
 
