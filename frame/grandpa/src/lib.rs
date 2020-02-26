@@ -64,6 +64,8 @@ pub trait Trait: frame_system::Trait {
 	/// The function call.
 	type Call: From<Call<Self>>;
 
+    /// The equivocation handling subsystem, equivocation report validation and
+    /// offence reporting will be defined based on this type.
 	type HandleEquivocation: equivocation::HandleEquivocation<Self>;
 }
 
@@ -209,7 +211,10 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		/// Report some misbehavior.
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
 		///
 		/// FIXME: I have no clue about the weight (but we're checking two
 		/// ed25519 signatures).
@@ -466,7 +471,11 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	pub fn submit_report_equivocation_extrinsic(
+    /// Submits an extrinsic to report an equivocation. This method will sign an
+    /// extrinsic with a call to `report_equivocation` with any reporting keys
+    /// available in the keystore and will push the transaction to the pool.
+    /// Only useful in an offchain context.
+    pub fn submit_report_equivocation_extrinsic(
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: <T::HandleEquivocation as equivocation::HandleEquivocation<T>>::KeyOwnerProof,
 	) -> Option<()> {
