@@ -363,9 +363,9 @@ decl_module! {
 			let deposit = T::MultiAccountDepositBase::get()
 				+ T::MultiAccountDepositFactor::get() * (other_signatories.len() as u32 + 1).into();
 
-			MultiAccountIndex::put(multi_account_index);
-
 			T::Currency::reserve(&who, deposit)?;
+
+			MultiAccountIndex::put(multi_account_index);
 
 			<MultiAccounts<T>>::insert(&id, MultiAccountData {
 				threshold,
