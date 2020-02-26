@@ -451,7 +451,9 @@ parameter_types! {
 	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
 }
 
+// TODO [ToDr] add generic resolution for `RuntimeAppPublic`
 pub struct SigningTypes;
+
 impl frame_system::offchain::new::SigningTypes for SigningTypes {
 	type AccountId = <Runtime as frame_system::Trait>::AccountId;
 	type Public = <Signature as traits::Verify>::Signer;
@@ -465,6 +467,7 @@ impl<C> frame_system::offchain::new::SendTransactionTypes<C> for SigningTypes wh
 	Call: From<C>,
 {
 	type Call = Call;
+	type Extrinsic = UncheckedExtrinsic;
 }
 
 impl pallet_im_online::Trait for Runtime {

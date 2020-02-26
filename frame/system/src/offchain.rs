@@ -64,13 +64,14 @@ pub mod new {
 		X,
 		C,
 	> SendRawUnsignedTransaction<T, C> for Signer<T, X> {
-		fn send_raw_unsigned_transaction(_call: T::Call) -> Result<(), ()> {
-			unimplemented!()
+		fn send_raw_unsigned_transaction(call: C) -> Result<(), ()> {
+			let xt = T::Extrinsic::new(call.into(), None).ok_or(())?;
+			sp_io::offchain::submit_transaction(xt.encode())
 		}
 	}
 
 	impl<T: SigningTypes> SignMessage<T> for Signer<T, ForAll> {
-		type Result = Vec<T::Signature>;
+		type Result = Vec<(Account<T>, T::Signature)>;
 
 		// fn sign_message(&self, message: &[u8]) -> Self::Result {
 		//     self.accounts
@@ -83,16 +84,18 @@ pub mod new {
 		// }
 
 		fn sign<TPayload, F>(&self, f: F) -> Self::Result where
-			F: Fn(T::AccountId, T::Public) -> TPayload,
+			F: Fn(&Account<T>) -> TPayload,
 			TPayload: SignedPayload<T>,
 		{
 			if let Some(ref accounts) = self.accounts {
 				accounts
 					.iter()
-					.filter_map(|key| {
+					.enumerate()
+					.filter_map(|(index, key)| {
 						let account_id = key.clone().into_account();
-						let payload = f(account_id, key.clone());
-						payload.sign()
+						let account = Account::new(index, account_id, key.clone());
+						let payload = f(&account);
+						payload.sign().map(|signature| (account, signature))
 					})
 				.collect()
 			} else {
@@ -102,7 +105,7 @@ pub mod new {
 	}
 
 	impl<T: SigningTypes> SignMessage<T> for Signer<T, ForAny> {
-		type Result = Option<T::Signature>;
+		type Result = Option<(Account<T>, T::Signature)>;
 
 		// fn sign_message(&self, message: &[u8]) -> Self::Result {
 		//     self.accounts
@@ -115,16 +118,17 @@ pub mod new {
 		// }
 
 		fn sign<TPayload, F>(&self, f: F) -> Self::Result where
-			F: Fn(T::AccountId, T::Public) -> TPayload,
+			F: Fn(&Account<T>) -> TPayload,
 			TPayload: SignedPayload<T>,
 		{
 			if let Some(ref accounts) = self.accounts {
-				for key in accounts {
+				for (index, key) in accounts.iter().enumerate() {
 					let account_id = key.clone().into_account();
-					let payload = f(account_id, key.clone());
+					let account = Account::new(index, account_id, key.clone());
+					let payload = f(&account);
 					let res = payload.sign();
-					if res.is_some() {
-						return res
+					if let Some(signature) = res {
+						return Some((account, signature))
 					}
 				}
 			} else {
@@ -139,11 +143,11 @@ pub mod new {
 		T: SigningTypes + SendTransactionTypes<C>,
 		C
 	> SendSignedTransaction<T, C> for Signer<T, ForAny> {
-		type Result = (T::Public, Result<(), ()>);
+		type Result = (Account<T>, Result<(), ()>);
 
 		fn send_signed_transaction(
 			&self,
-			_f: impl Fn(T::AccountId, T::Public) -> T::Call,
+			f: impl Fn(&Account<T>) -> T::Call,
 		) -> Self::Result {
 			unimplemented!()
 		}
@@ -153,11 +157,11 @@ pub mod new {
 		T: SigningTypes + SendTransactionTypes<C>,
 		C,
 	> SendSignedTransaction<T, C> for Signer<T, ForAll> {
-		type Result = Vec<(T::Public, Result<(), ()>)>;
+		type Result = Vec<(Account<T>, Result<(), ()>)>;
 
 		fn send_signed_transaction(
 			&self,
-			_f: impl Fn(T::AccountId, T::Public) -> T::Call,
+			_f: impl Fn(&Account<T>) -> T::Call,
 		) -> Self::Result {
 			unimplemented!()
 		}
@@ -167,7 +171,7 @@ pub mod new {
 		T: SigningTypes + SendTransactionTypes<C>,
 		C,
 	> SendUnsignedTransaction<T, C> for Signer<T, ForAny> {
-		type Result = Option<T::Signature>;
+		type Result = (Account<T>, Result<(), ()>);
 
 		fn send_unsigned_transaction<TPayload, F>(
 			&self,
@@ -175,8 +179,9 @@ pub mod new {
 			_f2: impl Fn(TPayload, T::Signature) -> T::Call,
 		) -> Self::Result
 		where
-			F: Fn(T::AccountId, T::Public) -> TPayload,
-			TPayload: SignedPayload<T> {
+			F: Fn(&Account<T>) -> TPayload,
+			TPayload: SignedPayload<T>
+		{
 				unimplemented!()
 		}
 	}
@@ -193,13 +198,38 @@ pub mod new {
 			_f2: impl Fn(TPayload, T::Signature) -> T::Call,
 		) -> Self::Result
 		where
-			F: Fn(T::AccountId, T::Public) -> TPayload,
+			F: Fn(&Account<T>) -> TPayload,
 			TPayload: SignedPayload<T> {
 				unimplemented!()
 		}
 	}
 
 	/// traits
+
+	pub struct Account<T: SigningTypes> {
+		pub index: usize,
+		pub id: T::AccountId,
+		pub public: T::Public,
+	}
+
+	impl<T: SigningTypes> Account<T> {
+		pub fn new(index: usize, id: T::AccountId, public: T::Public) -> Self {
+			Self { index, id, public }
+		}
+	}
+
+	impl<T: SigningTypes> Clone for Account<T> where
+		T::AccountId: Clone,
+		T::Public: Clone,
+	{
+		fn clone(&self) -> Self {
+			Self {
+				index: self.index,
+				id: self.id.clone(),
+				public: self.public.clone(),
+			}
+		}
+	}
 
 	pub trait SigningTypes {
 		type AccountId;
@@ -222,6 +252,7 @@ pub mod new {
 
 	pub trait SendTransactionTypes<LocalCall> {
 		type Call: From<LocalCall>;
+		type Extrinsic: ExtrinsicT<Call=Self::Call> + codec::Encode;
 	}
 
 	pub trait SignMessage<T: SigningTypes> {
@@ -230,7 +261,7 @@ pub mod new {
 		// fn sign_message(&self, message: &[u8]) -> Self::Result;
 
 		fn sign<TPayload, F>(&self, f: F) -> Self::Result where
-			F: Fn(T::AccountId, T::Public) -> TPayload,
+			F: Fn(&Account<T>) -> TPayload,
 			TPayload: SignedPayload<T>,
 			;
 	}
@@ -240,7 +271,7 @@ pub mod new {
 
 		fn send_signed_transaction(
 			&self,
-			f: impl Fn(T::AccountId, T::Public) -> T::Call,
+			f: impl Fn(&Account<T>) -> T::Call,
 		) -> Self::Result;
 	}
 
@@ -253,12 +284,12 @@ pub mod new {
 			f2: impl Fn(TPayload, T::Signature) -> T::Call,
 		) -> Self::Result
 		where
-			F: Fn(T::AccountId, T::Public) -> TPayload,
+			F: Fn(&Account<T>) -> TPayload,
 			TPayload: SignedPayload<T>;
 	}
 
 	pub trait SendRawUnsignedTransaction<T: SendTransactionTypes<C>, C> {
-		fn send_raw_unsigned_transaction(call: T::Call) -> Result<(), ()>;
+		fn send_raw_unsigned_transaction(call: C) -> Result<(), ()>;
 	}
 
 	pub trait SignedPayload<T: SigningTypes>: Encode {
