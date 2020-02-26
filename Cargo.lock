@@ -3151,6 +3151,9 @@ name = "memchr"
 version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3728d817d99e5ac407411fa471ff9800a778d88a24685968b36824eaf4bee400"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "memoffset"
