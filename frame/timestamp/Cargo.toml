@@ -11,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0-alpha.1", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "2.0.0-alpha.1", default-features = false, path = "../../primitives/io" }
+sp-io = { version = "2.0.0-alpha.1", default-features = false, path = "../../primitives/io", optional = true }
 sp-runtime = { version = "2.0.0-alpha.1", default-features = false, path = "../../primitives/runtime" }
 sp-inherents = { version = "2.0.0-alpha.1", default-features = false, path = "../../primitives/inherents" }
 frame-benchmarking = { version = "2.0.0-alpha.1", default-features = false, path = "../benchmarking", optional = true }
@@ -37,4 +37,4 @@ std = [
 	"frame-system/std",
 	"sp-timestamp/std"
 ]
-runtime_benchmarks = ["frame-benchmarking"]
+runtime_benchmarks = ["frame-benchmarking", "sp-io"]
