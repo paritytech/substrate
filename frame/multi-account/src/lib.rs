@@ -352,7 +352,6 @@ decl_module! {
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 			ensure!(threshold as usize <= other_signatories.len() + 1, Error::<T>::TooFewSignatories);
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
-			ensure!(other_signatories.len() < u32::max_value() as usize, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories.clone(), who.clone())?;
 
 			let multi_account_index = MultiAccountIndex::get()
@@ -424,31 +423,27 @@ decl_module! {
 			ensure!(signatories.len() >= 2, Error::<T>::TooFewSignatories);
 			ensure!(threshold as usize <= signatories.len(), Error::<T>::TooFewSignatories);
 			ensure!(signatories.len() <= max_sigs, Error::<T>::TooManySignatories);
-			ensure!(signatories.len() <= u32::max_value() as usize, Error::<T>::TooManySignatories);
-			let signatories = Self::ensure_sorted_and_unique(&signatories)?;
+			ensure!(Self::is_sorted_and_unique(&signatories), Error::<T>::SignatoriesOutOfOrder);
+			let multi_account = <MultiAccounts<T>>::get(&who).ok_or(Error::<T>::MultiAccountNotFound)?;
 
-			if let Some(multi_account) = <MultiAccounts<T>>::get(&who) {
-				// reserve new deposit for updated multi account
-				let updated_deposit = T::MultiAccountDepositBase::get()
-					+ T::MultiAccountDepositFactor::get() * (signatories.len() as u32).into();
+			// reserve new deposit for updated multi account
+			let updated_deposit = T::MultiAccountDepositBase::get()
+				+ T::MultiAccountDepositFactor::get() * (signatories.len() as u32).into();
 
-				T::Currency::reserve(&who, updated_deposit)?;
+			T::Currency::reserve(&who, updated_deposit)?;
 
-				// save multi account
-				<MultiAccounts<T>>::insert(&who, MultiAccountData {
-					threshold,
-					signatories,
-					deposit: updated_deposit,
-					depositor: who.clone(),
-				});
+			// save multi account
+			<MultiAccounts<T>>::insert(&who, MultiAccountData {
+				threshold,
+				signatories,
+				deposit: updated_deposit,
+				depositor: who.clone(),
+			});
 
-				// unreserve previous deposit
-				let _ = T::Currency::unreserve(&multi_account.depositor, multi_account.deposit);
+			// unreserve previous deposit
+			let _ = T::Currency::unreserve(&multi_account.depositor, multi_account.deposit);
 
-				Self::deposit_event(RawEvent::MultiAccountUpdated(who));
-			} else {
-				Err(Error::<T>::MultiAccountNotFound)?
-			}
+			Self::deposit_event(RawEvent::MultiAccountUpdated(who));
 
 			Ok(())
 		}
@@ -476,16 +471,13 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		fn remove(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let multi_account = <MultiAccounts<T>>::get(&who).ok_or(Error::<T>::MultiAccountNotFound)?;
 
-			if let Some(multi_account) = <MultiAccounts<T>>::get(&who) {
-				let _ = T::Currency::unreserve(&multi_account.depositor, multi_account.deposit);
+			let _ = T::Currency::unreserve(&multi_account.depositor, multi_account.deposit);
 
-				<MultiAccounts<T>>::remove(&who);
+			<MultiAccounts<T>>::remove(&who);
 
-				Self::deposit_event(RawEvent::MultiAccountRemoved(who));
-			} else {
-				Err(Error::<T>::MultiAccountNotFound)?
-			}
+			Self::deposit_event(RawEvent::MultiAccountRemoved(who));
 
 			Ok(())
 		}
@@ -542,59 +534,55 @@ decl_module! {
 			call: Box<<T as Trait>::Call>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let multi_account = <MultiAccounts<T>>::get(&multi_account_id).ok_or(Error::<T>::MultiAccountNotFound)?;
 
-			if let Some(multi_account) = <MultiAccounts<T>>::get(&multi_account_id) {
-				// ensure that the origin is a signatory of the multi account
-				if let Err(_) = multi_account.signatories.binary_search(&who) {
-					Err(Error::<T>::NotSignatory)?
-				}
+			// ensure that the origin is a signatory of the multi account
+			if let Err(_) = multi_account.signatories.binary_search(&who) {
+				Err(Error::<T>::NotSignatory)?
+			}
 
-				let call_hash = call.using_encoded(blake2_256);
+			let call_hash = call.using_encoded(blake2_256);
 
-				if let Some(mut m) = <Multisigs<T>>::get(&multi_account_id, call_hash) {
-					let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
-					ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
+			if let Some(mut m) = <Multisigs<T>>::get(&multi_account_id, call_hash) {
+				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
+				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 
-					let valid_approvals = Self::filter_approvals(m.approvals.clone(),
-						multi_account.signatories.clone());
+				let valid_approvals = Self::filter_approvals(&m.approvals, &multi_account.signatories);
 
-					if let Err(pos) = m.approvals.binary_search(&who) {
-						// we know threshold is greater than zero from the above ensure.
-						if (valid_approvals.len() as u16) < multi_account.threshold - 1 {
-							m.approvals.insert(pos, who.clone());
-							<Multisigs<T>>::insert(&multi_account_id, call_hash, m);
-							Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, multi_account_id));
-							return Ok(())
-						}
-					} else {
-						if (valid_approvals.len() as u16) < multi_account.threshold {
-							Err(Error::<T>::AlreadyApproved)?
-						}
+				if let Err(pos) = m.approvals.binary_search(&who) {
+					// we know threshold is greater than zero from the above ensure.
+					if (valid_approvals.len() as u16) < multi_account.threshold - 1 {
+						m.approvals.insert(pos, who.clone());
+						<Multisigs<T>>::insert(&multi_account_id, call_hash, m);
+						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, multi_account_id));
+						return Ok(())
 					}
-
-					let result = call.dispatch(frame_system::RawOrigin::Signed(multi_account_id.clone()).into());
-					let _ = T::Currency::unreserve(&m.depositor, m.deposit);
-					<Multisigs<T>>::remove(&multi_account_id, call_hash);
-					Self::deposit_event(RawEvent::MultisigExecuted(who, timepoint, multi_account_id, result));
 				} else {
-					ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
-					if multi_account.threshold > 1 {
-						let deposit = T::MultisigDepositBase::get()
-							+ T::MultisigDepositFactor::get() * multi_account.threshold.into();
-						T::Currency::reserve(&who, deposit)?;
-						<Multisigs<T>>::insert(&multi_account_id, call_hash, Multisig {
-							when: Self::timepoint(),
-							deposit,
-							depositor: who.clone(),
-							approvals: vec![who.clone()],
-						});
-						Self::deposit_event(RawEvent::NewMultisig(who, multi_account_id));
-					} else {
-						return call.dispatch(frame_system::RawOrigin::Signed(multi_account_id).into())
+					if (valid_approvals.len() as u16) < multi_account.threshold {
+						Err(Error::<T>::AlreadyApproved)?
 					}
 				}
+
+				let result = call.dispatch(frame_system::RawOrigin::Signed(multi_account_id.clone()).into());
+				let _ = T::Currency::unreserve(&m.depositor, m.deposit);
+				<Multisigs<T>>::remove(&multi_account_id, call_hash);
+				Self::deposit_event(RawEvent::MultisigExecuted(who, timepoint, multi_account_id, result));
 			} else {
-				Err(Error::<T>::MultiAccountNotFound)?
+				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
+				if multi_account.threshold > 1 {
+					let deposit = T::MultisigDepositBase::get()
+						+ T::MultisigDepositFactor::get() * multi_account.threshold.into();
+					T::Currency::reserve(&who, deposit)?;
+					<Multisigs<T>>::insert(&multi_account_id, call_hash, Multisig {
+						when: Self::timepoint(),
+						deposit,
+						depositor: who.clone(),
+						approvals: vec![who.clone()],
+					});
+					Self::deposit_event(RawEvent::NewMultisig(who, multi_account_id));
+				} else {
+					return call.dispatch(frame_system::RawOrigin::Signed(multi_account_id).into())
+				}
 			}
 
 			Ok(())
@@ -641,48 +629,45 @@ decl_module! {
 			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let multi_account = <MultiAccounts<T>>::get(&multi_account_id).ok_or(Error::<T>::MultiAccountNotFound)?;
 
-			if let Some(multi_account) = <MultiAccounts<T>>::get(&multi_account_id) {
-				// ensure that the origin is a signatory of the multi account
-				if let Err(_) = multi_account.signatories.binary_search(&who) {
-					Err(Error::<T>::NotSignatory)?
-				}
+			// ensure that the origin is a signatory of the multi account
+			if let Err(_) = multi_account.signatories.binary_search(&who) {
+				Err(Error::<T>::NotSignatory)?
+			}
 
-				if let Some(mut m) = <Multisigs<T>>::get(&multi_account_id, call_hash) {
-					let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
-					ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
+			if let Some(mut m) = <Multisigs<T>>::get(&multi_account_id, call_hash) {
+				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
+				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 
-					let valid_approvals = Self::filter_approvals(m.approvals.clone(),
-						multi_account.signatories.clone());
+				let valid_approvals = Self::filter_approvals(&m.approvals, &multi_account.signatories);
 
-					ensure!(valid_approvals.len() < multi_account.threshold as usize, Error::<T>::NoApprovalsNeeded);
-					if let Err(pos) = m.approvals.binary_search(&who) {
-						m.approvals.insert(pos, who.clone());
-						<Multisigs<T>>::insert(&multi_account_id, call_hash, m);
-						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, multi_account_id));
-					} else {
-						Err(Error::<T>::AlreadyApproved)?
-					}
+				ensure!(valid_approvals.len() < multi_account.threshold as usize, Error::<T>::NoApprovalsNeeded);
+				if let Err(pos) = m.approvals.binary_search(&who) {
+					m.approvals.insert(pos, who.clone());
+					<Multisigs<T>>::insert(&multi_account_id, call_hash, m);
+					Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, multi_account_id));
 				} else {
-					if multi_account.threshold > 1 {
-						ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
-						let deposit = T::MultisigDepositBase::get()
-							+ T::MultisigDepositFactor::get() * multi_account.threshold.into();
-						T::Currency::reserve(&who, deposit)?;
-						<Multisigs<T>>::insert(&multi_account_id, call_hash, Multisig {
-							when: Self::timepoint(),
-							deposit,
-							depositor: who.clone(),
-							approvals: vec![who.clone()],
-						});
-						Self::deposit_event(RawEvent::NewMultisig(who, multi_account_id));
-					} else {
-						Err(Error::<T>::NoApprovalsNeeded)?
-					}
+					Err(Error::<T>::AlreadyApproved)?
 				}
 			} else {
-				Err(Error::<T>::MultiAccountNotFound)?
+				if multi_account.threshold > 1 {
+					ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
+					let deposit = T::MultisigDepositBase::get()
+						+ T::MultisigDepositFactor::get() * multi_account.threshold.into();
+					T::Currency::reserve(&who, deposit)?;
+					<Multisigs<T>>::insert(&multi_account_id, call_hash, Multisig {
+						when: Self::timepoint(),
+						deposit,
+						depositor: who.clone(),
+						approvals: vec![who.clone()],
+					});
+					Self::deposit_event(RawEvent::NewMultisig(who, multi_account_id));
+				} else {
+					Err(Error::<T>::NoApprovalsNeeded)?
+				}
 			}
+
 			Ok(())
 		}
 
@@ -749,16 +734,9 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Check that signatories is sorted.
-	fn ensure_sorted(signatories: Vec<T::AccountId>) -> Result<Vec<T::AccountId>, DispatchError> {
-		let mut maybe_last = None;
-		for item in signatories.iter() {
-			if let Some(last) = maybe_last {
-				ensure!(last < item, Error::<T>::SignatoriesOutOfOrder);
-			}
-			maybe_last = Some(item);
-		}
-		Ok(signatories)
+	/// Check that signatories are sorted and unique.
+	fn is_sorted_and_unique(signatories: &Vec<T::AccountId>) -> bool {
+		signatories.windows(2).all(|w| w[0] < w[1])
 	}
 
 	/// Check that signatories is sorted and doesn't contain sender, then insert sender.
@@ -783,8 +761,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Remove approvals from account IDs that are no longer in the set of signatories
-	fn filter_approvals(approvals: Vec<T::AccountId>, signatories: Vec<T::AccountId>) -> Vec<T::AccountId> {
-		approvals.into_iter().filter(|approval| signatories.binary_search(&approval).is_ok()).collect()
+	fn filter_approvals(approvals: &Vec<T::AccountId>, signatories: &Vec<T::AccountId>) -> Vec<T::AccountId> {
+		approvals.clone().into_iter().filter(|approval| signatories.binary_search(&approval).is_ok()).collect()
 	}
 }
 
