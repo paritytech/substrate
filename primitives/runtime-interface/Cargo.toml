@@ -22,7 +22,7 @@ sp-state-machine = { version = "0.8.0-alpha.1", path = "../../primitives/state-m
 sp-core = { version = "2.0.0-alpha.1", path = "../core" }
 sp-io = { version = "2.0.0-alpha.1", path = "../io" }
 rustversion = "1.0.0"
-trybuild = "1.0.17"
+trybuild = "1.0.23"
 
 [features]
 default = [ "std" ]
