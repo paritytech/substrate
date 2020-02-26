@@ -163,6 +163,10 @@ impl<N: Codec> ConsensusLog<N> {
 	}
 }
 
+/// Proof of voter misbehavior on a given set id. Misbehavior/equivocation in
+/// GRANDPA happens when a voter votes on the same round (either at prevote or
+/// precommit stage) for different blocks. Proving is achieved by collecting the
+/// signed messages of conflicting votes.
 #[derive(Clone, Debug, Decode, Encode, PartialEq)]
 pub struct EquivocationProof<H, N> {
 	set_id: SetId,
@@ -170,6 +174,8 @@ pub struct EquivocationProof<H, N> {
 }
 
 impl<H, N> EquivocationProof<H, N> {
+	/// Create a new `EquivocationProof` for the given set id and using the
+	/// given equivocation as proof.
 	pub fn new(set_id: SetId, equivocation: Equivocation<H, N>) -> Self {
 		EquivocationProof {
 			set_id,
@@ -177,10 +183,12 @@ impl<H, N> EquivocationProof<H, N> {
 		}
 	}
 
+	/// Returns the set id at which the equivocation occurred.
 	pub fn set_id(&self) -> SetId {
 		self.set_id
 	}
 
+	/// Returns the round number at which the equivocation occurred.
 	pub fn round(&self) -> RoundNumber {
 		match self.equivocation {
 			Equivocation::Prevote(ref equivocation) => equivocation.round_number,
@@ -188,27 +196,20 @@ impl<H, N> EquivocationProof<H, N> {
 		}
 	}
 
+	/// Returns the authority id of the equivocator.
 	pub fn offender(&self) -> &AuthorityId {
 		self.equivocation.offender()
 	}
 }
 
+/// Wrapper object for GRANDPA equivocation proofs, useful for unifying prevote
+/// and precommit equivocations under a common type.
 #[derive(Clone, Debug, Decode, Encode, PartialEq)]
 pub enum Equivocation<H, N> {
-	Prevote(
-		grandpa::Equivocation<
-			AuthorityId,
-			grandpa::Prevote<H, N>,
-			AuthoritySignature,
-		>,
-	),
-	Precommit(
-		grandpa::Equivocation<
-			AuthorityId,
-			grandpa::Precommit<H, N>,
-			AuthoritySignature,
-		>,
-	),
+	/// Proof of equivocation at prevote stage.
+	Prevote(grandpa::Equivocation<AuthorityId, grandpa::Prevote<H, N>, AuthoritySignature>),
+	/// Proof of equivocation at precommit stage.
+	Precommit(grandpa::Equivocation<AuthorityId, grandpa::Precommit<H, N>, AuthoritySignature>),
 }
 
 impl<H, N> From<grandpa::Equivocation<AuthorityId, grandpa::Prevote<H, N>, AuthoritySignature>>
@@ -240,6 +241,7 @@ impl<H, N> From<grandpa::Equivocation<AuthorityId, grandpa::Precommit<H, N>, Aut
 }
 
 impl<H, N> Equivocation<H, N> {
+	/// Returns the authority id of the equivocator.
 	pub fn offender(&self) -> &AuthorityId {
 		match self {
 			Equivocation::Prevote(ref equivocation) => &equivocation.identity,
@@ -248,6 +250,8 @@ impl<H, N> Equivocation<H, N> {
 	}
 }
 
+/// Verifies the equivocation proof by making sure that both votes target
+/// different blocks and that its signatures are valid.
 pub fn check_equivocation_proof<H, N>(report: &EquivocationProof<H, N>) -> Result<(), ()>
 where
 	H: Clone + Encode + PartialEq,
@@ -281,25 +285,21 @@ where
 			)?;
 
 			return Ok(());
-		}
+		};
 	}
 
 	match report.equivocation {
 		Equivocation::Prevote(ref equivocation) => {
 			check!(equivocation, grandpa::Message::Prevote);
-		},
+		}
 		Equivocation::Precommit(ref equivocation) => {
 			check!(equivocation, grandpa::Message::Precommit);
-		},
+		}
 	}
 }
 
 /// Encode round message localized to a given round and set id.
-pub fn localized_payload<E: Encode>(
-	round: RoundNumber,
-	set_id: SetId,
-	message: &E,
-) -> Vec<u8> {
+pub fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetId, message: &E) -> Vec<u8> {
 	let mut buf = Vec::new();
 	localized_payload_with_buffer(round, set_id, message, &mut buf);
 	buf
@@ -326,18 +326,12 @@ pub fn check_message_signature<H, N>(
 	signature: &AuthoritySignature,
 	round: RoundNumber,
 	set_id: SetId,
-) -> Result<(), ()> where
+) -> Result<(), ()>
+where
 	H: Encode,
 	N: Encode,
 {
-	check_message_signature_with_buffer(
-		message,
-		id,
-		signature,
-		round,
-		set_id,
-		&mut Vec::new(),
-	)
+	check_message_signature_with_buffer(message, id, signature, round, set_id, &mut Vec::new())
 }
 
 /// Check a message signature by encoding the message as a localized payload and
@@ -351,7 +345,8 @@ pub fn check_message_signature_with_buffer<H, N>(
 	round: RoundNumber,
 	set_id: SetId,
 	buf: &mut Vec<u8>,
-) -> Result<(), ()> where
+) -> Result<(), ()>
+where
 	H: Encode,
 	N: Encode,
 {
@@ -379,13 +374,15 @@ pub fn check_message_signature_with_buffer<H, N>(
 	}
 }
 
+/// Localizes the message to the given set and round and signs the payload.
 #[cfg(feature = "std")]
 pub fn sign_message<H, N>(
 	message: grandpa::Message<H, N>,
 	pair: &AuthorityPair,
 	round: RoundNumber,
 	set_id: SetId,
-) -> grandpa::SignedMessage<H, N, AuthoritySignature, AuthorityId> where
+) -> grandpa::SignedMessage<H, N, AuthoritySignature, AuthorityId>
+where
 	H: Encode,
 	N: Encode,
 {
@@ -475,6 +472,12 @@ sp_api::decl_runtime_apis! {
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> AuthorityList;
 
+        /// Submits an extrinsic to report an equivocation. The caller must
+        /// provide the equivocation proof and an encoded key ownership proof
+        /// (the key ownership proof is generic). This method will sign the
+        /// extrinsic with any reporting keys available in the keystore and will
+        /// push the transaction to the pool.
+        /// Only useful in an offchain context.
 		#[skip_initialize_block]
 		fn submit_report_equivocation_extrinsic(
 			equivocation_proof: EquivocationProof<Block::Hash, NumberFor<Block>>,
