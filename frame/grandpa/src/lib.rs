@@ -53,7 +53,9 @@ mod equivocation;
 mod mock;
 mod tests;
 
-pub use equivocation::EquivocationHandler;
+pub use equivocation::{
+    EquivocationHandler, GrandpaEquivocationOffence, GrandpaTimeSlot, GrandpaOffence
+};
 
 pub trait Trait: frame_system::Trait {
 	/// The event type of this module.

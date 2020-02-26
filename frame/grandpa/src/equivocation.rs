@@ -165,21 +165,21 @@ where
 #[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Encode, Decode)]
 pub struct GrandpaTimeSlot {
 	// The order of these matters for `derive(Ord)`.
-	set_id: SetId,
-	round: RoundNumber,
+	pub set_id: SetId,
+	pub round: RoundNumber,
 }
 
 /// A grandpa equivocation offence report.
 #[allow(dead_code)]
 pub struct GrandpaEquivocationOffence<FullIdentification> {
 	/// Time slot at which this incident happened.
-	time_slot: GrandpaTimeSlot,
+	pub time_slot: GrandpaTimeSlot,
 	/// The session index in which the incident happened.
-	session_index: SessionIndex,
+	pub session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.
-	validator_set_count: u32,
+	pub validator_set_count: u32,
 	/// The authority which produced this equivocation.
-	offender: FullIdentification,
+	pub offender: FullIdentification,
 }
 
 pub trait GrandpaOffence<FullIdentification>: Offence<FullIdentification> {
