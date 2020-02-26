@@ -40,6 +40,8 @@ sp_api::decl_runtime_apis! {
 		fn dispatch_benchmark(
 			module: Vec<u8>,
 			extrinsic: Vec<u8>,
+			mins: Vec<u32>,
+			maxs: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
 		) -> Option<Vec<BenchmarkResults>>;
@@ -77,8 +79,16 @@ pub trait Benchmarking<T> {
 	/// Parameters
 	/// - `extrinsic`: The name of extrinsic function you want to benchmark encoded as bytes.
 	/// - `steps`: The number of sample points you want to take across the range of parameters.
+	/// - `mins`: The minimum number for each range of parameters.
+	/// - `maxs`: The maximum number for each range of parameters.
 	/// - `repeat`: The number of times you want to repeat a benchmark.
-	fn run_benchmark(extrinsic: Vec<u8>, steps: Vec<u32>, repeat: u32) -> Result<Vec<T>, &'static str>;
+	fn run_benchmark(
+		extrinsic: Vec<u8>,
+		mins: Vec<u32>,
+		maxs: Vec<u32>,
+		steps: Vec<u32>,
+		repeat: u32,
+	) -> Result<Vec<T>, &'static str>;
 }
 
 /// The required setup for creating a benchmark.

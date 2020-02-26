@@ -39,6 +39,14 @@ pub struct BenchmarkCmd {
 	#[structopt(short, long, use_delimiter = true)]
 	pub steps: Vec<u32>,
 
+	/// Indicates minimum number for each of the component ranges.
+	#[structopt(long, use_delimiter = true)]
+	pub mins: Vec<u32>,
+
+	/// Indicates maximum number for each of the component ranges.
+	#[structopt(long, use_delimiter = true)]
+	pub maxs: Vec<u32>,
+
 	/// Select how many repetitions of this benchmark should run.
 	#[structopt(short, long, default_value = "1")]
 	pub repeat: u32,
@@ -104,7 +112,14 @@ impl BenchmarkCmd {
 			&mut changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
-			&(&self.pallet, &self.extrinsic, self.steps.clone(), self.repeat).encode(),
+			&(
+				&self.pallet,
+				&self.extrinsic,
+				self.mins.clone(),
+				self.maxs.clone(),
+				self.steps.clone(),
+				self.repeat,
+			).encode(),
 			Default::default(),
 		)
 		.execute(strategy.into())
@@ -115,9 +130,11 @@ impl BenchmarkCmd {
 		if let Some(results) = results {
 			// Print benchmark metadata
 			println!(
-				"Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}",
+				"Pallet: {:?}, Extrinsic: {:?}, Mins: {:?}, Maxs: {:?}, Steps: {:?}, Repeat: {:?}",
 				self.pallet,
 				self.extrinsic,
+				self.mins,
+				self.maxs,
 				self.steps,
 				self.repeat,
 			);

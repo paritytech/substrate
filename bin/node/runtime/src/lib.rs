@@ -819,15 +819,35 @@ impl_runtime_apis! {
 		fn dispatch_benchmark(
 			module: Vec<u8>,
 			extrinsic: Vec<u8>,
+			mins: Vec<u32>,
+			maxs: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
 		) -> Option<Vec<frame_benchmarking::BenchmarkResults>> {
 			use frame_benchmarking::Benchmarking;
 
 			match module.as_slice() {
-				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
-				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
-				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
+				b"pallet-balances" | b"balances" => Balances::run_benchmark(
+					extrinsic,
+					mins,
+					maxs,
+					steps,
+					repeat,
+				).ok(),
+				b"pallet-identity" | b"identity" => Identity::run_benchmark(
+					extrinsic,
+					mins,
+					maxs,
+					steps,
+					repeat,
+				).ok(),
+				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(
+					extrinsic,
+					mins,
+					maxs,
+					steps,
+					repeat,
+				).ok(),
 				_ => None,
 			}
 		}
