@@ -4255,7 +4255,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-multi-account"
-version = "2.0.0"
+version = "2.0.0-alpha.1"
 dependencies = [
  "frame-support",
  "frame-system",
