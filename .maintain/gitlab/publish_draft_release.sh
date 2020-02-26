@@ -14,17 +14,6 @@ version="$CI_COMMIT_TAG"
 last_version=$(git tag -l | sort -V | grep -B 1 -x "$version" | head -n 1)
 echo "[+] Version: $version; Previous version: $last_version"
 
-# Check that a signed tag exists on github for this version
-echo '[+] Checking tag has been signed'
-#check_tag "paritytech/substrate" "$version"
-case $? in
-  0) echo '[+] Tag found and has been signed'
-    ;;
-  1) echo '[!] Tag found but has not been signed. Aborting release.'; exit 1
-    ;;
-  2) echo '[!] Tag not found. Aborting release.'; exit
-esac
-
 all_changes="$(sanitised_git_logs "$last_version" "$version")"
 labelled_changes=""
 echo "[+] Iterating through $(wc -l <<< "$all_changes") changes to find labelled PRs"
