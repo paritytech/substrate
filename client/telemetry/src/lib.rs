@@ -297,3 +297,34 @@ macro_rules! telemetry {
 		})
 	}
 }
+
+#[cfg(test)]
+mod telemetry_endpoints_tests {
+	use libp2p::Multiaddr;
+	use super::TelemetryEndpoints;
+
+	#[test]
+	fn valid_endpoints() {
+		let endp = vec![("/ip4/80.123.90.4/tcp/5432".into(), 3), ("/ip4/80.123.90.4/tcp/5432".into(), 4)];
+		let telem = TelemetryEndpoints::new(endp.clone()).unwrap();
+		let mut res: Vec<(Multiaddr, u8)> = vec![];
+		for (a, b) in endp.iter() {
+			res.push((a.parse().unwrap(), *b))
+		}
+		assert_eq!(telem.0, res);
+	}
+
+	#[test]
+	fn invalid_endpoints() {
+		let endp = vec![("/ip4/...80.123.90.4/tcp/5432".into(), 3), ("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4)];
+		let telem = TelemetryEndpoints::new(endp);
+		assert!(telem.is_err());
+	}
+
+	#[test]
+	fn valid_and_invalid_endpointsj() {
+		let endp = vec![("/ip4/80.123.90.4/tcp/5432".into(), 3), ("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4)];
+		let telem = TelemetryEndpoints::new(endp);
+		assert!(telem.is_err());
+	}
+}
