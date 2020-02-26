@@ -131,8 +131,7 @@ where
 
 	/// Push onto the block's list of extrinsics.
 	///
-	/// This will treat incoming extrinsic `xt` as untrusted and perform additional checks
-	/// (currenty checking signature).
+	/// This will treat incoming extrinsic `xt` as trusted and skip signature check (for signed transactions).
 	pub fn push_trusted(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
 		self.push_internal(xt, true)
 	}
