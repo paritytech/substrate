@@ -17,6 +17,7 @@
 //! This is part of the Substrate runtime.
 
 use sp_core::{ed25519, sr25519, crypto::Pair};
+use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering}};
 
 #[derive(Debug, Clone)]
 struct Ed25519BatchItem {
@@ -32,15 +33,31 @@ struct Sr25519BatchItem {
 	message: Vec<u8>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct BatchVerifier {
-	ed25519_items: Vec<Ed25519BatchItem>,
 	sr25519_items: Vec<Sr25519BatchItem>,
+	invalid: Arc<AtomicBool>,
+	left: Arc<AtomicUsize>,
+}
+
+
+lazy_static::lazy_static! {
+	static ref LOCAL_POOL: futures::executor::ThreadPool = {
+		futures::executor::ThreadPool::builder()
+			.stack_size(16*1024)
+			.name_prefix("io-background")
+			.create()
+			.expect("failed to create background thread pool")
+	};
 }
 
 impl BatchVerifier {
 	pub fn new() -> Self {
-		Self::default()
+		BatchVerifier {
+			sr25519_items: Default::default(),
+			invalid: Arc::new(false.into()),
+			left: Arc::new(0.into()),
+		}
 	}
 
 	pub fn push_ed25519(
@@ -49,7 +66,18 @@ impl BatchVerifier {
 		pub_key: ed25519::Public,
 		message: Vec<u8>,
 	) {
-		self.ed25519_items.push(Ed25519BatchItem { signature, pub_key, message });
+		if self.invalid.load(AtomicOrdering::Relaxed) { return; } // there is already invalid transaction encountered
+
+		let invalid_clone = self.invalid.clone();
+		let left_clone = self.left.clone();
+		self.left.fetch_add(1, AtomicOrdering::SeqCst);
+
+		LOCAL_POOL.spawn_ok(async move {
+			if !ed25519::Pair::verify(&signature, &message, &pub_key) {
+				invalid_clone.store(true, AtomicOrdering::Relaxed);
+			}
+			left_clone.fetch_sub(1, AtomicOrdering::SeqCst);
+		});
 	}
 
 	pub fn push_sr25519(
@@ -62,12 +90,15 @@ impl BatchVerifier {
 	}
 
 	pub fn verify_and_clear(&mut self) -> bool {
-		// TODO: parallel
-		for ed25519_item in self.ed25519_items.drain(..) {
-			if !ed25519::Pair::verify(&ed25519_item.signature, &ed25519_item.message, &ed25519_item.pub_key) {
-				return false;
-			}
+		while self.left.load(AtomicOrdering::SeqCst) != 0 {
+			std::thread::park_timeout(std::time::Duration::from_micros(50));
 		}
+
+		if self.invalid.load(AtomicOrdering::Relaxed) {
+			self.invalid.store(false, AtomicOrdering::Relaxed);
+			return false;
+		}
+
 
 		let sr25519_batch_result = {
 			let messages = self.sr25519_items.iter().map(|item| &item.message[..]).collect();
