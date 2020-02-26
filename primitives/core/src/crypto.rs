@@ -921,12 +921,18 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 }
 
 /// An identifier for a specific cryptographic algorithm used by a key pair
-#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub struct CryptoTypeId(pub [u8; 4]);
 
 /// A type alias of CryptoTypeId & a public key
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
+
+impl std::fmt::Display for CryptoTypePublicPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:#?}-{:x?}", self.0, self.1)
+    }
+}
 
 /// Known key types; this also functions as a global registry of key types for projects wishing to
 /// avoid collisions with each other.
