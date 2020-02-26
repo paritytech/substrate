@@ -425,7 +425,7 @@ decl_module! {
 			ensure!(threshold as usize <= signatories.len(), Error::<T>::TooFewSignatories);
 			ensure!(signatories.len() <= max_sigs, Error::<T>::TooManySignatories);
 			ensure!(signatories.len() <= u32::max_value() as usize, Error::<T>::TooManySignatories);
-			let signatories = Self::ensure_sorted(signatories.clone())?;
+			let signatories = Self::ensure_sorted_and_unique(&signatories)?;
 
 			if let Some(multi_account) = <MultiAccounts<T>>::get(&who) {
 				// reserve new deposit for updated multi account
