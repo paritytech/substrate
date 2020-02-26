@@ -43,18 +43,31 @@ use sp_staking::{
 	SessionIndex,
 };
 
+/// A trait with utility methods for handling equivocation reports in GRANDPA.
+/// The key owner proof and offence types are generic, and the trait provides
+/// methods to check an equivocation proof (i.e. the equivocation itself and the
+/// key ownership proof), reporting an offence triggered by a valid equivocation
+/// report, and also for creating and submitting equivocation report extrinsics
+/// (useful only in offchain context).
 pub trait HandleEquivocation<T: super::Trait> {
+	/// The proof of key ownership.
 	type KeyOwnerProof: Clone + Debug + Decode + Encode + PartialEq;
+	/// The identification of a key owner.
 	type KeyOwnerIdentification;
+	/// The offence type used for reporting offences on valid equivocation reports.
 	type Offence: GrandpaOffence<Self::KeyOwnerIdentification>;
 
+	/// Verifies the key ownership proof and the equivocation proof against the
+	/// offending key owner.
 	fn check_proof(
 		equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
 	) -> Option<(Self::KeyOwnerIdentification, SessionIndex, u32)>;
 
+	/// Report an offence proved by the given reporters.
 	fn report_offence(reporters: Vec<T::AccountId>, offence: Self::Offence);
 
+	/// Create and dispatch an equivocation report extrinsic.
 	fn submit_equivocation_report(
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
@@ -87,6 +100,10 @@ impl<T: super::Trait> HandleEquivocation<T> for () {
 	}
 }
 
+/// Generic equivocation handler. This type implements `HandleEquivocation`
+/// using existing subsystems that are part of frame (type bounds described
+/// below) and will dispatch to them directly, it's only purpose is to wire all
+/// subsystems together.
 pub struct EquivocationHandler<
 	P,
 	S,
@@ -117,7 +134,10 @@ where
 	P: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), ExtraData = (SessionIndex, u32)>,
 	// A transaction submitter. Used for submitting equivocation reports.
 	S: SubmitSignedTransaction<T, <T as super::Trait>::Call>,
+	// The offence type that should be used when reporting.
 	O: GrandpaOffence<P::IdentificationTuple>,
+	// A system for reporting offences after valid equivocation reports are
+	// processed.
 	R: ReportOffence<T::AccountId, P::IdentificationTuple, O>,
 	// Key type to use when signing equivocation report transactions, must be
 	// convertible to and from an account id since that's what we need to use
@@ -182,7 +202,11 @@ pub struct GrandpaEquivocationOffence<FullIdentification> {
 	pub offender: FullIdentification,
 }
 
+/// An interface for types that will be used as GRANDPA offences and must also
+/// implement the `Offence` trait. This trait provides a constructor that is
+/// provided all available data during processing of GRANDPA equivocations.
 pub trait GrandpaOffence<FullIdentification>: Offence<FullIdentification> {
+	/// Create a new GRANDPA offence using the given equivocation details.
 	fn new(
 		session_index: SessionIndex,
 		validator_set_count: u32,
