@@ -7,6 +7,8 @@ version = "2.0.0-alpha.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 repository = "https://github.com/paritytech/substrate/"
+documentation = "https://docs.rs/sc-peerset"
+
 
 [dependencies]
 futures = "0.3.1"

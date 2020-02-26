@@ -6,6 +6,8 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "This crate provides an implementation of `WasmRuntime` that is baked by wasmi."
+documentation = "https://docs.rs/sc-execturo-wasmi"
 
 [dependencies]
 log = "0.4.8"

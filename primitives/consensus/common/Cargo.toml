@@ -7,6 +7,9 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Common utilities for building and using consensus engines in substrate."
+documentation = "https://docs.rs/sp-consensus/"
+
 
 [dependencies]
 derive_more = "0.99.2"

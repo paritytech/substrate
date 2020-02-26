@@ -6,6 +6,9 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Keystore (and session key management) for ed25519 based chains like Polkadot."
+documentation = "https://docs.rs/sc-keystore"
+
 
 [dependencies]
 derive_more = "0.99.2"

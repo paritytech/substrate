@@ -6,6 +6,9 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Substrate blockchain traits and primitives."
+documentation = "https://docs.rs/sp-blockchain"
+
 
 [dependencies]
 log = "0.4.8"

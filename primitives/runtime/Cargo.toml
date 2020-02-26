@@ -6,6 +6,9 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Runtime Modules shared primitive types."
+documentation = "https://docs.rs/sp-runtime"
+
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }

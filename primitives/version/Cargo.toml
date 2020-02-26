@@ -6,6 +6,9 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Version module for the Substrate runtime; Provides a function that returns the runtime version."
+documentation = "https://docs.rs/sp-version"
+
 
 [dependencies]
 impl-serde = { version = "0.2.3", optional = true }

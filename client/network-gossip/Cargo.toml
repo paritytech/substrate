@@ -7,6 +7,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+documentation = "https://docs.rs/sc-network-gossip"
+
 
 [dependencies]
 futures = "0.3.1"

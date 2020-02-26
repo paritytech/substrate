@@ -6,6 +6,8 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "A crate that provides means of executing/dispatching calls into the runtime."
+documentation = "https://docs.rs/sc-executor"
 
 [dependencies]
 derive_more = "0.99.2"

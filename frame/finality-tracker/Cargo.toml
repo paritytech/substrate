@@ -6,6 +6,9 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "FRAME Pallet that tracks the last finalized block, as perceived by block authors."
+documentation = "https://docs.rs/pallet-finality-tracker"
+
 
 [dependencies]
 serde = { version = "1.0.101", default-features = false, features = ["derive"] }

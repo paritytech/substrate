@@ -6,6 +6,8 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "A set of common definitions that are needed for defining execution engines."
+documentation = "https://docs.rs/sc-executor-common/"
 
 [dependencies]
 log = "0.4.8"

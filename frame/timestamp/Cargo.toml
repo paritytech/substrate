@@ -6,6 +6,9 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "FRAME Timestamp Module"
+documentation = "https://docs.rs/pallet-timestamp"
+
 
 [dependencies]
 serde = { version = "1.0.101", optional = true }
