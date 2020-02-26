@@ -1944,6 +1944,7 @@ impl<T: Trait> Module<T> {
 			use crate::{Trait, BalanceOf, MomentOf, SessionIndex, Exposure};
 			use codec::{Encode, Decode};
 			use frame_support::{decl_module, decl_storage};
+			use sp_std::prelude::*;
 
 			/// Reward points of an era. Used to split era total payout between validators.
 			#[derive(Encode, Decode, Default)]
