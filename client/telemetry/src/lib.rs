@@ -96,12 +96,33 @@ pub struct TelemetryConfig {
 ///
 /// The URL string can be either a URL or a multiaddress.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct TelemetryEndpoints(Vec<(String, u8)>);
+pub struct TelemetryEndpoints(Vec<(Multiaddr, u8)>);
 
 impl TelemetryEndpoints {
-	pub fn new(endpoints: Vec<(String, u8)>) -> Self {
-		TelemetryEndpoints(endpoints)
+	pub fn new(endpoints: Vec<(String, u8)>) -> Result<Self, libp2p::multiaddr::Error> {
+		let endpoints: Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error> = endpoints.iter()
+			.map(|e| Ok((url_to_multiaddr(&e.0)?, e.1)))
+			.collect();
+		endpoints.map(Self)
 	}
+}
+
+/// Parses a WebSocket URL into a libp2p `Multiaddr`.
+fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
+	// First, assume that we have a `Multiaddr`.
+	let parse_error = match url.parse() {
+		Ok(ma) => return Ok(ma),
+		Err(err) => err,
+	};
+
+	// If not, try the `ws://path/url` format.
+	if let Ok(ma) = libp2p::multiaddr::from_url(url) {
+		return Ok(ma)
+	}
+
+	// If we have no clue about the format of that string, assume that we were expecting a
+	// `Multiaddr`.
+	Err(parse_error)
 }
 
 /// Log levels.
@@ -149,13 +170,7 @@ struct TelemetryDrain {
 /// doesn't provide any way of knowing whether a global logger has already been registered.
 pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 	// Build the list of telemetry endpoints.
-	let mut endpoints = Vec::new();
-	for &(ref url, verbosity) in &config.endpoints.0 {
-		match url_to_multiaddr(url) {
-			Ok(addr) => endpoints.push((addr, verbosity)),
-			Err(err) => warn!(target: "telemetry", "Invalid telemetry URL {}: {}", url, err),
-		}
-	}
+	let (endpoints, wasm_external_transport) = (config.endpoints.0, config.wasm_external_transport);
 
 	let (sender, receiver) = mpsc::channel(16);
 	let guard = {
@@ -164,7 +179,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 		slog_scope::set_global_logger(root)
 	};
 
-	let worker = match worker::TelemetryWorker::new(endpoints, config.wasm_external_transport) {
+	let worker = match worker::TelemetryWorker::new(endpoints, wasm_external_transport) {
 		Ok(w) => Some(w),
 		Err(err) => {
 			error!(target: "telemetry", "Failed to initialize telemetry worker: {:?}", err);
@@ -269,24 +284,6 @@ impl slog::Drain for TelemetryDrain {
 
 		Ok(())
 	}
-}
-
-/// Parses a WebSocket URL into a libp2p `Multiaddr`.
-fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
-	// First, assume that we have a `Multiaddr`.
-	let parse_error = match url.parse() {
-		Ok(ma) => return Ok(ma),
-		Err(err) => err,
-	};
-
-	// If not, try the `ws://path/url` format.
-	if let Ok(ma) = libp2p::multiaddr::from_url(url) {
-		return Ok(ma)
-	}
-
-	// If we have no clue about the format of that string, assume that we were expecting a
-	// `Multiaddr`.
-	Err(parse_error)
 }
 
 /// Translates to `slog_scope::info`, but contains an additional verbosity
