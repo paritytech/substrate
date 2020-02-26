@@ -6,6 +6,7 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Substrate Client RPC"
 
 [dependencies]
 sc-rpc-api = { version = "0.8.0-alpha.1", path = "../rpc-api" }
@@ -31,13 +32,3 @@ sp-transaction-pool = { version = "2.0.0-alpha.1", path = "../../primitives/tran
 sp-blockchain = { version = "2.0.0-alpha.1", path = "../../primitives/blockchain" }
 hash-db = { version = "0.15.2", default-features = false }
 parking_lot = "0.10.0"
-
-[dev-dependencies]
-assert_matches = "1.3.0"
-futures01 = { package = "futures", version = "0.1.29" }
-sc-network = { version = "0.8.0-alpha.1", path = "../network" }
-rustc-hex = "2.0.1"
-sp-io = { version = "2.0.0-alpha.1", path = "../../primitives/io" }
-substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
-tokio = "0.1.22"
-sc-transaction-pool = { version = "2.0.0-alpha.1", path = "../transaction-pool" }
