@@ -136,8 +136,8 @@ pub trait BareCryptoStore: Send + Sync {
 	/// Provided a list of public keys, sign a message with
 	/// each key given that the key is supported.
 	///
-	/// Returns a list of `Option`s each representing the signature of each key.
-	/// None is return for non-supported keys.
+	/// Returns a list of `Result`s each representing the signature of each key or
+	/// a BareCryptoStoreError for non-supported keys.
 	fn sign_with_all(
 		&self,
 		id: KeyTypeId,
