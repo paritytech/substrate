@@ -4424,6 +4424,9 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "safe-mix",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -6312,6 +6315,8 @@ dependencies = [
 name = "sc-rpc"
 version = "2.0.0-alpha.1"
 dependencies = [
+ "assert_matches",
+ "futures 0.1.29",
  "futures 0.3.4",
  "hash-db",
  "jsonrpc-core",
@@ -6319,15 +6324,19 @@ dependencies = [
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
+ "rustc-hex",
  "sc-client",
  "sc-client-api",
  "sc-executor",
  "sc-keystore",
+ "sc-network",
  "sc-rpc-api",
+ "sc-transaction-pool",
  "serde_json",
  "sp-api",
  "sp-blockchain",
  "sp-core",
+ "sp-io",
  "sp-offchain",
  "sp-rpc",
  "sp-runtime",
@@ -6335,6 +6344,8 @@ dependencies = [
  "sp-state-machine",
  "sp-transaction-pool",
  "sp-version",
+ "substrate-test-runtime-client",
+ "tokio 0.1.22",
 ]
 
 [[package]]
@@ -7616,6 +7627,7 @@ name = "substrate-frame-rpc-support"
 version = "2.0.0-alpha.1"
 dependencies = [
  "frame-support",
+ "frame-system",
  "futures 0.3.4",
  "jsonrpc-client-transports",
  "jsonrpc-core",
@@ -7623,6 +7635,7 @@ dependencies = [
  "sc-rpc-api",
  "serde",
  "sp-storage",
+ "tokio 0.1.22",
 ]
 
 [[package]]

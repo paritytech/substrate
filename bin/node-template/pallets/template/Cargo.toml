@@ -22,6 +22,21 @@ default-features = false
 package = 'frame-system'
 version = "2.0.0-alpha.1"
 path = "../../../../frame/system"
+[dev-dependencies.sp-core]
+default-features = false
+version = "2.0.0-alpha.1"
+path = "../../../../primitives/core"
+
+[dev-dependencies.sp-io]
+default-features = false
+version = "2.0.0-alpha.1"
+path = "../../../../primitives/io"
+
+[dev-dependencies.sp-runtime]
+default-features = false
+version = "2.0.0-alpha.1"
+path = "../../../../primitives/runtime"
+
 
 [features]
 default = ['std']
