@@ -22,15 +22,17 @@ use sp_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
+use std::str::FromStr;
+#[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
-use crate::generic::{Digest, DigestItem};
+use crate::generic::{Digest, DigestItem, CheckSignature};
 pub use sp_arithmetic::traits::{
-	SimpleArithmetic, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
+	AtLeast32Bit, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
 	CheckedShl, CheckedShr, IntegerSquareRoot
 };
@@ -462,6 +464,9 @@ sp_core::impl_maybe_marker!(
 	/// A type that implements Display when in std environment.
 	trait MaybeDisplay: Display;
 
+	/// A type that implements FromStr when in std environment.
+	trait MaybeFromStr: FromStr;
+
 	/// A type that implements Hash when in std environment.
 	trait MaybeHash: sp_std::hash::Hash;
 
@@ -474,22 +479,6 @@ sp_core::impl_maybe_marker!(
 	/// A type that implements MallocSizeOf.
 	trait MaybeMallocSizeOf: parity_util_mem::MallocSizeOf;
 );
-
-/// A type that provides a randomness beacon.
-pub trait RandomnessBeacon {
-	/// Returns 32 bytes of random data. The output will change eventually, but
-	/// is not guaranteed to be different between any two calls.
-	///
-	/// # Security
-	///
-	/// This MUST NOT be used for gambling, as it can be influenced by a
-	/// malicious validator in the short term. It MAY be used in many
-	/// cryptographic protocols, however, so long as one remembers that this
-	/// (like everything else on-chain) is public. For example, it can be
-	/// used where a number is needed that cannot have been chosen by an
-	/// adversary, for purposes such as public-coin zero-knowledge proofs.
-	fn random() -> [u8; 32];
-}
 
 /// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static {}
@@ -512,7 +501,7 @@ pub trait Header:
 {
 	/// Header number.
 	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr
+		+ Copy + MaybeDisplay + AtLeast32Bit + Codec + sp_std::str::FromStr
 		+ MaybeMallocSizeOf;
 	/// Header hash type
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
@@ -647,7 +636,7 @@ pub trait Checkable<Context>: Sized {
 	type Checked;
 
 	/// Check self, given an instance of Context.
-	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
+	fn check(self, signature: CheckSignature, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -659,15 +648,15 @@ pub trait BlindCheckable: Sized {
 	type Checked;
 
 	/// Check self.
-	fn check(self) -> Result<Self::Checked, TransactionValidityError>;
+	fn check(self, signature: CheckSignature) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 // Every `BlindCheckable` is also a `StaticCheckable` for arbitrary `Context`.
 impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
 
-	fn check(self, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
-		BlindCheckable::check(self)
+	fn check(self, signature: CheckSignature, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
+		BlindCheckable::check(self, signature)
 	}
 }
 
@@ -900,7 +889,6 @@ pub trait Applyable: Sized + Send + Sync {
 	fn sender(&self) -> Option<&Self::AccountId>;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		info: Self::DispatchInfo,
@@ -909,7 +897,6 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: Self::DispatchInfo,
@@ -935,7 +922,6 @@ pub trait GetNodeBlockType {
 /// the transaction for the transaction pool.
 /// During block execution phase one need to perform the same checks anyway,
 /// since this function is not being called.
-#[deprecated(note = "Use SignedExtensions instead.")]
 pub trait ValidateUnsigned {
 	/// The call to validate
 	type Call;
@@ -965,7 +951,7 @@ pub trait ValidateUnsigned {
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity;
 }
 
-/// Opaque datatype that may be destructured into a series of raw byte slices (which represent
+/// Opaque data type that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
 pub trait OpaqueKeys: Clone {
 	/// Types bound to this opaque keys that provide the key type ids returned.

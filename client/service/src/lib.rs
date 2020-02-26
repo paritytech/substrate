@@ -31,7 +31,8 @@ use std::{borrow::Cow, io, pin::Pin};
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use wasm_timer::Instant;
 use std::task::{Poll, Context};
 use parking_lot::Mutex;
 
@@ -44,14 +45,12 @@ use futures::{
 	sink::SinkExt,
 	task::{Spawn, FutureObj, SpawnError},
 };
-use sc_network::{
-	NetworkService, NetworkState, specialization::NetworkSpecialization,
-	PeerId, ReportHandle,
-};
+use sc_network::{NetworkService, network_state::NetworkState, PeerId, ReportHandle};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
+use parity_util_mem::MallocSizeOf;
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -65,12 +64,23 @@ pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoo
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 pub use sc_client::FinalityNotifications;
 pub use sc_rpc::Metadata as RpcMetadata;
+pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use sc_network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
+pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
+
+/// A type that implements `MallocSizeOf` on native but not wasm.
+#[cfg(not(target_os = "unknown"))]
+pub trait MallocSizeOfWasm: MallocSizeOf {}
+#[cfg(target_os = "unknown")]
+pub trait MallocSizeOfWasm {}
+#[cfg(not(target_os = "unknown"))]
+impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
+#[cfg(target_os = "unknown")]
+impl<T> MallocSizeOfWasm for T {}
 
 /// Substrate service.
 pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
@@ -162,9 +172,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	/// Chain selection algorithm.
 	type SelectChain: sp_consensus::SelectChain<Self::Block>;
 	/// Transaction pool.
-	type TransactionPool: TransactionPool<Block = Self::Block>;
-	/// Network specialization.
-	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
+	type TransactionPool: TransactionPool<Block = Self::Block> + MallocSizeOfWasm;
 
 	/// Get event stream for telemetry connection established events.
 	fn telemetry_on_connect_stream(&self) -> futures::channel::mpsc::UnboundedReceiver<()>;
@@ -205,7 +213,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 
 	/// Get shared network instance.
 	fn network(&self)
-		-> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, <Self::Block as BlockT>::Hash>>;
+		-> Arc<NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>;
 
 	/// Returns a receiver that periodically receives a status of the network.
 	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
@@ -217,18 +225,17 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	fn on_exit(&self) -> ::exit_future::Exit;
 }
 
-impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService for
+impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
 	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
-		NetworkService<TBl, TNetSpec, TBl::Hash>, TExPool, TOc>
+		NetworkService<TBl, TBl::Hash>, TExPool, TOc>
 where
 	TBl: BlockT + Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl>,
 	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send + Unpin,
-	TExPool: 'static + TransactionPool<Block = TBl>,
+	TExPool: 'static + TransactionPool<Block = TBl> + MallocSizeOfWasm,
 	TOc: 'static + Send + Sync,
-	TNetSpec: NetworkSpecialization<TBl>,
 {
 	type Block = TBl;
 	type Backend = TBackend;
@@ -236,7 +243,6 @@ where
 	type RuntimeApi = TRtApi;
 	type SelectChain = TSc;
 	type TransactionPool = TExPool;
-	type NetworkSpecialization = TNetSpec;
 
 	fn telemetry_on_connect_stream(&self) -> futures::channel::mpsc::UnboundedReceiver<()> {
 		let (sink, stream) = futures::channel::mpsc::unbounded();
@@ -302,7 +308,7 @@ where
 	}
 
 	fn network(&self)
-		-> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, <Self::Block as BlockT>::Hash>>
+		-> Arc<NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>
 	{
 		self.network.clone()
 	}
@@ -366,11 +372,10 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
 fn build_network_future<
 	B: BlockT,
 	C: sc_client::BlockchainEvents<B>,
-	S: sc_network::specialization::NetworkSpecialization<B>,
 	H: sc_network::ExHashT
 > (
 	roles: Roles,
-	mut network: sc_network::NetworkWorker<B, S, H>,
+	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
 	mut rpc_rx: mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
@@ -384,7 +389,7 @@ fn build_network_future<
 
 		// We poll `imported_blocks_stream`.
 		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
-			network.on_block_imported(notification.hash, notification.header, Vec::new(), notification.is_new_best);
+			network.on_block_imported(notification.header, Vec::new(), notification.is_new_best);
 		}
 
 		// We poll `finality_notification_stream`, but we only take the last event.
@@ -521,6 +526,30 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
 	}
 }
 
+#[cfg(not(target_os = "unknown"))]
+// Wrapper for HTTP and WS servers that makes sure they are properly shut down.
+mod waiting {
+	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
+	impl Drop for HttpServer {
+		fn drop(&mut self) {
+			if let Some(server) = self.0.take() {
+				server.close_handle().close();
+				server.wait();
+			}
+		}
+	}
+
+	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
+	impl Drop for WsServer {
+		fn drop(&mut self) {
+			if let Some(server) = self.0.take() {
+				server.close_handle().close();
+				let _ = server.wait();
+			}
+		}
+	}
+}
+
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
@@ -549,7 +578,7 @@ fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metad
 		maybe_start_server(
 			config.rpc_http,
 			|address| sc_rpc_server::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
-		)?,
+		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
 			config.rpc_ws,
 			|address| sc_rpc_server::start_ws(
@@ -558,7 +587,7 @@ fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metad
 				config.rpc_cors.as_ref(),
 				gen_handler(),
 			),
-		)?.map(Mutex::new),
+		)?.map(|s| waiting::WsServer(Some(s))).map(Mutex::new),
 	)))
 }
 
@@ -612,7 +641,7 @@ where
 	E: IntoPoolError + From<sp_transaction_pool::error::Error>,
 {
 	pool.ready()
-		.filter(|t| t.is_propagateable())
+		.filter(|t| t.is_propagable())
 		.map(|t| {
 			let hash = t.hash().clone();
 			let ex: B::Extrinsic = t.data().clone();
@@ -621,10 +650,10 @@ where
 		.collect()
 }
 
-impl<B, H, C, Pool, E> sc_network::TransactionPool<H, B> for
+impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for
 	TransactionPoolAdapter<C, Pool>
 where
-	C: sc_network::ClientHandle<B> + Send + Sync,
+	C: sc_network::config::Client<B> + Send + Sync,
 	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
@@ -692,6 +721,7 @@ mod tests {
 	use futures::executor::block_on;
 	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
+	use sp_runtime::generic::CheckSignature;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 
@@ -703,7 +733,7 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
-		));
+		).0);
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
@@ -720,7 +750,7 @@ mod tests {
 
 		// then
 		assert_eq!(transactions.len(), 1);
-		assert!(transactions[0].1.clone().check().is_ok());
+		assert!(transactions[0].1.clone().check(CheckSignature::Yes).is_ok());
 		// this should not panic
 		let _ = transactions[0].1.transfer();
 	}

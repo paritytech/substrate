@@ -73,10 +73,12 @@ use sp_runtime::{DispatchResult, RuntimeDebug};
 use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
-	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
+	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus},
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
+
+pub mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
@@ -392,7 +394,7 @@ decl_storage! {
 		/// Alternative "sub" identities of this account.
 		///
 		/// The first item is the deposit, the second is a vector of the accounts.
-		pub SubsOf get(fn subs):
+		pub SubsOf get(fn subs_of):
 			map hasher(blake2_256) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The set of registrars. Not expected to get very big as can only be added through a
@@ -553,7 +555,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) {
 			let sender = ensure_signed(origin)?;
-			ensure!(<IdentityOf<T>>::exists(&sender), Error::<T>::NotFound);
+			ensure!(<IdentityOf<T>>::contains_key(&sender), Error::<T>::NotFound);
 			ensure!(subs.len() <= T::MaxSubAccounts::get() as usize, Error::<T>::TooManySubAccounts);
 
 			let (old_deposit, old_ids) = <SubsOf<T>>::get(&sender);
@@ -625,7 +627,7 @@ decl_module! {
 		/// - `max_fee`: The maximum fee that may be paid. This should just be auto-populated as:
 		///
 		/// ```nocompile
-		/// Self::registrars(reg_index).uwnrap().fee
+		/// Self::registrars(reg_index).unwrap().fee
 		/// ```
 		///
 		/// Emits `JudgementRequested` if successful.
@@ -821,7 +823,7 @@ decl_module! {
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
 				Ok(position) => {
 					if let Judgement::FeePaid(fee) = id.judgements[position].1 {
-						let _ = T::Currency::repatriate_reserved(&target, &sender, fee);
+						let _ = T::Currency::repatriate_reserved(&target, &sender, fee, BalanceStatus::Free);
 					}
 					id.judgements[position] = item
 				}
@@ -873,6 +875,16 @@ decl_module! {
 	}
 }
 
+impl<T: Trait> Module<T> {
+	/// Get the subs of an account.
+	pub fn subs(who: &T::AccountId) -> Vec<(T::AccountId, Data)> {
+		SubsOf::<T>::get(who).1
+			.into_iter()
+			.filter_map(|a| SuperOf::<T>::get(&a).map(|x| (a, x.1)))
+			.collect()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -880,7 +892,7 @@ mod tests {
 	use sp_runtime::traits::BadOrigin;
 	use frame_support::{
 		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
-		ord_parameter_types
+		ord_parameter_types,
 	};
 	use sp_core::H256;
 	use frame_system::EnsureSignedBy;
@@ -894,9 +906,9 @@ mod tests {
 		pub enum Origin for Test  where system = frame_system {}
 	}
 
-	// For testing the module, we construct most of a mock runtime. This means
+	// For testing the pallet, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of modules we want to use.
+	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -922,20 +934,19 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
 	}
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 0;
-		pub const CreationFee: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 	parameter_types! {
 		pub const BasicDeposit: u64 = 10;
@@ -1096,14 +1107,14 @@ mod tests {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 80);
-			assert_eq!(Identity::subs(10), (10, vec![20]));
+			assert_eq!(Identity::subs_of(10), (10, vec![20]));
 			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 
 			// push another item and re-set it.
 			subs.push((30, Data::Raw(vec![50; 1])));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 70);
-			assert_eq!(Identity::subs(10), (20, vec![20, 30]));
+			assert_eq!(Identity::subs_of(10), (20, vec![20, 30]));
 			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
 
@@ -1111,7 +1122,7 @@ mod tests {
 			subs[0] = (40, Data::Raw(vec![60; 1]));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 70); // no change in the balance
-			assert_eq!(Identity::subs(10), (20, vec![40, 30]));
+			assert_eq!(Identity::subs_of(10), (20, vec![40, 30]));
 			assert_eq!(Identity::super_of(20), None);
 			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
 			assert_eq!(Identity::super_of(40), Some((10, Data::Raw(vec![60; 1]))));
@@ -1119,7 +1130,7 @@ mod tests {
 			// clear
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![]));
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_eq!(Identity::subs(10), (0, vec![]));
+			assert_eq!(Identity::subs_of(10), (0, vec![]));
 			assert_eq!(Identity::super_of(30), None);
 			assert_eq!(Identity::super_of(40), None);
 

@@ -63,7 +63,8 @@ use libp2p::{Multiaddr, wasm_ext};
 use log::{error, warn};
 use parking_lot::Mutex;
 use serde::{Serialize, Deserialize};
-use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::{Duration, Instant}};
+use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::Duration};
+use wasm_timer::Instant;
 
 pub use libp2p::wasm_ext::ExtTransport;
 pub use slog_scope::with_logger;
@@ -125,7 +126,7 @@ pub struct Telemetry {
 
 /// Behind the `Mutex` in `Telemetry`.
 ///
-/// Note that ideally we wouldn't have to make the `Telemetry` clonable, as that would remove the
+/// Note that ideally we wouldn't have to make the `Telemetry` cloneable, as that would remove the
 /// need for a `Mutex`. However there is currently a weird hack in place in `sc-service`
 /// where we extract the telemetry registration so that it continues running during the shutdown
 /// process.
@@ -194,7 +195,7 @@ impl Stream for Telemetry {
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let before = Instant::now();
 
-		// Because the `Telemetry` is clonable, we need to put the actual fields behind a `Mutex`.
+		// Because the `Telemetry` is cloneable, we need to put the actual fields behind a `Mutex`.
 		// However, the user is only ever supposed to poll from one instance of `Telemetry`, while
 		// the other instances are used only for RAII purposes.
 		// We assume that the user is following this advice and therefore that the `Mutex` is only

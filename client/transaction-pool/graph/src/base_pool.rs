@@ -138,7 +138,7 @@ impl<Hash, Extrinsic> InPoolTransaction for Transaction<Hash, Extrinsic> {
 		&self.provides
 	}
 
-	fn is_propagateable(&self) -> bool {
+	fn is_propagable(&self) -> bool {
 		self.propagate
 	}
 }
@@ -209,7 +209,8 @@ const RECENTLY_PRUNED_TAGS: usize = 2;
 /// as-is for the second time will fail or produce unwanted results.
 /// Most likely it is required to revalidate them and recompute set of
 /// required tags.
-#[derive(Debug, parity_util_mem::MallocSizeOf)]
+#[derive(Debug)]
+#[cfg_attr(not(target_os = "unknown"), derive(parity_util_mem::MallocSizeOf))]
 pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 	reject_future_transactions: bool,
 	future: FutureTransactions<Hash, Ex>,
@@ -1057,7 +1058,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 				requires: vec![vec![3], vec![2]],
 				provides: vec![vec![4]],
 				propagate: true,
-		}.is_propagateable(), true);
+		}.is_propagable(), true);
 
 		assert_eq!(Transaction {
 				data: vec![4u8],
@@ -1068,7 +1069,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 				requires: vec![vec![3], vec![2]],
 				provides: vec![vec![4]],
 				propagate: false,
-		}.is_propagateable(), false);
+		}.is_propagable(), false);
 	}
 
 	#[test]
@@ -1125,7 +1126,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 	}
 
 	#[test]
-	fn should_accept_future_transactions_when_explcitly_asked_to() {
+	fn should_accept_future_transactions_when_explicitly_asked_to() {
 		// given
 		let mut pool = pool();
 		pool.reject_future_transactions = true;

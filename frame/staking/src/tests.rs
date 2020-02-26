@@ -18,7 +18,6 @@
 
 use super::*;
 use mock::*;
-use codec::Encode;
 use sp_runtime::{assert_eq_error_rate, traits::{OnInitialize, BadOrigin}};
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
@@ -236,7 +235,7 @@ fn multi_era_reward_should_work() {
 
 		// Compute now as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
-		assert!(total_payout_0 > 10); // Test is meaningfull if reward something
+		assert!(total_payout_0 > 10); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_session(0);
@@ -250,7 +249,7 @@ fn multi_era_reward_should_work() {
 		start_session(4);
 
 		let total_payout_1 = current_total_payout_for_duration(3000);
-		assert!(total_payout_1 > 10); // Test is meaningfull if reward something
+		assert!(total_payout_1 > 10); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 101)]);
 
 		// new era is triggered here.
@@ -459,7 +458,7 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 0
 			let total_payout_0 = current_total_payout_for_duration(3000);
-			assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_0 > 100); // Test is meaningful if reward something
 			<Module<Test>>::reward_by_ids(vec![(41, 1)]);
 			<Module<Test>>::reward_by_ids(vec![(31, 1)]);
 			<Module<Test>>::reward_by_ids(vec![(21, 10)]); // must be no-op
@@ -507,7 +506,7 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 1
 			let total_payout_1 = current_total_payout_for_duration(3000);
-			assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_1 > 100); // Test is meaningful if reward something
 			<Module<Test>>::reward_by_ids(vec![(41, 10)]); // must be no-op
 			<Module<Test>>::reward_by_ids(vec![(31, 10)]); // must be no-op
 			<Module<Test>>::reward_by_ids(vec![(21, 2)]);
@@ -576,7 +575,7 @@ fn nominators_also_get_slashed() {
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
 
 		let total_payout = current_total_payout_for_duration(3000);
-		assert!(total_payout > 100); // Test is meaningfull if reward something
+		assert!(total_payout > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		// new era, pay rewards,
@@ -851,7 +850,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
-		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(1);
@@ -873,7 +872,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(3000);
-		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_1 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(2);
@@ -900,7 +899,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_2 = current_total_payout_for_duration(3000);
-		assert!(total_payout_2 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_2 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(3);
@@ -950,7 +949,7 @@ fn validator_payment_prefs_work() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
-		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(1);
@@ -977,7 +976,7 @@ fn bond_extra_works() {
 	// See `bond_extra_and_withdraw_unbonded_works` for more details and updates on `Exposure`.
 	ExtBuilder::default().build().execute_with(|| {
 		// Check that account 10 is a validator
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 		// Check that account 10 is bonded to account 11
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Check how much is at stake
@@ -1375,7 +1374,7 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 		// Confirm validator count is 2
 		assert_eq!(Staking::validator_count(), 2);
 		// Confirm account 10 and 20 are validators
-		assert!(<Validators<Test>>::exists(&11) && <Validators<Test>>::exists(&21));
+		assert!(<Validators<Test>>::contains_key(&11) && <Validators<Test>>::contains_key(&21));
 
 		assert_eq!(Staking::stakers(&11).total, 1000);
 		assert_eq!(Staking::stakers(&21).total, 2000);
@@ -1394,7 +1393,7 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
-		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 		<Module<Test>>::reward_by_ids(vec![(21, 1)]);
 
@@ -1433,10 +1432,10 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
 
 		// Check storage items that should be cleaned up
-		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Bonded<Test>>::exists(&11));
-		assert!(<Validators<Test>>::exists(&11));
-		assert!(<Payee<Test>>::exists(&11));
+		assert!(<Ledger<Test>>::contains_key(&10));
+		assert!(<Bonded<Test>>::contains_key(&11));
+		assert!(<Validators<Test>>::contains_key(&11));
+		assert!(<Payee<Test>>::contains_key(&11));
 
 		// Reduce free_balance of controller to 0
 		let _ = Balances::slash(&10, u64::max_value());
@@ -1447,22 +1446,25 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert_eq!(Staking::bonded(&11), Some(10));
 
 		// Check storage items have not changed
-		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Bonded<Test>>::exists(&11));
-		assert!(<Validators<Test>>::exists(&11));
-		assert!(<Payee<Test>>::exists(&11));
+		assert!(<Ledger<Test>>::contains_key(&10));
+		assert!(<Bonded<Test>>::contains_key(&11));
+		assert!(<Validators<Test>>::contains_key(&11));
+		assert!(<Payee<Test>>::contains_key(&11));
 
 		// Reduce free_balance of stash to 0
 		let _ = Balances::slash(&11, u64::max_value());
 		// Check total balance of stash
 		assert_eq!(Balances::total_balance(&11), 0);
 
+		// Reap the stash
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
+
 		// Check storage items do not exist
-		assert!(!<Ledger<Test>>::exists(&10));
-		assert!(!<Bonded<Test>>::exists(&11));
-		assert!(!<Validators<Test>>::exists(&11));
-		assert!(!<Nominators<Test>>::exists(&11));
-		assert!(!<Payee<Test>>::exists(&11));
+		assert!(!<Ledger<Test>>::contains_key(&10));
+		assert!(!<Bonded<Test>>::contains_key(&11));
+		assert!(!<Validators<Test>>::contains_key(&11));
+		assert!(!<Nominators<Test>>::contains_key(&11));
+		assert!(!<Payee<Test>>::contains_key(&11));
 	});
 }
 
@@ -1474,7 +1476,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		// Make 10 a nominator
 		assert_ok!(Staking::nominate(Origin::signed(10), vec![20]));
 		// Check that account 10 is a nominator
-		assert!(<Nominators<Test>>::exists(11));
+		assert!(<Nominators<Test>>::contains_key(11));
 		// Check the balance of the nominator account
 		assert_eq!(Balances::free_balance(10), 256);
 		// Check the balance of the stash account
@@ -1484,10 +1486,10 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
 
 		// Check storage items that should be cleaned up
-		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Bonded<Test>>::exists(&11));
-		assert!(<Nominators<Test>>::exists(&11));
-		assert!(<Payee<Test>>::exists(&11));
+		assert!(<Ledger<Test>>::contains_key(&10));
+		assert!(<Bonded<Test>>::contains_key(&11));
+		assert!(<Nominators<Test>>::contains_key(&11));
+		assert!(<Payee<Test>>::contains_key(&11));
 
 		// Reduce free_balance of controller to 0
 		let _ = Balances::slash(&10, u64::max_value());
@@ -1500,22 +1502,25 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert_eq!(Staking::bonded(&11), Some(10));
 
 		// Check storage items have not changed
-		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Bonded<Test>>::exists(&11));
-		assert!(<Nominators<Test>>::exists(&11));
-		assert!(<Payee<Test>>::exists(&11));
+		assert!(<Ledger<Test>>::contains_key(&10));
+		assert!(<Bonded<Test>>::contains_key(&11));
+		assert!(<Nominators<Test>>::contains_key(&11));
+		assert!(<Payee<Test>>::contains_key(&11));
 
 		// Reduce free_balance of stash to 0
 		let _ = Balances::slash(&11, u64::max_value());
 		// Check total balance of stash
 		assert_eq!(Balances::total_balance(&11), 0);
 
+		// Reap the stash
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
+
 		// Check storage items do not exist
-		assert!(!<Ledger<Test>>::exists(&10));
-		assert!(!<Bonded<Test>>::exists(&11));
-		assert!(!<Validators<Test>>::exists(&11));
-		assert!(!<Nominators<Test>>::exists(&11));
-		assert!(!<Payee<Test>>::exists(&11));
+		assert!(!<Ledger<Test>>::contains_key(&10));
+		assert!(!<Bonded<Test>>::contains_key(&11));
+		assert!(!<Validators<Test>>::contains_key(&11));
+		assert!(!<Nominators<Test>>::contains_key(&11));
+		assert!(!<Payee<Test>>::contains_key(&11));
 	});
 }
 
@@ -1679,7 +1684,7 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 			assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
 			let total_payout_0 = current_total_payout_for_duration(3000);
-			assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_0 > 100); // Test is meaningful if reward something
 			reward_all_elected();
 			start_era(1);
 
@@ -1694,7 +1699,7 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 			assert_eq!(Balances::free_balance(2), init_balance_2);
 
 			let total_payout_1 = current_total_payout_for_duration(3000);
-			assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+			assert!(total_payout_1 > 100); // Test is meaningful if reward something
 			reward_all_elected();
 			start_era(2);
 
@@ -1968,7 +1973,7 @@ fn offence_ensures_new_era_without_clobbering() {
 #[test]
 fn offence_deselects_validator_when_slash_is_zero() {
 	ExtBuilder::default().build().execute_with(|| {
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (
@@ -1980,7 +1985,7 @@ fn offence_deselects_validator_when_slash_is_zero() {
 			&[Perbill::from_percent(0)],
 		);
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
-		assert!(!<Validators<Test>>::exists(11));
+		assert!(!<Validators<Test>>::contains_key(11));
 	});
 }
 
@@ -2017,7 +2022,7 @@ fn slash_in_old_span_does_not_deselect() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
 
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (
@@ -2029,13 +2034,13 @@ fn slash_in_old_span_does_not_deselect() {
 			&[Perbill::from_percent(0)],
 		);
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
-		assert!(!<Validators<Test>>::exists(11));
+		assert!(!<Validators<Test>>::contains_key(11));
 
 		start_era(2);
 
 		Staking::validate(Origin::signed(10), Default::default()).unwrap();
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 
 		start_era(3);
 
@@ -2056,7 +2061,7 @@ fn slash_in_old_span_does_not_deselect() {
 
 		// not for zero-slash.
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 
 		on_offence_in_era(
 			&[OffenceDetails {
@@ -2066,13 +2071,14 @@ fn slash_in_old_span_does_not_deselect() {
 				),
 				reporters: vec![],
 			}],
-			&[Perbill::from_percent(100)],
+			// NOTE: A 100% slash here would clean up the account, causing de-registration.
+			&[Perbill::from_percent(95)],
 			1,
 		);
 
 		// or non-zero.
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-		assert!(<Validators<Test>>::exists(11));
+		assert!(<Validators<Test>>::contains_key(11));
 		assert_ledger_consistent(11);
 	});
 }
@@ -2272,7 +2278,7 @@ fn only_slash_for_max_in_era() {
 
 #[test]
 fn garbage_collection_after_slashing() {
-	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(2).build().execute_with(|| {
 		assert_eq!(Balances::free_balance(11), 256_000);
 
 		on_offence_now(
@@ -2303,6 +2309,10 @@ fn garbage_collection_after_slashing() {
 		// so we don't test those here.
 
 		assert_eq!(Balances::free_balance(11), 0);
+		assert_eq!(Balances::total_balance(&11), 0);
+
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
+
 		assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
 		assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &0);
 	})
@@ -2671,13 +2681,6 @@ fn remove_multi_deferred() {
 }
 
 #[test]
-fn version_initialized() {
-	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(<Staking as Store>::StorageVersion::get(), crate::migration::CURRENT_VERSION);
-	});
-}
-
-#[test]
 fn slash_kicks_validators_not_nominators() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
@@ -2713,56 +2716,6 @@ fn slash_kicks_validators_not_nominators() {
 		// re-registers.
 		let last_slash = <Staking as Store>::SlashingSpans::get(&11).unwrap().last_nonzero_slash();
 		assert!(nominations.submitted_in < last_slash);
-	});
-}
-
-#[test]
-fn migration_v2() {
-	ExtBuilder::default().build().execute_with(|| {
-		use crate::{EraIndex, slashing::SpanIndex};
-
-		#[derive(Encode)]
-		struct V1SlashingSpans {
-			span_index: SpanIndex,
-			last_start: EraIndex,
-			prior: Vec<EraIndex>,
-		}
-
-		// inject old-style values directly into storage.
-		let set = |stash, spans: V1SlashingSpans| {
-			let key = <Staking as Store>::SlashingSpans::hashed_key_for(stash);
-			sp_io::storage::set(&key, &spans.encode());
-		};
-
-		let spans_11 = V1SlashingSpans {
-			span_index: 10,
-			last_start: 1,
-			prior: vec![0],
-		};
-
-		let spans_21 = V1SlashingSpans {
-			span_index: 1,
-			last_start: 5,
-			prior: vec![],
-		};
-
-		set(11, spans_11);
-		set(21, spans_21);
-
-		<Staking as Store>::StorageVersion::put(1);
-
-		// perform migration.
-		crate::migration::inner::to_v2::<Test>(&mut 1);
-
-		assert_eq!(
-			<Staking as Store>::SlashingSpans::get(&11).unwrap().last_nonzero_slash(),
-			1,
-		);
-
-		assert_eq!(
-			<Staking as Store>::SlashingSpans::get(&21).unwrap().last_nonzero_slash(),
-			5,
-		);
 	});
 }
 

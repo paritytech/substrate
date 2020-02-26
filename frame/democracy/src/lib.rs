@@ -30,7 +30,7 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
-		OnReapAccount, OnUnbalanced
+		OnUnbalanced, BalanceStatus
 	}
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -260,6 +260,24 @@ impl<BlockNumber: Parameter, Hash: Parameter> ReferendumInfo<BlockNumber, Hash> 
 	}
 }
 
+/// State of a proxy voting account.
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+pub enum ProxyState<AccountId> {
+	/// Account is open to becoming a proxy but is not yet assigned.
+	Open(AccountId),
+	/// Account is actively being a proxy.
+	Active(AccountId),
+}
+
+impl<AccountId> ProxyState<AccountId> {
+	fn as_active(self) -> Option<AccountId> {
+		match self {
+			ProxyState::Active(a) => Some(a),
+			ProxyState::Open(_) => None,
+		}
+	}
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Democracy {
 		/// The number of (public) proposals that have been made so far.
@@ -294,12 +312,12 @@ decl_storage! {
 		/// Get the vote in a given referendum of a particular voter. The result is meaningful only
 		/// if `voters_for` includes the voter when called with the referendum (you'll get the
 		/// default `Vote` value otherwise). If you don't want to check `voters_for`, then you can
-		/// also check for simple existence with `VoteOf::exists` first.
+		/// also check for simple existence with `VoteOf::contains_key` first.
 		pub VoteOf get(fn vote_of): map hasher(blake2_256) (ReferendumIndex, T::AccountId) => Vote;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
-		pub Proxy get(fn proxy): map hasher(blake2_256) T::AccountId => Option<T::AccountId>;
+		pub Proxy get(fn proxy): map hasher(blake2_256) T::AccountId => Option<ProxyState<T::AccountId>>;
 
 		/// Get the account (and lock periods) to which another account is delegating vote.
 		pub Delegations get(fn delegations):
@@ -423,6 +441,12 @@ decl_error! {
 		NotLocked,
 		/// The lock on the account to be unlocked has not yet expired.
 		NotExpired,
+		/// A proxy-pairing was attempted to an account that was not open.
+		NotOpen,
+		/// A proxy-pairing was attempted to an account that was open to another account.
+		WrongOpen,
+		/// A proxy-de-pairing was attempted to an account that was not active.
+		NotActive
 	}
 }
 
@@ -525,8 +549,9 @@ decl_module! {
 			#[compact] ref_index: ReferendumIndex,
 			vote: Vote
 		) -> DispatchResult {
-			let who = Self::proxy(ensure_signed(origin)?).ok_or(Error::<T>::NotProxy)?;
-			Self::do_vote(who, ref_index, vote)
+			let who = ensure_signed(origin)?;
+			let voter = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
+			Self::do_vote(voter, ref_index, vote)
 		}
 
 		/// Schedule an emergency cancellation of a referendum. Cannot happen twice to the same
@@ -537,7 +562,7 @@ decl_module! {
 
 			let info = Self::referendum_info(ref_index).ok_or(Error::<T>::BadIndex)?;
 			let h = info.proposal_hash;
-			ensure!(!<Cancellations<T>>::exists(h), Error::<T>::AlreadyCanceled);
+			ensure!(!<Cancellations<T>>::contains_key(h), Error::<T>::AlreadyCanceled);
 
 			<Cancellations<T>>::insert(h, true);
 			Self::clear_referendum(ref_index);
@@ -659,42 +684,65 @@ decl_module! {
 			}
 		}
 
-		/// Specify a proxy. Called by the stash.
+		/// Specify a proxy that is already open to us. Called by the stash.
+		///
+		/// NOTE: Used to be called `set_proxy`.
 		///
 		/// # <weight>
 		/// - One extra DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
-		fn set_proxy(origin, proxy: T::AccountId) {
+		fn activate_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
-			ensure!(!<Proxy<T>>::exists(&proxy), Error::<T>::AlreadyProxy);
-			<Proxy<T>>::insert(proxy, who)
+			Proxy::<T>::try_mutate(&proxy, |a| match a.take() {
+				None => Err(Error::<T>::NotOpen),
+				Some(ProxyState::Active(_)) => Err(Error::<T>::AlreadyProxy),
+				Some(ProxyState::Open(x)) if &x == &who => {
+					*a = Some(ProxyState::Active(who));
+					Ok(())
+				}
+				Some(ProxyState::Open(_)) => Err(Error::<T>::WrongOpen),
+			})?;
 		}
 
 		/// Clear the proxy. Called by the proxy.
 		///
-		/// # <weight>
-		/// - One DB clear.
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
-		fn resign_proxy(origin) {
-			let who = ensure_signed(origin)?;
-			<Proxy<T>>::remove(who);
-		}
-
-		/// Clear the proxy. Called by the stash.
+		/// NOTE: Used to be called `resign_proxy`.
 		///
 		/// # <weight>
 		/// - One DB clear.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
-		fn remove_proxy(origin, proxy: T::AccountId) {
+		fn close_proxy(origin) {
 			let who = ensure_signed(origin)?;
-			ensure!(
-				&Self::proxy(&proxy).ok_or(Error::<T>::NotProxy)? == &who,
-				Error::<T>::WrongProxy,
-			);
-			<Proxy<T>>::remove(proxy);
+			Proxy::<T>::mutate(&who, |a| {
+				if a.is_some() {
+					system::Module::<T>::dec_ref(&who);
+				}
+				*a = None;
+			});
+		}
+
+		/// Deactivate the proxy, but leave open to this account. Called by the stash.
+		///
+		/// The proxy must already be active.
+		///
+		/// NOTE: Used to be called `remove_proxy`.
+		///
+		/// # <weight>
+		/// - One DB clear.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
+		fn deactivate_proxy(origin, proxy: T::AccountId) {
+			let who = ensure_signed(origin)?;
+			Proxy::<T>::try_mutate(&proxy, |a| match a.take() {
+				None | Some(ProxyState::Open(_)) => Err(Error::<T>::NotActive),
+				Some(ProxyState::Active(x)) if &x == &who => {
+					*a = Some(ProxyState::Open(who));
+					Ok(())
+				}
+				Some(ProxyState::Active(_)) => Err(Error::<T>::WrongProxy),
+			})?;
 		}
 
 		/// Delegate vote.
@@ -725,7 +773,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn undelegate(origin) {
 			let who = ensure_signed(origin)?;
-			ensure!(<Delegations<T>>::exists(&who), Error::<T>::NotDelegated);
+			ensure!(<Delegations<T>>::contains_key(&who), Error::<T>::NotDelegated);
 			let (_, conviction) = <Delegations<T>>::take(&who);
 			// Indefinite lock is reduced to the maximum voting lock that could be possible.
 			let now = <frame_system::Module<T>>::block_number();
@@ -754,7 +802,7 @@ decl_module! {
 		fn note_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			ensure!(!<Preimages<T>>::exists(&proposal_hash), Error::<T>::DuplicatePreimage);
+			ensure!(!<Preimages<T>>::contains_key(&proposal_hash), Error::<T>::DuplicatePreimage);
 
 			let deposit = <BalanceOf<T>>::from(encoded_proposal.len() as u32)
 				.saturating_mul(T::PreimageByteDeposit::get());
@@ -772,7 +820,7 @@ decl_module! {
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			ensure!(!<Preimages<T>>::exists(&proposal_hash), Error::<T>::DuplicatePreimage);
+			ensure!(!<Preimages<T>>::contains_key(&proposal_hash), Error::<T>::DuplicatePreimage);
 			let queue = <DispatchQueue<T>>::get();
 			ensure!(queue.iter().any(|item| &item.1 == &proposal_hash), Error::<T>::NotImminent);
 
@@ -802,7 +850,7 @@ decl_module! {
 			let queue = <DispatchQueue<T>>::get();
 			ensure!(!queue.iter().any(|item| &item.1 == &proposal_hash), Error::<T>::Imminent);
 
-			let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
+			let _ = T::Currency::repatriate_reserved(&old, &who, deposit, BalanceStatus::Free);
 			<Preimages<T>>::remove(&proposal_hash);
 			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
 		}
@@ -818,6 +866,30 @@ decl_module! {
 			Locks::<T>::remove(&target);
 			Self::deposit_event(RawEvent::Unlocked(target));
 		}
+
+		/// Become a proxy.
+		///
+		/// This must be called prior to a later `activate_proxy`.
+		///
+		/// Origin must be a Signed.
+		///
+		/// - `target`: The account whose votes will later be proxied.
+		///
+		/// `close_proxy` must be called before the account can be destroyed.
+		///
+		/// # <weight>
+		/// - One extra DB entry.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
+		fn open_proxy(origin, target: T::AccountId) {
+			let who = ensure_signed(origin)?;
+			Proxy::<T>::mutate(&who, |a| {
+				if a.is_none() {
+					system::Module::<T>::inc_ref(&who);
+				}
+				*a = Some(ProxyState::Open(target));
+			});
+		}
 	}
 }
 
@@ -832,7 +904,7 @@ impl<T: Trait> Module<T> {
 
 	/// Return true if `ref_index` is an on-going referendum.
 	pub fn is_active_referendum(ref_index: ReferendumIndex) -> bool {
-		<ReferendumInfoOf<T>>::exists(ref_index)
+		<ReferendumInfoOf<T>>::contains_key(ref_index)
 	}
 
 	/// Get all referenda currently active.
@@ -913,7 +985,7 @@ impl<T: Trait> Module<T> {
 		if recursion_limit == 0 { return (Zero::zero(), Zero::zero()); }
 		<Delegations<T>>::enumerate()
 			.filter(|(delegator, (delegate, _))|
-				*delegate == to && !<VoteOf<T>>::exists(&(ref_index, delegator.clone()))
+				*delegate == to && !<VoteOf<T>>::contains_key(&(ref_index, delegator.clone()))
 			).fold(
 				(Zero::zero(), Zero::zero()),
 				|(votes_acc, turnout_acc), (delegator, (_delegate, max_conviction))| {
@@ -935,7 +1007,12 @@ impl<T: Trait> Module<T> {
 
 	#[cfg(feature = "std")]
 	pub fn force_proxy(stash: T::AccountId, proxy: T::AccountId) {
-		<Proxy<T>>::insert(proxy, stash)
+		Proxy::<T>::mutate(&proxy, |o| {
+			if o.is_none() {
+				system::Module::<T>::inc_ref(&proxy);
+			}
+			*o = Some(ProxyState::Active(stash))
+		})
 	}
 
 	/// Start a referendum.
@@ -963,7 +1040,7 @@ impl<T: Trait> Module<T> {
 	/// Actually enact a vote, if legit.
 	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> DispatchResult {
 		ensure!(Self::is_active_referendum(ref_index), Error::<T>::ReferendumInvalid);
-		if !<VoteOf<T>>::exists((ref_index, &who)) {
+		if !<VoteOf<T>>::contains_key((ref_index, &who)) {
 			<VotersFor<T>>::append_or_insert(ref_index, &[&who][..]);
 		}
 		<VoteOf<T>>::insert((ref_index, &who), vote);
@@ -1162,12 +1239,6 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
-	fn on_reap_account(who: &T::AccountId) {
-		<Proxy<T>>::remove(who)
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1227,20 +1298,19 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
 	}
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 0;
-		pub const CreationFee: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
 		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
 	}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 2;
@@ -1969,29 +2039,45 @@ mod tests {
 	fn proxy_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(Democracy::proxy(10), None);
-			assert_ok!(Democracy::set_proxy(Origin::signed(1), 10));
-			assert_eq!(Democracy::proxy(10), Some(1));
+			assert!(System::allow_death(&10));
+
+			assert_noop!(Democracy::activate_proxy(Origin::signed(1), 10), Error::<Test>::NotOpen);
+
+			assert_ok!(Democracy::open_proxy(Origin::signed(10), 1));
+			assert!(!System::allow_death(&10));
+			assert_eq!(Democracy::proxy(10), Some(ProxyState::Open(1)));
+
+			assert_noop!(Democracy::activate_proxy(Origin::signed(2), 10), Error::<Test>::WrongOpen);
+			assert_ok!(Democracy::activate_proxy(Origin::signed(1), 10));
+			assert_eq!(Democracy::proxy(10), Some(ProxyState::Active(1)));
 
 			// Can't set when already set.
-			assert_noop!(Democracy::set_proxy(Origin::signed(2), 10), Error::<Test>::AlreadyProxy);
+			assert_noop!(Democracy::activate_proxy(Origin::signed(2), 10), Error::<Test>::AlreadyProxy);
 
 			// But this works because 11 isn't proxying.
-			assert_ok!(Democracy::set_proxy(Origin::signed(2), 11));
-			assert_eq!(Democracy::proxy(10), Some(1));
-			assert_eq!(Democracy::proxy(11), Some(2));
+			assert_ok!(Democracy::open_proxy(Origin::signed(11), 2));
+			assert_ok!(Democracy::activate_proxy(Origin::signed(2), 11));
+			assert_eq!(Democracy::proxy(10), Some(ProxyState::Active(1)));
+			assert_eq!(Democracy::proxy(11), Some(ProxyState::Active(2)));
 
 			// 2 cannot fire 1's proxy:
-			assert_noop!(Democracy::remove_proxy(Origin::signed(2), 10), Error::<Test>::WrongProxy);
+			assert_noop!(Democracy::deactivate_proxy(Origin::signed(2), 10), Error::<Test>::WrongProxy);
 
-			// 1 fires his proxy:
-			assert_ok!(Democracy::remove_proxy(Origin::signed(1), 10));
-			assert_eq!(Democracy::proxy(10), None);
-			assert_eq!(Democracy::proxy(11), Some(2));
+			// 1 deactivates their proxy:
+			assert_ok!(Democracy::deactivate_proxy(Origin::signed(1), 10));
+			assert_eq!(Democracy::proxy(10), Some(ProxyState::Open(1)));
+			// but the proxy account cannot be killed until the proxy is closed.
+			assert!(!System::allow_death(&10));
 
-			// 11 resigns:
-			assert_ok!(Democracy::resign_proxy(Origin::signed(11)));
+			// and then 10 closes it completely:
+			assert_ok!(Democracy::close_proxy(Origin::signed(10)));
 			assert_eq!(Democracy::proxy(10), None);
+			assert!(System::allow_death(&10));
+
+			// 11 just closes without 2's "permission".
+			assert_ok!(Democracy::close_proxy(Origin::signed(11)));
 			assert_eq!(Democracy::proxy(11), None);
+			assert!(System::allow_death(&11));
 		});
 	}
 
@@ -2003,7 +2089,8 @@ mod tests {
 
 			fast_forward_to(2);
 			let r = 0;
-			assert_ok!(Democracy::set_proxy(Origin::signed(1), 10));
+			assert_ok!(Democracy::open_proxy(Origin::signed(10), 1));
+			assert_ok!(Democracy::activate_proxy(Origin::signed(1), 10));
 			assert_ok!(Democracy::proxy_vote(Origin::signed(10), r, AYE));
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
@@ -2067,7 +2154,7 @@ mod tests {
 	}
 
 	#[test]
-	/// If transactor already voted, delegated vote is overwriten.
+	/// If transactor already voted, delegated vote is overwritten.
 	fn single_proposal_should_work_with_vote_and_delegation() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(0);
@@ -2122,7 +2209,7 @@ mod tests {
 	}
 
 	#[test]
-	/// If transactor voted, delegated vote is overwriten.
+	/// If transactor voted, delegated vote is overwritten.
 	fn single_proposal_should_work_with_delegation_and_vote() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(0);

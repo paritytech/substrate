@@ -196,12 +196,28 @@ pub trait Externalities: ExtensionStore {
 	) -> Vec<u8>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
-	/// `parent` is expects a SCALE endcoded hash.
+	/// `parent` is expects a SCALE encoded hash.
 	///
 	/// The hash is defined by the `Block`.
 	///
 	/// Returns the SCALE encoded hash.
 	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Wipes all changes from caches and the database.
+	///
+	/// The state will be reset to genesis.
+	fn wipe(&mut self);
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Commits all changes to the database and clears all caches.
+	fn commit(&mut self);
 }
 
 /// Extension for the [`Externalities`] trait.
