@@ -32,17 +32,17 @@ use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use log::debug;
 
-pub mod app {
-	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
+pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::key_types::GRANDPA;
+
+mod app {
+	use sp_application_crypto::{app_crypto, key_types::GRANDPA, ed25519};
 	app_crypto!(ed25519, GRANDPA);
 }
 
-pub const KEY_TYPE: app_crypto::KeyTypeId =
-	app_crypto::key_types::GRANDPA;
-
-/// The grandpa crypto scheme defined via the keypair type.
-#[cfg(any(feature = "std", feature = "full_crypto"))]
-pub type AuthorityPair = app::Pair;
+sp_application_crypto::with_pair! {
+	/// The grandpa crypto scheme defined via the keypair type.
+	pub type AuthorityPair = app::Pair;
+}
 
 /// Identity of a Grandpa authority.
 pub type AuthorityId = app::Public;
@@ -361,13 +361,13 @@ pub fn check_message_signature_with_buffer<H, N>(
 
 	#[cfg(not(feature = "std"))]
 	let verify = || {
-		use app_crypto::RuntimeAppPublic;
+		use sp_application_crypto::RuntimeAppPublic;
 		id.verify(&buf, signature)
 	};
 
 	#[cfg(feature = "std")]
 	let verify = || {
-		use app_crypto::Pair;
+		use sp_application_crypto::Pair;
 		AuthorityPair::verify(signature, &buf, &id)
 	};
 
@@ -410,7 +410,7 @@ pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
 
 /// The current version of the stored AuthorityList type. The encoding version MUST be updated any
 /// time the AuthorityList type changes.
-const AUTHORITIES_VERISON: u8 = 1;
+const AUTHORITIES_VERSION: u8 = 1;
 
 /// An AuthorityList that is encoded with a version specifier. The encoding version is updated any
 /// time the AuthorityList type changes. This ensures that encodings of different versions of an
@@ -439,18 +439,18 @@ impl<'a> Into<AuthorityList> for VersionedAuthorityList<'a> {
 
 impl<'a> Encode for VersionedAuthorityList<'a> {
 	fn size_hint(&self) -> usize {
-		(AUTHORITIES_VERISON, self.0.as_ref()).size_hint()
+		(AUTHORITIES_VERSION, self.0.as_ref()).size_hint()
 	}
 
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		(AUTHORITIES_VERISON, self.0.as_ref()).using_encoded(f)
+		(AUTHORITIES_VERSION, self.0.as_ref()).using_encoded(f)
 	}
 }
 
 impl<'a> Decode for VersionedAuthorityList<'a> {
 	fn decode<I: Input>(value: &mut I) -> Result<Self, codec::Error> {
 		let (version, authorities): (u8, AuthorityList) = Decode::decode(value)?;
-		if version != AUTHORITIES_VERISON {
+		if version != AUTHORITIES_VERSION {
 			return Err("unknown Grandpa authorities version".into());
 		}
 		Ok(authorities.into())

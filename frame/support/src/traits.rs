@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Traits for SRML.
+//! Traits for FRAME.
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
@@ -195,9 +195,9 @@ pub trait OnNewAccount<AccountId> {
 
 /// The account with the given id was reaped.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
-pub trait OnReapAccount<AccountId> {
+pub trait OnKilledAccount<AccountId> {
 	/// The account with the given id was reaped.
-	fn on_reap_account(who: &AccountId);
+	fn on_killed_account(who: &AccountId);
 }
 
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained
@@ -744,7 +744,8 @@ pub trait VestingSchedule<AccountId> {
 	type Currency: Currency<AccountId>;
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
-	fn vesting_balance(who: &AccountId) -> <Self::Currency as Currency<AccountId>>::Balance;
+	/// Returns `None` if the account has no vesting schedule.
+	fn vesting_balance(who: &AccountId) -> Option<<Self::Currency as Currency<AccountId>>::Balance>;
 
 	/// Adds a vesting schedule to a given account.
 	///

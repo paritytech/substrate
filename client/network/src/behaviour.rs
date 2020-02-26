@@ -16,15 +16,13 @@
 
 use crate::{
 	debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut, DiscoveryNetBehaviour,
-	Event, protocol::event::DhtEvent
+	Event, protocol::event::DhtEvent, ExHashT,
 };
-use crate::{ExHashT, specialization::NetworkSpecialization};
 use crate::protocol::{self, light_client_handler, CustomMessageOutcome, Protocol};
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
-use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
-use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
+use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
 use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, Justification};
@@ -34,18 +32,18 @@ use void;
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "BehaviourOut<B>", poll_method = "poll")]
-pub struct Behaviour<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
+pub struct Behaviour<B: BlockT, H: ExHashT> {
 	/// All the substrate-specific protocols.
-	substrate: Protocol<B, S, H>,
+	substrate: Protocol<B, H>,
 	/// Periodically pings and identifies the nodes we are connected to, and store information in a
 	/// cache.
-	debug_info: debug_info::DebugInfoBehaviour<Substream<StreamMuxerBox>>,
+	debug_info: debug_info::DebugInfoBehaviour,
 	/// Discovers nodes of the network.
-	discovery: DiscoveryBehaviour<Substream<StreamMuxerBox>>,
+	discovery: DiscoveryBehaviour,
 	/// Block request handling.
-	block_requests: protocol::BlockRequests<Substream<StreamMuxerBox>, B>,
+	block_requests: protocol::BlockRequests<B>,
 	/// Light client request handling.
-	light_client_handler: protocol::LightClientHandler<Substream<StreamMuxerBox>, B>,
+	light_client_handler: protocol::LightClientHandler<B>,
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
 	events: Vec<BehaviourOut<B>>,
@@ -59,18 +57,18 @@ pub enum BehaviourOut<B: BlockT> {
 	Event(Event),
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
+impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	/// Builds a new `Behaviour`.
 	pub async fn new(
-		substrate: Protocol<B, S, H>,
+		substrate: Protocol<B, H>,
 		user_agent: String,
 		local_public_key: PublicKey,
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 		allow_private_ipv4: bool,
 		discovery_only_if_under_num: u64,
-		block_requests: protocol::BlockRequests<Substream<StreamMuxerBox>, B>,
-		light_client_handler: protocol::LightClientHandler<Substream<StreamMuxerBox>, B>,
+		block_requests: protocol::BlockRequests<B>,
+		light_client_handler: protocol::LightClientHandler<B>,
 	) -> Self {
 		Behaviour {
 			substrate,
@@ -108,12 +106,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 	}
 
 	/// Returns a shared reference to the user protocol.
-	pub fn user_protocol(&self) -> &Protocol<B, S, H> {
+	pub fn user_protocol(&self) -> &Protocol<B, H> {
 		&self.substrate
 	}
 
 	/// Returns a mutable reference to the user protocol.
-	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B, S, H> {
+	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B, H> {
 		&mut self.substrate
 	}
 
@@ -134,15 +132,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<void::Void> for
-Behaviour<B, S, H> {
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<void::Void> for
+Behaviour<B, H> {
 	fn inject_event(&mut self, event: void::Void) {
 		void::unreachable(event)
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for
-Behaviour<B, S, H> {
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for
+Behaviour<B, H> {
 	fn inject_event(&mut self, event: CustomMessageOutcome<B>) {
 		match event {
 			CustomMessageOutcome::BlockImport(origin, blocks) =>
@@ -175,8 +173,8 @@ Behaviour<B, S, H> {
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<debug_info::DebugInfoEvent>
-	for Behaviour<B, S, H> {
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<debug_info::DebugInfoEvent>
+	for Behaviour<B, H> {
 	fn inject_event(&mut self, event: debug_info::DebugInfoEvent) {
 		let debug_info::DebugInfoEvent::Identified { peer_id, mut info } = event;
 		if info.listen_addrs.len() > 30 {
@@ -193,8 +191,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
-	for Behaviour<B, S, H> {
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
+	for Behaviour<B, H> {
 	fn inject_event(&mut self, out: DiscoveryOut) {
 		match out {
 			DiscoveryOut::UnroutablePeer(_peer_id) => {
@@ -222,8 +220,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
-	fn poll<TEv>(&mut self, _: &mut Context) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
+impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
+	fn poll<TEv>(&mut self, _: &mut Context, _: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
 		if !self.events.is_empty() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(self.events.remove(0)))
 		}

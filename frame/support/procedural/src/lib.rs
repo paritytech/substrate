@@ -99,7 +99,7 @@ use proc_macro::TokenStream;
 ///   with care, see generator documentation.
 ///
 ///   All key formatting logic can be accessed in a type-agnostic format via the
-///   [`KeyFormat`](../srml_support/storage/generator/trait.KeyFormat.html) trait, which
+///   `KeyFormat` trait, which
 ///   is implemented for the storage linked map type as well.
 ///
 ///   The generator key format is implemented with:
@@ -123,7 +123,7 @@ use proc_macro::TokenStream;
 ///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
-///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be choosen with care, see
+///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be chosen with care, see
 ///   generator documentation.
 ///
 ///   If the first key is untrusted, a cryptographic `hasher` such as `blake2_256` or
@@ -200,7 +200,7 @@ use proc_macro::TokenStream;
 ///
 /// ```nocompile
 /// construct_runtime!(
-/// 	pub enum Runtume with ... {
+/// 	pub enum Runtime with ... {
 ///         ...,
 ///         Example: example::{Module, Storage, ..., Config<T>},
 ///         ...,
@@ -268,8 +268,8 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         NodeBlock = runtime::Block,
 ///         UncheckedExtrinsic = UncheckedExtrinsic
 ///     {
-///         System: system,
-///         Test: test::{default},
+///         System: system::{Module, Call, Event<T>, Config<T>},
+///         Test: test::{Module, Call},
 ///         Test2: test_with_long_module::{Module},
 ///
 ///         // Module with instances
@@ -279,17 +279,12 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// )
 /// ```
 ///
-/// The module `System: system` will expand to `System: system::{Module, Call, Storage, Event<T>, Config<T>}`.
-/// The identifier `System` is the name of the module and the lower case identifier `system` is the
-/// name of the Rust module/crate for this Substrate module.
+/// The identifier `System` is the name of the pallet and the lower case identifier `system` is the
+/// name of the Rust module/crate for this Substrate module. The identifiers between the braces are
+/// the module parts provided by the pallet. It is important to list these parts here to export
+/// them correctly in the metadata or to make the pallet usable in the runtime.
 ///
-/// The module `Test: test::{default}` will expand to
-/// `Test: test::{Module, Call, Storage, Event<T>, Config<T>}`.
-///
-/// The module `Test2: test_with_long_module::{Module}` will expand to
-/// `Test2: test_with_long_module::{Module}`.
-///
-/// We provide support for the following types in a module:
+/// We provide support for the following module parts in a pallet:
 ///
 /// - `Module`
 /// - `Call`

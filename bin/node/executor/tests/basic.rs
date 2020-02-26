@@ -164,7 +164,7 @@ fn panic_execution_with_foreign_code_gives_error() {
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, Storage {
 		top: map![
 			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(69u128, 0u128, 0u128, 0u128).encode()
+				(69u128, 0u8, 0u128, 0u128, 0u128).encode()
 			},
 			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				69_u128.encode()
@@ -200,7 +200,7 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 		top: map![
 			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 69u128, 0u128, 0u128, 0u128).encode()
+				(0u32, 0u8, 69u128, 0u128, 0u128, 0u128).encode()
 			},
 			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				69_u128.encode()
@@ -236,7 +236,7 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 		top: map![
 			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+				(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
 			},
 			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				(111 * DOLLARS).encode()
@@ -278,7 +278,7 @@ fn successful_execution_with_foreign_code_gives_ok() {
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, Storage {
 		top: map![
 			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+				(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
 			},
 			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				(111 * DOLLARS).encode()
@@ -347,7 +347,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984800000000)),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -381,13 +381,14 @@ fn full_native_block_import_works() {
 	).0.unwrap();
 
 	t.execute_with(|| {
+		let fees = transfer_fee(&xt(), fm);
 		assert_eq!(
 			Balances::total_balance(&alice()),
-			alice_last_known_balance - 10 * DOLLARS - transfer_fee(&xt(), fm),
+			alice_last_known_balance - 10 * DOLLARS - fees,
 		);
 		assert_eq!(
 			Balances::total_balance(&bob()),
-			179 * DOLLARS - transfer_fee(&xt(), fm),
+			179 * DOLLARS - fees,
 		);
 		let events = vec![
 			EventRecord {
@@ -399,7 +400,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984788199392)),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -422,7 +423,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984788199392)),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -733,7 +734,7 @@ fn successful_execution_gives_ok() {
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 		top: map![
 			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+				(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
 			},
 			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				(111 * DOLLARS).encode()

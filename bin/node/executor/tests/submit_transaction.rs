@@ -167,8 +167,9 @@ fn submitted_transaction_should_be_valid() {
 		// add balance to the account
 		let author = extrinsic.signature.clone().unwrap().0;
 		let address = Indices::lookup(author).unwrap();
-		let account = pallet_balances::AccountData { free: 5_000_000_000_000, ..Default::default() };
-		<frame_system::Account<Runtime>>::insert(&address, (0u32, account));
+		let data = pallet_balances::AccountData { free: 5_000_000_000_000, ..Default::default() };
+		let account = frame_system::AccountInfo { nonce: 0u32, refcount: 0u8, data };
+		<frame_system::Account<Runtime>>::insert(&address, account);
 
 		// check validity
 		let res = Executive::validate_transaction(extrinsic);

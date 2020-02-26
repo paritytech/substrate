@@ -69,7 +69,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnReapAccount = ();
+	type OnKilledAccount = ();
 }
 
 mod grandpa {

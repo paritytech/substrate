@@ -19,12 +19,18 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-pub use crate::protocol::ProtocolConfig;
+pub use crate::chain::{Client, FinalityProofProvider};
+pub use crate::on_demand_layer::OnDemand;
+pub use crate::service::TransactionPool;
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
-use crate::chain::{Client, FinalityProofProvider};
-use crate::on_demand_layer::OnDemand;
-use crate::service::{ExHashT, TransactionPool};
+// Note: this re-export shouldn't be part of the public API of the crate and will be removed in
+// the future.
+#[doc(hidden)]
+pub use crate::protocol::ProtocolConfig;
+
+use crate::service::ExHashT;
+
 use bitflags::bitflags;
 use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sp_runtime::traits::{Block as BlockT};
@@ -37,7 +43,7 @@ use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathB
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
-pub struct Params<B: BlockT, S, H: ExHashT> {
+pub struct Params<B: BlockT, H: ExHashT> {
 	/// Assigned roles for our node (full, light, ...).
 	pub roles: Roles,
 
@@ -82,9 +88,6 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// valid.
 	pub import_queue: Box<dyn ImportQueue<B>>,
 
-	/// Customization of the network. Use this to plug additional networking capabilities.
-	pub specialization: S,
-
 	/// Type to check incoming block announcements.
 	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 }
@@ -117,6 +120,12 @@ impl Roles {
 	/// Does this role represents a client that does not hold full chain data locally?
 	pub fn is_light(&self) -> bool {
 		!self.is_full()
+	}
+}
+
+impl fmt::Display for Roles {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{:?}", self)
 	}
 }
 
@@ -241,9 +250,9 @@ impl From<multiaddr::Error> for ParseErr {
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
 	/// Directory path to store general network configuration. None means nothing will be saved.
-	pub config_path: Option<String>,
+	pub config_path: Option<PathBuf>,
 	/// Directory path to store network-specific configuration. None means nothing will be saved.
-	pub net_config_path: Option<String>,
+	pub net_config_path: Option<PathBuf>,
 	/// Multiaddresses to listen for incoming connections.
 	pub listen_addresses: Vec<Multiaddr>,
 	/// Multiaddresses to advertise. Detected automatically if empty.
@@ -338,8 +347,9 @@ pub enum TransportConfig {
 		enable_mdns: bool,
 
 		/// If true, allow connecting to private IPv4 addresses (as defined in
-		/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address has been passed in
-		/// [`NetworkConfiguration::reserved_nodes`] or [`NetworkConfiguration::boot_nodes`].
+		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
+		/// been passed in [`NetworkConfiguration::reserved_nodes`] or
+		/// [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
 
 		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we

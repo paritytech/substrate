@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! An opt-in utility for tracking historical sessions in SRML-session.
+//! An opt-in utility for tracking historical sessions in FRAME-session.
 //!
 //! This is generally useful when implementing blockchains that require accountable
 //! safety where validators from some amount f prior sessions must remain slashable.
@@ -323,7 +323,7 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
+				l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
 			),
 		}.assimilate_storage(&mut t).unwrap();
 		sp_io::TestExternalities::new(t)

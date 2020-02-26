@@ -1,18 +1,20 @@
 [package]
 name = "node-primitives"
-version = "2.0.0"
+version = "2.0.0-alpha.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
-sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../../primitives/application-crypto" }
-sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-application-crypto = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/application-crypto" }
+sp-core = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-sp-serializer = { version = "2.0.0", path = "../../../primitives/serializer" }
+sp-serializer = { version = "2.0.0-alpha.1", path = "../../../primitives/serializer" }
 pretty_assertions = "0.6.1"
 
 [features]

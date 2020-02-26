@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! System SRML specific RPC methods.
+//! System FRAME specific RPC methods.
 
 use std::sync::Arc;
 
@@ -236,7 +236,7 @@ mod tests {
 		let _ = env_logger::try_init();
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let pool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())))
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
 		);
 
 		let new_transaction = |nonce: u64| {

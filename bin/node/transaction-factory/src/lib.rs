@@ -83,7 +83,7 @@ pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
 	mut factory_state: RA,
 	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
 	select_chain: &Sc,
-) -> sc_cli::error::Result<()>
+) -> sc_cli::Result<()>
 where
 	Block: BlockT,
 	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
@@ -97,7 +97,7 @@ where
 	RA: RuntimeAdapter<Block = Block>,
 	Block::Hash: From<sp_core::H256>,
 {
-	let best_header: Result<<Block as BlockT>::Header, sc_cli::error::Error> =
+	let best_header: Result<<Block as BlockT>::Header, sc_cli::Error> =
 		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
 	let mut best_hash = best_header?.hash();
 	let mut best_block_id = BlockId::<Block>::hash(best_hash);
@@ -156,20 +156,9 @@ where
 		best_hash = block.header().hash();
 		best_block_id = BlockId::<Block>::hash(best_hash);
 
-		let import = BlockImportParams {
-			origin: BlockOrigin::File,
-			header: block.header().clone(),
-			post_digests: Vec::new(),
-			body: Some(block.extrinsics().to_vec()),
-			storage_changes: None,
-			finalized: false,
-			justification: None,
-			auxiliary: Vec::new(),
-			intermediates: Default::default(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import = BlockImportParams::new(BlockOrigin::File, block.header().clone());
+		import.body = Some(block.extrinsics().to_vec());
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 		client.clone().import_block(import, HashMap::new()).expect("Failed to import block");
 
 		info!("Imported block at {}", factory_state.block_number());

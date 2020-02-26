@@ -102,7 +102,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Error::Db(e) => e.fmt(f),
-			Error::Decoding(e) => write!(f, "Error decoding slicable value: {}", e.what()),
+			Error::Decoding(e) => write!(f, "Error decoding sliceable value: {}", e.what()),
 			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
@@ -340,7 +340,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				{
 					let refs = self.pinned.entry(hash.clone()).or_default();
 					if *refs == 0 {
-						trace!(target: "state-db", "Pinned block: {:?}", hash);
+						trace!(target: "state-db-pin", "Pinned block: {:?}", hash);
 						self.non_canonical.pin(hash);
 					}
 					*refs += 1;
@@ -357,11 +357,11 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			Entry::Occupied(mut entry) => {
 				*entry.get_mut() -= 1;
 				if *entry.get() == 0 {
-					trace!(target: "state-db", "Unpinned block: {:?}", hash);
+					trace!(target: "state-db-pin", "Unpinned block: {:?}", hash);
 					entry.remove();
 					self.non_canonical.unpin(hash);
 				} else {
-					trace!(target: "state-db", "Releasing reference for {:?}", hash);
+					trace!(target: "state-db-pin", "Releasing reference for {:?}", hash);
 				}
 			},
 			Entry::Vacant(_) => {},
