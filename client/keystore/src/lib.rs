@@ -309,24 +309,6 @@ impl BareCryptoStore for Store {
 		Ok(keys.intersection(&all_keys).cloned().collect())
 	}
 
-	fn keys(&self, id: KeyTypeId) -> std::result::Result<HashSet<CryptoTypePublicPair>, TraitError> {
-		let ed25519_existing_keys = self
-			.public_keys_by_type::<ed25519::Public>(id)
-			.map_err(|e| TraitError::from(e))?
-			.into_iter()
-			.map(Into::into);
-
-		let sr25519_existing_keys = self
-			.public_keys_by_type::<sr25519::Public>(id)
-			.map_err(|e| TraitError::from(e))?
-			.into_iter()
-			.map(Into::into);
-
-		Ok(ed25519_existing_keys
-			.chain(sr25519_existing_keys)
-			.collect())
-	}
-
 	fn sign_with(
 		&self,
 		id: KeyTypeId,

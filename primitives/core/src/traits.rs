@@ -90,7 +90,22 @@ pub trait BareCryptoStore: Send + Sync {
 	/// List all supported keys
 	///
 	/// Returns a set of public keys the signer supports.
-	fn keys(&self, id: KeyTypeId) -> Result<HashSet<CryptoTypePublicPair>, BareCryptoStoreError>;
+	fn keys(&self, id: KeyTypeId) -> Result<HashSet<CryptoTypePublicPair>, BareCryptoStoreError> {
+		let ed25519_existing_keys = self
+    		.ed25519_public_keys(id)
+			.into_iter()
+			.map(Into::into);
+
+		let sr25519_existing_keys = self
+			.sr25519_public_keys(id)
+			.into_iter()
+			.map(Into::into);
+
+		Ok(ed25519_existing_keys
+			.chain(sr25519_existing_keys)
+			.collect::<HashSet<_>>())
+	}
+
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.

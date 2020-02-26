@@ -150,22 +150,6 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		Ok(keys.intersection(&all_keys).cloned().collect())
 	}
 
-	fn keys(&self, id: KeyTypeId) -> std::result::Result<HashSet<CryptoTypePublicPair>, BareCryptoStoreError> {
-		let ed25519_existing_keys = self
-    		.ed25519_public_keys(id)
-			.into_iter()
-			.map(Into::into);
-
-		let sr25519_existing_keys = self
-			.sr25519_public_keys(id)
-			.into_iter()
-			.map(Into::into);
-
-		Ok(ed25519_existing_keys
-			.chain(sr25519_existing_keys)
-			.collect::<HashSet<_>>())
-	}
-
 	fn sign_with(
 		&self,
 		id: KeyTypeId,
