@@ -7,7 +7,6 @@ repository = "https://github.com/paritytech/substrate/"
 license = "GPL-3.0"
 edition = "2018"
 homepage = "https://substrate.dev"
-description = "Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ('trie')."
 documentation = "https://docs.rs/sp-trie"
 
 [[bench]]

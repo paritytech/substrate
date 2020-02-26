@@ -7,7 +7,6 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "Substrate state machine implementation."
 documentation = "https://docs.rs/sp-state-machine"
 
 [dependencies]

@@ -7,7 +7,6 @@ description = "Storage related primitives"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "Primitive types for storage related stuff."
 documentation = "https://docs.rs/sp-storage/"
 
 [dependencies]
