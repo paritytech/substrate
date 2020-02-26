@@ -38,7 +38,6 @@ use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::Message as GenericMessage;
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
-use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{BoxFinalityProofRequestBuilder, Roles};
@@ -73,7 +72,6 @@ pub mod message;
 pub mod event;
 pub mod light_client_handler;
 pub mod light_dispatch;
-pub mod specialization;
 pub mod sync;
 
 pub use block_requests::BlockRequests;
@@ -133,10 +131,12 @@ mod rep {
 	pub const BAD_PROTOCOL: Rep = Rep::new_fatal("Unsupported protocol");
 	/// Peer role does not match (e.g. light peer connecting to another light peer).
 	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
+	/// Peer response data does not have requested bits.
+	pub const BAD_RESPONSE: Rep = Rep::new(-(1 << 12), "Incomplete response");
 }
 
 // Lock must always be taken in order declared here.
-pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
+pub struct Protocol<B: BlockT, H: ExHashT> {
 	/// Interval at which we call `tick`.
 	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Interval at which we call `propagate_extrinsics`.
@@ -146,7 +146,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	light_dispatch: LightDispatch<B>,
 	genesis_hash: B::Hash,
 	sync: ChainSync<B>,
-	specialization: S,
 	context_data: ContextData<B, H>,
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
@@ -334,55 +333,6 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 	}
 }
 
-/// Context for a network-specific handler.
-pub trait Context<B: BlockT> {
-	/// Adjusts the reputation of the peer. Use this to point out that a peer has been malign or
-	/// irresponsible or appeared lazy.
-	fn report_peer(&mut self, who: PeerId, reputation: sc_peerset::ReputationChange);
-
-	/// Force disconnecting from a peer. Use this when a peer misbehaved.
-	fn disconnect_peer(&mut self, who: PeerId);
-
-	/// Send a chain-specific message to a peer.
-	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>);
-}
-
-/// Protocol context.
-struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
-	behaviour: &'a mut GenericProto,
-	context_data: &'a mut ContextData<B, H>,
-	peerset_handle: &'a sc_peerset::PeersetHandle,
-}
-
-impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
-	fn new(
-		context_data: &'a mut ContextData<B, H>,
-		behaviour: &'a mut GenericProto,
-		peerset_handle: &'a sc_peerset::PeersetHandle,
-	) -> Self {
-		ProtocolContext { context_data, peerset_handle, behaviour }
-	}
-}
-
-impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, H> {
-	fn report_peer(&mut self, who: PeerId, reputation: sc_peerset::ReputationChange) {
-		self.peerset_handle.report_peer(who, reputation)
-	}
-
-	fn disconnect_peer(&mut self, who: PeerId) {
-		self.behaviour.disconnect_peer(&who)
-	}
-
-	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
-		send_message::<B> (
-			self.behaviour,
-			&mut self.context_data.stats,
-			&who,
-			GenericMessage::ChainSpecific(message)
-		)
-	}
-}
-
 /// Data necessary to create a context.
 struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
@@ -409,20 +359,19 @@ impl Default for ProtocolConfig {
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
+impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
 		chain: Arc<dyn Client<B>>,
 		checker: Arc<dyn FetchChecker<B>>,
-		specialization: S,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		protocol_id: ProtocolId,
 		peerset_config: sc_peerset::PeersetConfig,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
-	) -> error::Result<(Protocol<B, S, H>, sc_peerset::PeersetHandle)> {
+	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
 			config.roles,
@@ -458,7 +407,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			light_dispatch: LightDispatch::new(checker),
 			genesis_hash: info.genesis_hash,
 			sync,
-			specialization,
 			handshaking_peers: HashMap::new(),
 			important_peers,
 			transaction_pool,
@@ -680,11 +628,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					CustomMessageOutcome::None
 				};
 			},
-			GenericMessage::ChainSpecific(msg) => self.specialization.on_message(
-				&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-				who,
-				msg,
-			),
 		}
 
 		CustomMessageOutcome::None
@@ -709,14 +652,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	/// Locks `self` and returns a context plus the network specialization.
-	pub fn specialization_lock<'a>(
-		&'a mut self,
-	) -> (impl Context<B> + 'a, &'a mut S) {
-		let context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		(context, &mut self.specialization)
-	}
-
 	/// Called when a new peer is connected
 	pub fn on_peer_connected(&mut self, who: PeerId) {
 		trace!(target: "sync", "Connecting {}", who);
@@ -738,9 +673,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			self.context_data.peers.remove(&peer)
 		};
 		if let Some(_peer_data) = removed {
-			let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
 			self.sync.peer_disconnected(peer.clone());
-			self.specialization.on_disconnect(&mut context, peer.clone());
 			self.light_dispatch.on_disconnect(LightDispatchIn {
 				behaviour: &mut self.behaviour,
 				peerset: self.peerset_handle.clone(),
@@ -769,12 +702,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		peer: PeerId,
 		request: message::BlockRequest<B>
 	) {
-		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}",
+		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?} for {:?}",
 			request.id,
 			peer,
 			request.from,
 			request.to,
-			request.max);
+			request.max,
+			request.fields,
+		);
 
 		// sending block requests to the node that is unable to serve it is considered a bad behavior
 		if !self.config.roles.is_full() {
@@ -822,6 +757,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				message_queue: None,
 				justification,
 			};
+			// Stop if we don't have requested block body
+			if get_body && block_data.body.is_none() {
+				trace!(target: "sync", "Missing data for block request.");
+				break;
+			}
 			blocks.push(block_data);
 			match request.direction {
 				message::Direction::Ascending => id = BlockId::Number(number + One::one()),
@@ -852,7 +792,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>,
 	) -> CustomMessageOutcome<B> {
-		let blocks_range = match (
+		let blocks_range = || match (
 			response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
 			response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
 		) {
@@ -864,7 +804,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			response.id,
 			peer,
 			response.blocks.len(),
-			blocks_range
+			blocks_range(),
 		);
 
 		if request.fields == message::BlockAttributes::JUSTIFICATION {
@@ -879,6 +819,20 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 		} else {
+			// Validate fields against the request.
+			if request.fields.contains(message::BlockAttributes::HEADER) && response.blocks.iter().any(|b| b.header.is_none()) {
+				self.behaviour.disconnect_peer(&peer);
+				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
+				trace!(target: "sync", "Missing header for a block");
+				return CustomMessageOutcome::None
+			}
+			if request.fields.contains(message::BlockAttributes::BODY) && response.blocks.iter().any(|b| b.body.is_none()) {
+				self.behaviour.disconnect_peer(&peer);
+				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
+				trace!(target: "sync", "Missing body for a block");
+				return CustomMessageOutcome::None
+			}
+
 			match self.sync.on_block_data(peer, Some(request), response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
@@ -939,9 +893,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 
-		self.specialization.maintain_peers(
-			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle)
-		);
 		for p in aborting {
 			self.behaviour.disconnect_peer(&p);
 			self.peerset_handle.report_peer(p, rep::TIMEOUT);
@@ -1056,9 +1007,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 		}
-
-		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		self.specialization.on_connect(&mut context, who.clone(), status);
 
 		// Notify all the notification protocols as open.
 		CustomMessageOutcome::NotificationStreamOpened {
@@ -1291,7 +1239,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			roles: self.config.roles.into(),
 			best_number: info.best_number,
 			best_hash: info.best_hash,
-			chain_status: self.specialization.status(),
+			chain_status: Vec::new(), // TODO: find a way to make this backwards-compatible
 		};
 
 		self.send_message(&who, GenericMessage::Status(status))
@@ -1360,15 +1308,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Call this when a block has been imported in the import queue and we should announce it on
 	/// the network.
-	pub fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header, data: Vec<u8>, is_best: bool) {
+	pub fn on_block_imported(&mut self, header: &B::Header, data: Vec<u8>, is_best: bool) {
 		if is_best {
 			self.sync.update_chain_info(header);
 		}
-		self.specialization.on_block_imported(
-			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-			hash.clone(),
-			header,
-		);
 
 		// blocks are not announced by light clients
 		if self.config.roles.is_light() {
@@ -1858,8 +1801,7 @@ fn send_message<B: BlockT>(
 	behaviour.send_packet(who, encoded);
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviour for
-Protocol<B, S, H> {
+impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 	type ProtocolsHandler = <GenericProto as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
@@ -2016,13 +1958,13 @@ Protocol<B, S, H> {
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> DiscoveryNetBehaviour for Protocol<B, S, H> {
+impl<B: BlockT, H: ExHashT> DiscoveryNetBehaviour for Protocol<B, H> {
 	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		self.behaviour.add_discovered_nodes(peer_ids)
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Drop for Protocol<B, S, H> {
+impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
 	fn drop(&mut self) {
 		debug!(target: "sync", "Network stats:\n{}", self.format_stats());
 	}

@@ -120,9 +120,8 @@ pub trait Network<Block: BlockT>: GossipNetwork<Block> + Clone + Send + 'static 
 	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
-impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
+impl<B, H> Network<B> for Arc<NetworkService<B, H>> where
 	B: BlockT,
-	S: sc_network::specialization::NetworkSpecialization<B>,
 	H: sc_network::ExHashT,
 {
 	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {

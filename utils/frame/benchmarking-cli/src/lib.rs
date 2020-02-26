@@ -16,9 +16,9 @@
 
 use sp_runtime::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sc_client::StateMachine;
-use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
+use sc_cli::{ExecutionStrategy, WasmExecutionMethod, VersionInfo};
 use sc_client_db::BenchmarkingState;
-use sc_service::{RuntimeGenesis, ChainSpecExtension};
+use sc_service::{RuntimeGenesis, ChainSpecExtension, Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::fmt::Debug;
 use codec::{Encode, Decode};
@@ -36,8 +36,8 @@ pub struct BenchmarkCmd {
 	pub extrinsic: String,
 
 	/// Select how many samples we should take across the variable components.
-	#[structopt(short, long, default_value = "1")]
-	pub steps: u32,
+	#[structopt(short, long, use_delimiter = true)]
+	pub steps: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run.
 	#[structopt(short, long, default_value = "1")]
@@ -68,26 +68,16 @@ pub struct BenchmarkCmd {
 }
 
 impl BenchmarkCmd {
-	/// Parse CLI arguments and initialize given config.
-	pub fn init<G, E>(
-		&self,
-		config: &mut sc_service::config::Configuration<G, E>,
-		spec_factory: impl FnOnce(&str) -> Result<Option<sc_service::ChainSpec<G, E>>, String>,
-		version: &sc_cli::VersionInfo,
-	) -> sc_cli::error::Result<()> where
-		G: sc_service::RuntimeGenesis,
-		E: sc_service::ChainSpecExtension,
-	{
-		sc_cli::init_config(config, &self.shared_params, version, spec_factory)?;
-		// make sure to configure keystore
-		sc_cli::fill_config_keystore_in_memory(config).map_err(Into::into)
+	/// Initialize
+	pub fn init(&self, version: &sc_cli::VersionInfo) -> sc_cli::Result<()> {
+		self.shared_params.init(version)
 	}
 
 	/// Runs the command and benchmarks the chain.
 	pub fn run<G, E, BB, ExecDispatch>(
 		self,
-		config: sc_service::Configuration<G, E>,
-	) -> sc_cli::error::Result<()>
+		config: Configuration<G, E>,
+	) -> sc_cli::Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -107,13 +97,14 @@ impl BenchmarkCmd {
 			wasm_method,
 			None, // heap pages
 		);
+
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 			&state,
 			None,
 			&mut changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
-			&(&self.pallet, &self.extrinsic, self.steps, self.repeat).encode(),
+			&(&self.pallet, &self.extrinsic, self.steps.clone(), self.repeat).encode(),
 			Default::default(),
 		)
 		.execute(strategy.into())
@@ -134,18 +125,37 @@ impl BenchmarkCmd {
 			// Print the table header
 			results[0].0.iter().for_each(|param| print!("{:?},", param.0));
 
-			print!("time\n");
+			print!("extrinsic_time,storage_root_time\n");
 			// Print the values
 			results.iter().for_each(|result| {
 				let parameters = &result.0;
 				parameters.iter().for_each(|param| print!("{:?},", param.1));
-				print!("{:?}\n", result.1);
+				// Print extrinsic time and storage root time
+				print!("{:?},{:?}\n", result.1, result.2);
 			});
 
 			eprintln!("Done.");
 		} else {
 			eprintln!("No Results.");
 		}
+
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<G, E>(
+		&self,
+		mut config: &mut Configuration<G, E>,
+		spec_factory: impl FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		version: &VersionInfo,
+	) -> sc_cli::Result<()> where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+
+		// make sure to configure keystore
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}
