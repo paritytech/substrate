@@ -2775,24 +2775,24 @@ mod offchain_phragmen {
 		|| {
 			run_to_block(10);
 			assert_session_era!(1, 0);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 			assert!(Staking::snapshot_nominators().is_none());
 			assert!(Staking::snapshot_validators().is_none());
 
 			run_to_block(18);
 			assert_session_era!(1, 0);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 			assert!(Staking::snapshot_nominators().is_none());
 			assert!(Staking::snapshot_validators().is_none());
 
 			run_to_block(40);
 			assert_session_era!(4, 0);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 			assert!(Staking::snapshot_nominators().is_none());
 			assert!(Staking::snapshot_validators().is_none());
 
 			run_to_block(46);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 			assert!(Staking::snapshot_nominators().is_none());
 			assert!(Staking::snapshot_validators().is_none());
 
@@ -2807,7 +2807,7 @@ mod offchain_phragmen {
 			assert!(Staking::snapshot_validators().is_some());
 
 			run_to_block(50);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 			assert!(Staking::snapshot_nominators().is_none());
 			assert!(Staking::snapshot_validators().is_none());
 		})
@@ -2818,7 +2818,7 @@ mod offchain_phragmen {
 		ExtBuilder::default().build().execute_with(|| {
 			start_session(1);
 			start_session(2);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 			// some election must have happened by now.
 			assert_eq!(
 				System::events().into_iter().map(|r| r.event).filter_map(|e| {
@@ -2855,7 +2855,7 @@ mod offchain_phragmen {
 
 			run_to_block(27);
 			assert!(Staking::snapshot_validators().is_none());
-			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 		})
 	}
 
@@ -2888,7 +2888,7 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn offchain_result_can_be_submitted() {
+	fn signed_result_can_be_submitted() {
 		// should check that we have a new validator set normally,
 		// event says that it comes from offchain.
 		ExtBuilder::default()
@@ -2912,7 +2912,7 @@ mod offchain_phragmen {
 			assert_eq!(queued_result.compute, ElectionCompute::Signed);
 
 			run_to_block(15);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 
 			assert_eq!(
 				System::events().into_iter().map(|r| r.event).filter_map(|e| {
@@ -2928,8 +2928,8 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn offchain_result_can_be_submitted_later() {
-		// same as `offchain_result_can_be_submitted` but at a later block.
+	fn signed_result_can_be_submitted_later() {
+		// same as `signed_result_can_be_submitted` but at a later block.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.build()
@@ -2952,7 +2952,7 @@ mod offchain_phragmen {
 			assert_eq!(queued_result.compute, ElectionCompute::Signed);
 
 			run_to_block(15);
-			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 
 			assert_eq!(
 				System::events().into_iter().map(|r| r.event).filter_map(|e| {
@@ -2978,7 +2978,7 @@ mod offchain_phragmen {
 		|| {
 			run_to_block(11);
 			// submission is not yet allowed
-			assert_eq!(Staking::era_election_status(), ElectionStatus::Close);
+			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 
 			// create all the indices just to build the solution.
 			Staking::create_stakers_snapshot();
@@ -3097,7 +3097,7 @@ mod offchain_phragmen {
 			// put a good solution on-chain
 			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
 			assert_ok!(
-				Staking::submit_election_solution(Origin::signed(10), winners, compact, score)
+				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 			);
 
 			// now run the offchain worker in the same chain state.

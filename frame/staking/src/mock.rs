@@ -467,7 +467,8 @@ impl ExtBuilder {
 		self
 	}
 	pub fn offchain_phragmen_ext(self) -> Self {
-		self.session_per_era(3)
+		self
+			.session_per_era(3)
 			.session_length(5)
 			.election_lookahead(3)
 			.local_key_account(11)

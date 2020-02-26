@@ -270,7 +270,7 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Perbill, PerThing, RuntimeDebug, RuntimeAppPublic,
+	Perbill, PerU16, PerThing, RuntimeDebug, RuntimeAppPublic,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
@@ -322,7 +322,7 @@ pub type Points = u32;
 pub type ChainAccuracy = Perbill;
 
 /// Accuracy used for off-chain phragmen. This better be small.
-pub type OffchainAccuracy = sp_runtime::PerU16;
+pub type OffchainAccuracy = PerU16;
 
 /// The balance type of this module.
 pub type BalanceOf<T> =
@@ -341,6 +341,7 @@ type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
 
+/// Staking's key type used for submitting unsigned solutions.
 pub mod sr25519 {
 	mod app_sr25519 {
 		use sp_application_crypto::{app_crypto, key_types::STAKING, sr25519};
@@ -621,28 +622,27 @@ pub enum ElectionCompute {
 /// The result of an election round.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct ElectionResult<AccountId, Balance: HasCompact> {
-	/// Type of the result,
-	compute: ElectionCompute,
-	/// The new computed slot stake.
-	slot_stake: Balance,
 	/// Flat list of validators who have been elected.
 	elected_stashes: Vec<AccountId>,
 	/// Flat list of new exposures, to be updated in the [`Exposure`] storage.
 	exposures: Vec<(AccountId, Exposure<AccountId, Balance>)>,
+	/// Type of the result. This is kept on chain only to track and report the best score's
+	/// submission type. An optimisation can could remove this.
+	compute: ElectionCompute,
 }
 
 /// The status of the upcoming (offchain) election.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ElectionStatus<BlockNumber> {
 	/// Nothing has and will happen for now. submission window is not open.
-	Close,
+	Closed,
 	/// The submission window has been open since the contained block number.
 	Open(BlockNumber),
 }
 
 impl<BlockNumber> Default for ElectionStatus<BlockNumber> {
 	fn default() -> Self {
-		Self::Close
+		Self::Closed
 	}
 }
 
@@ -975,24 +975,26 @@ decl_error! {
 		PhragmenEarlySubmission,
 		/// The submitted result is not as good as the one stored on chain.
 		PhragmenWeakSubmission,
-		/// The submitted result has unknown edges that are not among the presented winners.
-		PhragmenBogusEdge,
-		/// One of the submitted winners is not an active candidate on chain.
+		/// The snapshot data of the current window is missing.
+		SnapshotUnavailable,
+		/// Incorrect number of winners were presented.
+		PhragmenBogusWinnerCount,
+		/// One of the submitted winners is not an active candidate on chain (index is out of range
+		/// in snapshot).
 		PhragmenBogusWinner,
-		/// One of the submitted nominators is not an active nominator on chain.
+		/// Error while building the assignment type from the compact. This can happen if an index
+		/// is invalid, or if the weights _overflow_.
+		PhragmenBogusCompact,
+		/// One of the submitted nominators is not an active nominator on chain. DEPRECATED.
 		PhragmenBogusNominator,
 		/// One of the submitted nominators has an edge to which they have not voted on chain.
 		PhragmenBogusNomination,
 		/// A self vote must only be originated from a validator to ONLY themselves.
 		PhragmenBogusSelfVote,
+		/// The submitted result has unknown edges that are not among the presented winners.
+		PhragmenBogusEdge,
 		/// The claimed score does not match with the one computed from the data.
 		PhragmenBogusScore,
-		/// Error while building the assignment type from the compact.
-		PhragmenBogusCompact,
-		/// Incorrect number of winners were presented.
-		PhragmenBogusWinnerCount,
-		/// The snapshot data of the current window is missing.
-		SnapshotUnavailable,
 	}
 }
 
@@ -1011,7 +1013,7 @@ decl_module! {
 		/// Does the following:
 		///
 		/// 1. potential storage migration
-		/// 2. sets `ElectionStatus` to `Triggered(now)` where `now` is the block number at which
+		/// 2. sets `ElectionStatus` to `Open(now)` where `now` is the block number at which
 		///    the election window has opened. The offchain worker, if applicable, will execute at
 		///    the end of the current block. `submit_election_solution` will accept solutions from
 		///    this block until the end of the era.
@@ -1019,7 +1021,7 @@ decl_module! {
 			Self::ensure_storage_upgraded();
 			if
 				// if we don't have any ongoing offchain compute.
-				Self::era_election_status() == ElectionStatus::Close &&
+				Self::era_election_status() == ElectionStatus::Closed &&
 				// and an era is about to be changed.
 				Self::is_current_session_final()
 			{
@@ -1086,115 +1088,6 @@ decl_module! {
 			if !<CurrentEraStart<T>>::exists() {
 				<CurrentEraStart<T>>::put(T::Time::now());
 			}
-		}
-
-		/// Submit a phragmen result to the chain. If the solution:
-		///
-		/// 1. is valid
-		/// 2. has a better score than a potentially existing solution on chain
-		///
-		/// then, it will be put on chain.
-		///
-		/// A solution consists of two pieces of data:
-		///
-		/// 1. `winners`: a flat vector of all the winners of the round.
-		/// 2. `assignments`: the compact version of an assignment vector that encodes the edge
-		///    weights.
-		///
-		/// Both of which may be computed using the [`phragmen`], or any other algorithm.
-		///
-		/// Additionally, the submitter must provide:
-		///
-		/// - The score that they claim their solution has.
-		///
-		/// Both validators and nominators will be represented by indices in the solution. The
-		/// indices should respect the corresponding types ([`ValidatorIndex`] and
-		/// [`NominatorIndex`]). Moreover, they should be valid when used to index into
-		/// [`SnapshotValidators`] and [`SnapshotNominators`]. Any invalid index will cause the
-		/// solution to be rejected.
-		///
-		/// A solution is valid if:
-		///
-		/// 0. It is submitted when [`EraElectionStatus`] is `Open`.
-		/// 1. Its claimed score is equal to the score computed on-chain.
-		/// 2. Presents the correct number of winners.
-		/// 3. All indexes must be value according to the snapshot vectors. All edge values must
-		///    also be correct and should not overflow the granularity of the ratio type (i.e. 256
-		///    or billion).
-		/// 4. For each edge, all targets are actually nominated by the voter.
-		/// 5. Has correct self-votes.
-		///
-		/// A solutions score is consisted of 3 parameters:
-		///
-		/// 1. `min { support.total }` for each support of a winner. This value should be maximized.
-		/// 2. `sum { support.total }` for each support of a winner. This value should be minimized.
-		/// 3. `sum { support.total^2 }` for each support of a winner. This value should be
-		///    minimized (to ensure less variance)
-		///
-		/// # <weight>
-		/// E: number of edges.
-		/// m: size of winner committee.
-		/// n: number of nominators.
-		/// d: edge degree (16 for now)
-		/// v: number of on-chain validator candidates.
-		///
-		/// NOTE: given a solution which is reduced, we can enable a new check the ensure `|E| < n +
-		/// m`.
-		///
-		/// major steps (all done in `check_and_replace_solution`):
-		///
-		/// - Storage: O(1) read `ElectionStatus`.
-		/// - Storage: O(1) read `PhragmenScore`.
-		/// - Storage: O(1) read `ValidatorCount`.
-		/// - Storage: O(1) length read from `SnapshotValidators`.
-		/// - Storage: O(v) reads of `AccountId`.
-		/// - Memory: O(m) iterations to map winner index to validator id.
-		/// - Storage: O(n) reads `AccountId`.
-		/// - Memory: O(n + m) reads to map index to `AccountId` for un-compact.
-		/// - Storage: O(e) accountid reads from `Nomination` to read correct nominations.
-		/// - Storage: O(e) calls into `slashable_balance_of_extended` to convert ratio to staked.
-		/// - Memory: build_support_map. O(e).
-		/// - Memory: evaluate_support: O(E).
-		/// - Storage: O(e) writes to `QueuedElected`.
-		/// - Storage: O(1) write to `QueuedScore`
-		///
-		/// The weight of this call is 1/10th of the blocks total weight.
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
-		pub fn submit_election_solution(
-			origin,
-			winners: Vec<ValidatorIndex>,
-			compact_assignments: Compact,
-			score: PhragmenScore,
-		) {
-			let _who = ensure_signed(origin)?;
-			Self::check_and_replace_solution(
-				winners,
-				compact_assignments,
-				ElectionCompute::Signed,
-				score,
-			)?
-		}
-
-		/// Unsigned version of `submit_election_solution`. Will only be accepted from those who are
-		/// in the current validator set.
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
-		pub fn submit_election_solution_unsigned(
-			origin,
-			winners: Vec<ValidatorIndex>,
-			compact_assignments: Compact,
-			score: PhragmenScore,
-			// already used and checked in ValidateUnsigned.
-			_validator_index: u32,
-			_signature: <T::KeyType as RuntimeAppPublic>::Signature,
-		) {
-			ensure_none(origin)?;
-			Self::check_and_replace_solution(
-				winners,
-				compact_assignments,
-				ElectionCompute::Authority,
-				score,
-			)?
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -1597,6 +1490,115 @@ decl_module! {
 
 			Self::update_ledger(&controller, &ledger);
 		}
+
+		/// Submit a phragmen result to the chain. If the solution:
+		///
+		/// 1. is valid
+		/// 2. has a better score than a potentially existing solution on chain
+		///
+		/// then, it will be put on chain.
+		///
+		/// A solution consists of two pieces of data:
+		///
+		/// 1. `winners`: a flat vector of all the winners of the round.
+		/// 2. `assignments`: the compact version of an assignment vector that encodes the edge
+		///    weights.
+		///
+		/// Both of which may be computed using [`phragmen`], or any other algorithm.
+		///
+		/// Additionally, the submitter must provide:
+		///
+		/// - The score that they claim their solution has.
+		///
+		/// Both validators and nominators will be represented by indices in the solution. The
+		/// indices should respect the corresponding types ([`ValidatorIndex`] and
+		/// [`NominatorIndex`]). Moreover, they should be valid when used to index into
+		/// [`SnapshotValidators`] and [`SnapshotNominators`]. Any invalid index will cause the
+		/// solution to be rejected.
+		///
+		/// A solution is valid if:
+		///
+		/// 0. It is submitted when [`EraElectionStatus`] is `Open`.
+		/// 1. Its claimed score is equal to the score computed on-chain.
+		/// 2. Presents the correct number of winners.
+		/// 3. All indexes must be value according to the snapshot vectors. All edge values must
+		///    also be correct and should not overflow the granularity of the ratio type (i.e. 256
+		///    or billion).
+		/// 4. For each edge, all targets are actually nominated by the voter.
+		/// 5. Has correct self-votes.
+		///
+		/// A solutions score is consisted of 3 parameters:
+		///
+		/// 1. `min { support.total }` for each support of a winner. This value should be maximized.
+		/// 2. `sum { support.total }` for each support of a winner. This value should be minimized.
+		/// 3. `sum { support.total^2 }` for each support of a winner. This value should be
+		///    minimized (to ensure less variance)
+		///
+		/// # <weight>
+		/// E: number of edges.
+		/// m: size of winner committee.
+		/// n: number of nominators.
+		/// d: edge degree (16 for now)
+		/// v: number of on-chain validator candidates.
+		///
+		/// NOTE: given a solution which is reduced, we can enable a new check the ensure `|E| < n +
+		/// m`.
+		///
+		/// major steps (all done in `check_and_replace_solution`):
+		///
+		/// - Storage: O(1) read `ElectionStatus`.
+		/// - Storage: O(1) read `PhragmenScore`.
+		/// - Storage: O(1) read `ValidatorCount`.
+		/// - Storage: O(1) length read from `SnapshotValidators`.
+		/// - Storage: O(v) reads of `AccountId`.
+		/// - Memory: O(m) iterations to map winner index to validator id.
+		/// - Storage: O(n) reads `AccountId`.
+		/// - Memory: O(n + m) reads to map index to `AccountId` for un-compact.
+		/// - Storage: O(e) accountid reads from `Nomination` to read correct nominations.
+		/// - Storage: O(e) calls into `slashable_balance_of_extended` to convert ratio to staked.
+		/// - Memory: build_support_map. O(e).
+		/// - Memory: evaluate_support: O(E).
+		/// - Storage: O(e) writes to `QueuedElected`.
+		/// - Storage: O(1) write to `QueuedScore`
+		///
+		/// The weight of this call is 1/10th of the blocks total weight.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
+		pub fn submit_election_solution(
+			origin,
+			winners: Vec<ValidatorIndex>,
+			compact_assignments: Compact,
+			score: PhragmenScore,
+		) {
+			let _who = ensure_signed(origin)?;
+			Self::check_and_replace_solution(
+				winners,
+				compact_assignments,
+				ElectionCompute::Signed,
+				score,
+			)?
+		}
+
+		/// Unsigned version of `submit_election_solution`. Will only be accepted from those who are
+		/// in the current validator set.
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
+		pub fn submit_election_solution_unsigned(
+			origin,
+			winners: Vec<ValidatorIndex>,
+			compact_assignments: Compact,
+			score: PhragmenScore,
+			// already used and checked in ValidateUnsigned.
+			_validator_index: u32,
+			_signature: <T::KeyType as RuntimeAppPublic>::Signature,
+		) {
+			ensure_none(origin)?;
+			Self::check_and_replace_solution(
+				winners,
+				compact_assignments,
+				ElectionCompute::Authority,
+				score,
+			)?
+		}
 	}
 }
 
@@ -1629,7 +1631,8 @@ impl<T: Trait> Module<T> {
 
 	/// Dump the list of validators and nominators into vectors and keep them on-chain.
 	///
-	/// This data is used to efficiently evaluate election results.
+	/// This data is used to efficiently evaluate election results. returns `true` if the operation
+	/// is successful.
 	fn create_stakers_snapshot() -> bool {
 		let validators = <Validators<T>>::enumerate().map(|(v, _)| v).collect::<Vec<_>>();
 		let mut nominators = <Nominators<T>>::enumerate().map(|(n, _)| n).collect::<Vec<_>>();
@@ -1776,7 +1779,7 @@ impl<T: Trait> Module<T> {
 	) -> Result<(), Error<T>> {
 		// discard early solutions
 		match Self::era_election_status() {
-			ElectionStatus::Close => Err(Error::<T>::PhragmenEarlySubmission)?,
+			ElectionStatus::Closed => Err(Error::<T>::PhragmenEarlySubmission)?,
 			ElectionStatus::Open(_) => { /* Open and no solutions received. Allowed. */ },
 		}
 
@@ -1858,7 +1861,7 @@ impl<T: Trait> Module<T> {
 					is_validator is false; maybe_nomination is some; qed"
 				);
 				// NOTE: we don't really have to check here if the sum of all edges are the
-				// nominator budged. By definition, compact -> staked ensures this.
+				// nominator correct. Un-compacting assures this by definition.
 				ensure!(
 					distribution.into_iter().all(|(t, _)| {
 						nomination.targets.iter().find(|&tt| tt == t).is_some()
@@ -1901,7 +1904,6 @@ impl<T: Trait> Module<T> {
 		// At last, alles Ok. Exposures and store the result.
 		let to_balance = |e: ExtendedBalance|
 			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
-		let mut slot_stake: BalanceOf<T> = Bounded::max_value();
 
 		let exposures = supports.into_iter().map(|(validator, support)| {
 			let mut others = Vec::new();
@@ -1920,9 +1922,6 @@ impl<T: Trait> Module<T> {
 				});
 			let exposure = Exposure { own, others, total };
 
-			if exposure.total < slot_stake {
-				slot_stake = exposure.total;
-			}
 			(validator, exposure)
 		}).collect::<Vec<(T::AccountId, Exposure<_, _>)>>();
 
@@ -1935,7 +1934,6 @@ impl<T: Trait> Module<T> {
 			elected_stashes: winners,
 			compute,
 			exposures,
-			slot_stake,
 		});
 		QueuedScore::put(submitted_score);
 
@@ -2039,11 +2037,14 @@ impl<T: Trait> Module<T> {
 		})
 	}
 
+	/// Select the new validator set at the end of the era.
+	///
 	/// Runs [`try_do_phragmen`] and updates the following storage items:
+	/// - [`EraElectionStatus`]: with `None`.
 	/// - [`Stakers`]: with the new staker set.
 	/// - [`SlotStake`]: with the new slot stake.
 	/// - [`CurrentElected`]: with the new elected set.
-	/// - [`EraElectionStatus`]: with `None`
+	/// - [`SnapshotValidators`] and [`SnapshotNominators`] are both removed.
 	///
 	/// Internally, [`QueuedElected`], snapshots and [`QueuedScore`] are also consumed.
 	///
@@ -2054,11 +2055,10 @@ impl<T: Trait> Module<T> {
 		if let Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
 			elected_stashes,
 			exposures,
-			slot_stake,
 			compute,
 		}) = Self::try_do_phragmen() {
 			// We have chosen the new validator set. Submission is no longer allowed.
-			<EraElectionStatus<T>>::put(ElectionStatus::Close);
+			<EraElectionStatus<T>>::put(ElectionStatus::Closed);
 
 			// kill the snapshots.
 			Self::kill_stakers_snapshot();
@@ -2069,7 +2069,9 @@ impl<T: Trait> Module<T> {
 			}
 
 			// Populate Stakers and write slot stake.
+			let mut slot_stake: BalanceOf<T> = Bounded::max_value();
 			exposures.into_iter().for_each(|(s, e)| {
+				if e.total < slot_stake { slot_stake = e.total }
 				<Stakers<T>>::insert(s, e);
 			});
 
@@ -2106,7 +2108,8 @@ impl<T: Trait> Module<T> {
 			Self::do_phragmen_with_post_processing::<ChainAccuracy>(ElectionCompute::OnChain)
 		);
 
-		// either way, kill this
+		// either way, kill this. We remove it here to make sure it always has teh exact same
+		// lifetime as `QueuedElected`.
 		QueuedScore::kill();
 
 		next_result
@@ -2144,8 +2147,7 @@ impl<T: Trait> Module<T> {
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
-			// collect exposures and slot stake.
-			let mut slot_stake = BalanceOf::<T>::max_value();
+			// collect exposures
 			let exposures = supports.into_iter().map(|(validator, support)| {
 				// build `struct exposure` from `support`
 				let mut others = Vec::new();
@@ -2172,9 +2174,6 @@ impl<T: Trait> Module<T> {
 					total,
 				};
 
-				if exposure.total < slot_stake {
-					slot_stake = exposure.total;
-				}
 				(validator, exposure)
 			}).collect::<Vec<(T::AccountId, Exposure<_, _>)>>();
 
@@ -2184,7 +2183,6 @@ impl<T: Trait> Module<T> {
 			// compare against the prior set.
 			Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
 				elected_stashes,
-				slot_stake,
 				exposures,
 				compute,
 			})
@@ -2596,7 +2594,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			use offchain_election::SignaturePayload;
 
 			// discard early solution
-			if Self::era_election_status() == ElectionStatus::Close {
+			if Self::era_election_status() == ElectionStatus::Closed {
 				debug::native::debug!(
 					target: "staking",
 					"rejecting unsigned transaction because it is too early."

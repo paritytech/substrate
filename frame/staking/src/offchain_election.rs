@@ -59,7 +59,7 @@ pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/staking-election/";
 const OFFCHAIN_REPEAT: u32 = 5;
 
 pub(crate) fn set_check_offchain_execution_status<T: Trait>(
-	now: T::BlockNumber
+	now: T::BlockNumber,
 ) -> Result<(), &'static str> {
 	let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 	let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
@@ -99,13 +99,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 	// For each local key is in the stored authority keys, try and submit. Breaks out after first
 	// successful submission.
 	for (index, ref pubkey) in local_keys.into_iter().filter_map(|key|
-		keys.iter().enumerate().find_map(|(index, val_key)|
-			if *val_key == key {
-				Some((index, val_key))
-			} else {
-				None
-			}
-		)
+		keys.iter().enumerate().find(|(_, val_key)| **val_key == key)
 	) {
 		// make sure that the snapshot is available.
 		let snapshot_validators = <Module<T>>::snapshot_validators()
