@@ -58,16 +58,6 @@ pub mod new {
 		}
 	}
 
-	impl<
-		T: SigningTypes + SubmitTransactionTypes<C>,
-		X,
-		C,
-	> SendRawUnsignedTransaction<T, C> for Signer<T, X> {
-		fn send_raw_unsigned_transaction(_call: T::Call) -> Result<(), ()> {
-			unimplemented!()
-		}
-	}
-
 	impl<T: SigningTypes> SignMessage<T> for Signer<T, ForAll> {
 		type Result = Vec<T::Signature>;
 
@@ -123,6 +113,17 @@ pub mod new {
 			}
 
 			None
+		}
+	}
+
+	impl<
+		T: SigningTypes + SubmitTransactionTypes<C>,
+		X,
+		C,
+	> SendRawUnsignedTransaction<T, C> for Signer<T, X> {
+		fn send_raw_unsigned_transaction(call: T::Call) -> Result<(), ()> {
+            let xt = T::Extrinsic::new(call.into(), None).ok_or(())?;
+            sp_io::offchain::submit_transaction(xt.encode())
 		}
 	}
 
@@ -213,6 +214,7 @@ pub mod new {
 
 	pub trait SubmitTransactionTypes<LocalCall> {
 		type Call: From<LocalCall>;
+        type Extrinsic: ExtrinsicT<Call=Self::Call> + codec::Encode;
 	}
 
 	pub trait SignMessage<T: SigningTypes> {
