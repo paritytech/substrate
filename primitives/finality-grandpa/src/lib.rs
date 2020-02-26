@@ -32,7 +32,8 @@ use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use log::debug;
 
-pub use sp_application_crypto::key_types::GRANDPA;
+/// Key type for GRANDPA module.
+pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::GRANDPA;
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::GRANDPA, ed25519};

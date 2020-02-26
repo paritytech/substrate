@@ -733,7 +733,7 @@ impl_runtime_apis! {
 		}
 
 		fn submit_report_equivocation_extrinsic(
-			equivocation_report: fg_primitives::EquivocationReport<
+			equivocation_proof: fg_primitives::EquivocationProof<
 				<Block as BlockT>::Hash,
 				NumberFor<Block>,
 			>,
@@ -742,7 +742,7 @@ impl_runtime_apis! {
 			let key_owner_proof = codec::Decode::decode(&mut &key_owner_proof[..]).ok()?;
 
 			Grandpa::submit_report_equivocation_extrinsic(
-				equivocation_report,
+				equivocation_proof,
 				key_owner_proof,
 			)
 		}

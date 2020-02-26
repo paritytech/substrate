@@ -319,7 +319,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: &BlockId<Block>,
 		_: ExecutionContext,
 		_: Option<(
-			sp_finality_grandpa::EquivocationReport<<Block as BlockT>::Hash, NumberFor<Block>>,
+			sp_finality_grandpa::EquivocationProof<<Block as BlockT>::Hash, NumberFor<Block>>,
 			Vec<u8>,
 		)>,
 		_: Vec<u8>,

@@ -64,7 +64,7 @@ use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
 use sp_finality_grandpa::{
-	AuthorityId, AuthoritySignature, Equivocation, EquivocationReport,
+	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof,
 	GrandpaApi, RoundNumber, SetId,
 };
 
@@ -1026,7 +1026,7 @@ where
 	};
 
 	// submit equivocation report at **best** block
-	let equivocation_report = EquivocationReport::new(
+	let equivocation_proof = EquivocationProof::new(
 		authority_set.set_id,
 		equivocation,
 	);
@@ -1034,7 +1034,7 @@ where
 	api.runtime_api()
 		.submit_report_equivocation_extrinsic(
 			&BlockId::Hash(best_header.hash()),
-			equivocation_report,
+			equivocation_proof,
 			membership_proof.encode(),
 		).map_err(Error::Client)?;
 

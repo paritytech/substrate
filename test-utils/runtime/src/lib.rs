@@ -651,7 +651,7 @@ cfg_if! {
 				}
 
 				fn submit_report_equivocation_extrinsic(
-					_equivocation_report: sp_finality_grandpa::EquivocationReport<
+					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
 						<Block as BlockT>::Hash,
 						NumberFor<Block>,
 					>,

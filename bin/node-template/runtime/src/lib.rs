@@ -371,7 +371,7 @@ impl_runtime_apis! {
 		}
 
 		fn submit_report_equivocation_extrinsic(
-			_equivocation_report: fg_primitives::EquivocationReport<
+			_equivocation_proof: fg_primitives::EquivocationProof<
 				<Block as BlockT>::Hash,
 				NumberFor<Block>,
 			>,
