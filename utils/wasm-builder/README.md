@@ -50,6 +50,8 @@ By using environment variables, you can configure which WASM binaries are built 
 - `WASM_BUILD_NO_COLOR` - Disable color output of the wasm build.
 - `WASM_TARGET_DIRECTORY` - Will copy any build wasm binary to the given directory. The path needs
                            to be absolute.
+- `WASM_BUILD_TOOLCHAIN` - The toolchain that should be used to build the wasm binaries. The
+                           format needs to be the same as used by cargo, e.g. `nightly-2020-02-20`.
 
 Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
 Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
@@ -61,5 +63,8 @@ WASM builder requires the following prerequisites for building the WASM binary:
 
 - rust nightly + `wasm32-unknown-unknown` toolchain
 
+If a specific rust nightly is installed with `rustup`, it is important that the wasm target is installed
+as well. For example if installing the rust nightly from 20.02.2020 using `rustup install nightly-2020-02-20`,
+the wasm target needs to be installed as well `rustup target add wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
 
 License: GPL-3.0

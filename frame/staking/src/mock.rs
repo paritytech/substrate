@@ -72,7 +72,7 @@ thread_local! {
 	pub(crate) static LOCAL_KEY_ACCOUNT: RefCell<AccountId> = RefCell::new(10);
 }
 
-/// Another session handler struct ti test on_disabled.
+/// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
 impl pallet_session::OneSessionHandler<AccountId> for OtherSessionHandler {
 	type Key = UintAuthorityId;
@@ -227,7 +227,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnReapAccount = (Balances, Staking, Session);
+	type OnKilledAccount = ();
 }
 impl pallet_balances::Trait for Test {
 	type Balance = Balance;
@@ -556,6 +556,7 @@ impl ExtBuilder {
 
 		let _ = pallet_session::GenesisConfig::<Test> {
 			keys: validators.iter().map(|x| (
+				*x,
 				*x,
 				SessionKeys {
 					staking: dummy_sr25519::dummy_key_for(*x),
