@@ -31,7 +31,7 @@ pub enum BenchmarkParameter {
 /// Results from running benchmarks on a FRAME pallet.
 /// Contains duration of the function call in nanoseconds along with the benchmark parameters
 /// used for that benchmark result.
-pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128);
+pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128, u128);
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
@@ -40,7 +40,7 @@ sp_api::decl_runtime_apis! {
 		fn dispatch_benchmark(
 			module: Vec<u8>,
 			extrinsic: Vec<u8>,
-			steps: u32,
+			steps: Vec<u32>,
 			repeat: u32,
 		) -> Option<Vec<BenchmarkResults>>;
 	}
@@ -78,7 +78,7 @@ pub trait Benchmarking<T> {
 	/// - `extrinsic`: The name of extrinsic function you want to benchmark encoded as bytes.
 	/// - `steps`: The number of sample points you want to take across the range of parameters.
 	/// - `repeat`: The number of times you want to repeat a benchmark.
-	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<T>, &'static str>;
+	fn run_benchmark(extrinsic: Vec<u8>, steps: Vec<u32>, repeat: u32) -> Result<Vec<T>, &'static str>;
 }
 
 /// The required setup for creating a benchmark.
