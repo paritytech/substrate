@@ -432,7 +432,7 @@ dependencies = [
  "console_log",
  "futures 0.1.29",
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "js-sys",
  "kvdb-web",
  "libp2p",
@@ -994,9 +994,9 @@ dependencies = [
 
 [[package]]
 name = "csv-core"
-version = "0.1.10"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b2466559f260f48ad25fe6317b3c8dac77b5bdb5763ac7d9d6103530663bc90"
+checksum = "9b5cadb6b25c77aeff80ba701712494213f4a8418fcda2ee11b6560c3ad0bf4c"
 dependencies = [
  "memchr",
 ]
@@ -1074,9 +1074,9 @@ checksum = "f4f47ca1860a761136924ddd2422ba77b2ea54fe8cc75b9040804a0d9d32ad97"
 
 [[package]]
 name = "derive_more"
-version = "0.99.3"
+version = "0.99.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a806e96c59a76a5ba6e18735b6cf833344671e61e7863f2edb5c518ea2cac95c"
+checksum = "2159be042979966de68315bce7034bb000c775f22e3e834e1c52ff78f041cae8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1776,9 +1776,9 @@ checksum = "a1de7508b218029b0f01662ed8f61b1c964b3ae99d6f25462d0f55a595109df6"
 
 [[package]]
 name = "futures-timer"
-version = "3.0.2"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e64b03909df88034c26dc1547e8970b91f98bdb65165d6a4e9110d94263dbb2c"
+checksum = "3de1a2b2a2a33d9e60e17980b60ee061eeaae96a5abe9121db0fdb9af167a1c5"
 dependencies = [
  "gloo-timers",
  "send_wrapper 0.4.0",
@@ -2023,18 +2023,18 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.1.7"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2c55f143919fbc0bc77e427fe2d74cf23786d7c1875666f2fde3ac3c659bb67"
+checksum = "eff2656d88f158ce120947499e971d743c05dbcbed62e5bd2f38f1698bbc3772"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "hex"
-version = "0.4.2"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
+checksum = "76cdda6bf525062a0c9e8f14ee2b37935c86b8efb6c8b69b3c83dfb518a914af"
 
 [[package]]
 name = "hex-literal"
@@ -2670,7 +2670,7 @@ dependencies = [
  "ed25519-dalek",
  "fnv",
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "lazy_static",
  "libsecp256k1",
  "log 0.4.8",
@@ -2967,7 +2967,7 @@ checksum = "f9e80ad4e3535345f3d666554ce347d3100453775611c05c60786bf9a1747a10"
 dependencies = [
  "async-std",
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "get_if_addrs",
  "ipnet",
  "libp2p-core",
@@ -3151,6 +3151,9 @@ name = "memchr"
 version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3728d817d99e5ac407411fa471ff9800a778d88a24685968b36824eaf4bee400"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "memoffset"
@@ -4921,9 +4924,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-error"
-version = "0.4.9"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "052b3c9af39c7e5e94245f820530487d19eb285faedcb40e0c3275132293f242"
+checksum = "875077759af22fa20b610ad4471d8155b321c89c3f2785526c9839b099be4e0a"
 dependencies = [
  "proc-macro-error-attr",
  "proc-macro2",
@@ -4934,9 +4937,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-error-attr"
-version = "0.4.9"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d175bef481c7902e63e3165627123fff3502f06ac043d3ef42d08c1246da9253"
+checksum = "c5717d9fa2664351a01ed73ba5ef6df09c01a521cb42cb65a061432a826f3c7a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5582,7 +5585,7 @@ dependencies = [
  "derive_more",
  "env_logger 0.7.1",
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "libp2p",
  "log 0.4.8",
  "parity-scale-codec",
@@ -5812,7 +5815,7 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.1.29",
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
@@ -5852,7 +5855,7 @@ dependencies = [
  "fork-tree",
  "futures 0.1.29",
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "log 0.4.8",
  "merlin",
  "num-bigint",
@@ -5984,7 +5987,7 @@ name = "sc-consensus-slots"
 version = "0.8.0-alpha.1"
 dependencies = [
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
@@ -6103,7 +6106,7 @@ dependencies = [
  "fork-tree",
  "futures 0.1.29",
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
@@ -6180,7 +6183,7 @@ dependencies = [
  "fnv",
  "fork-tree",
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "futures_codec",
  "libp2p",
  "linked-hash-map",
@@ -6228,7 +6231,7 @@ name = "sc-network-gossip"
 version = "0.8.0-alpha.1"
 dependencies = [
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "libp2p",
  "log 0.4.8",
  "lru",
@@ -6245,7 +6248,7 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.1.29",
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "libp2p",
  "log 0.4.8",
  "parking_lot 0.10.0",
@@ -6273,7 +6276,7 @@ dependencies = [
  "env_logger 0.7.1",
  "fnv",
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "hyper 0.13.2",
  "hyper-rustls",
  "log 0.4.8",
@@ -6403,7 +6406,7 @@ dependencies = [
  "futures 0.1.29",
  "futures 0.3.4",
  "futures-diagnose",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "lazy_static",
  "log 0.4.8",
  "parity-multiaddr 0.5.0",
@@ -6484,7 +6487,7 @@ version = "2.0.0-alpha.1"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.4",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "libp2p",
  "log 0.4.8",
  "parking_lot 0.10.0",
@@ -6590,9 +6593,9 @@ dependencies = [
 
 [[package]]
 name = "scopeguard"
-version = "1.1.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+checksum = "b42e15e59b18a828bbf5c58ea01debb36b9b096346de35d941dcb89009f24a0d"
 
 [[package]]
 name = "scroll"
@@ -6710,9 +6713,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.48"
+version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9371ade75d4c2d6cb154141b9752cf3781ec9c05e0e5cf35060e1e70ee7b9c25"
+checksum = "15913895b61e0be854afd32fd4163fcd2a3df34142cf2cb961b310ce694cbf90"
 dependencies = [
  "itoa",
  "ryu",
@@ -7042,7 +7045,7 @@ dependencies = [
  "derive_more",
  "futures 0.3.4",
  "futures-diagnose",
- "futures-timer 3.0.2",
+ "futures-timer 3.0.1",
  "libp2p",
  "log 0.4.8",
  "parity-scale-codec",
@@ -7896,18 +7899,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.11"
+version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee14bf8e6767ab4c687c9e8bc003879e042a96fd67a3ba5934eadb6536bef4db"
+checksum = "205684fd018ca14432b12cce6ea3d46763311a571c3d294e71ba3f01adcf1aad"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.11"
+version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7b51e1fbc44b5a0840be594fbc0f960be09050f2617e61e6aa43bef97cd3ef4"
+checksum = "57e4d2e50ca050ed44fb58309bdce3efa79948f84f9993ad1978de5eebdce5a7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8782,9 +8785,9 @@ checksum = "073da89bf1c84db000dd68ce660c1b4a08e3a2d28fd1e3394ab9e7abdde4a0f8"
 
 [[package]]
 name = "wasmparser"
-version = "0.51.2"
+version = "0.51.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a40d24f114a3f24b459ec292019220cff6388673b4a2c0a11483665b599ef15c"
+checksum = "9e41b27a1677fe28c115de49efca55dabb14f7fece2c32947ffb9b1064fe5bd4"
 
 [[package]]
 name = "wasmtime"
@@ -8800,7 +8803,7 @@ dependencies = [
  "region",
  "rustc-demangle",
  "target-lexicon",
- "wasmparser 0.51.2",
+ "wasmparser 0.51.1",
  "wasmtime-environ",
  "wasmtime-jit",
  "wasmtime-runtime",
@@ -8820,7 +8823,7 @@ dependencies = [
  "more-asserts",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.51.2",
+ "wasmparser 0.51.1",
  "wasmtime-environ",
 ]
 
@@ -8848,7 +8851,7 @@ dependencies = [
  "sha2",
  "thiserror",
  "toml",
- "wasmparser 0.51.2",
+ "wasmparser 0.51.1",
  "winapi 0.3.8",
  "zstd",
 ]
@@ -8870,7 +8873,7 @@ dependencies = [
  "region",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.51.2",
+ "wasmparser 0.51.1",
  "wasmtime-debug",
  "wasmtime-environ",
  "wasmtime-runtime",
@@ -8898,18 +8901,18 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "8.0.0"
+version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f9df3d716118a503b2f6bbb6ff46b21997ab0cc167b01de7a188e45e4b01e8d"
+checksum = "12a729d076deb29c8509fa71f2d427729f9394f9496844ed8fcab152f35d163d"
 dependencies = [
  "leb128",
 ]
 
 [[package]]
 name = "wat"
-version = "1.0.9"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a927b35badc29c97d97e82689eef7f72fc936d884b3391804c1bb6cd2bdccbb"
+checksum = "5795e34a4b39893653dec97e644fac85c31398e0ce1abecc48967aac83d9e8ce"
 dependencies = [
  "wast",
 ]
