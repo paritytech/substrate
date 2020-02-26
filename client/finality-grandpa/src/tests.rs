@@ -18,7 +18,10 @@
 
 use super::*;
 use environment::HasVoted;
-use sc_network_test::{Block, Hash, TestNetFactory, BlockImportAdapter, Peer, PeersClient, PassThroughVerifier, PeersFullClient};
+use sc_network_test::{
+	Block, Hash, TestNetFactory, BlockImportAdapter, Peer,
+	PeersClient, PassThroughVerifier, PeersFullClient,
+};
 use sc_network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
 use futures_timer::Delay;

@@ -56,7 +56,10 @@ use futures::prelude::*;
 use futures::StreamExt;
 use log::{debug, info};
 use futures::channel::mpsc;
-use sc_client_api::{ClientBackend, BlockchainEvents, CallExecutor, backend::{AuxStore, Backend}, ExecutionStrategy, Finalizer, TransactionFor};
+use sc_client_api::{
+	LockImportRun, BlockchainEvents, CallExecutor,
+	backend::{AuxStore, Backend}, ExecutionStrategy, Finalizer, TransactionFor,
+};
 use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
 use sc_client::Client;
 use parity_scale_codec::{Decode, Encode};
@@ -259,8 +262,9 @@ impl<Block: BlockT, Client> BlockStatus<Block> for Arc<Client> where
 
 /// A trait that includes all the client functionalities grandpa requires.
 /// Ideally this would be a trait alias, we're not there yet.
+/// tracking issue https://github.com/rust-lang/rust/issues/41517
 pub trait ClientForGrandpa<Block, BE>:
-	ClientBackend<Block, BE> + Finalizer<Block, BE> + AuxStore
+	LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 	+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
 	+ BlockchainEvents<Block> + ProvideRuntimeApi<Block>
 	+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
@@ -273,7 +277,7 @@ impl<Block, BE, T> ClientForGrandpa<Block, BE> for T
 	where
 		BE: Backend<Block>,
 		Block: BlockT,
-		T: ClientBackend<Block, BE> + Finalizer<Block, BE> + AuxStore
+		T: LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
 			+ BlockchainEvents<Block> + ProvideRuntimeApi<Block>
 			+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>,

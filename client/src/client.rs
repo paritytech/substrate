@@ -66,7 +66,7 @@ pub use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
-		ClientBackend, changes_tries_state_at_block,
+		LockImportRun, changes_tries_state_at_block,
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
@@ -218,7 +218,7 @@ impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
 	type Type = Block;
 }
 
-impl<B, E, Block, RA> ClientBackend<Block, B> for Client<B, E, Block, RA>
+impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
 	where
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
@@ -258,7 +258,7 @@ impl<B, E, Block, RA> ClientBackend<Block, B> for Client<B, E, Block, RA>
 	}
 }
 
-impl<B, E, Block, RA> ClientBackend<Block, B> for &Client<B, E, Block, RA>
+impl<B, E, Block, RA> LockImportRun<Block, B> for &Client<B, E, Block, RA>
 	where
 		Block: BlockT,
 		B: backend::Backend<Block>,
