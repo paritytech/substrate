@@ -340,7 +340,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				{
 					let refs = self.pinned.entry(hash.clone()).or_default();
 					if *refs == 0 {
-						trace!(target: "state-db", "Pinned block: {:?}", hash);
+						trace!(target: "state-db-pin", "Pinned block: {:?}", hash);
 						self.non_canonical.pin(hash);
 					}
 					*refs += 1;
@@ -357,11 +357,11 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			Entry::Occupied(mut entry) => {
 				*entry.get_mut() -= 1;
 				if *entry.get() == 0 {
-					trace!(target: "state-db", "Unpinned block: {:?}", hash);
+					trace!(target: "state-db-pin", "Unpinned block: {:?}", hash);
 					entry.remove();
 					self.non_canonical.unpin(hash);
 				} else {
-					trace!(target: "state-db", "Releasing reference for {:?}", hash);
+					trace!(target: "state-db-pin", "Releasing reference for {:?}", hash);
 				}
 			},
 			Entry::Vacant(_) => {},

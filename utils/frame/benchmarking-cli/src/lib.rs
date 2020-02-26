@@ -36,8 +36,8 @@ pub struct BenchmarkCmd {
 	pub extrinsic: String,
 
 	/// Select how many samples we should take across the variable components.
-	#[structopt(short, long, default_value = "1")]
-	pub steps: u32,
+	#[structopt(short, long, use_delimiter = true)]
+	pub steps: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run.
 	#[structopt(short, long, default_value = "1")]
@@ -97,13 +97,14 @@ impl BenchmarkCmd {
 			wasm_method,
 			None, // heap pages
 		);
+
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 			&state,
 			None,
 			&mut changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
-			&(&self.pallet, &self.extrinsic, self.steps, self.repeat).encode(),
+			&(&self.pallet, &self.extrinsic, self.steps.clone(), self.repeat).encode(),
 			Default::default(),
 		)
 		.execute(strategy.into())
