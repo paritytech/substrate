@@ -26,7 +26,9 @@ use frame_support::{
 	assert_ok, assert_noop,
 	traits::{Currency, ReservableCurrency},
 	dispatch::DispatchError, StorageMap,
+	storage::migration::{put_storage_value, get_storage_value},
 };
+use sp_io::hashing::blake2_256;
 use substrate_test_utils::assert_eq_uvec;
 use crate::Store;
 
@@ -2858,28 +2860,34 @@ fn upgrade_works() {
 		assert_eq!(Session::validators(), vec![21, 11]);
 
 		// Insert fake data to check the migration
-		<Staking as Store>::CurrentElected::put(vec![21, 31]);
-		<Staking as Store>::CurrentEraStartSessionIndex::put(5);
-		<Staking as Store>::CurrentEraStart::put(777);
-		<Staking as Store>::Stakers::insert(11, Exposure {
-			total: 10,
-			own: 10,
-			others: vec![],
-		});
-		<Staking as Store>::Stakers::insert(21, Exposure {
-			total: 20,
-			own: 20,
-			others: vec![],
-		});
-		<Staking as Store>::Stakers::insert(31, Exposure {
-			total: 30,
-			own: 30,
-			others: vec![],
-		});
-		<Staking as Store>::CurrentEraPointsEarned::put(EraPoints {
-			total: 12,
-			individual: vec![2, 10],
-		});
+		put_storage_value::<Vec<AccountId>>(b"Staking", b"CurrentElected", b"", vec![21, 31]);
+		put_storage_value::<SessionIndex>(b"Staking", b"CurrentEraStartSessionIndex", b"", 5);
+		put_storage_value::<MomentOf<Test>>(b"Staking", b"CurrentEraStart", b"", 777);
+		put_storage_value(
+			b"Staking", b"Stakers", &blake2_256(&11u64.encode()),
+			Exposure::<AccountId, Balance> {
+				total: 10,
+				own: 10,
+				others: vec![],
+			}
+		);
+		put_storage_value(
+			b"Staking", b"Stakers", &blake2_256(&21u64.encode()),
+			Exposure::<AccountId, Balance> {
+				total: 20,
+				own: 20,
+				others: vec![],
+			}
+		);
+		put_storage_value(
+			b"Staking", b"Stakers", &blake2_256(&31u64.encode()),
+			Exposure::<AccountId, Balance> {
+				total: 30,
+				own: 30,
+				others: vec![],
+			}
+		);
+		put_storage_value::<(u32, Vec<u32>)>(b"Staking", b"CurrentEraPointsEarned", b"", (12, vec![2, 10]));
 		<Staking as Store>::ErasStakers::remove_all();
 		<Staking as Store>::ErasStakersClipped::remove_all();
 
@@ -3093,13 +3101,23 @@ fn test_upgrade_from_master_works() {
 		}
 		let mut ext = sp_io::TestExternalities::from(storage);
 		ext.execute_with(|| {
-			let old_stakers = <Staking as Store>::CurrentElected::get();
+			let old_stakers =
+				get_storage_value::<Vec<AccountId>>(b"Staking", b"CurrentElected", b"").unwrap();
 			let old_staker_0 = old_stakers[0];
 			let old_staker_1 = old_stakers[1];
-			let old_current_era = <Staking as Store>::CurrentEra::get().unwrap();
-			let old_staker_0_exposure = <Staking as Store>::Stakers::get(old_staker_0);
-			let old_staker_1_exposure = <Staking as Store>::Stakers::get(old_staker_1);
-			let old_era_points_earned = <Staking as Store>::CurrentEraPointsEarned::get();
+			let old_current_era =
+				get_storage_value::<EraIndex>(b"Staking", b"CurrentEra", b"").unwrap();
+			let old_staker_0_exposure = get_storage_value::<Exposure<AccountId, Balance>>(
+				b"Staking", b"Stakers", &blake2_256(&old_staker_0.encode())
+			).unwrap();
+			let old_staker_1_exposure = get_storage_value::<Exposure<AccountId, Balance>>(
+				b"Staking", b"Stakers", &blake2_256(&old_staker_1.encode())
+			).unwrap();
+			let (
+				old_era_points_earned_total,
+				old_era_points_earned_individual
+			) = get_storage_value::<(u32, Vec<u32>)>(b"Staking", b"CurrentEraPointsEarned", b"")
+				.unwrap_or((0, vec![]));
 
 			Staking::ensure_storage_upgraded();
 			assert!(<Staking as Store>::IsUpgraded::get());
@@ -3165,16 +3183,16 @@ fn test_upgrade_from_master_works() {
 			// Check ErasRewardPoints
 			assert_eq!(<Staking as Store>::ErasRewardPoints::iter().count(), 1);
 			let mut individual = BTreeMap::new();
-			if let Some(p) = old_era_points_earned.individual.get(0) {
+			if let Some(p) = old_era_points_earned_individual.get(0) {
 				individual.insert(old_staker_0, p.clone());
 			}
-			if let Some(p) = old_era_points_earned.individual.get(1) {
+			if let Some(p) = old_era_points_earned_individual.get(1) {
 				individual.insert(old_staker_1, p.clone());
 			}
 			assert_eq!(
 				<Staking as Store>::ErasRewardPoints::get(current_era),
 				EraRewardPoints {
-					total: old_era_points_earned.total,
+					total: old_era_points_earned_total,
 					individual,
 				}
 			);

@@ -310,17 +310,6 @@ pub struct EraRewardPoints<AccountId: Ord> {
 	individual: BTreeMap<AccountId, RewardPoint>,
 }
 
-/// Deprecated. Used for migration only.
-// Reward points of an era. Used to split era total payout between validators.
-#[derive(Encode, Decode, Default)]
-pub struct EraPoints {
-	// Total number of points. Equals the sum of reward points for each validator.
-	total: u32,
-	// The reward points earned by a given validator. The index of this vec corresponds to the
-	// index into the current validator set.
-	individual: Vec<u32>,
-}
-
 /// Indicates the initial status of the staker.
 #[derive(RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -838,32 +827,6 @@ decl_storage! {
 		///
 		/// True for new networks.
 		IsUpgraded build(|_| true): bool;
-
-		/// Deprecated.
-		SlotStake: BalanceOf<T>;
-
-		/// Deprecated.
-		// The currently elected validator set keyed by stash account ID.
-		CurrentElected: Vec<T::AccountId>;
-
-		/// Deprecated
-		// The start of the current era.
-		CurrentEraStart: MomentOf<T>;
-
-		/// Deprecated
-		// The session index at which the current era started.
-		CurrentEraStartSessionIndex: SessionIndex;
-
-		/// Deprecated
-		// Rewards for the current era. Using indices of current elected set.
-		CurrentEraPointsEarned: EraPoints;
-
-		/// Deprecated
-		// Nominators for a particular account that is in action right now. You can't iterate
-		// through validators here, but you can find them in the Session module.
-		//
-		// This is keyed by the stash account.
-		Stakers: map hasher(blake2_256) T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1976,6 +1939,51 @@ impl<T: Trait> Module<T> {
 	//   * CurrentEraStartSessionIndex
 	//   * CurrentEraPointsEarned
 	fn do_upgrade() {
+		/// Deprecated storages used for migration only.
+		mod deprecated {
+			use crate::{Trait, BalanceOf, MomentOf, SessionIndex, Exposure};
+			use codec::{Encode, Decode};
+			use frame_support::{decl_module, decl_storage};
+
+			/// Reward points of an era. Used to split era total payout between validators.
+			#[derive(Encode, Decode, Default)]
+			pub struct EraPoints {
+				/// Total number of points. Equals the sum of reward points for each validator.
+				pub total: u32,
+				/// The reward points earned by a given validator. The index of this vec corresponds to the
+				/// index into the current validator set.
+				pub individual: Vec<u32>,
+			}
+
+			decl_module! {
+				pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+			}
+
+			decl_storage! {
+				pub trait Store for Module<T: Trait> as Staking {
+					pub SlotStake: BalanceOf<T>;
+
+					/// The currently elected validator set keyed by stash account ID.
+					pub CurrentElected: Vec<T::AccountId>;
+
+					/// The start of the current era.
+					pub CurrentEraStart: MomentOf<T>;
+
+					/// The session index at which the current era started.
+					pub CurrentEraStartSessionIndex: SessionIndex;
+
+					/// Rewards for the current era. Using indices of current elected set.
+					pub CurrentEraPointsEarned: EraPoints;
+
+					/// Nominators for a particular account that is in action right now. You can't iterate
+					/// through validators here, but you can find them in the Session module.
+					///
+					/// This is keyed by the stash account.
+					pub Stakers: map hasher(blake2_256) T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
+				}
+			}
+		}
+
 		#[derive(Encode, Decode)]
 		struct OldStakingLedger<AccountId, Balance: HasCompact> {
 			stash: AccountId,
@@ -1986,16 +1994,16 @@ impl<T: Trait> Module<T> {
 			unlocking: Vec<UnlockChunk<Balance>>,
 		}
 
-		let current_era_start_index = <Module<T> as Store>::CurrentEraStartSessionIndex::get();
+		let current_era_start_index = deprecated::CurrentEraStartSessionIndex::get();
 		let current_era = <Module<T> as Store>::CurrentEra::get().unwrap_or(0);
 		<Module<T> as Store>::ErasStartSessionIndex::insert(current_era, current_era_start_index);
 		<Module<T> as Store>::ActiveEra::put(current_era);
-		<Module<T> as Store>::ActiveEraStart::put(<Module<T> as Store>::CurrentEraStart::get());
+		<Module<T> as Store>::ActiveEraStart::put(deprecated::CurrentEraStart::<T>::get());
 
-		let current_elected = <Module<T> as Store>::CurrentElected::get();
+		let current_elected = deprecated::CurrentElected::<T>::get();
 		let mut current_total_stake = <BalanceOf<T>>::zero();
 		for validator in &current_elected {
-			let exposure = <Module<T> as Store>::Stakers::get(validator);
+			let exposure = deprecated::Stakers::<T>::get(validator);
 			current_total_stake += exposure.total;
 			<Module<T> as Store>::ErasStakers::insert(current_era, validator, &exposure);
 
@@ -2012,7 +2020,7 @@ impl<T: Trait> Module<T> {
 		}
 		<Module<T> as Store>::ErasTotalStake::insert(current_era, current_total_stake);
 
-		let points = <Module<T> as Store>::CurrentEraPointsEarned::get();
+		let points = deprecated::CurrentEraPointsEarned::get();
 		<Module<T> as Store>::ErasRewardPoints::insert(current_era, EraRewardPoints {
 			total: points.total,
 			individual: current_elected.iter().cloned().zip(points.individual.iter().cloned()).collect(),
@@ -2035,12 +2043,12 @@ impl<T: Trait> Module<T> {
 
 
 		// Kill old storages
-		<Module<T> as Store>::Stakers::remove_all();
-		<Module<T> as Store>::SlotStake::kill();
-		<Module<T> as Store>::CurrentElected::kill();
-		<Module<T> as Store>::CurrentEraStart::kill();
-		<Module<T> as Store>::CurrentEraStartSessionIndex::kill();
-		<Module<T> as Store>::CurrentEraPointsEarned::kill();
+		deprecated::Stakers::<T>::remove_all();
+		deprecated::SlotStake::<T>::kill();
+		deprecated::CurrentElected::<T>::kill();
+		deprecated::CurrentEraStart::<T>::kill();
+		deprecated::CurrentEraStartSessionIndex::kill();
+		deprecated::CurrentEraPointsEarned::kill();
 	}
 }
 
@@ -2069,8 +2077,12 @@ impl<T: Trait> SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>
 		-> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>>
 	{
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
+			let current_era = Self::current_era()
+				// Must be some as a new era has been created.
+				.unwrap_or(0);
+
 			validators.into_iter().map(|v| {
-				let exposure = <Stakers<T>>::get(&v);
+				let exposure = Self::eras_stakers(current_era, &v);
 				(v, exposure)
 			}).collect()
 		})
