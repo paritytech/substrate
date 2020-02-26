@@ -6,6 +6,7 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Generic Transaction Pool"
 
 [dependencies]
 derive_more = "0.99.2"

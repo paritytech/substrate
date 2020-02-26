@@ -5,6 +5,7 @@ name = 'pallet-template'
 version = "2.0.0-alpha.1"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet template"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }

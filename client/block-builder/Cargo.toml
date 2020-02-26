@@ -6,8 +6,7 @@ edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = ""
-documentation = "https://docs.rs/"
+description = "Substrate block builder"
 
 
 [dependencies]

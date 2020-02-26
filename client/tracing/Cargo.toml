@@ -6,6 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Instrumentation implementation for substrate."
 
 [dependencies]
 erased-serde = "0.3.9"
