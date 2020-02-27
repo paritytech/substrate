@@ -22,7 +22,7 @@
 //! `slog_scope::with_logger` followed with `slog_log!`.
 //!
 //! Note that you are supposed to only ever use `telemetry!` and not `slog_scope::with_logger` at
-//! the moment. Substate may eventually be reworked to get proper `slog` support, including sending
+//! the moment. Substrate may eventually be reworked to get proper `slog` support, including sending
 //! information to the telemetry.
 //!
 //! The [`Telemetry`] struct implements `Stream` and must be polled regularly (or sent to a
@@ -40,8 +40,8 @@
 //! let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
 //! 	endpoints: sc_telemetry::TelemetryEndpoints::new(vec![
 //! 		// The `0` is the maximum verbosity level of messages to send to this endpoint.
-//! 		("wss://example.com".into(), 0).expect("Invalid URL or multiaddr provided")
-//! 	]),
+//! 		("wss://example.com".into(), 0)
+//! 	]).expect("Invalid URL or multiaddr provided"),
 //! 	// Can be used to pass an external implementation of WebSockets.
 //! 	wasm_external_transport: None,
 //! });
@@ -306,7 +306,7 @@ mod telemetry_endpoints_tests {
 	#[test]
 	fn valid_endpoints() {
 		let endp = vec![("/ip4/80.123.90.4/tcp/5432".into(), 3), ("/ip4/80.123.90.4/tcp/5432".into(), 4)];
-		let telem = TelemetryEndpoints::new(endp.clone()).unwrap();
+		let telem = TelemetryEndpoints::new(endp.clone()).expect("Telemetry endpoint should be valid");
 		let mut res: Vec<(Multiaddr, u8)> = vec![];
 		for (a, b) in endp.iter() {
 			res.push((a.parse().unwrap(), *b))
