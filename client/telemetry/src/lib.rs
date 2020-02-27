@@ -309,7 +309,7 @@ mod telemetry_endpoints_tests {
 		let telem = TelemetryEndpoints::new(endp.clone()).expect("Telemetry endpoint should be valid");
 		let mut res: Vec<(Multiaddr, u8)> = vec![];
 		for (a, b) in endp.iter() {
-			res.push((a.parse().unwrap(), *b))
+			res.push((a.parse().expect("provided url should be valid"), *b))
 		}
 		assert_eq!(telem.0, res);
 	}
