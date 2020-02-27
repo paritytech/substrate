@@ -53,7 +53,7 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
-use prometheus_exporter::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
+use substrate_prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
 
 struct ServiceMetrics {
 	block_height_number: GaugeVec<U64>,
@@ -1020,7 +1020,7 @@ ServiceBuilder<
 			));
 		}
 
-		// Prometheus exporter and metrics
+		// Prometheus endpoint and metrics
 		let metrics = if let Some(port) = config.prometheus_port {
 			let registry = match prometheus_registry {
 				Some(registry) => registry,
@@ -1030,7 +1030,7 @@ ServiceBuilder<
 			let metrics = ServiceMetrics::register(&registry)?;
 
 			let future = select(
-				prometheus_exporter::init_prometheus(port, registry).boxed(),
+				substrate_prometheus_endpoint::init_prometheus(port, registry).boxed(),
 				exit.clone()
 			).map(drop);
 
