@@ -261,7 +261,7 @@ pub trait Storage {
 		if !storage_key.starts_with(prefix) {
 			panic!("Invalid storage key");
 		}
-		let storage_key = &storage_key[..prefix.len()];
+		let storage_key = &storage_key[prefix.len()..];
 		let child_info = ChildInfo::resolve_child_info(ChildType::ParentKeyId as u32, storage_key)
 			.expect("Invalid storage key");
 		self.child_storage_root(&child_info)
