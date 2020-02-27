@@ -38,6 +38,7 @@ use crate::communication::{Network as NetworkT, NetworkBridge};
 use crate::consensus_changes::SharedConsensusChanges;
 use sp_finality_grandpa::AuthorityId;
 use std::marker::{PhantomData, Unpin};
+use sc_client_api::CallExecutor;
 
 struct ObserverChain<'a, Block: BlockT, Client> {
 	client: &'a Arc<Client>,
@@ -60,7 +61,7 @@ impl<'a, Block, Client> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
 	}
 }
 
-fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
+fn grandpa_observer<BE, Block: BlockT, E, Client, S, F>(
 	client: &Arc<Client>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -75,7 +76,8 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	>,
 	F: Fn(u64),
 	BE: Backend<Block>,
-	Client: crate::ClientForGrandpa<Block, BE>,
+	Client: crate::ClientForGrandpa<Block, BE, E>,
+	E: CallExecutor<Block>,
 {
 	let authority_set = authority_set.clone();
 	let consensus_changes = consensus_changes.clone();
@@ -155,17 +157,18 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 /// NOTE: this is currently not part of the crate's public API since we don't consider
 /// it stable enough to use on a live network.
 #[allow(unused)]
-pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
+pub fn run_grandpa_observer<BE, Block: BlockT, Client, E, N, SC>(
 	config: Config,
 	link: LinkHalf<Block, Client, SC>,
 	network: N,
 	on_exit: impl futures::Future<Output=()> + Clone + Send + Unpin + 'static,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	BE: Backend<Block> + Unpin + 'static,
+	E: CallExecutor<Block> + Send + Unpin + 'static,
 	N: NetworkT<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	Client: crate::ClientForGrandpa<Block, BE> + 'static,
+	Client: crate::ClientForGrandpa<Block, BE, E> + 'static,
 {
 	let LinkHalf {
 		client,
@@ -199,21 +202,22 @@ pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
 
 /// Future that powers the observer.
 #[must_use]
-struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
+struct ObserverWork<B: BlockT, BE, Client, E, N: NetworkT<B>> {
 	observer: Pin<Box<dyn Future<Output = Result<(), CommandOrError<B::Hash, NumberFor<B>>>> + Send>>,
 	client: Arc<Client>,
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
 	keystore: Option<sc_keystore::KeyStorePtr>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
-	_phantom: PhantomData<BE>,
+	_phantom: PhantomData<(BE, E)>,
 }
 
-impl<B, BE, Client, Network> ObserverWork<B, BE, Client, Network>
+impl<B, BE, Client, E, Network> ObserverWork<B, BE, Client, E, Network>
 where
 	B: BlockT,
 	BE: Backend<B> + 'static,
-	Client: crate::ClientForGrandpa<B, BE> + 'static,
+	Client: crate::ClientForGrandpa<B, BE, E> + 'static,
+	E: CallExecutor<B> + 'static,
 	Network: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 {
@@ -324,11 +328,12 @@ where
 	}
 }
 
-impl<B, BE, C, N> Future for ObserverWork<B, BE, C, N>
+impl<B, BE, C, E, N> Future for ObserverWork<B, BE, C, E, N>
 where
 	B: BlockT,
 	BE: Backend<B> + Unpin + 'static,
-	C: crate::ClientForGrandpa<B, BE>+ 'static,
+	E: CallExecutor<B> + Unpin + 'static,
+	C: crate::ClientForGrandpa<B, BE, E>+ 'static,
 	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 {

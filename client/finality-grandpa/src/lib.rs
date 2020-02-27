@@ -56,12 +56,8 @@ use futures::prelude::*;
 use futures::StreamExt;
 use log::{debug, info};
 use futures::channel::mpsc;
-use sc_client_api::{
-	LockImportRun, BlockchainEvents, CallExecutor,
-	backend::{AuxStore, Backend}, ExecutionStrategy, Finalizer, TransactionFor,
-};
+use sc_client_api::{LockImportRun, BlockchainEvents, CallExecutor, backend::{AuxStore, Backend}, ExecutionStrategy, Finalizer, TransactionFor, ExecutorProvider};
 use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
-use sc_client::Client;
 use parity_scale_codec::{Decode, Encode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
@@ -263,23 +259,25 @@ impl<Block: BlockT, Client> BlockStatus<Block> for Arc<Client> where
 /// A trait that includes all the client functionalities grandpa requires.
 /// Ideally this would be a trait alias, we're not there yet.
 /// tracking issue https://github.com/rust-lang/rust/issues/41517
-pub trait ClientForGrandpa<Block, BE>:
+pub trait ClientForGrandpa<Block, BE, E>:
 	LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 	+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
-	+ BlockchainEvents<Block> + ProvideRuntimeApi<Block>
+	+ BlockchainEvents<Block> + ProvideRuntimeApi<Block> + ExecutorProvider<Block, E>
 	+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
 	where
 		BE: Backend<Block>,
 		Block: BlockT,
+		E: CallExecutor<Block>,
 {}
 
-impl<Block, BE, T> ClientForGrandpa<Block, BE> for T
+impl<Block, BE, E, T> ClientForGrandpa<Block, BE, E> for T
 	where
 		BE: Backend<Block>,
 		Block: BlockT,
+		E: CallExecutor<Block>,
 		T: LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
-			+ BlockchainEvents<Block> + ProvideRuntimeApi<Block>
+			+ BlockchainEvents<Block> + ProvideRuntimeApi<Block> + ExecutorProvider<Block, E>
 			+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>,
 {}
 
@@ -387,11 +385,9 @@ pub trait GenesisAuthoritySetProvider<Block: BlockT> {
 	fn get(&self) -> Result<AuthorityList, ClientError>;
 }
 
-impl<B, E, Block: BlockT, RA> GenesisAuthoritySetProvider<Block> for Client<B, E, Block, RA>
+impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block> for Arc<dyn ExecutorProvider<Block, E>>
 	where
-		B: Backend<Block> + Send + Sync + 'static,
 		E: CallExecutor<Block> + Send + Sync,
-		RA: Send + Sync,
 {
 	fn get(&self) -> Result<AuthorityList, ClientError> {
 		// This implementation uses the Grandpa runtime API instead of reading directly from the
@@ -416,18 +412,19 @@ impl<B, E, Block: BlockT, RA> GenesisAuthoritySetProvider<Block> for Client<B, E
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<BE, Block: BlockT, Client, SC>(
+pub fn block_import<BE, Block: BlockT, Client, E, SC>(
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 ) -> Result<(
-		GrandpaBlockImport<BE, Block, Client, SC>,
+		GrandpaBlockImport<BE, Block, Client, E, SC>,
 		LinkHalf<Block, Client, SC>,
 	), ClientError>
 where
 	SC: SelectChain<Block>,
 	BE: Backend<Block> + 'static,
-	Client: ClientForGrandpa<Block, BE> + 'static,
+	E: CallExecutor<Block>,
+	Client: ClientForGrandpa<Block, BE, E> + 'static,
 {
 	let chain_info = client.info();
 	let genesis_hash = chain_info.genesis_hash;
@@ -464,7 +461,7 @@ where
 	))
 }
 
-fn global_communication<BE, Block: BlockT, C, N>(
+fn global_communication<BE, Block: BlockT, C, E, N>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: Arc<C>,
@@ -480,7 +477,8 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	> + Unpin,
 ) where
 	BE: Backend<Block> + 'static,
-	C: ClientForGrandpa<Block, BE> + 'static,
+	C: ClientForGrandpa<Block, BE, E> + 'static,
+	E: CallExecutor<Block>,
 	N: NetworkT<Block>,
 	NumberFor<Block>: BlockNumberOps,
 {
@@ -555,7 +553,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR, X> {
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR, X>(
+pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, E, N, SC, VR, X>(
 	grandpa_params: GrandpaParams<Block, C, N, SC, VR, X>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	Block::Hash: Ord,
@@ -566,7 +564,8 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR, X>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	X: futures::Future<Output=()> + Clone + Send + Unpin + 'static,
-	C: ClientForGrandpa<Block, BE> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
+	C: ClientForGrandpa<Block, BE, E> + 'static,
 {
 	let GrandpaParams {
 		mut config,
@@ -648,18 +647,19 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR, X>(
 
 /// Future that powers the voter.
 #[must_use]
-struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
+struct VoterWork<B, Block: BlockT, C, E, N: NetworkT<Block>, SC, VR> {
 	voter: Pin<Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> + Send>>,
-	env: Arc<Environment<B, Block, C, N, SC, VR>>,
+	env: Arc<Environment<B, Block, C, E, N, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	network: NetworkBridge<Block, N>,
 }
 
-impl<B, Block, C, N, SC, VR> VoterWork<B, Block, C, N, SC, VR>
+impl<B, Block, C, E, N, SC, VR> VoterWork<B, Block, C, E, N, SC, VR>
 where
 	Block: BlockT,
 	B: Backend<Block> + 'static,
-	C: ClientForGrandpa<Block, B> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
+	C: ClientForGrandpa<Block, B, E> + 'static,
 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
@@ -832,14 +832,15 @@ where
 	}
 }
 
-impl<B, Block, C, N, SC, VR> Future for VoterWork<B, Block, C, N, SC, VR>
+impl<B, Block, C, E, N, SC, VR> Future for VoterWork<B, Block, C, E, N, SC, VR>
 where
 	Block: BlockT,
 	B: Backend<Block> + 'static,
 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
-	C: ClientForGrandpa<Block, B> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
+	C: ClientForGrandpa<Block, B, E> + 'static,
 	VR: VotingRule<Block, C> + Clone + 'static,
 {
 	type Output = Result<(), Error>;

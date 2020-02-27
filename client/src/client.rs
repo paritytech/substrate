@@ -76,7 +76,7 @@ pub use sc_client_api::{
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	notifications::{StorageNotifications, StorageEventStream},
-	CallExecutor,
+	CallExecutor, ExecutorProvider, ProofProvider,
 };
 use sp_blockchain::Error;
 
@@ -86,7 +86,6 @@ use crate::{
 	in_mem, genesis, cht, block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
 use crate::client::backend::KeyIterator;
-use sc_client_api::ExecutorProvider;
 
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
@@ -289,7 +288,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Vec<u8>> {
-		Ok(self.storage(id, &StorageKey(well_known_keys::CODE.to_vec()))?
+		Ok(StorageProvider::storage(self, id, &StorageKey(well_known_keys::CODE.to_vec()))?
 			.expect("None is returned if there's no value stored for the given key;\
 				':code' key is always defined; qed").0)
 	}
@@ -297,52 +296,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		self.executor.runtime_version(id)
-	}
-
-	/// Reads storage value at a given block + key, returning read proof.
-	pub fn read_proof<I>(&self, id: &BlockId<Block>, keys: I) -> sp_blockchain::Result<StorageProof> where
-		I: IntoIterator,
-		I::Item: AsRef<[u8]>,
-	{
-		self.state_at(id)
-			.and_then(|state| prove_read(state, keys)
-				.map_err(Into::into))
-	}
-
-	/// Reads child storage value at a given block + storage_key + key, returning
-	/// read proof.
-	pub fn read_child_proof<I>(
-		&self,
-		id: &BlockId<Block>,
-		storage_key: &[u8],
-		child_info: ChildInfo,
-		keys: I,
-	) -> sp_blockchain::Result<StorageProof> where
-		I: IntoIterator,
-		I::Item: AsRef<[u8]>,
-	{
-		self.state_at(id)
-			.and_then(|state| prove_child_read(state, storage_key, child_info, keys)
-				.map_err(Into::into))
-	}
-
-	/// Execute a call to a contract on top of state in a block of given hash
-	/// AND returning execution proof.
-	///
-	/// No changes are made.
-	pub fn execution_proof(&self,
-		id: &BlockId<Block>,
-		method: &str,
-		call_data: &[u8]
-	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let state = self.state_at(id)?;
-		let header = self.prepare_environment_block(id)?;
-		prove_execution(state, header, &self.executor, method, call_data)
-	}
-
-	/// Reads given header and generates CHT-based header proof.
-	pub fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, StorageProof)> {
-		self.header_proof_with_cht_size(id, cht::size())
 	}
 
 	/// Get block hash by number.
@@ -377,32 +330,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			headers,
 		)?;
 		Ok((header, proof))
-	}
-
-	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
-	/// `min` is the hash of the first block, which changes trie root is known to the requester - when we're using
-	/// changes tries from ascendants of this block, we should provide proofs for changes tries roots
-	/// `max` is the hash of the last block known to the requester - we can't use changes tries from descendants
-	/// of this block.
-	/// Works only for runtimes that are supporting changes tries.
-	pub fn key_changes_proof(
-		&self,
-		first: Block::Hash,
-		last: Block::Hash,
-		min: Block::Hash,
-		max: Block::Hash,
-		storage_key: Option<&StorageKey>,
-		key: &StorageKey,
-	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
-		self.key_changes_proof_with_cht_size(
-			first,
-			last,
-			min,
-			max,
-			storage_key,
-			key,
-			cht::size(),
-		)
 	}
 
 	/// Does the same work as `key_changes_proof`, but assumes that CHTs are of passed size.
@@ -1180,6 +1107,65 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			parent_header.hash(),
 			Default::default(),
 		))
+	}
+}
+
+impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+{
+	fn read_proof(&self, id: &BlockId<Block>, keys: &[Vec<u8>]) -> sp_blockchain::Result<StorageProof> {
+		self.state_at(id)
+			.and_then(|state| prove_read(state, keys)
+				.map_err(Into::into))
+	}
+
+	fn read_child_proof(
+		&self,
+		id: &BlockId<Block>,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		keys: &[Vec<u8>],
+	) -> sp_blockchain::Result<StorageProof> {
+		self.state_at(id)
+			.and_then(|state| prove_child_read(state, storage_key, child_info, keys)
+				.map_err(Into::into))
+	}
+
+	fn execution_proof(
+		&self,
+		id: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8]
+	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
+		let state = self.state_at(id)?;
+		let header = self.prepare_environment_block(id)?;
+		prove_execution(state, header, &self.executor, method, call_data)
+	}
+
+	fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, StorageProof)> {
+		self.header_proof_with_cht_size(id, cht::size())
+	}
+
+	fn key_changes_proof(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		min: Block::Hash,
+		max: Block::Hash,
+		storage_key: Option<&StorageKey>,
+		key: &StorageKey,
+	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
+		self.key_changes_proof_with_cht_size(
+			first,
+			last,
+			min,
+			max,
+			storage_key,
+			key,
+			cht::size(),
+		)
 	}
 }
 

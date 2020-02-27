@@ -40,6 +40,7 @@ use crate::finality_proof::{
 	AuthoritySetForFinalityChecker, ProvableJustification, make_finality_proof_request,
 };
 use crate::justification::GrandpaJustification;
+use sc_client_api::CallExecutor;
 
 /// LightAuthoritySet is saved under this key in aux storage.
 const LIGHT_AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
@@ -47,7 +48,7 @@ const LIGHT_AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const LIGHT_CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 
 /// Create light block importer.
-pub fn light_block_import<BE, Block: BlockT, Client>(
+pub fn light_block_import<BE, Block: BlockT, Client, E>(
 	client: Arc<Client>,
 	backend: Arc<BE>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
@@ -55,7 +56,8 @@ pub fn light_block_import<BE, Block: BlockT, Client>(
 ) -> Result<GrandpaLightBlockImport<BE, Block, Client>, ClientError>
 	where
 		BE: Backend<Block>,
-		Client: crate::ClientForGrandpa<Block, BE>,
+		E: CallExecutor<Block>,
+		Client: crate::ClientForGrandpa<Block, BE, E>,
 {
 	let info = client.info();
 	let import_data = load_aux_import_data(
@@ -647,7 +649,7 @@ pub mod tests {
 	}
 
 	/// Creates light block import that ignores justifications that came outside of finality proofs.
-	pub fn light_block_import_without_justifications<BE, Block: BlockT, Client>(
+	pub fn light_block_import_without_justifications<BE, Block: BlockT, Client, E>(
 		client: Arc<Client>,
 		backend: Arc<BE>,
 		genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
@@ -655,7 +657,8 @@ pub mod tests {
 	) -> Result<NoJustificationsImport<BE, Block, Client>, ClientError>
 		where
 			BE: Backend<Block> + 'static,
-			Client: crate::ClientForGrandpa<Block, BE>,
+			E: CallExecutor<Block>,
+			Client: crate::ClientForGrandpa<Block, BE, E>,
 	{
 		light_block_import(client, backend, genesis_authorities_provider, authority_set_provider)
 			.map(NoJustificationsImport)

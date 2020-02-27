@@ -379,7 +379,7 @@ pub mod tests {
 			.and_then(|v| Decode::decode(&mut &v.0[..]).ok()).unwrap();
 		let remote_read_proof = remote_client.read_proof(
 			&remote_block_id,
-			&[well_known_keys::HEAP_PAGES],
+			&[well_known_keys::HEAP_PAGES.to_vec()],
 		).unwrap();
 
 		// check remote read proof locally
@@ -427,7 +427,7 @@ pub mod tests {
 			&remote_block_id,
 			b":child_storage:default:child1",
 			CHILD_INFO_1,
-			&[b"key1"],
+			&[vec!["key1"]],
 		).unwrap();
 
 		// check locally
