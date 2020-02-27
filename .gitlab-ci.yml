@@ -77,7 +77,7 @@ variables:
   dependencies:                    []
   interruptible:                   true
   tags:
-    - linux-docker
+    - ci6
 
 .build-only:                       &build-only
   only:
