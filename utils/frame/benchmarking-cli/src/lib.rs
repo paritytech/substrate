@@ -39,13 +39,13 @@ pub struct BenchmarkCmd {
 	#[structopt(short, long, use_delimiter = true)]
 	pub steps: Vec<u32>,
 
-	/// Indicates minimum number for each of the component ranges.
+	/// Indicates lowest values for each of the component ranges.
 	#[structopt(long, use_delimiter = true)]
-	pub mins: Vec<u32>,
+	pub lowest_range_values: Vec<u32>,
 
-	/// Indicates maximum number for each of the component ranges.
+	/// Indicates highest values for each of the component ranges.
 	#[structopt(long, use_delimiter = true)]
-	pub maxs: Vec<u32>,
+	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run.
 	#[structopt(short, long, default_value = "1")]
@@ -115,8 +115,8 @@ impl BenchmarkCmd {
 			&(
 				&self.pallet,
 				&self.extrinsic,
-				self.mins.clone(),
-				self.maxs.clone(),
+				self.lowest_range_values.clone(),
+				self.highest_range_values.clone(),
 				self.steps.clone(),
 				self.repeat,
 			).encode(),
@@ -130,11 +130,11 @@ impl BenchmarkCmd {
 		if let Some(results) = results {
 			// Print benchmark metadata
 			println!(
-				"Pallet: {:?}, Extrinsic: {:?}, Mins: {:?}, Maxs: {:?}, Steps: {:?}, Repeat: {:?}",
+				"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
 				self.pallet,
 				self.extrinsic,
-				self.mins,
-				self.maxs,
+				self.lowest_range_values,
+				self.highest_range_values,
 				self.steps,
 				self.repeat,
 			);
