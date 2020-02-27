@@ -140,13 +140,13 @@ macro_rules! impl_benchmark {
 		$( $name:ident ),*
 	) => {
 		impl<T: Trait> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T> {
-			fn run_benchmark(extrinsic: Vec<u8>, steps: Vec<u32>, repeat: u32) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
+			fn run_benchmark(extrinsic: Vec<u8>, steps: Vec<u32>, repeat: u32) -> Result<Vec<$crate::BenchmarkResults>, Vec<u8>> {
 				// Map the input to the selected benchmark.
 				let extrinsic = sp_std::str::from_utf8(extrinsic.as_slice())
-					.map_err(|_| "Could not find extrinsic")?;
+					.map_err(|_| "Could not find extrinsic".as_bytes().to_vec())?;
 				let selected_benchmark = match extrinsic {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
-					_ => return Err("Could not find extrinsic."),
+					_ => return Err("Could not find extrinsic.".as_bytes().to_vec()),
 				};
 
 				// Warm up the DB

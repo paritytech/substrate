@@ -42,7 +42,7 @@ sp_api::decl_runtime_apis! {
 			extrinsic: Vec<u8>,
 			steps: Vec<u32>,
 			repeat: u32,
-		) -> Option<Vec<BenchmarkResults>>;
+		) -> Result<Vec<BenchmarkResults>, Vec<u8>>;
 	}
 }
 
@@ -78,7 +78,7 @@ pub trait Benchmarking<T> {
 	/// - `extrinsic`: The name of extrinsic function you want to benchmark encoded as bytes.
 	/// - `steps`: The number of sample points you want to take across the range of parameters.
 	/// - `repeat`: The number of times you want to repeat a benchmark.
-	fn run_benchmark(extrinsic: Vec<u8>, steps: Vec<u32>, repeat: u32) -> Result<Vec<T>, &'static str>;
+	fn run_benchmark(extrinsic: Vec<u8>, steps: Vec<u32>, repeat: u32) -> Result<Vec<T>, Vec<u8>>;
 }
 
 /// The required setup for creating a benchmark.

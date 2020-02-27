@@ -109,34 +109,37 @@ impl BenchmarkCmd {
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
-		let results = <Option<Vec<BenchmarkResults>> as Decode>::decode(&mut &result[..])
-			.unwrap_or(None);
+		let results = <Result<Vec<BenchmarkResults>, Vec<u8>> as Decode>::decode(&mut &result[..])
+			.unwrap_or(Err(b"failed to decode results".to_vec()));
 
-		if let Some(results) = results {
-			// Print benchmark metadata
-			println!(
-				"Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}",
-				self.pallet,
-				self.extrinsic,
-				self.steps,
-				self.repeat,
-			);
+		match results {
+			Ok(results) => {
+				// Print benchmark metadata
+				println!(
+					"Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}",
+					self.pallet,
+					self.extrinsic,
+					self.steps,
+					self.repeat,
+				);
 
-			// Print the table header
-			results[0].0.iter().for_each(|param| print!("{:?},", param.0));
+				// Print the table header
+				results[0].0.iter().for_each(|param| print!("{:?},", param.0));
 
-			print!("extrinsic_time,storage_root_time\n");
-			// Print the values
-			results.iter().for_each(|result| {
-				let parameters = &result.0;
-				parameters.iter().for_each(|param| print!("{:?},", param.1));
-				// Print extrinsic time and storage root time
-				print!("{:?},{:?}\n", result.1, result.2);
-			});
+				print!("extrinsic_time,storage_root_time\n");
+				// Print the values
+				results.iter().for_each(|result| {
+					let parameters = &result.0;
+					parameters.iter().for_each(|param| print!("{:?},", param.1));
+					// Print extrinsic time and storage root time
+					print!("{:?},{:?}\n", result.1, result.2);
+				});
 
-			eprintln!("Done.");
-		} else {
-			eprintln!("No Results.");
+				eprintln!("Done.");
+			}
+			Err(err) => {
+				eprintln!("Error: {:?}", std::str::from_utf8(&err).unwrap());
+			}
 		}
 
 		Ok(())

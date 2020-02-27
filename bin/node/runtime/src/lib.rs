@@ -821,14 +821,14 @@ impl_runtime_apis! {
 			extrinsic: Vec<u8>,
 			steps: Vec<u32>,
 			repeat: u32,
-		) -> Option<Vec<frame_benchmarking::BenchmarkResults>> {
+		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, Vec<u8>> {
 			use frame_benchmarking::Benchmarking;
 
 			match module.as_slice() {
-				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
-				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
-				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
-				_ => None,
+				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat),
+				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat),
+				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat),
+				_ => Err("Benchmark not found for this pallet.".as_bytes().to_vec()),
 			}
 		}
 	}
