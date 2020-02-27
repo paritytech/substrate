@@ -60,7 +60,7 @@ use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
 	CallApiAtParams,
 };
-use sc_block_builder::BlockBuilderApi;
+use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 
 pub use sc_client_api::{
 	backend::{
@@ -863,33 +863,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		)
 	}
 
-	/// Create a new block, built on top of `parent`.
-	///
-	/// When proof recording is enabled, all accessed trie nodes are saved.
-	/// These recorded trie nodes can be used by a third party to proof the
-	/// output of this block builder without having access to the full storage.
-	pub fn new_block_at<R: Into<RecordProof>>(
-		&self,
-		parent: &BlockId<Block>,
-		inherent_digests: DigestFor<Block>,
-		record_proof: R,
-	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> where
-		E: Clone + Send + Sync,
-		RA: Send + Sync,
-		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error> +
-			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-	{
-		sc_block_builder::BlockBuilder::new(
-			self,
-			self.expect_block_hash_from_id(parent)?,
-			self.expect_block_number_from_id(parent)?,
-			record_proof.into(),
-			inherent_digests,
-			&self.backend
-		)
-	}
-
 	/// Apply a checked and validated block to an operation. If a justification is provided
 	/// then `finalized` *must* be true.
 	fn apply_block(
@@ -1418,6 +1391,32 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			parent_header.hash(),
 			Default::default(),
 		))
+	}
+}
+
+impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Block, RA>
+	where
+		B: backend::Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static,
+		Block: BlockT,
+		Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
+		<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
+			+ BlockBuilderApi<Block, Error = Error>,
+{
+	fn new_block_at<R: Into<RecordProof>>(
+		&self,
+		parent: &BlockId<Block>,
+		inherent_digests: DigestFor<Block>,
+		record_proof: R,
+	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
+		sc_block_builder::BlockBuilder::new(
+			self,
+			self.expect_block_hash_from_id(parent)?,
+			self.expect_block_number_from_id(parent)?,
+			record_proof.into(),
+			inherent_digests,
+			&self.backend
+		)
 	}
 }
 
