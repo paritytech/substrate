@@ -276,7 +276,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	SessionIndex,
-	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence},
+	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence, OffenceError},
 };
 #[cfg(feature = "std")]
 use sp_runtime::{Serialize, Deserialize};
@@ -1828,7 +1828,7 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	R: ReportOffence<Reporter, Offender, O>,
 	O: Offence<Offender>,
 {
-	fn report_offence(reporters: Vec<Reporter>, offence: O) {
+	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
 		<Module<T>>::ensure_storage_upgraded();
 
 		// disallow any slashing from before the current bonding period.
@@ -1840,7 +1840,8 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 		} else {
 			<Module<T>>::deposit_event(
 				RawEvent::OldSlashingReportDiscarded(offence_session)
-			)
+			);
+			Ok(())
 		}
 	}
 }

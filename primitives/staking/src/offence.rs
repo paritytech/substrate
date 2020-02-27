@@ -91,14 +91,21 @@ pub trait Offence<Offender> {
 	) -> Perbill;
 }
 
+/// Errors that may happen on offence reports.
+#[derive(PartialEq, sp_runtime::RuntimeDebug)]
+pub enum OffenceError {
+	/// The report has already been sumbmitted.
+	DuplicateReport,
+}
+
 /// A trait for decoupling offence reporters from the actual handling of offence reports.
 pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
 	/// Report an `offence` and reward given `reporters`.
-	fn report_offence(reporters: Vec<Reporter>, offence: O);
+	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError>;
 }
 
 impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender, O> for () {
-	fn report_offence(_reporters: Vec<Reporter>, _offence: O) {}
+	fn report_offence(_reporters: Vec<Reporter>, _offence: O) -> Result<(), OffenceError> { Ok(()) }
 }
 
 /// A trait to take action on an offence.
