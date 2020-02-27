@@ -66,7 +66,7 @@ fn bench_block_import(c: &mut Criterion) {
 		bench_db.path().display(),
 	);
 
-	c.bench_function_over_inputs("import block B-0001",
+	c.bench_function_over_inputs("import-block-B-0001",
 		move |bencher, profile| {
 			bencher.iter_batched(
 				|| {
@@ -117,7 +117,7 @@ fn bench_account_reaping(c: &mut Criterion) {
 	let mut bench_db = BenchDb::new(100);
 	let block = bench_db.generate_block(BlockType::RandomTransfersReaping(100));
 
-	c.bench_function_over_inputs("account reaping B-0002",
+	c.bench_function_over_inputs("import-block-reaping-B-0002",
 		move |bencher, profile| {
 			bencher.iter_batched(
 				|| {
@@ -146,7 +146,7 @@ fn bench_account_ed25519(c: &mut Criterion) {
 	let mut bench_db = BenchDb::with_key_types(100, KeyTypes::Ed25519);
 	let block = bench_db.generate_block(BlockType::RandomTransfers(100));
 
-	c.bench_function_over_inputs("import block with ed25519 B-0003",
+	c.bench_function_over_inputs("import-block-ed25519-B-0003",
 		move |bencher, profile| {
 			bencher.iter_batched(
 				|| {
