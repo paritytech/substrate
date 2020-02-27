@@ -686,7 +686,8 @@ mod tests {
 			"test-id",
 			|| (),
 			vec!["boo".to_string()],
-			TelemetryEndpoints::new(vec![("wss://foo/bar".to_string(), 42)]).ok(),
+			Some(TelemetryEndpoints::new(vec![("wss://foo/bar".to_string(), 42)])
+				.expect("provided url should be valid")),
 			None,
 			None,
 			None::<()>,
