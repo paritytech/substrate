@@ -4989,19 +4989,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prometheus-exporter"
-version = "0.8.0-alpha.2"
-dependencies = [
- "async-std",
- "derive_more",
- "futures-util",
- "hyper 0.13.2",
- "log 0.4.8",
- "prometheus",
- "tokio 0.2.11",
-]
-
-[[package]]
 name = "prost"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5685,7 +5672,6 @@ dependencies = [
  "log 0.4.8",
  "names",
  "parity-util-mem",
- "prometheus-exporter",
  "regex",
  "rpassword",
  "sc-client-api",
@@ -5702,6 +5688,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "structopt",
+ "substrate-prometheus-endpoint",
  "tempfile",
  "time",
  "tokio 0.2.11",
@@ -6413,7 +6400,6 @@ dependencies = [
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.10.0",
- "prometheus-exporter",
  "sc-chain-spec",
  "sc-client",
  "sc-client-api",
@@ -6442,6 +6428,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-transaction-pool",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "sysinfo",
  "target_info",
@@ -7660,6 +7647,19 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "substrate-test-runtime-client",
+]
+
+[[package]]
+name = "substrate-prometheus-endpoint"
+version = "0.8.0-alpha.2"
+dependencies = [
+ "async-std",
+ "derive_more",
+ "futures-util",
+ "hyper 0.13.2",
+ "log 0.4.8",
+ "prometheus",
+ "tokio 0.2.11",
 ]
 
 [[package]]
