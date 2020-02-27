@@ -47,7 +47,7 @@ use node_runtime::{
 	AccountId,
 	Signature,
 };
-use sp_core::ExecutionContext;
+use sp_core::{ExecutionContext, blake2_256};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_inherents::InherentData;
@@ -69,14 +69,18 @@ pub struct BenchKeyring {
 	accounts: BTreeMap<AccountId, BenchPair>,
 }
 
+#[derive(Clone)]
 enum BenchPair {
 	Sr25519(sr25519::Pair),
 	Ed25519(ed25519::Pair),
 }
 
 impl BenchPair {
-	fn sign(payload: &[u8]) -> MultiSignature {
-
+	fn sign(&self, payload: &[u8]) -> Signature {
+		match self {
+			Self::Sr25519(pair) => pair.sign(payload).into(),
+			Self::Ed25519(pair) => pair.sign(payload).into(),
+		}
 	}
 }
 
@@ -124,8 +128,6 @@ impl Clone for BenchDb {
 pub enum BlockType {
 	/// Bunch of random transfers.
 	RandomTransfers(usize),
-	/// Bunch of random transfers signed with ed25519.
-	RandomTransfersEd25519(usize),
 	/// Bunch of random transfers that drain all of the source balance.
 	RandomTransfersReaping(usize),
 }
@@ -142,14 +144,10 @@ impl BlockType {
 impl BenchDb {
 	/// New immutable benchmarking database.
 	///
-	/// This will generate database files in random temporary directory
-	/// and keep it there until struct is dropped.
-	///
-	/// You can `clone` this database or you can `create_context` from it
-	/// (which also do `clone`) to run actual operation against new database
-	/// which will be identical to this.
-	pub fn new(keyring_length: usize) -> Self {
-		let keyring = BenchKeyring::new(keyring_length);
+	/// See [`new`] method documentation for more information about the purpose
+	/// of this structure.
+	pub fn with_key_types(keyring_length: usize, key_types: KeyTypes) -> Self {
+		let keyring = BenchKeyring::new(keyring_length, key_types);
 
 		let dir = tempfile::tempdir().expect("temp dir creation failed");
 		log::trace!(
@@ -161,6 +159,18 @@ impl BenchDb {
 		let directory_guard = Guard(dir);
 
 		BenchDb { keyring, directory_guard }
+	}
+
+	/// New immutable benchmarking database.
+	///
+	/// This will generate database files in random temporary directory
+	/// and keep it there until struct is dropped.
+	///
+	/// You can `clone` this database or you can `create_context` from it
+	/// (which also do `clone`) to run actual operation against new database
+	/// which will be identical to this.
+	pub fn new(keyring_length: usize) -> Self {
+		Self::with_key_types(keyring_length, KeyTypes::Sr25519)
 	}
 
 	// This should return client that is doing everything that full node
@@ -300,8 +310,11 @@ impl BenchDb {
 	}
 }
 
+/// Key types to be used in benching keyring
 pub enum KeyTypes {
+	/// sr25519 signing keys
 	Sr25519,
+	/// ed25519 signing keys
 	Ed25519,
 }
 
@@ -315,17 +328,17 @@ impl BenchKeyring {
 		for n in 0..length {
 			let seed = format!("//endowed-user/{}", n);
 			let (account_id, pair) = match key_types {
-				Sr25519 => {
+				KeyTypes::Sr25519 => {
 					let pair = sr25519::Pair::from_string(&seed, None).expect("failed to generate pair");
 					let account_id = AccountPublic::from(pair.public()).into_account();
-					(account_id, pair)
+					(account_id, BenchPair::Sr25519(pair))
 				},
-				Ed25519 => {
-					let pair = ed25519::Pair::from_string(&seed, None).expect("failed to generate pair");
+				KeyTypes::Ed25519 => {
+					let pair = ed25519::Pair::from_seed(&blake2_256(seed.as_bytes()));
 					let account_id = AccountPublic::from(pair.public()).into_account();
-					(account_id, pair)
+					(account_id, BenchPair::Ed25519(pair))
 				},
-			}
+			};
 			accounts.insert(account_id, pair);
 		}
 

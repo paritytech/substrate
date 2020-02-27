@@ -29,7 +29,7 @@
 //! It is not supposed to measure runtime modules weight correctness
 
 use std::fmt;
-use node_testing::bench::{BenchDb, Profile, BlockType};
+use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes};
 use node_primitives::Block;
 use sp_runtime::generic::BlockId;
 use criterion::{Criterion, criterion_group, criterion_main};
@@ -38,7 +38,7 @@ use sc_client_api::backend::Backend;
 criterion_group!(
 	name = benches;
 	config = Criterion::default().sample_size(50).warm_up_time(std::time::Duration::from_secs(20));
-	targets = bench_block_import, bench_account_reaping
+	targets = bench_block_import, bench_account_reaping, bench_account_ed25519
 );
 criterion_group!(
 	name = wasm_size;
@@ -143,8 +143,8 @@ fn bench_account_reaping(c: &mut Criterion) {
 fn bench_account_ed25519(c: &mut Criterion) {
 	sc_cli::init_logger("");
 
-	let mut bench_db = BenchDb::new(100);
-	let block = bench_db.generate_block(BlockType::RandomTransfersEd25519(200));
+	let mut bench_db = BenchDb::with_key_types(100, KeyTypes::Ed25519);
+	let block = bench_db.generate_block(BlockType::RandomTransfers(100));
 
 	c.bench_function_over_inputs("ed25519 B-0003",
 		move |bencher, profile| {
