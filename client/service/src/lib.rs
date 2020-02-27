@@ -331,7 +331,7 @@ where
 		self.exit.clone()
 	}
 
-	fn prometheus_registry(&self) -> Option<prometheus_exporter::Registry> {
+	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
 		self.prometheus_registry.clone()
 	}
 }
