@@ -423,31 +423,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "browser-utils"
-version = "0.8.0-alpha.2"
-dependencies = [
- "chrono",
- "clear_on_drop",
- "console_error_panic_hook",
- "console_log",
- "futures 0.1.29",
- "futures 0.3.4",
- "futures-timer 3.0.1",
- "js-sys",
- "kvdb-web",
- "libp2p",
- "log 0.4.8",
- "rand 0.6.5",
- "rand 0.7.3",
- "sc-chain-spec",
- "sc-informant",
- "sc-network",
- "sc-service",
- "wasm-bindgen",
- "wasm-bindgen-futures",
-]
-
-[[package]]
 name = "bs58"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3348,7 +3323,6 @@ name = "node-cli"
 version = "2.0.0-alpha.2"
 dependencies = [
  "assert_cmd",
- "browser-utils",
  "frame-benchmarking-cli",
  "frame-support",
  "frame-system",
@@ -3406,6 +3380,7 @@ dependencies = [
  "sp-timestamp",
  "sp-transaction-pool",
  "structopt",
+ "substrate-browser-utils",
  "substrate-build-script-utils",
  "tempfile",
  "tracing",
@@ -7604,6 +7579,31 @@ dependencies = [
  "pbkdf2",
  "schnorrkel",
  "sha2",
+]
+
+[[package]]
+name = "substrate-browser-utils"
+version = "0.8.0-alpha.2"
+dependencies = [
+ "chrono",
+ "clear_on_drop",
+ "console_error_panic_hook",
+ "console_log",
+ "futures 0.1.29",
+ "futures 0.3.4",
+ "futures-timer 3.0.1",
+ "js-sys",
+ "kvdb-web",
+ "libp2p",
+ "log 0.4.8",
+ "rand 0.6.5",
+ "rand 0.7.3",
+ "sc-chain-spec",
+ "sc-informant",
+ "sc-network",
+ "sc-service",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
