@@ -1,16 +1,18 @@
 [package]
 name = "sp-wasm-interface"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Types and traits for interfacing between the host and the wasm runtime."
+documentation = "https://docs.rs/sp-wasm-interface"
 
 [dependencies]
 wasmi = { version = "0.6.2", optional = true }
 impl-trait-for-tuples = "0.1.2"
-sp-std = { version = "2.0.0-alpha.1", path = "../std", default-features = false }
+sp-std = { version = "2.0.0-alpha.2", path = "../std", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.1.2", default-features = false, features = ["derive"] }
 
 [features]

@@ -1,6 +1,6 @@
 [package]
 name = "node-template-runtime"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 authors = ["Anonymous"]
 edition = "2018"
 license = "Unlicense"
@@ -10,31 +10,31 @@ repository = "https://github.com/paritytech/substrate/"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 
-aura = { version = "2.0.0-alpha.1", default-features = false, package = "pallet-aura", path = "../../../frame/aura" }
-balances = { version = "2.0.0-alpha.1", default-features = false, package = "pallet-balances", path = "../../../frame/balances" }
-frame-support = { version = "2.0.0-alpha.1", default-features = false, path = "../../../frame/support" }
-grandpa = { version = "2.0.0-alpha.1", default-features = false, package = "pallet-grandpa", path = "../../../frame/grandpa" }
-randomness-collective-flip = { version = "2.0.0-alpha.1", default-features = false, package = "pallet-randomness-collective-flip", path = "../../../frame/randomness-collective-flip" }
-sudo = { version = "2.0.0-alpha.1", default-features = false, package = "pallet-sudo", path = "../../../frame/sudo" }
-system = { version = "2.0.0-alpha.1", default-features = false, package = "frame-system", path = "../../../frame/system" }
-timestamp = { version = "2.0.0-alpha.1", default-features = false, package = "pallet-timestamp", path = "../../../frame/timestamp" }
-transaction-payment = { version = "2.0.0-alpha.1", default-features = false, package = "pallet-transaction-payment", path = "../../../frame/transaction-payment" }
-frame-executive = { version = "2.0.0-alpha.1", default-features = false, path = "../../../frame/executive" }
+aura = { version = "2.0.0-alpha.2", default-features = false, package = "pallet-aura", path = "../../../frame/aura" }
+balances = { version = "2.0.0-alpha.2", default-features = false, package = "pallet-balances", path = "../../../frame/balances" }
+frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/support" }
+grandpa = { version = "2.0.0-alpha.2", default-features = false, package = "pallet-grandpa", path = "../../../frame/grandpa" }
+randomness-collective-flip = { version = "2.0.0-alpha.2", default-features = false, package = "pallet-randomness-collective-flip", path = "../../../frame/randomness-collective-flip" }
+sudo = { version = "2.0.0-alpha.2", default-features = false, package = "pallet-sudo", path = "../../../frame/sudo" }
+system = { version = "2.0.0-alpha.2", default-features = false, package = "frame-system", path = "../../../frame/system" }
+timestamp = { version = "2.0.0-alpha.2", default-features = false, package = "pallet-timestamp", path = "../../../frame/timestamp" }
+transaction-payment = { version = "2.0.0-alpha.2", default-features = false, package = "pallet-transaction-payment", path = "../../../frame/transaction-payment" }
+frame-executive = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/executive" }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-api = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/api" }
-sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "2.0.0-alpha.1"}
-sp-consensus-aura = { version = "0.8.0-alpha.1", default-features = false, path = "../../../primitives/consensus/aura" }
-sp-core = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/core" }
-sp-inherents = { path = "../../../primitives/inherents", default-features = false, version = "2.0.0-alpha.1"}
-sp-io = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/io" }
-sp-offchain = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/offchain" }
-sp-runtime = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/runtime" }
-sp-session = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/session" }
-sp-std = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/std" }
-sp-transaction-pool = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/transaction-pool" }
-sp-version = { version = "2.0.0-alpha.1", default-features = false, path = "../../../primitives/version" }
+sp-api = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/api" }
+sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "2.0.0-alpha.2"}
+sp-consensus-aura = { version = "0.8.0-alpha.2", default-features = false, path = "../../../primitives/consensus/aura" }
+sp-core = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/core" }
+sp-inherents = { path = "../../../primitives/inherents", default-features = false, version = "2.0.0-alpha.2"}
+sp-io = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/io" }
+sp-offchain = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/offchain" }
+sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/runtime" }
+sp-session = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/session" }
+sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/std" }
+sp-transaction-pool = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/transaction-pool" }
+sp-version = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/version" }
 
-template = { version = "2.0.0-alpha.1", default-features = false, path = "../pallets/template", package = "pallet-template" }
+template = { version = "2.0.0-alpha.2", default-features = false, path = "../pallets/template", package = "pallet-template" }
 
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
