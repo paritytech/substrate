@@ -66,7 +66,7 @@ pub use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
-		changes_tries_state_at_block,
+		LockImportRun, changes_tries_state_at_block,
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
@@ -216,6 +216,61 @@ impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
 	Block: BlockT,
 {
 	type Type = Block;
+}
+
+impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
+	where
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
+{
+	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err>
+		where
+			F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
+			Err: From<sp_blockchain::Error>,
+	{
+		let inner = || {
+			let _import_lock = self.backend.get_import_lock().write();
+
+			let mut op = ClientImportOperation {
+				op: self.backend.begin_operation()?,
+				notify_imported: None,
+				notify_finalized: Vec::new(),
+			};
+
+			let r = f(&mut op)?;
+
+			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
+			self.backend.commit_operation(op)?;
+			self.notify_finalized(notify_finalized)?;
+
+			if let Some(notify_imported) = notify_imported {
+				self.notify_imported(notify_imported)?;
+			}
+
+			Ok(r)
+		};
+
+		let result = inner();
+		*self.importing_block.write() = None;
+
+		result
+	}
+}
+
+impl<B, E, Block, RA> LockImportRun<Block, B> for &Client<B, E, Block, RA>
+	where
+		Block: BlockT,
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+{
+	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err>
+		where
+			F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
+			Err: From<sp_blockchain::Error>,
+	{
+		(**self).lock_import_and_run(f)
+	}
 }
 
 impl<B, E, Block, RA> Client<B, E, Block, RA> where
@@ -833,39 +888,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			inherent_digests,
 			&self.backend
 		)
-	}
-
-	/// Lock the import lock, and run operations inside.
-	pub fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err> where
-		F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
-		Err: From<sp_blockchain::Error>,
-	{
-		let inner = || {
-			let _import_lock = self.backend.get_import_lock().write();
-
-			let mut op = ClientImportOperation {
-				op: self.backend.begin_operation()?,
-				notify_imported: None,
-				notify_finalized: Vec::new(),
-			};
-
-			let r = f(&mut op)?;
-
-			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
-			self.backend.commit_operation(op)?;
-			self.notify_finalized(notify_finalized)?;
-
-			if let Some(notify_imported) = notify_imported {
-				self.notify_imported(notify_imported)?;
-			}
-
-			Ok(r)
-		};
-
-		let result = inner();
-		*self.importing_block.write() = None;
-
-		result
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
