@@ -416,7 +416,9 @@ impl RunCmd {
 		if self.no_telemetry {
 			config.telemetry_endpoints = None;
 		} else if !self.telemetry_endpoints.is_empty() {
-			config.telemetry_endpoints = TelemetryEndpoints::new(self.telemetry_endpoints.clone()).ok();
+			config.telemetry_endpoints = Some(
+				TelemetryEndpoints::new(self.telemetry_endpoints.clone()).map_err(|e| e.to_string())?
+			);
 		}
 
 		// Override prometheus
