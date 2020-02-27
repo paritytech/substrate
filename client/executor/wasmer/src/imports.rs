@@ -19,6 +19,7 @@ enum CallCtx {
 	Resolved {
 		host_func: &'static dyn Function,
 		state_holder: StateHolder,
+		name: String,
 	},
 }
 
@@ -113,11 +114,18 @@ fn resolve_memory_import(import: &ImportEntry, heap_pages: u32) -> Memory {
 unsafe extern "C" fn stub(ctx: *const OpaqueCallContext, raw_args: *const u64) -> u64 {
 	let ctx = ctx as *const CallCtx;
 	let (host_func, state_holder) = match *ctx {
-		CallCtx::Missing => return 0,
+		CallCtx::Missing => {
+			dbg!();
+			return 0;
+		},
 		CallCtx::Resolved {
 			ref host_func,
+			ref name,
 			ref state_holder,
-		} => (host_func, state_holder),
+		} => {
+			dbg!(name);
+			(host_func, state_holder)
+		},
 	};
 
 	let num_params = host_func.signature().args.len();
@@ -132,13 +140,15 @@ unsafe extern "C" fn stub(ctx: *const OpaqueCallContext, raw_args: *const u64) -
 			// Ignore the implicit context argument.
 			let idx = idx + 1;
 			let arg_val = match arg_ty {
-				ValueType::I32 => Value::I32(*raw_args.offset(idx as isize) as u32 as i32),
-				ValueType::I64 => Value::I64(*raw_args.offset(idx as isize) as u64 as i64),
-				ValueType::F32 => Value::F32((*raw_args.offset(idx as isize) as f32).to_bits()),
-				ValueType::F64 => Value::F64((*raw_args.offset(idx as isize) as f64).to_bits()),
+				ValueType::I32 => Value::I32(*raw_args.add(idx) as u32 as i32),
+				ValueType::I64 => Value::I64(*raw_args.add(idx) as u64 as i64),
+				ValueType::F32 => Value::F32((*raw_args.add(idx) as f32).to_bits()),
+				ValueType::F64 => Value::F64((*raw_args.add(idx) as f64).to_bits()),
 			};
 			args.push(arg_val);
 		});
+	dbg!(std::slice::from_raw_parts(raw_args as *const u8, (num_params + 1) * 8));
+	let args = dbg!(args);
 
 	let unwind_result = state_holder.with_context(|host_ctx| {
 		let mut host_ctx = host_ctx.unwrap();
@@ -195,6 +205,7 @@ fn resolve_func_import(
 		Some(host_func) => CallCtx::Resolved {
 			host_func: *host_func,
 			state_holder: state_holder.clone(),
+			name: format!("{}!{}", import.module(), import.field()),
 		},
 		None => CallCtx::Missing, // TODO: check allow_missing
 	};

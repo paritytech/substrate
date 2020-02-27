@@ -378,6 +378,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake3"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46080006c1505f12f64dd2a09264b343381ed3190fa02c8005d5d662ac571c63"
+dependencies = [
+ "arrayref",
+ "arrayvec 0.5.1",
+ "cc",
+ "cfg-if",
+ "constant_time_eq",
+ "crypto-mac",
+ "digest",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2100,12 +2115,6 @@ checksum = "eff2656d88f158ce120947499e971d743c05dbcbed62e5bd2f38f1698bbc3772"
 dependencies = [
  "libc",
 ]
-
-[[package]]
-name = "hex"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
 
 [[package]]
 name = "hex"
@@ -6170,7 +6179,7 @@ name = "sc-keystore"
 version = "2.0.0"
 dependencies = [
  "derive_more",
- "hex 0.4.1",
+ "hex",
  "parking_lot 0.10.0",
  "rand 0.7.3",
  "serde_json",
@@ -7143,7 +7152,7 @@ dependencies = [
  "ed25519-dalek",
  "hash-db",
  "hash256-std-hasher",
- "hex 0.4.1",
+ "hex",
  "hex-literal",
  "impl-serde 0.2.3",
  "lazy_static",
@@ -7617,7 +7626,7 @@ dependencies = [
  "derive_more",
  "frame-system",
  "futures 0.1.29",
- "hex 0.4.1",
+ "hex",
  "hex-literal",
  "hyper 0.12.35",
  "itertools",
@@ -8803,9 +8812,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-clif-backend"
-version = "0.13.1"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c785ab26863bd64d2ce2956083c3db9a09d7d639b6205baee6e54f258f94e034"
+checksum = "ea74b659f78bffcc2db4bd77bf27ce66907ab76728d012346b130fe384e11399"
 dependencies = [
  "byteorder 1.3.4",
  "cranelift-codegen 0.52.0",
@@ -8855,9 +8864,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-runtime"
-version = "0.13.1"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05726a0bc546d57e06cde6a7754cf9afbf21a5869d080a3c654d35902cd6fab3"
+checksum = "4a005e93916e9c4d6bb67fd301b4840fa3994be01806659fc94a72a85386550e"
 dependencies = [
  "lazy_static",
  "memmap",
@@ -8869,22 +8878,22 @@ dependencies = [
 
 [[package]]
 name = "wasmer-runtime-core"
-version = "0.13.1"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b1131f1bb9a0610eeef2974275de019027fa8dcfac78a9976439ce5f4561ade"
+checksum = "af29c21b4b17c90035dc5bc6a4dcf018b16acfd745631c905f2a7f04e3e2c74e"
 dependencies = [
  "bincode",
- "blake2b_simd",
+ "blake3",
  "cc",
  "digest",
  "errno",
- "hex 0.3.2",
+ "hex",
  "indexmap",
  "lazy_static",
  "libc",
  "nix 0.15.0",
  "page_size",
- "parking_lot 0.9.0",
+ "parking_lot 0.10.0",
  "rustc_version",
  "serde",
  "serde-bench",
@@ -8897,9 +8906,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-win-exception-handler"
-version = "0.13.1"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eac6af8ef69d582a851bb116be4faebc42d1f52ef00922e1688f3eff48d0d96b"
+checksum = "8e5ede589f678bb6c061e173394506589fd2bae9165d841b218c5d07b3082cd4"
 dependencies = [
  "cmake",
  "libc",

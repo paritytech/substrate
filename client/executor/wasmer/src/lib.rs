@@ -29,6 +29,7 @@ use wasmer_runtime::{
 mod host;
 mod imports;
 mod state_holder;
+mod util;
 
 use crate::host::HostState;
 use crate::imports::Imports;
@@ -92,7 +93,7 @@ fn call_method(
 ) -> Result<Vec<u8>> {
 	let instance = module.instantiate(&imports.import_object).unwrap();
 
-	let heap_base = 1054760; // TODO:
+	let heap_base = 1054880; // TODO:
 	let mut allocator = FreeingBumpHeapAllocator::new(heap_base);
 	let memory = imports.memory.as_ref().unwrap().clone();
 
@@ -131,29 +132,17 @@ fn inject_input_data(
 	memory: &Memory,
 	input_data: &[u8],
 ) -> (u32, u32) {
-	use std::ops::Deref;
-	let view = memory.view::<u8>();
-	let cell_slice = view.deref();
-	#[allow(mutable_transmutes)]
-	let slice: &mut [u8] = unsafe { std::mem::transmute(cell_slice) };
-	let len = input_data.len();
+	let len = input_data.len() as u32;
 	let ptr = allocator
-		.allocate(slice, len as u32)
+		.allocate(&mut util::AllocatorMemory(memory), len)
 		.map_err(|e| e.to_string())
 		.unwrap();
-	let ptr = usize::from(ptr);
-	slice[ptr..(ptr + len)].copy_from_slice(input_data);
-	(u32::from(ptr as u32), len as u32)
+	util::write_memory(memory, dbg!(ptr).into(), dbg!(input_data)).unwrap();
+	(ptr.into(), len)
 }
 
 fn extract_output_data(memory: &Memory, output_ptr: u32, output_len: u32) -> Vec<u8> {
-	use std::ops::Deref;
-	let len = output_len as usize;
-	let mut output = vec![0; len];
-	let view = memory.view::<u8>();
-	let cell_slice = view.deref();
-	let slice: &[u8] = unsafe { std::mem::transmute(cell_slice) };
-	let offset = output_ptr as usize;
-	output.copy_from_slice(&slice[offset..offset + len]);
+	let mut output = vec![0; output_len as usize];
+	util::read_memory(memory, output_ptr, &mut output).unwrap();
 	output
 }

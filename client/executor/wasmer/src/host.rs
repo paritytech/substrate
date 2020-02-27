@@ -17,6 +17,7 @@
 //! This module defines `HostState` and `HostContext` structs which provide logic and state
 //! required for execution of host.
 
+use crate::util;
 use codec::{Decode, Encode};
 use log::trace;
 use sc_executor_common::error::Result;
@@ -106,49 +107,26 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 		address: Pointer<u8>,
 		dest: &mut [u8],
 	) -> sp_wasm_interface::Result<()> {
-		use std::ops::Deref;
-		let view = self.memory.view::<u8>();
-		let cell_slice = view.deref();
-		let slice: &[u8] = unsafe { std::mem::transmute(cell_slice) };
-		let len = dest.len();
-		let offset = usize::from(address);
-		dest.copy_from_slice(&slice[offset..offset + len]);
-		Ok(())
+		util::read_memory(&self.memory, address.into(), dest)
+			.map_err(|_| "cannot read memory".to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> sp_wasm_interface::Result<()> {
-		use std::ops::Deref;
-		let view = self.memory.view::<u8>();
-		let cell_slice = view.deref();
-		#[allow(mutable_transmutes)]
-		let slice: &mut [u8] = unsafe { std::mem::transmute(cell_slice) };
-		let len = data.len();
-		let offset = usize::from(address);
-		slice[offset..offset + len].copy_from_slice(data);
-		Ok(())
+		util::write_memory(&self.memory, address.into(), data)
+			.map_err(|_| "cannot write memory".to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
-		use std::ops::Deref;
-		let view = self.memory.view::<u8>();
-		let cell_slice = view.deref();
-		#[allow(mutable_transmutes)]
-		let slice: &mut [u8] = unsafe { std::mem::transmute(cell_slice) };
-		self.allocator
+		dbg!(self.allocator
 			.borrow_mut()
-			.allocate(slice, size)
-			.map_err(|e| e.to_string())
+			.allocate(&mut util::AllocatorMemory(&self.memory), size)
+			.map_err(|e| e.to_string()))
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> sp_wasm_interface::Result<()> {
-		use std::ops::Deref;
-		let view = self.memory.view::<u8>();
-		let cell_slice = view.deref();
-		#[allow(mutable_transmutes)]
-		let slice: &mut [u8] = unsafe { std::mem::transmute(cell_slice) };
 		self.allocator
 			.borrow_mut()
-			.deallocate(slice, ptr)
+			.deallocate(&mut util::AllocatorMemory(&self.memory), dbg!(ptr))
 			.map_err(|e| e.to_string())
 	}
 
