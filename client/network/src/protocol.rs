@@ -253,7 +253,6 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 		id: RequestId,
 		block: <B as BlockT>::Hash,
 		storage_key: Vec<u8>,
-		child_type: u32,
 		keys: Vec<Vec<u8>>,
 	) {
 		let message: Message<B> = message::generic::Message::RemoteReadChildRequest(
@@ -261,7 +260,6 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 				id,
 				block,
 				storage_key,
-				child_type,
 				keys,
 			});
 
@@ -1517,10 +1515,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
-		let child_info = if let Some(ChildType::ParentKeyId) = ChildType::new(request.child_type) {
-			ChildInfo::new_default(&request.storage_key)
-		} else {
-			return;
+		let child_info = match ChildType::from_prefixed_key(&request.storage_key) {
+			Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+			None => return,
 		};
 		let proof = match self.context_data.chain.read_child_proof(
 			&request.block,

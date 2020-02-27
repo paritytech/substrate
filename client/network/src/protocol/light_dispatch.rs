@@ -70,7 +70,6 @@ pub trait LightDispatchNetwork<B: BlockT> {
 		id: RequestId,
 		block: <B as BlockT>::Hash,
 		storage_key: Vec<u8>,
-		child_type: u32,
 		keys: Vec<Vec<u8>>,
 	);
 
@@ -624,7 +623,6 @@ impl<Block: BlockT> Request<Block> {
 					self.id,
 					data.block,
 					data.storage_key.clone(),
-					data.child_type,
 					data.keys.clone(),
 				),
 			RequestData::RemoteCall(ref data, _) =>
@@ -820,7 +818,7 @@ pub mod tests {
 		fn send_header_request(&mut self, _: &PeerId, _: RequestId, _: <<B as BlockT>::Header as HeaderT>::Number) {}
 		fn send_read_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<Vec<u8>>) {}
 		fn send_read_child_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<u8>,
-			_: u32, _: Vec<Vec<u8>>) {}
+			_: Vec<Vec<u8>>) {}
 		fn send_call_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: String, _: Vec<u8>) {}
 		fn send_changes_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: <B as BlockT>::Hash,
 			_: <B as BlockT>::Hash, _: <B as BlockT>::Hash, _: Option<Vec<u8>>, _: Vec<u8>) {}
@@ -1046,8 +1044,7 @@ pub mod tests {
 			RemoteReadChildRequest {
 				header: dummy_header(),
 				block: Default::default(),
-				storage_key: b"sub".to_vec(),
-				child_type: 1,
+				storage_key: b":child_storage:default:sub".to_vec(),
 				keys: vec![b":key".to_vec()],
 				retry_count: None,
 			}, tx));

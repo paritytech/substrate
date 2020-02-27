@@ -241,8 +241,8 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
-		let child_info = match ChildType::new(request.child_type) {
-			Some(ChildType::ParentKeyId) => ChildInfo::new_default(&request.storage_key[..]),
+		let child_info = match ChildType::from_prefixed_key(&request.storage_key[..]) {
+			Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
 			None => return Err("Invalid child type".into()),
 		};
 		read_child_proof_check::<H, _>(
@@ -509,8 +509,7 @@ pub mod tests {
 			&RemoteReadChildRequest::<Header> {
 				block: remote_block_header.hash(),
 				header: remote_block_header,
-				storage_key: b"child1".to_vec(),
-				child_type: 1,
+				storage_key: b":child_storage:default:child1".to_vec(),
 				keys: vec![b"key1".to_vec()],
 				retry_count: None,
 			},

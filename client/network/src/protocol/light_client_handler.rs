@@ -514,8 +514,10 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof = if let Some(child_type) = ChildType::new(request.child_type) {
-			let child_info = ChildInfo::new_default(&request.storage_key);
+		let proof = if let Some((ChildType::ParentKeyId, storage_key)) = ChildType::from_prefixed_key(
+			&request.storage_key,
+		) {
+			let child_info = ChildInfo::new_default(storage_key);
 			match self.chain.read_child_proof(&block, &child_info, &request.keys) {
 				Ok(proof) => proof,
 				Err(error) => {
@@ -934,7 +936,6 @@ fn serialize_request<B: Block>(id: u64, request: &Request<B>) -> api::v1::light:
 			let r = api::v1::light::RemoteReadChildRequest {
 				block: request.block.encode(),
 				storage_key: request.storage_key.clone(),
-				child_type: request.child_type,
 				keys: request.keys.clone(),
 			};
 			api::v1::light::request::Request::RemoteReadChildRequest(r)
@@ -1636,8 +1637,7 @@ mod tests {
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b":child_storage:sub".to_vec(),
-			child_type: 1,
+			storage_key: b":child_storage:default:sub".to_vec(),
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};
@@ -1737,8 +1737,7 @@ mod tests {
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b"sub".to_vec(),
-			child_type: 1,
+			storage_key: b":child_storage:default:sub".to_vec(),
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};

@@ -262,6 +262,20 @@ impl ChildType {
 		})
 	}
 
+	/// Transform a prefixed key into a tuple of the child type
+	/// and the unprefixed representation of the key.
+	pub fn from_prefixed_key<'a>(storage_key: &'a [u8]) -> Option<(Self, &'a [u8])> {
+		let match_type = |storage_key: &'a [u8], child_type: ChildType| {
+			let prefix = child_type.parent_prefix();
+			if storage_key.starts_with(prefix) {
+				Some((child_type, &storage_key[prefix.len()..]))
+			} else {
+				None
+			}
+		};
+		match_type(storage_key, ChildType::ParentKeyId)
+	}
+
 	/// Produce a prefixed key for a given child type.
 	fn new_prefixed_key(&self, key: &[u8]) -> Vec<u8> {
 		let parent_prefix = self.parent_prefix();
@@ -298,10 +312,12 @@ impl ChildType {
 /// It shares its trie nodes backend storage with every other
 /// child trie, so its storage key needs to be a unique id
 /// that will be use only once.
+/// Those unique id also required to be long enough to avoid any
+/// unique id to be prefixed by an other unique id.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub struct ChildTrieParentKeyId {
-	/// Data is the full prefixed storage key.
+	/// Data is the storage key without prefix.
 	data: Vec<u8>,
 }
 
