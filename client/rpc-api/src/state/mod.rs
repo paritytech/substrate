@@ -100,7 +100,7 @@ pub trait StateApi<Hash> {
 	) -> FutureResult<Option<Hash>>;
 
 	/// Returns the size of a child storage entry at a block's state.
-	#[rpc(name = "state_getDefaultStorageSize")]
+	#[rpc(name = "state_getChildStorageSize")]
 	fn child_storage_size(
 		&self,
 		child_storage_key: StorageKey,

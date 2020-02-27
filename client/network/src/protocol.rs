@@ -1516,14 +1516,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
 		let child_info = match ChildType::from_prefixed_key(&request.storage_key) {
-			Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-			None => return,
+			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
+			None => Err("Invalid child storage key".into()),
 		};
-		let proof = match self.context_data.chain.read_child_proof(
+		let proof = match child_info.and_then(|child_info| self.context_data.chain.read_child_proof(
 			&request.block,
 			&child_info,
 			&request.keys,
-		) {
+		)) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",

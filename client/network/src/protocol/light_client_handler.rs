@@ -514,32 +514,24 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof = if let Some((ChildType::ParentKeyId, storage_key)) = ChildType::from_prefixed_key(
-			&request.storage_key,
+		let child_info = match ChildType::from_prefixed_key(&request.storage_key) {
+			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
+			None => Err("Invalid child storage key".into()),
+		};
+		let proof = match child_info.and_then(|child_info|
+			self.chain.read_child_proof(&block, &child_info, &request.keys)
 		) {
-			let child_info = ChildInfo::new_default(storage_key);
-			match self.chain.read_child_proof(&block, &child_info, &request.keys) {
-				Ok(proof) => proof,
-				Err(error) => {
-					log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",
-						request_id,
-						peer,
-						request.storage_key.to_hex::<String>(),
-						fmt_keys(request.keys.first(), request.keys.last()),
-						request.block,
-						error);
-					StorageProof::empty()
-				}
+			Ok(proof) => proof,
+			Err(error) => {
+				log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",
+					request_id,
+					peer,
+					request.storage_key.to_hex::<String>(),
+					fmt_keys(request.keys.first(), request.keys.last()),
+					request.block,
+					error);
+				StorageProof::empty()
 			}
-		} else {
-			log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",
-				request_id,
-				peer,
-				request.storage_key.to_hex::<String>(),
-				fmt_keys(request.keys.first(), request.keys.last()),
-				request.block,
-				"Unknown child type");
-			StorageProof::empty()
 		};
 
 		let response = {

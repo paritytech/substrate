@@ -317,7 +317,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 				.and_then(|block| {
 					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
 						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-						None => return Err("Invalid child type".into()),
+						None => return Err("Invalid child storage key".into()),
 					};
 					self.client.child_storage_keys(
 						&BlockId::Hash(block),
@@ -339,7 +339,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 				.and_then(|block| {
 					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
 						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-						None => return Err("Invalid child type".into()),
+						None => return Err("Invalid child storage key".into()),
 					};
 					self.client.child_storage(
 						&BlockId::Hash(block),
@@ -361,7 +361,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 				.and_then(|block| {
 					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
 						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-						None => return Err("Invalid child type".into()),
+						None => return Err("Invalid child storage key".into()),
 					};
 					self.client.child_storage_hash(
 						&BlockId::Hash(block),
