@@ -65,7 +65,7 @@ use codec::{Encode, Decode};
 const REWARD_F1: Perbill = Perbill::from_percent(50);
 
 /// The index of a slashing span - unique to each stash.
-pub(crate) type SpanIndex = u32;
+pub type SpanIndex = u32;
 
 // A range of start..end eras for a slashing span.
 #[derive(Encode, Decode)]
@@ -143,7 +143,7 @@ impl SlashingSpans {
 	}
 
 	/// Yields the era index where the most recent non-zero slash occurred.
-	pub(crate) fn last_nonzero_slash(&self) -> EraIndex {
+	pub fn last_nonzero_slash(&self) -> EraIndex {
 		self.last_nonzero_slash
 	}
 
