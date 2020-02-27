@@ -170,6 +170,12 @@ impl<T: PointerType> Pointer<T> {
 	}
 }
 
+impl<T: PointerType> From<u32> for Pointer<T> {
+	fn from(ptr: u32) -> Self {
+		Pointer::new(ptr)
+	}
+}
+
 impl<T: PointerType> From<Pointer<T>> for u32 {
 	fn from(ptr: Pointer<T>) -> Self {
 		ptr.ptr
