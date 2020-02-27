@@ -1,6 +1,6 @@
 [package]
-description = "Prometheus exporter server"
-name = "prometheus-exporter"
+description = "Endpoint to expose Prometheus metrics"
+name = "substrate-prometheus-endpoint"
 version = "0.8.0-alpha.2"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
