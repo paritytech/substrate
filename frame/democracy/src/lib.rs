@@ -14,7 +14,98 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Democratic system: Handles administration of general stakeholder voting.
+//! # Democracy Pallet
+//! 
+//! - [`democracy::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//! 
+//! The Democracy pallet handles the administration of general stakeholder voting.
+//!
+//! ### Terminology
+//!
+//! - **Conviction:** A multiplier that is added to a vote based on the length
+//!   of time the voter has opted to lock their tokens. Longer lock-up periods
+//!   grant a stronger vote.
+//! - **Vote:** A value that can either be in approval ("Aye") or rejection ("Nay")
+//!   of a particular referendum.
+//! - **Proposal:** A submission to the chain that represents an action that is 
+//!   being suggested for the system to adopt.
+//! - **Referendum:** A proposal that is in the process of being voted on for 
+//!   either acceptance or rejection as a change to the system.
+//! - **Proxy:** An account that votes on behalf of a separate "Stash" account
+//!   that holds the funds.
+//! - **Delegation:** Granting your voting power to the decisions of another account.
+//!
+//! ## Interface
+//!
+//! ### Dispatchable Functions
+//!
+//! #### Public
+//!
+//! These calls can be made from any externally held account capable of creating
+//! a signed extrinsic.
+//!
+//! - `propose` - The submission of a sensitive action, represented as a hash. 
+//!	  Requires a deposit.
+//! - `second` - Signals agreement with a proposal, moves it higher on the
+//!   proposal queue, and requires a matching deposit to the original.
+//! - `vote` - Votes in a referendum, either the vote is "Aye" to enact the 
+//!   proposal or "Nay" to keep the status quo.
+//! - `proxy_vote` - Votes in a referendum on behalf of a stash account.
+//! - `activate_proxy` - Activates a proxy that is already open to the sender.
+//! - `close_proxy` - Clears the proxy status, called by the proxy.
+//! - `deactivate_proxy` - Deactivates a proxy back to the open status, called by
+//!   the stash.
+//! - `open_proxy` -  Opens a proxy account on behalf of the sender.
+//! - `delegate` - Delegates the voting power (tokens * conviction) to another
+//!   account.
+//! - `undelegate` - Stops the delegation of voting power to another account.
+//! - `note_preimage` - Registers the preimage for an upcoming proposal, requires
+//!   a deposit that is returned once the proposal is enacted.
+//! - `note_imminent_preimage` - Registers the preimage for an upcoming proposal.
+//!   Does not require a deposit, but the proposal must be in the dispatch queue.
+//! - `reap_preimage` - Removes the preimage for an expired proposal. Will only
+//!   work under the condition that it's the same account that noted it and 
+//!   after the voting period, OR it's a different account after the enactment period.
+//! - `unlock` - Unlocks tokens that have an expired lock.
+//!
+//! #### Cancellation Origin
+//!
+//! This call can only be made by the `CancellationOrigin`.
+//!
+//! - `emergency_cancel` - Schedules an emergency cancellation of a referendum.
+//!   Can only happen once to a specific referendum.
+//!
+//! #### ExternalOrigin
+//!
+//! This call can only be made by the `ExternalOrigin`.
+//!
+//! - `external_propose` - Schedules a referendum to be tabled once it is is legal
+//!   for an externally proposed referendum.
+//!
+//! #### External Majority Origin
+//!
+//! This call can only be made by the `ExternalMajorityOrigin`.
+//!
+//! - `external_propose_majority` - Schedules a majority-carries referendum once
+//!   it is legal for an externally proposed referendum.
+//!
+//! #### External Default Origin
+//!
+//! This call can only be made by the `ExternalDefaultOrigin`.
+//!
+//! - `external_propose_default` - Schedules a negative-turnout-bias referendum
+//!   to be tabled once it is legal for an externally proposed referendum.
+//!
+//! #### Fast Track Origin
+//!
+//! This call can only be made by the `FastTrackOrigin`.
+//!
+//! - `fast_track` - Schedules the current externally proposed referendum that
+//!   is "majority-carries" to be tabled immediately.
+
 #![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -505,7 +596,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
 
-		/// Propose a sensitive action to be taken.
+		/// Signals agreement with a particular proposal.
 		///
 		/// # <weight>
 		/// - O(1).
