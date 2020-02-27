@@ -1,6 +1,6 @@
 [package]
 name = "sc-informant"
-version = "0.8.0-alpha.1"
+version = "0.8.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate informant."
 edition = "2018"
@@ -14,8 +14,8 @@ futures = "0.3.1"
 log = "0.4.8"
 parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
 wasm-timer = "0.2"
-sc-client-api = { version = "2.0.0-alpha.1", path = "../api" }
-sc-network = { version = "0.8.0-alpha.1", path = "../network" }
-sc-service = { version = "0.8.0-alpha.1", default-features = false, path = "../service" }
-sp-blockchain = { version = "2.0.0-alpha.1", path = "../../primitives/blockchain" }
-sp-runtime = { version = "2.0.0-alpha.1", path = "../../primitives/runtime" }
+sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
+sc-network = { version = "0.8.0-alpha.2", path = "../network" }
+sc-service = { version = "0.8.0-alpha.2", default-features = false, path = "../service" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
