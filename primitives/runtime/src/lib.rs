@@ -416,13 +416,6 @@ impl From<DispatchError> for &'static str {
 	}
 }
 
-impl From<DispatchError> for Vec<u8> {
-	fn from(err: DispatchError) -> Vec<u8> {
-		let s: &'static str = err.into();
-		s.as_bytes().to_vec()
-	}
-}
-
 impl traits::Printable for DispatchError {
 	fn print(&self) {
 		"DispatchError".print();

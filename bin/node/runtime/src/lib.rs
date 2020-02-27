@@ -822,14 +822,17 @@ impl_runtime_apis! {
 			steps: Vec<u32>,
 			repeat: u32,
 		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, Vec<u8>> {
+			use codec::Encode;
 			use frame_benchmarking::Benchmarking;
 
-			match module.as_slice() {
+			let results = match module.as_slice() {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat),
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat),
 				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat),
-				_ => Err("Benchmark not found for this pallet.".as_bytes().to_vec()),
-			}
+				_ => Err("Benchmark not found for this pallet."),
+			};
+
+			results.map_err(|e| e.encode())
 		}
 	}
 }
