@@ -55,6 +55,7 @@ use finality_proof::{
 	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
 };
 use consensus_changes::ConsensusChanges;
+use sc_block_builder::BlockBuilderProvider;
 
 type PeerData =
 	Mutex<

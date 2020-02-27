@@ -93,10 +93,10 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 		.build()?;
 
 	if participates_in_consensus {
-		let proposer = sc_basic_authorship::ProposerFactory {
-			client: service.client(),
-			transaction_pool: service.transaction_pool(),
-		};
+		let proposer = sc_basic_authorship::ProposerFactory::new(
+			service.client(),
+			service.transaction_pool()
+		);
 
 		let client = service.client();
 		let select_chain = service.select_chain()

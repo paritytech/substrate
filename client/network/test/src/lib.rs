@@ -35,7 +35,7 @@ use sc_client_api::{
 	FinalityNotification,
 	backend::{TransactionFor, AuxStore, Backend, Finalizer},
 };
-use sc_block_builder::BlockBuilder;
+use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client::LongestChain;
 use sc_network::config::Roles;
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
