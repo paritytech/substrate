@@ -106,7 +106,7 @@ impl<B> Fetcher<B> for OnDemand<B> where
 		request: RemoteReadChildRequest<B::Header>
 	) -> Self::RemoteReadResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteReadDefaultChild(request, sender));
+		let _ = self.requests_send.unbounded_send(RequestData::RemoteReadChild(request, sender));
 		RemoteResponse { receiver }
 	}
 

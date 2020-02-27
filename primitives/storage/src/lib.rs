@@ -161,14 +161,11 @@ impl ChildInfo {
 		}
 	}
 
-	/// Create child info from a linear byte packed value and a given type. 
-	pub fn resolve_child_info(child_type: u32, info: &[u8]) -> Option<Self> {
+	/// Create child info from a prefixed storage key and a given type.
+	pub fn resolve_child_info(child_type: u32, storage_key: &[u8]) -> Option<Self> {
 		match ChildType::new(child_type) {
 			Some(ChildType::ParentKeyId) => {
-				debug_assert!(
-					info.starts_with(ChildType::ParentKeyId.parent_prefix())
-				);
-				Some(Self::new_default(info))
+				Some(Self::new_default(storage_key))
 			},
 			None => None,
 		}
@@ -287,7 +284,7 @@ impl ChildType {
 
 	/// Returns the location reserved for this child trie in their parent trie if there
 	/// is one.
-	fn parent_prefix(&self) -> &'static [u8] {
+	pub fn parent_prefix(&self) -> &'static [u8] {
 		match self {
 			&ChildType::ParentKeyId => DEFAULT_CHILD_TYPE_PARENT_PREFIX,
 		}

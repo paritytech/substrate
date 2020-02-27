@@ -37,7 +37,7 @@ use sp_core::{
 	traits::{KeystoreExt, CallInWasmExt},
 	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
-	storage::ChildInfo,
+	storage::{ChildInfo, ChildType},
 };
 
 use sp_core::{
@@ -68,11 +68,11 @@ pub enum EcdsaVerifyError {
 	BadSignature,
 }
 
-/// Deprecated function, ensure that this is a default prefixed key.
 #[cfg(feature = "std")]
-fn child_storage_key_or_panic(storage_key: &[u8]) {
-	if !storage_key.starts_with(&ChildInfo::new_default(&[]).prefixed_storage_key()[..]) {
-		panic!("child storage key is invalid")
+fn deprecated_storage_key_prefix_check(storage_key: &[u8]) {
+	let prefix = ChildType::ParentKeyId.parent_prefix();
+	if !storage_key.starts_with(prefix) {
+		panic!("Invalid storage key");
 	}
 }
 
@@ -153,8 +153,7 @@ pub trait Storage {
 		child_type: u32,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		child_storage_key_or_panic(storage_key);
-		if child_type != 1 { panic!("Invalid child definition"); }
+		deprecated_storage_key_prefix_check(storage_key);
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
 		self.child_storage(&child_info, key).map(|s| s.to_vec())
@@ -170,8 +169,7 @@ pub trait Storage {
 		value_out: &mut [u8],
 		value_offset: u32,
 	) -> Option<u32> {
-		child_storage_key_or_panic(storage_key);
-		if child_type != 1 { panic!("Invalid child definition"); }
+		deprecated_storage_key_prefix_check(storage_key);
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
 		self.child_storage(&child_info, key)
@@ -193,8 +191,7 @@ pub trait Storage {
 		key: &[u8],
 		value: &[u8],
 	) {
-		child_storage_key_or_panic(storage_key);
-		if child_type != 1 { panic!("Invalid child definition"); }
+		deprecated_storage_key_prefix_check(storage_key);
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
 		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
@@ -208,8 +205,7 @@ pub trait Storage {
 		child_type: u32,
 		key: &[u8],
 	) {
-		child_storage_key_or_panic(storage_key);
-		if child_type != 1 { panic!("Invalid child definition"); }
+		deprecated_storage_key_prefix_check(storage_key);
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
 		self.clear_child_storage(&child_info, key);
@@ -222,8 +218,7 @@ pub trait Storage {
 		child_definition: &[u8],
 		child_type: u32,
 	) {
-		child_storage_key_or_panic(storage_key);
-		if child_type != 1 { panic!("Invalid child definition"); }
+		deprecated_storage_key_prefix_check(storage_key);
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
 		self.kill_child_storage(&child_info);
@@ -237,8 +232,7 @@ pub trait Storage {
 		child_type: u32,
 		key: &[u8],
 	) -> bool {
-		child_storage_key_or_panic(storage_key);
-		if child_type != 1 { panic!("Invalid child definition"); }
+		deprecated_storage_key_prefix_check(storage_key);
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
 		self.exists_child_storage(&child_info, key)
@@ -252,8 +246,7 @@ pub trait Storage {
 		child_type: u32,
 		prefix: &[u8],
 	) {
-		child_storage_key_or_panic(storage_key);
-		if child_type != 1 { panic!("Invalid child definition"); }
+		deprecated_storage_key_prefix_check(storage_key);
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
 		self.clear_child_prefix(&child_info, prefix);
@@ -264,8 +257,13 @@ pub trait Storage {
 		&mut self,
 		storage_key: &[u8],
 	) -> Vec<u8> {
-		child_storage_key_or_panic(storage_key);
-		let child_info = ChildInfo::new_default(storage_key);
+		let prefix = ChildType::ParentKeyId.parent_prefix();
+		if !storage_key.starts_with(prefix) {
+			panic!("Invalid storage key");
+		}
+		let storage_key = &storage_key[..prefix.len()];
+		let child_info = ChildInfo::resolve_child_info(ChildType::ParentKeyId as u32, storage_key)
+			.expect("Invalid storage key");
 		self.child_storage_root(&child_info)
 	}
 
@@ -277,8 +275,7 @@ pub trait Storage {
 		child_type: u32,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		child_storage_key_or_panic(storage_key);
-		if child_type != 1 { panic!("Invalid child definition"); }
+		deprecated_storage_key_prefix_check(storage_key);
 		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
 			.expect("Invalid child definition");
 		self.next_child_storage_key(&child_info, key)
@@ -291,7 +288,7 @@ pub trait Storage {
 /// from within the runtime.
 #[runtime_interface]
 pub trait DefaultChildStorage {
-	/// `storage_key` is the full location of the root of the child trie in the parent trie.
+	/// `storage_key` is the unprefixed location of the root of the child trie in the parent trie.
 	///
 	/// This function specifically returns the data for `key` in the child storage or `None`
 	/// if the key can not be found.

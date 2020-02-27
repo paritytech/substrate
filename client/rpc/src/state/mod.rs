@@ -103,8 +103,8 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 			.map(|x| x.map(|x| x.0.len() as u64)))
 	}
 
-	/// Returns the keys with prefix from a defaultchild storage,
-	/// leave empty to get all the keys
+	/// Returns the keys with prefix from a child storage,
+	/// leave prefix empty to get all the keys.
 	fn child_storage_keys(
 		&self,
 		block: Option<Block::Hash>,

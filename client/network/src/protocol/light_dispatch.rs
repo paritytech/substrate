@@ -148,7 +148,7 @@ pub(crate) enum RequestData<Block: BlockT> {
 		RemoteReadRequest<Block::Header>,
 		OneShotSender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>,
 	),
-	RemoteReadDefaultChild(
+	RemoteReadChild(
 		RemoteReadChildRequest<Block::Header>,
 		OneShotSender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	),
@@ -404,7 +404,7 @@ impl<B: BlockT> LightDispatch<B> where
 						RequestData::RemoteRead(request, sender)
 					),
 			}},
-			RequestData::RemoteReadDefaultChild(request, sender) => {
+			RequestData::RemoteReadChild(request, sender) => {
 				match checker.check_read_child_proof(&request, response.proof) {
 					Ok(response) => {
 						// we do not bother if receiver has been dropped already
@@ -413,7 +413,7 @@ impl<B: BlockT> LightDispatch<B> where
 					},
 					Err(error) => Accept::CheckFailed(
 						error,
-						RequestData::RemoteReadDefaultChild(request, sender)
+						RequestData::RemoteReadChild(request, sender)
 					),
 			}},
 			data => Accept::Unexpected(data),
@@ -596,7 +596,7 @@ impl<Block: BlockT> Request<Block> {
 		match self.data {
 			RequestData::RemoteHeader(ref data, _) => data.block,
 			RequestData::RemoteRead(ref data, _) => *data.header.number(),
-			RequestData::RemoteReadDefaultChild(ref data, _) => *data.header.number(),
+			RequestData::RemoteReadChild(ref data, _) => *data.header.number(),
 			RequestData::RemoteCall(ref data, _) => *data.header.number(),
 			RequestData::RemoteChanges(ref data, _) => data.max_block.0,
 			RequestData::RemoteBody(ref data, _) => *data.header.number(),
@@ -618,7 +618,7 @@ impl<Block: BlockT> Request<Block> {
 					data.block,
 					data.keys.clone(),
 				),
-			RequestData::RemoteReadDefaultChild(ref data, _) =>
+			RequestData::RemoteReadChild(ref data, _) =>
 				out.send_read_child_request(
 					peer,
 					self.id,
@@ -667,7 +667,7 @@ impl<Block: BlockT> RequestData<Block> {
 			RequestData::RemoteHeader(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteCall(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteRead(_, sender) => { let _ = sender.send(Err(error)); },
-			RequestData::RemoteReadDefaultChild(_, sender) => { let _ = sender.send(Err(error)); },
+			RequestData::RemoteReadChild(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteChanges(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteBody(_, sender) => { let _ = sender.send(Err(error)); },
 		}
@@ -1042,7 +1042,7 @@ pub mod tests {
 		light_dispatch.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
 		let (tx, response) = oneshot::channel();
-		light_dispatch.add_request(&mut network_interface, RequestData::RemoteReadDefaultChild(
+		light_dispatch.add_request(&mut network_interface, RequestData::RemoteReadChild(
 			RemoteReadChildRequest {
 				header: dummy_header(),
 				block: Default::default(),
