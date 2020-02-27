@@ -420,8 +420,6 @@ pub mod generic {
 		pub block: H,
 		/// Child Storage key.
 		pub storage_key: Vec<u8>,
-		/// Child type.
-		pub child_type: u32,
 		/// Storage key.
 		pub keys: Vec<Vec<u8>>,
 	}

@@ -119,7 +119,8 @@ impl<T: Trait> Module<T> {
 	{
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
-		let partial_fee = <ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
+		let partial_fee =
+			<ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
 		RuntimeDispatchInfo { weight, class, partial_fee }
@@ -165,9 +166,10 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let len_fee = per_byte.saturating_mul(len);
 
 			let weight_fee = {
-				// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
-				// maximum of its data type, which is not desired.
-				let capped_weight = info.weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
+				// cap the weight to the maximum defined in runtime, otherwise it will be the
+				// `Bounded` maximum of its data type, which is not desired.
+				let capped_weight = info.weight
+					.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
 				T::WeightToFee::convert(capped_weight)
 			};
 
@@ -248,20 +250,21 @@ mod tests {
 	use super::*;
 	use codec::Encode;
 	use frame_support::{
-		parameter_types, impl_outer_origin, impl_outer_dispatch,
+		impl_outer_dispatch, impl_outer_origin, parameter_types,
 		weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
 	};
+	use pallet_balances::Call as BalancesCall;
+	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill,
 		testing::{Header, TestXt},
-		traits::{BlakeTwo256, IdentityLookup, Extrinsic},
+		traits::{BlakeTwo256, Extrinsic, IdentityLookup},
+		Perbill,
 	};
-	use pallet_balances::Call as BalancesCall;
-	use sp_std::cell::RefCell;
-	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+	use std::cell::RefCell;
 
-	const CALL: &<Runtime as frame_system::Trait>::Call = &Call::Balances(BalancesCall::transfer(2, 69));
+	const CALL: &<Runtime as frame_system::Trait>::Call =
+		&Call::Balances(BalancesCall::transfer(2, 69));
 
 	impl_outer_dispatch! {
 		pub enum Call for Runtime where origin: Origin {
@@ -318,7 +321,7 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 	}
-thread_local! {
+	thread_local! {
 		static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
 		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
 		static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);
@@ -373,10 +376,16 @@ thread_local! {
 	}
 
 	impl ExtBuilder {
-		pub fn fees(mut self, base: u64, byte: u64, weight: u64) -> Self {
-			self.base_fee = base;
-			self.byte_fee = byte;
-			self.weight_to_fee = weight;
+		pub fn base_fee(mut self, base_fee: u64) -> Self {
+			self.base_fee = base_fee;
+			self
+		}
+		pub fn byte_fee(mut self, byte_fee: u64) -> Self {
+			self.byte_fee = byte_fee;
+			self
+		}
+		pub fn weight_fee(mut self, weight_to_fee: u64) -> Self {
+			self.weight_to_fee = weight_to_fee;
 			self
 		}
 		pub fn balance_factor(mut self, factor: u64) -> Self {
@@ -416,9 +425,9 @@ thread_local! {
 
 	#[test]
 	fn signed_extension_transaction_payment_work() {
-			ExtBuilder::default()
-			.balance_factor(10) // 100
-			.fees(5, 1, 1) // 5 fixed, 1 per byte, 1 per weight
+		ExtBuilder::default()
+			.balance_factor(10)
+			.base_fee(5)
 			.build()
 			.execute_with(||
 		{
@@ -441,9 +450,9 @@ thread_local! {
 
 	#[test]
 	fn signed_extension_transaction_payment_is_bounded() {
-			ExtBuilder::default()
+		ExtBuilder::default()
 			.balance_factor(1000)
-			.fees(0, 0, 1)
+			.byte_fee(0)
 			.build()
 			.execute_with(||
 		{
@@ -464,7 +473,7 @@ thread_local! {
 	#[test]
 	fn signed_extension_allows_free_transactions() {
 		ExtBuilder::default()
-			.fees(100, 1, 1)
+			.base_fee(100)
 			.balance_factor(0)
 			.build()
 			.execute_with(||
@@ -503,7 +512,7 @@ thread_local! {
 	#[test]
 	fn signed_ext_length_fee_is_also_updated_per_congestion() {
 		ExtBuilder::default()
-			.fees(5, 1, 1)
+			.base_fee(5)
 			.balance_factor(10)
 			.build()
 			.execute_with(||
@@ -531,7 +540,8 @@ thread_local! {
 		let ext = xt.encode();
 		let len = ext.len() as u32;
 		ExtBuilder::default()
-			.fees(5, 1, 2)
+			.base_fee(5)
+			.weight_fee(2)
 			.build()
 			.execute_with(||
 		{
@@ -558,10 +568,11 @@ thread_local! {
 	#[test]
 	fn compute_fee_works_without_multiplier() {
 		ExtBuilder::default()
-		.fees(100, 10, 1)
-		.balance_factor(0)
-		.build()
-		.execute_with(||
+			.base_fee(100)
+			.byte_fee(10)
+			.balance_factor(0)
+			.build()
+			.execute_with(||
 		{
 			// Next fee multiplier is zero
 			assert_eq!(NextFeeMultiplier::get(), Fixed64::from_natural(0));
@@ -597,10 +608,11 @@ thread_local! {
 	#[test]
 	fn compute_fee_works_with_multiplier() {
 		ExtBuilder::default()
-		.fees(100, 10, 1)
-		.balance_factor(0)
-		.build()
-		.execute_with(||
+			.base_fee(100)
+			.byte_fee(10)
+			.balance_factor(0)
+			.build()
+			.execute_with(||
 		{
 			// Add a next fee multiplier
 			NextFeeMultiplier::put(Fixed64::from_rational(1, 2)); // = 1/2 = .5
@@ -629,10 +641,11 @@ thread_local! {
 	#[test]
 	fn compute_fee_does_not_overflow() {
 		ExtBuilder::default()
-		.fees(100, 10, 1)
-		.balance_factor(0)
-		.build()
-		.execute_with(||
+			.base_fee(100)
+			.byte_fee(10)
+			.balance_factor(0)
+			.build()
+			.execute_with(||
 		{
 			// Overflow is handled
 			let dispatch_info = DispatchInfo {

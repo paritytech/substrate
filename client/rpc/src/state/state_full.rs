@@ -310,15 +310,14 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
-		child_type: u32,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| {
-					let child_info = match ChildType::new(child_type) {
-						Some(ChildType::ParentKeyId) => ChildInfo::new_default_from_vec(storage_key.0),
-						None => return Err("Invalid child type".into()),
+					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
+						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+						None => return Err("Invalid child storage key".into()),
 					};
 					self.client.child_storage_keys(
 						&BlockId::Hash(block),
@@ -333,15 +332,14 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
-		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| {
-					let child_info = match ChildType::new(child_type) {
-						Some(ChildType::ParentKeyId) => ChildInfo::new_default_from_vec(storage_key.0),
-						None => return Err("Invalid child type".into()),
+					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
+						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+						None => return Err("Invalid child storage key".into()),
 					};
 					self.client.child_storage(
 						&BlockId::Hash(block),
@@ -356,15 +354,14 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: StorageKey,
-		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| {
-					let child_info = match ChildType::new(child_type) {
-						Some(ChildType::ParentKeyId) => ChildInfo::new_default_from_vec(storage_key.0),
-						None => return Err("Invalid child type".into()),
+					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
+						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+						None => return Err("Invalid child storage key".into()),
 					};
 					self.client.child_storage_hash(
 						&BlockId::Hash(block),

@@ -55,7 +55,7 @@ use rustc_hex::ToHex;
 use sc_client::light::fetcher;
 use sc_client_api::StorageProof;
 use sc_peerset::ReputationChange;
-use sp_core::storage::{ChildInfo, StorageKey};
+use sp_core::storage::{ChildInfo, ChildType, StorageKey};
 use sp_blockchain::{Error as ClientError};
 use sp_runtime::traits::{Block, Header, NumberFor, Zero};
 use std::{
@@ -170,7 +170,7 @@ pub enum Request<B: Block> {
 		request: fetcher::RemoteReadRequest<B::Header>,
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
-	ReadDefaultChild {
+	ReadChild {
 		request: fetcher::RemoteReadChildRequest<B::Header>,
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
@@ -368,7 +368,7 @@ where
 						let reply = self.checker.check_read_proof(&request, proof)?;
 						Ok(Reply::MapVecU8OptVecU8(reply))
 					}
-					Request::ReadDefaultChild { request, .. } => {
+					Request::ReadChild { request, .. } => {
 						let proof = Decode::decode(&mut response.proof.as_ref())?;
 						let reply = self.checker.check_read_child_proof(&request, proof)?;
 						Ok(Reply::MapVecU8OptVecU8(reply))
@@ -514,8 +514,13 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let child_info = ChildInfo::new_default(&request.storage_key);
-		let proof = match self.chain.read_child_proof(&block, &child_info, &request.keys) {
+		let child_info = match ChildType::from_prefixed_key(&request.storage_key) {
+			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
+			None => Err("Invalid child storage key".into()),
+		};
+		let proof = match child_info.and_then(|child_info|
+			self.chain.read_child_proof(&block, &child_info, &request.keys)
+		) {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!("remote read child request {} from {} ({} {} at {:?}) failed with: {}",
@@ -889,7 +894,7 @@ fn required_block<B: Block>(request: &Request<B>) -> NumberFor<B> {
 	match request {
 		Request::Header { request, .. } => request.block,
 		Request::Read { request, .. } => *request.header.number(),
-		Request::ReadDefaultChild { request, .. } => *request.header.number(),
+		Request::ReadChild { request, .. } => *request.header.number(),
 		Request::Call { request, .. } => *request.header.number(),
 		Request::Changes { request, .. } => request.max_block.0,
 	}
@@ -899,7 +904,7 @@ fn retries<B: Block>(request: &Request<B>) -> usize {
 	let rc = match request {
 		Request::Header { request, .. } => request.retry_count,
 		Request::Read { request, .. } => request.retry_count,
-		Request::ReadDefaultChild { request, .. } => request.retry_count,
+		Request::ReadChild { request, .. } => request.retry_count,
 		Request::Call { request, .. } => request.retry_count,
 		Request::Changes { request, .. } => request.retry_count,
 	};
@@ -919,11 +924,10 @@ fn serialize_request<B: Block>(id: u64, request: &Request<B>) -> api::v1::light:
 			};
 			api::v1::light::request::Request::RemoteReadRequest(r)
 		}
-		Request::ReadDefaultChild { request, .. } => {
+		Request::ReadChild { request, .. } => {
 			let r = api::v1::light::RemoteReadChildRequest {
 				block: request.block.encode(),
 				storage_key: request.storage_key.clone(),
-				child_type: request.child_type,
 				keys: request.keys.clone(),
 			};
 			api::v1::light::request::Request::RemoteReadChildRequest(r)
@@ -967,7 +971,7 @@ fn send_reply<B: Block>(result: Result<Reply<B>, ClientError>, request: Request<
 			Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
 			reply => log::error!("invalid reply for read request: {:?}, {:?}", reply, request),
 		}
-		Request::ReadDefaultChild { request, sender } => match result {
+		Request::ReadChild { request, sender } => match result {
 			Err(e) => send(Err(e), sender),
 			Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
 			reply => log::error!("invalid reply for read child request: {:?}, {:?}", reply, request),
@@ -1547,7 +1551,7 @@ mod tests {
 					response: Some(api::v1::light::response::Response::RemoteReadResponse(r)),
 				}
 			}
-			Request::ReadDefaultChild{..} => {
+			Request::ReadChild{..} => {
 				let r = api::v1::light::RemoteReadResponse { proof: empty_proof() };
 				api::v1::light::Response {
 					id: 1,
@@ -1625,12 +1629,11 @@ mod tests {
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b":child_storage:sub".to_vec(),
-			child_type: 1,
+			storage_key: b":child_storage:default:sub".to_vec(),
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};
-		issue_request(Request::ReadDefaultChild { request, sender: chan.0 });
+		issue_request(Request::ReadChild { request, sender: chan.0 });
 		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
 	}
 
@@ -1726,12 +1729,11 @@ mod tests {
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b"sub".to_vec(),
-			child_type: 1,
+			storage_key: b":child_storage:default:sub".to_vec(),
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};
-		send_receive(Request::ReadDefaultChild { request, sender: chan.0 });
+		send_receive(Request::ReadChild { request, sender: chan.0 });
 		assert_eq!(Some(vec![42]), task::block_on(chan.1).unwrap().unwrap().remove(&b":key"[..]).unwrap());
 		//                   ^--- from `DummyFetchChecker::check_read_child_proof`
 	}

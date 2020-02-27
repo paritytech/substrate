@@ -74,9 +74,6 @@ message RemoteReadChildRequest {
 	// Child Storage key, this is relative
 	// to the child type storage location.
 	bytes storage_key = 3;
-	/// Child type, its required to resolve
-	/// child storage final location.
-	uint32 child_type = 5;
 	// Storage keys.
 	repeated bytes keys = 6;
 }

@@ -23,7 +23,7 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use sp_core::storage::{StorageKey, ChildInfo};
+use sp_core::storage::{StorageKey, ChildInfo, ChildType};
 use sp_consensus::{
 	BlockOrigin,
 	block_validation::BlockAnnounceValidator,
@@ -253,7 +253,6 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 		id: RequestId,
 		block: <B as BlockT>::Hash,
 		storage_key: Vec<u8>,
-		child_type: u32,
 		keys: Vec<Vec<u8>>,
 	) {
 		let message: Message<B> = message::generic::Message::RemoteReadChildRequest(
@@ -261,7 +260,6 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 				id,
 				block,
 				storage_key,
-				child_type,
 				keys,
 			});
 
@@ -1517,12 +1515,15 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
-		let child_info = ChildInfo::new_default(&request.storage_key);
-		let proof = match self.context_data.chain.read_child_proof(
+		let child_info = match ChildType::from_prefixed_key(&request.storage_key) {
+			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
+			None => Err("Invalid child storage key".into()),
+		};
+		let proof = match child_info.and_then(|child_info| self.context_data.chain.read_child_proof(
 			&request.block,
 			&child_info,
 			&request.keys,
-		) {
+		)) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",

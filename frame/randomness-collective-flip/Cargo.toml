@@ -1,23 +1,24 @@
 [package]
 name = "pallet-randomness-collective-flip"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "FRAME randomness collective flip pallet"
 
 [dependencies]
 safe-mix = { version = "1.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-runtime = { version = "2.0.0-alpha.1", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "2.0.0-alpha.1", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0-alpha.1", default-features = false, path = "../system" }
-sp-std = { version = "2.0.0-alpha.1", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
+sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "2.0.0-alpha.1", path = "../../primitives/core" }
-sp-io = { version = "2.0.0-alpha.1", path = "../../primitives/io" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
+sp-io = { version = "2.0.0-alpha.2", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
