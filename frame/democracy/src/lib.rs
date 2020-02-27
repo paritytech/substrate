@@ -23,6 +23,18 @@
 //! 
 //! The Democracy pallet handles the administration of general stakeholder voting.
 //!
+//! There are two different queues that a proposal can be added to before it
+//! becomes a referendum, 1) the proposal queue consisting of all public proposals
+//! and 2) the external queue consisting of a single proposal that originates
+//! from one of the _external_ origins (such as a collective group).
+//!
+//! Every launch period, a proposal will be taken from either the proposal queue
+//! or the external queue in turn. The taken proposal will become a referendum
+//! that can be voted on by any token holder in the system. The voting system
+//! uses timelock voting by allowing the token holder to set their _conviction_
+//! behind a vote. The conviction will dictate the length of time the tokens
+//! will be locked, as well as the multiplier that scales the vote power.
+//!
 //! ### Terminology
 //!
 //! - **Conviction:** A multiplier that is added to a vote based on the length
@@ -105,6 +117,18 @@
 //!
 //! - `fast_track` - Schedules the current externally proposed referendum that
 //!   is "majority-carries" to be tabled immediately.
+//!
+//! #### Veto Origin
+//! 
+//! This call can only be made by the `VetoOrigin`.
+//!
+//! - `veto_external` - Vetoes and blacklists the external proposal hash.
+//!
+//! #### Root
+//!
+//! - `cancel_referendum` - Removes a referendum.
+//! - `cancel_queued` - Cancels a proposal that is queued for enactment.
+//! - `clear_public_proposal` - Removes all public proposals.
 
 #![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -573,8 +597,16 @@ decl_module! {
 
 		/// Propose a sensitive action to be taken.
 		///
+		/// The dispatch origin of this call must be _Signed_ and the sender must
+		/// have funds to cover the deposit.
+		///
+		/// - `proposal_hash`: The hash of the proposal preimage.
+		/// - `value`: The amount of deposit (must be at least `MinimumDeposit`).
+		///
+		/// Emits `Proposed`.
+		///
 		/// # <weight>
-		/// - O(1).
+		/// - `O(1)`.
 		/// - Two DB changes, one DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
@@ -598,8 +630,13 @@ decl_module! {
 
 		/// Signals agreement with a particular proposal.
 		///
+		/// The dispatch origin of this call must be _Signed_ and the sender
+		/// must have funds to cover the deposit, equal to the original deposit.
+		///
+		/// - `proposal`: The index of the proposal to second.
+		///
 		/// # <weight>
-		/// - O(1).
+		/// - `O(1)`.
 		/// - One DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
@@ -615,8 +652,13 @@ decl_module! {
 		/// Vote in a referendum. If `vote.is_aye()`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
 		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `ref_index`: The index of the referendum to vote for.
+		/// - `vote`: The vote configuration.
+		///
 		/// # <weight>
-		/// - O(1).
+		/// - `O(1)`.
 		/// - One DB change, one DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
@@ -631,8 +673,13 @@ decl_module! {
 		/// Vote in a referendum on behalf of a stash. If `vote.is_aye()`, the vote is to enact
 		/// the proposal; otherwise it is a vote to keep the status quo.
 		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `ref_index`: The index of the referendum to proxy vote for.
+		/// - `vote`: The vote configuration.
+		///
 		/// # <weight>
-		/// - O(1).
+		/// - `O(1)`.
 		/// - One DB change, one DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
@@ -647,6 +694,14 @@ decl_module! {
 
 		/// Schedule an emergency cancellation of a referendum. Cannot happen twice to the same
 		/// referendum.
+		///
+		/// The dispatch origin of this call must be `CancellationOrigin`.
+		///
+		/// -`ref_index`: The index of the referendum to cancel.
+		///
+		/// # <weight>
+		/// - Depends on size of storage vec `VotersFor` for this referendum.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
 			T::CancellationOrigin::ensure_origin(origin)?;
@@ -661,6 +716,15 @@ decl_module! {
 
 		/// Schedule a referendum to be tabled once it is legal to schedule an external
 		/// referendum.
+		///
+		/// The dispatch origin of this call must be `ExternalOrigin`.
+		///
+		/// - `proposal_hash`: The preimage hash of the proposal.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One DB change.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose(origin, proposal_hash: T::Hash) {
 			T::ExternalOrigin::ensure_origin(origin)?;
@@ -677,8 +741,17 @@ decl_module! {
 		/// Schedule a majority-carries referendum to be tabled next once it is legal to schedule
 		/// an external referendum.
 		///
+		/// The dispatch of this call must be `ExternalMajorityOrigin`.
+		/// 
+		/// - `proposal_hash`: The preimage hash of the proposal.
+		///
 		/// Unlike `external_propose`, blacklisting has no effect on this and it may replace a
 		/// pre-scheduled `external_propose` call.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One DB change.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose_majority(origin, proposal_hash: T::Hash) {
 			T::ExternalMajorityOrigin::ensure_origin(origin)?;
@@ -688,8 +761,17 @@ decl_module! {
 		/// Schedule a negative-turnout-bias referendum to be tabled next once it is legal to
 		/// schedule an external referendum.
 		///
+		/// The dispatch of this call must be `ExternalDefaultOrigin`.
+		///
+		/// - `proposal_hash`: The preimage hash of the proposal.
+		///
 		/// Unlike `external_propose`, blacklisting has no effect on this and it may replace a
 		/// pre-scheduled `external_propose` call.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One DB change.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose_default(origin, proposal_hash: T::Hash) {
 			T::ExternalDefaultOrigin::ensure_origin(origin)?;
@@ -700,11 +782,21 @@ decl_module! {
 		/// immediately. If there is no externally-proposed referendum currently, or if there is one
 		/// but it is not a majority-carries referendum then it fails.
 		///
+		/// The dispatch of this call must be `FastTrackOrigin`.
+		///
 		/// - `proposal_hash`: The hash of the current external proposal.
 		/// - `voting_period`: The period that is allowed for voting on this proposal. Increased to
 		///   `EmergencyVotingPeriod` if too low.
 		/// - `delay`: The number of block after voting has ended in approval and this should be
 		///   enacted. This doesn't have a minimum amount.
+		///
+		/// Emits `Started`.
+		///
+		/// # <weight>
+		/// - One DB clear.
+		/// - One DB change.
+		/// - One extra DB entry.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn fast_track(origin,
 			proposal_hash: T::Hash,
@@ -727,6 +819,19 @@ decl_module! {
 		}
 
 		/// Veto and blacklist the external proposal hash.
+		///
+		/// The dispatch origin of this call must be `VetoOrigin`.
+		/// 
+		/// - `proposal_hash`: The preimage hash of the proposal to veto and blacklist.
+		///
+		/// Emits `Vetoed`.
+		///
+		/// # <weight>
+		/// - Two DB entries.
+		/// - One DB clear.
+		/// - Performs a binary search on `existing_vetoers` which should not
+		///   be very large.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn veto_external(origin, proposal_hash: T::Hash) {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
@@ -752,6 +857,14 @@ decl_module! {
 		}
 
 		/// Remove a referendum.
+		///
+		/// The dispatch origin of this call must be _Root_.
+		///
+		/// - `ref_index`: The index of the referendum to cancel.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
 			ensure_root(origin)?;
@@ -759,6 +872,14 @@ decl_module! {
 		}
 
 		/// Cancel a proposal queued for enactment.
+		///
+		/// The dispatch origin of this call must be _Root_.
+		///
+		/// - `which`: The index of the referendum to cancel.
+		///
+		/// # <weight>
+		/// - One DB change.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
@@ -778,6 +899,10 @@ decl_module! {
 		/// Specify a proxy that is already open to us. Called by the stash.
 		///
 		/// NOTE: Used to be called `set_proxy`.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `proxy`: The account which will be activated as proxy.
 		///
 		/// # <weight>
 		/// - One extra DB entry.
@@ -800,6 +925,8 @@ decl_module! {
 		///
 		/// NOTE: Used to be called `resign_proxy`.
 		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
 		/// # <weight>
 		/// - One DB clear.
 		/// # </weight>
@@ -820,6 +947,10 @@ decl_module! {
 		///
 		/// NOTE: Used to be called `remove_proxy`.
 		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `proxy`: The account which will be deactivated as proxy.
+		///
 		/// # <weight>
 		/// - One DB clear.
 		/// # </weight>
@@ -837,6 +968,16 @@ decl_module! {
 		}
 
 		/// Delegate vote.
+		///
+		/// Currency is locked indefinitely for as long as it's delegated.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `to`: The account to make a delegate of the sender.
+		/// - `conviction`: The conviction that will be attached to the delegated
+		///   votes.
+		///
+		/// Emits `Delegated`.
 		///
 		/// # <weight>
 		/// - One extra DB entry.
@@ -857,6 +998,14 @@ decl_module! {
 		}
 
 		/// Undelegate vote.
+		///
+		/// Must be sent from an account that has called delegate previously.
+		/// The tokens will be reduced from an indefinite lock to the maximum
+		/// possible according to the conviction of the prior delegation.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// Emits `Undelegated`.
 		///
 		/// # <weight>
 		/// - O(1).
@@ -879,7 +1028,14 @@ decl_module! {
 			Self::deposit_event(RawEvent::Undelegated(who));
 		}
 
-		/// Veto and blacklist the proposal hash. Must be from Root origin.
+		/// Clears all public proposals.
+		///
+		/// The dispatch origin of this call must be _Root_.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One DB clear.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn clear_public_proposals(origin) {
 			ensure_root(origin)?;
@@ -889,6 +1045,17 @@ decl_module! {
 
 		/// Register the preimage for an upcoming proposal. This doesn't require the proposal to be
 		/// in the dispatch queue but does require a deposit, returned once enacted.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `encoded_proposal`: The preimage of a proposal.
+		///
+		/// Emits `PreimageNoted`.
+		///
+		/// # <weight>
+		/// - Dependent on the size of `encoded_proposal` but protected by a 
+		///   required deposit.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn note_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
@@ -907,6 +1074,16 @@ decl_module! {
 
 		/// Register the preimage for an upcoming proposal. This requires the proposal to be
 		/// in the dispatch queue. No deposit is needed.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `encoded_proposal`: The preimage of a proposal.
+		///
+		/// Emits `PreimageNoted`.
+		///
+		/// # <weight>
+		/// - Dependent on the size of `encoded_proposal`.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
@@ -924,9 +1101,19 @@ decl_module! {
 
 		/// Remove an expired proposal preimage and collect the deposit.
 		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `proposal_hash`: The preimage hash of a proposal.
+		///
 		/// This will only work after `VotingPeriod` blocks from the time that the preimage was
 		/// noted, if it's the same account doing it. If it's a different account, then it'll only
 		/// work an additional `EnactmentPeriod` later.
+		///
+		/// Emits `PreimageReaped`.
+		///
+		/// # <weight>
+		/// - One DB clear.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn reap_preimage(origin, proposal_hash: T::Hash) {
 			let who = ensure_signed(origin)?;
@@ -946,6 +1133,17 @@ decl_module! {
 			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
 		}
 
+		/// Unlock tokens that have an expired lock.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `target`: The account to remove the lock on.
+		///
+		/// Emits `Unlocked`.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn unlock(origin, target: T::AccountId) {
 			ensure_signed(origin)?;
@@ -1156,7 +1354,6 @@ impl<T: Trait> Module<T> {
 	/// Remove all info on a referendum.
 	fn clear_referendum(ref_index: ReferendumIndex) {
 		<ReferendumInfoOf<T>>::remove(ref_index);
-
 
 		LowestUnbaked::mutate(|i| if *i == ref_index {
 			*i += 1;
