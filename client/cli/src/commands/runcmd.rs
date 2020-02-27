@@ -578,7 +578,7 @@ impl fmt::Display for TelemetryParsingError {
 			TelemetryParsingError::VerbosityParsingError(e) => write!(f, "{}", e),
 			TelemetryParsingError::UrlParsingError(e) => write!(f, "{}", e),
 		}
-    }
+	}
 }
 
 fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), TelemetryParsingError> {
