@@ -1,6 +1,6 @@
 [package]
 name = "node-cli"
-version = "2.0.0-alpha.2"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node implementation in Rust."
 build = "build.rs"

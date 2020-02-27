@@ -1,6 +1,6 @@
 [package]
 name = "node-inspect"
-version = "0.8.0-alpha.2"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
