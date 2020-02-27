@@ -58,7 +58,7 @@ use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
 use sp_finality_grandpa::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
-use prometheus_exporter::{Gauge, U64, register, PrometheusError};
+use prometheus_endpoint::{Gauge, U64, register, PrometheusError};
 
 type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -380,7 +380,7 @@ pub(crate) struct Metrics {
 }
 
 impl Metrics {
-	pub(crate) fn register(registry: &prometheus_exporter::Registry) -> Result<Self, PrometheusError> {
+	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			finality_grandpa_round: register(
 				Gauge::new("finality_grandpa_round", "Highest completed GRANDPA round.")?,

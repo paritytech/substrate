@@ -53,7 +53,7 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
-use prometheus_exporter::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
+use substrate_prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
 
 struct ServiceMetrics {
 	block_height_number: GaugeVec<U64>,
@@ -1037,7 +1037,7 @@ ServiceBuilder<
 			metrics.node_roles.set(u64::from(config.roles.bits()));
 
 			let future = select(
-				prometheus_exporter::init_prometheus(port, registry).boxed(),
+				substrate_prometheus_endpoint::init_prometheus(port, registry).boxed(),
 				exit.clone()
 			).map(drop);
 

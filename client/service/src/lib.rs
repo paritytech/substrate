@@ -114,7 +114,7 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	_offchain_workers: Option<Arc<TOc>>,
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
-	prometheus_registry: Option<prometheus_exporter::Registry>,
+	prometheus_registry: Option<prometheus_endpoint::Registry>,
 }
 
 /// Alias for a an implementation of `futures::future::Executor`.
@@ -226,7 +226,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	fn on_exit(&self) -> ::exit_future::Exit;
 
 	/// Get the prometheus metrics registry, if available.
-	fn prometheus_registry(&self) -> Option<prometheus_exporter::Registry>;
+	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for

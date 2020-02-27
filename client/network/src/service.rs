@@ -39,7 +39,7 @@ use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent};
 use parking_lot::Mutex;
 use sc_peerset::PeersetHandle;
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
-use prometheus_exporter::{Registry, Gauge, U64, register, PrometheusError};
+use prometheus_endpoint::{Registry, Gauge, U64, register, PrometheusError};
 
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
 use crate::{transport, config::NonReservedPeerMode, ReputationChange};

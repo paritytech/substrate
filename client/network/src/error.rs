@@ -46,7 +46,7 @@ pub enum Error {
 		second_id: PeerId,
 	},
 	/// Prometheus metrics error.
-	Prometheus(prometheus_exporter::PrometheusError)
+	Prometheus(prometheus_endpoint::PrometheusError)
 }
 
 // Make `Debug` use the `Display` implementation.

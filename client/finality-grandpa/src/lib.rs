@@ -552,7 +552,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR, X> {
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
 	/// The prometheus metrics registry.
-	pub prometheus_registry: Option<prometheus_exporter::Registry>,
+	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -677,7 +677,7 @@ where
 		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
-		prometheus_registry: Option<prometheus_exporter::Registry>,
+		prometheus_registry: Option<prometheus_endpoint::Registry>,
 	) -> Self {
 
 		let voters = persistent_data.authority_set.current_authorities();

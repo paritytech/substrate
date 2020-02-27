@@ -41,7 +41,7 @@ use core::{fmt, iter};
 use std::{future::Future, pin::Pin};
 use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
 use zeroize::Zeroize;
-use prometheus_exporter::Registry;
+use prometheus_endpoint::Registry;
 
 /// Network initialization parameters.
 pub struct Params<B: BlockT, H: ExHashT> {
