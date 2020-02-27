@@ -62,7 +62,7 @@ use futures::{prelude::*, channel::mpsc};
 use libp2p::{Multiaddr, wasm_ext};
 use log::{error, warn};
 use parking_lot::Mutex;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Deserializer};
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
 
@@ -96,7 +96,19 @@ pub struct TelemetryConfig {
 ///
 /// The URL string can be either a URL or a multiaddress.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct TelemetryEndpoints(Vec<(Multiaddr, u8)>);
+pub struct TelemetryEndpoints(
+	#[serde(deserialize_with = "url_or_multiaddr_deser")]
+	Vec<(Multiaddr, u8)>
+);
+
+/// Custom deserializer for TelemetryEndpoints, used to convert urls or multiaddr to multiaddr.
+fn url_or_multiaddr_deser<'de, D>(deserializer: D) -> Result<Vec<(Multiaddr, u8)>, D::Error> where D: Deserializer<'de> {
+	Vec::<(String, u8)>::deserialize(deserializer)?
+		.iter()
+		.map(|e| Ok((url_to_multiaddr(&e.0)
+		.map_err(serde::de::Error::custom)?, e.1)))
+		.collect()
+}
 
 impl TelemetryEndpoints {
 	pub fn new(endpoints: Vec<(String, u8)>) -> Result<Self, libp2p::multiaddr::Error> {
@@ -302,14 +314,15 @@ macro_rules! telemetry {
 mod telemetry_endpoints_tests {
 	use libp2p::Multiaddr;
 	use super::TelemetryEndpoints;
+	use super::url_to_multiaddr;
 
 	#[test]
 	fn valid_endpoints() {
-		let endp = vec![("/ip4/80.123.90.4/tcp/5432".into(), 3), ("/ip4/80.123.90.4/tcp/5432".into(), 4)];
+		let endp = vec![("wss://telemetry.polkadot.io/submit/".into(), 3), ("/ip4/80.123.90.4/tcp/5432".into(), 4)];
 		let telem = TelemetryEndpoints::new(endp.clone()).expect("Telemetry endpoint should be valid");
 		let mut res: Vec<(Multiaddr, u8)> = vec![];
 		for (a, b) in endp.iter() {
-			res.push((a.parse().expect("provided url should be valid"), *b))
+			res.push((url_to_multiaddr(a).expect("provided url should be valid"), *b))
 		}
 		assert_eq!(telem.0, res);
 	}
