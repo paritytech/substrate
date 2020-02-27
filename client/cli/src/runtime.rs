@@ -92,7 +92,7 @@ where
 
 	config.task_executor = {
 		let runtime_handle = runtime.handle().clone();
-		Some(Arc::new(move |fut| { runtime_handle.spawn(fut); }))
+		Arc::new(move |fut| { runtime_handle.spawn(fut); })
 	};
 
 	let f = future_builder(config)?;
@@ -118,7 +118,7 @@ where
 
 	config.task_executor = {
 		let runtime_handle = runtime.handle().clone();
-		Some(Arc::new(move |fut| { runtime_handle.spawn(fut); }))
+		Arc::new(move |fut| { runtime_handle.spawn(fut); })
 	};
 
 	let service = service_builder(config)?;

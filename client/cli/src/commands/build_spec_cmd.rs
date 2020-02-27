@@ -23,6 +23,7 @@ use crate::error;
 use crate::VersionInfo;
 use crate::params::SharedParams;
 use crate::params::NodeKeyParams;
+use crate::IntoConfiguration;
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
@@ -47,6 +48,17 @@ pub struct BuildSpecCmd {
 	pub node_key_params: NodeKeyParams,
 }
 
+impl<G, E, V> IntoConfiguration<G, E, V> for BuildSpecCmd
+where
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+	V: VersionInfo<G, E>,
+{
+	fn get_chain_spec(&self) -> ChainSpec<G, E> {
+		self.shared_params.get_chain_spec(V::spec_factory)
+	}
+}
+
 impl BuildSpecCmd {
 	/// Run the build-spec command
 	pub fn run<G, E>(
@@ -58,7 +70,7 @@ impl BuildSpecCmd {
 		E: ChainSpecExtension,
 	{
 		info!("Building chain spec");
-		let mut spec = config.expect_chain_spec().clone();
+		let mut spec = config.chain_spec.clone();
 		let raw_output = self.raw;
 
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
@@ -84,13 +96,12 @@ impl BuildSpecCmd {
 		&self,
 		mut config: &mut Configuration<G, E>,
 		spec_factory: F,
-		version: &VersionInfo,
 	) -> error::Result<()> where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		self.shared_params.update_config(&mut config)?;
 
 		let net_config_path = config
 			.in_chain_config_dir(crate::commands::DEFAULT_NETWORK_CONFIG_PATH)

@@ -49,7 +49,7 @@ impl PurgeChainCmd {
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		let db_path = match config.expect_database() {
+		let db_path = match &config.database {
 			DatabaseConfig::Path { path, .. } => path,
 			_ => {
 				eprintln!("Cannot purge custom database implementation");

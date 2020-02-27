@@ -24,8 +24,7 @@ mod arg_enums;
 mod error;
 mod runtime;
 mod commands;
-
-pub use sc_service::config::VersionInfo;
+mod config;
 
 use std::io::Write;
 
@@ -36,120 +35,145 @@ pub use params::*;
 pub use commands::*;
 pub use arg_enums::*;
 pub use error::*;
+pub use config::*;
 use log::info;
 use lazy_static::lazy_static;
+use sc_service::ChainSpec;
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
 
-/// Helper function used to parse the command line arguments. This is the equivalent of
-/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
-/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
-///
-/// To allow running the node without subcommand, tt also sets a few more settings:
-/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
-///
-/// Gets the struct from the command line arguments. Print the
-/// error message and quit the program in case of failure.
-pub fn from_args<T>(version: &VersionInfo) -> T
-where
-	T: StructOpt + Sized,
-{
-	from_iter::<T, _>(&mut std::env::args_os(), version)
-}
+/// Substrate client CLI
+pub trait SubstrateCLI<G, E> {
+	/// Implementation name.
+	fn name() -> &'static str;
+	/// Implementation version.
+	fn version() -> &'static str;
+	/// SCM Commit hash.
+	fn commit() -> &'static str;
+	/// Executable file name.
+	fn executable_name() -> &'static str;
+	/// Executable file description.
+	fn description() -> &'static str;
+	/// Executable file author.
+	fn author() -> &'static str;
+	/// Support URL.
+	fn support_url() -> &'static str;
+	/// Copyright starting year (x-current year)
+	fn copyright_start_year() -> i32;
+	/// Chain spec factory
+	fn spec_factory(id: &str) -> Option<ChainSpec<G, E>>;
 
-/// Helper function used to parse the command line arguments. This is the equivalent of
-/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
-/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
-///
-/// To allow running the node without subcommand, tt also sets a few more settings:
-/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
-///
-/// Gets the struct from any iterator such as a `Vec` of your making.
-/// Print the error message and quit the program in case of failure.
-pub fn from_iter<T, I>(iter: I, version: &VersionInfo) -> T
-where
-	T: StructOpt + Sized,
-	I: IntoIterator,
-	I::Item: Into<std::ffi::OsString> + Clone,
-{
-	let app = T::clap();
+	/// Helper function used to parse the command line arguments. This is the equivalent of
+	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
+	/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
+	///
+	/// To allow running the node without subcommand, tt also sets a few more settings:
+	/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
+	///
+	/// Gets the struct from the command line arguments. Print the
+	/// error message and quit the program in case of failure.
+	fn from_args<T>() -> T
+	where
+		T: StructOpt + Sized,
+	{
+		Self::from_iter::<T, _>(&mut std::env::args_os())
+	}
 
-	let mut full_version = sc_service::config::full_version_from_strs(
-		version.version,
-		version.commit
-	);
-	full_version.push_str("\n");
+	/// Helper function used to parse the command line arguments. This is the equivalent of
+	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
+	/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
+	///
+	/// To allow running the node without subcommand, tt also sets a few more settings:
+	/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
+	///
+	/// Gets the struct from any iterator such as a `Vec` of your making.
+	/// Print the error message and quit the program in case of failure.
+	fn from_iter<T, I>(iter: I) -> T
+	where
+		T: StructOpt + Sized,
+		I: IntoIterator,
+		I::Item: Into<std::ffi::OsString> + Clone,
+	{
+		let app = T::clap();
 
-	let app = app
-		.name(version.executable_name)
-		.author(version.author)
-		.about(version.description)
-		.version(full_version.as_str())
-		.settings(&[
-			AppSettings::GlobalVersion,
-			AppSettings::ArgsNegateSubcommands,
-			AppSettings::SubcommandsNegateReqs,
-		]);
+		let mut full_version = sc_service::config::full_version_from_strs(
+			V::version,
+			V::commit,
+		);
+		full_version.push_str("\n");
 
-	T::from_clap(&app.get_matches_from(iter))
-}
+		let app = app
+			.name(V::executable_name)
+			.author(V::author)
+			.about(V::description)
+			.version(full_version.as_str())
+			.settings(&[
+				AppSettings::GlobalVersion,
+				AppSettings::ArgsNegateSubcommands,
+				AppSettings::SubcommandsNegateReqs,
+			]);
 
-/// Helper function used to parse the command line arguments. This is the equivalent of
-/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
-/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
-///
-/// To allow running the node without subcommand, tt also sets a few more settings:
-/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
-///
-/// Gets the struct from any iterator such as a `Vec` of your making.
-/// Print the error message and quit the program in case of failure.
-///
-/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
-/// used. It will return a [`clap::Error`], where the [`kind`] is a
-/// [`ErrorKind::HelpDisplayed`] or [`ErrorKind::VersionDisplayed`] respectively. You must call
-/// [`Error::exit`] or perform a [`std::process::exit`].
-pub fn try_from_iter<T, I>(iter: I, version: &VersionInfo) -> clap::Result<T>
-where
-	T: StructOpt + Sized,
-	I: IntoIterator,
-	I::Item: Into<std::ffi::OsString> + Clone,
-{
-	let app = T::clap();
+		T::from_clap(&app.get_matches_from(iter))
+	}
 
-	let mut full_version = sc_service::config::full_version_from_strs(
-		version.version,
-		version.commit,
-	);
-	full_version.push_str("\n");
+	/// Helper function used to parse the command line arguments. This is the equivalent of
+	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
+	/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
+	///
+	/// To allow running the node without subcommand, tt also sets a few more settings:
+	/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
+	///
+	/// Gets the struct from any iterator such as a `Vec` of your making.
+	/// Print the error message and quit the program in case of failure.
+	///
+	/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
+	/// used. It will return a [`clap::Error`], where the [`kind`] is a
+	/// [`ErrorKind::HelpDisplayed`] or [`ErrorKind::VersionDisplayed`] respectively. You must call
+	/// [`Error::exit`] or perform a [`std::process::exit`].
+	fn try_from_iter<T, I>(iter: I) -> clap::Result<T>
+	where
+		T: StructOpt + Sized,
+		I: IntoIterator,
+		I::Item: Into<std::ffi::OsString> + Clone,
+	{
+		let app = T::clap();
 
-	let app = app
-		.name(version.executable_name)
-		.author(version.author)
-		.about(version.description)
-		.version(full_version.as_str());
+		let mut full_version = sc_service::config::full_version_from_strs(
+			V::version,
+			V::commit,
+		);
+		full_version.push_str("\n");
 
-	let matches = app.get_matches_from_safe(iter)?;
+		let app = app
+			.name(V::executable_name())
+			.author(V::author())
+			.about(V::description())
+			.version(full_version.as_str());
 
-	Ok(T::from_clap(&matches))
-}
+		let matches = app.get_matches_from_safe(iter)?;
 
-/// Initialize substrate. This must be done only once.
-///
-/// This method:
-///
-/// 1. Set the panic handler
-/// 2. Raise the FD limit
-/// 3. Initialize the logger
-pub fn init(logger_pattern: &str, version: &VersionInfo) -> error::Result<()> {
-	let full_version = sc_service::config::full_version_from_strs(
-		version.version,
-		version.commit
-	);
-	sp_panic_handler::set(version.support_url, &full_version);
+		Ok(T::from_clap(&matches))
+	}
 
-	fdlimit::raise_fd_limit();
-	init_logger(logger_pattern);
+	/// Initialize substrate. This must be done only once.
+	///
+	/// This method:
+	///
+	/// 1. Set the panic handler
+	/// 2. Raise the FD limit
+	/// 3. Initialize the logger
+	fn init(logger_pattern: &str) -> error::Result<()>
+	{
+		let full_version = sc_service::config::full_version_from_strs(
+			V::version,
+			V::commit,
+		);
+		sp_panic_handler::set(V::support_url, &full_version);
 
-	Ok(())
+		fdlimit::raise_fd_limit();
+		init_logger(logger_pattern);
+
+		Ok(())
+	}
 }
 
 /// Initialize the logger

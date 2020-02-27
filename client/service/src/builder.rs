@@ -208,7 +208,6 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 			password.clone()
 		)?,
 		KeystoreConfig::InMemory => Keystore::new_in_memory(),
-		KeystoreConfig::None => return Err("No keystore config provided!".into()),
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -216,7 +215,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 		config.default_heap_pages,
 	);
 
-	let chain_spec = config.expect_chain_spec();
+	let chain_spec = &config.chain_spec;
 	let fork_blocks = chain_spec
 		.extensions()
 		.get::<sc_client::ForkBlocks<TBl>>()
@@ -235,7 +234,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 			state_cache_child_ratio:
 			config.state_cache_child_ratio.map(|v| (v, 100)),
 			pruning: config.pruning.clone(),
-			source: match config.expect_database() {
+			source: match &config.database {
 				DatabaseConfig::Path { path, cache_size } =>
 					sc_client_db::DatabaseSettingsSrc::Path {
 						path: path.clone(),
@@ -254,7 +253,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 		sc_client_db::new_client(
 			db_config,
 			executor,
-			config.expect_chain_spec(),
+			chain_spec,
 			fork_blocks,
 			bad_blocks,
 			extensions,
@@ -331,7 +330,6 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 				password.clone()
 			)?,
 			KeystoreConfig::InMemory => Keystore::new_in_memory(),
-			KeystoreConfig::None => return Err("No keystore config provided!".into()),
 		};
 
 		let executor = NativeExecutor::<TExecDisp>::new(
@@ -345,7 +343,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 				state_cache_child_ratio:
 					config.state_cache_child_ratio.map(|v| (v, 100)),
 				pruning: config.pruning.clone(),
-				source: match config.expect_database() {
+				source: match &config.database {
 					DatabaseConfig::Path { path, cache_size } =>
 						sc_client_db::DatabaseSettingsSrc::Path {
 							path: path.clone(),
@@ -369,7 +367,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		let remote_blockchain = backend.remote_blockchain();
 		let client = Arc::new(sc_client::light::new_light(
 			backend.clone(),
-			config.expect_chain_spec(),
+			&config.chain_spec,
 			executor,
 		)?);
 
@@ -849,7 +847,7 @@ ServiceBuilder<
 
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.chain_info();
-		let chain_spec = config.expect_chain_spec();
+		let chain_spec = &config.chain_spec;
 
 		let version = config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
@@ -1226,7 +1224,7 @@ ServiceBuilder<
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
-			let chain_name = config.expect_chain_spec().name().to_owned();
+			let chain_name = config.chain_spec.name().to_owned();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
 			let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
 				endpoints,
@@ -1285,11 +1283,7 @@ ServiceBuilder<
 			essential_failed_rx,
 			to_spawn_tx,
 			to_spawn_rx,
-			task_executor: if let Some(exec) = config.task_executor {
-				exec
-			} else {
-				return Err(Error::TaskExecutorRequired);
-			},
+			task_executor: config.task_executor,
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,

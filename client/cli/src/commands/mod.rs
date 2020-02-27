@@ -14,19 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-mod runcmd;
-mod export_blocks_cmd;
+//mod runcmd;
+//mod export_blocks_cmd;
 mod build_spec_cmd;
-mod import_blocks_cmd;
-mod check_block_cmd;
-mod revert_cmd;
-mod purge_chain_cmd;
+//mod import_blocks_cmd;
+//mod check_block_cmd;
+//mod revert_cmd;
+//mod purge_chain_cmd;
 
 use std::fmt::Debug;
 use structopt::StructOpt;
 
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
+	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
@@ -53,22 +53,22 @@ const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 #[derive(Debug, Clone, StructOpt)]
 pub enum Subcommand {
 	/// Build a spec.json file, outputing to stdout.
-	BuildSpec(build_spec_cmd::BuildSpecCmd),
+	BuildSpec(BuildSpecCmd),
 
 	/// Export blocks to a file.
-	ExportBlocks(export_blocks_cmd::ExportBlocksCmd),
+	ExportBlocks(ExportBlocksCmd),
 
 	/// Import blocks from file.
-	ImportBlocks(import_blocks_cmd::ImportBlocksCmd),
+	ImportBlocks(ImportBlocksCmd),
 
 	/// Validate a single block.
-	CheckBlock(check_block_cmd::CheckBlockCmd),
+	CheckBlock(CheckBlockCmd),
 
 	/// Revert chain to the previous state.
-	Revert(revert_cmd::RevertCmd),
+	Revert(RevertCmd),
 
 	/// Remove the whole chain data.
-	PurgeChain(purge_chain_cmd::PurgeChainCmd),
+	PurgeChain(PurgeChainCmd),
 }
 
 impl Subcommand {
@@ -112,23 +112,20 @@ impl Subcommand {
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
+	pub fn update_config<G, E>(
 		&self,
 		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
 	) -> error::Result<()> where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
 		match self {
-			Subcommand::BuildSpec(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::ExportBlocks(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::ImportBlocks(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::CheckBlock(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::PurgeChain(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::Revert(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::BuildSpec(cmd) => cmd.update_config(&mut config),
+			Subcommand::ExportBlocks(cmd) => cmd.update_config(&mut config),
+			Subcommand::ImportBlocks(cmd) => cmd.update_config(&mut config),
+			Subcommand::CheckBlock(cmd) => cmd.update_config(&mut config),
+			Subcommand::PurgeChain(cmd) => cmd.update_config(&mut config),
+			Subcommand::Revert(cmd) => cmd.update_config(&mut config),
 		}
 	}
 
@@ -139,7 +136,7 @@ impl Subcommand {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init(&self, version: &VersionInfo) -> error::Result<()> {
-		self.get_shared_params().init(version)
+	pub fn init(&self) -> error::Result<()> {
+		self.get_shared_params().init()
 	}
 }

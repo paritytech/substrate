@@ -28,27 +28,6 @@ use sp_core::crypto::Protected;
 use target_info::Target;
 use sc_telemetry::TelemetryEndpoints;
 
-/// Executable version. Used to pass version information from the root crate.
-#[derive(Clone)]
-pub struct VersionInfo {
-	/// Implementation name.
-	pub name: &'static str,
-	/// Implementation version.
-	pub version: &'static str,
-	/// SCM Commit hash.
-	pub commit: &'static str,
-	/// Executable file name.
-	pub executable_name: &'static str,
-	/// Executable file description.
-	pub description: &'static str,
-	/// Executable file author.
-	pub author: &'static str,
-	/// Support URL.
-	pub support_url: &'static str,
-	/// Copyright starting year (x-current year)
-	pub copyright_start_year: i32,
-}
-
 /// Service configuration.
 pub struct Configuration<G, E = NoExtension> {
 	/// Implementation name
@@ -60,17 +39,15 @@ pub struct Configuration<G, E = NoExtension> {
 	/// Node roles.
 	pub roles: Roles,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: Option<Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>>,
+	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
-	/// Path to the base configuration directory.
-	pub config_dir: Option<PathBuf>,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
 	/// Configuration for the database.
-	pub database: Option<DatabaseConfig>,
+	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
@@ -78,7 +55,7 @@ pub struct Configuration<G, E = NoExtension> {
 	/// Pruning settings.
 	pub pruning: PruningMode,
 	/// Chain configuration.
-	pub chain_spec: Option<ChainSpec<G, E>>,
+	pub chain_spec: ChainSpec<G, E>,
 	/// Node name.
 	pub name: String,
 	/// Wasm execution method.
@@ -127,8 +104,6 @@ pub struct Configuration<G, E = NoExtension> {
 /// Configuration of the client keystore.
 #[derive(Clone)]
 pub enum KeystoreConfig {
-	/// No config supplied.
-	None,
 	/// Keystore at a path on-disk. Recommended for native nodes.
 	Path {
 		/// The path of the keystore.
@@ -144,8 +119,8 @@ impl KeystoreConfig {
 	/// Returns the path for the keystore.
 	pub fn path(&self) -> Option<&Path> {
 		match self {
-			Self::Path { path, .. } => Some(&path),
-			Self::None | Self::InMemory => None,
+			Self::Path { path, .. } => Some(path),
+			Self::InMemory => None,
 		}
 	}
 }
@@ -165,6 +140,8 @@ pub enum DatabaseConfig {
 	Custom(Arc<dyn KeyValueDB>),
 }
 
+// TODO: I don't think we can define a default at all. Is this useful only for testing?
+/*
 impl<G, E> Default for Configuration<G, E> {
 	/// Create a default config
 	fn default() -> Self {
@@ -204,8 +181,11 @@ impl<G, E> Default for Configuration<G, E> {
 		}
 	}
 }
+*/
 
 impl<G, E> Configuration<G, E> {
+	// TODO: we probably don't need that VersionInfo at all
+	/*
 	/// Create a default config using `VersionInfo`
 	pub fn from_version(version: &VersionInfo) -> Self {
 		let mut config = Configuration::default();
@@ -215,46 +195,37 @@ impl<G, E> Configuration<G, E> {
 
 		config
 	}
+	*/
 
 	/// Returns full version string of this configuration.
 	pub fn full_version(&self) -> String {
 		full_version_from_strs(self.impl_version, self.impl_commit)
 	}
 
+	// TODO: move to sc_cli
+	/*
 	/// Implementation id and version.
 	pub fn client_id(&self) -> String {
 		format!("{}/v{}", self.impl_name, self.full_version())
 	}
+	*/
 
+	// TODO: move to sc_cli
+	/*
 	/// Generate a PathBuf to sub in the chain configuration directory
 	/// if given
 	pub fn in_chain_config_dir(&self, sub: &str) -> Option<PathBuf> {
 		self.config_dir.clone().map(|mut path| {
 			path.push("chains");
-			path.push(self.expect_chain_spec().id());
+			path.push(self.chain_spec.id());
 			path.push(sub);
 			path
 		})
 	}
+	*/
 
-	/// Return a reference to the `ChainSpec` of this `Configuration`.
-	///
-	/// ### Panics
-	///
-	/// This method panic if the `chain_spec` is `None`
-	pub fn expect_chain_spec(&self) -> &ChainSpec<G, E> {
-		self.chain_spec.as_ref().expect("chain_spec must be specified")
-	}
-
-	/// Return a reference to the `DatabaseConfig` of this `Configuration`.
-	///
-	/// ### Panics
-	///
-	/// This method panic if the `database` is `None`
-	pub fn expect_database(&self) -> &DatabaseConfig {
-		self.database.as_ref().expect("database must be specified")
-	}
-
+	// TODO: move to sc_cli
+	/*
 	/// Returns a string displaying the node role, special casing the sentry mode
 	/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
 	/// doesn't participate.
@@ -265,7 +236,10 @@ impl<G, E> Configuration<G, E> {
 			self.roles.to_string()
 		}
 	}
+	*/
 
+	// TODO: move to sc_cli
+	/*
 	/// Use in memory keystore config when it is not required at all.
 	///
 	/// This function returns an error if the keystore is already set to something different than
@@ -276,6 +250,7 @@ impl<G, E> Configuration<G, E> {
 			_ => Err("Keystore config specified when it should not be!".into()),
 		}
 	}
+	*/
 }
 
 /// Returns platform info

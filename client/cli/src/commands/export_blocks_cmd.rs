@@ -79,7 +79,7 @@ impl ExportBlocksCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		if let DatabaseConfig::Path { ref path, .. } = config.expect_database() {
+		if let DatabaseConfig::Path { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);

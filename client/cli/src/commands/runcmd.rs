@@ -458,7 +458,7 @@ impl RunCmd {
 		info!("{}", version.name);
 		info!("  version {}", config.full_version());
 		info!("  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
-		info!("Chain specification: {}", config.expect_chain_spec().name());
+		info!("Chain specification: {}", config.chain_spec.name());
 		info!("Node name: {}", config.name);
 		info!("Roles: {}", config.display_role());
 

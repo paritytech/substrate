@@ -18,8 +18,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use app_dirs::{AppInfo, AppDataType};
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis,
-	config::DatabaseConfig, ChainSpec,
+	Configuration, ChainSpecExtension, RuntimeGenesis, config::DatabaseConfig, ChainSpec,
 };
 
 use crate::VersionInfo;
@@ -49,45 +48,52 @@ pub struct SharedParams {
 }
 
 impl SharedParams {
-	/// Load spec to `Configuration` from `SharedParams` and spec factory.
-	pub fn update_config<'a, G, E, F>(
+	pub(crate) fn get_chain_spec<G, E>(
 		&self,
-		mut config: &'a mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<&'a ChainSpec<G, E>> where
+		spec_factory: impl Fn(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	) -> ChainSpec<G, E>
+	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
 		let chain_key = match self.chain {
 			Some(ref chain) => chain.clone(),
 			None => if self.dev { "dev".into() } else { "".into() }
 		};
-		let spec = match spec_factory(&chain_key)? {
+
+		match spec_factory(&chain_key).expect("todo") {
 			Some(spec) => spec,
 			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
-		};
+		}
+	}
+
+	/// Load spec to `Configuration` from `SharedParams` and spec factory.
+	pub fn update_config<'a, G, E>(
+		&self,
+		mut config: &'a mut Configuration<G, E>,
+	) -> error::Result<&'a ChainSpec<G, E>> where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		let spec = self.get_chain_spec();
 
 		config.network.boot_nodes = spec.boot_nodes().to_vec();
 		config.telemetry_endpoints = spec.telemetry_endpoints().clone();
 
-		config.chain_spec = Some(spec);
+		config.chain_spec = spec;
 
 		if config.config_dir.is_none() {
-			config.config_dir = Some(base_path(self, version));
+			config.config_dir = Some(self.base_path());
 		}
 
-		if config.database.is_none() {
-			config.database = Some(DatabaseConfig::Path {
-				path: config
-					.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
-					.expect("We provided a base_path/config_dir."),
-				cache_size: None,
-			});
-		}
+		config.database = DatabaseConfig::Path {
+			path: config
+				.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
+				.expect("We provided a base_path/config_dir."),
+			cache_size: None,
+		};
 
-		Ok(config.chain_spec.as_ref().unwrap())
+		Ok(&config.chain_spec)
 	}
 
 	/// Initialize substrate. This must be done only once.
@@ -97,20 +103,20 @@ impl SharedParams {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init(&self, version: &VersionInfo) -> error::Result<()> {
-		crate::init(self.log.as_ref().map(|v| v.as_ref()).unwrap_or(""), version)
+	pub fn init<V>(&self) -> error::Result<()> {
+		V::init(self.log.as_ref().map(|v| v.as_ref()).unwrap_or(""))
 	}
-}
 
-fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
-	cli.base_path.clone()
-		.unwrap_or_else(||
-			app_dirs::get_app_root(
-				AppDataType::UserData,
-				&AppInfo {
-					name: version.executable_name,
-					author: version.author
-				}
-			).expect("app directories exist on all supported platforms; qed")
-		)
+	fn base_path(&self) -> PathBuf {
+		self.base_path.clone()
+			.unwrap_or_else(||
+				app_dirs::get_app_root(
+					AppDataType::UserData,
+					&AppInfo {
+						name: V::executable_name(),
+						author: V::author(),
+					}
+				).expect("app directories exist on all supported platforms; qed")
+			)
+	}
 }
