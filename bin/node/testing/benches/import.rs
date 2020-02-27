@@ -146,7 +146,7 @@ fn bench_account_ed25519(c: &mut Criterion) {
 	let mut bench_db = BenchDb::with_key_types(100, KeyTypes::Ed25519);
 	let block = bench_db.generate_block(BlockType::RandomTransfers(100));
 
-	c.bench_function_over_inputs("ed25519 B-0003",
+	c.bench_function_over_inputs("import block with ed25519 B-0003",
 		move |bencher, profile| {
 			bencher.iter_batched(
 				|| {
