@@ -233,7 +233,7 @@ wasm_export_functions! {
 	}
 
 	fn test_ext_blake2_256() {
-		use sp_core::Hasher;
+		use sp_core::InnerHasher;
 
 		let data = "hey, hash me please!";
 		let hash = sp_core::Blake2Hasher::hash(data.as_bytes());
