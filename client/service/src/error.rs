@@ -53,6 +53,12 @@ impl<'a> From<&'a str> for Error {
 	}
 }
 
+impl From<substrate_prometheus_endpoint::PrometheusError> for Error {
+	fn from(e: substrate_prometheus_endpoint::PrometheusError) -> Self {
+		Error::Other(format!("Prometheus error: {}", e))
+	}
+}
+
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {

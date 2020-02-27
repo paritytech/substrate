@@ -1,15 +1,18 @@
 [package]
 name = "sp-session"
-version = "2.0.0"
+version = "2.0.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Primitives for sessions"
 
 [dependencies]
-sp-api = { version = "2.0.0", default-features = false, path = "../api" }
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
-sp-core = { version = "2.0.0", default-features = false, path = "../core" }
-sp-runtime = { version = "2.0.0", optional = true, path = "../runtime" }
+sp-api = { version = "2.0.0-alpha.2", default-features = false, path = "../api" }
+sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../std" }
+sp-core = { version = "2.0.0-alpha.2", default-features = false, path = "../core" }
+sp-runtime = { version = "2.0.0-alpha.2", optional = true, path = "../runtime" }
 
 [features]
 default = [ "std" ]

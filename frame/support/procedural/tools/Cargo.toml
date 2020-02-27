@@ -1,12 +1,15 @@
 [package]
 name = "frame-support-procedural-tools"
-version = "2.0.0"
+version = "2.0.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Proc macro helpers for procedural macros"
 
 [dependencies]
-frame-support-procedural-tools-derive = { version = "2.0.0", path = "./derive" }
+frame-support-procedural-tools-derive = { version = "2.0.0-alpha.2", path = "./derive" }
 proc-macro2 = "1.0.6"
 quote = "1.0.2"
 syn = { version = "1.0.7", features = ["full", "visit"] }

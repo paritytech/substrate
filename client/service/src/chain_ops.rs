@@ -22,24 +22,19 @@ use crate::error::Error;
 use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 use log::{warn, info};
 use futures::{future, prelude::*};
-use sp_runtime::{
-	BuildStorage, BenchmarkResults,
-	traits::{
-		Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
-	}
+use sp_runtime::traits::{
+	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
-use sc_client::{Client, ExecutionStrategy, StateMachine, LocalCallExecutor};
-#[cfg(feature = "rocksdb")]
-use sc_client_db::BenchmarkingState;
-use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
-use sp_consensus::BlockOrigin;
-use sc_executor::{NativeExecutor, NativeExecutionDispatch, WasmExecutionMethod};
+use sc_client::{Client, LocalCallExecutor};
+use sp_consensus::{
+	BlockOrigin,
+	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
+};
+use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
-
-use sc_network::message;
 
 /// Build a chain spec json
 pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<String> where
@@ -49,67 +44,14 @@ pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<Strin
 	Ok(spec.to_json(raw)?)
 }
 
-/// Run runtime benchmarks.
-#[cfg(feature = "rocksdb")]
-pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
-	spec: ChainSpec<G, E>,
-	strategy: ExecutionStrategy,
-	wasm_method: WasmExecutionMethod,
-	pallet: String,
-	extrinsic: String,
-	steps: u32,
-	repeat: u32,
-) -> error::Result<()> where
-	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch + 'static,
-	G: RuntimeGenesis,
-	E: Extension,
-{
-	let genesis_storage = spec.build_storage()?;
-	let mut changes = Default::default();
-	let state = BenchmarkingState::<TBl>::new(genesis_storage)?;
-	let executor = NativeExecutor::<TExecDisp>::new(
-		wasm_method,
-		None, // heap pages
-	);
-	let result = StateMachine::<_, _, NumberFor<TBl>, _>::new(
-		&state,
-		None,
-		&mut changes,
-		&executor,
-		"Benchmark_dispatch_benchmark",
-		&(&pallet, &extrinsic, steps, repeat).encode(),
-		Default::default(),
-	).execute(strategy).map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
-	let results = <Option<Vec<BenchmarkResults>> as Decode>::decode(&mut &result[..]).unwrap_or(None);
-	if let Some(results) = results {
-		// Print benchmark metadata
-		println!("Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}", pallet, extrinsic, steps, repeat);
-		// Print the table header
-		results[0].0.iter().for_each(|param| print!("{:?},", param.0));
-		print!("time\n");
-		// Print the values
-		results.iter().for_each(|result| {
-			let parameters = &result.0;
-			parameters.iter().for_each(|param| print!("{:?},", param.1));
-			print!("{:?}\n", result.1);
-		});
-		info!("Done.");
-	} else {
-		info!("No Results.");
-	}
-	Ok(())
-}
-
-
 impl<
 	TBl, TRtApi, TGen, TCSExt, TBackend,
-	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP,
+	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp,
 	TExPool, TRpc, Backend
 > ServiceBuilderCommand for ServiceBuilder<
 	TBl, TRtApi, TGen, TCSExt,
 	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
-	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
+	TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend
 > where
 	TBl: BlockT,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
@@ -197,21 +139,13 @@ impl<
 					Ok(signed) => {
 						let (header, extrinsics) = signed.block.deconstruct();
 						let hash = header.hash();
-						let block  = message::BlockData::<Self::Block> {
-							hash,
-							justification: signed.justification,
-							header: Some(header),
-							body: Some(extrinsics),
-							receipt: None,
-							message_queue: None
-						};
 						// import queue handles verification and importing it into the client
 						queue.import_blocks(BlockOrigin::File, vec![
 							IncomingBlock::<Self::Block> {
-								hash: block.hash,
-								header: block.header,
-								body: block.body,
-								justification: block.justification,
+								hash,
+								header: Some(header),
+								body: Some(extrinsics),
+								justification: signed.justification,
 								origin: None,
 								allow_missing_state: false,
 								import_existing: force,

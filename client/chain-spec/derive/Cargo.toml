@@ -1,9 +1,12 @@
 [package]
 name = "sc-chain-spec-derive"
-version = "2.0.0"
+version = "2.0.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Macros to derive chain spec extension traits implementation."
 
 [lib]
 proc-macro = true

@@ -1,15 +1,17 @@
 [package]
 name = "sp-runtime-interface-test"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 publish = false
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-runtime-interface = { version = "2.0.0", path = "../" }
-sc-executor = { version = "0.8", path = "../../../client/executor" }
-sp-runtime-interface-test-wasm = { version = "2.0.0", path = "../test-wasm" }
-sp-state-machine = { version = "0.8", path = "../../../primitives/state-machine" }
-sp-core = { version = "2.0.0", path = "../../core" }
-sp-io = { version = "2.0.0", path = "../../io" }
+sp-runtime-interface = { version = "2.0.0-alpha.2", path = "../" }
+sc-executor = { version = "0.8.0-alpha.2", path = "../../../client/executor" }
+sp-runtime-interface-test-wasm = { version = "2.0.0-dev", path = "../test-wasm" }
+sp-state-machine = { version = "0.8.0-alpha.2", path = "../../../primitives/state-machine" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../core" }
+sp-io = { version = "2.0.0-alpha.2", path = "../../io" }

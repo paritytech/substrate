@@ -1,9 +1,12 @@
 [package]
 name = "sc-client-db"
-version = "0.8.0"
+version = "0.8.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Client backend that uses RocksDB database as storage."
 
 [dependencies]
 parking_lot = "0.10.0"
@@ -17,20 +20,20 @@ hash-db = "0.15.2"
 parity-util-mem = { version = "0.5.1", default-features = false, features = ["std"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 
-sc-client-api = { version = "2.0.0", path = "../api" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sc-client = { version = "0.8", path = "../" }
-sp-state-machine = { version = "0.8", path = "../../primitives/state-machine" }
-sc-executor = { version = "0.8", path = "../executor" }
-sc-state-db = { version = "0.8", path = "../state-db" }
-sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
-sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
-sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
+sc-client = { version = "0.8.0-alpha.2", path = "../" }
+sp-state-machine = { version = "0.8.0-alpha.2", path = "../../primitives/state-machine" }
+sc-executor = { version = "0.8.0-alpha.2", path = "../executor" }
+sc-state-db = { version = "0.8.0-alpha.2", path = "../state-db" }
+sp-trie = { version = "2.0.0-alpha.2", path = "../../primitives/trie" }
+sp-consensus = { version = "0.8.0-alpha.2", path = "../../primitives/consensus/common" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../../primitives/blockchain" }
 
 [dev-dependencies]
-sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+sp-keyring = { version = "2.0.0-alpha.2", path = "../../primitives/keyring" }
+substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 quickcheck = "0.9"
 kvdb-rocksdb = "0.5"

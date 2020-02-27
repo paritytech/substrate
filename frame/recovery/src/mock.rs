@@ -36,6 +36,7 @@ impl_outer_origin! {
 
 impl_outer_event! {
 	pub enum TestEvent for Test {
+		system<T>,
 		pallet_balances<T>,
 		recovery<T>,
 	}
@@ -47,9 +48,9 @@ impl_outer_dispatch! {
 	}
 }
 
-// For testing the module, we construct most of a mock runtime. This means
+// For testing the pallet, we construct most of a mock runtime. This means
 // first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of modules we want to use.
+// configuration traits of pallets we want to use.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 
@@ -62,10 +63,10 @@ parameter_types! {
 
 impl frame_system::Trait for Test {
 	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -77,22 +78,21 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = pallet_balances::AccountData<u128>;
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
 }
 
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
-	pub const CreationFee: u64 = 0;
 }
 
 impl pallet_balances::Trait for Test {
 	type Balance = u128;
-	type OnReapAccount = (System, Recovery);
-	type OnNewAccount = ();
-	type Event = TestEvent;
-	type TransferPayment = ();
 	type DustRemoval = ();
+	type Event = TestEvent;
 	type ExistentialDeposit = ExistentialDeposit;
-	type CreationFee = CreationFee;
+	type AccountStore = System;
 }
 
 parameter_types! {

@@ -1,24 +1,27 @@
 [package]
 name = "pallet-elections-phragmen"
-version = "2.0.0"
+version = "2.0.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME election pallet for PHRAGMEN"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-phragmen = { version = "2.0.0", default-features = false, path = "../../primitives/phragmen" }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
+sp-phragmen = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/phragmen" }
+frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
+sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-io = { version = "2.0.0", path = "../../primitives/io" }
+sp-io = { version = "2.0.0-alpha.2", path = "../../primitives/io" }
 hex-literal = "0.2.1"
-pallet-balances = { version = "2.0.0", path = "../balances" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
+pallet-balances = { version = "2.0.0-alpha.2", path = "../balances" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
+substrate-test-utils = { version = "2.0.0-alpha.2", path = "../../test-utils" }
 serde = { version = "1.0.101" }
 
 [features]

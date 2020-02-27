@@ -637,3 +637,23 @@ fn does_not_sync_announced_old_best_block() {
 	}));
 	assert!(!net.peer(1).is_major_syncing());
 }
+
+#[test]
+fn full_sync_requires_block_body() {
+	// Check that we don't sync headers-only in full mode.
+	let _ = ::env_logger::try_init();
+	let mut net = TestNet::new(2);
+
+	net.peer(0).push_headers(1);
+	// Wait for nodes to connect
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		if net.peer(0).num_peers() == 0  || net.peer(1).num_peers() == 0 {
+			Poll::Pending
+		} else {
+			Poll::Ready(())
+		}
+	}));
+	net.block_until_idle();
+	assert_eq!(net.peer(1).client.info().best_number, 0);
+}
