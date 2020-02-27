@@ -20,7 +20,7 @@ use super::*;
 use environment::HasVoted;
 use sc_network_test::{
 	Block, Hash, TestNetFactory, BlockImportAdapter, Peer,
-	PeersClient, PassThroughVerifier,
+	PeersClient, PassThroughVerifier, PeersFullClient,
 };
 use sc_network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
@@ -60,10 +60,8 @@ type PeerData =
 	Mutex<
 		Option<
 			LinkHalf<
-				substrate_test_runtime_client::Backend,
-				substrate_test_runtime_client::Executor,
 				Block,
-				substrate_test_runtime_client::runtime::RuntimeApi,
+				PeersFullClient,
 				LongestChain<substrate_test_runtime_client::Backend, Block>
 			>
 		>
@@ -1654,6 +1652,7 @@ fn grandpa_environment_respects_voting_rules() {
 			voters: Arc::new(authority_set.current_authorities()),
 			network,
 			voting_rule,
+			_phantom: PhantomData,
 		}
 	};
 
