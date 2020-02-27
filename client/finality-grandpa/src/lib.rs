@@ -692,7 +692,10 @@ where
 			authority_set: persistent_data.authority_set.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state.clone(),
-			metrics: prometheus_registry.map(|registry| Metrics::register(&registry).unwrap()),
+			metrics: prometheus_registry.map(|registry| {
+				Metrics::register(&registry)
+					.expect("Other metrics would have failed to register before these; qed")
+			}),
 			_phantom: PhantomData,
 		});
 

@@ -382,9 +382,10 @@ pub(crate) struct Metrics {
 impl Metrics {
 	pub(crate) fn register(registry: &prometheus_exporter::Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
-			finality_grandpa_round: register(Gauge::new(
-				"finality_grandpa_round", "Highest completed GRANDPA round.",
-			)?, registry)?,
+			finality_grandpa_round: register(
+				Gauge::new("finality_grandpa_round", "Highest completed GRANDPA round.")?,
+				registry
+			)?,
 		})
 	}
 }
