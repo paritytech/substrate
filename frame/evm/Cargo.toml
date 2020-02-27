@@ -1,6 +1,6 @@
 [package]
 name = "pallet-evm"
-version = "2.0.0-alpha.2"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
