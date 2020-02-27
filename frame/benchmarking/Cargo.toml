@@ -1,18 +1,19 @@
 [package]
 name = "frame-benchmarking"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Macro for benchmarking a FRAME runtime."
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.1.2", default-features = false }
-sp-api = { version = "2.0.0-alpha.1", path = "../../primitives/api", default-features = false }
-sp-runtime-interface = { version = "2.0.0-alpha.1", path = "../../primitives/runtime-interface", default-features = false }
-sp-std = { version = "2.0.0-alpha.1", path = "../../primitives/std", default-features = false }
-sp-io ={ path = "../../primitives/io", default-features = false , version = "2.0.0-alpha.1"}
+sp-api = { version = "2.0.0-alpha.2", path = "../../primitives/api", default-features = false }
+sp-runtime-interface = { version = "2.0.0-alpha.2", path = "../../primitives/runtime-interface", default-features = false }
+sp-std = { version = "2.0.0-alpha.2", path = "../../primitives/std", default-features = false }
+sp-io = { path = "../../primitives/io", default-features = false, version = "2.0.0-alpha.2" }
 
 [features]
 default = [ "std" ]

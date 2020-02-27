@@ -1,22 +1,24 @@
 [package]
 name = "sc-executor-common"
-version = "0.8.0-alpha.1"
+version = "0.8.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "A set of common definitions that are needed for defining execution engines."
+documentation = "https://docs.rs/sc-executor-common/"
 
 [dependencies]
 log = "0.4.8"
 derive_more = "0.99.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 wasmi = "0.6.2"
-sp-core = { version = "2.0.0-alpha.1", path = "../../../primitives/core" }
-sp-allocator = { version = "2.0.0-alpha.1", path = "../../../primitives/allocator" }
-sp-wasm-interface = { version = "2.0.0-alpha.1", path = "../../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "2.0.0-alpha.1", path = "../../../primitives/runtime-interface" }
-sp-serializer = { version = "2.0.0-alpha.1", path = "../../../primitives/serializer" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
+sp-allocator = { version = "2.0.0-alpha.2", path = "../../../primitives/allocator" }
+sp-wasm-interface = { version = "2.0.0-alpha.2", path = "../../../primitives/wasm-interface" }
+sp-runtime-interface = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime-interface" }
+sp-serializer = { version = "2.0.0-alpha.2", path = "../../../primitives/serializer" }
 
 [features]
 default = []
