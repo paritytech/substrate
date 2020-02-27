@@ -35,7 +35,7 @@ use crate::{
 };
 use sp_blockchain;
 use sp_consensus::BlockOrigin;
-use parking_lot::ReentrantMutex;
+use parking_lot::RwLock;
 
 pub use sp_state_machine::Backend as StateBackend;
 
@@ -325,7 +325,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// the using components should acquire and hold the lock whenever they do
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
-	fn get_import_lock(&self) -> &ReentrantMutex<()>;
+	fn get_import_lock(&self) -> &RwLock<()>;
 }
 
 /// Changes trie storage that supports pruning.
