@@ -1,16 +1,19 @@
 [package]
 name = "sp-inherents"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Provides types and traits for creating and checking inherents."
+documentation = "https://docs.rs/sp-inherents"
+
 
 [dependencies]
 parking_lot = { version = "0.10.0", optional = true }
-sp-std = { version = "2.0.0-alpha.1", default-features = false, path = "../std" }
-sp-core = { version = "2.0.0-alpha.1", default-features = false, path = "../core" }
+sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../std" }
+sp-core = { version = "2.0.0-alpha.2", default-features = false, path = "../core" }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
 derive_more = { version = "0.99.2", optional = true }
 
