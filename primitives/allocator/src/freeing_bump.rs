@@ -44,8 +44,9 @@
 //! Upon deallocation we get the order of the allocation from its header and then add that
 //! allocation to the linked list for the respective order.
 
-use crate::Error;
-use sp_std::{convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
+use crate::Memory;
+use crate::error::{Error, error};
+use sp_std::ops::{Index, IndexMut};
 use sp_wasm_interface::{Pointer, WordSize};
 
 /// The minimal alignment guaranteed by this allocator. The alignment of 8 is choosen because it is
@@ -64,11 +65,6 @@ const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 // Each pointer is prefixed with 8 bytes, which identify the list index
 // to which it belongs.
 const HEADER_SIZE: u32 = 8;
-
-/// Create an allocator error.
-fn error(msg: &'static str) -> Error {
-	Error::Other(msg)
-}
 
 /// A custom "trace" implementation that is only activated when `feature = std`.
 ///
@@ -404,46 +400,7 @@ impl FreeingBumpHeapAllocator {
 	}
 }
 
-/// A trait for abstraction of accesses to linear memory.
-pub trait Memory {
-	/// Read a u64 from the heap in LE form. Used to read heap allocation prefixes.
-	fn read_le_u64(&self, ptr: u32) -> Result<u64, Error>;
-	/// Write a u64 to the heap in LE form. Used to write heap allocation prefixes.
-	fn write_le_u64(&mut self, ptr: u32, val: u64) -> Result<(), Error>;
-	/// Returns the full size of the memory.
-	fn size(&self) -> u32;
-}
 
-impl Memory for [u8] {
-	fn read_le_u64(&self, ptr: u32) -> Result<u64, Error> {
-		let range =
-			heap_range(ptr, 8, self.len()).ok_or_else(|| error("read out of heap bounds"))?;
-		let bytes = self[range]
-			.try_into()
-			.expect("[u8] slice of length 8 must be convertible to [u8; 8]");
-		Ok(u64::from_le_bytes(bytes))
-	}
-	fn write_le_u64(&mut self, ptr: u32, val: u64) -> Result<(), Error> {
-		let range =
-			heap_range(ptr, 8, self.len()).ok_or_else(|| error("write out of heap bounds"))?;
-		let bytes = val.to_le_bytes();
-		&mut self[range].copy_from_slice(&bytes[..]);
-		Ok(())
-	}
-	fn size(&self) -> u32 {
-		u32::try_from(self.len()).expect("size of Wasm linear memory is <2^32; qed")
-	}
-}
-
-fn heap_range(offset: u32, length: u32, heap_len: usize) -> Option<Range<usize>> {
-	let start = offset as usize;
-	let end = offset.checked_add(length)? as usize;
-	if end <= heap_len {
-		Some(start..end)
-	} else {
-		None
-	}
-}
 
 #[cfg(test)]
 mod tests {

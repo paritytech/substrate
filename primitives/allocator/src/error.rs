@@ -36,3 +36,8 @@ impl std::error::Error for Error {
 		}
 	}
 }
+
+/// Create an allocator error.
+pub(crate) fn error(msg: &'static str) -> Error {
+	Error::Other(msg)
+}
