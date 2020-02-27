@@ -1,5 +1,5 @@
 [package]
-name = "browser-utils"
+name = "substrate-browser-utils"
 version = "0.8.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for creating a browser light-client."
