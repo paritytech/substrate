@@ -314,7 +314,7 @@ pub fn new_light(config: NodeConfiguration)
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi>(
+			let grandpa_block_import = grandpa::light_block_import(
 				client.clone(),
 				backend,
 				&*client,
