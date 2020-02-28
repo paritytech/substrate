@@ -22,6 +22,7 @@ mod utils;
 pub use utils::*;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
+pub use sp_runtime::traits::Dispatchable;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -78,19 +79,19 @@ pub use sp_io::storage::root as storage_root;
 ///   }
 ///
 ///   // first dispatchable: foo; this is a user dispatchable and operates on a `u8` vector of
-///   // size `l`, which we allow to be initialised as usual.
+///   // size `l`, which we allow to be initialized as usual.
 ///   foo {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let l = ...;
-///   } _(Origin::Signed(caller), vec![0u8; l])
+///   }: _(Origin::Signed(caller), vec![0u8; l])
 ///
 ///   // second dispatchable: bar; this is a root dispatchable and accepts a `u8` vector of size
-///   // `l`. We don't want it preininitialised like before so we override using the `=> ()`
+///   // `l`. We don't want it pre-initialized like before so we override using the `=> ()`
 ///   // notation.
 ///   // In this case, we explicitly name the call using `bar` instead of `_`.
 ///   bar {
 ///     let l = _ .. _ => ();
-///   } bar(Origin::Root, vec![0u8; l])
+///   }: bar(Origin::Root, vec![0u8; l])
 ///
 ///   // third dispatchable: baz; this is a user dispatchable. It isn't dependent on length like the
 ///   // other two but has its own complexity `c` that needs setting up. It uses `caller` (in the
@@ -100,13 +101,13 @@ pub use sp_io::storage::root as storage_root;
 ///   baz1 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c(&caller, c);
-///   } baz(Origin::Signed(caller))
+///   }: baz(Origin::Signed(caller))
 ///
 ///   // this is a second benchmark of the baz dispatchable with a different setup.
 ///   baz2 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c_in_some_other_way(&caller, c);
-///   } baz(Origin::Signed(caller))
+///   }: baz(Origin::Signed(caller))
 ///
 ///   // this is benchmarking some code that is not a dispatchable.
 ///   populate_a_set {
@@ -115,7 +116,7 @@ pub use sp_io::storage::root as storage_root;
 ///     for i in 0..x {
 ///       m.insert(i);
 ///     }
-///   } { m.into_iter().collect::<BTreeSet>() }
+///   }: { m.into_iter().collect::<BTreeSet>() }
 /// }
 /// ```
 #[macro_export]
@@ -187,7 +188,7 @@ macro_rules! impl_benchmark {
 							$crate::benchmarking::commit_db();
 							// Time the extrinsic logic.
 							let start_extrinsic = $crate::benchmarking::current_time();
-							call.dispatch(caller.into())?;
+							<crate::Call<T> as $crate::Dispatchable>::dispatch(call, caller.into())?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
 							// Time the storage root recalculation.

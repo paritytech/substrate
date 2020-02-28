@@ -14,7 +14,8 @@ sp-api = { version = "2.0.0-alpha.2", path = "../../primitives/api", default-fea
 sp-runtime-interface = { version = "2.0.0-alpha.2", path = "../../primitives/runtime-interface", default-features = false }
 sp-std = { version = "2.0.0-alpha.2", path = "../../primitives/std", default-features = false }
 sp-io = { path = "../../primitives/io", default-features = false, version = "2.0.0-alpha.2" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime", default-features = false }
 
 [features]
 default = [ "std" ]
-std = [ "sp-runtime-interface/std", "sp-api/std", "codec/std", "sp-std/std" ]
+std = [ "sp-runtime-interface/std", "sp-api/std", "codec/std", "sp-std/std", "sp-runtime/std" ]
