@@ -12,7 +12,7 @@ repository = "https://github.com/paritytech/substrate/"
 futures = "0.3"
 futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
-libp2p = { version = "0.16.2", default-features = false }
+libp2p-wasm-ext = { version = "0.16.2", features = ["websocket"] }
 console_error_panic_hook = "0.1.6"
 console_log = "0.1.2"
 js-sys = "0.3.34"
