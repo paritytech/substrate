@@ -3939,9 +3939,10 @@ dependencies = [
 
 [[package]]
 name = "pallet-benchmark"
-version = "2.0.0"
+version = "2.0.0-alpha.2"
 dependencies = [
  "enumflags2",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
