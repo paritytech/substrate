@@ -2,7 +2,7 @@
 authors = ['Anonymous']
 edition = '2018'
 name = 'pallet-template'
-version = "2.0.0-alpha.2"
+version = "2.0.0-alpha.3"
 license = "Unlicense"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
