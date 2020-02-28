@@ -25,9 +25,10 @@ use sp_staking::offence::OffenceDetails;
 use frame_support::{
 	assert_ok, assert_noop,
 	traits::{Currency, ReservableCurrency},
-	dispatch::DispatchError, StorageMap,
+	StorageMap,
 	storage::migration::{put_storage_value, get_storage_value},
 };
+use pallet_balances::Error as BalancesError;
 use sp_io::hashing::blake2_256;
 use substrate_test_utils::assert_eq_uvec;
 use crate::Store;
@@ -41,11 +42,7 @@ fn force_unstake_works() {
 		// Cant transfer
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 1, 10),
-			DispatchError::Module {
-				index: 0,
-				error: 1,
-				message: Some("LiquidityRestrictions"),
-			}
+			BalancesError::<Test, _>::LiquidityRestrictions
 		);
 		// Force unstake requires root.
 		assert_noop!(Staking::force_unstake(Origin::signed(11), 11), BadOrigin);
@@ -325,11 +322,7 @@ fn staking_should_work() {
 			// e.g. it cannot spend more than 500 that it has free from the total 2000
 			assert_noop!(
 				Balances::reserve(&3, 501),
-				DispatchError::Module {
-					index: 0,
-					error: 1,
-					message: Some("LiquidityRestrictions"),
-				}
+				BalancesError::<Test, _>::LiquidityRestrictions
 			);
 			assert_ok!(Balances::reserve(&3, 409));
 		});
@@ -775,11 +768,7 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 20, 1),
-			DispatchError::Module {
-				index: 0,
-				error: 1,
-				message: Some("LiquidityRestrictions"),
-			}
+			BalancesError::<Test, _>::LiquidityRestrictions
 		);
 
 		// Give account 11 extra free balance
@@ -804,11 +793,7 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
 			Balances::transfer(Origin::signed(21), 20, 1001),
-			DispatchError::Module {
-				index: 0,
-				error: 1,
-				message: Some("LiquidityRestrictions"),
-			}
+			BalancesError::<Test, _>::LiquidityRestrictions
 		);
 		assert_ok!(Balances::transfer(Origin::signed(21), 20, 1000));
 	});
@@ -827,11 +812,7 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
 			Balances::reserve(&11, 1),
-			DispatchError::Module {
-				index: 0,
-				error: 1,
-				message: Some("LiquidityRestrictions"),
-			}
+			BalancesError::<Test, _>::LiquidityRestrictions
 		);
 
 		// Give account 11 extra free balance
@@ -2815,37 +2796,37 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		assert_noop!(
 			Staking::payout_validator(Origin::signed(10), 0),
 			// Fail: Era out of history
-			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+			Error::<Test>::InvalidEraToReward
 		);
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 1));
 		assert_ok!(Staking::payout_validator(Origin::signed(10), 2));
 		assert_noop!(
 			Staking::payout_validator(Origin::signed(10), 2),
 			// Fail: Double claim
-			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+			Error::<Test>::InvalidEraToReward
 		);
 		assert_noop!(
 			Staking::payout_validator(Origin::signed(10), active_era),
 			// Fail: Era not finished yet
-			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+			Error::<Test>::InvalidEraToReward
 		);
 
 		assert_noop!(
 			Staking::payout_nominator(Origin::signed(100), 0, vec![(11, 0)]),
 			// Fail: Era out of history
-			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+			Error::<Test>::InvalidEraToReward
 		);
 		assert_ok!(Staking::payout_nominator(Origin::signed(100), 1, vec![(11, 0)]));
 		assert_ok!(Staking::payout_nominator(Origin::signed(100), 2, vec![(11, 0)]));
 		assert_noop!(
 			Staking::payout_nominator(Origin::signed(100), 2, vec![(11, 0)]),
 			// Fail: Double claim
-			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+			Error::<Test>::InvalidEraToReward
 		);
 		assert_noop!(
 			Staking::payout_nominator(Origin::signed(100), active_era, vec![(11, 0)]),
 			// Fail: Era not finished yet
-			DispatchError::Module { index: 0, error: 9, message: Some("InvalidEraToReward") }
+			Error::<Test>::InvalidEraToReward
 		);
 		
 		// Era 0 can't be rewarded anymore and current era can't be rewarded yet
