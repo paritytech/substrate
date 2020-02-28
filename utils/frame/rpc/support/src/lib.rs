@@ -33,9 +33,7 @@ use sc_rpc_api::state::StateClient;
 /// A typed query on chain state usable from an RPC client.
 ///
 /// ```no_run
-/// # use futures::compat::Compat;
 /// # use futures::compat::Future01CompatExt;
-/// # use futures::future::FutureExt;
 /// # use jsonrpc_client_transports::RpcError;
 /// # use jsonrpc_client_transports::transports::http;
 /// # use codec::Encode;
@@ -49,7 +47,7 @@ use sc_rpc_api::state::StateClient;
 /// # type Hash = ();
 /// #
 /// # fn main() -> Result<(), RpcError> {
-/// #     tokio::runtime::Runtime::new().unwrap().block_on(Compat::new(test().boxed()))
+/// #     tokio::runtime::Runtime::new().unwrap().block_on(test())
 /// # }
 /// #
 /// # struct TestRuntime;

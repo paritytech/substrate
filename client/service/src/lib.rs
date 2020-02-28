@@ -116,6 +116,8 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	marker: PhantomData<TBl>,
 }
 
+impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
+
 /// Alias for a an implementation of `futures::future::Executor`.
 pub type TaskExecutor = Arc<dyn Spawn + Send + Sync>;
 
@@ -229,7 +231,7 @@ impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
 	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
 		NetworkService<TBl, TBl::Hash>, TExPool, TOc>
 where
-	TBl: BlockT + Unpin,
+	TBl: BlockT,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl>,
 	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
@@ -328,7 +330,7 @@ where
 	}
 }
 
-impl<TBl: Unpin, TCl, TSc: Unpin, TNetStatus, TNet, TTxPool, TOc> Future for
+impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
 	type Output = Result<(), Error>;
