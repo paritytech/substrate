@@ -31,7 +31,8 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str,
+	Permill, Perbill, Percent, ApplyExtrinsicResult, RuntimeString,
+	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::TransactionValidity;
@@ -821,15 +822,17 @@ impl_runtime_apis! {
 			extrinsic: Vec<u8>,
 			steps: Vec<u32>,
 			repeat: u32,
-		) -> Option<Vec<frame_benchmarking::BenchmarkResults>> {
+		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, RuntimeString> {
 			use frame_benchmarking::Benchmarking;
 
-			match module.as_slice() {
-				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
-				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
-				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
-				_ => None,
-			}
+			let result = match module.as_slice() {
+				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat),
+				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat),
+				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat),
+				_ => Err("Benchmark not found for this pallet."),
+			};
+
+			result.map_err(|e| e.into())
 		}
 	}
 }

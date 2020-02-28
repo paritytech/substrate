@@ -1429,6 +1429,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-api",
  "sp-io",
+ "sp-runtime",
  "sp-runtime-interface",
  "sp-std",
 ]
