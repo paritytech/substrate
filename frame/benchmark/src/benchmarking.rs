@@ -20,7 +20,7 @@ use super::*;
 
 use frame_system::RawOrigin;
 use sp_std::prelude::*;
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, BenchmarkResults, BenchmarkParameter};
 
 
 use crate::Module as Benchmark;
@@ -108,10 +108,48 @@ benchmarks! {
 		let bytes = accounts.encode();
 	}: _(RawOrigin::Signed(account("user", 0, SEED)), bytes)
 
-	// time_host {
-	// 	for _ in 0 .. 1000 {
-	// 		let _ = frame_benchmarking::benchmarking::current_time();
-	// 	}
-	// }: { Ok(()) }
+	//storage_recalc(steps, repeat)
 
+	//current_time(steps, repeat)
+}
+
+// Custom implementation to handle benchmarking of storage recalculation.
+// Puts `repeat` number of items into random storage keys, and then times how
+// long it takes to recalculate the storage root.
+fn storage_recalc(steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
+	let mut results: Vec<BenchmarkResults> = Vec::new();
+
+	for step in 0 .. steps {
+		for index in 0 .. repeat {
+			let random = (index, step).using_encoded(sp_io::hashing::blake2_256);
+			sp_io::storage::set(&random, &random);
+		}
+		let start = frame_benchmarking::benchmarking::current_time();
+		frame_benchmarking::storage_root();
+		let finish = frame_benchmarking::benchmarking::current_time();
+		let elapsed = finish - start;
+	
+		results.push((vec![(BenchmarkParameter::r, repeat)], 0, elapsed));
+	}
+
+	return Ok(results)
+}
+
+// Custom implementation to handle benchmarking of calling a host function.
+// Will check how long it takes to call `current_time()`.
+fn current_time(steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
+	let mut results: Vec<BenchmarkResults> = Vec::new();
+
+	for _ in 0..steps {
+		let start = frame_benchmarking::benchmarking::current_time();
+		for _ in 0..repeat {
+			let _ = frame_benchmarking::benchmarking::current_time();
+		}
+		let finish = frame_benchmarking::benchmarking::current_time();
+		let elapsed = finish - start;
+
+		results.push((vec![(BenchmarkParameter::r, repeat)], elapsed, 0));
+	}
+
+	return Ok(results);
 }
