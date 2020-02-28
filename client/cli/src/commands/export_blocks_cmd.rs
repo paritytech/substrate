@@ -51,7 +51,10 @@ pub struct ExportBlocksCmd {
 	pub to: Option<BlockNumber>,
 
 	/// Use JSON output rather than binary.
-	#[structopt(long = "json", parse(try_from_str), default_value("true"), default_value_if("output", None, "false"))]
+	#[structopt(long = "json",
+		parse(try_from_str),
+		default_value("true"),
+		default_value_if("output", None, "false"))]
 	pub json: bool,
 
 	#[allow(missing_docs)]
