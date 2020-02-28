@@ -78,6 +78,9 @@ impl<Client, Storage, Block: traits::Block> fmt::Debug for OffchainWorkers<
 	}
 }
 
+
+pub struct NotifyToken;
+
 impl<Client, Storage, Block> OffchainWorkers<
 	Client,
 	Storage,
@@ -98,15 +101,12 @@ impl<Client, Storage, Block> OffchainWorkers<
 	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::hash(header.hash());
-		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block, Error = ()>, _>(
-			&at, |v| v == 1
+		let has_api_version = runtime.has_api_with::<dyn OffchainWorkerApi<Block, Error = ()>, _>(
+			&at, |v| v
 		);
-		let has_api_v2 = runtime.has_api_with::<dyn OffchainWorkerApi<Block, Error = ()>, _>(
-			&at, |v| v == 2
-		);
-		let version = match (has_api_v1, has_api_v2) {
-			(_, Ok(true)) => 2,
-			(Ok(true), _) => 1,
+		let version = match v {
+			Ok(1) => 1,
+			Ok(2) => 2,
 			err => {
 				let help = "Consider turning off offchain workers if they are not part of your runtime.";
 				log::error!("Unsupported Offchain Worker API version: {:?}. {}.", err, help);
@@ -158,6 +158,38 @@ impl<Client, Storage, Block> OffchainWorkers<
 	/// alternatively:
 	fn spawn_worker(&self, f: impl FnOnce() -> () + Send + 'static) {
 		self.thread_pool.lock().execute(f);
+	}
+
+	fn spawn_worker_task(&self, item : Pollable, f: impl FnOnce() -> impl Future<()> + Send + 'static) {
+		use tokio;
+
+			match pa {
+				Pollable::MagicCarpet(id) => {
+					unimplemented!("Missing future");	
+				},
+				Pollable::CapnProto(id) => {
+					unimplemented!("Missing future");	
+				},
+				Pollable::Http(id) => {
+					use std::sync::mpsc;
+					use hyper;
+					let client = hyper::Client::new();
+					let uri = "google.com";
+					let (sender, receiver) = mpsc::channel();
+					let req = client.get(uri).and_then(move |resp| {
+						sender.send(NotifyToken)
+					});
+					tokio::task::spawn(async move || {
+						req
+					});
+					receiver.recv();
+				},
+				#[allow(unused)]
+				_ => {
+					futures::future::ok(())// TODO should be an error
+				}
+			}
+			f().await
 	}
 }
 

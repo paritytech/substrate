@@ -13,11 +13,11 @@ bytes = "0.5"
 sc-client-api = { version = "2.0.0-dev", path = "../api" }
 sp-api = { version = "2.0.0-dev", path = "../../primitives/api" }
 fnv = "1.0.6"
-futures = "0.3.1"
-futures-timer = "3.0.1"
+futures = "0.3.4"
+futures-timer = "3.0.2"
 log = "0.4.8"
 threadpool = "1.7"
-num_cpus = "1.10"
+num_cpus = "1.12"
 sp-offchain = { version = "2.0.0-dev", path = "../../primitives/offchain" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 parking_lot = "0.10.0"
@@ -30,6 +30,7 @@ sc-keystore = { version = "2.0.0-dev", path = "../keystore" }
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 hyper = "0.13.2"
 hyper-rustls = "0.19"
+tokio = "0.2"
 
 [dev-dependencies]
 sc-client-db = { version = "0.8.0-dev", default-features = true, path = "../db/" }

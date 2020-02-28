@@ -312,6 +312,37 @@ pub trait Storage {
 	}
 }
 
+
+
+
+
+pub type PollableId = u32;
+
+#[derive(Debug,Clone,Copy)]
+#[repr(u8)]
+pub enum PollableType {
+	Http,
+	CapnProto,
+	MagicCarpet,
+}
+
+#[derive(Debug,Clone,Copy)]
+pub enum Pollable {
+	Http(PollableId),
+	CapnProto(PollableId),
+	MagicCarpet(PollableId),
+};
+
+/// Interface that provides async execution related functionality.
+#[runtime_interface]
+pub trait PollableReactorProxy {
+	/// Blocks until any of the given timeouts is reached.
+	fn epoll(input: Vec<(PollableType, PollableId)>) -> Vec<(PollableType, PollableId)> {
+		unimplemented!("epoll my ass");
+	}
+}
+
+
 /// Interface that provides trie related functionality.
 #[runtime_interface]
 pub trait Trie {

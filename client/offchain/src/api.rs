@@ -53,7 +53,7 @@ pub(crate) struct Api<Storage> {
 	/// Is this node a potential validator?
 	is_validator: bool,
 	/// Everything HTTP-related is handled by a different struct.
-	http: http::HttpApi,
+	http: http::HttpApi, 
 }
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
@@ -248,7 +248,7 @@ pub(crate) struct AsyncApi {
 }
 
 impl AsyncApi {
-	/// Creates new Offchain extensions API implementation  an the asynchronous processing part.
+	/// Creates new Offchain extensions API implementation an the asynchronous processing part.
 	pub fn new<S: OffchainStorage>(
 		db: S,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
