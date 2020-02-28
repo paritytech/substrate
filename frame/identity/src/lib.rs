@@ -394,7 +394,7 @@ decl_storage! {
 		/// Alternative "sub" identities of this account.
 		///
 		/// The first item is the deposit, the second is a vector of the accounts.
-		pub SubsOf get(fn subs):
+		pub SubsOf get(fn subs_of):
 			map hasher(blake2_256) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The set of registrars. Not expected to get very big as can only be added through a
@@ -910,6 +910,16 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+impl<T: Trait> Module<T> {
+	/// Get the subs of an account.
+	pub fn subs(who: &T::AccountId) -> Vec<(T::AccountId, Data)> {
+		SubsOf::<T>::get(who).1
+			.into_iter()
+			.filter_map(|a| SuperOf::<T>::get(&a).map(|x| (a, x.1)))
+			.collect()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -961,7 +971,7 @@ mod tests {
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = Balances;
+		type OnKilledAccount = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -1132,14 +1142,14 @@ mod tests {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 80);
-			assert_eq!(Identity::subs(10), (10, vec![20]));
+			assert_eq!(Identity::subs_of(10), (10, vec![20]));
 			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 
 			// push another item and re-set it.
 			subs.push((30, Data::Raw(vec![50; 1])));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 70);
-			assert_eq!(Identity::subs(10), (20, vec![20, 30]));
+			assert_eq!(Identity::subs_of(10), (20, vec![20, 30]));
 			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
 
@@ -1147,7 +1157,7 @@ mod tests {
 			subs[0] = (40, Data::Raw(vec![60; 1]));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 70); // no change in the balance
-			assert_eq!(Identity::subs(10), (20, vec![40, 30]));
+			assert_eq!(Identity::subs_of(10), (20, vec![40, 30]));
 			assert_eq!(Identity::super_of(20), None);
 			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
 			assert_eq!(Identity::super_of(40), Some((10, Data::Raw(vec![60; 1]))));
@@ -1155,7 +1165,7 @@ mod tests {
 			// clear
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![]));
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_eq!(Identity::subs(10), (0, vec![]));
+			assert_eq!(Identity::subs_of(10), (0, vec![]));
 			assert_eq!(Identity::super_of(30), None);
 			assert_eq!(Identity::super_of(40), None);
 

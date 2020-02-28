@@ -474,7 +474,10 @@ pub trait Crypto {
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
-	/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
+	///
+	/// - `sig` is passed in RSV format. V should be either `0/1` or `27/28`.
+	/// - `msg` is the blake2-256 hash of the message.
+	///
 	/// Returns `Err` if the signature is bad, otherwise the 64-byte pubkey
 	/// (doesn't include the 0x04 prefix).
 	fn secp256k1_ecdsa_recover(
@@ -493,8 +496,11 @@ pub trait Crypto {
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
-	/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
-	/// - returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
+	///
+	/// - `sig` is passed in RSV format. V should be either `0/1` or `27/28`.
+	/// - `msg` is the blake2-256 hash of the message.
+	///
+	/// Returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
 	fn secp256k1_ecdsa_recover_compressed(
 		sig: &[u8; 65],
 		msg: &[u8; 32],
@@ -909,6 +915,56 @@ pub fn oom(_: core::alloc::Layout) -> ! {
 #[cfg(feature = "std")]
 pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher, u64>;
 
+#[cfg(feature = "std")]
+mod ext_blake2_256 {
+	use sp_wasm_interface::{Signature, Function, HostFunctions, ValueType, Value, FunctionContext};
+
+	/// There is a custom `extern function` in `sp_core::hasher` for `ext_blake2_256` hasher. This
+	/// custom extern was missed to remove and requires us to support this now. This type is a custom
+	/// implementation for the wasm function in native.
+	pub struct ExtBlake2_256;
+
+	impl HostFunctions for ExtBlake2_256 {
+		fn host_functions() -> Vec<&'static dyn Function> {
+			vec![&ExtBlake2_256]
+		}
+	}
+
+	impl Function for ExtBlake2_256 {
+		fn name(&self) -> &str {
+			"ext_blake2_256"
+		}
+
+		fn signature(&self) -> Signature {
+			Signature::new_with_args(&[ValueType::I32, ValueType::I32, ValueType::I32][..])
+		}
+
+		fn execute(
+			&self,
+			context: &mut dyn FunctionContext,
+			args: &mut dyn Iterator<Item = Value>,
+		) -> sp_wasm_interface::Result<Option<Value>> {
+			let data = args.next().and_then(|v| v.as_i32())
+				.ok_or_else(|| "`data` not present or not an `i32`")? as u32;
+			let len = args.next().and_then(|v| v.as_i32())
+				.ok_or_else(|| "`len` not present or not an `i32`")? as u32;
+			let out = args.next().and_then(|v| v.as_i32())
+				.ok_or_else(|| "`out` not present or not an `i32`")? as u32;
+
+			let result: [u8; 32] = if len == 0 {
+				sp_core::hashing::blake2_256(&[0u8; 0])
+			} else {
+				let mem = context.read_memory(data.into(), len)
+					.map_err(|_| "Invalid attempt to get data in ext_blake2_256")?;
+				sp_core::hashing::blake2_256(&mem)
+			};
+			context.write_memory(out.into(), &result)
+				.map_err(|_| "Invalid attempt to set result in ext_blake2_256")?;
+			Ok(None)
+		}
+	}
+}
+
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
 /// All these host functions will be callable from inside the Wasm environment.
@@ -923,6 +979,7 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
+	ext_blake2_256::ExtBlake2_256,
 );
 
 #[cfg(test)]

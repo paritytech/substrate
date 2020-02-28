@@ -56,15 +56,18 @@ use futures::prelude::*;
 use futures::StreamExt;
 use log::{debug, info};
 use futures::channel::mpsc;
-use sc_client_api::{BlockchainEvents, CallExecutor, backend::{AuxStore, Backend}, ExecutionStrategy};
-use sp_blockchain::{HeaderBackend, Error as ClientError};
+use sc_client_api::{
+	LockImportRun, BlockchainEvents, CallExecutor,
+	backend::{AuxStore, Backend}, ExecutionStrategy, Finalizer, TransactionFor,
+};
+use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
 use sc_client::Client;
 use parity_scale_codec::{Decode, Encode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
 use sc_keystore::KeyStorePtr;
 use sp_inherents::InherentDataProviders;
-use sp_consensus::SelectChain;
+use sp_consensus::{SelectChain, BlockImport};
 use sp_core::Pair;
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use serde_json;
@@ -96,7 +99,6 @@ mod voting_rule;
 pub use finality_proof::FinalityProofProvider;
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
-pub use observer::run_grandpa_observer;
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
@@ -110,6 +112,8 @@ use sp_finality_grandpa::{AuthorityList, AuthorityPair, AuthoritySignature, SetI
 
 // Re-export these two because it's just so damn convenient.
 pub use sp_finality_grandpa::{AuthorityId, ScheduledChange};
+use sp_api::ProvideRuntimeApi;
+use std::marker::PhantomData;
 
 #[cfg(test)]
 mod tests;
@@ -246,10 +250,8 @@ pub(crate) trait BlockStatus<Block: BlockT> {
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error>;
 }
 
-impl<B, E, Block: BlockT, RA> BlockStatus<Block> for Arc<Client<B, E, Block, RA>> where
-	B: Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync,
-	RA: Send + Sync,
+impl<Block: BlockT, Client> BlockStatus<Block> for Arc<Client> where
+	Client: HeaderBackend<Block>,
 	NumberFor<Block>: BlockNumberOps,
 {
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error> {
@@ -257,6 +259,29 @@ impl<B, E, Block: BlockT, RA> BlockStatus<Block> for Arc<Client<B, E, Block, RA>
 			.map_err(|e| Error::Blockchain(format!("{:?}", e)))
 	}
 }
+
+/// A trait that includes all the client functionalities grandpa requires.
+/// Ideally this would be a trait alias, we're not there yet.
+/// tracking issue https://github.com/rust-lang/rust/issues/41517
+pub trait ClientForGrandpa<Block, BE>:
+	LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
+	+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
+	+ BlockchainEvents<Block> + ProvideRuntimeApi<Block>
+	+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
+	where
+		BE: Backend<Block>,
+		Block: BlockT,
+{}
+
+impl<Block, BE, T> ClientForGrandpa<Block, BE> for T
+	where
+		BE: Backend<Block>,
+		Block: BlockT,
+		T: LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
+			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
+			+ BlockchainEvents<Block> + ProvideRuntimeApi<Block>
+			+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>,
+{}
 
 /// Something that one can ask to do a block sync request.
 pub(crate) trait BlockSyncRequester<Block: BlockT> {
@@ -349,8 +374,8 @@ impl<H, N> fmt::Display for CommandOrError<H, N> {
 	}
 }
 
-pub struct LinkHalf<B, E, Block: BlockT, RA, SC> {
-	client: Arc<Client<B, E, Block, RA>>,
+pub struct LinkHalf<Block: BlockT, C, SC> {
+	client: Arc<C>,
 	select_chain: SC,
 	persistent_data: PersistentData<Block>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
@@ -391,22 +416,20 @@ impl<B, E, Block: BlockT, RA> GenesisAuthoritySetProvider<Block> for Client<B, E
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT, RA, SC>(
-	client: Arc<Client<B, E, Block, RA>>,
+pub fn block_import<BE, Block: BlockT, Client, SC>(
+	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 ) -> Result<(
-		GrandpaBlockImport<B, E, Block, RA, SC>,
-		LinkHalf<B, E, Block, RA, SC>
+		GrandpaBlockImport<BE, Block, Client, SC>,
+		LinkHalf<Block, Client, SC>,
 	), ClientError>
 where
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + Send + Sync,
-	RA: Send + Sync,
 	SC: SelectChain<Block>,
-	Client<B, E, Block, RA>: AuxStore,
+	BE: Backend<Block> + 'static,
+	Client: ClientForGrandpa<Block, BE> + 'static,
 {
-	let chain_info = client.chain_info();
+	let chain_info = client.info();
 	let genesis_hash = chain_info.genesis_hash;
 
 	let persistent_data = aux_schema::load_persistent(
@@ -441,10 +464,10 @@ where
 	))
 }
 
-fn global_communication<Block: BlockT, B, E, N, RA>(
+fn global_communication<BE, Block: BlockT, C, N>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
-	client: &Arc<Client<B, E, Block, RA>>,
+	client: Arc<C>,
 	network: &NetworkBridge<Block, N>,
 	keystore: &Option<KeyStorePtr>,
 ) -> (
@@ -456,10 +479,9 @@ fn global_communication<Block: BlockT, B, E, N, RA>(
 		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
 	> + Unpin,
 ) where
-	B: Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync,
+	BE: Backend<Block> + 'static,
+	C: ClientForGrandpa<Block, BE> + 'static,
 	N: NetworkT<Block>,
-	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
 	let is_voter = is_voter(voters, keystore).is_some();
@@ -488,20 +510,18 @@ fn global_communication<Block: BlockT, B, E, N, RA>(
 
 /// Register the finality tracker inherent data provider (which is used by
 /// GRANDPA), if not registered already.
-fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT, RA>(
-	client: Arc<Client<B, E, Block, RA>>,
+fn register_finality_tracker_inherent_data_provider<Block: BlockT, Client>(
+	client: Arc<Client>,
 	inherent_data_providers: &InherentDataProviders,
 ) -> Result<(), sp_consensus::Error> where
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
-	RA: Send + Sync + 'static,
+	Client: HeaderBackend<Block> + 'static,
 {
 	if !inherent_data_providers.has_provider(&sp_finality_tracker::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(sp_finality_tracker::InherentDataProvider::new(move || {
 				#[allow(deprecated)]
 				{
-					let info = client.chain_info();
+					let info = client.info();
 					telemetry!(CONSENSUS_INFO; "afg.finalized";
 						"finalized_number" => ?info.finalized_number,
 						"finalized_hash" => ?info.finalized_hash,
@@ -516,11 +536,11 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT, RA>(
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X> {
+pub struct GrandpaParams<Block: BlockT, C, N, SC, VR, X> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A link to the block import worker.
-	pub link: LinkHalf<B, E, Block, RA, SC>,
+	pub link: LinkHalf<Block, C, SC>,
 	/// The Network instance.
 	pub network: N,
 	/// The inherent data providers.
@@ -535,23 +555,21 @@ pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X> {
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
+pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR, X>(
+	grandpa_params: GrandpaParams<Block, C, N, SC, VR, X>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	Block::Hash: Ord,
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	BE: Backend<Block> + 'static,
 	N: NetworkT<Block> + Send + Sync + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
+	VR: VotingRule<Block, C> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
-	RA: Send + Sync + 'static,
 	X: futures::Future<Output=()> + Clone + Send + Unpin + 'static,
-	Client<B, E, Block, RA>: AuxStore,
+	C: ClientForGrandpa<Block, BE> + 'static,
 {
 	let GrandpaParams {
-		config,
+		mut config,
 		link,
 		network,
 		inherent_data_providers,
@@ -559,6 +577,12 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 		telemetry_on_connect,
 		voting_rule,
 	} = grandpa_params;
+
+	// NOTE: we have recently removed `run_grandpa_observer` from the public
+	// API, I felt it is easier to just ignore this field rather than removing
+	// it from the config temporarily. This should be removed after #5013 is
+	// fixed and we re-add the observer to the public API.
+	config.observer_enabled = false;
 
 	let LinkHalf {
 		client,
@@ -624,27 +648,25 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 
 /// Future that powers the voter.
 #[must_use]
-struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
+struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	voter: Pin<Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> + Send>>,
-	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
+	env: Arc<Environment<B, Block, C, N, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	network: NetworkBridge<Block, N>,
 }
 
-impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
+impl<B, Block, C, N, SC, VR> VoterWork<B, Block, C, N, SC, VR>
 where
 	Block: BlockT,
+	B: Backend<Block> + 'static,
+	C: ClientForGrandpa<Block, B> + 'static,
 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
-	RA: 'static + Send + Sync,
-	E: CallExecutor<Block> + Send + Sync + 'static,
-	B: Backend<Block> + 'static,
 	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
-	Client<B, E, Block, RA>: AuxStore,
+	VR: VotingRule<Block, C> + Clone + 'static,
 {
 	fn new(
-		client: Arc<Client<B, E, Block, RA>>,
+		client: Arc<C>,
 		config: Config,
 		network: NetworkBridge<Block, N>,
 		select_chain: SC,
@@ -665,6 +687,7 @@ where
 			authority_set: persistent_data.authority_set.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state.clone(),
+			_phantom: PhantomData,
 		});
 
 		let mut work = VoterWork {
@@ -695,7 +718,7 @@ where
 			"authority_id" => authority_id.to_string(),
 		);
 
-		let chain_info = self.env.client.chain_info();
+		let chain_info = self.env.client.info();
 		telemetry!(CONSENSUS_INFO; "afg.authority_set";
 			"number" => ?chain_info.finalized_number,
 			"hash" => ?chain_info.finalized_hash,
@@ -719,7 +742,7 @@ where
 				let global_comms = global_communication(
 					self.env.set_id,
 					&self.env.voters,
-					&self.env.client,
+					self.env.client.clone(),
 					&self.env.network,
 					&self.env.config.keystore,
 				);
@@ -784,6 +807,7 @@ where
 					consensus_changes: self.env.consensus_changes.clone(),
 					network: self.env.network.clone(),
 					voting_rule: self.env.voting_rule.clone(),
+					_phantom: PhantomData,
 				});
 
 				self.rebuild_voter();
@@ -808,17 +832,15 @@ where
 	}
 }
 
-impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
+impl<B, Block, C, N, SC, VR> Future for VoterWork<B, Block, C, N, SC, VR>
 where
 	Block: BlockT,
+	B: Backend<Block> + 'static,
 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
-	RA: 'static + Send + Sync,
-	E: CallExecutor<Block> + Send + Sync + 'static,
-	B: Backend<Block> + 'static,
 	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
-	Client<B, E, Block, RA>: AuxStore,
+	C: ClientForGrandpa<Block, B> + 'static,
+	VR: VotingRule<Block, C> + Clone + 'static,
 {
 	type Output = Result<(), Error>;
 
@@ -863,15 +885,13 @@ where
 /// discards all GRANDPA messages (otherwise, we end up banning nodes that send
 /// us a `Neighbor` message, since there is no registered gossip validator for
 /// the engine id defined in the message.)
-pub fn setup_disabled_grandpa<B, E, Block: BlockT, RA, N>(
-	client: Arc<Client<B, E, Block, RA>>,
+pub fn setup_disabled_grandpa<Block: BlockT, Client, N>(
+	client: Arc<Client>,
 	inherent_data_providers: &InherentDataProviders,
 	network: N,
 ) -> Result<(), sp_consensus::Error> where
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
-	RA: Send + Sync + 'static,
 	N: NetworkT<Block> + Send + Clone + 'static,
+	Client: HeaderBackend<Block> + 'static,
 {
 	register_finality_tracker_inherent_data_provider(
 		client,
@@ -881,7 +901,10 @@ pub fn setup_disabled_grandpa<B, E, Block: BlockT, RA, N>(
 	// We register the GRANDPA protocol so that we don't consider it an anomaly
 	// to receive GRANDPA messages on the network. We don't process the
 	// messages.
-	network.register_notifications_protocol(communication::GRANDPA_ENGINE_ID);
+	network.register_notifications_protocol(
+		communication::GRANDPA_ENGINE_ID,
+		From::from(communication::GRANDPA_PROTOCOL_NAME),
+	);
 
 	Ok(())
 }
