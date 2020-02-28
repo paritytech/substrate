@@ -133,6 +133,22 @@ macro_rules! implement_per_thing {
 
 				// q cannot overflow: (q / (q/$max)) < 2 * $max. p < q hence p also cannot overflow.
 				// this implies that Self::Inner must be able to fit 2 * $max.
+				//
+				// Proof for `q_reduce < 2 * $max`:
+				// i.e. `floor(q / max(floor(q/$max), 1)) < 2 * $max`:
+				// ```
+				// if q <= $max:
+				// floor(q / 1) = q <= $max < 2*$max           // $max > 0
+				//
+				// else if q > $max:
+				// floor(q / floor(q/$max)) <= q / floor(q/$max) = q * $max / (q - q%$max)
+				//
+				// and:
+				// q * $max / (q - q%$max) < 2*$max
+				// ssi q * $max < 2 * $max * (q - q%$max)      // (q - q%max) > 0
+				// ssi q < 2 * (q - q%$max)                    // $max > 0
+				// ssi q%$max < q                              // True because q > $max
+				// ```
 				let q_reduce: Self::Inner = (q / factor.clone())
 					.try_into()
 					.map_err(|_| "Failed to convert")
