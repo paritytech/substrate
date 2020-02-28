@@ -1,24 +1,25 @@
 [package]
 name = "pallet-transaction-payment"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet to manage transaction payments"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0-alpha.1", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "2.0.0-alpha.1", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "2.0.0-alpha.1", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0-alpha.1", default-features = false, path = "../system" }
-pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0-alpha.1", default-features = false, path = "./rpc/runtime-api" }
+sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
+pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0-alpha.2", default-features = false, path = "./rpc/runtime-api" }
 
 [dev-dependencies]
-sp-io = { version = "2.0.0-alpha.1", path = "../../primitives/io" }
-sp-core = { version = "2.0.0-alpha.1", path = "../../primitives/core" }
-pallet-balances = { version = "2.0.0-alpha.1", path = "../balances" }
+sp-io = { version = "2.0.0-alpha.2", path = "../../primitives/io" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
+pallet-balances = { version = "2.0.0-alpha.2", path = "../balances" }
 
 [features]
 default = ["std"]
