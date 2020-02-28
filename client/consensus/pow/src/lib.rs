@@ -111,9 +111,7 @@ fn aux_key<T: AsRef<[u8]>>(hash: &T) -> Vec<u8> {
 
 /// Intermediate value passed to block importer.
 #[derive(Encode, Decode, Clone, Debug, Default)]
-pub struct PowIntermediate<B: BlockT, Difficulty> {
-	/// The header hash with seal, used for auxiliary key.
-	pub hash: B::Hash,
+pub struct PowIntermediate<Difficulty> {
 	/// Difficulty of the block, if known.
 	pub difficulty: Option<Difficulty>,
 }
@@ -331,7 +329,7 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 			_ => return Err(Error::<B>::HeaderUnsealed(block.header.hash()).into()),
 		};
 
-		let intermediate = block.take_intermediate::<PowIntermediate::<B, Algorithm::Difficulty>>(
+		let intermediate = block.take_intermediate::<PowIntermediate::<Algorithm::Difficulty>>(
 			INTERMEDIATE_KEY
 		)?;
 
@@ -353,7 +351,7 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 		aux.difficulty = difficulty;
 		aux.total_difficulty.increment(difficulty);
 
-		let key = aux_key(&intermediate.hash);
+		let key = aux_key(&block.post_hash());
 		block.auxiliary.push((key, Some(aux.encode())));
 		if block.fork_choice.is_none() {
 			block.fork_choice = Some(ForkChoiceStrategy::Custom(
@@ -421,29 +419,19 @@ impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 		let hash = header.hash();
 		let (checked_header, seal) = self.check_header(header)?;
 
-		let intermediate = PowIntermediate::<B, Algorithm::Difficulty> {
-			hash: hash,
+		let intermediate = PowIntermediate::<Algorithm::Difficulty> {
 			difficulty: None,
 		};
 
-		let import_block = BlockImportParams {
-			origin,
-			header: checked_header,
-			post_digests: vec![seal],
-			body,
-			storage_changes: None,
-			finalized: false,
-			justification,
-			intermediates: {
-				let mut ret = HashMap::new();
-				ret.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<dyn Any>);
-				ret
-			},
-			auxiliary: vec![],
-			fork_choice: None,
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import_block = BlockImportParams::new(origin, checked_header);
+		import_block.post_digests.push(seal);
+		import_block.body = body;
+		import_block.justification = justification;
+		import_block.intermediates.insert(
+			Cow::from(INTERMEDIATE_KEY),
+			Box::new(intermediate) as Box<dyn Any>
+		);
+		import_block.post_hash = Some(hash);
 
 		Ok((import_block, None))
 	}
@@ -661,29 +649,19 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			(hash, seal)
 		};
 
-		let intermediate = PowIntermediate::<B, Algorithm::Difficulty> {
-			hash,
+		let intermediate = PowIntermediate::<Algorithm::Difficulty> {
 			difficulty: Some(difficulty),
 		};
 
-		let import_block = BlockImportParams {
-			origin: BlockOrigin::Own,
-			header,
-			justification: None,
-			post_digests: vec![seal],
-			body: Some(body),
-			storage_changes: Some(proposal.storage_changes),
-			intermediates: {
-				let mut ret = HashMap::new();
-				ret.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<dyn Any>);
-				ret
-			},
-			finalized: false,
-			auxiliary: vec![],
-			fork_choice: None,
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
+		import_block.post_digests.push(seal);
+		import_block.body = Some(body);
+		import_block.storage_changes = Some(proposal.storage_changes);
+		import_block.intermediates.insert(
+			Cow::from(INTERMEDIATE_KEY),
+			Box::new(intermediate) as Box<dyn Any>
+		);
+		import_block.post_hash = Some(hash);
 
 		block_import.import_block(import_block, HashMap::default())
 			.map_err(|e| Error::BlockBuiltError(best_hash, e))?;

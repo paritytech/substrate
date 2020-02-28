@@ -310,6 +310,10 @@ impl Externalities for BasicExternalities {
 	fn storage_commit_transaction(&mut self) {
 		// no need to fail in this case
 	}
+
+	fn wipe(&mut self) {}
+
+	fn commit(&mut self) {}
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {

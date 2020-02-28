@@ -21,14 +21,38 @@ use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use node_runtime::{
 	GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, SystemConfig,
 	GrandpaConfig, IndicesConfig, ContractsConfig, SocietyConfig, WASM_BINARY,
+	AccountId,
 };
 use node_runtime::constants::currency::*;
 use sp_core::ChangesTrieConfiguration;
 use sp_runtime::Perbill;
 
-
 /// Create genesis runtime configuration for tests.
 pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig {
+	config_endowed(support_changes_trie, code, Default::default())
+}
+
+/// Create genesis runtime configuration for tests with some extra
+/// endowed accounts.
+pub fn config_endowed(
+	support_changes_trie: bool,
+	code: Option<&[u8]>,
+	extra_endowed: Vec<AccountId>,
+) -> GenesisConfig {
+
+	let mut endowed = vec![
+		(alice(), 111 * DOLLARS),
+		(bob(), 100 * DOLLARS),
+		(charlie(), 100_000_000 * DOLLARS),
+		(dave(), 111 * DOLLARS),
+		(eve(), 101 * DOLLARS),
+		(ferdie(), 100 * DOLLARS),
+	];
+
+	endowed.extend(
+		extra_endowed.into_iter().map(|endowed| (endowed, 100*DOLLARS))
+	);
+
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
 			changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
@@ -38,29 +62,22 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 			code: code.map(|x| x.to_vec()).unwrap_or_else(|| WASM_BINARY.to_vec()),
 		}),
 		pallet_indices: Some(IndicesConfig {
-			ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
+			indices: vec![],
 		}),
 		pallet_balances: Some(BalancesConfig {
-			balances: vec![
-				(alice(), 111 * DOLLARS),
-				(bob(), 100 * DOLLARS),
-				(charlie(), 100_000_000 * DOLLARS),
-				(dave(), 111 * DOLLARS),
-				(eve(), 101 * DOLLARS),
-				(ferdie(), 100 * DOLLARS),
-			],
+			balances: endowed,
 		}),
 		pallet_session: Some(SessionConfig {
 			keys: vec![
-				(alice(), to_session_keys(
+				(dave(), alice(), to_session_keys(
 					&Ed25519Keyring::Alice,
 					&Sr25519Keyring::Alice,
 				)),
-				(bob(), to_session_keys(
+				(eve(), bob(), to_session_keys(
 					&Ed25519Keyring::Bob,
 					&Sr25519Keyring::Bob,
 				)),
-				(charlie(), to_session_keys(
+				(ferdie(), charlie(), to_session_keys(
 					&Ed25519Keyring::Charlie,
 					&Sr25519Keyring::Charlie,
 				)),

@@ -71,7 +71,7 @@ impl Subscriptions {
 
 	/// Borrows the internal task executor.
 	///
-	/// This can be used to spawn additional tasks on the underyling event loop.
+	/// This can be used to spawn additional tasks on the underlying event loop.
 	pub fn executor(&self) -> &TaskExecutor {
 		&self.executor
 	}

@@ -141,7 +141,7 @@ fn node_config<G, E: Clone> (
 {
 	let root = root.path().join(format!("node-{}", index));
 
-	let config_path = Some(String::from(root.join("network").to_str().unwrap()));
+	let config_path = Some(root.join("network"));
 	let net_config_path = config_path.clone();
 
 	let network_config = NetworkConfiguration {
@@ -199,7 +199,7 @@ fn node_config<G, E: Clone> (
 		rpc_ws: None,
 		rpc_ws_max_connections: None,
 		rpc_cors: None,
-		grafana_port: None,
+		prometheus_port: None,
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
 		default_heap_pages: None,
@@ -498,7 +498,7 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	const NUM_FULL_NODES: usize = 10;
 	const NUM_LIGHT_NODES: usize = 10;
 	const NUM_BLOCKS: usize = 10; // 10 * 2 sec block production time = ~20 seconds
-	let temp = tempdir_with_prefix("substrate-conensus-test");
+	let temp = tempdir_with_prefix("substrate-consensus-test");
 	let mut network = TestNet::new(
 		&temp,
 		spec.clone(),

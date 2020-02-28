@@ -196,7 +196,7 @@ pub trait Externalities: ExtensionStore {
 	) -> Vec<u8>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
-	/// `parent` is expects a SCALE endcoded hash.
+	/// `parent` is expects a SCALE encoded hash.
 	///
 	/// The hash is defined by the `Block`.
 	///
@@ -216,19 +216,21 @@ pub trait Externalities: ExtensionStore {
 	/// The transactional layer is closed, a new one is started if this was the last layer.
 	fn storage_commit_transaction(&mut self);
 
-	/// This function modify prospective transactional state,
-	/// it is only for benchmarking purpose and should not be
-	/// use for different purposes.
-	fn wipe(&mut self) {
-		unimplemented!()
-	}
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Wipes all changes from caches and the database.
+	///
+	/// The state will be reset to genesis.
+	fn wipe(&mut self);
 
-	/// This function modify prospective transactional state,
-	/// it is only for benchmarking purpose and should not be
-	/// use for different purposes.
-	fn commit(&mut self) {
-		unimplemented!()
-	}
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Commits all changes to the database and clears all caches.
+	fn commit(&mut self);
 }
 
 /// Extension for the [`Externalities`] trait.

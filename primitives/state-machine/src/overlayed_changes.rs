@@ -56,6 +56,7 @@ pub struct OverlayedChanges {
 	/// Changes with their history.
 	pub(crate) changes: OverlayedChangeSet,
 	/// True if extrinsiscs stats must be collected.
+	/// True if extrinsics stats must be collected.
 	pub(crate) collect_extrinsics: bool,
 	/// Counter of number of operation between garbage collection.
 	/// Changing or deleting a value increment this counter by one.
@@ -73,7 +74,7 @@ pub struct OverlayedChanges {
 pub struct OverlayedValue {
 	/// Current value. None if value has been deleted.
 	pub value: Option<StorageValue>,
-	/// The set of extinsic indices where the values has been changed.
+	/// The set of extrinsic indices where the values has been changed.
 	/// Is filled only if runtime has announced changes trie support.
 	pub extrinsics: Option<BTreeSet<u32>>,
 }
