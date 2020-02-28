@@ -33,7 +33,7 @@ pub trait PerThing:
 	type Inner: BaseArithmetic + Copy + fmt::Debug;
 
 	/// The data type that is used to store values bigger than the maximum of this type. This must
-	/// at least be able to store twice the size of `Self::ACCURACY`.
+	/// at least be able to store `Self::ACCURACY * Self::ACCURACY`.
 	type Upper: BaseArithmetic + Copy + fmt::Debug;
 
 	/// accuracy of this type
@@ -85,7 +85,7 @@ pub trait PerThing:
 	fn from_rational_approximation<N>(p: N, q: N) -> Self
 		where N:
 			Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + TryInto<Self::Upper> +
-			ops::Div<N, Output=N>;
+			ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N>;
 
 	/// A mul implementation that always rounds down, whilst the standard `Mul` implementation
 	/// rounds to the nearest numbers
@@ -108,7 +108,14 @@ pub trait PerThing:
 }
 
 macro_rules! implement_per_thing {
-	($name:ident, $test_mod:ident, [$($test_units:tt),+], $max:tt, $type:ty, $upper_type:ty, $title:expr $(,)?) => {
+	(
+		$name:ident,
+		$test_mod:ident,
+		[$($test_units:tt),+],
+		$max:tt, $type:ty,
+		$upper_type:ty,
+		$title:expr $(,)?
+	) => {
 		/// A fixed point representation of a number between in the range [0, 1].
 		///
 		#[doc = $title]
@@ -153,29 +160,39 @@ macro_rules! implement_per_thing {
 			fn from_fraction(x: f64) -> Self { Self((x * ($max as f64)) as Self::Inner) }
 
 			fn from_rational_approximation<N>(p: N, q: N) -> Self
-				where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + TryInto<Self::Upper> + ops::Div<N, Output=N>
+				where N:
+				Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + TryInto<Self::Upper> +
+				ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N>
 			{
+				let div_ceil = |x: N, f: N| -> N {
+					let mut o = x.clone() / f.clone();
+					let r = x.rem(f.clone());
+					if r > N::from(0) {
+						o = o + N::from(1);
+					}
+					o
+				};
+
 				// q cannot be zero.
 				let q: N = q.max((1 as Self::Inner).into());
 				// p should not be bigger than q.
 				let p: N = p.min(q.clone());
 
-				let factor: N = (q.clone() / $max.into()).max((1 as Self::Inner).into());
+				let factor: N = div_ceil(q.clone(), $max.into()).max((1 as Self::Inner).into());
 
-				// q cannot overflow: (q / (q/$max)) < 2 * $max. p < q hence p also cannot overflow.
-				// this implies that Self::Inner must be able to fit 2 * $max.
-				let q_reduce: $upper_type = (q / factor.clone())
+				// q cannot overflow: (q / (q/$max)) < $max. p < q hence p also cannot overflow.
+				let q_reduce: $type = (q.clone() / factor.clone())
 					.try_into()
 					.map_err(|_| "Failed to convert")
 					.expect(
-						"q / (q/$max) < (2 * $max). Macro prevents any type being created that \
+						"q / ceil(q/$max) < $max. Macro prevents any type being created that \
 						does not satisfy this; qed"
 					);
-				let p_reduce: $upper_type = (p / factor.clone())
+				let p_reduce: $type = (p / factor)
 					.try_into()
 					.map_err(|_| "Failed to convert")
 					.expect(
-						"q / (q/$max) < (2 * $max). Macro prevents any type being created that \
+						"q / ceil(q/$max) < $max. Macro prevents any type being created that \
 						does not satisfy this; qed"
 					);
 

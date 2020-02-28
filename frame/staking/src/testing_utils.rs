@@ -300,12 +300,7 @@ pub fn get_seq_phragmen_solution<T: Trait>(do_reduce: bool)
 		assignments,
 	} = <Module<T>>::do_phragmen::<OffchainAccuracy>().unwrap();
 
-	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
-	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();
-
 	offchain_election::prepare_submission::<T>(
-		snapshot_nominators,
-		snapshot_validators,
 		assignments,
 		winners,
 		do_reduce,

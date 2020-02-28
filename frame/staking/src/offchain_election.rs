@@ -32,7 +32,7 @@ use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::PerThing;
 
 #[derive(RuntimeDebug)]
-pub(crate) enum OffchainElectionError {
+pub enum OffchainElectionError {
 	/// No signing key has been found on the current node that maps to a validators. This node
 	/// should not run the offchain election code.
 	NoSigningKey,
@@ -101,11 +101,6 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 	for (index, ref pubkey) in local_keys.into_iter().filter_map(|key|
 		keys.iter().enumerate().find(|(_, val_key)| **val_key == key)
 	) {
-		// make sure that the snapshot is available.
-		let snapshot_validators = <Module<T>>::snapshot_validators()
-			.ok_or(OffchainElectionError::SnapshotUnavailable)?;
-		let snapshot_nominators = <Module<T>>::snapshot_nominators()
-			.ok_or(OffchainElectionError::SnapshotUnavailable)?;
 
 		// compute raw solution.
 		let PhragmenResult {
@@ -116,12 +111,10 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 
 		// process and prepare it for submission.
 		let (winners, compact, score) = prepare_submission::<T>(
-			snapshot_nominators,
-			snapshot_validators,
 			assignments,
 			winners,
 			true,
-		);
+		)?;
 
 		// sign it.
 		let signature_payload: SignaturePayload =
@@ -157,15 +150,19 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 ///
 /// This does a lot of stuff; read the inline comments.
 pub fn prepare_submission<T: Trait>(
-	snapshot_nominators: Vec<T::AccountId>,
-	snapshot_validators: Vec<T::AccountId>,
 	assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>>,
 	winners: Vec<(T::AccountId, ExtendedBalance)>,
 	do_reduce: bool,
-) -> (Vec<ValidatorIndex>, Compact, PhragmenScore)
+) -> Result<(Vec<ValidatorIndex>, Compact, PhragmenScore), OffchainElectionError>
 where
 	ExtendedBalance: From<<OffchainAccuracy as PerThing>::Inner>,
 {
+	// make sure that the snapshot is available.
+	let snapshot_validators = <Module<T>>::snapshot_validators()
+		.ok_or(OffchainElectionError::SnapshotUnavailable)?;
+	let snapshot_nominators = <Module<T>>::snapshot_nominators()
+		.ok_or(OffchainElectionError::SnapshotUnavailable)?;
+
 	// all helper closures
 	let nominator_index = |a: &T::AccountId| -> Option<NominatorIndex> {
 		snapshot_nominators.iter().position(|x| x == a).and_then(|i|
@@ -227,5 +224,5 @@ where
 		snapshot_validators.iter().position(|v| *v == w).unwrap().try_into().unwrap()
 	).collect::<Vec<ValidatorIndex>>();
 
-	(winners, compact, score)
+	Ok((winners, compact, score))
 }

@@ -865,7 +865,7 @@ pub fn horrible_phragmen_with_post_processing(
 	(compact, winners, score)
 }
 
-// Note: this should always logicall reproduce [`offchain_election::prepare_submission`], yet we
+// Note: this should always logically reproduce [`offchain_election::prepare_submission`], yet we
 // cannot do it since we want to have `tweak` injected into the process.
 pub fn do_phragmen_with_post_processing(
 	do_reduce: bool,

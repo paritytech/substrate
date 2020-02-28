@@ -6,7 +6,7 @@ edition = "2018"
 license = "GPL-3.0"
 
 [dependencies]
-sp-arithmetic = { version = "2.0.0", path = ".." }
+sp-arithmetic = { version = "2.0.0-alpha.1", path = ".." }
 honggfuzz = "0.5"
 primitive-types = "0.6.2"
 num-bigint = "0.2"
@@ -17,6 +17,10 @@ num-traits = "0.2"
 [[bin]]
 name = "biguint"
 path = "src/biguint.rs"
+
+[[bin]]
+name = "per_thing_rational"
+path = "src/per_thing_rational.rs"
 
 [[bin]]
 name = "rational128"
