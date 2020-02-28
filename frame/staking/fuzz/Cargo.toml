@@ -12,19 +12,19 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.3"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-pallet-staking = { version = "2.0.0-dev", path = "..", features = ["testing-utils"] }
-pallet-staking-reward-curve = { version = "2.0.0-dev",  path = "../reward-curve" }
-pallet-session = { version = "2.0.0-dev", path = "../../session" }
-pallet-indices = { version = "2.0.0-dev", path = "../../indices" }
-pallet-balances = { version = "2.0.0-dev", path = "../../balances" }
-pallet-timestamp = { version = "2.0.0-dev", path = "../../timestamp" }
-frame-system = { version = "2.0.0-dev", path = "../../system" }
-frame-support = { version = "2.0.0-dev", path = "../../support" }
-sp-std = { version = "2.0.0-dev", path = "../../../primitives/std" }
-sp-io ={ version = "2.0.0-dev", path = "../../../primitives/io" }
-sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
-sp-phragmen = { version = "2.0.0-dev", path = "../../../primitives/phragmen" }
-sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
+pallet-staking = { version = "2.0.0-alpha.2", path = "..", features = ["testing-utils"] }
+pallet-staking-reward-curve = { version = "2.0.0-alpha.2",  path = "../reward-curve" }
+pallet-session = { version = "2.0.0-alpha.2", path = "../../session" }
+pallet-indices = { version = "2.0.0-alpha.2", path = "../../indices" }
+pallet-balances = { version = "2.0.0-alpha.2", path = "../../balances" }
+pallet-timestamp = { version = "2.0.0-alpha.2", path = "../../timestamp" }
+frame-system = { version = "2.0.0-alpha.2", path = "../../system" }
+frame-support = { version = "2.0.0-alpha.2", path = "../../support" }
+sp-std = { version = "2.0.0-alpha.2", path = "../../../primitives/std" }
+sp-io ={ version = "2.0.0-alpha.2", path = "../../../primitives/io" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
+sp-phragmen = { version = "2.0.0-alpha.2", path = "../../../primitives/phragmen" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
 rand = "0.7.3"
 
 # Prevent this from interfering with workspaces

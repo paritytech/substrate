@@ -47,10 +47,10 @@ pub fn new_test_ext() -> Result<sp_io::TestExternalities, std::string::String> {
 fuzz_target!(|do_reduce: bool| {
     let ext = new_test_ext();
 	let mode: Mode = unsafe { std::mem::transmute(testing_utils::random(0, 2)) };
-	let num_validators = testing_utils::random(50, 500);
-	let num_nominators = testing_utils::random(100, 500);
+	let num_validators = testing_utils::random(200, 1000);
+	let num_nominators = testing_utils::random(500, 2000);
 	let edge_per_voter = testing_utils::random(1, 16);
-	let to_elect = testing_utils::random(10, 50);
+	let to_elect = testing_utils::random(10, 200);
 
 	println!("+++ instance with params {} / {} / {} / {:?} / {}",
 		num_nominators,

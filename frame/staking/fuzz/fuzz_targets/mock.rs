@@ -86,7 +86,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnReapAccount = (Balances, Staking);
+	type OnKilledAccount = (Balances,);
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;

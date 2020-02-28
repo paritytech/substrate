@@ -556,7 +556,7 @@ macro_rules! implement_per_thing {
 							$num_type::max_value()
 						).0 as $upper_type,
 						$name::one().0 as $upper_type,
-						1,
+						2,
 					);
 					assert_eq_error_rate!(
 						$name::from_rational_approximation(
@@ -564,7 +564,7 @@ macro_rules! implement_per_thing {
 							$num_type::max_value()
 						).0 as $upper_type,
 						$name::from_parts($max / 3).0 as $upper_type,
-						2
+						2,
 					);
 					assert_eq!(
 						$name::from_rational_approximation(1, $num_type::max_value()),
@@ -604,6 +604,7 @@ macro_rules! implement_per_thing {
 					$name::from_rational_approximation(3 * max_value / 2, 3 * max_value),
 					$name::from_fraction(0.5),
 				);
+
 				$(per_thing_from_rationale_approx_test!($test_units);)*
 			}
 

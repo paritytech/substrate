@@ -304,7 +304,7 @@ pub fn get_seq_phragmen_solution<T: Trait>(do_reduce: bool)
 		assignments,
 		winners,
 		do_reduce,
-	)
+	).unwrap()
 }
 
 /// Remove all validator, nominators, votes and exposures.
