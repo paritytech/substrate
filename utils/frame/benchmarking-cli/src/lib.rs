@@ -124,36 +124,38 @@ impl BenchmarkCmd {
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
-		let results = <Option<Vec<BenchmarkResults>> as Decode>::decode(&mut &result[..])
-			.unwrap_or(None);
 
-		if let Some(results) = results {
-			// Print benchmark metadata
-			println!(
-				"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
-				self.pallet,
-				self.extrinsic,
-				self.lowest_range_values,
-				self.highest_range_values,
-				self.steps,
-				self.repeat,
-			);
+		let results = <Result<Vec<BenchmarkResults>, String> as Decode>::decode(&mut &result[..])
+			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
-			// Print the table header
-			results[0].0.iter().for_each(|param| print!("{:?},", param.0));
+		match results {
+			Ok(results) => {
+				// Print benchmark metadata
+				println!(
+					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
+					self.pallet,
+					self.extrinsic,
+					self.lowest_range_values,
+					self.highest_range_values,
+					self.steps,
+					self.repeat,
+				);
 
-			print!("extrinsic_time,storage_root_time\n");
-			// Print the values
-			results.iter().for_each(|result| {
-				let parameters = &result.0;
-				parameters.iter().for_each(|param| print!("{:?},", param.1));
-				// Print extrinsic time and storage root time
-				print!("{:?},{:?}\n", result.1, result.2);
-			});
+				// Print the table header
+				results[0].0.iter().for_each(|param| print!("{:?},", param.0));
 
-			eprintln!("Done.");
-		} else {
-			eprintln!("No Results.");
+				print!("extrinsic_time,storage_root_time\n");
+				// Print the values
+				results.iter().for_each(|result| {
+					let parameters = &result.0;
+					parameters.iter().for_each(|param| print!("{:?},", param.1));
+					// Print extrinsic time and storage root time
+					print!("{:?},{:?}\n", result.1, result.2);
+				});
+
+				eprintln!("Done.");
+			}
+			Err(error) => eprintln!("Error: {:?}", error),
 		}
 
 		Ok(())
