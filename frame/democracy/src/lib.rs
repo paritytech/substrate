@@ -31,7 +31,7 @@
 //! Every launch period, a proposal will be taken from either the proposal queue
 //! or the external queue in turn. The taken proposal will become a referendum
 //! that can be voted on by any token holder in the system. The voting system
-//! uses timelock voting by allowing the token holder to set their _conviction_
+//! uses time-lock voting by allowing the token holder to set their _conviction_
 //! behind a vote. The conviction will dictate the length of time the tokens
 //! will be locked, as well as the multiplier that scales the vote power.
 //!
