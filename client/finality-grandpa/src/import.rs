@@ -21,9 +21,10 @@ use parity_scale_codec::Encode;
 use futures::channel::mpsc;
 use parking_lot::RwLockWriteGuard;
 
-use sp_blockchain::{HeaderBackend, BlockStatus, well_known_cache_keys};
-use sc_client_api::{backend::{TransactionFor, Backend}, CallExecutor, utils::is_descendent_of};
-use sc_client::Client;
+use sp_blockchain::{BlockStatus, well_known_cache_keys};
+use sc_client_api::{backend::Backend, utils::is_descendent_of};
+use sp_api::{TransactionFor};
+
 use sp_consensus::{
 	BlockImport, Error as ConsensusError,
 	BlockCheckParams, BlockImportParams, ImportResult, JustificationImport,
@@ -41,6 +42,7 @@ use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingCha
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::finalize_block;
 use crate::justification::GrandpaJustification;
+use std::marker::PhantomData;
 
 /// A block-import handler for GRANDPA.
 ///
@@ -51,16 +53,17 @@ use crate::justification::GrandpaJustification;
 ///
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
-pub struct GrandpaBlockImport<B, E, Block: BlockT, RA, SC> {
-	inner: Arc<Client<B, E, Block, RA>>,
+pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
+	inner: Arc<Client>,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
+	_phantom: PhantomData<Backend>,
 }
 
-impl<B, E, Block: BlockT, RA, SC: Clone> Clone for
-	GrandpaBlockImport<B, E, Block, RA, SC>
+impl<Backend, Block: BlockT, Client, SC: Clone> Clone for
+	GrandpaBlockImport<Backend, Block, Client, SC>
 {
 	fn clone(&self) -> Self {
 		GrandpaBlockImport {
@@ -69,24 +72,24 @@ impl<B, E, Block: BlockT, RA, SC: Clone> Clone for
 			authority_set: self.authority_set.clone(),
 			send_voter_commands: self.send_voter_commands.clone(),
 			consensus_changes: self.consensus_changes.clone(),
+			_phantom: PhantomData,
 		}
 	}
 }
 
-impl<B, E, Block: BlockT, RA, SC> JustificationImport<Block>
-	for GrandpaBlockImport<B, E, Block, RA, SC> where
+impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
+	for GrandpaBlockImport<BE, Block, Client, SC> where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
-		B: Backend<Block> + 'static,
-		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		RA: Send + Sync,
+		BE: Backend<Block>,
+		Client: crate::ClientForGrandpa<Block, BE>,
 		SC: SelectChain<Block>,
 {
 	type Error = ConsensusError;
 
 	fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
 		let mut out = Vec::new();
-		let chain_info = self.inner.chain_info();
+		let chain_info = self.inner.info();
 
 		// request justifications for all pending changes for which change blocks have already been imported
 		let authorities = self.authority_set.inner().read();
@@ -105,7 +108,7 @@ impl<B, E, Block: BlockT, RA, SC> JustificationImport<Block>
 				};
 
 				if let Ok(Some(hash)) = effective_block_hash {
-					if let Ok(Some(header)) = self.inner.header(&BlockId::Hash(hash)) {
+					if let Ok(Some(header)) = self.inner.header(BlockId::Hash(hash)) {
 						if *header.number() == pending_change.effective_number() {
 							out.push((header.hash(), *header.number()));
 						}
@@ -123,7 +126,7 @@ impl<B, E, Block: BlockT, RA, SC> JustificationImport<Block>
 		number: NumberFor<Block>,
 		justification: Justification,
 	) -> Result<(), Self::Error> {
-		self.import_justification(hash, number, justification, false)
+		GrandpaBlockImport::import_justification(self, hash, number, justification, false)
 	}
 }
 
@@ -200,14 +203,13 @@ fn find_forced_change<B: BlockT>(header: &B::Header)
 	header.digest().convert_first(|l| l.try_to(id).and_then(filter_log))
 }
 
-impl<B, E, Block: BlockT, RA, SC>
-	GrandpaBlockImport<B, E, Block, RA, SC>
+impl<BE, Block: BlockT, Client, SC>
+	GrandpaBlockImport<BE, Block, Client, SC>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	DigestFor<Block>: Encode,
-	RA: Send + Sync,
+	BE: Backend<Block>,
+	Client: crate::ClientForGrandpa<Block, BE>,
 {
 	// check for a new authority set change.
 	fn check_new_change(&self, header: &Block::Header, hash: Block::Hash)
@@ -235,11 +237,11 @@ where
 		})
 	}
 
-	fn make_authorities_changes<'a>(
-		&'a self,
-		block: &mut BlockImportParams<Block, TransactionFor<B, Block>>,
+	fn make_authorities_changes(
+		&self,
+		block: &mut BlockImportParams<Block, TransactionFor<Client, Block>>,
 		hash: Block::Hash,
-	) -> Result<PendingSetChanges<'a, Block>, ConsensusError> {
+	) -> Result<PendingSetChanges<Block>, ConsensusError> {
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
 		// the old authority set on error or panic.
@@ -325,10 +327,10 @@ where
 					// for the canon block the new authority set should start
 					// with. we use the minimum between the median and the local
 					// best finalized block.
-					let best_finalized_number = self.inner.chain_info().finalized_number;
+					let best_finalized_number = self.inner.info().finalized_number;
 					let canon_number = best_finalized_number.min(median_last_finalized_number);
 					let canon_hash =
-						self.inner.header(&BlockId::Number(canon_number))
+						self.inner.header(BlockId::Number(canon_number))
 							.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 							.expect("the given block number is less or equal than the current best finalized number; \
 									 current best finalized number must exist in chain; qed.")
@@ -380,18 +382,17 @@ where
 	}
 }
 
-impl<B, E, Block: BlockT, RA, SC> BlockImport<Block>
-	for GrandpaBlockImport<B, E, Block, RA, SC> where
+impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
+	for GrandpaBlockImport<BE, Block, Client, SC> where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
-		B: Backend<Block> + 'static,
-		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		RA: Send + Sync,
-		for<'a> &'a Client<B, E, Block, RA>:
-			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<B, Block>>,
+		BE: Backend<Block>,
+		Client: crate::ClientForGrandpa<Block, BE>,
+		for<'a> &'a Client:
+			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
 {
 	type Error = ConsensusError;
-	type Transaction = TransactionFor<B, Block>;
+	type Transaction = TransactionFor<Client, Block>;
 
 	fn import_block(
 		&mut self,
@@ -521,31 +522,31 @@ impl<B, E, Block: BlockT, RA, SC> BlockImport<Block>
 	}
 }
 
-impl<B, E, Block: BlockT, RA, SC> GrandpaBlockImport<B, E, Block, RA, SC> {
+impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Client, SC> {
 	pub(crate) fn new(
-		inner: Arc<Client<B, E, Block, RA>>,
+		inner: Arc<Client>,
 		select_chain: SC,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 		send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	) -> GrandpaBlockImport<B, E, Block, RA, SC> {
+	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
 		GrandpaBlockImport {
 			inner,
 			select_chain,
 			authority_set,
 			send_voter_commands,
 			consensus_changes,
+			_phantom: PhantomData,
 		}
 	}
 }
 
-impl<B, E, Block: BlockT, RA, SC>
-	GrandpaBlockImport<B, E, Block, RA, SC>
+impl<BE, Block: BlockT, Client, SC>
+	GrandpaBlockImport<BE, Block, Client, SC>
 where
+	BE: Backend<Block>,
+	Client: crate::ClientForGrandpa<Block, BE>,
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
-	RA: Send + Sync,
 {
 
 	/// Import a block justification and finalize the block.
@@ -572,7 +573,7 @@ where
 		};
 
 		let result = finalize_block(
-			&*self.inner,
+			self.inner.clone(),
 			&self.authority_set,
 			&self.consensus_changes,
 			None,

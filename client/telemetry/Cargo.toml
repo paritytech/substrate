@@ -1,12 +1,14 @@
 [package]
 name = "sc-telemetry"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Telemetry utils"
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+documentation = "https://docs.rs/sc-telemetry"
+
 
 [dependencies]
 bytes = "0.5"
