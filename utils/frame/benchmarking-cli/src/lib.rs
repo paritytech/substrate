@@ -111,7 +111,7 @@ impl BenchmarkCmd {
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
 		let results = <Result<Vec<BenchmarkResults>, String> as Decode>::decode(&mut &result[..])
-			.expect("failed to decode benchmark results");
+			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
 		match results {
 			Ok(results) => {
