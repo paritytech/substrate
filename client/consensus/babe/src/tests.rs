@@ -32,10 +32,9 @@ use sc_network_test::*;
 use sc_network_test::{Block as TestBlock, PeersClient};
 use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
-use tokio::runtime::current_thread;
 use sc_client_api::{BlockchainEvents, backend::TransactionFor};
 use log::debug;
-use std::{time::Duration, cell::RefCell};
+use std::{time::Duration, cell::RefCell, task::Poll};
 
 type Item = DigestItem<Hash>;
 
@@ -354,7 +353,7 @@ fn run_one_test(
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
-	let mut runtime = current_thread::Runtime::new().unwrap();
+	let mut babe_futures = Vec::new();
 	let mut keystore_paths = Vec::new();
 
 	for (peer_id, seed) in peers {
@@ -399,7 +398,7 @@ fn run_one_test(
 		);
 
 
-		runtime.spawn(start_babe(BabeParams {
+		babe_futures.push(start_babe(BabeParams {
 			block_import: data.block_import.lock().take().expect("import set up during init"),
 			select_chain,
 			client,
@@ -410,23 +409,23 @@ fn run_one_test(
 			babe_link: data.link.clone(),
 			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
-		}).expect("Starts babe").unit_error().compat());
+		}).expect("Starts babe"));
 	}
 
-	runtime.spawn(futures01::future::poll_fn(move || {
-		let mut net = net.lock();
-		net.poll();
-		for p in net.peers() {
-			for (h, e) in p.failed_verifications() {
-				panic!("Verification failed for {:?}: {}", h, e);
+	futures::executor::block_on(future::select(
+		futures::future::poll_fn(move |cx| {
+			let mut net = net.lock();
+			net.poll(cx);
+			for p in net.peers() {
+				for (h, e) in p.failed_verifications() {
+					panic!("Verification failed for {:?}: {}", h, e);
+				}
 			}
-		}
-
-		Ok::<_, ()>(futures01::Async::NotReady::<()>)
-	}));
-
-	runtime.block_on(future::join_all(import_notifications)
-		.unit_error().compat()).unwrap();
+	
+			Poll::<()>::Pending
+		}),
+		future::select(future::join_all(import_notifications), future::join_all(babe_futures))
+	));
 }
 
 #[test]
