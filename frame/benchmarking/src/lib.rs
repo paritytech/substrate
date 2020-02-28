@@ -140,7 +140,13 @@ macro_rules! impl_benchmark {
 		$( $name:ident ),*
 	) => {
 		impl<T: Trait> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T> {
-			fn run_benchmark(extrinsic: Vec<u8>, steps: Vec<u32>, repeat: u32) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
+			fn run_benchmark(
+				extrinsic: Vec<u8>,
+				lowest_range_values: Vec<u32>,
+				highest_range_values: Vec<u32>,
+				steps: Vec<u32>,
+				repeat: u32,
+			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
 				let extrinsic = sp_std::str::from_utf8(extrinsic.as_slice())
 					.map_err(|_| "Could not find extrinsic")?;
@@ -157,26 +163,38 @@ macro_rules! impl_benchmark {
 				let mut results: Vec<$crate::BenchmarkResults> = Vec::new();
 
 				// Default number of steps for a component.
-				let mut prev_steps = &10;
+				let mut prev_steps = 10;
 
 				// Select the component we will be benchmarking. Each component will be benchmarked.
 				for (idx, (name, low, high)) in components.iter().enumerate() {
 					// Get the number of steps for this component.
-					let steps = steps.get(idx).unwrap_or(&prev_steps);
+					let steps = steps.get(idx).cloned().unwrap_or(prev_steps);
 					prev_steps = steps;
 
+					let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
+					let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
+
+					let diff = highest - lowest;
+
 					// Create up to `STEPS` steps for that component between high and low.
-					let step_size = ((high - low) / steps).max(1);
-					let num_of_steps = (high - low) / step_size + 1;
+					let step_size = (diff / steps).max(1);
+					let num_of_steps = diff / step_size + 1;
+
 					for s in 0..num_of_steps {
 						// This is the value we will be testing for component `name`
-						let component_value = low + step_size * s;
+						let component_value = lowest + step_size * s;
 
-						// Select the mid value for all the other components.
+						// Select the max value for all the other components.
 						let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
-							.map(|(n, l, h)|
-								(*n, if n == name { component_value } else { *h })
-							).collect();
+							.enumerate()
+							.map(|(idx, (n, l, h))|
+								if n == name {
+									(*n, component_value)
+								} else {
+									(*n, *highest_range_values.get(idx).unwrap_or(h))
+								}
+							)
+							.collect();
 
 						// Run the benchmark `repeat` times.
 						for _ in 0..repeat {

@@ -19,8 +19,7 @@
 // FIXME #1021 move this into sp-consensus
 
 use std::{time, sync::Arc};
-use sc_client_api::{CallExecutor, backend};
-use sc_client::Client as SubstrateClient;
+use sc_client_api::backend;
 use codec::Decode;
 use sp_consensus::{evaluation, Proposal, RecordProof};
 use sp_inherents::InherentData;
@@ -32,35 +31,47 @@ use sp_runtime::{
 };
 use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
-use sc_block_builder::BlockBuilderApi;
+use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::prelude::*;
+use sp_blockchain::HeaderBackend;
+use std::marker::PhantomData;
 
 /// Proposer factory.
-pub struct ProposerFactory<C, A> where A: TransactionPool {
+pub struct ProposerFactory<A, B, C> {
 	/// The client instance.
-	pub client: Arc<C>,
+	client: Arc<C>,
 	/// The transaction pool.
-	pub transaction_pool: Arc<A>,
+	transaction_pool: Arc<A>,
+	/// phantom member to pin the `Backend` type.
+	_phantom: PhantomData<B>,
 }
 
-impl<B, E, Block, RA, A> ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
+impl<A, B, C> ProposerFactory<A, B, C> {
+	pub fn new(client: Arc<C>, transaction_pool: Arc<A>) -> Self {
+		ProposerFactory {
+			client,
+			transaction_pool,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl<B, Block, C, A> ProposerFactory<A, B, C>
 	where
 		A: TransactionPool<Block = Block> + 'static,
 		B: backend::Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync + Clone + 'static,
 		Block: BlockT,
-		RA: Send + Sync + 'static,
-		SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-		<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-			BlockBuilderApi<Block, Error = sp_blockchain::Error> +
-			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+		C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
+			+ Send + Sync + 'static,
+		C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
+			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	pub fn init_with_now(
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
 		now: Box<dyn Fn() -> time::Instant + Send + Sync>,
-	) -> Proposer<Block, SubstrateClient<B, E, Block, RA>, A> {
+	) -> Proposer<B, Block, C, A> {
 		let parent_hash = parent_header.hash();
 
 		let id = BlockId::hash(parent_hash);
@@ -75,6 +86,7 @@ impl<B, E, Block, RA, A> ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 				parent_number: *parent_header.number(),
 				transaction_pool: self.transaction_pool.clone(),
 				now,
+				_phantom: PhantomData,
 			}),
 		};
 
@@ -82,21 +94,19 @@ impl<B, E, Block, RA, A> ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 	}
 }
 
-impl<B, E, Block, RA, A> sp_consensus::Environment<Block> for
-	ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
+impl<A, B, Block, C> sp_consensus::Environment<Block> for
+	ProposerFactory<A, B, C>
 		where
 			A: TransactionPool<Block = Block> + 'static,
 			B: backend::Backend<Block> + Send + Sync + 'static,
-			E: CallExecutor<Block> + Send + Sync + Clone + 'static,
 			Block: BlockT,
-			RA: Send + Sync + 'static,
-			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-				BlockBuilderApi<Block, Error = sp_blockchain::Error> +
-				ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+			C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
+				+ Send + Sync + 'static,
+			C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
+				+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
-	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
+	type Proposer = Proposer<B, Block, C, A>;
 	type Error = sp_blockchain::Error;
 
 	fn init(
@@ -108,32 +118,31 @@ impl<B, E, Block, RA, A> sp_consensus::Environment<Block> for
 }
 
 /// The proposer logic.
-pub struct Proposer<Block: BlockT, C, A: TransactionPool> {
-	inner: Arc<ProposerInner<Block, C, A>>,
+pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
+	inner: Arc<ProposerInner<B, Block, C, A>>,
 }
 
 /// Proposer inner, to wrap parameters under Arc.
-struct ProposerInner<Block: BlockT, C, A: TransactionPool> {
+struct ProposerInner<B, Block: BlockT, C, A: TransactionPool> {
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
+	_phantom: PhantomData<B>,
 }
 
-impl<B, E, Block, RA, A> sp_consensus::Proposer<Block> for
-	Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
+impl<A, B, Block, C> sp_consensus::Proposer<Block> for
+	Proposer<B, Block, C, A>
 		where
 			A: TransactionPool<Block = Block> + 'static,
 			B: backend::Backend<Block> + Send + Sync + 'static,
-			E: CallExecutor<Block> + Send + Sync + Clone + 'static,
 			Block: BlockT,
-			RA: Send + Sync + 'static,
-			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-				BlockBuilderApi<Block, Error = sp_blockchain::Error> +
-				ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+			C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
+				+ Send + Sync + 'static,
+			C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
+				+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	type Transaction = backend::TransactionFor<B, Block>;
 	type Proposal = tokio_executor::blocking::Blocking<
@@ -157,16 +166,15 @@ impl<B, E, Block, RA, A> sp_consensus::Proposer<Block> for
 	}
 }
 
-impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, A>	where
-	A: TransactionPool<Block = Block>,
-	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-	E: CallExecutor<Block> + Send + Sync + Clone + 'static,
-	Block: BlockT,
-	RA: Send + Sync + 'static,
-	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-		BlockBuilderApi<Block, Error = sp_blockchain::Error> +
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+impl<A, B, Block, C> ProposerInner<B, Block, C, A>
+	where
+		A: TransactionPool<Block = Block>,
+		B: backend::Backend<Block> + Send + Sync + 'static,
+		Block: BlockT,
+		C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
+			+ Send + Sync + 'static,
+		C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
+			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	fn propose_with(
 		&self,
@@ -315,10 +323,7 @@ mod tests {
 			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)])
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory {
-			client: client.clone(),
-			transaction_pool: txpool.clone(),
-		};
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
 
 		let cell = Mutex::new(time::Instant::now());
 		let mut proposer = proposer_factory.init_with_now(
@@ -359,10 +364,7 @@ mod tests {
 			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0)]),
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory {
-			client: client.clone(),
-			transaction_pool: txpool.clone(),
-		};
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
 
 		let mut proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),

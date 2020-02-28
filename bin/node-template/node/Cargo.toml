@@ -1,6 +1,6 @@
 [package]
 name = "node-template"
-version = "2.0.0-alpha.2"
+version = "2.0.0-alpha.3"
 authors = ["Anonymous"]
 edition = "2018"
 license = "Unlicense"
