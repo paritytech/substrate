@@ -1,12 +1,13 @@
 [package]
 name = "sp-trie"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Patricia trie stuff using a parity-scale-codec node format"
 repository = "https://github.com/paritytech/substrate/"
 license = "GPL-3.0"
 edition = "2018"
 homepage = "https://substrate.dev"
+documentation = "https://docs.rs/sp-trie"
 
 [[bench]]
 name = "bench"
@@ -14,12 +15,12 @@ harness = false
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-sp-std = { version = "2.0.0-alpha.1", default-features = false, path = "../std" }
+sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../std" }
 hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.20.0", default-features = false }
 trie-root = { version = "0.16.0", default-features = false }
 memory-db = { version = "0.19.0", default-features = false }
-sp-core = { version = "2.0.0-alpha.1", default-features = false, path = "../core" }
+sp-core = { version = "2.0.0-alpha.2", default-features = false, path = "../core" }
 
 [dev-dependencies]
 trie-bench = "0.20.0"

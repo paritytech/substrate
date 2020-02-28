@@ -1,30 +1,32 @@
 [package]
 name = "sc-executor"
-version = "0.8.0-alpha.1"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "A crate that provides means of executing/dispatching calls into the runtime."
+documentation = "https://docs.rs/sc-executor"
 
 [dependencies]
 derive_more = "0.99.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sp-io = { version = "2.0.0-alpha.1", path = "../../primitives/io" }
-sp-core = { version = "2.0.0-alpha.1", path = "../../primitives/core" }
-sp-trie = { version = "2.0.0-alpha.1", path = "../../primitives/trie" }
-sp-serializer = { version = "2.0.0-alpha.1", path = "../../primitives/serializer" }
-sp-version = { version = "2.0.0-alpha.1", path = "../../primitives/version" }
-sp-panic-handler = { version = "2.0.0-alpha.1", path = "../../primitives/panic-handler" }
+sp-io = { version = "2.0.0-alpha.2", path = "../../primitives/io" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
+sp-trie = { version = "2.0.0-alpha.2", path = "../../primitives/trie" }
+sp-serializer = { version = "2.0.0-alpha.2", path = "../../primitives/serializer" }
+sp-version = { version = "2.0.0-alpha.2", path = "../../primitives/version" }
+sp-panic-handler = { version = "2.0.0-alpha.2", path = "../../primitives/panic-handler" }
 wasmi = "0.6.2"
 parity-wasm = "0.41.0"
 lazy_static = "1.4.0"
-sp-wasm-interface = { version = "2.0.0-alpha.1", path = "../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "2.0.0-alpha.1", path = "../../primitives/runtime-interface" }
-sp-externalities = { version = "0.8.0-alpha.1", path = "../../primitives/externalities" }
-sc-executor-common = { version = "0.8.0-alpha.1", path = "common" }
-sc-executor-wasmi = { version = "0.8.0-alpha.1", path = "wasmi" }
-sc-executor-wasmtime = { version = "0.8.0-alpha.1", path = "wasmtime", optional = true }
+sp-wasm-interface = { version = "2.0.0-alpha.2", path = "../../primitives/wasm-interface" }
+sp-runtime-interface = { version = "2.0.0-alpha.2", path = "../../primitives/runtime-interface" }
+sp-externalities = { version = "0.8.0-alpha.2", path = "../../primitives/externalities" }
+sc-executor-common = { version = "0.8.0-alpha.2", path = "common" }
+sc-executor-wasmi = { version = "0.8.0-alpha.2", path = "wasmi" }
+sc-executor-wasmtime = { version = "0.8.0-alpha.2", path = "wasmtime", optional = true }
 parking_lot = "0.10.0"
 log = "0.4.8"
 libsecp256k1 = "0.3.4"
@@ -35,7 +37,7 @@ wabt = "0.9.2"
 hex-literal = "0.2.1"
 sc-runtime-test = { version = "2.0.0-dev", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0-dev", path = "../../test-utils/runtime" }
-sp-state-machine = { version = "0.8.0-alpha.1", path = "../../primitives/state-machine" }
+sp-state-machine = { version = "0.8.0-alpha.2", path = "../../primitives/state-machine" }
 test-case = "0.3.3"
 
 [features]
