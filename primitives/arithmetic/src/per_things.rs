@@ -132,7 +132,8 @@ macro_rules! implement_per_thing {
 				let factor = (q.clone() / $max.into()).max((1 as Self::Inner).into());
 
 				// q cannot overflow: (q / (q/$max)) < 2 * $max. p < q hence p also cannot overflow.
-				// this implies that Self::Inner must be able to fit 2 * $max.
+				// this implies that Self::Inner must be able to fit 2 * $max. This is guarenteed
+				// by the macros tests.
 				//
 				// Proof for `q_reduce < 2 * $max`:
 				// i.e. `floor(q / max(floor(q/$max), 1)) < 2 * $max`:
