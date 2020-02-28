@@ -32,6 +32,7 @@ use crate::{
 		input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex, ChildIndex},
 	},
 };
+use sp_core::storage::{ChildInfo, ChildType};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -105,19 +106,19 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 
-	let mut children_prefixed_keys = BTreeSet::<StorageKey>::new();
+	let mut children_info = BTreeSet::<ChildInfo>::new();
 	let mut children_result = BTreeMap::new();
 	for (_storage_key, (_map, child_info)) in changes.prospective.children_default.iter()
 		.chain(changes.committed.children_default.iter()) {
-		children_prefixed_keys.insert(child_info.prefixed_storage_key());
+		children_info.insert(child_info.clone());
 	}
-	for storage_key in children_prefixed_keys {
+	for child_info in children_info {
 		let child_index = ChildIndex::<Number> {
 			block: block.clone(),
-			storage_key: storage_key.clone(),
+			storage_key: child_info.prefixed_storage_key(),
 		};
 
-		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(storage_key))?;
+		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(child_info))?;
 		children_result.insert(child_index, iter);
 	}
 
@@ -130,22 +131,22 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
 	changes: &'a OverlayedChanges,
-	storage_key: Option<StorageKey>,
+	child_info: Option<ChildInfo>,
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
 	where
 		B: Backend<H>,
 		H: Hasher,
 		Number: BlockNumber,
 {
-	let (committed, prospective, child_info) = if let Some(sk) = storage_key.as_ref() {
-		let child_info = changes.default_child_info(sk).cloned();
-		(
-			changes.committed.children_default.get(sk).map(|c| &c.0),
-			changes.prospective.children_default.get(sk).map(|c| &c.0),
-			child_info,
-		)
+	let (committed, prospective) = if let Some(child_info) = child_info.as_ref() {
+		match child_info.child_type() {
+			ChildType::ParentKeyId => (
+				changes.committed.children_default.get(child_info.storage_key()).map(|c| &c.0),
+				changes.prospective.children_default.get(child_info.storage_key()).map(|c| &c.0),
+			),
+		}
 	} else {
-		(Some(&changes.committed.top), Some(&changes.prospective.top), None)
+		(Some(&changes.committed.top), Some(&changes.prospective.top))
 	};
 	committed.iter().flat_map(|c| c.iter())
 		.chain(prospective.iter().flat_map(|c| c.iter()))
@@ -155,13 +156,11 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 				Entry::Vacant(entry) => {
 					// ignore temporary values (values that have null value at the end of operation
 					// AND are not in storage at the beginning of operation
-					if let Some(sk) = storage_key.as_ref() {
-						if !changes.child_storage(sk, k).map(|v| v.is_some()).unwrap_or_default() {
-							if let Some(child_info) = child_info.as_ref() {
-								if !backend.exists_child_storage(&child_info, k)
-									.map_err(|e| format!("{}", e))? {
-									return Ok(map);
-								}
+					if let Some(child_info) = child_info.as_ref() {
+						if !changes.child_storage(child_info, k).map(|v| v.is_some()).unwrap_or_default() {
+							if !backend.exists_child_storage(&child_info, k)
+								.map_err(|e| format!("{}", e))? {
+								return Ok(map);
 							}
 						}
 					} else {
@@ -344,7 +343,6 @@ mod test {
 	use codec::Encode;
 	use sp_core::Blake2Hasher;
 	use sp_core::storage::well_known_keys::EXTRINSIC_INDEX;
-	use sp_core::storage::ChildInfo;
 	use crate::InMemoryBackend;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
@@ -367,8 +365,9 @@ mod test {
 			(vec![104], vec![255]),
 			(vec![105], vec![255]),
 		].into_iter().collect::<std::collections::BTreeMap<_, _>>().into();
-		let child_trie_key1 = child_info_1.prefixed_storage_key();
-		let child_trie_key2 = child_info_2.prefixed_storage_key();
+		let prefixed_child_trie_key1 = child_info_1.prefixed_storage_key();
+		let child_trie_key1 = child_info_1.storage_key().to_vec();
+		let child_trie_key2 = child_info_2.storage_key().to_vec();
 		let storage = InMemoryStorage::with_inputs(vec![
 			(zero + 1, vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![100] }, vec![1, 3]),
@@ -402,7 +401,7 @@ mod test {
 			]),
 			(zero + 9, Vec::new()), (zero + 10, Vec::new()), (zero + 11, Vec::new()), (zero + 12, Vec::new()),
 			(zero + 13, Vec::new()), (zero + 14, Vec::new()), (zero + 15, Vec::new()),
-		], vec![(child_trie_key1.clone(), vec![
+		], vec![(prefixed_child_trie_key1.clone(), vec![
 				(zero + 1, vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![100] }, vec![1, 3]),
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![101] }, vec![0, 2]),

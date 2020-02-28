@@ -210,7 +210,7 @@ where
 	) -> Option<StorageValue> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
-			.child_storage(child_info.storage_key(), key)
+			.child_storage(child_info, key)
 			.map(|x| x.map(|x| x.to_vec()))
 			.unwrap_or_else(||
 				self.backend.child_storage(child_info, key)
@@ -234,7 +234,7 @@ where
 	) -> Option<Vec<u8>> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
-			.child_storage(child_info.storage_key(), key)
+			.child_storage(child_info, key)
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(||
 				self.backend.child_storage_hash(child_info, key)
@@ -313,7 +313,7 @@ where
 	) -> bool {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
-		let result = match self.overlay.child_storage(child_info.storage_key(), key) {
+		let result = match self.overlay.child_storage(child_info, key) {
 			Some(x) => x.is_some(),
 			_ => self.backend
 				.exists_child_storage(child_info, key)

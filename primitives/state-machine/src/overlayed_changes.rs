@@ -212,14 +212,14 @@ impl OverlayedChanges {
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
-	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
-		if let Some(map) = self.prospective.children_default.get(storage_key) {
+	pub fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Option<&[u8]>> {
+		if let Some(map) = self.prospective.children_default.get(child_info.storage_key()) {
 			if let Some(val) = map.0.get(key) {
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
 
-		if let Some(map) = self.committed.children_default.get(storage_key) {
+		if let Some(map) = self.committed.children_default.get(child_info.storage_key()) {
 			if let Some(val) = map.0.get(key) {
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
