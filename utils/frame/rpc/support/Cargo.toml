@@ -20,4 +20,4 @@ sc-rpc-api = { version = "0.8.0-alpha.2", path = "../../../../client/rpc-api" }
 
 [dev-dependencies]
 frame-system = { version = "2.0.0-alpha.2", path = "../../../../frame/system" }
-tokio = "0.1"
+tokio = "0.2"
