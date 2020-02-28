@@ -6408,9 +6408,9 @@ dependencies = [
 name = "sc-service-test"
 version = "2.0.0-dev"
 dependencies = [
- "async-std",
  "env_logger 0.7.1",
  "fdlimit",
+ "futures 0.1.29",
  "futures 0.3.4",
  "log 0.4.8",
  "sc-client",
@@ -6421,7 +6421,7 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "tempfile",
- "tokio 0.2.12",
+ "tokio 0.1.22",
 ]
 
 [[package]]
