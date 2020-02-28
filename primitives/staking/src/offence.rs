@@ -96,6 +96,22 @@ pub trait Offence<Offender> {
 pub enum OffenceError {
 	/// The report has already been sumbmitted.
 	DuplicateReport,
+
+	/// Other error has happened.
+	Other(u8),
+}
+
+impl sp_runtime::traits::Printable for OffenceError {
+	fn print(&self) {
+		"OffenceError".print();
+		match self {
+			Self::DuplicateReport => "DuplicateReport".print(),
+			Self::Other(e) => {
+				"Other".print();
+				e.print();
+			}
+		}
+	}
 }
 
 /// A trait for decoupling offence reporters from the actual handling of offence reports.

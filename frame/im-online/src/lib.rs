@@ -609,10 +609,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 			let validator_set_count = keys.len() as u32;
 			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
 			if let Err(e) = T::ReportUnresponsiveness::report_offence(vec![], offence) {
-				debug::info!(
-					target: "imonline",
-					"Failed to report an offence: {:?}", e,
-				);
+				sp_runtime::print(e);
 			}
 		}
 	}
