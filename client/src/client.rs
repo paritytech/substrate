@@ -1088,7 +1088,11 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 	E: CallExecutor<Block>,
 	Block: BlockT,
 {
-	fn read_proof(&self, id: &BlockId<Block>, keys: &[Vec<u8>]) -> sp_blockchain::Result<StorageProof> {
+	fn read_proof(
+		&self,
+		id: &BlockId<Block>,
+		keys: &mut dyn Iterator<Item=&[u8]>,
+	) -> sp_blockchain::Result<StorageProof> {
 		self.state_at(id)
 			.and_then(|state| prove_read(state, keys)
 				.map_err(Into::into))
@@ -1099,7 +1103,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		id: &BlockId<Block>,
 		storage_key: &[u8],
 		child_info: ChildInfo,
-		keys: &[Vec<u8>],
+		keys: &mut dyn Iterator<Item=&[u8]>,
 	) -> sp_blockchain::Result<StorageProof> {
 		self.state_at(id)
 			.and_then(|state| prove_child_read(state, storage_key, child_info, keys)

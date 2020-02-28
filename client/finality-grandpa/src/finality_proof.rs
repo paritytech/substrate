@@ -95,7 +95,7 @@ impl<BE, Block: BlockT> AuthoritySetForFinalityProver<Block> for Arc<dyn Storage
 	}
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<StorageProof> {
-		self.read_proof(block, &[GRANDPA_AUTHORITIES_KEY.to_vec()])
+		self.read_proof(block, &mut std::iter::once(GRANDPA_AUTHORITIES_KEY))
 	}
 }
 

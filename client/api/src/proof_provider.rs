@@ -24,7 +24,11 @@ use sp_storage::{ChildInfo, StorageKey};
 /// Interface for providing block proving utilities.
 pub trait ProofProvider<Block: BlockT> {
 	/// Reads storage value at a given block + key, returning read proof.
-	fn read_proof(&self, id: &BlockId<Block>, keys: &[Vec<u8>]) -> sp_blockchain::Result<StorageProof>;
+	fn read_proof(
+		&self,
+		id: &BlockId<Block>,
+		keys: &mut dyn Iterator<Item=&[u8]>,
+	) -> sp_blockchain::Result<StorageProof>;
 
 	/// Reads child storage value at a given block + storage_key + key, returning
 	/// read proof.
@@ -33,7 +37,7 @@ pub trait ProofProvider<Block: BlockT> {
 		id: &BlockId<Block>,
 		storage_key: &[u8],
 		child_info: ChildInfo,
-		keys: &[Vec<u8>],
+		keys: &mut dyn Iterator<Item=&[u8]>,
 	) -> sp_blockchain::Result<StorageProof>;
 
 	/// Execute a call to a contract on top of state in a block of given hash
