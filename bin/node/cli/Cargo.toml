@@ -1,6 +1,6 @@
 [package]
 name = "node-cli"
-version = "2.0.0-alpha.2"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node implementation in Rust."
 build = "build.rs"
@@ -98,7 +98,7 @@ node-inspect = { version = "0.8.0-alpha.2", optional = true, path = "../inspect"
 # WASM-specific dependencies
 wasm-bindgen = { version = "0.2.57", optional = true }
 wasm-bindgen-futures = { version = "0.4.7", optional = true }
-browser-utils = { path = "../../../utils/browser", optional = true , version = "0.8.0-alpha.2"}
+browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.8.0-alpha.2" }
 
 [dev-dependencies]
 sc-keystore = { version = "2.0.0-alpha.2", path = "../../../client/keystore" }
