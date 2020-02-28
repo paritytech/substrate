@@ -349,7 +349,7 @@ pub mod tests {
 	use sp_runtime::generic::BlockId;
 	use sp_state_machine::Backend;
 	use super::*;
-	use sc_client_api::StorageProvider;
+	use sc_client_api::{StorageProvider, ProofProvider};
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
@@ -427,7 +427,7 @@ pub mod tests {
 			&remote_block_id,
 			b":child_storage:default:child1",
 			CHILD_INFO_1,
-			&[vec!["key1"]],
+			&["key1".as_bytes().to_vec()],
 		).unwrap();
 
 		// check locally

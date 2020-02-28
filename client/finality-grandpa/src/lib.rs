@@ -92,7 +92,7 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
-pub use finality_proof::FinalityProofProvider;
+pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
 pub use voting_rule::{
@@ -423,7 +423,7 @@ pub fn block_import<BE, Block: BlockT, Client, E, SC>(
 where
 	SC: SelectChain<Block>,
 	BE: Backend<Block> + 'static,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + Send + Sync,
 	Client: ClientForGrandpa<Block, BE, E> + 'static,
 {
 	let chain_info = client.info();

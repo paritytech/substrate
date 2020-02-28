@@ -39,8 +39,7 @@ use log::{trace, warn};
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sc_client_api::{
-	backend::Backend,
-	StorageProof,
+	backend::Backend, StorageProof,
 	light::{FetchChecker, RemoteReadRequest},
 	StorageProvider, ProofProvider,
 };
@@ -74,7 +73,7 @@ pub trait StorageAndProofProvider<Block, BE>: StorageProvider<Block, BE> + Proof
 		BE: Backend<Block> + Send + Sync,
 {}
 
-/// blanket impl
+/// Blanket implementation.
 impl<Block, BE, P> StorageAndProofProvider<Block, BE> for P
 	where
 		Block: BlockT,
@@ -82,7 +81,7 @@ impl<Block, BE, P> StorageAndProofProvider<Block, BE> for P
 		P: StorageProvider<Block, BE> + ProofProvider<Block> + Send + Sync,
 {}
 
-/// Client-based implementation of AuthoritySetForFinalityProver.
+/// Implementation of AuthoritySetForFinalityProver.
 impl<BE, Block: BlockT> AuthoritySetForFinalityProver<Block> for Arc<dyn StorageAndProofProvider<Block, BE>>
 	where
 		BE: Backend<Block> + Send + Sync + 'static,
@@ -159,11 +158,13 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	///
 	/// - backend for accessing blockchain data;
 	/// - authority_provider for calling and proving runtime methods.
-	pub fn new(
+	pub fn new<P>(
 		backend: Arc<B>,
-		authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
-	) -> Self {
-		FinalityProofProvider { backend, authority_provider }
+		authority_provider: P,
+	) -> Self
+		where P: AuthoritySetForFinalityProver<Block> + 'static,
+	{
+		FinalityProofProvider { backend, authority_provider: Arc::new(authority_provider) }
 	}
 }
 

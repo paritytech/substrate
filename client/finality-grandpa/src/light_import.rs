@@ -18,7 +18,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use log::{info, trace, warn};
 use parking_lot::RwLock;
-use sc_client_api::backend::{AuxStore, Backend, Finalizer, TransactionFor};
+use sc_client_api::{
+	CallExecutor, backend::{AuxStore, Backend, Finalizer, TransactionFor},
+};
 use sp_blockchain::{HeaderBackend, Error as ClientError, well_known_cache_keys};
 use parity_scale_codec::{Encode, Decode};
 use sp_consensus::{
@@ -40,7 +42,6 @@ use crate::finality_proof::{
 	AuthoritySetForFinalityChecker, ProvableJustification, make_finality_proof_request,
 };
 use crate::justification::GrandpaJustification;
-use sc_client_api::CallExecutor;
 
 /// LightAuthoritySet is saved under this key in aux storage.
 const LIGHT_AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
@@ -56,7 +57,7 @@ pub fn light_block_import<BE, Block: BlockT, Client, E>(
 ) -> Result<GrandpaLightBlockImport<BE, Block, Client>, ClientError>
 	where
 		BE: Backend<Block>,
-		E: CallExecutor<Block>,
+		E: CallExecutor<Block> + Send + Sync,
 		Client: crate::ClientForGrandpa<Block, BE, E>,
 {
 	let info = client.info();
@@ -657,7 +658,7 @@ pub mod tests {
 	) -> Result<NoJustificationsImport<BE, Block, Client>, ClientError>
 		where
 			BE: Backend<Block> + 'static,
-			E: CallExecutor<Block>,
+			E: CallExecutor<Block> + Send + Sync,
 			Client: crate::ClientForGrandpa<Block, BE, E>,
 	{
 		light_block_import(client, backend, genesis_authorities_provider, authority_set_provider)
