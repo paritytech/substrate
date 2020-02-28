@@ -101,5 +101,5 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - WASM_BUILD_NO_COLOR=1 RUST_BACKTRACE=full time cargo test --release --verbose --locked -p frame-support-test --test construct_runtime_ui
+    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --locked -p frame-support-test --test construct_runtime_ui
     - sccache -s
