@@ -22,6 +22,7 @@ use sp_std::prelude::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::benchmarks;
 use sp_runtime::traits::Dispatchable;
+use sp_std::collections::btree_set::BTreeSet;
 
 const MAX_TIME: u32 = 100;
 
@@ -33,4 +34,15 @@ benchmarks! {
 	set {
 		let n in ...;
 	}: _(RawOrigin::None, n.into())
+
+	populate_set {
+		let x in 0 .. 10_000;
+		let mut m = Vec::<u32>::new();
+		for i in 0..x {
+			m.push(i);
+		}
+	}: {
+		let _ = m.into_iter().collect::<BTreeSet<u32>>();
+		Ok(()) 
+	}
 }
