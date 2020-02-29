@@ -19,6 +19,7 @@
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use sp_io::hashing::blake2_256;
+use sp_runtime::RuntimeString;
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(codec::Encode, codec::Decode, Clone, Copy, PartialEq, Debug)]
@@ -40,9 +41,11 @@ sp_api::decl_runtime_apis! {
 		fn dispatch_benchmark(
 			module: Vec<u8>,
 			extrinsic: Vec<u8>,
+			lowest_range_values: Vec<u32>,
+			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
-		) -> Option<Vec<BenchmarkResults>>;
+		) -> Result<Vec<BenchmarkResults>, RuntimeString>;
 	}
 }
 
@@ -77,8 +80,16 @@ pub trait Benchmarking<T> {
 	/// Parameters
 	/// - `extrinsic`: The name of extrinsic function you want to benchmark encoded as bytes.
 	/// - `steps`: The number of sample points you want to take across the range of parameters.
+	/// - `lowest_range_values`: The lowest number for each range of parameters.
+	/// - `highest_range_values`: The highest number for each range of parameters.
 	/// - `repeat`: The number of times you want to repeat a benchmark.
-	fn run_benchmark(extrinsic: Vec<u8>, steps: Vec<u32>, repeat: u32) -> Result<Vec<T>, &'static str>;
+	fn run_benchmark(
+		extrinsic: Vec<u8>,
+		lowest_range_values: Vec<u32>,
+		highest_range_values: Vec<u32>,
+		steps: Vec<u32>,
+		repeat: u32,
+	) -> Result<Vec<T>, &'static str>;
 }
 
 /// The required setup for creating a benchmark.

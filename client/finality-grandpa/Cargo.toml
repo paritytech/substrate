@@ -48,7 +48,6 @@ substrate-test-runtime-client = { version = "2.0.0-dev",  path = "../../test-uti
 sp-consensus-babe = { version = "0.8.0-alpha.2", path = "../../primitives/consensus/babe" }
 sp-state-machine = { version = "0.8.0-alpha.2", path = "../../primitives/state-machine" }
 env_logger = "0.7.0"
-tokio = "0.1.22"
+tokio = { version = "0.2", features = ["rt-core"] }
 tempfile = "3.1.0"
 sp-api = { version = "2.0.0-alpha.2", path = "../../primitives/api" }
-futures01 = { package = "futures", version = "0.1.29" }
