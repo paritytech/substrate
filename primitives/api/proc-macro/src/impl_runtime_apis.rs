@@ -166,7 +166,7 @@ fn generate_impl_calls(
 					impl_trait_ident.clone(),
 					 method.sig.ident.clone(),
 					 impl_call,
-					 filter_attrs(&impl_.attrs),
+					 filter_cfg_attrs(&impl_.attrs),
 				));
 			}
 		}
@@ -454,7 +454,7 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 		let trait_ = extend_with_runtime_decl_path(trait_);
 
 		impl_.trait_.as_mut().unwrap().1 = trait_;
-		impl_.attrs = filter_attrs(&impl_.attrs);
+		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
 		impls_prepared.push(impl_);
 	}
 
@@ -630,7 +630,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			}
 		);
 
-		input.attrs = filter_attrs(&input.attrs);
+		input.attrs = filter_cfg_attrs(&input.attrs);
 
 		// The implementation for the `RuntimeApiImpl` is only required when compiling with
 		// the feature `std` or `test`.
@@ -705,7 +705,7 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 		let id: Path = parse_quote!( #path ID );
 		let version: Path = parse_quote!( #path VERSION );
-		let attrs = filter_attrs(&impl_.attrs);
+		let attrs = filter_cfg_attrs(&impl_.attrs);
 
 		result.push(quote!(
 			#( #attrs )*
@@ -761,7 +761,7 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 }
 
 // Filters all attributes except the cfg ones.
-fn filter_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
+fn filter_cfg_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
 	attrs.into_iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
 }
 
@@ -782,7 +782,7 @@ mod tests {
 			parse_quote!(#[allow(non_camel_case_types)]),
 		];
 
-		let filtered = filter_attrs(&attrs);
+		let filtered = filter_cfg_attrs(&attrs);
 		assert_eq!(filtered.len(), 2);
 		assert_eq!(cfg_std, filtered[0]);
 		assert_eq!(cfg_benchmarks, filtered[1]);
