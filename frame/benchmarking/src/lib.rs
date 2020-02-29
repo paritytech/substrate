@@ -18,8 +18,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod tests;
 mod utils;
 pub use utils::*;
+
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 
@@ -82,15 +84,14 @@ pub use sp_io::storage::root as storage_root;
 ///   foo {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let l = ...;
-///   } _(Origin::Signed(caller), vec![0u8; l])
+///   }: _(Origin::Signed(caller), vec![0u8; l])
 ///
 ///   // second dispatchable: bar; this is a root dispatchable and accepts a `u8` vector of size
-///   // `l`. We don't want it preininitialised like before so we override using the `=> ()`
-///   // notation.
+///   // `l`. We don't want it preininitialised like before so we override using the `=> ()` notation.
 ///   // In this case, we explicitly name the call using `bar` instead of `_`.
 ///   bar {
 ///     let l = _ .. _ => ();
-///   } bar(Origin::Root, vec![0u8; l])
+///   }: bar(Origin::Root, vec![0u8; l])
 ///
 ///   // third dispatchable: baz; this is a user dispatchable. It isn't dependent on length like the
 ///   // other two but has its own complexity `c` that needs setting up. It uses `caller` (in the
@@ -100,13 +101,13 @@ pub use sp_io::storage::root as storage_root;
 ///   baz1 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c(&caller, c);
-///   } baz(Origin::Signed(caller))
+///   }: baz(Origin::Signed(caller))
 ///
 ///   // this is a second benchmark of the baz dispatchable with a different setup.
 ///   baz2 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c_in_some_other_way(&caller, c);
-///   } baz(Origin::Signed(caller))
+///   }: baz(Origin::Signed(caller))
 ///
 ///   // this is benchmarking some code that is not a dispatchable.
 ///   populate_a_set {
@@ -115,7 +116,7 @@ pub use sp_io::storage::root as storage_root;
 ///     for i in 0..x {
 ///       m.insert(i);
 ///     }
-///   } { m.into_iter().collect::<BTreeSet>() }
+///   }: { m.into_iter().collect::<BTreeSet>() }
 /// }
 /// ```
 #[macro_export]
@@ -132,6 +133,275 @@ macro_rules! benchmarks {
 			$( { $common , $common_from , $common_to , $common_instancer } )*
 		} ( ) $( $rest )* );
 	}
+}
+
+#[macro_export]
+#[allow(missing_docs)]
+macro_rules! benchmarks_iter {
+	// mutation arm:
+	(
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter! {
+			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: $name ( $origin $( , $arg )* ) $( $rest )*
+		}
+	};
+	// mutation arm:
+	(
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter! {
+			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: { 
+				Call::<T>::$dispatch($($arg),*).dispatch($origin.into())?; Ok(())
+			} $( $rest )*
+		}
+	};
+	// iteration arm:
+	(
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		$name:ident { $( $code:tt )* }: $eval:block
+		$( $rest:tt )*
+	) => {
+		$crate::benchmark_backend! {
+			$name { $( $common )* } { } { $eval } { $( $code )* }
+		}
+		$crate::benchmarks_iter!( { $( $common )* } ( $( $names )* $name ) $( $rest )* );
+	};
+	// iteration-exit arm
+	( { $( $common:tt )* } ( $( $names:ident )* ) ) => {
+		$crate::selected_benchmark!( $( $names ),* );
+		$crate::impl_benchmark!( $( $names ),* );
+	}
+}
+
+#[macro_export]
+#[allow(missing_docs)]
+macro_rules! benchmark_backend {
+	// parsing arms
+	($name:ident {
+		$( $common:tt )*
+	} {
+		$( PRE { $( $pre_parsed:tt )* } )*
+	} { $eval:block } {
+			let $pre_id:tt : $pre_ty:ty = $pre_ex:expr;
+			$( $rest:tt )*
+	} ) => {
+		$crate::benchmark_backend! {
+			$name { $( $common )* } {
+				$( PRE { $( $pre_parsed )* } )*
+				PRE { $pre_id , $pre_ty , $pre_ex }
+			} { $eval } { $( $rest )* }
+		}
+	};
+	($name:ident {
+		$( $common:tt )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $param:ident in ( $param_from:expr ) .. $param_to:expr => $param_instancer:expr;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend! {
+			$name { $( $common )* } {
+				$( $parsed )*
+				PARAM { $param , $param_from , $param_to , $param_instancer }
+			} { $eval } { $( $rest )* }
+		}
+	};
+	// mutation arm to look after defaulting to a common param
+	($name:ident {
+		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $param:ident in ...;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend! {
+			$name {
+				$( { $common , $common_from , $common_to , $common_instancer } )*
+			} {
+				$( $parsed )*
+			} { $eval } {
+				let $param
+					in ({ $( let $common = $common_from; )* $param })
+					.. ({ $( let $common = $common_to; )* $param })
+					=> ({ $( let $common = || -> Result<(), &'static str> { $common_instancer ; Ok(()) }; )* $param()? });
+				$( $rest )*
+			}
+		}
+	};
+	// mutation arm to look after defaulting only the range to common param
+	($name:ident {
+		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $param:ident in _ .. _ => $param_instancer:expr ;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend! {
+			$name {
+				$( { $common , $common_from , $common_to , $common_instancer } )*
+			} {
+				$( $parsed )*
+			} { $eval } {
+				let $param
+					in ({ $( let $common = $common_from; )* $param })
+					.. ({ $( let $common = $common_to; )* $param })
+					=> $param_instancer ;
+				$( $rest )*
+			}
+		}
+	};
+	// mutation arm to look after a single tt for param_from.
+	($name:ident {
+		$( $common:tt )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $param:ident in $param_from:tt .. $param_to:expr => $param_instancer:expr ;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend! {
+			$name { $( $common )* } { $( $parsed )* } { $eval } {
+				let $param in ( $param_from ) .. $param_to => $param_instancer;
+				$( $rest )*
+			}
+		}
+	};
+	// mutation arm to look after the default tail of `=> ()`
+	($name:ident {
+		$( $common:tt )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $param:ident in $param_from:tt .. $param_to:expr;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend! {
+			$name { $( $common )* } { $( $parsed )* } { $eval } {
+				let $param in $param_from .. $param_to => ();
+				$( $rest )*
+			}
+		}
+	};
+	// mutation arm to look after `let _ =`
+	($name:ident {
+		$( $common:tt )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $pre_id:tt = $pre_ex:expr;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend! {
+			$name { $( $common )* } { $( $parsed )* } { $eval } {
+				let $pre_id : _ = $pre_ex;
+				$( $rest )*
+			}
+		}
+	};
+	// actioning arm
+	($name:ident {
+		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
+	} {
+		$( PRE { $pre_id:tt , $pre_ty:ty , $pre_ex:expr } )*
+		$( PARAM { $param:ident , $param_from:expr , $param_to:expr , $param_instancer:expr } )*
+	} { $eval:block } { $( $post:tt )* } ) => {
+		#[allow(non_camel_case_types)]
+		struct $name;
+		#[allow(unused_variables)]
+		impl<T: Trait> $crate::BenchmarkingSetup<T> for $name {
+			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
+				vec! [
+					$(
+						($crate::BenchmarkParameter::$param, $param_from, $param_to)
+					),*
+				]
+			}
+
+			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
+				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
+			{
+				$(
+					let $common = $common_from;
+				)*
+				$(
+					// Prepare instance
+					let $param = components.iter().find(|&c| c.0 == $crate::BenchmarkParameter::$param).unwrap().1;
+				)*
+				$(
+					let $pre_id : $pre_ty = $pre_ex;
+				)*
+				$( $param_instancer ; )*
+				$( $post )*
+				Ok(Box::new(move || -> Result<(), &'static str> { $eval }))
+			}
+
+			fn run(&self, closure: Box<dyn FnOnce() -> Result<(), &'static str>>) -> Result<(), &'static str> {
+				closure()?;
+				Ok(())
+			}
+		}
+	}
+}
+
+/// Creates a `SelectedBenchmark` enum implementing `BenchmarkingSetup`.
+///
+/// Every variant must implement [`BenchmarkingSetup`].
+///
+/// ```nocompile
+///
+/// struct Transfer;
+/// impl BenchmarkingSetup for Transfer { ... }
+///
+/// struct SetBalance;
+/// impl BenchmarkingSetup for SetBalance { ... }
+///
+/// selected_benchmark!(Transfer, SetBalance);
+/// ```
+#[macro_export]
+macro_rules! selected_benchmark {
+	(
+		$( $bench:ident ),*
+	) => {
+		// The list of available benchmarks for this pallet.
+		#[allow(non_camel_case_types)]
+		enum SelectedBenchmark {
+			$( $bench, )*
+		}
+
+		// Allow us to select a benchmark from the list of available benchmarks.
+		impl<T: Trait> $crate::BenchmarkingSetup<T> for SelectedBenchmark {
+			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
+				match self {
+					$( Self::$bench => <$bench as $crate::BenchmarkingSetup<T>>::components(&$bench), )*
+				}
+			}
+
+			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
+				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
+			{
+				match self {
+					$( Self::$bench => <$bench as $crate::BenchmarkingSetup<T>>::instance(&$bench, components), )*
+				}
+			}
+
+			fn run(&self, closure: Box<dyn FnOnce() -> Result<(), &'static str>>) -> Result<(), &'static str> {
+				match self {
+					$( Self::$bench => <$bench as $crate::BenchmarkingSetup<T>>::run(&$bench, closure), )*
+				}
+			}
+		}
+	};
 }
 
 #[macro_export]
@@ -159,7 +429,7 @@ macro_rules! impl_benchmark {
 				$crate::benchmarking::commit_db();
 				$crate::benchmarking::wipe_db();
 
-				let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
+				let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::components(&selected_benchmark);
 				let mut results: Vec<$crate::BenchmarkResults> = Vec::new();
 
 				// Default number of steps for a component.
@@ -199,14 +469,16 @@ macro_rules! impl_benchmark {
 						// Run the benchmark `repeat` times.
 						for _ in 0..repeat {
 							// Set up the externalities environment for the setup we want to benchmark.
-							let (call, caller) = <SelectedBenchmark as $crate::BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
+							let closure = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
 							// Commit the externalities to the database, flushing the DB cache.
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
+
 							// Time the extrinsic logic.
 							let start_extrinsic = $crate::benchmarking::current_time();
-							call.dispatch(caller.into())?;
+							<SelectedBenchmark as $crate::BenchmarkingSetup<T>>::run(&selected_benchmark, closure)?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
+
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
@@ -223,268 +495,4 @@ macro_rules! impl_benchmark {
 			}
 		}
 	}
-}
-
-#[macro_export]
-#[allow(missing_docs)]
-macro_rules! benchmarks_iter {
-	// mutation arm:
-	(
-		{ $( $common:tt )* }
-		( $( $names:ident )* )
-		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
-		$( $rest:tt )*
-	) => {
-		$crate::benchmarks_iter! {
-			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: $name ( $origin $( , $arg )* ) $( $rest )*
-		}
-	};
-	// mutation arm:
-	(
-		{ $( $common:tt )* }
-		( $( $names:ident )* )
-		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
-		$( $rest:tt )*
-	) => {
-		$crate::benchmarks_iter! {
-			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: { Ok((crate::Call::<T>::$dispatch($($arg),*), $origin)) } $( $rest )*
-		}
-	};
-	// iteration arm:
-	(
-		{ $( $common:tt )* }
-		( $( $names:ident )* )
-		$name:ident { $( $code:tt )* }: { $eval:expr }
-		$( $rest:tt )*
-	) => {
-		$crate::benchmark_backend! {
-			$name { $( $common )* } { } { $eval } { $( $code )* }
-		}
-		$crate::benchmarks_iter!( { $( $common )* } ( $( $names )* $name ) $( $rest )* );
-	};
-	// iteration-exit arm
-	( { $( $common:tt )* } ( $( $names:ident )* ) ) => {
-		$crate::selected_benchmark!( $( $names ),* );
-		$crate::impl_benchmark!( $( $names ),* );
-	}
-}
-
-#[macro_export]
-#[allow(missing_docs)]
-macro_rules! benchmark_backend {
-	// parsing arms
-	($name:ident {
-		$( $common:tt )*
-	} {
-		$( PRE { $( $pre_parsed:tt )* } )*
-	} { $eval:expr } {
-			let $pre_id:tt : $pre_ty:ty = $pre_ex:expr;
-			$( $rest:tt )*
-	} ) => {
-		$crate::benchmark_backend! {
-			$name { $( $common )* } {
-				$( PRE { $( $pre_parsed )* } )*
-				PRE { $pre_id , $pre_ty , $pre_ex }
-			} { $eval } { $( $rest )* }
-		}
-	};
-	($name:ident {
-		$( $common:tt )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:expr } {
-		let $param:ident in ( $param_from:expr ) .. $param_to:expr => $param_instancer:expr;
-		$( $rest:tt )*
-	}) => {
-		$crate::benchmark_backend! {
-			$name { $( $common )* } {
-				$( $parsed )*
-				PARAM { $param , $param_from , $param_to , $param_instancer }
-			} { $eval } { $( $rest )* }
-		}
-	};
-	// mutation arm to look after defaulting to a common param
-	($name:ident {
-		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:expr } {
-		let $param:ident in ...;
-		$( $rest:tt )*
-	}) => {
-		$crate::benchmark_backend! {
-			$name {
-				$( { $common , $common_from , $common_to , $common_instancer } )*
-			} {
-				$( $parsed )*
-			} { $eval } {
-				let $param
-					in ({ $( let $common = $common_from; )* $param })
-					.. ({ $( let $common = $common_to; )* $param })
-					=> ({ $( let $common = || -> Result<(), &'static str> { $common_instancer ; Ok(()) }; )* $param()? });
-				$( $rest )*
-			}
-		}
-	};
-	// mutation arm to look after defaulting only the range to common param
-	($name:ident {
-		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:expr } {
-		let $param:ident in _ .. _ => $param_instancer:expr ;
-		$( $rest:tt )*
-	}) => {
-		$crate::benchmark_backend! {
-			$name {
-				$( { $common , $common_from , $common_to , $common_instancer } )*
-			} {
-				$( $parsed )*
-			} { $eval } {
-				let $param
-					in ({ $( let $common = $common_from; )* $param })
-					.. ({ $( let $common = $common_to; )* $param })
-					=> $param_instancer ;
-				$( $rest )*
-			}
-		}
-	};
-	// mutation arm to look after a single tt for param_from.
-	($name:ident {
-		$( $common:tt )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:expr } {
-		let $param:ident in $param_from:tt .. $param_to:expr => $param_instancer:expr ;
-		$( $rest:tt )*
-	}) => {
-		$crate::benchmark_backend! {
-			$name { $( $common )* } { $( $parsed )* } { $eval } {
-				let $param in ( $param_from ) .. $param_to => $param_instancer;
-				$( $rest )*
-			}
-		}
-	};
-	// mutation arm to look after the default tail of `=> ()`
-	($name:ident {
-		$( $common:tt )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:expr } {
-		let $param:ident in $param_from:tt .. $param_to:expr;
-		$( $rest:tt )*
-	}) => {
-		$crate::benchmark_backend! {
-			$name { $( $common )* } { $( $parsed )* } { $eval } {
-				let $param in $param_from .. $param_to => ();
-				$( $rest )*
-			}
-		}
-	};
-	// mutation arm to look after `let _ =`
-	($name:ident {
-		$( $common:tt )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:expr } {
-		let $pre_id:tt = $pre_ex:expr;
-		$( $rest:tt )*
-	}) => {
-		$crate::benchmark_backend! {
-			$name { $( $common )* } { $( $parsed )* } { $eval } {
-				let $pre_id : _ = $pre_ex;
-				$( $rest )*
-			}
-		}
-	};
-	// actioning arm
-	($name:ident {
-		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
-	} {
-		$( PRE { $pre_id:tt , $pre_ty:ty , $pre_ex:expr } )*
-		$( PARAM { $param:ident , $param_from:expr , $param_to:expr , $param_instancer:expr } )*
-	} { $eval:expr } { $( $post:tt )* } ) => {
-		#[allow(non_camel_case_types)]
-		struct $name;
-		#[allow(unused_variables)]
-		impl<T: Trait> $crate::BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for $name {
-			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
-				vec! [
-					$(
-						($crate::BenchmarkParameter::$param, $param_from, $param_to)
-					),*
-				]
-			}
-
-			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
-				-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
-			{
-				$(
-					let $common = $common_from;
-				)*
-				$(
-					// Prepare instance
-					let $param = components.iter().find(|&c| c.0 == $crate::BenchmarkParameter::$param).unwrap().1;
-				)*
-				$(
-					let $pre_id : $pre_ty = $pre_ex;
-				)*
-				$( $param_instancer ; )*
-				$( $post )*
-				$eval
-			}
-		}
-	}
-}
-
-/// Creates a `SelectedBenchmark` enum implementing `BenchmarkingSetup`.
-///
-/// Every variant must implement [`BenchmarkingSetup`].
-///
-/// ```nocompile
-///
-/// struct Transfer;
-/// impl BenchmarkingSetup for Transfer { ... }
-///
-/// struct SetBalance;
-/// impl BenchmarkingSetup for SetBalance { ... }
-///
-/// selected_benchmark!(Transfer, SetBalance);
-/// ```
-#[macro_export]
-macro_rules! selected_benchmark {
-	(
-		$( $bench:ident ),*
-	) => {
-		// The list of available benchmarks for this pallet.
-		#[allow(non_camel_case_types)]
-		enum SelectedBenchmark {
-			$( $bench, )*
-		}
-
-		// Allow us to select a benchmark from the list of available benchmarks.
-		impl<T: Trait> $crate::BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
-			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
-				match self {
-					$( Self::$bench => <$bench as $crate::BenchmarkingSetup<
-						T,
-						Call<T>,
-						RawOrigin<T::AccountId>,
-					>>::components(&$bench), )*
-				}
-			}
-
-			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
-				-> Result<(Call<T>, RawOrigin<T::AccountId>), &'static str>
-			{
-				match self {
-					$( Self::$bench => <$bench as $crate::BenchmarkingSetup<
-						T,
-						Call<T>,
-						RawOrigin<T::AccountId>,
-					>>::instance(&$bench, components), )*
-				}
-			}
-		}
-	};
 }

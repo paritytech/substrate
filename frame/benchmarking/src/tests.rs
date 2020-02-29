@@ -14,23 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Timestamp pallet benchmarking.
+//! Tests for benchmarking macro.
 
-use super::*;
+#![cfg(test)]
 
-use sp_std::prelude::*;
-use frame_system::RawOrigin;
-use frame_benchmarking::benchmarks;
-use sp_runtime::traits::Dispatchable;
+use sp_std::collections::btree_set::BTreeSet;
+use frame_system::*;
+use crate::benchmarks;
 
-const MAX_TIME: u32 = 100;
+#[test]
+fn benchmark_for_non_dispatchables() {
+	benchmarks! {
+		_ {
 
-benchmarks! {
-	_ {
-		let n in 1 .. MAX_TIME => ();
-	}
+		}
 
-	set {
-		let n in ...;
-	}: _(RawOrigin::None, n.into())
+		populate_set {
+			let x in 0 .. 10_000;
+			let mut m = Vec::<u32>::new();
+			for i in 0..x {
+				m.push(i);
+			}
+		}: { m.into_iter().collect::<BTreeSet<u32>>(); Ok(()) }
+	} 
 }
