@@ -318,7 +318,7 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	pub can_author_with: CAW,
 }
 
-/// Start the babe worker. The returned future should be run in a tokio runtime.
+/// Start the babe worker.
 pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	keystore,
 	client,
