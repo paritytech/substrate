@@ -204,6 +204,8 @@ decl_error! {
 		WrongTimepoint,
 		/// A timepoint was given, yet no multisig operation is underway.
 		UnexpectedTimepoint,
+		/// There are active multisigs for this multi account; cancel them first.
+		ActiveMultisigs,
 	}
 }
 
@@ -330,11 +332,8 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ and be equal to the multi account ID. It can be
 		/// dispatched by a `call` from this module.
 		///
-		/// Any removed signatories that have approved multisig transactions will no longer be counted as valid
-		/// approvals. Removing a signatory that has initiated/is the owner of a multisig transaction will not
-		/// cancel the multisig transaction, but the owner can always cancel the multisig transaction, even after
-		/// leaving the signatories. Such a transaction can still be dispatched, as long as the threshold
-		/// is met by the current signatories.
+		/// Any active multisig operation needs to be cancelled before a multi account can be updated. See the cancel
+		/// extrinsic for details.
 		///
 		/// - `threshold`: The total number of approvals dispatches from this multi account require before they are
 		///    executed.
@@ -370,6 +369,10 @@ decl_module! {
 			ensure!(Self::is_sorted_and_unique(&signatories), Error::<T>::SignatoriesOutOfOrder);
 			let multi_account = <MultiAccounts<T>>::get(&who).ok_or(Error::<T>::MultiAccountNotFound)?;
 
+			// Check there are no active multisigs
+			let mut active_multisigs = <Multisigs<T>>::iter_prefix(&who);
+			ensure!(active_multisigs.next().is_none(), Error::<T>::ActiveMultisigs);
+
 			// reserve new deposit for updated multi account
 			let updated_deposit = T::MultiAccountDepositBase::get()
 				+ T::MultiAccountDepositFactor::get() * (signatories.len() as u32).into();
@@ -399,9 +402,8 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ and be equal to the multi account ID. It can be
 		/// dispatched by a `call` from this module.
 		///
-		/// Multisig transactions from the removed account will not be automatically cancelled, but they can no
-		/// longer be approved or called. The owner can always cancel open multisig transaction, even after
-		/// the multi account has been removed.
+		/// Any active multisig operation needs to be cancelled before a multi account can be updated. See the cancel
+		/// extrinsic for details.
 		///
 		/// # <weight>
 		/// - `O(1)`.
@@ -417,6 +419,10 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			let multi_account = <MultiAccounts<T>>::get(&who).ok_or(Error::<T>::MultiAccountNotFound)?;
 
+			// Check there are no active multisigs
+			let mut active_multisigs = <Multisigs<T>>::iter_prefix(&who);
+			ensure!(active_multisigs.next().is_none(), Error::<T>::ActiveMultisigs);
+
 			let _ = T::Currency::unreserve(&multi_account.depositor, multi_account.deposit);
 
 			<MultiAccounts<T>>::remove(&who);
@@ -430,12 +436,6 @@ decl_module! {
 		/// `threshold` of `signatories`, as specified in the multi account.
 		///
 		/// If there are enough approvals, then dispatch the call.
-		///
-		/// If one approving account is removed from the signatories of the multi account, it does
-		/// no longer count as a valid approval for the multisig transaction. Removing the initiator/
-		/// owner of a multisig transaction from the signatories will not cancel the multisig transaction.
-		/// It can still be dispatched, as long as the threshold is met by the current signatories.
-		/// Approvals fail if the multi account was removed.
 		///
 		/// Payment: `MultisigDepositBase` will be reserved if this is the first approval, plus
 		/// `threshold` times `MultisigDepositFactor`. It is returned once this dispatch happens or
@@ -495,18 +495,16 @@ decl_module! {
 				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
 				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 
-				let valid_approvals = Self::filter_approvals(&m.approvals, &multi_account.signatories);
-
 				if let Err(pos) = m.approvals.binary_search(&who) {
 					// we know threshold is greater than zero from the above ensure.
-					if (valid_approvals.len() as u16) < multi_account.threshold - 1 {
+					if (m.approvals.len() as u16) < multi_account.threshold - 1 {
 						m.approvals.insert(pos, who.clone());
 						<Multisigs<T>>::insert(&multi_account_id, call_hash, m);
 						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, multi_account_id));
 						return Ok(())
 					}
 				} else {
-					if (valid_approvals.len() as u16) < multi_account.threshold {
+					if (m.approvals.len() as u16) < multi_account.threshold {
 						Err(Error::<T>::AlreadyApproved)?
 					}
 				}
@@ -544,10 +542,6 @@ decl_module! {
 		/// is cancelled.
 		///
 		/// The dispatch origin for this call must be _Signed_ and must be one of the signatories.
-		///
-		/// Removing the initiator/owner of a multisig transaction from the multi account's signatories
-		/// will not cancel the multisig transaction. It can still be dispatched, as long as the threshold
-		/// is met by the current signatories. Approvals fail if the multi account was removed.
 		///
 		/// - `multi_account_id`: The account ID of the multi account that was created before.
 		/// - `maybe_timepoint`: If this is the first approval, then this must be `None`. If it is
@@ -588,9 +582,7 @@ decl_module! {
 				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
 				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 
-				let valid_approvals = Self::filter_approvals(&m.approvals, &multi_account.signatories);
-
-				ensure!(valid_approvals.len() < multi_account.threshold as usize, Error::<T>::NoApprovalsNeeded);
+				ensure!(m.approvals.len() < multi_account.threshold as usize, Error::<T>::NoApprovalsNeeded);
 				if let Err(pos) = m.approvals.binary_search(&who) {
 					m.approvals.insert(pos, who.clone());
 					<Multisigs<T>>::insert(&multi_account_id, call_hash, m);
@@ -619,15 +611,15 @@ decl_module! {
 			Ok(())
 		}
 
-		/// Cancel a pre-existing, on-going multisig transaction. Any deposit reserved previously
-		/// for this operation will be unreserved on success.
+		/// Cancel an active (pre-existing/on-going) multisig transaction. Any deposit reserved previously
+		/// for the multisig operation will be unreserved on success.
 		///
-		/// The dispatch origin for this call must be _Signed_ and must be the initiator (owner) of the multisig.
+		/// The dispatch origin for this call must be _Signed_ and must be the initiator (owner) of the multisig or
+		/// the multi account itself.
 		///
-		/// The multisig transaction is not automatically cancelled if the owner is removed from the multi account,
-		/// nor is it cancelled if the multi account is removed. The multisig transaction can be cancelled by the
-		/// owner even aftre being removed from the multi account, and it can also be cancelled if the multi account
-		/// has been removed.
+		/// Any active multisig must be cancelled before a multi account can be updated or removed. To prevent
+		/// an outgoing multi account member to block updates/removals, the mulit account itself can cancel
+		/// any active multisig. Such a cancellation can be dispatched by a `call` from this module.
 		///
 		/// - `multi_account_id`: The account ID of the multi account that was created before.
 		/// - `timepoint`: The timepoint (block number and transaction index) of the first approval
@@ -655,12 +647,12 @@ decl_module! {
 			let m = <Multisigs<T>>::get(&multi_account_id, call_hash)
 				.ok_or(Error::<T>::NotFound)?;
 			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
-			ensure!(m.depositor == who, Error::<T>::NotOwner);
+			ensure!(who == multi_account_id || who == m.depositor, Error::<T>::NotOwner);
 
 			let _ = T::Currency::unreserve(&m.depositor, m.deposit);
 			<Multisigs<T>>::remove(&multi_account_id, call_hash);
 
-			Self::deposit_event(RawEvent::MultisigCancelled(who, timepoint, multi_account_id));
+			Self::deposit_event(RawEvent::MultisigCancelled(m.depositor, timepoint, multi_account_id));
 
 			Ok(())
 		}
@@ -706,11 +698,6 @@ impl<T: Trait> Module<T> {
 		}
 		signatories.insert(index, who);
 		Ok(signatories)
-	}
-
-	/// Remove approvals from account IDs that are no longer in the set of signatories
-	fn filter_approvals(approvals: &Vec<T::AccountId>, signatories: &Vec<T::AccountId>) -> Vec<T::AccountId> {
-		approvals.clone().into_iter().filter(|approval| signatories.binary_search(&approval).is_ok()).collect()
 	}
 }
 
@@ -870,12 +857,12 @@ mod tests {
 			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
 
 			assert_ok!(MultiAccount::create(Origin::signed(1), 2, vec![2, 3]));
-			assert_eq!(<MultiAccounts<Test>>::get(&multi_id).unwrap(), MultiAccountData {
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), Some(MultiAccountData {
 				threshold: 2,
 				signatories: vec![1, 2, 3],
 				deposit: 4,
 				depositor: 1,
-			});
+			}));
 			assert_eq!(Balances::free_balance(1), 11);
 			assert_eq!(Balances::reserved_balance(1), 4);
 			assert_eq!(Balances::free_balance(multi_id), 15);
@@ -883,12 +870,12 @@ mod tests {
 			expect_event(RawEvent::NewMultiAccount(1, multi_id));
 
 			assert_ok!(MultiAccount::update(Origin::signed(multi_id), 1, vec![1, 3]));
-			assert_eq!(<MultiAccounts<Test>>::get(&multi_id).unwrap(), MultiAccountData {
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), Some(MultiAccountData {
 				threshold: 1,
 				signatories: vec![1, 3],
 				deposit: 3,
 				depositor: multi_id,
-			});
+			}));
 			assert_eq!(Balances::free_balance(1), 15);
 			assert_eq!(Balances::reserved_balance(1), 0);
 			assert_eq!(Balances::free_balance(multi_id), 12);
@@ -1268,7 +1255,7 @@ mod tests {
 	}
 
 	#[test]
-	fn owner_can_still_cancel_after_leaving_signatories() {
+	fn multiaccount_update_fails_if_has_active_multisigs() {
 		new_test_ext().execute_with(|| {
 			let multi_id = MultiAccount::multi_account_id(1);
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
@@ -1276,119 +1263,42 @@ mod tests {
 			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
 
 			assert_ok!(MultiAccount::create(Origin::signed(1), 2, vec![2, 3]));
-
-			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
-			let hash = call.using_encoded(blake2_256);
-			assert_ok!(MultiAccount::approve(Origin::signed(2), multi_id, None, hash.clone()));
-			assert_eq!(<Multisigs<Test>>::get(&multi_id, hash).unwrap(), Multisig {
-				when: now(),
-				deposit: 3,
-				depositor: 2,
-				approvals: vec![2],
-			});
-			assert_eq!(Balances::free_balance(2), 12);
-			assert_eq!(Balances::reserved_balance(2), 3);
-
-			assert_ok!(MultiAccount::update(Origin::signed(multi_id), 2, vec![1, 3]));
-			// multisig has not changed
-			assert_eq!(<Multisigs<Test>>::get(&multi_id, hash.clone()).unwrap(), Multisig {
-				when: now(),
-				deposit: 3,
-				depositor: 2,
-				approvals: vec![2],
-			});
-
-			assert_ok!(MultiAccount::cancel(Origin::signed(2), multi_id, now(), hash.clone()));
-			// multisig successfully removed
-			assert_eq!(<Multisigs<Test>>::get(&multi_id, hash), None);
-			// deposit returned
-			assert_eq!(Balances::free_balance(2), 15);
-			assert_eq!(Balances::reserved_balance(2), 0);
-			// event sent
-			expect_event(RawEvent::MultisigCancelled(2, now(), multi_id));
-		});
-	}
-
-	#[test]
-	fn multisig_still_works_after_owner_left_signatories() {
-		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
-			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
-			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
-			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
-
-			assert_ok!(MultiAccount::create(Origin::signed(1), 2, vec![2, 3]));
-
-			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 10)));
-			let hash = call.using_encoded(blake2_256);
-			assert_ok!(MultiAccount::approve(Origin::signed(2), multi_id, None, hash.clone()));
-			assert_eq!(Balances::free_balance(2), 12);
-			assert_eq!(Balances::reserved_balance(2), 3);
-
-			assert_ok!(MultiAccount::update(Origin::signed(multi_id), 2, vec![1, 3]));
-
-			assert_ok!(MultiAccount::approve(Origin::signed(1), multi_id, Some(now()), hash.clone()));
-			assert_ok!(MultiAccount::call(Origin::signed(3), multi_id, Some(now()), call));
-			// multisig successfully removed
-			assert_eq!(<Multisigs<Test>>::get(&multi_id, hash), None);
-			// deposit returned to owner, who is no longer one of the signatories
-			assert_eq!(Balances::free_balance(2), 15);
-			assert_eq!(Balances::reserved_balance(2), 0);
-			// event sent
-			expect_event(RawEvent::MultisigExecuted(3, now(), multi_id, Ok(())));
-		});
-	}
-
-	#[test]
-	fn multisig_only_counts_current_signatories_not_removed_ones() {
-		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
-			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
-			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
-			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
-
-			assert_ok!(MultiAccount::create(Origin::signed(1), 3, vec![2, 3]));
-
-			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 10)));
-			let hash = call.using_encoded(blake2_256);
-			assert_ok!(MultiAccount::approve(Origin::signed(2), multi_id, None, hash.clone()));
-			assert_ok!(MultiAccount::approve(Origin::signed(3), multi_id, Some(now()), hash.clone()));
-			// multisig inserted
-			assert_eq!(<Multisigs<Test>>::get(&multi_id, hash.clone()).unwrap(), Multisig {
-				when: now(),
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), Some(MultiAccountData {
+				threshold: 2,
+				signatories: vec![1, 2, 3],
 				deposit: 4,
-				depositor: 2,
-				approvals: vec![2, 3],
-			});
+				depositor: 1,
+			}));
 
-			assert_ok!(MultiAccount::update(Origin::signed(multi_id), 3, vec![1, 2, 4]));
-			assert_ok!(MultiAccount::call(Origin::signed(1), multi_id, Some(now()), call.clone()));
-			// multisig still not removed, 3 approvals, but not from the right signatories
-			assert_eq!(<Multisigs<Test>>::get(&multi_id, hash.clone()).unwrap(), Multisig {
-				when: now(),
+			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 10)));
+			let hash = call.using_encoded(blake2_256);
+			assert_ok!(MultiAccount::call(Origin::signed(1), multi_id, None, call.clone()));
+
+			assert_noop!(MultiAccount::update(Origin::signed(multi_id), 1, vec![1, 3]), Error::<Test>::ActiveMultisigs);
+
+			// multi account still the same
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), Some(MultiAccountData {
+				threshold: 2,
+				signatories: vec![1, 2, 3],
 				deposit: 4,
-				depositor: 2,
-				approvals: vec![1, 2, 3],
-			});
-			// deposit not returned
-			assert_eq!(Balances::free_balance(2), 11);
-			assert_eq!(Balances::reserved_balance(2), 4);
-			// event sent
-			expect_event(RawEvent::MultisigApproval(1, now(), multi_id));
+				depositor: 1,
+			}));
 
-			assert_ok!(MultiAccount::call(Origin::signed(4), multi_id, Some(now()), call));
-			// multisig successfully removed
-			assert_eq!(<Multisigs<Test>>::get(&multi_id, hash), None);
-			// deposit returned to owner, who is no longer one of the signatories
-			assert_eq!(Balances::free_balance(2), 15);
-			assert_eq!(Balances::reserved_balance(2), 0);
-			// event sent
-			expect_event(RawEvent::MultisigExecuted(4, now(), multi_id, Ok(())));
+			assert_ok!(MultiAccount::cancel(Origin::signed(multi_id), multi_id, now(), hash));
+
+			assert_ok!(MultiAccount::update(Origin::signed(multi_id), 1, vec![1, 3]));
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), Some(MultiAccountData {
+				threshold: 1,
+				signatories: vec![1, 3],
+				deposit: 3,
+				depositor: multi_id,
+			}));
+			expect_event(RawEvent::MultiAccountUpdated(multi_id));
 		});
 	}
 
 	#[test]
-	fn multisig_cannot_be_approved_or_called_after_multiaccount_removed() {
+	fn multiaccount_remove_fails_if_has_active_multisigs() {
 		new_test_ext().execute_with(|| {
 			let multi_id = MultiAccount::multi_account_id(1);
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
@@ -1396,37 +1306,32 @@ mod tests {
 			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
 
 			assert_ok!(MultiAccount::create(Origin::signed(1), 2, vec![2, 3]));
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), Some(MultiAccountData {
+				threshold: 2,
+				signatories: vec![1, 2, 3],
+				deposit: 4,
+				depositor: 1,
+			}));
 
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 10)));
 			let hash = call.using_encoded(blake2_256);
-			assert_ok!(MultiAccount::approve(Origin::signed(2), multi_id, None, hash.clone()));
+			assert_ok!(MultiAccount::call(Origin::signed(1), multi_id, None, call.clone()));
+
+			assert_noop!(MultiAccount::remove(Origin::signed(multi_id)), Error::<Test>::ActiveMultisigs);
+
+			// multi account still the same
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), Some(MultiAccountData {
+				threshold: 2,
+				signatories: vec![1, 2, 3],
+				deposit: 4,
+				depositor: 1,
+			}));
+
+			assert_ok!(MultiAccount::cancel(Origin::signed(multi_id), multi_id, now(), hash));
 
 			assert_ok!(MultiAccount::remove(Origin::signed(multi_id)));
-
-			assert_noop!(MultiAccount::approve(Origin::signed(3), multi_id, Some(now()), hash),
-				Error::<Test>::MultiAccountNotFound);
-			assert_noop!(MultiAccount::call(Origin::signed(3), multi_id, Some(now()), call),
-				Error::<Test>::MultiAccountNotFound);
-		});
-	}
-
-	#[test]
-	fn multisig_can_still_be_cancelled_after_multiaccount_removed() {
-		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
-			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
-			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
-			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
-
-			assert_ok!(MultiAccount::create(Origin::signed(1), 2, vec![2, 3]));
-
-			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 10)));
-			let hash = call.using_encoded(blake2_256);
-			assert_ok!(MultiAccount::approve(Origin::signed(2), multi_id, None, hash.clone()));
-
-			assert_ok!(MultiAccount::remove(Origin::signed(multi_id)));
-
-			assert_ok!(MultiAccount::cancel(Origin::signed(2), multi_id, now(), hash));
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), None);
+			expect_event(RawEvent::MultiAccountRemoved(multi_id));
 		});
 	}
 }
