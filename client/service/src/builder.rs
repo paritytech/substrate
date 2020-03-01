@@ -899,7 +899,7 @@ ServiceBuilder<
 		let network_params = sc_network::config::Params {
 			roles: config.roles,
 			executor: {
-				let to_spawn_tx = task_manager.spawn_sender();
+				let to_spawn_tx = task_manager.scheduler();
 				Some(Box::new(move |fut| {
 					if let Err(e) = to_spawn_tx.unbounded_send((fut, From::from("libp2p-node"))) {
 						error!("Failed to spawn libp2p background task: {:?}", e);
@@ -944,7 +944,7 @@ ServiceBuilder<
 			// block notifications
 			let txpool = Arc::downgrade(&transaction_pool);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
-			let to_spawn_tx_ = task_manager.spawn_sender();
+			let to_spawn_tx_ = task_manager.scheduler();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 			let is_validator = config.roles.is_authority();
 

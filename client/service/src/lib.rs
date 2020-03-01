@@ -26,6 +26,7 @@ pub mod error;
 
 mod builder;
 mod status_sinks;
+mod task_manager;
 
 use std::{borrow::Cow, io, pin::Pin};
 use std::marker::PhantomData;
@@ -37,10 +38,9 @@ use std::task::{Poll, Context};
 use parking_lot::Mutex;
 
 use sc_client::Client;
-use exit_future::Signal;
 use futures::{
 	Future, FutureExt, Stream, StreamExt,
-	future::select, channel::mpsc,
+	channel::mpsc,
 	compat::*,
 	sink::SinkExt,
 	task::{Spawn, FutureObj, SpawnError},
@@ -69,6 +69,7 @@ pub use sc_executor::NativeExecutionDispatch;
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+pub use task_manager::{TaskManager, SpawnTaskHandle, TaskExecutor, ServiceTaskExecutor};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -81,9 +82,6 @@ pub trait MallocSizeOfWasm {}
 impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
 #[cfg(target_os = "unknown")]
 impl<T> MallocSizeOfWasm for T {}
-
-/// Type alias for service task executor (usually runtime).
-pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
 
 /// Substrate service.
 pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
@@ -111,118 +109,6 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	marker: PhantomData<TBl>,
 }
 
-/// Alias for a an implementation of `futures::future::Executor`.
-pub type TaskExecutor = Arc<dyn Spawn + Send + Sync>;
-
-/// An handle for spawning tasks in the service.
-#[derive(Clone)]
-pub struct SpawnTaskHandle {
-	sender: mpsc::UnboundedSender<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
-	on_exit: exit_future::Exit,
-}
-
-impl SpawnTaskHandle {
-	/// Spawns the given task with the given name.
-	pub fn spawn(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static) {
-		let on_exit = self.on_exit.clone();
-		let future = async move {
-			futures::pin_mut!(task);
-			let _ = select(on_exit, task).await;
-		};
-		if self.sender.unbounded_send((Box::pin(future), name.into())).is_err() {
-			error!("Failed to send task to spawn over channel");
-		}
-	}
-}
-
-impl Spawn for SpawnTaskHandle {
-	fn spawn_obj(&self, future: FutureObj<'static, ()>)
-	-> Result<(), SpawnError> {
-		let future = select(self.on_exit.clone(), future).map(drop);
-		self.sender.unbounded_send((Box::pin(future), From::from("unnamed")))
-			.map_err(|_| SpawnError::shutdown())
-	}
-}
-
-/// Helper struct to manage background/async tasks in Service.
-pub struct TaskManager {
-	/// A future that resolves when the service has exited, this is useful to
-	/// make sure any internally spawned futures stop when the service does.
-	on_exit: exit_future::Exit,
-	/// A signal that makes the exit future above resolve, fired on service drop.
-	signal: Option<Signal>,
-	/// Sender for futures that must be spawned as background tasks.
-	to_spawn_tx: mpsc::UnboundedSender<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
-	/// Receiver for futures that must be spawned as background tasks.
-	to_spawn_rx: mpsc::UnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
-}
-
-impl TaskManager {
-	/// New task manager for service.
-	pub fn new() -> Self {
-		let (signal, on_exit) = exit_future::signal();
-		let (to_spawn_tx, to_spawn_rx) =
-			mpsc::unbounded::<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>();
-
-		Self {
-			on_exit,
-			signal: Some(signal),
-			to_spawn_tx,
-			to_spawn_rx,
-		}
-	}
-
-	fn spawn_handle(&self) -> SpawnTaskHandle {
-		SpawnTaskHandle {
-			on_exit: self.on_exit.clone(),
-			sender: self.to_spawn_tx.clone(),
-		}
-	}
-
-	/// Spawn background/async task.
-	pub fn spawn(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static) {
-		let on_exit = self.on_exit.clone();
-		let future = async move {
-			futures::pin_mut!(task);
-			let _ = select(on_exit, task).await;
-		};
-		if self.to_spawn_tx.unbounded_send((Box::pin(future), name.into())).is_err() {
-			error!("Failed to send task to spawn over channel");
-		}
-	}
-
-	/// Get sender where background/async tasks can be sent.
-	pub fn spawn_sender(&self) -> mpsc::UnboundedSender<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)> {
-		self.to_spawn_tx.clone()
-	}
-
-	/// Process background task receiver
-	fn process_receiver(&mut self, executor: &ServiceTaskExecutor, cx: &mut Context) {
-		while let Poll::Ready(Some((task_to_spawn, name))) = Pin::new(&mut self.to_spawn_rx).poll_next(cx) {
-			(executor)(Box::pin(futures_diagnose::diagnose(name, task_to_spawn)));
-		}
-	}
-}
-
-
-impl Drop for TaskManager
-{
-	fn drop(&mut self) {
-		debug!(target: "service", "Substrate service shutdown");
-		if let Some(signal) = self.signal.take() {
-			let _ = signal.fire();
-		}
-	}
-}
-
-type Boxed01Future01 = Box<dyn futures01::Future<Item = (), Error = ()> + Send + 'static>;
-
-impl futures01::future::Executor<Boxed01Future01> for SpawnTaskHandle {
-	fn execute(&self, future: Boxed01Future01) -> Result<(), futures01::future::ExecuteError<Boxed01Future01>>{
-		self.spawn("unnamed", future.compat().map(drop));
-		Ok(())
-	}
-}
 
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
@@ -377,7 +263,7 @@ where
 	}
 
 	fn on_exit(&self) -> exit_future::Exit {
-		self.task_manager.on_exit.clone()
+		self.task_manager.on_exit()
 	}
 }
 
@@ -412,7 +298,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
 		&self,
 		future: FutureObj<'static, ()>
 	) -> Result<(), SpawnError> {
-		self.task_manager.to_spawn_tx.unbounded_send((Box::pin(future), From::from("unnamed")))
+		self.task_manager.scheduler().unbounded_send((Box::pin(future), From::from("unnamed")))
 			.map_err(|_| SpawnError::shutdown())
 	}
 }
