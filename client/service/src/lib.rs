@@ -175,6 +175,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
 
 	/// Get a handle to a future that will resolve on exit.
+	#[deprecated]
 	fn on_exit(&self) -> ::exit_future::Exit;
 }
 
@@ -262,7 +263,7 @@ where
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool> {
 		self.transaction_pool.clone()
 	}
-
+	
 	fn on_exit(&self) -> exit_future::Exit {
 		self.task_manager.on_exit()
 	}
