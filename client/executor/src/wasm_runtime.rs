@@ -19,13 +19,15 @@
 //! The primary means of accessing the runtimes is through a cache which saves the reusable
 //! components of the runtime that are expensive to initialize.
 
+use std::sync::Arc;
+use std::borrow::Cow;
 use crate::error::{Error, WasmError};
-use log::{trace, warn};
+use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use codec::Decode;
 use sp_core::{storage::well_known_keys, traits::Externalities};
 use sp_version::RuntimeVersion;
-use std::{collections::hash_map::{Entry, HashMap}, panic::AssertUnwindSafe};
-use sc_executor_common::wasm_runtime::WasmRuntime;
+use std::panic::AssertUnwindSafe;
+use sc_executor_common::wasm_runtime::{WasmRuntime, WasmInstance};
 
 use sp_wasm_interface::Function;
 
@@ -39,14 +41,32 @@ pub enum WasmExecutionMethod {
 	Compiled,
 }
 
+/// Eecuted code source.
+pub enum CodeSource<'a> {
+	/// Take code from storage,
+	Externalities,
+	/// Use provided code,
+	Custom(&'a [u8]),
+}
+
 /// A Wasm runtime object along with its cached runtime version.
 struct VersionedRuntime {
+	/// Code hash.
+	code_hash: Vec<u8>,
+	/// Wasm runtime type.
+	wasm_method: WasmExecutionMethod,
+	/// Shared runtime.
 	runtime: Box<dyn WasmRuntime>,
 	/// The number of WebAssembly heap pages this instance was created with.
 	heap_pages: u64,
-	/// Runtime version according to `Core_version`.
-	version: RuntimeVersion,
+	/// Runtime version according to `Core_version` if any.
+	version: Option<RuntimeVersion>,
+	/// Cached instance pool.
+	instances: RwLock<Vec<Mutex<Box<dyn WasmInstance>>>>,
 }
+
+const MAX_RUNTIMES: usize = 2;
+const MAX_INSTANCES: usize = 8;
 
 /// Cache for the runtimes.
 ///
@@ -60,18 +80,18 @@ struct VersionedRuntime {
 ///
 /// For now the cache grows indefinitely, but that should be fine for now since runtimes can only be
 /// upgraded rarely and there are no other ways to make the node to execute some other runtime.
-pub struct RuntimesCache {
-	/// A cache of runtime instances along with metadata, ready to be reused.
+pub struct RuntimeCache {
+	/// A cache of runtimes along with metadata.
 	///
-	/// Instances are keyed by the Wasm execution method and the hash of their code.
-	instances: HashMap<(WasmExecutionMethod, Vec<u8>), Result<VersionedRuntime, WasmError>>,
+	/// Runtimes sorted by recent usage. The most recently used is at the front.
+	runtimes: RwLock<[Option<Arc<VersionedRuntime>>; MAX_RUNTIMES]>,
 }
 
-impl RuntimesCache {
+impl RuntimeCache {
 	/// Creates a new instance of a runtimes cache.
-	pub fn new() -> RuntimesCache {
-		RuntimesCache {
-			instances: HashMap::new(),
+	pub fn new() -> RuntimeCache {
+		RuntimeCache {
+			runtimes: Default::default(),
 		}
 	}
 
@@ -104,80 +124,119 @@ impl RuntimesCache {
 	///
 	/// `Error::InvalidMemoryReference` is returned if no memory export with the
 	/// identifier `memory` can be found in the runtime.
-	pub fn fetch_runtime<E: Externalities>(
-		&mut self,
-		ext: &mut E,
+	pub fn with_instance<'c, R, F>(
+		&self,
+		code: CodeSource<'c>,
+		ext: &mut dyn Externalities,
 		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
 		host_functions: &[&'static dyn Function],
-	) -> Result<(&mut (dyn WasmRuntime + 'static), &RuntimeVersion, Vec<u8>), Error> {
-		let code_hash = ext
-			.original_storage_hash(well_known_keys::CODE)
-			.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?;
-
-		let heap_pages = ext
-			.storage(well_known_keys::HEAP_PAGES)
-			.and_then(|pages| u64::decode(&mut &pages[..]).ok())
-			.unwrap_or(default_heap_pages);
-
-		let result = match self.instances.entry((wasm_method, code_hash.clone())) {
-			Entry::Occupied(o) => {
-				let result = o.into_mut();
-				if let Ok(ref mut cached_runtime) = result {
-					let heap_pages_changed = cached_runtime.heap_pages != heap_pages;
-					let host_functions_changed = cached_runtime.runtime.host_functions()
-						!= host_functions;
-					if heap_pages_changed || host_functions_changed {
-						let changed = if heap_pages_changed {
-							"heap_pages"
-						} else {
-							"host functions"
-						};
-
-						trace!(
-							target: "runtimes_cache",
-							"{} were changed. Reinstantiating the instance",
-							changed,
-						);
-						*result = create_versioned_wasm_runtime(
-							ext,
-							wasm_method,
-							heap_pages,
-							host_functions.into(),
-						);
-						if let Err(ref err) = result {
-							warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
-						}
-					}
-				}
-				result
+		allow_missing_func_imports: bool,
+		f: F,
+	) -> Result<R, Error>
+		where F: FnOnce(&dyn WasmInstance, Option<&RuntimeVersion>, &mut dyn Externalities) -> R,
+	{
+		let (code_hash, heap_pages) = match &code {
+			CodeSource::Externalities => {
+				(
+					ext
+						.original_storage_hash(well_known_keys::CODE)
+						.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?,
+					ext
+						.storage(well_known_keys::HEAP_PAGES)
+						.and_then(|pages| u64::decode(&mut &pages[..]).ok())
+						.unwrap_or(default_heap_pages)
+				)
 			},
-			Entry::Vacant(v) => {
-				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
+			CodeSource::Custom(code) => {
+				(sp_core::blake2_256(code).to_vec(), default_heap_pages)
+			}
+		};
+
+		let runtimes = self.runtimes.upgradable_read(); // this must be released prior to calling f
+		let pos = runtimes.iter().position(|r| r.as_ref().map_or(
+			false,
+			|r| r.wasm_method == wasm_method && r.code_hash == code_hash && r.heap_pages == heap_pages
+		));
+
+		let runtime = match pos {
+			Some(n) => runtimes[n].clone().expect("`position` only returns `Some` for entries that are `Some`"),
+			None =>  {
+				let code = match code {
+					CodeSource::Externalities => {
+						Cow::Owned(ext.original_storage(well_known_keys::CODE).ok_or(WasmError::CodeNotFound)?)
+					}
+					CodeSource::Custom(code) => {
+						Cow::Borrowed(code)
+					}
+				};
+
 				let result = create_versioned_wasm_runtime(
+					&code,
+					code_hash,
 					ext,
 					wasm_method,
 					heap_pages,
 					host_functions.into(),
+					allow_missing_func_imports,
 				);
 				if let Err(ref err) = result {
-					warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
+					log::warn!(target: "wasm-cache", "Cannot create a runtime: {:?}", err);
 				}
-				v.insert(result)
+				Arc::new(result?)
 			}
 		};
 
-		result.as_mut()
-			.map(|entry| (entry.runtime.as_mut(), &entry.version, code_hash))
-			.map_err(|ref e| Error::InvalidCode(format!("{:?}", e)))
-	}
+		// Rearrange runtimes by last recently used.
+		match pos {
+			Some(0) => { drop(runtimes) },
+			Some(n) => {
+				let mut runtimes = RwLockUpgradableReadGuard::upgrade(runtimes);
+				for i in (1 .. n + 1).rev() {
+					runtimes.swap(i, i - 1);
+				}
+			}
+			None => {
+				let mut runtimes = RwLockUpgradableReadGuard::upgrade(runtimes);
+				runtimes[MAX_RUNTIMES-1] = Some(runtime.clone());
+				for i in (1 .. MAX_RUNTIMES).rev() {
+					runtimes.swap(i, i - 1);
+				}
+			}
+		}
 
+		let result = {
+			let instance_pool = runtime.instances.upgradable_read();
+			// Find a free instance
+			let instance = instance_pool.iter().filter_map(|i| i.try_lock()).next();
+			if let Some(instance) = instance {
+				f(&**instance, runtime.version.as_ref(), ext)
+			} else {
+				// Allocate a new instance
+				drop(instance);
+				let instance = runtime.runtime.new_instance()?;
+
+				let result = f(&*instance, runtime.version.as_ref(), ext);
+				let mut instance_pool = RwLockUpgradableReadGuard::upgrade(instance_pool);
+				if instance_pool.len() < MAX_INSTANCES {
+					instance_pool.push(Mutex::new(instance));
+					log::debug!(target: "wasm-cache", "Allocated WASM instance {}/{}", instance_pool.len(), MAX_INSTANCES);
+				} else {
+					log::warn!(target: "wasm-cache", "Ran out of free WASM instances");
+				}
+				result
+			}
+		};
+
+		Ok(result)
+	}
+	/*
 	/// Invalidate the runtime for the given `wasm_method` and `code_hash`.
 	///
 	/// Invalidation of a runtime is useful when there was a `panic!` in native while executing it.
 	/// The `panic!` maybe have brought the runtime into a poisoned state and so, it is better to
 	/// invalidate this runtime instance.
-	pub fn invalidate_runtime(
+	fn invalidate_runtime(
 		&mut self,
 		wasm_method: WasmExecutionMethod,
 		code_hash: Vec<u8>,
@@ -185,6 +244,7 @@ impl RuntimesCache {
 		// Just remove the instance, it will be re-created the next time it is requested.
 		self.instances.remove(&(wasm_method, code_hash));
 	}
+	*/
 }
 
 /// Create a wasm runtime with the given `code`.
@@ -197,25 +257,32 @@ pub fn create_wasm_runtime_with_code(
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
-			sc_executor_wasmi::create_instance(code, heap_pages, host_functions, allow_missing_func_imports)
+			sc_executor_wasmi::create_runtime(code, heap_pages, host_functions, allow_missing_func_imports)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled =>
-			sc_executor_wasmtime::create_instance(code, heap_pages, host_functions, allow_missing_func_imports)
+			sc_executor_wasmtime::create_runtime(code, heap_pages, host_functions, allow_missing_func_imports)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }
 
-fn create_versioned_wasm_runtime<E: Externalities>(
-	ext: &mut E,
+fn create_versioned_wasm_runtime(
+	code: &[u8],
+	code_hash: Vec<u8>,
+	ext: &mut dyn Externalities,
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
+	allow_missing_func_imports: bool,
 ) -> Result<VersionedRuntime, WasmError> {
-	let code = ext
-		.original_storage(well_known_keys::CODE)
-		.ok_or(WasmError::CodeNotFound)?;
-	let mut runtime = create_wasm_runtime_with_code(wasm_method, heap_pages, &code, host_functions, false)?;
+	let time = std::time::Instant::now();
+	let mut runtime = create_wasm_runtime_with_code(
+		wasm_method,
+		heap_pages,
+		&code,
+		host_functions,
+		allow_missing_func_imports
+	)?;
 
 	// Call to determine runtime version.
 	let version_result = {
@@ -224,21 +291,31 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 
 		// The following unwind safety assertion is OK because if the method call panics, the
 		// runtime will be dropped.
-		let mut runtime = AssertUnwindSafe(runtime.as_mut());
+		let runtime = AssertUnwindSafe(runtime.as_mut());
 		crate::native_executor::with_externalities_safe(
 			&mut **ext,
-			move || runtime.call("Core_version", &[])
+			move || runtime.new_instance()?.call("Core_version", &[])
 		).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
 	};
-	let encoded_version = version_result
-		.map_err(|e| WasmError::Instantiation(format!("failed to call \"Core_version\": {}", e)))?;
-	let version = RuntimeVersion::decode(&mut encoded_version.as_slice())
-		.map_err(|_| WasmError::Instantiation("failed to decode \"Core_version\" result".into()))?;
+	let version = match version_result {
+		Ok(version) => Some(RuntimeVersion::decode(&mut version.as_slice())
+			.map_err(|_| WasmError::Instantiation("failed to decode \"Core_version\" result".into()))?),
+		Err(_) => None,
+	};
+	log::debug!(
+		target: "wasm-cache",
+		"Prepared new runtime version {:?} in {} ms.",
+		version,
+		time.elapsed().as_millis()
+	);
 
 	Ok(VersionedRuntime {
+		code_hash,
 		runtime,
 		version,
 		heap_pages,
+		wasm_method,
+		instances: RwLock::new(Vec::with_capacity(MAX_INSTANCES)),
 	})
 }
 

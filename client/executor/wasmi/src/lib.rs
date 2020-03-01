@@ -17,7 +17,7 @@
 //! This crate provides an implementation of `WasmRuntime` that is baked by wasmi.
 
 use sc_executor_common::{error::{Error, WasmError}, sandbox};
-use std::{str, mem, cell::RefCell};
+use std::{str, mem, cell::RefCell, sync::Arc};
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
@@ -30,7 +30,7 @@ use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
 use sp_runtime_interface::unpack_ptr_and_len;
-use sc_executor_common::wasm_runtime::WasmRuntime;
+use sc_executor_common::wasm_runtime::{WasmRuntime, WasmInstance};
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
@@ -624,8 +624,74 @@ impl StateSnapshot {
 }
 
 /// A runtime along with its initial state snapshot.
-#[derive(Clone)]
 pub struct WasmiRuntime {
+	/// A wasm module.
+	module: Module,
+	/// The host functions registered for this instance.
+	host_functions: Arc<Vec<&'static dyn Function>>,
+	/// Enable stub generation for functions that are not available in `host_functions`.
+	/// These stubs will error when the wasm blob tries to call them.
+	allow_missing_func_imports: bool,
+	/// Numer of heap pages this runtime uses.
+	heap_pages: u64, 
+	/// Data segments created for each new instance.
+	data_segments: Vec<DataSegment>,
+}
+
+impl WasmRuntime for WasmiRuntime {
+	fn new_instance(&self) -> Result<Box<dyn WasmInstance>, Error> {
+		// Instantiate this module.
+		let (instance, missing_functions, memory) = instantiate_module(
+			self.heap_pages as usize,
+			&self.module,
+			&self.host_functions,
+			self.allow_missing_func_imports,
+		).map_err(|e| WasmError::Instantiation(e.to_string()))?;
+
+		// Take state snapshot before executing anything.
+		let state_snapshot = StateSnapshot::take(&instance, self.data_segments.clone())
+			.expect(
+				"`take` returns `Err` if the module is not valid;
+					we already loaded module above, thus the `Module` is proven to be valid at this point;
+					qed
+					",
+			);
+
+		Ok(Box::new(WasmiInstance {
+			instance,
+			memory,
+			state_snapshot,
+			host_functions: self.host_functions.clone(),
+			allow_missing_func_imports: self.allow_missing_func_imports,
+			missing_functions,
+		}))
+	}
+}
+
+pub fn create_runtime(
+	code: &[u8],
+	heap_pages: u64,
+	host_functions: Vec<&'static dyn Function>,
+	allow_missing_func_imports: bool,
+) -> Result<WasmiRuntime, WasmError> {
+	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
+
+	// Extract the data segments from the wasm code.
+	//
+	// A return of this error actually indicates that there is a problem in logic, since
+	// we just loaded and validated the `module` above.
+	let data_segments = extract_data_segments(&code)?;
+	Ok(WasmiRuntime {
+		module,
+		data_segments,
+		host_functions: Arc::new(host_functions),
+		allow_missing_func_imports,
+		heap_pages,
+	})
+}
+
+/// Wasmi instance wrapper
+pub struct WasmiInstance {
 	/// A wasm module instance.
 	instance: ModuleRef,
 	/// The memory instance of used by the wasm module.
@@ -633,7 +699,7 @@ pub struct WasmiRuntime {
 	/// The snapshot of the instance's state taken just after the instantiation.
 	state_snapshot: StateSnapshot,
 	/// The host functions registered for this instance.
-	host_functions: Vec<&'static dyn Function>,
+	host_functions: Arc<Vec<&'static dyn Function>>,
 	/// Enable stub generation for functions that are not available in `host_functions`.
 	/// These stubs will error when the wasm blob tries to call them.
 	allow_missing_func_imports: bool,
@@ -641,13 +707,13 @@ pub struct WasmiRuntime {
 	missing_functions: Vec<String>,
 }
 
-impl WasmRuntime for WasmiRuntime {
-	fn host_functions(&self) -> &[&'static dyn Function] {
-		&self.host_functions
-	}
 
+// This is safe because `WasmiInstance` does not leak any references to `self.memory` and `self.instance`
+unsafe impl Send for WasmiInstance {}
+
+impl WasmInstance for WasmiInstance {
 	fn call(
-		&mut self,
+		&self,
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>, Error> {
@@ -664,65 +730,24 @@ impl WasmRuntime for WasmiRuntime {
 			&self.memory,
 			method,
 			data,
-			&self.host_functions,
+			self.host_functions.as_ref(),
 			self.allow_missing_func_imports,
-			&self.missing_functions,
+			self.missing_functions.as_ref(),
 		)
 	}
 
-	fn get_global_val(&self, name: &str) -> Result<Option<sp_wasm_interface::Value>, Error> {
+	fn get_global_const(&self, name: &str) -> Result<Option<sp_wasm_interface::Value>, Error> {
 		match self.instance.export_by_name(name) {
 			Some(global) => Ok(Some(
-				global
-					 .as_global()
-					 .ok_or_else(|| format!("`{}` is not a global", name))?
-					 .get()
-					 .into()
+					global
+					.as_global()
+					.ok_or_else(|| format!("`{}` is not a global", name))?
+					.get()
+					.into()
 			)),
 			None => Ok(None),
 		}
 	}
-}
-
-pub fn create_instance(
-	code: &[u8],
-	heap_pages: u64,
-	host_functions: Vec<&'static dyn Function>,
-	allow_missing_func_imports: bool,
-) -> Result<WasmiRuntime, WasmError> {
-	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
-
-	// Extract the data segments from the wasm code.
-	//
-	// A return of this error actually indicates that there is a problem in logic, since
-	// we just loaded and validated the `module` above.
-	let data_segments = extract_data_segments(&code)?;
-
-	// Instantiate this module.
-	let (instance, missing_functions, memory) = instantiate_module(
-		heap_pages as usize,
-		&module,
-		&host_functions,
-		allow_missing_func_imports,
-	).map_err(|e| WasmError::Instantiation(e.to_string()))?;
-
-	// Take state snapshot before executing anything.
-	let state_snapshot = StateSnapshot::take(&instance, data_segments)
-		.expect(
-			"`take` returns `Err` if the module is not valid;
-				we already loaded module above, thus the `Module` is proven to be valid at this point;
-				qed
-				",
-		);
-
-	Ok(WasmiRuntime {
-		instance,
-		memory,
-		state_snapshot,
-		host_functions,
-		allow_missing_func_imports,
-		missing_functions,
-	})
 }
 
 /// Extract the data segments from the given wasm code.

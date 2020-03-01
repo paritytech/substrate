@@ -24,6 +24,7 @@ use wasmtime::{
 	Trap, Val,
 };
 
+#[derive(Default)]
 pub struct Imports {
 	/// Contains the index into `externs` where the memory import is stored if any. `None` if there
 	/// is none.

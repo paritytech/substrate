@@ -19,7 +19,7 @@
 
 use crate::instance_wrapper::InstanceWrapper;
 use crate::util;
-use std::cell::RefCell;
+use std::{cell::RefCell, rc::Rc};
 use log::trace;
 use codec::{Encode, Decode};
 use sp_allocator::FreeingBumpHeapAllocator;
@@ -51,22 +51,17 @@ pub struct HostState {
 	// borrow after performing necessary queries/changes.
 	sandbox_store: RefCell<sandbox::Store<SupervisorFuncRef>>,
 	allocator: RefCell<FreeingBumpHeapAllocator>,
-	instance: InstanceWrapper,
+	instance: Rc<InstanceWrapper>,
 }
 
 impl HostState {
 	/// Constructs a new `HostState`.
-	pub fn new(allocator: FreeingBumpHeapAllocator, instance: InstanceWrapper) -> Self {
+	pub fn new(allocator: FreeingBumpHeapAllocator, instance: Rc<InstanceWrapper>) -> Self {
 		HostState {
 			sandbox_store: RefCell::new(sandbox::Store::new()),
 			allocator: RefCell::new(allocator),
 			instance,
 		}
-	}
-
-	/// Destruct the host state and extract the `InstanceWrapper` passed at the creation.
-	pub fn into_instance(self) -> InstanceWrapper {
-		self.instance
 	}
 
 	/// Materialize `HostContext` that can be used to invoke a substrate host `dyn Function`.

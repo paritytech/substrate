@@ -708,12 +708,11 @@ mod tests {
 		type Error = u8;
 
 		fn call<
-			E: Externalities,
 			R: Encode + Decode + PartialEq,
 			NC: FnOnce() -> result::Result<R, String>,
 		>(
 			&self,
-			ext: &mut E,
+			ext: &mut dyn Externalities,
 			_method: &str,
 			_data: &[u8],
 			use_native: bool,

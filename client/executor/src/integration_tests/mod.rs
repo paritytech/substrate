@@ -21,7 +21,7 @@ use hex_literal::hex;
 use sp_core::{
 	Blake2Hasher, blake2_128, blake2_256, ed25519, sr25519, map, Pair,
 	offchain::{OffchainExt, testing},
-	traits::Externalities,
+	traits::{Externalities, CallInWasm},
 };
 use sc_runtime_test::WASM_BINARY;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
@@ -39,15 +39,18 @@ fn call_in_wasm<E: Externalities>(
 	call_data: &[u8],
 	execution_method: WasmExecutionMethod,
 	ext: &mut E,
-) -> crate::error::Result<Vec<u8>> {
-	crate::call_in_wasm::<HostFunctions>(
+) -> Result<Vec<u8>, String> {
+	let executor = crate::WasmExecutor::new(
+		execution_method,
+		Some(1024),
+		HostFunctions::host_functions(),
+		true,
+	);
+	executor.call_in_wasm(
+		&WASM_BINARY[..],
 		function,
 		call_data,
-		execution_method,
 		ext,
-		&WASM_BINARY[..],
-		1024,
-		true,
 	)
 }
 
@@ -83,12 +86,12 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 			match wasm_method {
 				WasmExecutionMethod::Interpreted => assert_eq!(
 					&format!("{:?}", e),
-					"Wasmi(Trap(Trap { kind: Host(Other(\"Function `missing_external` is only a stub. Calling a stub is not allowed.\")) }))"
+					"\"Trap: Trap { kind: Host(Other(\\\"Function `missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
 				),
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"Wasm execution trapped: call to a missing function env:missing_external\")"
+					"\"Wasm execution trapped: call to a missing function env:missing_external\""
 				),
 			}
 		}
@@ -112,12 +115,12 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 			match wasm_method {
 				WasmExecutionMethod::Interpreted => assert_eq!(
 					&format!("{:?}", e),
-					"Wasmi(Trap(Trap { kind: Host(Other(\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\")) }))"
+					"\"Trap: Trap { kind: Host(Other(\\\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
 				),
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"Wasm execution trapped: call to a missing function env:yet_another_missing_external\")"
+					"\"Wasm execution trapped: call to a missing function env:yet_another_missing_external\""
 				),
 			}
 		}
@@ -501,29 +504,32 @@ fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 
-	crate::call_in_wasm::<HostFunctions>(
+	let executor = crate::WasmExecutor::new(
+		wasm_method,
+		Some(17),  // `17` is the initial number of pages compiled into the binary.
+		HostFunctions::host_functions(),
+		true,
+	);
+	executor.call_in_wasm(
+		&WASM_BINARY[..],
 		"test_exhaust_heap",
 		&[0],
-		wasm_method,
 		&mut ext.ext(),
-		&WASM_BINARY[..],
-		// `17` is the initial number of pages compiled into the binary.
-		17,
-		true,
 	).unwrap();
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
-	let mut instance = crate::wasm_runtime::create_wasm_runtime_with_code(
+	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
 		1024,
 		&WASM_BINARY[..],
 		HostFunctions::host_functions(),
 		true,
-	).expect("Creates instance");
+	).expect("Creates runtime");
 
+	let instance = runtime.new_instance().unwrap();
 	let res = instance.call("returns_mutable_static", &[0]).unwrap();
 	assert_eq!(33, u64::decode(&mut &res[..]).unwrap());
 
@@ -549,13 +555,14 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	// to our allocator algorithm there are inefficiencies.
 	const REQUIRED_MEMORY_PAGES: u64 = 32;
 
-	let mut instance = crate::wasm_runtime::create_wasm_runtime_with_code(
+	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
 		REQUIRED_MEMORY_PAGES,
 		&WASM_BINARY[..],
 		HostFunctions::host_functions(),
 		true,
-	).expect("Creates instance");
+	).expect("Creates runtime");
+	let instance = runtime.new_instance().unwrap();
 
 	// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
 	let res = instance.call("allocates_huge_stack_array", &true.encode());
@@ -568,15 +575,16 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
-	let mut instance = crate::wasm_runtime::create_wasm_runtime_with_code(
+	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
 		1024,
 		&WASM_BINARY[..],
 		HostFunctions::host_functions(),
 		true,
-	).expect("Creates instance");
+	).expect("Creates runtime");
+	let instance = runtime.new_instance().unwrap();
 
-	let heap_base = instance.get_global_val("__heap_base")
+	let heap_base = instance.get_global_const("__heap_base")
 		.expect("`__heap_base` is valid")
 		.expect("`__heap_base` exists")
 		.as_i32()
