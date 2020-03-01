@@ -265,7 +265,7 @@ decl_module! {
 		/// - `threshold`: The total number of approvals dispatches from this multi account require before they are
 		///    executed.
 		/// - `other_signatories`: The accounts (other than the sender) who can approve dispatches from this multi
-		///    account. May not be empty.
+		///    account. May be empty.
 		///
 		/// # <weight>
 		/// - `O(S)`.
@@ -291,7 +291,6 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
-			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 			ensure!(threshold as usize <= other_signatories.len() + 1, Error::<T>::TooFewSignatories);
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories.clone(), who.clone())?;
@@ -363,7 +362,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
-			ensure!(signatories.len() >= 2, Error::<T>::TooFewSignatories);
+			ensure!(signatories.len() >= 1, Error::<T>::TooFewSignatories);
 			ensure!(threshold as usize <= signatories.len(), Error::<T>::TooFewSignatories);
 			ensure!(signatories.len() <= max_sigs, Error::<T>::TooManySignatories);
 			ensure!(Self::is_sorted_and_unique(&signatories), Error::<T>::SignatoriesOutOfOrder);
@@ -618,7 +617,7 @@ decl_module! {
 		/// the multi account itself.
 		///
 		/// Any active multisig must be cancelled before a multi account can be updated or removed. To prevent
-		/// an outgoing multi account member to block updates/removals, the mulit account itself can cancel
+		/// an outgoing multi account member to block updates/removals, the multi account itself can cancel
 		/// any active multisig. Such a cancellation can be dispatched by a `call` from this module.
 		///
 		/// - `multi_account_id`: The account ID of the multi account that was created before.
@@ -1092,6 +1091,37 @@ mod tests {
 			let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
 			expect_event(RawEvent::MultisigExecuted(3, now(), multi_id, Err(err)));
 			assert_eq!(Balances::free_balance(multi_id), 5);
+		});
+	}
+
+	#[test]
+	fn multisig_1_of_1_works() {
+		new_test_ext().execute_with(|| {
+			let multi_id = MultiAccount::multi_account_id(1);
+
+			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
+
+			assert_ok!(MultiAccount::create(Origin::signed(1), 1, vec![]));
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), Some(MultiAccountData {
+				threshold: 1,
+				signatories: vec![1],
+				deposit: 2,
+				depositor: 1,
+			}));
+			expect_event(RawEvent::NewMultiAccount(1, multi_id));
+
+			assert_ok!(MultiAccount::update(Origin::signed(multi_id), 1, vec![2]));
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), Some(MultiAccountData {
+				threshold: 1,
+				signatories: vec![2],
+				deposit: 2,
+				depositor: multi_id,
+			}));
+			expect_event(RawEvent::MultiAccountUpdated(multi_id));
+
+			assert_ok!(MultiAccount::remove(Origin::signed(multi_id)));
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), None);
+			expect_event(RawEvent::MultiAccountRemoved(multi_id));
 		});
 	}
 
