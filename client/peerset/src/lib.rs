@@ -424,7 +424,10 @@ impl Peerset {
 		let not_connected = match self.data.peer(&peer_id) {
 			// If we're already connected, don't answer, as the docs mention.
 			peersstate::Peer::Connected(_) => return,
-			peersstate::Peer::NotConnected(entry) => entry,
+			peersstate::Peer::NotConnected(mut entry) => {
+				entry.bump_last_connected_or_discovered();
+				entry
+			},
 			peersstate::Peer::Unknown(entry) => entry.discover(),
 		};
 

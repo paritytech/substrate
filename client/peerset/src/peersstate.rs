@@ -476,6 +476,19 @@ impl<'a> NotConnectedPeer<'a> {
 		self.peer_id.into_owned()
 	}
 
+	/// Bumps the value that `last_connected_or_discovered` would return to now, even if we
+	/// didn't connect or disconnect.
+	pub fn bump_last_connected_or_discovered(&mut self) {
+		let state = match self.state.nodes.get_mut(&*self.peer_id) {
+			Some(s) => s,
+			None => return,
+		};
+
+		if let ConnectionState::NotConnected { last_connected } = &mut state.connection_state {
+			*last_connected = Instant::now();
+		}
+	}
+
 	/// Returns when we were last connected to this peer, or when we discovered it if we were
 	/// never connected.
 	///
