@@ -13,7 +13,7 @@ documentation = "https://docs.rs/sc-network-gossip"
 [dependencies]
 futures = "0.3.1"
 futures-timer = "3.0.1"
-libp2p = { version = "0.16.1", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { version = "0.16.2", default-features = false, features = ["libp2p-websocket"] }
 log = "0.4.8"
 lru = "0.4.3"
 parking_lot = "0.10.0"
