@@ -144,7 +144,7 @@ pub mod new {
 	}
 
 	impl<
-		T: SendTransactionTypes<LocalCall>,
+		T: CreateSignedTransaction<LocalCall>,
 		C: AppCrypto<T>,
 		LocalCall,
 	> SendSignedTransaction<T, LocalCall> for Signer<T, C, ForAny> {
@@ -163,8 +163,11 @@ pub mod new {
 					account.id,
 					account_data.nonce,
 				);
-				let (call, signature) = T::CreateTransaction::create_transaction(
+				let p: C::GenericPublic = account.public.clone().try_into().ok()?;
+				let x = Into::<C::RuntimeAppPublic>::into(p);
+				let (call, signature) = T::create_transaction::<C>(
 					call.into(),
+					x,
 					account.public.clone(),
 					account.id.clone(),
 					account_data.nonce
@@ -308,23 +311,23 @@ pub mod new {
 
 	pub trait SendTransactionTypes<LocalCall>: SigningTypes {
 		type Extrinsic: ExtrinsicT<Call=Self::OverarchingCall> + codec::Encode;
-		type CreateTransaction: CreateTransaction<Self, LocalCall>;
 		type OverarchingCall: From<LocalCall>;
 	}
 
-	pub trait CreateTransaction<T: SendTransactionTypes<C>, C> {
+	pub trait CreateSignedTransaction<LocalCall>: SendTransactionTypes<LocalCall> {
 		/// Attempt to create signed extrinsic data that encodes call from given account.
 		///
 		/// Runtime implementation is free to construct the payload to sign and the signature
 		/// in any way it wants.
 		/// Returns `None` if signed extrinsic could not be created (either because signing failed
 		/// or because of any other runtime-specific reason).
-		fn create_transaction(
-			call: T::OverarchingCall,
-			public: T::Public,
-			account: T::AccountId,
-			nonce: T::Index,
-		) -> Option<(T::OverarchingCall, <T::Extrinsic as ExtrinsicT>::SignaturePayload)>;
+		fn create_transaction<C: AppCrypto<Self>>(
+			call: Self::OverarchingCall,
+			crypto: C::RuntimeAppPublic,
+			public: Self::Public,
+			account: Self::AccountId,
+			nonce: Self::Index,
+		) -> Option<(Self::OverarchingCall, <Self::Extrinsic as ExtrinsicT>::SignaturePayload)>;
 	}
 
 	pub trait SignMessage<T: SigningTypes> {

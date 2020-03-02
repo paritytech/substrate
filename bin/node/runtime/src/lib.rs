@@ -474,8 +474,6 @@ impl<C> frame_system::offchain::new::SendTransactionTypes<C> for Runtime where
 {
 	type OverarchingCall = Call;
 	type Extrinsic = UncheckedExtrinsic;
-	// TODO [ToDr] This should just extend `SendTransactionTypes`
-	type CreateTransaction = Runtime;
 }
 
 pub struct ImOnlineAuthId;
