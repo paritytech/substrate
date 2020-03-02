@@ -147,8 +147,8 @@ fn generate_exchangeable_host_function(method: &TraitItemMethod) -> Result<Token
 			#[allow(non_upper_case_globals)]
 			#[doc = #doc_string]
 			pub static #exchangeable_function : #crate_::wasm::ExchangeableFunction<
-				fn ( #( #arg_types ),* ) #output
-			> = #crate_::wasm::ExchangeableFunction::new(extern_host_function_impls::#function);
+				&dyn Fn ( #( #arg_types ),* ) #output
+			> = #crate_::wasm::ExchangeableFunction::new(&extern_host_function_impls::#function);
 		}
 	)
 }

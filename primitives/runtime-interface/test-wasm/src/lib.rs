@@ -210,7 +210,17 @@ wasm_export_functions! {
 		assert!(!test_api::overwrite_native_function_implementation());
 
 		let _guard = test_api::host_overwrite_native_function_implementation
-			.replace_implementation(new_implementation);
+			.replace_implementation(&new_implementation);
+
+		assert!(test_api::overwrite_native_function_implementation());
+	}
+
+	fn test_overwrite_native_function_implementation_with_closure() {
+		// Check native implementation
+		assert!(!test_api::overwrite_native_function_implementation());
+
+		let _guard = test_api::host_overwrite_native_function_implementation
+			.replace_implementation(&|| true);
 
 		assert!(test_api::overwrite_native_function_implementation());
 	}
