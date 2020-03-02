@@ -1020,7 +1020,7 @@ ServiceBuilder<
 
 			spawn_handle.spawn(
 				"telemetry-on-block",
-				events.map(drop),
+				events,
 			);
 		}
 
@@ -1035,7 +1035,7 @@ ServiceBuilder<
 
 			spawn_handle.spawn(
 				"prometheus-endpoint",
-				substrate_prometheus_endpoint::init_prometheus(port, registry).boxed().map(drop),
+				substrate_prometheus_endpoint::init_prometheus(port, registry).map(drop)
 			);
 
 			Some(metrics)
@@ -1111,7 +1111,7 @@ ServiceBuilder<
 
 		spawn_handle.spawn(
 			"telemetry-periodic-send",
-			tel_task.map(drop),
+			tel_task,
 		);
 
 		// Periodically send the network state to the telemetry.
@@ -1127,7 +1127,7 @@ ServiceBuilder<
 		});
 		spawn_handle.spawn(
 			"telemetry-periodic-network-state",
-			tel_task_2.map(drop),
+			tel_task_2,
 		);
 
 		// RPC
@@ -1209,7 +1209,7 @@ ServiceBuilder<
 				network_status_sinks.clone(),
 				system_rpc_rx,
 				has_bootnodes,
-			).map(drop),
+			),
 		);
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>> = Default::default();
