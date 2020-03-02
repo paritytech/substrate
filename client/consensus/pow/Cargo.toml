@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-pow"
-version = "0.8.0-alpha.1"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "PoW consensus algorithm for substrate"
 edition = "2018"
@@ -10,16 +10,16 @@ repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-sp-core = { version = "2.0.0-alpha.1", path = "../../../primitives/core" }
-sp-blockchain = { version = "2.0.0-alpha.1", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "2.0.0-alpha.1", path = "../../../primitives/runtime" }
-sp-api = { version = "2.0.0-alpha.1", path = "../../../primitives/api" }
-sc-client-api = { version = "2.0.0-alpha.1", path = "../../api" }
-sp-block-builder = { version = "2.0.0-alpha.1", path = "../../../primitives/block-builder" }
-sp-inherents = { version = "2.0.0-alpha.1", path = "../../../primitives/inherents" }
-sp-consensus-pow = { version = "0.8.0-alpha.1", path = "../../../primitives/consensus/pow" }
-sp-consensus = { version = "0.8.0-alpha.1", path = "../../../primitives/consensus/common" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
+sp-api = { version = "2.0.0-alpha.2", path = "../../../primitives/api" }
+sc-client-api = { version = "2.0.0-alpha.2", path = "../../api" }
+sp-block-builder = { version = "2.0.0-alpha.2", path = "../../../primitives/block-builder" }
+sp-inherents = { version = "2.0.0-alpha.2", path = "../../../primitives/inherents" }
+sp-consensus-pow = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/pow" }
+sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/common" }
 log = "0.4.8"
 futures = { version = "0.3.1", features = ["compat"] }
-sp-timestamp = { version = "2.0.0-alpha.1", path = "../../../primitives/timestamp" }
+sp-timestamp = { version = "2.0.0-alpha.2", path = "../../../primitives/timestamp" }
 derive_more = "0.99.2"

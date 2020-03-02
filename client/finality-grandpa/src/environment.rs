@@ -25,18 +25,14 @@ use parity_scale_codec::{Decode, Encode};
 use futures::prelude::*;
 use futures_timer::Delay;
 use parking_lot::RwLock;
-use sp_blockchain::{HeaderBackend, Error as ClientError};
+use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
+use std::marker::PhantomData;
 
 use sc_client_api::{
-	BlockchainEvents,
-	backend::{AuxStore, Backend},
-	Finalizer,
-	call_executor::CallExecutor,
+	backend::Backend,
 	utils::is_descendent_of,
 };
-use sc_client::{
-	apply_aux, Client,
-};
+use sc_client::apply_aux;
 use finality_grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
@@ -377,8 +373,8 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
-	pub(crate) client: Arc<Client<B, E, Block, RA>>,
+pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
+	pub(crate) client: Arc<C>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
@@ -388,9 +384,10 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, V
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
+	pub(crate) _phantom: PhantomData<Backend>,
 }
 
-impl<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> Environment<B, E, Block, N, RA, SC, VR> {
+impl<Backend, Block: BlockT, C, N: NetworkT<Block>, SC, VR> Environment<Backend, Block, C, N, SC, VR> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -406,17 +403,16 @@ impl<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> Environment<B, E, Bloc
 	}
 }
 
-impl<Block: BlockT, B, E, N, RA, SC, VR>
+impl<BE, Block: BlockT, C, N, SC, VR>
 	finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, VR>
+for Environment<BE, Block, C, N, SC, VR>
 where
 	Block: 'static,
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + Send + Sync,
+	BE: Backend<Block>,
+	C: crate::ClientForGrandpa<Block, BE>,
  	N: NetworkT<Block> + 'static + Send,
 	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block, Client<B, E, Block, RA>>,
-	RA: Send + Sync,
+	VR: VotingRule<Block, C>,
 	NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
@@ -432,7 +428,7 @@ where
 			return None;
 		}
 
-		let base_header = match self.client.header(&BlockId::Hash(block)).ok()? {
+		let base_header = match self.client.header(BlockId::Hash(block)).ok()? {
 			Some(h) => h,
 			None => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find base block", block);
@@ -450,7 +446,7 @@ where
 
 		match self.select_chain.finality_target(block, None) {
 			Ok(Some(best_hash)) => {
-				let best_header = self.client.header(&BlockId::Hash(best_hash)).ok()?
+				let best_header = self.client.header(BlockId::Hash(best_hash)).ok()?
 					.expect("Header known to exist after `finality_target` call; qed");
 
 				// check if our vote is currently being limited due to a pending change
@@ -474,7 +470,7 @@ where
 							break;
 						}
 
-						target_header = self.client.header(&BlockId::Hash(*target_header.parent_hash())).ok()?
+						target_header = self.client.header(BlockId::Hash(*target_header.parent_hash())).ok()?
 							.expect("Header known to exist after `finality_target` call; qed");
 					}
 
@@ -519,17 +515,16 @@ where
 }
 
 
-pub(crate) fn ancestry<B, Block: BlockT, E, RA>(
-	client: &Client<B, E, Block, RA>,
+pub(crate) fn ancestry<Block: BlockT, Client>(
+	client: &Arc<Client>,
 	base: Block::Hash,
 	block: Block::Hash,
 ) -> Result<Vec<Block::Hash>, GrandpaError> where
-	B: Backend<Block>,
-	E: CallExecutor<Block>,
+	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
 	if base == block { return Err(GrandpaError::NotDescendent) }
 
-	let tree_route_res = sp_blockchain::tree_route(client, block, base);
+	let tree_route_res = sp_blockchain::tree_route(&**client, block, base);
 
 	let tree_route = match tree_route_res {
 		Ok(tree_route) => tree_route,
@@ -550,19 +545,17 @@ pub(crate) fn ancestry<B, Block: BlockT, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT, N, RA, SC, VR>
+impl<B, Block: BlockT, C, N, SC, VR>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, VR>
+for Environment<B, Block, C, N, SC, VR>
 where
 	Block: 'static,
-	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + 'static + Send + Sync,
+	B: Backend<Block>,
+	C: crate::ClientForGrandpa<Block, B> + 'static,
  	N: NetworkT<Block> + 'static + Send,
-	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block, Client<B, E, Block, RA>>,
+	VR: VotingRule<Block, C>,
 	NumberFor<Block>: BlockNumberOps,
-	Client<B, E, Block, RA>: AuxStore,
 {
 	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
 	type Id = AuthorityId;
@@ -882,7 +875,7 @@ where
 		commit: Commit<Block>,
 	) -> Result<(), Self::Error> {
 		finalize_block(
-			&*self.client,
+			self.client.clone(),
 			&self.authority_set,
 			&self.consensus_changes,
 			Some(self.config.justification_period.into()),
@@ -940,8 +933,8 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 /// authority set change is enacted then a justification is created (if not
 /// given) and stored with the block when finalizing it.
 /// This method assumes that the block being finalized has already been imported.
-pub(crate) fn finalize_block<B, Block: BlockT, E, RA>(
-	client: &Client<B, E, Block, RA>,
+pub(crate) fn finalize_block<BE, Block, Client>(
+	client: Arc<Client>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	justification_period: Option<NumberFor<Block>>,
@@ -949,16 +942,16 @@ pub(crate) fn finalize_block<B, Block: BlockT, E, RA>(
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
-	B: Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync,
-	RA: Send + Sync,
+	Block:  BlockT,
+	BE: Backend<Block>,
+	Client: crate::ClientForGrandpa<Block, BE>,
 {
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
 	//       also implicitly synchronizes the check for last finalized number
 	//       below.
 	let mut authority_set = authority_set.inner().write();
 
-	let status = client.chain_info();
+	let status = client.info();
 	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
 		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
 		// the voter will be restarted at the median last finalized block, which can be lower than the local best
@@ -981,14 +974,14 @@ pub(crate) fn finalize_block<B, Block: BlockT, E, RA>(
 	let mut consensus_changes = consensus_changes.lock();
 	let canon_at_height = |canon_number| {
 		// "true" because the block is finalized
-		canonical_at_height(client, (hash, number), true, canon_number)
+		canonical_at_height(&*client, (hash, number), true, canon_number)
 	};
 
 	let update_res: Result<_, Error> = client.lock_import_and_run(|import_op| {
 		let status = authority_set.apply_standard_changes(
 			hash,
 			number,
-			&is_descendent_of::<Block, _>(client, None),
+			&is_descendent_of::<Block, _>(&*client, None),
 		).map_err(|e| Error::Safety(e.to_string()))?;
 
 		// check if this is this is the first finalization of some consensus changes
@@ -1031,7 +1024,7 @@ pub(crate) fn finalize_block<B, Block: BlockT, E, RA>(
 				// finalization to remote nodes
 				if !justification_required {
 					if let Some(justification_period) = justification_period {
-						let last_finalized_number = client.chain_info().finalized_number;
+						let last_finalized_number = client.info().finalized_number;
 						justification_required =
 							(!last_finalized_number.is_zero() || number - last_finalized_number == justification_period) &&
 							(last_finalized_number / justification_period != number / justification_period);
@@ -1040,7 +1033,7 @@ pub(crate) fn finalize_block<B, Block: BlockT, E, RA>(
 
 				if justification_required {
 					let justification = GrandpaJustification::from_commit(
-						client,
+						&client,
 						round_number,
 						commit,
 					)?;

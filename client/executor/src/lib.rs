@@ -30,10 +30,7 @@
 #![recursion_limit="128"]
 
 #[macro_use]
-mod wasm_utils;
-#[macro_use]
 mod native_executor;
-pub mod deprecated_host_interface;
 mod wasm_runtime;
 #[cfg(test)]
 mod integration_tests;

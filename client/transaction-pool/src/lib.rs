@@ -16,6 +16,7 @@
 
 //! Substrate transaction pool implementation.
 
+#![recursion_limit="256"]
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
