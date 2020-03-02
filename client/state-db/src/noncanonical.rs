@@ -106,7 +106,7 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 					// save to be discarded later.
 					pinned_insertions.insert(overlay.hash.clone(), overlay.inserted);
 				} else {
-					// discard immediatelly.
+					// discard immediately.
 					parents.remove(&overlay.hash);
 					discard_values(&mut values, overlay.inserted);
 				}
@@ -436,7 +436,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		while let Some(hash) = parent {
 			let refs = self.pinned.entry(hash.clone()).or_default();
 			if *refs == 0 {
-				trace!(target: "state-db", "Pinned non-canon block: {:?}", hash);
+				trace!(target: "state-db-pin", "Pinned non-canon block: {:?}", hash);
 			}
 			*refs += 1;
 			parent = self.parents.get(hash);
@@ -455,7 +455,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					if *entry.get() == 0 {
 						entry.remove();
 						if let Some(inserted) = self.pinned_insertions.remove(&hash) {
-							trace!(target: "state-db", "Discarding unpinned non-canon block: {:?}", hash);
+							trace!(target: "state-db-pin", "Discarding unpinned non-canon block: {:?}", hash);
 							discard_values(&mut self.values, inserted);
 							self.parents.remove(&hash);
 						}
