@@ -174,7 +174,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
 
 	/// Get a handle to a future that will resolve on exit.
-	#[deprecated]
+	#[deprecated(note = "Use `spawn_task`/`spawn_essential_task` instead, those functions will attach on_exit signal.")]
 	fn on_exit(&self) -> ::exit_future::Exit;
 }
 
