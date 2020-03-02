@@ -179,7 +179,7 @@ pub fn transaction_start_windows(states: &States, from: usize) -> usize {
 }
 
 /// Stack of values at different transactional layers.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Layers<V>(pub(crate) smallvec::SmallVec<[LayerEntry<V>; ALLOCATED_HISTORY]>);
 
 #[cfg(test)]
@@ -198,7 +198,7 @@ impl<V> Default for Layers<V> {
 }
 
 /// An value entry of a indexed transactional layer.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LayerEntry<V> {
 	/// The stored value.
 	pub value: V,
@@ -819,5 +819,135 @@ pub mod fuzz {
 		for input in inputs.iter() {
 			fuzz_transactions_inner(&input[..], true);
 		}
+	}
+
+	#[test]
+	fn test_internal_state() {
+		use super::{States, Layers, TransactionState};
+
+		let check_state = |global_state: &States, global_state_ref: &States, layers: &[&Layers<usize>], layers_ref: &[&[(usize, usize)]]| {
+			let layers_ref: Vec<_> = layers_ref.iter().map(|internal|
+				Layers::from_iter(internal.iter().map(Clone::clone).map(Into::into).into_iter())
+			).collect();
+			let layers_ref_ref: Vec<_> = layers_ref.iter().collect();
+			assert_eq!(global_state, global_state_ref);
+			assert_eq!(layers, &layers_ref_ref[..]);
+		};
+
+		let mut global_state = States::default();
+		let ref_state = States::test_vector(
+			vec![TransactionState::Pending],
+			vec![0],
+			0,
+		);
+		let mut value1 = Layers::default();
+		check_state(&global_state, &ref_state, &[&value1], &[&[]]);
+		value1.set(&global_state, 11);
+		check_state(&global_state, &ref_state, &[&value1], &[&[(11, 0)]]);
+		value1.set(&global_state, 12);
+		let mut value2 = Layers::default();
+		check_state(&global_state, &ref_state, &[&value1, &value2], &[&[(12, 0)], &[]]);
+		global_state.start_transaction();
+		let ref_state = States::test_vector(
+			vec![TransactionState::Pending, TransactionState::TxPending],
+			vec![0, 1],
+			0,
+		);
+		check_state(&global_state, &ref_state, &[&value1, &value2], &[&[(12, 0)], &[]]);
+		value2.set(&global_state, 11);
+		let values_ref = &[
+			&[(12, 0)][..],
+			&[(11, 1)][..],
+		][..];
+		check_state(&global_state, &ref_state, &[&value1, &value2], values_ref);
+		value1.set(&global_state, 13);
+		let values_ref = &[
+			&[(12, 0), (13, 1)][..],
+			&[(11, 1)][..],
+		][..];
+		check_state(&global_state, &ref_state, &[&value1, &value2], values_ref);
+		global_state.start_transaction();
+		let ref_state = States::test_vector(
+			vec![TransactionState::Pending, TransactionState::TxPending, TransactionState::TxPending],
+			vec![0, 1, 2],
+			0,
+		);
+		check_state(&global_state, &ref_state, &[&value1, &value2], values_ref);
+		global_state.discard_transaction();
+		let ref_state = States::test_vector(
+			vec![TransactionState::Pending, TransactionState::TxPending, TransactionState::Dropped, TransactionState::Pending],
+			vec![0, 1, 1, 1],
+			0,
+		);
+		check_state(&global_state, &ref_state, &[&value1, &value2], values_ref);
+		value2.set(&global_state, 12);
+		let values_ref = &[
+			&[(12, 0), (13, 1)][..],
+			&[(11, 1), (12, 3)][..],
+		][..];
+		assert_eq!(value1.get(global_state.as_ref()), (Some(&13), false));
+		assert_eq!(value2.get(global_state.as_ref()), (Some(&12), false));
+		check_state(&global_state, &ref_state, &[&value1, &value2], values_ref);
+		global_state.discard_transaction();
+		let ref_state = States::test_vector(
+			vec![
+				TransactionState::Pending,
+				TransactionState::Dropped,
+				TransactionState::Dropped,
+				TransactionState::Dropped,
+				TransactionState::Pending,
+			],
+			vec![0, 0, 0, 0, 0],
+			0,
+		);
+		check_state(&global_state, &ref_state, &[&value1, &value2], values_ref);
+		assert_eq!(value1.get(global_state.as_ref()), (Some(&12), true));
+		assert_eq!(value2.get(global_state.as_ref()), (None, true));
+		// update value 1 & value 2 by using get_mut.
+		assert!(value1.get_mut(&global_state).is_some());
+		assert!(value2.get_mut(&global_state).is_none());
+		assert_eq!(value1.get(global_state.as_ref()), (Some(&12), false));
+		assert_eq!(value2.get(global_state.as_ref()), (None, false));
+		let values_ref = &[
+			&[(12, 0)][..],
+			&[][..],
+		][..];
+		check_state(&global_state, &ref_state, &[&value1, &value2], values_ref);
+		global_state.start_transaction();
+		value2.set(&global_state, 14);
+		let ref_state = States::test_vector(
+			vec![
+				TransactionState::Pending,
+				TransactionState::Dropped,
+				TransactionState::Dropped,
+				TransactionState::Dropped,
+				TransactionState::Pending,
+				TransactionState::TxPending,
+			],
+			vec![0, 0, 0, 0, 0, 5],
+			0,
+		);
+		let values_ref = &[
+			&[(12, 0)][..],
+			&[(14, 5)][..],
+		][..];
+		check_state(&global_state, &ref_state, &[&value1, &value2], values_ref);
+		global_state.commit_prospective();
+		let ref_state = States::test_vector(
+			vec![
+				TransactionState::Pending,
+				TransactionState::Dropped,
+				TransactionState::Dropped,
+				TransactionState::Dropped,
+				TransactionState::Pending,
+				TransactionState::TxPending,
+				TransactionState::Pending,
+			],
+			vec![6, 6, 6, 6, 6, 6, 6],
+			6,
+		);
+		check_state(&global_state, &ref_state, &[&value1, &value2], values_ref);
+		assert_eq!(value1.get(global_state.as_ref()), (Some(&12), false));
+		assert_eq!(value2.get(global_state.as_ref()), (Some(&14), false));
 	}
 }
