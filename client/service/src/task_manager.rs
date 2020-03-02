@@ -144,7 +144,7 @@ pub struct TaskManager {
 
 impl TaskManager {
 	/// Spawn background/async task, which will be aware on exit signal.
-	pub fn spawn(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static) {
+	pub(super) fn spawn(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static) {
 		let on_exit = self.on_exit.clone();
 		let future = async move {
 			futures::pin_mut!(task);
@@ -155,7 +155,7 @@ impl TaskManager {
 		}
 	}
 
-	pub fn spawn_handle(&self) -> SpawnTaskHandle {
+	pub(super) fn spawn_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			on_exit: self.on_exit.clone(),
 			sender: self.to_spawn_tx.clone(),
@@ -163,19 +163,19 @@ impl TaskManager {
 	}
 
 	/// Get sender where background/async tasks can be sent.
-	pub fn scheduler(&self) -> TaskScheduler {
+	pub(super) fn scheduler(&self) -> TaskScheduler {
 		self.to_spawn_tx.clone()
 	}
 
 	/// Process background task receiver.
-	pub fn process_receiver(&mut self, cx: &mut Context) {
+	pub(super) fn process_receiver(&mut self, cx: &mut Context) {
 		while let Poll::Ready(Some((task_to_spawn, name))) = Pin::new(&mut self.to_spawn_rx).poll_next(cx) {
 			(self.executor)(Box::pin(futures_diagnose::diagnose(name, task_to_spawn)));
 		}
 	}
 
 	/// Clone on exit signal.
-	pub fn on_exit(&self) -> exit_future::Exit {
+	pub(super) fn on_exit(&self) -> exit_future::Exit {
 		self.on_exit.clone()
 	}
 }
