@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-babe-rpc"
-version = "0.8.0-alpha.1"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "RPC extensions for the BABE consensus algorithm"
 edition = "2018"
@@ -9,24 +9,24 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sc-consensus-babe = { version = "0.8.0-alpha.1", path = "../" }
+sc-consensus-babe = { version = "0.8.0-alpha.2", path = "../" }
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
-sp-consensus-babe = { version = "0.8.0-alpha.1", path = "../../../../primitives/consensus/babe" }
+sp-consensus-babe = { version = "0.8.0-alpha.2", path = "../../../../primitives/consensus/babe" }
 serde = { version = "1.0.104", features=["derive"] }
-sp-blockchain = { version = "2.0.0-alpha.1", path = "../../../../primitives/blockchain" }
-sp-runtime = { version = "2.0.0-alpha.1", path = "../../../../primitives/runtime" }
-sc-consensus-epochs = { version = "0.8.0-alpha.1", path = "../../epochs" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../../../primitives/runtime" }
+sc-consensus-epochs = { version = "0.8.0-alpha.2", path = "../../epochs" }
 futures = "0.3.1"
 derive_more = "0.99.2"
-sp-api = { version = "2.0.0-alpha.1", path = "../../../../primitives/api" }
-sp-consensus = { version = "0.8.0-alpha.1", path = "../../../../primitives/consensus/common" }
-sp-core = { version = "2.0.0-alpha.1", path = "../../../../primitives/core" }
-sc-keystore = { version = "2.0.0-alpha.1", path = "../../../keystore" }
+sp-api = { version = "2.0.0-alpha.2", path = "../../../../primitives/api" }
+sp-consensus = { version = "0.8.0-alpha.2", path = "../../../../primitives/consensus/common" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../../../primitives/core" }
+sc-keystore = { version = "2.0.0-alpha.2", path = "../../../keystore" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../../test-utils/runtime/client" }
-sp-application-crypto = { version = "2.0.0-alpha.1", path = "../../../../primitives/application-crypto" }
-sp-keyring = { version = "2.0.0-alpha.1", path = "../../../../primitives/keyring" }
+sp-application-crypto = { version = "2.0.0-alpha.2", path = "../../../../primitives/application-crypto" }
+sp-keyring = { version = "2.0.0-alpha.2", path = "../../../../primitives/keyring" }
 tempfile = "3.1.0"

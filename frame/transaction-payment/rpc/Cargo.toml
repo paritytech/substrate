@@ -1,21 +1,22 @@
 [package]
 name = "pallet-transaction-payment-rpc"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "RPC interface for the transaction payment module."
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
-sp-core = { version = "2.0.0-alpha.1", path = "../../../primitives/core" }
-sp-rpc = { version = "2.0.0-alpha.1", path = "../../../primitives/rpc" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
+sp-rpc = { version = "2.0.0-alpha.2", path = "../../../primitives/rpc" }
 serde = { version = "1.0.101", features = ["derive"] }
-sp-runtime = { version = "2.0.0-alpha.1", path = "../../../primitives/runtime" }
-sp-api = { version = "2.0.0-alpha.1", path = "../../../primitives/api" }
-sp-blockchain = { version = "2.0.0-alpha.1", path = "../../../primitives/blockchain" }
-pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0-alpha.1", path = "./runtime-api" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
+sp-api = { version = "2.0.0-alpha.2", path = "../../../primitives/api" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockchain" }
+pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0-alpha.2", path = "./runtime-api" }
