@@ -3565,25 +3565,33 @@ mod offchain_phragmen {
 fn slash_kicks_validators_not_nominators() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
+		assert_eq_uvec!(Staking::current_elected(), vec![11, 21]);
 
+		// pre-slash balance
 		assert_eq!(Balances::free_balance(11), 1000);
-
-		let exposure = Staking::stakers(&11);
 		assert_eq!(Balances::free_balance(101), 2000);
-		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
+
+		// 11 and 21 both have the support of 100
+		let exposure_11 = Staking::stakers(&11);
+		let exposure_21 = Staking::stakers(&21);
+
+		assert_eq!(exposure_11.total, 1000 + 125);
+		assert_eq!(exposure_21.total, 1000 + 375);
 
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, exposure.clone()),
+					offender: (11, exposure_11.clone()),
 					reporters: vec![],
 				},
 			],
 			&[Perbill::from_percent(10)],
 		);
 
+		// post-slash balance
+		let nominator_slash_amount_11 = (125 / 10);
 		assert_eq!(Balances::free_balance(11), 900);
-		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
+		assert_eq!(Balances::free_balance(101), 2000 - nominator_slash_amount_11);
 
 		// This is the best way to check that the validator was chilled; `get` will
 		// return default value.
@@ -3597,6 +3605,19 @@ fn slash_kicks_validators_not_nominators() {
 		// re-registers.
 		let last_slash = <Staking as Store>::SlashingSpans::get(&11).unwrap().last_nonzero_slash();
 		assert!(nominations.submitted_in < last_slash);
+
+		// actually re-bond the slashed validator
+		assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
+
+		start_era(2);
+		let exposure_11 = Staking::stakers(&11);
+		let exposure_21 = Staking::stakers(&21);
+
+		// 10 is re-elected, but without the support of 100
+		assert_eq!(exposure_11.total, 900);
+
+		// 20 is re-elected, with the (almost) entire support of 100
+		assert_eq!(exposure_21.total, 1000 + 500 - nominator_slash_amount_11);
 	});
 }
 
