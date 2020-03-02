@@ -141,16 +141,19 @@ pub mod new {
 		}
 	}
 
-	impl<T: SendTransactionTypes> SendSignedTransaction<T, C> for Signer<T, ForAny> {
+	impl<
+		T: SendTransactionTypes,
+		C: Into<T::Call>,
+	> SendSignedTransaction<T, C> for Signer<T, ForAny> {
 		type Result = Option<(Account<T>, Result<(), ()>)>;
 
 		fn send_signed_transaction(
 			&self,
-			f: impl Fn(&Account<T>) -> T::Call,
+			f: impl Fn(&Account<T>) -> C,
 		) -> Self::Result {
 			self.for_any(|account| {
 				let call = f(account);
-				let mut account_data = crate::Account::<T::System>::get(&account.id);
+				let mut account_data = crate::Account::<T>::get(&account.id);
 				debug::native::debug!(
 					target: "offchain",
 					"Creating signed transaction from account: {:?} (nonce: {:?})",
@@ -158,9 +161,9 @@ pub mod new {
 					account_data.nonce,
 				);
 				let (call, signature) = T::CreateTransaction::create_transaction(
-					call,
-					&account.public,
-					&account.id,
+					call.into(),
+					account.public.clone(),
+					account.id.clone(),
 					account_data.nonce
 				)?;
 				let xt = T::Extrinsic::new(call, Some(signature))?;
@@ -170,7 +173,7 @@ pub mod new {
 					// increment the nonce. This is fine, since the code should always
 					// be running in off-chain context, so we NEVER persists data.
 					account_data.nonce += One::one();
-					crate::Account::<T::System>::insert(&account.id, account_data);
+					crate::Account::<T>::insert(&account.id, account_data);
 				}
 
 				Some(res)
@@ -181,7 +184,7 @@ pub mod new {
 	impl<
 		T: SendTransactionTypes,
 		C: Into<T::Call>,
-	> SendSignedTransaction<T, C, ForAll> {
+	> SendSignedTransaction<T, C> for Signer<T, ForAll> {
 		type Result = Vec<(Account<T>, Result<(), ()>)>;
 
 		fn send_signed_transaction(
@@ -266,6 +269,10 @@ pub mod new {
 			From<Self::GenericSignature>
 			+ TryInto<Self::GenericSignature>
 			;
+		// TODO [ToDr]
+		// since now the `SignintTypes` trait extends `System` trait, we can't
+		// really have a single `RuntimeAppPublic` here.
+		// `RuntimeAppPublic` thus needs to be passed in some other way to all the functions.
 		type RuntimeAppPublic: RuntimeAppPublic;
 		// TODO [ToDr] The conversions are messy, clean them up.
 		//
