@@ -824,7 +824,7 @@ pub fn horrible_phragmen_with_post_processing(
 	// Ensure that this result is worse than seq-phragmen. Otherwise, it should not have been used
 	// for testing.
 	let score = {
-		let (_, _, better_score) = do_phragmen_with_post_processing(true, |_| {});
+		let (_, _, better_score) = prepare_submission_with(true, |_| {});
 
 		let support = build_support_map::<AccountId>(&winners, &staked_assignment).0;
 		let score = evaluate_support(&support);
@@ -867,7 +867,7 @@ pub fn horrible_phragmen_with_post_processing(
 
 // Note: this should always logically reproduce [`offchain_election::prepare_submission`], yet we
 // cannot do it since we want to have `tweak` injected into the process.
-pub fn do_phragmen_with_post_processing(
+pub fn prepare_submission_with(
 	do_reduce: bool,
 	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
 ) -> (

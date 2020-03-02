@@ -2910,7 +2910,7 @@ mod offchain_phragmen {
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 			assert!(Staking::snapshot_validators().is_some());
 
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (compact, winners, score) = prepare_submission_with(true, |_| {});
 			assert_ok!(Staking::submit_election_solution(
 				Origin::signed(10),
 				winners,
@@ -2948,7 +2948,7 @@ mod offchain_phragmen {
 			run_to_block(14);
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (compact, winners, score) = prepare_submission_with(true, |_| {});
 			assert_ok!(
 				Staking::submit_election_solution(
 					Origin::signed(10),
@@ -2992,7 +2992,7 @@ mod offchain_phragmen {
 
 			// create all the indices just to build the solution.
 			Staking::create_stakers_snapshot();
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (compact, winners, score) = prepare_submission_with(true, |_| {});
 			Staking::kill_stakers_snapshot();
 
 			assert_noop!(
@@ -3016,7 +3016,7 @@ mod offchain_phragmen {
 			run_to_block(12);
 
 			// a good solution
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (compact, winners, score) = prepare_submission_with(true, |_| {});
 			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact, score));
 
 			// a bad solution
@@ -3046,7 +3046,7 @@ mod offchain_phragmen {
 			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact, score));
 
 			// a better solution
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (compact, winners, score) = prepare_submission_with(true, |_| {});
 			assert_ok!(Staking::submit_election_solution(Origin::signed(10), winners, compact, score));
 		})
 	}
@@ -3105,7 +3105,7 @@ mod offchain_phragmen {
 		ext.execute_with(||{
 			run_to_block(12);
 			// put a good solution on-chain
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (compact, winners, score) = prepare_submission_with(true, |_| {});
 			assert_ok!(
 				Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 			);
@@ -3164,7 +3164,7 @@ mod offchain_phragmen {
 			run_to_block(12);
 
 			ValidatorCount::put(3);
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (compact, winners, score) = prepare_submission_with(true, |_| {});
 			ValidatorCount::put(4);
 
 			assert_eq!(winners.len(), 3);
@@ -3190,7 +3190,7 @@ mod offchain_phragmen {
 			run_to_block(12);
 
 			ValidatorCount::put(3);
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (compact, winners, score) = prepare_submission_with(true, |_| {});
 			ValidatorCount::put(4);
 
 			assert_eq!(winners.len(), 3);
@@ -3215,7 +3215,7 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (compact, winners, score) = prepare_submission_with(true, |_| {});
 
 			assert_eq!(winners.len(), 4);
 
@@ -3241,7 +3241,7 @@ mod offchain_phragmen {
 
 			assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
 			assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
-			let (mut compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (mut compact, winners, score) = prepare_submission_with(true, |_| {});
 
 			// index 9 doesn't exist.
 			compact.votes1.push((9, 2));
@@ -3269,7 +3269,7 @@ mod offchain_phragmen {
 
 			assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
 			assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
-			let (mut compact, winners, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (mut compact, winners, score) = prepare_submission_with(true, |_| {});
 
 			// index 4 doesn't exist.
 			compact.votes1.push((3, 4));
@@ -3297,7 +3297,7 @@ mod offchain_phragmen {
 
 			assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
 			assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
-			let (compact, _, score) = do_phragmen_with_post_processing(true, |_| {});
+			let (compact, _, score) = prepare_submission_with(true, |_| {});
 
 			// index 4 doesn't exist.
 			let winners = vec![0, 1, 2, 4];
@@ -3325,7 +3325,7 @@ mod offchain_phragmen {
 
 			assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
 			assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |a| {
+			let (compact, winners, score) = prepare_submission_with(true, |a| {
 				a.iter_mut().find(|x| x.who == 5).map(|x|
 					x.distribution = vec![(20, 50), (40, 30), (30, 20)]
 				);
@@ -3351,7 +3351,7 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |a| {
+			let (compact, winners, score) = prepare_submission_with(true, |a| {
 				// mutate a self vote to target someone else. That someone else is still among the
 				// winners
 				a.iter_mut().find(|x| x.who == 10).map(|x|
@@ -3379,7 +3379,7 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (compact, winners, score) = do_phragmen_with_post_processing(true, |a| {
+			let (compact, winners, score) = prepare_submission_with(true, |a| {
 				// Remove the self vote.
 				a.retain(|x| x.who != 10);
 				// add is as a new double vote
@@ -3409,7 +3409,7 @@ mod offchain_phragmen {
 
 			// Note: we don't reduce here to be able to tweak votes3. votes3 will vanish if you
 			// reduce.
-			let (mut compact, winners, score) = do_phragmen_with_post_processing(false, |_| {});
+			let (mut compact, winners, score) = prepare_submission_with(false, |_| {});
 
 			if let Some(c) = compact.votes3.iter_mut().find(|x| x.0 == 0) {
 				// by default it should have been (0, [(2, 33%), (1, 33%)], 0)
@@ -3446,7 +3446,7 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (compact, winners, score) = do_phragmen_with_post_processing(false, |a| {
+			let (compact, winners, score) = prepare_submission_with(false, |a| {
 				// 3 only voted for 20 and 40. We add a fake vote to 30. The stake sum is still
 				// correctly 100.
 				a.iter_mut().find(|x| x.who == 3).map(|x| {
@@ -3462,6 +3462,75 @@ mod offchain_phragmen {
 	}
 
 	#[test]
+	fn nomination_slash_filter_is_checked() {
+		// If a nominator has voted for someone who has been recently slashed, that particular
+		// nomination should be disabled for the upcoming election. A solution mut respect this
+		// rule.
+		ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(4)
+			.has_stakers(false)
+			.build()
+			.execute_with(|| {
+				build_offchain_phragmen_test_ext();
+				// finalize the round with fallback. This is needed since all nominator submission
+				// are in era zero and we want this one to pass with no problems.
+				run_to_block(15);
+
+				// open the election window and create snapshots.
+				run_to_block(27);
+
+				// a solution that has been prepared before the slash.
+				let (pre_compact, pre_winners, pre_score) = prepare_submission_with(false, |_| {});
+
+				// slash 10
+				let offender_expo = Staking::stakers(10);
+				on_offence_now(
+					&[
+						OffenceDetails {
+							offender: (10, offender_expo.clone()),
+							reporters: vec![],
+						},
+					],
+					&[Perbill::from_percent(10)],
+				);
+
+				// validate 10 again for the next round.
+				assert_ok!(Staking::validate(Origin::signed(10 + 1000), Default::default()));
+
+				// a solution that has been prepared after the slash.
+				let (compact, winners, score) = prepare_submission_with(false, |_| {});
+
+				// The edges are different.
+				assert_ne!(compact, pre_compact);
+				// But the winners are the same.
+				assert_eq_uvec!(winners, pre_winners);
+				// 2 votes for 10 and 20, but the edge for 20 is gone, so there must be one less
+				// entry in votes2.
+				assert_eq!(compact.votes2.len(), pre_compact.votes2.len() - 1);
+
+				// old results are invalid.
+				assert_noop!(
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						pre_winners,
+						pre_compact,
+						pre_score,
+					),
+					Error::<Test>::PhragmenBogusNomination,
+				);
+
+				// new results are okay.
+				assert_ok!(
+					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+				);
+
+				// finish the round.
+				run_to_block(30);
+			})
+	}
+
+	#[test]
 	fn invalid_phragmen_result_wrong_score() {
 		// A valid voter who's total distributed stake is more than what they bond
 		ExtBuilder::default()
@@ -3474,7 +3543,7 @@ mod offchain_phragmen {
 			build_offchain_phragmen_test_ext();
 			run_to_block(12);
 
-			let (compact, winners, mut score) = do_phragmen_with_post_processing(true, |_| {});
+			let (compact, winners, mut score) = prepare_submission_with(true, |_| {});
 			score[0] += 1;
 
 			assert_noop!(
@@ -3562,7 +3631,7 @@ mod offchain_phragmen {
 }
 
 #[test]
-fn slash_kicks_validators_not_nominators() {
+fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_validator() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
 		assert_eq_uvec!(Staking::current_elected(), vec![11, 21]);
@@ -3589,7 +3658,7 @@ fn slash_kicks_validators_not_nominators() {
 		);
 
 		// post-slash balance
-		let nominator_slash_amount_11 = (125 / 10);
+		let nominator_slash_amount_11 = 125 / 10;
 		assert_eq!(Balances::free_balance(11), 900);
 		assert_eq!(Balances::free_balance(101), 2000 - nominator_slash_amount_11);
 

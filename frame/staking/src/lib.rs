@@ -987,7 +987,7 @@ decl_error! {
 		/// Error while building the assignment type from the compact. This can happen if an index
 		/// is invalid, or if the weights _overflow_.
 		PhragmenBogusCompact,
-		/// One of the submitted nominators is not an active nominator on chain. DEPRECATED.
+		/// One of the submitted nominators is not an active nominator on chain.
 		PhragmenBogusNominator,
 		/// One of the submitted nominators has an edge to which they have not voted on chain.
 		PhragmenBogusNomination,
@@ -1881,8 +1881,15 @@ impl<T: Trait> Module<T> {
 				// NOTE: we don't really have to check here if the sum of all edges are the
 				// nominator correct. Un-compacting assures this by definition.
 				ensure!(
+					// each target in the provided distribution must be actually nominated by the
+					// nominator after the last non-zero slash.
 					distribution.into_iter().all(|(t, _)| {
 						nomination.targets.iter().find(|&tt| tt == t).is_some()
+						&&
+						<Self as Store>::SlashingSpans::get(&t).map_or(
+							true,
+							|spans| nomination.submitted_in >= spans.last_nonzero_slash(),
+						)
 					}),
 					Error::<T>::PhragmenBogusNomination,
 				);
