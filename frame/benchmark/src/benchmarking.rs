@@ -108,18 +108,20 @@ benchmarks! {
 		let bytes = accounts.encode();
 	}: _(RawOrigin::Signed(account("user", 0, SEED)), bytes)
 
-	//storage_recalc(steps, repeat)
+	storage_recalc(steps, repeat)
 
-	//current_time(steps, repeat)
+	current_time(steps, repeat)
 }
 
 // Custom implementation to handle benchmarking of storage recalculation.
 // Puts `repeat` number of items into random storage keys, and then times how
 // long it takes to recalculate the storage root.
-fn storage_recalc(steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
+fn storage_recalc(steps: Vec<u32>, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
 	let mut results: Vec<BenchmarkResults> = Vec::new();
 
-	for step in 0 .. steps {
+	let s = if steps.is_empty() { 10 } else { steps[0] };
+
+	for step in 0 .. s {
 		for index in 0 .. repeat {
 			let random = (index, step).using_encoded(sp_io::hashing::blake2_256);
 			sp_io::storage::set(&random, &random);
@@ -137,10 +139,12 @@ fn storage_recalc(steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'st
 
 // Custom implementation to handle benchmarking of calling a host function.
 // Will check how long it takes to call `current_time()`.
-fn current_time(steps: u32, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
+fn current_time(steps: Vec<u32>, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
 	let mut results: Vec<BenchmarkResults> = Vec::new();
 
-	for _ in 0..steps {
+	let s = if steps.is_empty() { 10 } else { steps[0] };
+
+	for _ in 0..s {
 		let start = frame_benchmarking::benchmarking::current_time();
 		for _ in 0..repeat {
 			let _ = frame_benchmarking::benchmarking::current_time();

@@ -117,6 +117,33 @@ pub use sp_runtime::traits::Dispatchable;
 ///       m.insert(i);
 ///     }
 ///   }: { m.into_iter().collect::<BTreeSet>() }
+///
+///   // this is a custom benchmarking function which directly returns
+///   // `Result<Vec<BenchmarkResults>, &'static str>`, allowing you full control
+///   // of the benchmark functionality. As an input, it accepts steps and repeat,
+///   // which you can chose to use or ignore.
+///   current_time(steps, repeat)
+/// }
+///
+/// // Custom implementation to handle benchmarking of calling a host function.
+/// // Will check how long it takes to call `current_time()`.
+/// fn current_time(steps: Vec<u32>, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
+/// 	let mut results: Vec<BenchmarkResults> = Vec::new();
+///
+/// 	let s = if steps.is_empty() { 10 } else { steps[0] };
+///
+/// 	for _ in 0..s {
+/// 		let start = frame_benchmarking::benchmarking::current_time();
+/// 		for _ in 0..repeat {
+/// 			let _ = frame_benchmarking::benchmarking::current_time();
+/// 		}
+/// 		let finish = frame_benchmarking::benchmarking::current_time();
+/// 		let elapsed = finish - start;
+///
+/// 		results.push((vec![(BenchmarkParameter::r, repeat)], elapsed, 0));
+/// 	}
+///
+/// 	return Ok(results);
 /// }
 /// ```
 #[macro_export]
@@ -131,14 +158,15 @@ macro_rules! benchmarks {
 	) => {
 		$crate::benchmarks_iter!({
 			$( { $common , $common_from , $common_to , $common_instancer } )*
-		} ( ) $( $rest )* );
+		} ( ) ( ) $( $rest )* );
 	}
 }
 
 #[macro_export]
 macro_rules! impl_benchmark {
 	(
-		$( $name:ident ),*
+		{ $( $name:ident ),* }
+		{ $( $extra:ident ),* }
 	) => {
 		impl<T: Trait> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T> {
 			fn run_benchmark(
@@ -153,6 +181,8 @@ macro_rules! impl_benchmark {
 					.map_err(|_| "Could not find extrinsic")?;
 				let selected_benchmark = match extrinsic {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
+					$( stringify!($extra) => return crate::benchmarking::$extra(steps, repeat), )*
+					
 					_ => return Err("Could not find extrinsic."),
 				};
 
@@ -233,40 +263,55 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
+		( $( $extras:ident )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: $name ( $origin $( , $arg )* ) $( $rest )*
+			{ $( $common )* } ( $( $names )* ) ( $( $extras )* ) $name { $( $code )* }: $name ( $origin $( , $arg )* ) $( $rest )*
 		}
 	};
 	// mutation arm:
 	(
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
+		( $( $extras:ident )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: { Ok((crate::Call::<T>::$dispatch($($arg),*), $origin)) } $( $rest )*
+			{ $( $common )* } ( $( $names )* ) ( $( $extras )* ) $name { $( $code )* }: { Ok((crate::Call::<T>::$dispatch($($arg),*), $origin)) } $( $rest )*
+		}
+	};
+	// extra match arm:
+	(
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		( $( $extras:ident )* )
+		$extra:ident ( steps, repeat )
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter! {
+			{ $( $common )* } ( $( $names )* ) ( $( $extras )* $extra ) $( $rest )*
 		}
 	};
 	// iteration arm:
 	(
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
+		( $( $extras:ident )* )
 		$name:ident { $( $code:tt )* }: { $eval:expr }
 		$( $rest:tt )*
 	) => {
 		$crate::benchmark_backend! {
 			$name { $( $common )* } { } { $eval } { $( $code )* }
 		}
-		$crate::benchmarks_iter!( { $( $common )* } ( $( $names )* $name ) $( $rest )* );
+		$crate::benchmarks_iter!( { $( $common )* } ( $( $names )* $name ) ( $( $extras )* ) $( $rest )* );
 	};
 	// iteration-exit arm
-	( { $( $common:tt )* } ( $( $names:ident )* ) ) => {
+	( { $( $common:tt )* } ( $( $names:ident )* ) ( $( $extras:ident )* ) ) => {
 		$crate::selected_benchmark!( $( $names ),* );
-		$crate::impl_benchmark!( $( $names ),* );
+		$crate::impl_benchmark!( { $( $names ),* } { $( $extras ),* } );
 	}
 }
 
