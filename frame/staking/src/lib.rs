@@ -1458,7 +1458,6 @@ impl<T: Trait> Module<T> {
 			return Err(Error::<T>::InvalidEraToReward.into());
 		}
 
-		// Note: This means that the reward for EraIndex::max() can be called indefinitely.
 		nominator_ledger.last_reward = Some(era);
 		<Ledger<T>>::insert(&who, &nominator_ledger);
 
