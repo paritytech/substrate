@@ -473,12 +473,12 @@ sp_api::decl_runtime_apis! {
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> AuthorityList;
 
-        /// Submits an extrinsic to report an equivocation. The caller must
-        /// provide the equivocation proof and an encoded key ownership proof
-        /// (the key ownership proof is generic). This method will sign the
-        /// extrinsic with any reporting keys available in the keystore and will
-        /// push the transaction to the pool.
-        /// Only useful in an offchain context.
+		/// Submits an extrinsic to report an equivocation. The caller must
+		/// provide the equivocation proof and an encoded key ownership proof
+		/// (the key ownership proof is generic). This method will sign the
+		/// extrinsic with any reporting keys available in the keystore and will
+		/// push the transaction to the pool.
+		/// Only useful in an offchain context.
 		#[skip_initialize_block]
 		fn submit_report_equivocation_extrinsic(
 			equivocation_proof: EquivocationProof<Block::Hash, NumberFor<Block>>,

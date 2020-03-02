@@ -54,7 +54,7 @@ mod mock;
 mod tests;
 
 pub use equivocation::{
-    EquivocationHandler, GrandpaEquivocationOffence, GrandpaTimeSlot, GrandpaOffence
+	EquivocationHandler, GrandpaEquivocationOffence, GrandpaTimeSlot, GrandpaOffence
 };
 
 pub trait Trait: frame_system::Trait {
@@ -64,8 +64,8 @@ pub trait Trait: frame_system::Trait {
 	/// The function call.
 	type Call: From<Call<Self>>;
 
-    /// The equivocation handling subsystem, equivocation report validation and
-    /// offence reporting will be defined based on this type.
+	/// The equivocation handling subsystem, equivocation report validation and
+	/// offence reporting will be defined based on this type.
 	type HandleEquivocation: equivocation::HandleEquivocation<Self>;
 }
 
@@ -471,11 +471,11 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-    /// Submits an extrinsic to report an equivocation. This method will sign an
-    /// extrinsic with a call to `report_equivocation` with any reporting keys
-    /// available in the keystore and will push the transaction to the pool.
-    /// Only useful in an offchain context.
-    pub fn submit_report_equivocation_extrinsic(
+	/// Submits an extrinsic to report an equivocation. This method will sign an
+	/// extrinsic with a call to `report_equivocation` with any reporting keys
+	/// available in the keystore and will push the transaction to the pool.
+	/// Only useful in an offchain context.
+	pub fn submit_report_equivocation_extrinsic(
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: <T::HandleEquivocation as equivocation::HandleEquivocation<T>>::KeyOwnerProof,
 	) -> Option<()> {

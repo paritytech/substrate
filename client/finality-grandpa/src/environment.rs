@@ -419,7 +419,7 @@ where
 	Block: 'static,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync,
- 	N: NetworkT<Block> + 'static + Send,
+	N: NetworkT<Block> + 'static + Send,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	RA: Send + Sync,
@@ -992,13 +992,13 @@ where
 		// at best block.
 		Some((_, n)) if n > *best_header.number() => best_header.hash(),
 		Some((h, _)) => {
-            // this is the header at which the new set will start
+			// this is the header at which the new set will start
 			let header = backend.header(BlockId::Hash(h))?.expect(
 				"got block hash from registered pending change; \
 				pending changes are only registered on block import; qed.",
 			);
 
-            // its parent block is the last block in the current set
+			// its parent block is the last block in the current set
 			*header.parent_hash()
 		}
 		// there is no pending change, the latest block for the current set is
