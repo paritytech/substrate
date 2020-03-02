@@ -66,7 +66,7 @@ decl_module! {
 	/// The module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
-		
+
 		fn deposit_event() = default;
 
 		/// Do nothing.
@@ -77,6 +77,10 @@ decl_module! {
 		}
 
 		/// Read a value from storage value `repeat` number of times.
+		/// Note the first `get()` read here will pull from the underlying
+		/// storage database, however, the `repeat` calls will all pull from the
+		/// storage overlay cache. You must consider this when analyzing the
+		/// results of the benchmark.
 		pub fn read_value(_origin, repeat: u32) {
 			for _ in 0..repeat {
 				MyValue::get();
@@ -91,6 +95,10 @@ decl_module! {
 		}
 
 		/// Read a value from storage `repeat` number of times.
+		/// Note the first `exists()` read here will pull from the underlying
+		/// storage database, however, the `repeat` calls will all pull from the
+		/// storage overlay cache. You must consider this when analyzing the
+		/// results of the benchmark.
 		pub fn exists_value(_origin, repeat: u32) {
 			for _ in 0..repeat {
 				MyValue::exists();
