@@ -670,7 +670,7 @@ benchmarks!{
 
 	// This will measure the execution time of sorting a vector.
 	sort_vector {
-		let x in 0 .. 1;
+		let x in 0 .. 10000;
 		let mut m = Vec::<u32>::new();
 		for i in 0..x {
 			m.push(i);
