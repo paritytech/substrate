@@ -772,7 +772,7 @@ mod tests {
 	#[test]
 	fn filter_non_cfg_attributes() {
 		let cfg_std: Attribute = parse_quote!(#[cfg(feature = "std")]);
-		let cfg_benchmarks: Attribute = parse_quote!(#[cfg(feature = "runtime_benchmarks")]);
+		let cfg_benchmarks: Attribute = parse_quote!(#[cfg(feature = "runtime-benchmarks")]);
 
 		let attrs = vec![
 			cfg_std.clone(),

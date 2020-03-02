@@ -40,4 +40,4 @@ std = [
 	"frame-system/std",
 	"sp-timestamp/std"
 ]
-runtime_benchmarks = ["frame-benchmarking", "sp-io"]
+runtime-benchmarks = ["frame-benchmarking", "sp-io"]

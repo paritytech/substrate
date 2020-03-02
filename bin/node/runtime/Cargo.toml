@@ -132,4 +132,4 @@ std = [
 	"pallet-recovery/std",
 	"pallet-vesting/std",
 ]
-runtime_benchmarks = ["frame-benchmarking"]
+runtime-benchmarks = ["frame-benchmarking"]
