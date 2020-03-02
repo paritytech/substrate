@@ -323,6 +323,9 @@ pub mod new {
 		/// or because of any other runtime-specific reason).
 		fn create_transaction<C: AppCrypto<Self>>(
 			call: Self::OverarchingCall,
+			// TODO [ToDr] This probably should be replaced with `SignedPayload` somehow.
+			// i.e. split `create_transaction` into two parts and let it create some
+			// `SignedPayload`.
 			crypto: C::RuntimeAppPublic,
 			public: Self::Public,
 			account: Self::AccountId,

@@ -456,11 +456,12 @@ impl frame_system::offchain::new::SigningTypes for Runtime {
 	type Signature = Signature;
 }
 
-impl<LocalCall> frame_system::offchain::new::CreateTransaction<Runtime, LocalCall> for Runtime where
+impl<LocalCall> frame_system::offchain::new::CreateSignedTransaction<LocalCall> for Runtime where
 	Call: From<LocalCall>,
 {
-	fn create_transaction(
+	fn create_transaction<C: frame_system::offchain::new::AppCrypto<Self>>(
 		call: Call,
+		crypto: C::RuntimeAppPublic,
 		public: <Signature as traits::Verify>::Signer,
 		account: AccountId,
 		nonce: Index,
