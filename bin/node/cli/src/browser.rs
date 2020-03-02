@@ -38,8 +38,7 @@ async fn start_inner(chain_spec: String, log_level: String) -> Result<Client, Bo
 	let chain_spec = ChainSpec::from_json_bytes(chain_spec.as_bytes().to_vec())
 		.map_err(|e| format!("{:?}", e))?;
 
-	let config: Configuration<_, _> = browser_configuration(chain_spec)
-		.await?;
+	let config = browser_configuration(chain_spec).await?;
 
 	info!("Substrate browser node");
 	info!("  version {}", config.full_version());
