@@ -82,7 +82,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 226,
+	spec_version: 227,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -820,15 +820,35 @@ impl_runtime_apis! {
 		fn dispatch_benchmark(
 			module: Vec<u8>,
 			extrinsic: Vec<u8>,
+			lowest_range_values: Vec<u32>,
+			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
 		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, RuntimeString> {
 			use frame_benchmarking::Benchmarking;
 
 			let result = match module.as_slice() {
-				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat),
-				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat),
-				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat),
+				b"pallet-balances" | b"balances" => Balances::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-identity" | b"identity" => Identity::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				_ => Err("Benchmark not found for this pallet."),
 			};
 

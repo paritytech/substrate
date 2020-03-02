@@ -35,7 +35,7 @@ pub use console_log::init_with_level as init_console_log;
 ///
 /// This configuration contains good defaults for a browser light client.
 pub async fn browser_configuration<G, E>(chain_spec: ChainSpec<G, E>)
--> Result<Configuration<G, E>, Box<dyn std::error::Error>>
+	-> Result<Configuration<G, E>, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis,
 	E: Extension,
