@@ -258,6 +258,7 @@ use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
 };
+use sp_std::prelude::*;
 use frame_benchmarking::{benchmarks, account};
 use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
 use codec::{Encode, Decode};
