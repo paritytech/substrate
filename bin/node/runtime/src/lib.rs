@@ -451,23 +451,34 @@ parameter_types! {
 	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
 }
 
-// TODO [ToDr] add generic resolution for `RuntimeAppPublic`
-pub struct SigningTypes;
-
-impl frame_system::offchain::new::SigningTypes for SigningTypes {
-	type AccountId = <Runtime as frame_system::Trait>::AccountId;
+impl frame_system::offchain::new::SigningTypes for Runtime {
 	type Public = <Signature as traits::Verify>::Signer;
 	type Signature = Signature;
+	// TODO [ToDr] add generic resolution for `RuntimeAppPublic`
 	type RuntimeAppPublic = ImOnlineId;
 	type GenericSignature = sp_core::sr25519::Signature;
 	type GenericPublic = sp_core::sr25519::Public;
 }
 
-impl<C> frame_system::offchain::new::SendTransactionTypes<C> for SigningTypes where
+impl<LocalCall> frame_system::offchain::new::CreateTransaction<Runtime, LocalCall> for Runtime where
+	Call: From<LocalCall>,
+{
+	fn create_transaction(
+		call: Call,
+		public: <Signature as traits::Verify>::Signer,
+		account: AccountId,
+		nonce: Index,
+	) -> Option<(Call, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
+		unimplemented!()
+	}
+}
+
+impl<C> frame_system::offchain::new::SendTransactionTypes<C> for Runtime where
 	Call: From<C>,
 {
-	type Call = Call;
+	type OverarchingCall = Call;
 	type Extrinsic = UncheckedExtrinsic;
+	type CreateTransaction = Runtime;
 }
 
 impl pallet_im_online::Trait for Runtime {
@@ -475,7 +486,6 @@ impl pallet_im_online::Trait for Runtime {
 	type Event = Event;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
-	type Types = SigningTypes;
 }
 
 impl pallet_offences::Trait for Runtime {

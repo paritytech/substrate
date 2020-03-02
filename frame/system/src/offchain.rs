@@ -262,14 +262,14 @@ pub mod new {
 
 	pub trait SigningTypes: crate::Trait {
 		//type AccountId;
+		// TODO [ToDr] Could this be just `T::Signature as traits::Verify>::Signer`?
 		type Public: Clone
 			+ IdentifyAccount<AccountId = Self::AccountId>
 			+ From<Self::GenericPublic>
 			+ TryInto<Self::GenericPublic>;
 		type Signature:
 			From<Self::GenericSignature>
-			+ TryInto<Self::GenericSignature>
-			;
+			+ TryInto<Self::GenericSignature>;
 		// TODO [ToDr]
 		// since now the `SignintTypes` trait extends `System` trait, we can't
 		// really have a single `RuntimeAppPublic` here.
