@@ -3464,7 +3464,7 @@ mod offchain_phragmen {
 	#[test]
 	fn nomination_slash_filter_is_checked() {
 		// If a nominator has voted for someone who has been recently slashed, that particular
-		// nomination should be disabled for the upcoming election. A solution mut respect this
+		// nomination should be disabled for the upcoming election. A solution must respect this
 		// rule.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
