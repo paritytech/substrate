@@ -104,7 +104,7 @@ pub mod new {
 	impl<
 		T: SigningTypes + SendTransactionTypes<C>,
 		X,
-		C,
+		C: Into<T::Call>,
 	> SendRawUnsignedTransaction<T, C> for Signer<T, X> {
 		fn send_raw_unsigned_transaction(call: C) -> Result<(), ()> {
 			let xt = T::Extrinsic::new(call.into(), None).ok_or(())?;
@@ -143,22 +143,48 @@ pub mod new {
 	}
 
 	impl<
-		T: SigningTypes + SendTransactionTypes<C>,
+		T: SendTransactionTypes<C>,
 		C
 	> SendSignedTransaction<T, C> for Signer<T, ForAny> {
-		type Result = (Account<T>, Result<(), ()>);
+		type Result = Option<(Account<T>, Result<(), ()>)>;
 
 		fn send_signed_transaction(
 			&self,
 			f: impl Fn(&Account<T>) -> T::Call,
 		) -> Self::Result {
-			unimplemented!()
+			self.for_any(|account| {
+				let call = f(account);
+				let mut account_data = crate::Account::<T::System>::get(&account.id);
+				debug::native::debug!(
+					target: "offchain",
+					"Creating signed transaction from account: {:?} (nonce: {:?})",
+					account.id,
+					account_data.nonce,
+				);
+				let (call, signature) = T::CreateTransaction::create_transaction(
+					call,
+					&account.public,
+					&account.id,
+					account_data.nonce
+				)?;
+				let xt = T::Extrinsic::new(call, Some(signature))?;
+				let res = sp_io::offchain::submit_transaction(xt.encode());
+
+				if res.is_ok() {
+					// increment the nonce. This is fine, since the code should always
+					// be running in off-chain context, so we NEVER persists data.
+					account_data.nonce += One::one();
+					crate::Account::<T::System>::insert(&account.id, account_data);
+				}
+
+				Some(res)
+			})
 		}
 	}
 
 	impl<
-		T: SigningTypes + SendTransactionTypes<C>,
-		C,
+		T: SendTransactionTypes<C>,
+		C: Into<T::Call>,
 	> SendSignedTransaction<T, C> for Signer<T, ForAll> {
 		type Result = Vec<(Account<T>, Result<(), ()>)>;
 
@@ -172,7 +198,7 @@ pub mod new {
 
 	impl<
 		T: SigningTypes + SendTransactionTypes<C>,
-		C,
+		C: Into<T::Call>,
 	> SendUnsignedTransaction<T, C> for Signer<T, ForAny> {
 		type Result = (Account<T>, Result<(), ()>);
 
@@ -234,8 +260,8 @@ pub mod new {
 		}
 	}
 
-	pub trait SigningTypes {
-		type AccountId;
+	pub trait SigningTypes: crate::Trait {
+		//type AccountId;
 		type Public: Clone
 			+ IdentifyAccount<AccountId = Self::AccountId>
 			+ From<Self::GenericPublic>
@@ -254,9 +280,24 @@ pub mod new {
 			+ Into<<Self::RuntimeAppPublic as RuntimeAppPublic>::Signature>;
 	}
 
-	pub trait SendTransactionTypes<LocalCall> {
-		type Call: From<LocalCall>;
+	pub trait SendTransactionTypes<LocalCall: Into<Self::Call>>: SigningTypes {
 		type Extrinsic: ExtrinsicT<Call=Self::Call> + codec::Encode;
+		type CreateTransaction: CreateTransaction<Self, LocalCall>;
+	}
+
+	pub trait CreateTransaction<T: SendTransactionTypes<LocalCall>, LocalCall> {
+		/// Attempt to create signed extrinsic data that encodes call from given account.
+		///
+		/// Runtime implementation is free to construct the payload to sign and the signature
+		/// in any way it wants.
+		/// Returns `None` if signed extrinsic could not be created (either because signing failed
+		/// or because of any other runtime-specific reason).
+		fn create_transaction(
+			call: T::Call,
+			public: T::Public,
+			account: T::AccountId,
+			nonce: T::Index,
+		) -> Option<(T::Call, <T::Extrinsic as ExtrinsicT>::SignaturePayload)>;
 	}
 
 	pub trait SignMessage<T: SigningTypes> {
