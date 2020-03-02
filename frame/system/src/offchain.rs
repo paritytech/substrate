@@ -102,10 +102,11 @@ pub mod new {
 	}
 
 	impl<
-		T: SigningTypes + SendTransactionTypes,
+		T: SigningTypes + SendTransactionTypes<C>,
 		X,
-	> SendRawUnsignedTransaction<T> for Signer<T, X> {
-		fn send_raw_unsigned_transaction(call: impl Into<T::Call>) -> Result<(), ()> {
+		C: Into<T::Call>,
+	> SendRawUnsignedTransaction<T, C> for Signer<T, X> {
+		fn send_raw_unsigned_transaction(call: C) -> Result<(), ()> {
 			let xt = T::Extrinsic::new(call.into(), None).ok_or(())?;
 			sp_io::offchain::submit_transaction(xt.encode())
 		}
@@ -142,7 +143,7 @@ pub mod new {
 	}
 
 	impl<
-		T: SendTransactionTypes,
+		T: SendTransactionTypes<C>,
 		C: Into<T::Call>,
 	> SendSignedTransaction<T, C> for Signer<T, ForAny> {
 		type Result = Option<(Account<T>, Result<(), ()>)>;
@@ -182,7 +183,7 @@ pub mod new {
 	}
 
 	impl<
-		T: SendTransactionTypes,
+		T: SendTransactionTypes<C>,
 		C: Into<T::Call>,
 	> SendSignedTransaction<T, C> for Signer<T, ForAll> {
 		type Result = Vec<(Account<T>, Result<(), ()>)>;
@@ -196,7 +197,7 @@ pub mod new {
 	}
 
 	impl<
-		T: SigningTypes + SendTransactionTypes,
+		T: SigningTypes + SendTransactionTypes<C>,
 		C: Into<T::Call>,
 	> SendUnsignedTransaction<T, C> for Signer<T, ForAny> {
 		type Result = (Account<T>, Result<(), ()>);
@@ -215,7 +216,7 @@ pub mod new {
 	}
 
 	impl<
-		T: SigningTypes + SendTransactionTypes,
+		T: SigningTypes + SendTransactionTypes<C>,
 		C: Into<T::Call>,
 	> SendUnsignedTransaction<T, C> for Signer<T, ForAll> {
 		type Result = Vec<Option<T::Signature>>;
@@ -297,12 +298,12 @@ pub mod new {
 			+ Into<<Self::RuntimeAppPublic as RuntimeAppPublic>::Signature>;
 	}
 
-	pub trait SendTransactionTypes: SigningTypes {
+	pub trait SendTransactionTypes<C: Into<Self::Call>>: SigningTypes {
 		type Extrinsic: ExtrinsicT<Call=Self::Call> + codec::Encode;
-		type CreateTransaction: CreateTransaction<Self>;
+		type CreateTransaction: CreateTransaction<Self, C>;
 	}
 
-	pub trait CreateTransaction<T: SendTransactionTypes> {
+	pub trait CreateTransaction<T: SendTransactionTypes<C>, C: Into<T::Call>> {
 		/// Attempt to create signed extrinsic data that encodes call from given account.
 		///
 		/// Runtime implementation is free to construct the payload to sign and the signature
@@ -329,7 +330,7 @@ pub mod new {
 	}
 
 	pub trait SendSignedTransaction<
-		T: SigningTypes + SendTransactionTypes,
+		T: SigningTypes + SendTransactionTypes<C>,
 		C: Into<T::Call>,
 	> {
 		type Result;
@@ -341,7 +342,7 @@ pub mod new {
 	}
 
 	pub trait SendUnsignedTransaction<
-		T: SigningTypes + SendTransactionTypes,
+		T: SigningTypes + SendTransactionTypes<C>,
 		C: Into<T::Call>,
 	> {
 		type Result;
@@ -356,8 +357,8 @@ pub mod new {
 			TPayload: SignedPayload<T>;
 	}
 
-	pub trait SendRawUnsignedTransaction<T: SendTransactionTypes> {
-		fn send_raw_unsigned_transaction(call: impl Into<T::Call>) -> Result<(), ()>;
+	pub trait SendRawUnsignedTransaction<T: SendTransactionTypes<C>, C: Into<T::Call>> {
+		fn send_raw_unsigned_transaction(call: C) -> Result<(), ()>;
 	}
 
 	pub trait SignedPayload<T: SigningTypes>: Encode {

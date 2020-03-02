@@ -217,15 +217,15 @@ pub struct Heartbeat<BlockNumber>
 	pub authority_index: AuthIndex,
 }
 
-pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
+pub trait Trait: new::SendTransactionTypes<<Self as Trait>::Call> + pallet_session::historical::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
-	// A transaction submitter / signing types.
-	type Types: new::SigningTypes + new::SendTransactionTypes<Call<Self>>;
+	/// The overarching event type.
+	type Call: From<Call<Self>>;
 
 	/// An expected duration of the session.
 	///
@@ -480,8 +480,8 @@ impl<T: Trait> Module<T> {
 					call,
 				);
 
-				new::Signer::<T::Types>
-					::send_raw_unsigned_transaction(call.into())
+				new::Signer::<T>
+					::send_raw_unsigned_transaction(call)
 					.map_err(|_| OffchainErr::SubmitTransaction)?;
 
 				Ok(())
