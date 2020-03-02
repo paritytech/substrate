@@ -159,8 +159,8 @@ pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
 	config: Config,
 	link: LinkHalf<Block, Client, SC>,
 	network: N,
-	on_exit: impl futures::Future<Output=()> + Clone + Send + Unpin + 'static,
-) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
+) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static>
+where
 	BE: Backend<Block> + Unpin + 'static,
 	N: NetworkT<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
@@ -194,7 +194,7 @@ pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
 			warn!("GRANDPA Observer failed: {:?}", e);
 		});
 
-	Ok(future::select(observer_work, on_exit).map(drop))
+	Ok(observer_work.map(drop))
 }
 
 /// Future that powers the observer.
