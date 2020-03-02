@@ -261,9 +261,20 @@ Each external function invoked from a contract can involve some overhead.
 This function receives a `key` and `value` as arguments. It consists of the following steps:
 
 1. Reading the sandbox memory for `key` and `value` (see sandboxing memory get).
-2. Setting the storage by the given `key` with the given `value` (see `set_storage`).
+2. Setting the storage at the given `key` to the given `value` (see `set_storage`).
 
 **complexity**: Complexity is proportional to the size of the `value`. This function induces a DB write of size proportional to the `value` size (if flushed to the storage), so should be priced accordingly.
+
+## ext_clear_storage
+
+This function receives a `key` as argument. It consists of the following steps:
+
+1. Reading the sandbox memory for `key` (see sandboxing memory get).
+2. Clearing the storage at the given `key` (see `set_storage`).
+
+**complexity**: Complexity is constant. This function induces a DB write to clear the storage entry
+(upon being flushed to the storage) and should be priced accordingly. The price should generally be
+low enough to motivate clearing of unused contract storage.
 
 ## ext_get_storage
 
