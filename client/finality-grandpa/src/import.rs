@@ -22,7 +22,7 @@ use futures::channel::mpsc;
 use parking_lot::RwLockWriteGuard;
 
 use sp_blockchain::{BlockStatus, well_known_cache_keys};
-use sc_client_api::{backend::Backend, utils::is_descendent_of, CallExecutor};
+use sc_client_api::{backend::Backend, utils::is_descendent_of};
 use sp_api::{TransactionFor};
 
 use sp_consensus::{
@@ -53,17 +53,17 @@ use std::marker::PhantomData;
 ///
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
-pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, E, SC> {
+pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	inner: Arc<Client>,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	_phantom: PhantomData<(Backend, E)>,
+	_phantom: PhantomData<Backend>,
 }
 
-impl<Backend, Block: BlockT, Client, E, SC: Clone> Clone for
-	GrandpaBlockImport<Backend, Block, Client, E, SC>
+impl<Backend, Block: BlockT, Client, SC: Clone> Clone for
+	GrandpaBlockImport<Backend, Block, Client, SC>
 {
 	fn clone(&self) -> Self {
 		GrandpaBlockImport {
@@ -77,13 +77,12 @@ impl<Backend, Block: BlockT, Client, E, SC: Clone> Clone for
 	}
 }
 
-impl<BE, Block: BlockT, Client, E, SC> JustificationImport<Block>
-	for GrandpaBlockImport<BE, Block, Client, E, SC> where
+impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
+	for GrandpaBlockImport<BE, Block, Client, SC> where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
 		BE: Backend<Block>,
-		Client: crate::ClientForGrandpa<Block, BE, E>,
-		E: CallExecutor<Block>,
+		Client: crate::ClientForGrandpa<Block, BE>,
 		SC: SelectChain<Block>,
 {
 	type Error = ConsensusError;
@@ -204,14 +203,13 @@ fn find_forced_change<B: BlockT>(header: &B::Header)
 	header.digest().convert_first(|l| l.try_to(id).and_then(filter_log))
 }
 
-impl<BE, Block: BlockT, Client, E, SC>
-	GrandpaBlockImport<BE, Block, Client, E, SC>
+impl<BE, Block: BlockT, Client, SC>
+	GrandpaBlockImport<BE, Block, Client, SC>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	DigestFor<Block>: Encode,
 	BE: Backend<Block>,
-	E: CallExecutor<Block>,
-	Client: crate::ClientForGrandpa<Block, BE, E>,
+	Client: crate::ClientForGrandpa<Block, BE>,
 {
 	// check for a new authority set change.
 	fn check_new_change(&self, header: &Block::Header, hash: Block::Hash)
@@ -384,13 +382,12 @@ where
 	}
 }
 
-impl<BE, Block: BlockT, Client, E, SC> BlockImport<Block>
-	for GrandpaBlockImport<BE, Block, Client, E, SC> where
+impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
+	for GrandpaBlockImport<BE, Block, Client, SC> where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
 		BE: Backend<Block>,
-		E: CallExecutor<Block>,
-		Client: crate::ClientForGrandpa<Block, BE, E>,
+		Client: crate::ClientForGrandpa<Block, BE>,
 		for<'a> &'a Client:
 			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
 {
@@ -525,14 +522,14 @@ impl<BE, Block: BlockT, Client, E, SC> BlockImport<Block>
 	}
 }
 
-impl<Backend, Block: BlockT, Client, E, SC> GrandpaBlockImport<Backend, Block, Client, E, SC> {
+impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Client, SC> {
 	pub(crate) fn new(
 		inner: Arc<Client>,
 		select_chain: SC,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 		send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	) -> GrandpaBlockImport<Backend, Block, Client, E, SC> {
+	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
 		GrandpaBlockImport {
 			inner,
 			select_chain,
@@ -544,12 +541,10 @@ impl<Backend, Block: BlockT, Client, E, SC> GrandpaBlockImport<Backend, Block, C
 	}
 }
 
-impl<BE, Block: BlockT, Client, E, SC>
-	GrandpaBlockImport<BE, Block, Client, E, SC>
+impl<BE, Block: BlockT, Client, SC> GrandpaBlockImport<BE, Block, Client, SC>
 where
 	BE: Backend<Block>,
-	E: CallExecutor<Block>,
-	Client: crate::ClientForGrandpa<Block, BE, E>,
+	Client: crate::ClientForGrandpa<Block, BE>,
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 {
 

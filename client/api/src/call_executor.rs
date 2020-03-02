@@ -32,9 +32,11 @@ use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use crate::execution_extensions::ExecutionExtensions;
 
 /// Executor Provider
-pub trait ExecutorProvider<Block: BlockT, E: CallExecutor<Block>> {
+pub trait ExecutorProvider<Block: BlockT> {
+	/// executor instance
+	type Executor: CallExecutor<Block>;
 	/// Get call executor reference.
-	fn executor(&self) -> &E;
+	fn executor(&self) -> &Self::Executor;
 
 	/// Get a reference to the execution extensions.
 	fn execution_extensions(&self) -> &ExecutionExtensions<Block>;

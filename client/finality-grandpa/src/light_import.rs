@@ -19,7 +19,7 @@ use std::sync::Arc;
 use log::{info, trace, warn};
 use parking_lot::RwLock;
 use sc_client_api::{
-	CallExecutor, backend::{AuxStore, Backend, Finalizer, TransactionFor},
+	backend::{AuxStore, Backend, Finalizer, TransactionFor},
 };
 use sp_blockchain::{HeaderBackend, Error as ClientError, well_known_cache_keys};
 use parity_scale_codec::{Encode, Decode};
@@ -49,7 +49,7 @@ const LIGHT_AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const LIGHT_CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 
 /// Create light block importer.
-pub fn light_block_import<BE, Block: BlockT, Client, E>(
+pub fn light_block_import<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
 	backend: Arc<BE>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
@@ -57,8 +57,7 @@ pub fn light_block_import<BE, Block: BlockT, Client, E>(
 ) -> Result<GrandpaLightBlockImport<BE, Block, Client>, ClientError>
 	where
 		BE: Backend<Block>,
-		E: CallExecutor<Block> + Send + Sync,
-		Client: crate::ClientForGrandpa<Block, BE, E>,
+		Client: crate::ClientForGrandpa<Block, BE>,
 {
 	let info = client.info();
 	let import_data = load_aux_import_data(
@@ -650,7 +649,7 @@ pub mod tests {
 	}
 
 	/// Creates light block import that ignores justifications that came outside of finality proofs.
-	pub fn light_block_import_without_justifications<BE, Block: BlockT, Client, E>(
+	pub fn light_block_import_without_justifications<BE, Block: BlockT, Client>(
 		client: Arc<Client>,
 		backend: Arc<BE>,
 		genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
@@ -658,8 +657,7 @@ pub mod tests {
 	) -> Result<NoJustificationsImport<BE, Block, Client>, ClientError>
 		where
 			BE: Backend<Block> + 'static,
-			E: CallExecutor<Block> + Send + Sync,
-			Client: crate::ClientForGrandpa<Block, BE, E>,
+			Client: crate::ClientForGrandpa<Block, BE>,
 	{
 		light_block_import(client, backend, genesis_authorities_provider, authority_set_provider)
 			.map(NoJustificationsImport)

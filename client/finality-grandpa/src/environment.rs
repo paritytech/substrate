@@ -28,7 +28,7 @@ use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
 use std::marker::PhantomData;
 
-use sc_client_api::{backend::Backend, utils::is_descendent_of, CallExecutor};
+use sc_client_api::{backend::Backend, utils::is_descendent_of};
 use sc_client::apply_aux;
 use finality_grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
@@ -370,7 +370,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<Backend, Block: BlockT, C, E, N: NetworkT<Block>, SC, VR> {
+pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	pub(crate) client: Arc<C>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
@@ -381,10 +381,10 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, E, N: NetworkT<Block>, 
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
-	pub(crate) _phantom: PhantomData<(Backend, E)>,
+	pub(crate) _phantom: PhantomData<Backend>,
 }
 
-impl<Backend, Block: BlockT, C, E, N: NetworkT<Block>, SC, VR> Environment<Backend, Block, C, E, N, SC, VR> {
+impl<Backend, Block: BlockT, C, N: NetworkT<Block>, SC, VR> Environment<Backend, Block, C, N, SC, VR> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -400,14 +400,13 @@ impl<Backend, Block: BlockT, C, E, N: NetworkT<Block>, SC, VR> Environment<Backe
 	}
 }
 
-impl<BE, Block: BlockT, C, E, N, SC, VR>
+impl<BE, Block: BlockT, C, N, SC, VR>
 	finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<BE, Block, C, E, N, SC, VR>
+for Environment<BE, Block, C, N, SC, VR>
 where
 	Block: 'static,
 	BE: Backend<Block>,
-	C: crate::ClientForGrandpa<Block, BE, E>,
-	E: CallExecutor<Block>,
+	C: crate::ClientForGrandpa<Block, BE>,
  	N: NetworkT<Block> + 'static + Send,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C>,
@@ -543,14 +542,13 @@ pub(crate) fn ancestry<Block: BlockT, Client>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, Block: BlockT, C, E, N, SC, VR>
+impl<B, Block: BlockT, C, N, SC, VR>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, Block, C, E, N, SC, VR>
+for Environment<B, Block, C, N, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block>,
-	C: crate::ClientForGrandpa<Block, B, E> + 'static,
-	E: CallExecutor<Block>,
+	C: crate::ClientForGrandpa<Block, B> + 'static,
  	N: NetworkT<Block> + 'static + Send,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C>,
@@ -932,7 +930,7 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 /// authority set change is enacted then a justification is created (if not
 /// given) and stored with the block when finalizing it.
 /// This method assumes that the block being finalized has already been imported.
-pub(crate) fn finalize_block<BE, Block, Client, E>(
+pub(crate) fn finalize_block<BE, Block, Client>(
 	client: Arc<Client>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -943,8 +941,7 @@ pub(crate) fn finalize_block<BE, Block, Client, E>(
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
 	Block:  BlockT,
 	BE: Backend<Block>,
-	E: CallExecutor<Block>,
-	Client: crate::ClientForGrandpa<Block, BE, E>,
+	Client: crate::ClientForGrandpa<Block, BE>,
 {
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
 	//       also implicitly synchronizes the check for last finalized number

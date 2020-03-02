@@ -40,7 +40,7 @@ use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err, child_resolution_error};
 use std::marker::PhantomData;
-use sc_client_api::{call_executor::CallExecutor, StorageProvider, ExecutorProvider};
+use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider};
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -57,17 +57,17 @@ struct QueryStorageRange<Block: BlockT> {
 }
 
 /// State API backend for full nodes.
-pub struct FullState<BE, E, Block: BlockT, Client> {
+pub struct FullState<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
 	subscriptions: Subscriptions,
-	_phantom: PhantomData<(BE, Block, E)>
+	_phantom: PhantomData<(BE, Block)>
 }
 
-impl<BE, E, Block: BlockT, Client> FullState<BE, E, Block, Client>
+impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 	where
 		BE: Backend<Block>,
-		Client: StorageProvider<Block, BE> + HeaderMetadata<Block, Error = sp_blockchain::Error>
-			+ HeaderBackend<Block>,
+		Client: StorageProvider<Block, BE> + HeaderBackend<Block>
+			+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
 		Block: BlockT + 'static,
 {
 	/// Create new state API backend for full nodes.
@@ -212,13 +212,13 @@ impl<BE, E, Block: BlockT, Client> FullState<BE, E, Block, Client>
 	}
 }
 
-impl<BE, E, Block, Client> StateBackend<Block, Client> for FullState<BE, E, Block, Client> where
+impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client> where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
-	Client: ExecutorProvider<Block, E> + StorageProvider<Block, BE> + HeaderBackend<Block>
+	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
-		+ CallApiAt<Block, Error = sp_blockchain::Error> + ProvideRuntimeApi<Block> + Send + Sync + 'static,
+		+ CallApiAt<Block, Error = sp_blockchain::Error> + ProvideRuntimeApi<Block>
+		+ Send + Sync + 'static,
 	Client::Api: Metadata<Block, Error = sp_blockchain::Error>,
 {
 	fn call(

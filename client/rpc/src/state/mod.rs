@@ -37,7 +37,7 @@ use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
-use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend, CallExecutor};
+use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend};
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
 
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
@@ -194,15 +194,14 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 }
 
 /// Create new state API that works on full node.
-pub fn new_full<BE, E, Block: BlockT, Client>(
+pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
 	subscriptions: Subscriptions,
 ) -> State<Block, Client>
 	where
 		Block: BlockT + 'static,
 		BE: Backend<Block> + 'static,
-		E: CallExecutor<Block, Backend = BE> + Send + Sync + 'static,
-		Client: ExecutorProvider<Block, E> + StorageProvider<Block, BE> + HeaderBackend<Block>
+		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + HeaderBackend<Block>
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 			+ CallApiAt<Block, Error = sp_blockchain::Error>
 			+ ProvideRuntimeApi<Block> + Send + Sync + 'static,
@@ -214,7 +213,7 @@ pub fn new_full<BE, E, Block: BlockT, Client>(
 }
 
 /// Create new state API that works on light node.
-pub fn new_light<BE, E, Block: BlockT, Client, F: Fetcher<Block>>(
+pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
 	subscriptions: Subscriptions,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
@@ -223,8 +222,7 @@ pub fn new_light<BE, E, Block: BlockT, Client, F: Fetcher<Block>>(
 	where
 		Block: BlockT + 'static,
 		BE: Backend<Block> + 'static,
-		E: CallExecutor<Block> + 'static,
-		Client: ExecutorProvider<Block, E> + StorageProvider<Block, BE>
+		Client: ExecutorProvider<Block> + StorageProvider<Block, BE>
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error>
 			+ ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockchainEvents<Block>
 			+ Send + Sync + 'static,
