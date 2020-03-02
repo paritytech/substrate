@@ -12,7 +12,7 @@ documentation = "https://docs.rs/sp-consensus/"
 
 [dependencies]
 derive_more = "0.99.2"
-libp2p = { version = "0.16.1", default-features = false }
+libp2p = { version = "0.16.2", default-features = false }
 log = "0.4.8"
 sp-core = { path= "../../core" , version = "2.0.0-alpha.2"}
 sp-inherents = { version = "2.0.0-alpha.2", path = "../../inherents" }
