@@ -122,6 +122,10 @@ fn storage_recalc(steps: Vec<u32>, repeat: u32) -> Result<Vec<BenchmarkResults>,
 	let s = if steps.is_empty() { 10 } else { steps[0] };
 
 	for step in 0 .. s {
+		// Warm up and reset the DB
+		frame_benchmarking::benchmarking::commit_db();
+		frame_benchmarking::benchmarking::wipe_db();
+
 		for index in 0 .. repeat {
 			let random = (index, step).using_encoded(sp_io::hashing::blake2_256);
 			sp_io::storage::set(&random, &random);

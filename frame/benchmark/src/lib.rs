@@ -116,7 +116,7 @@ decl_module! {
 			}
 		}
 
-		/// Insert a value into a map.
+		/// Check is a map contains a value `repeat` number of times.
 		pub fn contains_key_map(_origin, repeat: u32) {
 			for r in 0..repeat {
 				MyMap::contains_key(r);
