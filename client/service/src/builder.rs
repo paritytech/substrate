@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
-use crate::{TaskManager, start_rpc_servers, build_network_future, TransactionPoolAdapter};
+use crate::{TaskManagerSetup, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
 use crate::config::{Configuration, DatabaseConfig, KeystoreConfig};
 use sc_client_api::{
@@ -115,7 +115,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TF
 	config: Configuration<TGen, TCSExt>,
 	pub (crate) client: Arc<TCl>,
 	backend: Arc<Backend>,
-	task_manager: TaskManager,
+	tasks_setup: TaskManagerSetup,
 	keystore: Arc<RwLock<Keystore>>,
 	fetcher: Option<TFchr>,
 	select_chain: Option<TSc>,
@@ -180,7 +180,7 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 	TFullClient<TBl, TRtApi, TExecDisp>,
 	Arc<TFullBackend<TBl>>,
 	Arc<RwLock<sc_keystore::Store>>,
-	TaskManager,
+	TaskManagerSetup,
 );
 
 /// Creates a new full client for the given config.
@@ -212,7 +212,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 		KeystoreConfig::None => return Err("No keystore config provided!".into()),
 	};
 
-	let task_manager = TaskManager::new();
+	let tasks_setup = TaskManagerSetup::new();
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
@@ -264,7 +264,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 		)?
 	};
 
-	Ok((client, backend, keystore, task_manager))
+	Ok((client, backend, keystore, tasks_setup))
 }
 
 impl<TGen, TCSExt> ServiceBuilder<(), (), TGen, TCSExt, (), (), (), (), (), (), (), (), ()>
@@ -287,7 +287,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TFullBackend<TBl>,
 	>, Error> {
-		let (client, backend, keystore, task_manager) = new_full_parts(&config)?;
+		let (client, backend, keystore, tasks_setup) = new_full_parts(&config)?;
 
 		let client = Arc::new(client);
 
@@ -296,7 +296,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			client,
 			backend,
 			keystore,
-			task_manager,
+			tasks_setup,
 			fetcher: None,
 			select_chain: None,
 			import_queue: (),
@@ -329,7 +329,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		let task_manager = TaskManager::new();
+		let tasks_setup = TaskManagerSetup::new();
 
 		let keystore = match &config.keystore {
 			KeystoreConfig::Path { path, password } => Keystore::open(
@@ -383,7 +383,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			config,
 			client,
 			backend,
-			task_manager,
+			tasks_setup,
 			keystore,
 			fetcher: Some(fetcher.clone()),
 			select_chain: None,
@@ -457,7 +457,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
-			task_manager: self.task_manager,
+			tasks_setup: self.tasks_setup,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain,
@@ -501,7 +501,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
-			task_manager: self.task_manager,
+			tasks_setup: self.tasks_setup,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -542,7 +542,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
-			task_manager: self.task_manager,
+			tasks_setup: self.tasks_setup,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -607,7 +607,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
-			task_manager: self.task_manager,
+			tasks_setup: self.tasks_setup,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -667,7 +667,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 		Ok(ServiceBuilder {
 			config: self.config,
 			client: self.client,
-			task_manager: self.task_manager,
+			tasks_setup: self.tasks_setup,
 			backend: self.backend,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
@@ -697,7 +697,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
-			task_manager: self.task_manager,
+			tasks_setup: self.tasks_setup,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -719,7 +719,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
-			task_manager: self.task_manager,
+			tasks_setup: self.tasks_setup,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -832,7 +832,7 @@ ServiceBuilder<
 			marker: _,
 			mut config,
 			client,
-			task_manager,
+			tasks_setup,
 			fetcher: on_demand,
 			backend,
 			keystore,
@@ -877,7 +877,7 @@ ServiceBuilder<
 			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
-			executor: task_manager.spawn_handle(),
+			executor: tasks_setup.spawn_handle(),
 		});
 
 		let protocol_id = {
@@ -899,7 +899,7 @@ ServiceBuilder<
 		let network_params = sc_network::config::Params {
 			roles: config.roles,
 			executor: {
-				let spawn_handle = task_manager.spawn_handle();
+				let spawn_handle = tasks_setup.spawn_handle();
 				Some(Box::new(move |fut| {
 					spawn_handle.spawn("libp2p-node", fut);
 				}))
@@ -932,17 +932,19 @@ ServiceBuilder<
 			_ => None,
 		};
 
+		let spawn_handle = tasks_setup.spawn_handle();
+
 		// Spawn background tasks which were stacked during the
 		// service building.
 		for (title, background_task) in background_tasks {
-			task_manager.spawn(title, background_task);
+			spawn_handle.spawn(title, background_task);
 		}
 
 		{
 			// block notifications
 			let txpool = Arc::downgrade(&transaction_pool);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
-			let spawn_handle = task_manager.spawn_handle();
+			let notifications_spawn_handle = tasks_setup.spawn_handle();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 			let is_validator = config.roles.is_authority();
 
@@ -964,7 +966,7 @@ ServiceBuilder<
 						let offchain = offchain.as_ref().and_then(|o| o.upgrade());
 						match offchain {
 							Some(offchain) if is_new_best => {
-								spawn_handle.spawn(
+								notifications_spawn_handle.spawn(
 									"offchain-on-block",
 									offchain.on_block_imported(
 										&header,
@@ -984,7 +986,7 @@ ServiceBuilder<
 
 					let txpool = txpool.upgrade();
 					if let Some(txpool) = txpool.as_ref() {
-						spawn_handle.spawn(
+						notifications_spawn_handle.spawn(
 							"txpool-maintain",
 							txpool.maintain(event),
 						);
@@ -993,7 +995,7 @@ ServiceBuilder<
 					ready(())
 				});
 
-			task_manager.spawn(
+			spawn_handle.spawn(
 				"txpool-and-offchain-notif",
 				events,
 			);
@@ -1016,7 +1018,7 @@ ServiceBuilder<
 					ready(())
 				});
 
-			task_manager.spawn(
+			spawn_handle.spawn(
 				"telemetry-on-block",
 				events.map(drop),
 			);
@@ -1031,7 +1033,7 @@ ServiceBuilder<
 
 			let metrics = ServiceMetrics::register(&registry)?;
 
-			task_manager.spawn(
+			spawn_handle.spawn(
 				"prometheus-endpoint",
 				substrate_prometheus_endpoint::init_prometheus(port, registry).boxed().map(drop),
 			);
@@ -1107,7 +1109,7 @@ ServiceBuilder<
 			ready(())
 		});
 
-		task_manager.spawn(
+		spawn_handle.spawn(
 			"telemetry-periodic-send",
 			tel_task.map(drop),
 		);
@@ -1123,7 +1125,7 @@ ServiceBuilder<
 			);
 			ready(())
 		});
-		task_manager.spawn(
+		spawn_handle.spawn(
 			"telemetry-periodic-network-state",
 			tel_task_2.map(drop),
 		);
@@ -1140,7 +1142,7 @@ ServiceBuilder<
 				properties: chain_spec.properties().clone(),
 			};
 
-			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(task_manager.spawn_handle()));
+			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(tasks_setup.spawn_handle()));
 
 			let (chain, state) = if let (Some(remote_backend), Some(on_demand)) =
 				(remote_backend.as_ref(), on_demand.as_ref()) {
@@ -1198,7 +1200,7 @@ ServiceBuilder<
 		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 
-		task_manager.spawn(
+		spawn_handle.spawn(
 			"network-worker",
 			build_network_future(
 				config.roles,
@@ -1250,7 +1252,7 @@ ServiceBuilder<
 					ready(())
 				});
 
-			task_manager.spawn(
+			spawn_handle.spawn(
 				"telemetry-worker",
 				future,
 			);
@@ -1271,7 +1273,7 @@ ServiceBuilder<
 
 		Ok(Service {
 			client,
-			task_manager,
+			task_manager: tasks_setup.into_task_manager(config.task_executor.ok_or(Error::TaskExecutorRequired)?),
 			network,
 			network_status_sinks,
 			select_chain,
@@ -1284,7 +1286,6 @@ ServiceBuilder<
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			keystore,
-			task_executor: config.task_executor.ok_or(Error::TaskExecutorRequired)?,
 			marker: PhantomData::<TBl>,
 		})
 	}

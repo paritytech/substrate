@@ -36,6 +36,61 @@ pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send
 /// Type alias for the task scheduler.
 pub type TaskScheduler = mpsc::UnboundedSender<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>;
 
+/// Helper struct to setup background tasks execution for service.
+pub struct TaskManagerSetup {
+	/// A future that resolves when the service has exited, this is useful to
+	/// make sure any internally spawned futures stop when the service does.
+	on_exit: exit_future::Exit,
+	/// A signal that makes the exit future above resolve, fired on service drop.
+	signal: Option<Signal>,
+	/// Sender for futures that must be spawned as background tasks.
+	to_spawn_tx: TaskScheduler,
+	/// Receiver for futures that must be spawned as background tasks.
+	to_spawn_rx: mpsc::UnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
+}
+
+impl TaskManagerSetup {
+	/// New asynchronous task manager setup.
+	pub fn new() -> Self {
+		let (signal, on_exit) = exit_future::signal();
+		let (to_spawn_tx, to_spawn_rx) = mpsc::unbounded();
+		Self {
+			on_exit,
+			signal: Some(signal),
+			to_spawn_tx,
+			to_spawn_rx,
+		}
+	}
+
+	/// Get spawn handle.
+	///
+	/// Tasks spawned through this handle will get scheduled once
+	/// service is up and running.
+	pub fn spawn_handle(&self) -> SpawnTaskHandle {
+		SpawnTaskHandle {
+			on_exit: self.on_exit.clone(),
+			sender: self.to_spawn_tx.clone(),
+		}
+	}
+
+	/// Convert into actual task manager from initial setup.
+	pub fn into_task_manager(self, executor: ServiceTaskExecutor) -> TaskManager {
+		let TaskManagerSetup {
+			on_exit,
+			signal,
+			to_spawn_rx,
+			to_spawn_tx
+		} = self;
+		TaskManager {
+			on_exit,
+			signal,
+			to_spawn_tx,
+			to_spawn_rx,
+			executor,
+		}
+	}
+}
+
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
@@ -86,21 +141,11 @@ pub struct TaskManager {
 	to_spawn_tx: TaskScheduler,
 	/// Receiver for futures that must be spawned as background tasks.
 	to_spawn_rx: mpsc::UnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
+	/// How to spawn background tasks.
+	executor: ServiceTaskExecutor,
 }
 
 impl TaskManager {
-	/// New task manager for service.
-	pub fn new() -> Self {
-		let (signal, on_exit) = exit_future::signal();
-		let (to_spawn_tx, to_spawn_rx) = mpsc::unbounded();
-		Self {
-			on_exit,
-			signal: Some(signal),
-			to_spawn_tx,
-			to_spawn_rx,
-		}
-	}
-
 	/// Spawn background/async task, which will be aware on exit signal.
 	pub fn spawn(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static) {
 		let on_exit = self.on_exit.clone();
@@ -126,9 +171,9 @@ impl TaskManager {
 	}
 
 	/// Process background task receiver.
-	pub(crate) fn process_receiver(&mut self, executor: &ServiceTaskExecutor, cx: &mut Context) {
+	pub(crate) fn process_receiver(&mut self, cx: &mut Context) {
 		while let Poll::Ready(Some((task_to_spawn, name))) = Pin::new(&mut self.to_spawn_rx).poll_next(cx) {
-			(executor)(Box::pin(futures_diagnose::diagnose(name, task_to_spawn)));
+			(self.executor)(Box::pin(futures_diagnose::diagnose(name, task_to_spawn)));
 		}
 	}
 

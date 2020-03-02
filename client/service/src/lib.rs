@@ -69,7 +69,7 @@ pub use sc_executor::NativeExecutionDispatch;
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
-pub use task_manager::{TaskManager, SpawnTaskHandle, TaskExecutor, ServiceTaskExecutor};
+pub use task_manager::{TaskManager, TaskManagerSetup, SpawnTaskHandle, TaskExecutor, ServiceTaskExecutor};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -104,8 +104,6 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>>,
 	_offchain_workers: Option<Arc<TOc>>,
 	keystore: sc_keystore::KeyStorePtr,
-	/// How to spawn background tasks.
-	task_executor: ServiceTaskExecutor,
 	marker: PhantomData<TBl>,
 }
 
@@ -286,7 +284,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 			}
 		}
 
-		this.task_manager.process_receiver(&this.task_executor, cx);
+		this.task_manager.process_receiver(cx);
 
 		// The service future never ends.
 		Poll::Pending
