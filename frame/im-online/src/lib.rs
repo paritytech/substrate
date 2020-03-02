@@ -429,6 +429,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		let session_index = <pallet_session::Module<T>>::current_index();
+
 		Ok(Self::local_authority_keys()
 			.map(move |(authority_index, key)|
 				Self::send_single_heartbeat(authority_index, key, session_index, block_number)
@@ -489,9 +490,20 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn local_authority_keys() -> impl Iterator<Item=(u32, T::AuthorityId)> {
-		// we run only when a local authority key is configured
+		// on-chain storage
+		//
+		// At index `idx`:
+		// 1. A (ImOnline) public key to be used by a validator at index `idx` to send im-online
+		//          heartbeats.
 		let authorities = Keys::<T>::get();
+
+		// local keystore
+		//
+		// All `ImOnline` public (+private) keys currently in the local keystore.
 		let mut local_keys = T::AuthorityId::all();
+
+
+
 		local_keys.sort();
 
 		authorities.into_iter()

@@ -272,6 +272,20 @@ pub mod new {
 			;
 		type RuntimeAppPublic: RuntimeAppPublic;
 		// TODO [ToDr] The conversions are messy, clean them up.
+		//
+		// The idea would be to have some implementation for `RuntimeAppPublic`
+		// to convert to and from generic types.
+		// Maybe even a method like:
+		// impl RuntimeAppPublic {
+		//  fn into_public<T: From<Self::Generic>>(&self) -> T;
+		// }
+		// so an ability to convert the runtime app public into
+		// some type that is reachable from the inner (wrapped) generic
+		// crypto type.
+		// So example:
+		// ImOnline(sr25519) = RuntimeAppPublic
+		// sr25519 = Generic
+		// MutliSigner = From<sr25519>
 		type GenericPublic:
 			From<Self::RuntimeAppPublic>
 			+ Into<Self::RuntimeAppPublic>;
