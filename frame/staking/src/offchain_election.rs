@@ -16,20 +16,18 @@
 
 //! Helpers for offchain worker election.
 
-use crate::{
-	Call, Module, Trait, ValidatorIndex, NominatorIndex, Compact, OffchainAccuracy,
-};
+use crate::{Call, Compact, Module, NominatorIndex, OffchainAccuracy, Trait, ValidatorIndex};
 use codec::Encode;
-use frame_system::offchain::{SubmitUnsignedTransaction};
 use frame_support::debug;
+use frame_system::offchain::SubmitUnsignedTransaction;
 use sp_phragmen::{
-	reduce, ExtendedBalance, PhragmenResult, Assignment, PhragmenScore,
-	build_support_map, evaluate_support,
+	build_support_map, evaluate_support, reduce, Assignment, ExtendedBalance, PhragmenResult,
+	PhragmenScore,
 };
-use sp_std::{prelude::*, convert::TryInto};
-use sp_runtime::{RuntimeAppPublic, RuntimeDebug};
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::PerThing;
+use sp_runtime::{RuntimeAppPublic, RuntimeDebug};
+use sp_std::{convert::TryInto, prelude::*};
 
 #[derive(RuntimeDebug)]
 pub enum OffchainElectionError {
@@ -64,22 +62,23 @@ pub(crate) fn set_check_offchain_execution_status<T: Trait>(
 	let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 	let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
 
-	let mutate_stat = storage.mutate::<
-		_,
-		&'static str,
-		_,
-	>(|maybe_head: Option<Option<T::BlockNumber>>| {
-		match maybe_head {
-			Some(Some(head)) if now < head => Err("fork."),
-			Some(Some(head)) if now >= head && now <= head + threshold => Err("recently executed."),
-			Some(Some(head)) if now > head + threshold =>
-				// we can run again now. Write the new head.
-				Ok(now),
-			_ =>
-				// value doesn't exists. Probably this node just booted up. Write, and run
-				Ok(now),
-		}
-	});
+	let mutate_stat =
+		storage.mutate::<_, &'static str, _>(|maybe_head: Option<Option<T::BlockNumber>>| {
+			match maybe_head {
+				Some(Some(head)) if now < head => Err("fork."),
+				Some(Some(head)) if now >= head && now <= head + threshold => {
+					Err("recently executed.")
+				}
+				Some(Some(head)) if now > head + threshold => {
+					// we can run again now. Write the new head.
+					Ok(now)
+				}
+				_ => {
+					// value doesn't exists. Probably this node just booted up. Write, and run
+					Ok(now)
+				}
+			}
+		});
 
 	match mutate_stat {
 		// all good
@@ -98,10 +97,11 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 
 	// For each local key is in the stored authority keys, try and submit. Breaks out after first
 	// successful submission.
-	for (index, ref pubkey) in local_keys.into_iter().filter_map(|key|
-		keys.iter().enumerate().find(|(_, val_key)| **val_key == key)
-	) {
-
+	for (index, ref pubkey) in local_keys.into_iter().filter_map(|key| {
+		keys.iter()
+			.enumerate()
+			.find(|(_, val_key)| **val_key == key)
+	}) {
 		// compute raw solution.
 		let PhragmenResult {
 			winners,
@@ -110,16 +110,12 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 			.ok_or(OffchainElectionError::ElectionFailed)?;
 
 		// process and prepare it for submission.
-		let (winners, compact, score) = prepare_submission::<T>(
-			assignments,
-			winners,
-			true,
-		)?;
+		let (winners, compact, score) = prepare_submission::<T>(assignments, winners, true)?;
 
 		// sign it.
-		let signature_payload: SignaturePayload =
-			(&winners, &compact, &score, &(index as u32));
-		let signature = pubkey.sign(&signature_payload.encode())
+		let signature_payload: SignaturePayload = (&winners, &compact, &score, &(index as u32));
+		let signature = pubkey
+			.sign(&signature_payload.encode())
 			.ok_or(OffchainElectionError::SigningFailed)?;
 
 		// send it.
@@ -129,16 +125,21 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 			score,
 			index as u32,
 			signature,
-		).into();
+		)
+		.into();
 
-		let ok = T::SubmitTransaction::submit_unsigned(call).map_err(|_| {
-			debug::native::warn!(
-				target: "staking",
-				"failed to submit offchain solution with key {:?}",
-				pubkey,
-			);
-		}).is_ok();
-		if ok { return Ok(()) }
+		let ok = T::SubmitTransaction::submit_unsigned(call)
+			.map_err(|_| {
+				debug::native::warn!(
+					target: "staking",
+					"failed to submit offchain solution with key {:?}",
+					pubkey,
+				);
+			})
+			.is_ok();
+		if ok {
+			return Ok(());
+		}
 	}
 
 	// no key left and no submission.
@@ -158,25 +159,30 @@ where
 	ExtendedBalance: From<<OffchainAccuracy as PerThing>::Inner>,
 {
 	// make sure that the snapshot is available.
-	let snapshot_validators = <Module<T>>::snapshot_validators()
-		.ok_or(OffchainElectionError::SnapshotUnavailable)?;
-	let snapshot_nominators = <Module<T>>::snapshot_nominators()
-		.ok_or(OffchainElectionError::SnapshotUnavailable)?;
+	let snapshot_validators =
+		<Module<T>>::snapshot_validators().ok_or(OffchainElectionError::SnapshotUnavailable)?;
+	let snapshot_nominators =
+		<Module<T>>::snapshot_nominators().ok_or(OffchainElectionError::SnapshotUnavailable)?;
 
 	// all helper closures
 	let nominator_index = |a: &T::AccountId| -> Option<NominatorIndex> {
-		snapshot_nominators.iter().position(|x| x == a).and_then(|i|
-			<usize as TryInto<NominatorIndex>>::try_into(i).ok()
-		)
+		snapshot_nominators
+			.iter()
+			.position(|x| x == a)
+			.and_then(|i| <usize as TryInto<NominatorIndex>>::try_into(i).ok())
 	};
 	let validator_index = |a: &T::AccountId| -> Option<ValidatorIndex> {
-		snapshot_validators.iter().position(|x| x == a).and_then(|i|
-			<usize as TryInto<ValidatorIndex>>::try_into(i).ok()
-		)
+		snapshot_validators
+			.iter()
+			.position(|x| x == a)
+			.and_then(|i| <usize as TryInto<ValidatorIndex>>::try_into(i).ok())
 	};
 
 	// Clean winners.
-	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<T::AccountId>>();
+	let winners = winners
+		.into_iter()
+		.map(|(w, _)| w)
+		.collect::<Vec<T::AccountId>>();
 
 	// convert into absolute value and to obtain the reduced version.
 	let mut staked = sp_phragmen::assignment_ratio_to_staked(
@@ -205,24 +211,28 @@ where
 			<Module<T>>::slashable_balance_of_extended,
 		);
 
-		let (support_map, _) = build_support_map::<T::AccountId>(
-			winners.as_slice(),
-			staked.as_slice(),
-		);
+		let (support_map, _) =
+			build_support_map::<T::AccountId>(winners.as_slice(), staked.as_slice());
 		evaluate_support::<T::AccountId>(&support_map)
 	};
 
 	// compact encode the assignment.
-	let compact = Compact::from_assignment(
-		low_accuracy_assignment,
-		nominator_index,
-		validator_index,
-	).unwrap();
+	let compact =
+		Compact::from_assignment(low_accuracy_assignment, nominator_index, validator_index)
+			.unwrap();
 
 	// winners to index.
-	let winners = winners.into_iter().map(|w|
-		snapshot_validators.iter().position(|v| *v == w).unwrap().try_into().unwrap()
-	).collect::<Vec<ValidatorIndex>>();
+	let winners = winners
+		.into_iter()
+		.map(|w| {
+			snapshot_validators
+				.iter()
+				.position(|v| *v == w)
+				.unwrap()
+				.try_into()
+				.unwrap()
+		})
+		.collect::<Vec<ValidatorIndex>>();
 
 	Ok((winners, compact, score))
 }

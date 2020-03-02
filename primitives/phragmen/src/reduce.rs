@@ -47,16 +47,13 @@
 //!
 //! 1. https://hackmd.io/JOn9x98iS0e0DPWQ87zGWg?view
 
-// TODO: should be able to handle self votes. + Fuzzer should randomly create them
-
+use crate::node::{Node, NodeId, NodeRef, NodeRole};
+use crate::{ExtendedBalance, IdentifierT, StakedAssignment};
+use sp_runtime::traits::{Bounded, Zero};
 use sp_std::{
+	collections::btree_map::{BTreeMap, Entry::*},
 	prelude::*,
-	collections::{btree_map::{Entry::*, BTreeMap}},
 };
-use sp_runtime::traits::{Zero, Bounded};
-use crate::node::{Node, NodeRef, NodeRole, NodeId};
-use crate::{ExtendedBalance, StakedAssignment, IdentifierT};
-
 
 /// Map type used for reduce_4. Can be easily swapped with HashMap.
 type Map<A> = BTreeMap<(A, A), A>;
@@ -65,12 +62,12 @@ type Map<A> = BTreeMap<(A, A), A>;
 fn combinations_2<T: Clone>(input: &[T]) -> Vec<(T, T)> {
 	let n = input.len();
 	if n < 2 {
-		return Default::default()
+		return Default::default();
 	}
 
-	let mut comb = Vec::with_capacity(n * (n-1) / 2);
+	let mut comb = Vec::with_capacity(n * (n - 1) / 2);
 	for i in 0..n {
-		for j in i+1..n {
+		for j in i + 1..n {
 			comb.push((input[i].clone(), input[j].clone()))
 		}
 	}
@@ -96,10 +93,7 @@ pub(crate) fn trailing_common<T: Eq>(t1: &[T], t2: &[T]) -> usize {
 }
 
 /// Merges two parent roots as described by the reduce algorithm.
-fn merge<A: IdentifierT>(
-	voter_root_path: Vec<NodeRef<A>>,
-	target_root_path: Vec<NodeRef<A>>
-) {
+fn merge<A: IdentifierT>(voter_root_path: Vec<NodeRef<A>>, target_root_path: Vec<NodeRef<A>>) {
 	if voter_root_path.len() <= target_root_path.len() {
 		// iterate from last to beginning, skipping the first one. This asserts that
 		// indexing is always correct.
@@ -107,20 +101,16 @@ fn merge<A: IdentifierT>(
 			.iter()
 			.take(voter_root_path.len() - 1) // take all except for last.
 			.enumerate()
-			.map(|(i, n)| (n, voter_root_path[i+1].clone()))
-			.for_each(|(voter, next)| {
-				Node::set_parent_of(&next, &voter)
-			});
+			.map(|(i, n)| (n, voter_root_path[i + 1].clone()))
+			.for_each(|(voter, next)| Node::set_parent_of(&next, &voter));
 		Node::set_parent_of(&voter_root_path[0], &target_root_path[0]);
 	} else {
 		target_root_path
 			.iter()
 			.take(target_root_path.len() - 1) // take all except for last.
 			.enumerate()
-			.map(|(i, n)| (n, target_root_path[i+1].clone()))
-			.for_each(|(target, next)| {
-				Node::set_parent_of(&next, &target)
-			});
+			.map(|(i, n)| (n, target_root_path[i + 1].clone()))
+			.for_each(|(target, next)| Node::set_parent_of(&next, &target));
 		Node::set_parent_of(&target_root_path[0], &voter_root_path[0]);
 	}
 }
@@ -133,10 +123,7 @@ fn merge<A: IdentifierT>(
 /// result will most likely be corrupt otherwise.
 ///
 /// O(|E_w| ⋅ k).
-fn reduce_4<A: IdentifierT>(
-	assignments: &mut Vec<StakedAssignment<A>>,
-) -> u32 {
-
+fn reduce_4<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32 {
 	let mut combination_map: Map<A> = Map::new();
 	let mut num_changed: u32 = Zero::zero();
 
@@ -157,7 +144,7 @@ fn reduce_4<A: IdentifierT>(
 			match combination_map.entry((v1.clone(), v2.clone())) {
 				Vacant(entry) => {
 					entry.insert(who.clone());
-				},
+				}
 				Occupied(mut entry) => {
 					let other_who = entry.get_mut();
 
@@ -166,7 +153,8 @@ fn reduce_4<A: IdentifierT>(
 					// reason for this is subtle; candidate_combinations is created once while the
 					// inner loop might remove some edges. Note that if count() > 2, the we have
 					// duplicates.
-					if assignments[assignment_index].distribution
+					if assignments[assignment_index]
+						.distribution
 						.iter()
 						.filter(|(t, _)| *t == v1 || *t == v2)
 						.count() != 2
@@ -179,15 +167,19 @@ fn reduce_4<A: IdentifierT>(
 					if maybe_other_assignments.is_none() {
 						continue;
 					}
-					let other_assignment = maybe_other_assignments
-						.expect("value is checked to be 'Some'");
+					let other_assignment =
+						maybe_other_assignments.expect("value is checked to be 'Some'");
 
 					// Collect potential cycle votes
-					let mut other_cycle_votes = other_assignment.distribution
+					let mut other_cycle_votes = other_assignment
+						.distribution
 						.iter()
 						.filter_map(|(t, w)| {
-							if *t == v1 || *t == v2  { Some((t.clone(), *w)) }
-							else { None }
+							if *t == v1 || *t == v2 {
+								Some((t.clone(), *w))
+							} else {
+								None
+							}
 						})
 						.collect::<Vec<(A, ExtendedBalance)>>();
 
@@ -205,11 +197,18 @@ fn reduce_4<A: IdentifierT>(
 					} else if other_votes_count == 2 {
 						// This is a cycle.
 						let mut who_cycle_votes: Vec<(A, ExtendedBalance)> = Vec::with_capacity(2);
-						assignments[assignment_index].distribution.iter().for_each(|(t, w)| {
-							if *t == v1 || *t == v2  { who_cycle_votes.push((t.clone(), *w)); }
-						});
+						assignments[assignment_index]
+							.distribution
+							.iter()
+							.for_each(|(t, w)| {
+								if *t == v1 || *t == v2 {
+									who_cycle_votes.push((t.clone(), *w));
+								}
+							});
 
-						if who_cycle_votes.len() != 2 { continue; }
+						if who_cycle_votes.len() != 2 {
+							continue;
+						}
 
 						// Align the targets similarly. This helps with the circulation below.
 						if other_cycle_votes[0].0 != who_cycle_votes[0].0 {
@@ -224,9 +223,13 @@ fn reduce_4<A: IdentifierT>(
 							.chain(other_cycle_votes.iter())
 							.enumerate()
 							.map(|(index, (t, w))| {
-								if *w <= min_value { min_value = *w; min_index = index; }
+								if *w <= min_value {
+									min_value = *w;
+									min_index = index;
+								}
 								(t.clone(), *w)
-							}).collect::<Vec<(A, ExtendedBalance)>>();
+							})
+							.collect::<Vec<(A, ExtendedBalance)>>();
 
 						// min was in the first part of the chained iters
 						let mut increase_indices: Vec<usize> = Vec::new();
@@ -255,51 +258,72 @@ fn reduce_4<A: IdentifierT>(
 						// apply changes
 						let mut remove_indices: Vec<usize> = Vec::with_capacity(1);
 						increase_indices.into_iter().for_each(|i| {
-							let voter = if i < 2 { who.clone() } else { other_who.clone() };
+							let voter = if i < 2 {
+								who.clone()
+							} else {
+								other_who.clone()
+							};
 							// Note: so this is pretty ambiguous. We should only look for one
 							// assignment that meets this criteria and if we find multiple then that
 							// is a corrupt input. Same goes for the next block.
-							assignments.iter_mut().filter(|a| a.who == voter).for_each(|ass| {
-								ass.distribution
-									.iter_mut()
-									.position(|(t, _)| *t == cycle[i].0)
-									.map(|idx| {
-										let next_value = ass.distribution[idx].1.saturating_add(min_value);
-										ass.distribution[idx].1 = next_value;
-									});
-							});
+							assignments
+								.iter_mut()
+								.filter(|a| a.who == voter)
+								.for_each(|ass| {
+									ass.distribution
+										.iter_mut()
+										.position(|(t, _)| *t == cycle[i].0)
+										.map(|idx| {
+											let next_value =
+												ass.distribution[idx].1.saturating_add(min_value);
+											ass.distribution[idx].1 = next_value;
+										});
+								});
 						});
 						decrease_indices.into_iter().for_each(|i| {
-							let voter = if i < 2 { who.clone() } else { other_who.clone() };
-							assignments.iter_mut().filter(|a| a.who == voter).for_each(|ass| {
-								ass.distribution
-									.iter_mut()
-									.position(|(t, _)| *t == cycle[i].0)
-									.map(|idx| {
-										let next_value = ass.distribution[idx].1.saturating_sub(min_value);
-										if next_value.is_zero() {
-											ass.distribution.remove(idx);
-											remove_indices.push(i);
-											num_changed += 1;
-										} else {
-											ass.distribution[idx].1 = next_value;
-										}
-									});
-							});
+							let voter = if i < 2 {
+								who.clone()
+							} else {
+								other_who.clone()
+							};
+							assignments
+								.iter_mut()
+								.filter(|a| a.who == voter)
+								.for_each(|ass| {
+									ass.distribution
+										.iter_mut()
+										.position(|(t, _)| *t == cycle[i].0)
+										.map(|idx| {
+											let next_value =
+												ass.distribution[idx].1.saturating_sub(min_value);
+											if next_value.is_zero() {
+												ass.distribution.remove(idx);
+												remove_indices.push(i);
+												num_changed += 1;
+											} else {
+												ass.distribution[idx].1 = next_value;
+											}
+										});
+								});
 						});
 
 						// remove either one of them.
 						let who_removed = remove_indices.iter().find(|i| **i < 2usize).is_some();
-						let other_removed = remove_indices.into_iter().find(|i| *i >= 2usize).is_some();
+						let other_removed =
+							remove_indices.into_iter().find(|i| *i >= 2usize).is_some();
 
 						match (who_removed, other_removed) {
-							(false, true) => { *other_who = who.clone(); },
-							(true, false) => {}, // nothing, other_who can stay there.
-							(true, true) => { entry.remove(); }, // remove and don't replace
+							(false, true) => {
+								*other_who = who.clone();
+							}
+							(true, false) => {} // nothing, other_who can stay there.
+							(true, true) => {
+								entry.remove();
+							} // remove and don't replace
 							(false, false) => {
 								// Neither of the edges was removed? impossible.
 								debug_assert!(false, "Duplicate voter (or other corrupt input).");
-							},
+							}
 						}
 					}
 				}
@@ -318,9 +342,7 @@ fn reduce_4<A: IdentifierT>(
 /// result will most likely be corrupt otherwise.
 ///
 /// O(|Ew| ⋅ m)
-fn reduce_all<A: IdentifierT>(
-	assignments: &mut Vec<StakedAssignment<A>>,
-) -> u32 {
+fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32 {
 	let mut num_changed: u32 = Zero::zero();
 	let mut tree: BTreeMap<NodeId<A>, NodeRef<A>> = BTreeMap::new();
 
@@ -352,10 +374,14 @@ fn reduce_all<A: IdentifierT>(
 			let target_exists = tree.contains_key(&target_id);
 
 			// create both.
-			let voter_node = tree.entry(voter_id.clone())
-				.or_insert(Node::new(voter_id).into_ref()).clone();
-			let target_node = tree.entry(target_id.clone())
-				.or_insert(Node::new(target_id).into_ref()).clone();
+			let voter_node = tree
+				.entry(voter_id.clone())
+				.or_insert(Node::new(voter_id).into_ref())
+				.clone();
+			let target_node = tree
+				.entry(target_id.clone())
+				.or_insert(Node::new(target_id).into_ref())
+				.clone();
 
 			// If one exists but the other one doesn't, or if both does not, then set the existing
 			// one as the parent of the non-existing one and move on. Else, continue with the rest
@@ -365,12 +391,12 @@ fn reduce_all<A: IdentifierT>(
 					Node::set_parent_of(&target_node, &voter_node);
 					dist_index += 1;
 					continue;
-				},
+				}
 				(false, true) => {
 					Node::set_parent_of(&voter_node, &target_node);
 					dist_index += 1;
 					continue;
-				},
+				}
 				(true, false) => {
 					Node::set_parent_of(&target_node, &voter_node);
 					dist_index += 1;
@@ -392,20 +418,30 @@ fn reduce_all<A: IdentifierT>(
 
 				// because roots are the same.
 				#[cfg(feature = "std")]
-				debug_assert_eq!(target_root_path.last().unwrap(), voter_root_path.last().unwrap());
+				debug_assert_eq!(
+					target_root_path.last().unwrap(),
+					voter_root_path.last().unwrap()
+				);
 				debug_assert!(common_count > 0);
 
 				// cycle part of each path will be `path[path.len() - common_count - 1 : 0]`
 				// NOTE: the order of chaining is important! it is always build from [target, ...,
 				// voter]
-				let cycle =
-					target_root_path.iter().take(target_root_path.len() - common_count + 1).cloned()
-					.chain(voter_root_path.iter().take(voter_root_path.len() - common_count).rev().cloned())
+				let cycle = target_root_path
+					.iter()
+					.take(target_root_path.len() - common_count + 1)
+					.cloned()
+					.chain(
+						voter_root_path
+							.iter()
+							.take(voter_root_path.len() - common_count)
+							.rev()
+							.cloned(),
+					)
 					.collect::<Vec<NodeRef<A>>>();
 				// a cycle's length shall always be multiple of two.
 				#[cfg(feature = "std")]
 				debug_assert_eq!(cycle.len() % 2, 0);
-
 
 				// find minimum of cycle.
 				let mut min_value: ExtendedBalance = Bounded::max_value();
@@ -417,8 +453,20 @@ fn reduce_all<A: IdentifierT>(
 				// 1 -> next // 0 -> prev
 				let mut min_direction = 0u32;
 				// helpers
-				let next_index = |i| { if i < (cycle.len() - 1) { i + 1 } else { 0 } };
-				let prev_index = |i| { if i > 0 { i - 1 } else { cycle.len() - 1 } };
+				let next_index = |i| {
+					if i < (cycle.len() - 1) {
+						i + 1
+					} else {
+						0
+					}
+				};
+				let prev_index = |i| {
+					if i > 0 {
+						i - 1
+					} else {
+						cycle.len() - 1
+					}
+				};
 				for i in 0..cycle.len() {
 					if cycle[i].borrow().id.role == NodeRole::Voter {
 						// NOTE: sadly way too many clones since I don't want to make A: Copy
@@ -463,72 +511,95 @@ fn reduce_all<A: IdentifierT>(
 					let current = cycle[i].borrow();
 					if current.id.role == NodeRole::Voter {
 						let prev = cycle[prev_index(i)].borrow();
-						assignments.iter_mut().enumerate().filter(|(_, a)| a.who == current.id.who).for_each(|(target_ass_index, ass)| {
-							ass.distribution.iter_mut().position(|(t, _)| *t == prev.id.who).map(|idx| {
-								let next_value = if i % 2 == 0 {
-									if start_operation_add {
-										ass.distribution[idx].1.saturating_add(min_value)
-									} else {
-										ass.distribution[idx].1.saturating_sub(min_value)
-									}
-								} else {
-									if start_operation_add {
-										ass.distribution[idx].1.saturating_sub(min_value)
-									} else {
-										ass.distribution[idx].1.saturating_add(min_value)
-									}
-								};
+						assignments
+							.iter_mut()
+							.enumerate()
+							.filter(|(_, a)| a.who == current.id.who)
+							.for_each(|(target_ass_index, ass)| {
+								ass.distribution
+									.iter_mut()
+									.position(|(t, _)| *t == prev.id.who)
+									.map(|idx| {
+										let next_value = if i % 2 == 0 {
+											if start_operation_add {
+												ass.distribution[idx].1.saturating_add(min_value)
+											} else {
+												ass.distribution[idx].1.saturating_sub(min_value)
+											}
+										} else {
+											if start_operation_add {
+												ass.distribution[idx].1.saturating_sub(min_value)
+											} else {
+												ass.distribution[idx].1.saturating_add(min_value)
+											}
+										};
 
-								if next_value.is_zero() {
-									// if the removed edge is from the current assignment, dis_index
-									// should NOT be increased.
-									if target_ass_index == assignment_index { should_inc_counter = false }
-									ass.distribution.remove(idx);
-									num_changed += 1;
-									// only add if this is not the min itself.
-									if !(i == min_index && min_direction == 0) {
-										additional_removed.push((cycle[i].clone(), cycle[prev_index(i)].clone()));
-									}
-								} else {
-									ass.distribution[idx].1 = next_value;
-								}
+										if next_value.is_zero() {
+											// if the removed edge is from the current assignment, dis_index
+											// should NOT be increased.
+											if target_ass_index == assignment_index {
+												should_inc_counter = false
+											}
+											ass.distribution.remove(idx);
+											num_changed += 1;
+											// only add if this is not the min itself.
+											if !(i == min_index && min_direction == 0) {
+												additional_removed.push((
+													cycle[i].clone(),
+													cycle[prev_index(i)].clone(),
+												));
+											}
+										} else {
+											ass.distribution[idx].1 = next_value;
+										}
+									});
 							});
-						});
 
 						let next = cycle[next_index(i)].borrow();
-						assignments.iter_mut().enumerate().filter(|(_, a)| a.who == current.id.who).for_each(|(target_ass_index, ass)| {
-							ass.distribution.iter_mut().position(|(t, _)| *t == next.id.who).map(|idx| {
-								let next_value = if i % 2 == 0 {
-									if start_operation_add {
-										ass.distribution[idx].1.saturating_sub(min_value)
-									} else {
-										ass.distribution[idx].1.saturating_add(min_value)
-									}
-								} else {
-									if start_operation_add {
-										ass.distribution[idx].1.saturating_add(min_value)
-									} else {
-										ass.distribution[idx].1.saturating_sub(min_value)
-									}
-								};
+						assignments
+							.iter_mut()
+							.enumerate()
+							.filter(|(_, a)| a.who == current.id.who)
+							.for_each(|(target_ass_index, ass)| {
+								ass.distribution
+									.iter_mut()
+									.position(|(t, _)| *t == next.id.who)
+									.map(|idx| {
+										let next_value = if i % 2 == 0 {
+											if start_operation_add {
+												ass.distribution[idx].1.saturating_sub(min_value)
+											} else {
+												ass.distribution[idx].1.saturating_add(min_value)
+											}
+										} else {
+											if start_operation_add {
+												ass.distribution[idx].1.saturating_add(min_value)
+											} else {
+												ass.distribution[idx].1.saturating_sub(min_value)
+											}
+										};
 
-								if next_value.is_zero() {
-									// if the removed edge is from the current assignment, dis_index
-									// should NOT be increased.
-									if target_ass_index == assignment_index { should_inc_counter = false }
-									ass.distribution.remove(idx);
-									num_changed += 1;
-									if !(i == min_index && min_direction == 1) {
-										additional_removed.push((cycle[i].clone(), cycle[next_index(i)].clone()));
-									}
-								} else {
-									ass.distribution[idx].1 = next_value;
-								}
+										if next_value.is_zero() {
+											// if the removed edge is from the current assignment, dis_index
+											// should NOT be increased.
+											if target_ass_index == assignment_index {
+												should_inc_counter = false
+											}
+											ass.distribution.remove(idx);
+											num_changed += 1;
+											if !(i == min_index && min_direction == 1) {
+												additional_removed.push((
+													cycle[i].clone(),
+													cycle[next_index(i)].clone(),
+												));
+											}
+										} else {
+											ass.distribution[idx].1 = next_value;
+										}
+									});
 							});
-						});
 					}
-				};
-
+				}
 
 				// don't do anything if the edge removed itself. This is always the first and last
 				// element
@@ -539,7 +610,7 @@ fn reduce_all<A: IdentifierT>(
 					let min_edge = vec![min_voter, min_target];
 					if min_chain_in_voter {
 						// NOTE: safe; voter_root_path is always bigger than 1 element.
-						for i in 0..voter_root_path.len()-1 {
+						for i in 0..voter_root_path.len() - 1 {
 							let current = voter_root_path[i].clone().borrow().id.who.clone();
 							let next = voter_root_path[i + 1].clone().borrow().id.who.clone();
 							if min_edge.contains(&current) && min_edge.contains(&next) {
@@ -550,7 +621,7 @@ fn reduce_all<A: IdentifierT>(
 						Node::set_parent_of(&voter_node, &target_node);
 					} else {
 						// NOTE: safe; target_root_path is always bigger than 1 element.
-						for i in 0..target_root_path.len()-1 {
+						for i in 0..target_root_path.len() - 1 {
 							let current = target_root_path[i].clone().borrow().id.who.clone();
 							let next = target_root_path[i + 1].clone().borrow().id.who.clone();
 							if min_edge.contains(&current) && min_edge.contains(&next) {
@@ -572,7 +643,9 @@ fn reduce_all<A: IdentifierT>(
 				}
 
 				// increment the counter if needed.
-				if should_inc_counter { dist_index += 1; }
+				if should_inc_counter {
+					dist_index += 1;
+				}
 			}
 		}
 	}
@@ -590,9 +663,7 @@ fn reduce_all<A: IdentifierT>(
 /// duplicate ids, only the first instance is ever updates.
 ///
 /// O(min{ |Ew| ⋅ k + m3 , |Ew| ⋅ m })
-pub fn reduce<A: IdentifierT>(
-	assignments: &mut Vec<StakedAssignment<A>>,
-) -> u32 where {
+pub fn reduce<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32 where {
 	let mut num_changed = reduce_4(assignments);
 	num_changed += reduce_all(assignments);
 	num_changed
@@ -636,17 +707,11 @@ mod tests {
 		let assignments = vec![
 			StakedAssignment {
 				who: 1,
-				distribution: vec![
-					(10, 25),
-					(20, 75),
-				],
+				distribution: vec![(10, 25), (20, 75)],
 			},
 			StakedAssignment {
 				who: 2,
-				distribution: vec![
-					(10, 50),
-					(20, 50),
-				],
+				distribution: vec![(10, 50), (20, 50)],
 			},
 		];
 
@@ -659,16 +724,11 @@ mod tests {
 			vec![
 				StakedAssignment {
 					who: 1,
-					distribution: vec![
-						(20, 100),
-					],
+					distribution: vec![(20, 100),],
 				},
 				StakedAssignment {
 					who: 2,
-					distribution: vec![
-						(10, 75),
-						(20, 25),
-					],
+					distribution: vec![(10, 75), (20, 25),],
 				},
 			],
 		);
@@ -679,37 +739,23 @@ mod tests {
 		let mut assignments = vec![
 			StakedAssignment {
 				who: 1,
-				distribution: vec![(10, 10)]
+				distribution: vec![(10, 10)],
 			},
 			StakedAssignment {
 				who: 2,
-				distribution: vec![
-					(10, 15),
-					(20, 5),
-				],
+				distribution: vec![(10, 15), (20, 5)],
 			},
 			StakedAssignment {
 				who: 3,
-				distribution: vec![
-					(20, 15),
-					(40, 15)
-				],
+				distribution: vec![(20, 15), (40, 15)],
 			},
 			StakedAssignment {
-				who: 4, distribution:
-				vec![
-					(20, 10),
-					(30, 10),
-					(40, 20),
-				]
+				who: 4,
+				distribution: vec![(20, 10), (30, 10), (40, 20)],
 			},
 			StakedAssignment {
 				who: 5,
-				distribution: vec![
-					(20, 20),
-					(30, 10),
-					(40, 20),
-				],
+				distribution: vec![(20, 20), (30, 10), (40, 20)],
 			},
 		];
 
@@ -719,38 +765,25 @@ mod tests {
 			assignments,
 			vec![
 				StakedAssignment {
-				who: 1,
-				distribution: vec![
-					(10, 10),
-				]
-			},
-			StakedAssignment {
-				who: 2,
-				distribution: vec![
-					(10, 15),
-					(20, 5),
-				],
-			},
-			StakedAssignment {
-				who: 3,
-				distribution: vec![
-					(20, 30),
-				],
-			},
-			StakedAssignment {
-				who: 4, distribution:
-				vec![
-					(40, 40),
-				]
-			},
-			StakedAssignment {
-				who: 5,
-				distribution: vec![
-					(20, 15),
-					(30, 20),
-					(40, 15),
-				],
-			},
+					who: 1,
+					distribution: vec![(10, 10),]
+				},
+				StakedAssignment {
+					who: 2,
+					distribution: vec![(10, 15), (20, 5),],
+				},
+				StakedAssignment {
+					who: 3,
+					distribution: vec![(20, 30),],
+				},
+				StakedAssignment {
+					who: 4,
+					distribution: vec![(40, 40),]
+				},
+				StakedAssignment {
+					who: 5,
+					distribution: vec![(20, 15), (30, 20), (40, 15),],
+				},
 			],
 		)
 	}
@@ -760,122 +793,24 @@ mod tests {
 		let mut assignments = vec![
 			StakedAssignment {
 				who: 1,
-				distribution: vec![(10, 10)]
+				distribution: vec![(10, 10)],
 			},
 			StakedAssignment {
 				who: 2,
-				distribution: vec![
-					(10, 15),
-					(20, 5),
-				],
+				distribution: vec![(10, 15), (20, 5)],
 			},
 			StakedAssignment {
 				who: 3,
-				distribution: vec![
-					(20, 15),
-					(40, 15)
-				],
+				distribution: vec![(20, 15), (40, 15)],
 			},
 			StakedAssignment {
-				who: 4, distribution:
-				vec![
-					(20, 10),
-					(30, 10),
-					(40, 20),
-				]
+				who: 4,
+				distribution: vec![(20, 10), (30, 10), (40, 20)],
 			},
 			StakedAssignment {
 				who: 5,
-				distribution: vec![
-					(20, 20),
-					(30, 10),
-					(40, 20),
-				],
+				distribution: vec![(20, 20), (30, 10), (40, 20)],
 			},
-		];
-
-		assert_eq!(3, reduce(&mut assignments));
-
-		assert_eq!(
-			assignments,
-			vec![
-				StakedAssignment {
-				who: 1,
-				distribution: vec![
-					(10, 10),
-				]
-			},
-			StakedAssignment {
-				who: 2,
-				distribution: vec![
-					(10, 15),
-					(20, 5),
-				],
-			},
-			StakedAssignment {
-				who: 3,
-				distribution: vec![
-					(20, 30),
-				],
-			},
-			StakedAssignment {
-				who: 4, distribution:
-				vec![
-					(40, 40),
-				]
-			},
-			StakedAssignment {
-				who: 5,
-				distribution: vec![
-					(20, 15),
-					(30, 20),
-					(40, 15),
-				],
-			},
-			],
-		)
-	}
-
-	#[test]
-	fn should_deal_with_self_vote() {
-		let mut assignments = vec![
-			StakedAssignment {
-				who: 1,
-				distribution: vec![(10, 10)]
-			},
-			StakedAssignment {
-				who: 2,
-				distribution: vec![
-					(10, 15),
-					(20, 5),
-				],
-			},
-			StakedAssignment {
-				who: 3,
-				distribution: vec![
-					(20, 15),
-					(40, 15)
-				],
-			},
-			StakedAssignment {
-				who: 4, distribution:
-				vec![
-					(20, 10),
-					(30, 10),
-					(40, 20),
-				]
-			},
-			StakedAssignment {
-				who: 5,
-				distribution: vec![
-					(20, 20),
-					(30, 10),
-					(40, 20),
-				],
-			},
-			// self vote from 10 and 20 to itself.
-			StakedAssignment { who: 10, distribution: vec![(10, 100)] },
-			StakedAssignment { who: 20, distribution: vec![(20, 200)] },
 		];
 
 		assert_eq!(3, reduce(&mut assignments));
@@ -885,40 +820,96 @@ mod tests {
 			vec![
 				StakedAssignment {
 					who: 1,
-					distribution: vec![
-						(10, 10),
-					]
+					distribution: vec![(10, 10),]
 				},
 				StakedAssignment {
 					who: 2,
-					distribution: vec![
-						(10, 15),
-						(20, 5),
-					],
+					distribution: vec![(10, 15), (20, 5),],
 				},
 				StakedAssignment {
 					who: 3,
-					distribution: vec![
-						(20, 30),
-					],
+					distribution: vec![(20, 30),],
 				},
 				StakedAssignment {
-					who: 4, distribution:
-					vec![
-						(40, 40),
-					]
+					who: 4,
+					distribution: vec![(40, 40),]
 				},
 				StakedAssignment {
 					who: 5,
-					distribution: vec![
-						(20, 15),
-						(30, 20),
-						(40, 15),
-					],
+					distribution: vec![(20, 15), (30, 20), (40, 15),],
+				},
+			],
+		)
+	}
+
+	#[test]
+	fn should_deal_with_self_vote() {
+		let mut assignments = vec![
+			StakedAssignment {
+				who: 1,
+				distribution: vec![(10, 10)],
+			},
+			StakedAssignment {
+				who: 2,
+				distribution: vec![(10, 15), (20, 5)],
+			},
+			StakedAssignment {
+				who: 3,
+				distribution: vec![(20, 15), (40, 15)],
+			},
+			StakedAssignment {
+				who: 4,
+				distribution: vec![(20, 10), (30, 10), (40, 20)],
+			},
+			StakedAssignment {
+				who: 5,
+				distribution: vec![(20, 20), (30, 10), (40, 20)],
+			},
+			// self vote from 10 and 20 to itself.
+			StakedAssignment {
+				who: 10,
+				distribution: vec![(10, 100)],
+			},
+			StakedAssignment {
+				who: 20,
+				distribution: vec![(20, 200)],
+			},
+		];
+
+		assert_eq!(3, reduce(&mut assignments));
+
+		assert_eq!(
+			assignments,
+			vec![
+				StakedAssignment {
+					who: 1,
+					distribution: vec![(10, 10),]
+				},
+				StakedAssignment {
+					who: 2,
+					distribution: vec![(10, 15), (20, 5),],
+				},
+				StakedAssignment {
+					who: 3,
+					distribution: vec![(20, 30),],
+				},
+				StakedAssignment {
+					who: 4,
+					distribution: vec![(40, 40),]
+				},
+				StakedAssignment {
+					who: 5,
+					distribution: vec![(20, 15), (30, 20), (40, 15),],
 				},
 				// should stay untouched.
-				StakedAssignment { who: 10, distribution: vec![(10, 100)] },
-				StakedAssignment { who: 20, distribution: vec![(20, 200)] },
+				StakedAssignment {
+					who: 10,
+					distribution: vec![(10, 100)]
+				},
+				StakedAssignment {
+					who: 20,
+					distribution: vec![(20, 200)]
+				},
 			],
 		)
 	}
@@ -926,53 +917,16 @@ mod tests {
 	#[test]
 	fn reduce_3_common_votes_same_weight() {
 		let mut assignments = vec![
-			StakedAssignment {
-				who: 4,
-				distribution: vec![
-					(
-						1000000,
-						100,
-					),
-					(
-						1000002,
-						100,
-					),
-					(
-						1000004,
-						100,
-					),
-				],
-			},
-			StakedAssignment {
-				who: 5,
-				distribution: vec![
-					(
-						1000000,
-						100,
-					),
-					(
-						1000002,
-						100,
-					),
-					(
-						1000004,
-						100,
-					),
-				],
-			},
-		];
-
-		reduce_4(&mut  assignments);
-
-		assert_eq!(
-			assignments,
-			vec![
 				StakedAssignment {
 					who: 4,
 					distribution: vec![
 						(
 							1000000,
-							200,
+							100,
+						),
+						(
+							1000002,
+							100,
 						),
 						(
 							1000004,
@@ -984,8 +938,12 @@ mod tests {
 					who: 5,
 					distribution: vec![
 						(
+							1000000,
+							100,
+						),
+						(
 							1000002,
-							200,
+							100,
 						),
 						(
 							1000004,
@@ -993,11 +951,23 @@ mod tests {
 						),
 					],
 				},
+			];
+
+		reduce_4(&mut assignments);
+
+		assert_eq!(
+			assignments,
+			vec![
+				StakedAssignment {
+					who: 4,
+					distribution: vec![(1000000, 200,), (1000004, 100,),],
+				},
+				StakedAssignment {
+					who: 5,
+					distribution: vec![(1000002, 200,), (1000004, 100,),],
+				},
 			],
 		)
-
-
-
 	}
 
 	#[test]
@@ -1006,24 +976,15 @@ mod tests {
 		let mut assignments = vec![
 			StakedAssignment {
 				who: 1,
-				distribution: vec![
-					(10, 10),
-					(20, 10)
-				]
+				distribution: vec![(10, 10), (20, 10)],
 			},
 			StakedAssignment {
 				who: 1,
-				distribution: vec![
-					(10, 15),
-					(20, 5),
-				],
+				distribution: vec![(10, 15), (20, 5)],
 			},
 			StakedAssignment {
 				who: 2,
-				distribution: vec![
-					(10, 15),
-					(20, 15)
-				],
+				distribution: vec![(10, 15), (20, 15)],
 			},
 		];
 
@@ -1035,10 +996,7 @@ mod tests {
 		let mut assignments = vec![
 			StakedAssignment {
 				who: 1,
-				distribution: vec![
-					(10, 15),
-					(20, 5),
-				],
+				distribution: vec![(10, 15), (20, 5)],
 			},
 			StakedAssignment {
 				who: 2,
@@ -1060,9 +1018,7 @@ mod tests {
 			vec![
 				StakedAssignment {
 					who: 1,
-					distribution: vec![
-						(10, 20),
-					],
+					distribution: vec![(10, 20),],
 				},
 				StakedAssignment {
 					who: 2,
@@ -1083,101 +1039,27 @@ mod tests {
 		let mut assignments = vec![
 			StakedAssignment {
 				who: 1,
-				distribution: vec![
-					(
-						103,
-						72,
-					),
-					(
-						101,
-						53,
-					),
-					(
-						100,
-						83,
-					),
-					(
-						102,
-						38,
-					),
-				],
+				distribution: vec![(103, 72), (101, 53), (100, 83), (102, 38)],
 			},
 			StakedAssignment {
 				who: 2,
-				distribution: vec![
-					(
-						103,
-						18,
-					),
-					(
-						101,
-						36,
-					),
-					(
-						102,
-						54,
-					),
-					(
-						100,
-						94,
-					),
-				],
+				distribution: vec![(103, 18), (101, 36), (102, 54), (100, 94)],
 			},
 			StakedAssignment {
 				who: 3,
-				distribution: vec![
-					(
-						100,
-						96,
-					),
-					(
-						101,
-						35,
-					),
-					(
-						102,
-						52,
-					),
-					(
-						103,
-						69,
-					),
-				],
+				distribution: vec![(100, 96), (101, 35), (102, 52), (103, 69)],
 			},
 			StakedAssignment {
 				who: 4,
-				distribution: vec![
-					(
-						102,
-						34,
-					),
-					(
-						100,
-						47,
-					),
-					(
-						103,
-						91,
-					),
-					(
-						101,
-						73,
-					),
-				],
+				distribution: vec![(102, 34), (100, 47), (103, 91), (101, 73)],
 			},
 		];
 
-		let winners = vec![
-			103,
-			101,
-			100,
-			102,
-		];
+		let winners = vec![103, 101, 100, 102];
 
 		let n = 4;
 		let m = winners.len() as u32;
 		let num_reduced = reduce_all(&mut assignments);
 		assert!(16 - num_reduced <= n + m);
-
 	}
 }

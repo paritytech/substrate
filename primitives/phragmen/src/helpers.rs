@@ -16,19 +16,19 @@
 
 //! Helper methods for phragmen.
 
-use crate::{Assignment, StakedAssignment, ExtendedBalance, IdentifierT};
-use sp_std::prelude::*;
+use crate::{Assignment, ExtendedBalance, IdentifierT, StakedAssignment};
 use sp_runtime::PerThing;
+use sp_std::prelude::*;
 
 /// Converts a vector of ratio assignments into ones with absolute budget value.
 pub fn assignment_ratio_to_staked<A: IdentifierT, T: PerThing, FS>(
 	ratio: Vec<Assignment<A, T>>,
 	stake_of: FS,
 ) -> Vec<StakedAssignment<A>>
-	where
-		for <'r> FS: Fn(&'r A) -> ExtendedBalance,
-		T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
-		ExtendedBalance: From<<T as PerThing>::Inner>,
+where
+	for<'r> FS: Fn(&'r A) -> ExtendedBalance,
+	T: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
+	ExtendedBalance: From<<T as PerThing>::Inner>,
 {
 	ratio
 		.into_iter()
@@ -42,12 +42,11 @@ pub fn assignment_ratio_to_staked<A: IdentifierT, T: PerThing, FS>(
 /// Converts a vector of staked assignments into ones with ratio values.
 pub fn assignment_staked_to_ratio<A: IdentifierT, T: PerThing>(
 	ratio: Vec<StakedAssignment<A>>,
-) -> Vec<Assignment<A, T>> where ExtendedBalance: From<<T as PerThing>::Inner>
+) -> Vec<Assignment<A, T>>
+where
+	ExtendedBalance: From<<T as PerThing>::Inner>,
 {
-	ratio
-		.into_iter()
-		.map(|a| a.into_assignment(true))
-		.collect()
+	ratio.into_iter().map(|a| a.into_assignment(true)).collect()
 }
 
 #[cfg(test)]
@@ -64,14 +63,14 @@ mod tests {
 				distribution: vec![
 					(10u32, Perbill::from_fraction(0.5)),
 					(20, Perbill::from_fraction(0.5)),
-				]
+				],
 			},
 			Assignment {
 				who: 2u32,
 				distribution: vec![
 					(10, Perbill::from_fraction(0.33)),
 					(20, Perbill::from_fraction(0.67)),
-				]
+				],
 			},
 		];
 
@@ -83,20 +82,13 @@ mod tests {
 			vec![
 				StakedAssignment {
 					who: 1u32,
-					distribution: vec![
-						(10u32, 50),
-						(20, 50),
-					]
+					distribution: vec![(10u32, 50), (20, 50),]
 				},
 				StakedAssignment {
 					who: 2u32,
-					distribution: vec![
-						(10u32, 33),
-						(20, 67),
-					]
+					distribution: vec![(10u32, 33), (20, 67),]
 				}
 			]
 		);
 	}
 }
-

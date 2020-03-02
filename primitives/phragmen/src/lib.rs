@@ -149,7 +149,7 @@ pub struct PhragmenResult<AccountId, T: PerThing> {
 	pub winners: Vec<(AccountId, ExtendedBalance)>,
 	/// Individual assignments. for each tuple, the first elements is a voter and the second
 	/// is the list of candidates that it supports.
-	pub assignments: Vec<Assignment<AccountId, T>>
+	pub assignments: Vec<Assignment<AccountId, T>>,
 }
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
@@ -163,7 +163,8 @@ pub struct Assignment<AccountId, T: PerThing> {
 }
 
 impl<AccountId, T: PerThing> Assignment<AccountId, T>
-	where ExtendedBalance: From<<T as PerThing>::Inner>
+where
+	ExtendedBalance: From<<T as PerThing>::Inner>,
 {
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
@@ -175,20 +176,25 @@ impl<AccountId, T: PerThing> Assignment<AccountId, T>
 	/// If an edge ratio is [`Bounded::max_value()`], it is dropped. This edge can never mean
 	/// anything useful.
 	pub fn into_staked(self, stake: ExtendedBalance, fill: bool) -> StakedAssignment<AccountId>
-		where T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>
+	where
+		T: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	{
 		let mut sum: ExtendedBalance = Bounded::min_value();
-		let mut distribution = self.distribution.into_iter().filter_map(|(target, p)| {
-			// if this ratio is zero, then skip it.
-			if p == Bounded::min_value() {
-				None
-			} else {
-				let distribution_stake = p * stake;
-				// defensive only. We assume that balance cannot exceed extended balance.
-				sum = sum.saturating_add(distribution_stake);
-				Some((target, distribution_stake))
-			}
-		}).collect::<Vec<(AccountId, ExtendedBalance)>>();
+		let mut distribution = self
+			.distribution
+			.into_iter()
+			.filter_map(|(target, p)| {
+				// if this ratio is zero, then skip it.
+				if p == Bounded::min_value() {
+					None
+				} else {
+					let distribution_stake = p * stake;
+					// defensive only. We assume that balance cannot exceed extended balance.
+					sum = sum.saturating_add(distribution_stake);
+					Some((target, distribution_stake))
+				}
+			})
+			.collect::<Vec<(AccountId, ExtendedBalance)>>();
 
 		if fill {
 			// NOTE: we can do this better.
@@ -226,8 +232,7 @@ pub struct StakedAssignment<AccountId> {
 	pub distribution: Vec<(AccountId, ExtendedBalance)>,
 }
 
-impl<AccountId> StakedAssignment<AccountId>
-{
+impl<AccountId> StakedAssignment<AccountId> {
 	/// Converts self into the normal [`Assignment`] type.
 	///
 	/// If `fill` is set to true, it _tries_ to ensure that all the potential rounding errors are
@@ -241,29 +246,38 @@ impl<AccountId> StakedAssignment<AccountId>
 	/// If an edge stake is so small that it cannot be represented in `T`, it is ignored. This edge
 	/// can never be re-created and does not mean anything useful anymore.
 	pub fn into_assignment<T: PerThing>(self, fill: bool) -> Assignment<AccountId, T>
-		where ExtendedBalance: From<<T as PerThing>::Inner>
+	where
+		ExtendedBalance: From<<T as PerThing>::Inner>,
 	{
 		let accuracy: u128 = T::ACCURACY.saturated_into();
 		let mut sum: u128 = Zero::zero();
 		let stake = self.distribution.iter().map(|x| x.1).sum();
-		let mut distribution = self.distribution.into_iter().filter_map(|(target, w)| {
-			let per_thing = T::from_rational_approximation(w, stake);
-			if per_thing == Bounded::min_value() {
-				None
-			} else {
-				sum += per_thing.clone().deconstruct().saturated_into();
-				Some((target, per_thing))
-			}
-		}).collect::<Vec<(AccountId, T)>>();
+		let mut distribution = self
+			.distribution
+			.into_iter()
+			.filter_map(|(target, w)| {
+				let per_thing = T::from_rational_approximation(w, stake);
+				if per_thing == Bounded::min_value() {
+					None
+				} else {
+					sum += per_thing.clone().deconstruct().saturated_into();
+					Some((target, per_thing))
+				}
+			})
+			.collect::<Vec<(AccountId, T)>>();
 
 		if fill {
 			if let Some(leftover) = accuracy.checked_sub(sum) {
 				if let Some(last) = distribution.last_mut() {
-					last.1 = last.1.saturating_add(T::from_parts(leftover.saturated_into()));
+					last.1 = last
+						.1
+						.saturating_add(T::from_parts(leftover.saturated_into()));
 				}
 			} else if let Some(excess) = sum.checked_sub(accuracy) {
 				if let Some(last) = distribution.last_mut() {
-					last.1 = last.1.saturating_sub(T::from_parts(excess.saturated_into()));
+					last.1 = last
+						.1
+						.saturating_sub(T::from_parts(excess.saturated_into()));
 				}
 			}
 		}

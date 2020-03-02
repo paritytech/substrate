@@ -17,7 +17,7 @@
 //! (very) Basic implementation of a graph node used in the reduce algorithm.
 
 use sp_runtime::RuntimeDebug;
-use sp_std::{prelude::*, cell::RefCell, rc::Rc, fmt};
+use sp_std::{cell::RefCell, fmt, prelude::*, rc::Rc};
 
 /// The role that a node can accept.
 #[derive(PartialEq, Eq, Ord, PartialOrd, Clone, RuntimeDebug)]
@@ -59,7 +59,16 @@ impl<A: PartialEq> Eq for NodeId<A> {}
 #[cfg(feature = "std")]
 impl<A: fmt::Debug + Clone> sp_std::fmt::Debug for NodeId<A> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		write!(f, "Node({:?}, {:?})", self.who, if self.role == NodeRole::Voter { "V" } else { "T" })
+		write!(
+			f,
+			"Node({:?}, {:?})",
+			self.who,
+			if self.role == NodeRole::Voter {
+				"V"
+			} else {
+				"T"
+			}
+		)
 	}
 }
 
@@ -83,7 +92,12 @@ impl<A: PartialEq> Eq for Node<A> {}
 #[cfg(feature = "std")]
 impl<A: fmt::Debug + Clone> fmt::Debug for Node<A> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "({:?} --> {:?})", self.id, self.parent.as_ref().map(|p| p.borrow().id.clone()))
+		write!(
+			f,
+			"({:?} --> {:?})",
+			self.id,
+			self.parent.as_ref().map(|p| p.borrow().id.clone())
+		)
 	}
 }
 
@@ -129,7 +143,9 @@ impl<A: PartialEq + Eq + Clone + fmt::Debug> Node<A> {
 		let mut current = start.clone();
 
 		while let Some(ref next_parent) = current.clone().borrow().parent {
-			if visited.contains(next_parent) { break; }
+			if visited.contains(next_parent) {
+				break;
+			}
 			parent_path.push(next_parent.clone());
 			current = next_parent.clone();
 			visited.push(current.clone());
@@ -156,7 +172,16 @@ mod tests {
 	#[test]
 	fn basic_create_works() {
 		let node = Node::new(id(10));
-		assert_eq!(node, Node { id: NodeId { who: 10, role: NodeRole::Target }, parent: None });
+		assert_eq!(
+			node,
+			Node {
+				id: NodeId {
+					who: 10,
+					role: NodeRole::Target
+				},
+				parent: None
+			}
+		);
 	}
 
 	#[test]
@@ -197,10 +222,7 @@ mod tests {
 			(d.clone(), vec![e.clone(), a.clone(), d.clone()]),
 		);
 
-		assert_eq!(
-			Node::root(&a),
-			(d.clone(), vec![a.clone(), d.clone()]),
-		);
+		assert_eq!(Node::root(&a), (d.clone(), vec![a.clone(), d.clone()]),);
 
 		assert_eq!(
 			Node::root(&c),
@@ -212,10 +234,7 @@ mod tests {
 		//			 <-- E
 		Node::set_parent_of(&a, &f);
 
-		assert_eq!(
-			Node::root(&a),
-			(f.clone(), vec![a.clone(), f.clone()]),
-		);
+		assert_eq!(Node::root(&a), (f.clone(), vec![a.clone(), f.clone()]),);
 
 		assert_eq!(
 			Node::root(&c),
