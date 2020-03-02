@@ -69,7 +69,8 @@ pub use sc_executor::NativeExecutionDispatch;
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
-pub use task_manager::{TaskManager, TaskManagerSetup, SpawnTaskHandle, TaskExecutor, ServiceTaskExecutor};
+pub use task_manager::{TaskManagerBuilder, SpawnTaskHandle};
+use task_manager::TaskManager;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 

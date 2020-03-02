@@ -27,9 +27,6 @@ use futures::{
 	task::{Spawn, FutureObj, SpawnError},
 };
 
-/// Alias for a an implementation of `futures::future::Executor`.
-pub type TaskExecutor = Arc<dyn Spawn + Send + Sync>;
-
 /// Type alias for service task executor (usually runtime).
 pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
 
@@ -37,7 +34,7 @@ pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send
 pub type TaskScheduler = mpsc::UnboundedSender<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>;
 
 /// Helper struct to setup background tasks execution for service.
-pub struct TaskManagerSetup {
+pub struct TaskManagerBuilder {
 	/// A future that resolves when the service has exited, this is useful to
 	/// make sure any internally spawned futures stop when the service does.
 	on_exit: exit_future::Exit,
@@ -49,7 +46,7 @@ pub struct TaskManagerSetup {
 	to_spawn_rx: mpsc::UnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
 }
 
-impl TaskManagerSetup {
+impl TaskManagerBuilder {
 	/// New asynchronous task manager setup.
 	pub fn new() -> Self {
 		let (signal, on_exit) = exit_future::signal();
@@ -74,8 +71,8 @@ impl TaskManagerSetup {
 	}
 
 	/// Convert into actual task manager from initial setup.
-	pub fn into_task_manager(self, executor: ServiceTaskExecutor) -> TaskManager {
-		let TaskManagerSetup {
+	pub(crate) fn into_task_manager(self, executor: ServiceTaskExecutor) -> TaskManager {
+		let TaskManagerBuilder {
 			on_exit,
 			signal,
 			to_spawn_rx,
@@ -158,7 +155,7 @@ impl TaskManager {
 		}
 	}
 
-	pub(crate) fn spawn_handle(&self) -> SpawnTaskHandle {
+	pub fn spawn_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			on_exit: self.on_exit.clone(),
 			sender: self.to_spawn_tx.clone(),
@@ -166,19 +163,19 @@ impl TaskManager {
 	}
 
 	/// Get sender where background/async tasks can be sent.
-	pub(crate) fn scheduler(&self) -> TaskScheduler {
+	pub fn scheduler(&self) -> TaskScheduler {
 		self.to_spawn_tx.clone()
 	}
 
 	/// Process background task receiver.
-	pub(crate) fn process_receiver(&mut self, cx: &mut Context) {
+	pub fn process_receiver(&mut self, cx: &mut Context) {
 		while let Poll::Ready(Some((task_to_spawn, name))) = Pin::new(&mut self.to_spawn_rx).poll_next(cx) {
 			(self.executor)(Box::pin(futures_diagnose::diagnose(name, task_to_spawn)));
 		}
 	}
 
 	/// Clone on exit signal.
-	pub(crate) fn on_exit(&self) -> exit_future::Exit {
+	pub fn on_exit(&self) -> exit_future::Exit {
 		self.on_exit.clone()
 	}
 }
