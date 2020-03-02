@@ -50,9 +50,9 @@ pub struct ExportBlocksCmd {
 	#[structopt(long = "to", value_name = "BLOCK")]
 	pub to: Option<BlockNumber>,
 
-	/// Use JSON output rather than binary.
-	#[structopt(long = "json")]
-	pub json: bool,
+	/// Use binary output rather than JSON.
+	#[structopt(long = "binary", value_name = "BOOL", parse(try_from_str), default_value("false"))]
+	pub binary: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -85,7 +85,7 @@ impl ExportBlocksCmd {
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());
 
-		let json = self.json;
+		let binary = self.binary;
 
 		let file: Box<dyn io::Write> = match &self.output {
 			Some(filename) => Box::new(fs::File::create(filename)?),
@@ -93,7 +93,7 @@ impl ExportBlocksCmd {
 		};
 
 		run_until_exit(config, |config| {
-			Ok(builder(config)?.export_blocks(file, from.into(), to, json))
+			Ok(builder(config)?.export_blocks(file, from.into(), to, binary))
 		})
 	}
 
