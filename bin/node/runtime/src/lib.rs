@@ -454,10 +454,6 @@ parameter_types! {
 impl frame_system::offchain::new::SigningTypes for Runtime {
 	type Public = <Signature as traits::Verify>::Signer;
 	type Signature = Signature;
-	// TODO [ToDr] add generic resolution for `RuntimeAppPublic`
-	type RuntimeAppPublic = ImOnlineId;
-	type GenericSignature = sp_core::sr25519::Signature;
-	type GenericPublic = sp_core::sr25519::Public;
 }
 
 impl<LocalCall> frame_system::offchain::new::CreateTransaction<Runtime, LocalCall> for Runtime where
@@ -478,11 +474,26 @@ impl<C> frame_system::offchain::new::SendTransactionTypes<C> for Runtime where
 {
 	type OverarchingCall = Call;
 	type Extrinsic = UncheckedExtrinsic;
+	// TODO [ToDr] This should just extend `SendTransactionTypes`
 	type CreateTransaction = Runtime;
 }
 
+pub struct ImOnlineAuthId;
+impl frame_system::offchain::new::AppCrypto<Runtime> for ImOnlineAuthId {
+	// TODO [ToDr] Get rid of this trait and instead
+	// have `RuntimeAppPublic` be able to give you `GenericSignature/GenericPublic`
+	// or see the proposal at `system/src/offchain.rs`.
+	//
+	// That way `AppCrypto` would just have a blanket impl for `RuntimeAppPublic`;
+	type RuntimeAppPublic = ImOnlineId;
+	type GenericSignature = sp_core::sr25519::Signature;
+	type GenericPublic = sp_core::sr25519::Public;
+}
+
+
 impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
+	type AuthorityId2 = ImOnlineAuthId;
 	type Event = Event;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;

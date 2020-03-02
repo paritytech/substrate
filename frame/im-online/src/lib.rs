@@ -221,6 +221,9 @@ pub trait Trait: new::SendTransactionTypes<Call<Self>> + pallet_session::histori
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
+	/// TODO when we remove `AppCrypto` it should just be the same as `AuthorityId`
+	type AuthorityId2: new::AppCrypto<Self>;
+
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
@@ -477,7 +480,7 @@ impl<T: Trait> Module<T> {
 					call,
 				);
 
-				new::Signer::<T>
+				new::Signer::<T, T::AuthorityId2>
 					::send_raw_unsigned_transaction(call)
 					.map_err(|_| OffchainErr::SubmitTransaction)?;
 
