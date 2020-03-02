@@ -258,10 +258,11 @@ use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_benchmarking::{benchmarks, account};
+use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	traits::{SignedExtension, Bounded, SaturatedConversion},
+	traits::{SignedExtension, Bounded, SaturatedConversion, Dispatchable},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
@@ -642,12 +643,50 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	}
 }
 
+benchmarks!{
+	_ {
+		// Define a common range for `b`.
+		let b in 1 .. 1000 => ();
+	}
+
+	// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
+	accumulate_dummy {
+		let b in ...;
+		let caller = account("caller", 0, 0);
+	}: _ (RawOrigin::Signed(caller), b.into())
+
+	// This will measure the execution time of `set_dummy` for b in [1..1000] range.
+	set_dummy {
+		let b in ...;
+		let caller = account("caller", 0, 0);
+	}: set_dummy (RawOrigin::Signed(caller), b.into())
+
+	// This will measure the execution time of `set_dummy` for b in [1..10] range.
+	another_set_dummy {
+		let b in 1 .. 10;
+		let caller = account("caller", 0, 0);
+	}: set_dummy (RawOrigin::Signed(caller), b.into())
+
+	// This will measure the execution time of sorting a vector.
+	sort_vector {
+		let x in 0 .. 1;
+		let mut m = Vec::<u32>::new();
+		for i in 0..x {
+			m.push(i);
+		}
+	}: {
+		m.sort();
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 
 	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
+	use frame_benchmarking::{BenchmarkingSetup, BenchmarkParameter};
 	use sp_core::H256;
+
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
@@ -784,5 +823,63 @@ mod tests {
 		let custom_call = <Call<Test>>::set_dummy(20);
 		let info = custom_call.get_dispatch_info();
 		assert_eq!(info.weight, 2000);
+	}
+
+	#[test]
+	fn benchmarks_macro_works() {
+		// Check benchmark creation for `accumulate_dummy`.
+		let selected_benchmark = SelectedBenchmark::accumulate_dummy;
+
+		let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
+		assert_eq!(components, vec![(BenchmarkParameter::b, 1, 1000)]);
+
+		let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
+			&selected_benchmark,
+			&[(BenchmarkParameter::b, 1)],
+		).expect("failed to create closure");
+
+		new_test_ext().execute_with(|| {
+			assert_eq!(closure(), Ok(()));
+		});
+
+		// Check benchmark creation for `set_dummy`.
+		let selected_benchmark = SelectedBenchmark::set_dummy;
+		let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
+		assert_eq!(components, vec![(BenchmarkParameter::b, 1, 1000)]);
+
+		let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
+			&selected_benchmark,
+			&[(BenchmarkParameter::b, 1)],
+		).expect("failed to create closure");
+
+		new_test_ext().execute_with(|| {
+			assert_eq!(closure(), Err("Bad origin"));
+		});
+
+		// Check benchmark creation for `set_dummy` with another name and range.
+		let selected_benchmark = SelectedBenchmark::another_set_dummy;
+		let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
+		assert_eq!(components, vec![(BenchmarkParameter::b, 1, 10)]);
+
+		let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
+			&selected_benchmark,
+			&[(BenchmarkParameter::b, 1)],
+		).expect("failed to create closure");
+
+		new_test_ext().execute_with(|| {
+			assert_eq!(closure(), Err("Bad origin"));
+		});
+
+		let selected_benchmark = SelectedBenchmark::sort_vector;
+
+		let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
+		assert_eq!(components, vec![(BenchmarkParameter::x, 0, 1)]);
+
+		let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
+			&selected_benchmark,
+			&[(BenchmarkParameter::x, 1)],
+		).expect("failed to create closure");
+
+		assert_eq!(closure(), Ok(()));
 	}
 }

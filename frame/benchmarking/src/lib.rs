@@ -156,7 +156,7 @@ macro_rules! benchmarks_iter {
 	) => {
 		$crate::benchmarks_iter! {
 			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: { 
-				Call::<T>::$dispatch($($arg),*).dispatch($origin.into())?; Ok(())
+				crate::Call::<T>::$dispatch($($arg),*).dispatch($origin.into())?;
 			} $( $rest )*
 		}
 	};
@@ -341,12 +341,8 @@ macro_rules! benchmark_backend {
 				)*
 				$( $param_instancer ; )*
 				$( $post )*
-				Ok(Box::new(move || -> Result<(), &'static str> { $eval }))
-			}
 
-			fn run(&self, closure: Box<dyn FnOnce() -> Result<(), &'static str>>) -> Result<(), &'static str> {
-				closure()?;
-				Ok(())
+				Ok(Box::new(move || -> Result<(), &'static str> { $eval; Ok(()) }))
 			}
 		}
 	}
@@ -390,12 +386,6 @@ macro_rules! selected_benchmark {
 			{
 				match self {
 					$( Self::$bench => <$bench as $crate::BenchmarkingSetup<T>>::instance(&$bench, components), )*
-				}
-			}
-
-			fn run(&self, closure: Box<dyn FnOnce() -> Result<(), &'static str>>) -> Result<(), &'static str> {
-				match self {
-					$( Self::$bench => <$bench as $crate::BenchmarkingSetup<T>>::run(&$bench, closure), )*
 				}
 			}
 		}
@@ -455,7 +445,7 @@ macro_rules! impl_benchmark {
 						// Select the max value for all the other components.
 						let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
 							.enumerate()
-							.map(|(idx, (n, l, h))|
+							.map(|(idx, (n, _, h))|
 								if n == name {
 									(*n, component_value)
 								} else {
@@ -467,23 +457,26 @@ macro_rules! impl_benchmark {
 						// Run the benchmark `repeat` times.
 						for _ in 0..repeat {
 							// Set up the externalities environment for the setup we want to benchmark.
-							let closure = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
+							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
+
 							// Commit the externalities to the database, flushing the DB cache.
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
 
 							// Time the extrinsic logic.
 							let start_extrinsic = $crate::benchmarking::current_time();
-							<SelectedBenchmark as $crate::BenchmarkingSetup<T>>::run(&selected_benchmark, closure)?;
+							closure_to_benchmark()?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
-
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
+
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
 							$crate::storage_root();
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
+
 							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
+
 							// Wipe the DB back to the genesis state.
 							$crate::benchmarking::wipe_db();
 						}
