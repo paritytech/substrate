@@ -169,9 +169,10 @@ impl<B: BlockT> BlockCollection<B> {
 		for (start, range_data) in &mut self.blocks {
 			match range_data {
 				&mut BlockRangeState::Complete(ref mut blocks) if *start <= prev => {
-						prev = *start + (blocks.len() as u32).into();
-						drained.append(blocks);
-						ranges.push(*start);
+					prev = *start + (blocks.len() as u32).into();
+					// Remove all elements from `blocks` and add them to `drained`
+					drained.append(blocks);
+					ranges.push(*start);
 				},
 				_ => break,
 			}
