@@ -899,11 +899,9 @@ ServiceBuilder<
 		let network_params = sc_network::config::Params {
 			roles: config.roles,
 			executor: {
-				let to_spawn_tx = task_manager.scheduler();
+				let spawn_handle = task_manager.spawn_handle();
 				Some(Box::new(move |fut| {
-					if let Err(e) = to_spawn_tx.unbounded_send((fut, From::from("libp2p-node"))) {
-						error!("Failed to spawn libp2p background task: {:?}", e);
-					}
+					spawn_handle.spawn("libp2p-node", fut);
 				}))
 			},
 			network_config: config.network.clone(),
@@ -944,7 +942,7 @@ ServiceBuilder<
 			// block notifications
 			let txpool = Arc::downgrade(&transaction_pool);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
-			let to_spawn_tx_ = task_manager.scheduler();
+			let spawn_handle = task_manager.spawn_handle();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 			let is_validator = config.roles.is_authority();
 
@@ -966,15 +964,14 @@ ServiceBuilder<
 						let offchain = offchain.as_ref().and_then(|o| o.upgrade());
 						match offchain {
 							Some(offchain) if is_new_best => {
-								let future = offchain.on_block_imported(
-									&header,
-									network_state_info.clone(),
-									is_validator,
+								spawn_handle.spawn(
+									"offchain-on-block",
+									offchain.on_block_imported(
+										&header,
+										network_state_info.clone(),
+										is_validator,
+									),
 								);
-								let _ = to_spawn_tx_.unbounded_send((
-									Box::pin(future),
-									From::from("offchain-on-block"),
-								));
 							},
 							Some(_) => log::debug!(
 									target: "sc_offchain",
@@ -987,11 +984,10 @@ ServiceBuilder<
 
 					let txpool = txpool.upgrade();
 					if let Some(txpool) = txpool.as_ref() {
-						let future = txpool.maintain(event);
-						let _ = to_spawn_tx_.unbounded_send((
-							Box::pin(future),
-							From::from("txpool-maintain")
-						));
+						spawn_handle.spawn(
+							"txpool-maintain",
+							txpool.maintain(event),
+						);
 					}
 
 					ready(())

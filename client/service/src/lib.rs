@@ -263,7 +263,7 @@ where
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool> {
 		self.transaction_pool.clone()
 	}
-	
+
 	fn on_exit(&self) -> exit_future::Exit {
 		self.task_manager.on_exit()
 	}
