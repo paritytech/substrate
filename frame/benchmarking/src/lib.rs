@@ -20,7 +20,6 @@
 
 mod utils;
 pub use utils::*;
-
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 
