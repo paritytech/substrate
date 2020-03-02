@@ -3940,16 +3940,13 @@ dependencies = [
 
 [[package]]
 name = "pallet-benchmark"
-version = "2.0.0-alpha.2"
+version = "2.0.0-alpha.3"
 dependencies = [
- "enumflags2",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-balances",
  "parity-scale-codec",
  "serde",
- "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",

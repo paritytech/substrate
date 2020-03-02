@@ -1,13 +1,24 @@
+// Copyright 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! A pallet that contains common runtime patterns in an isolated manner.
+//! This pallet is **not** meant to be used in a production blockchain, just
+//! for benchmarking and testing purposes.
+
 #![cfg_attr(not(feature = "std"), no_std)]
-
-/// A runtime module template with necessary imports
-
-/// Feel free to remove or edit this file as needed.
-/// If you change the name of this file, make sure to update its references in runtime/src/lib.rs
-/// If you remove this file, you can remove those references
-
-/// For more guidance on Substrate modules, see the example module
-/// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
 use frame_support::{decl_module, decl_storage, decl_event, decl_error};
 use frame_support::traits::Currency;
@@ -47,10 +58,6 @@ decl_event!(
 // The pallet's errors
 decl_error! {
 	pub enum Error for Module<T: Trait> {
-		/// Value was None
-		NoneValue,
-		/// Value reached maximum and cannot be incremented further
-		StorageOverflow,
 	}
 }
 
@@ -58,13 +65,8 @@ decl_error! {
 decl_module! {
 	/// The module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		// Initializing errors
-		// this includes information about your errors in the node's metadata.
-		// it is needed only if you are using errors in your pallet
 		type Error = Error<T>;
-
-		// Initializing events
-		// this is needed only if you are using events in your pallet
+		
 		fn deposit_event() = default;
 
 		/// Do nothing.
