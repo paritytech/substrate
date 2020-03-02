@@ -217,15 +217,12 @@ pub struct Heartbeat<BlockNumber>
 	pub authority_index: AuthIndex,
 }
 
-pub trait Trait: new::SendTransactionTypes<<Self as Trait>::Call> + pallet_session::historical::Trait {
+pub trait Trait: new::SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-
-	/// The overarching event type.
-	type Call: From<Call<Self>>;
 
 	/// An expected duration of the session.
 	///
