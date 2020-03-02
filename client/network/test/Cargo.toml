@@ -13,11 +13,10 @@ repository = "https://github.com/paritytech/substrate/"
 sc-network = { version = "0.8.0-alpha.2", path = "../" }
 log = "0.4.8"
 parking_lot = "0.10.0"
-futures = "0.1.29"
-futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
+futures = "0.3.1"
 futures-timer = "3.0.1"
 rand = "0.7.2"
-libp2p = { version = "0.16.1", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { version = "0.16.2", default-features = false, features = ["libp2p-websocket"] }
 sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/common" }
 sc-client = { version = "0.8.0-alpha.2", path = "../../" }
 sc-client-api = { version = "2.0.0-alpha.2", path = "../../api" }
@@ -30,4 +29,3 @@ env_logger = "0.7.0"
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0-dev", path = "../../../test-utils/runtime" }
 tempfile = "3.1.0"
-tokio = "0.1.22"

@@ -66,4 +66,3 @@ substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-util
 sp-consensus-babe = { version = "0.8.0-alpha.2", path = "../../primitives/consensus/babe" }
 grandpa = { version = "0.8.0-alpha.2", package = "sc-finality-grandpa", path = "../finality-grandpa" }
 grandpa-primitives = { version = "2.0.0-alpha.2", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
-tokio = { version = "0.2", features = ["rt-core"] }
