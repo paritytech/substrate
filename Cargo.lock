@@ -2602,9 +2602,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6bf152b510950e1030f2d3dcca5f0b4017892be50348a15fd3eec8b90c826fb"
+checksum = "bba17ee9cac4bb89de5812159877d9b4f0a993bf41697a5a875940cd1eb71f24"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.4",
@@ -2763,9 +2763,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-kad"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76c260a92309112fff855ab2bd8f26c246c1dd380b87021abe61358dedb9748d"
+checksum = "464dc8412978d40f0286be72ed9ab5e0e1386a4a06e7f174526739b5c3c1f041"
 dependencies = [
  "arrayvec 0.5.1",
  "bytes 0.5.4",
@@ -2828,11 +2828,11 @@ dependencies = [
 
 [[package]]
 name = "libp2p-noise"
-version = "0.16.0"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac7d33809afdf6794f09fdb2f9f94e1550ae230be5bae6430a078eb96fc9e5a6"
+checksum = "b15a8a3d71f898beb6f854c8aae27aa1d198e0d1f2e49412261c2d90ef39675a"
 dependencies = [
- "curve25519-dalek 1.2.3",
+ "curve25519-dalek 2.0.0",
  "futures 0.3.4",
  "lazy_static",
  "libp2p-core",
@@ -2843,7 +2843,7 @@ dependencies = [
  "sha2",
  "snow",
  "static_assertions",
- "x25519-dalek 0.5.2",
+ "x25519-dalek",
  "zeroize 1.1.0",
 ]
 
@@ -2967,9 +2967,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-wasm-ext"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d40c95ac1a9b7fb7770616e4165f34559885337f3be485b32acdd085261be3a"
+checksum = "923581c055bc4b8c5f42d4ce5ef43e52fe5216f1ea4bc26476cb8a966ce6220b"
 dependencies = [
  "futures 0.3.4",
  "js-sys",
@@ -3002,9 +3002,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-yamux"
-version = "0.16.0"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f72aa5a7273c29c6eaea09108a49feaefc7456164863f64f86a193f9e78a4b7f"
+checksum = "9dac30de24ccde0e67f363d71a125c587bbe6589503f664947e9b084b68a34f1"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -6826,7 +6826,7 @@ dependencies = [
  "rustc_version",
  "sha2",
  "subtle 2.2.2",
- "x25519-dalek 0.6.0",
+ "x25519-dalek",
 ]
 
 [[package]]
@@ -9081,17 +9081,6 @@ checksum = "d59cefebd0c892fa2dd6de581e937301d8552cb44489cdff035c6187cb63fa5e"
 dependencies = [
  "winapi 0.2.8",
  "winapi-build",
-]
-
-[[package]]
-name = "x25519-dalek"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ee1585dc1484373cbc1cee7aafda26634665cf449436fd6e24bfd1fad230538"
-dependencies = [
- "clear_on_drop",
- "curve25519-dalek 1.2.3",
- "rand_core 0.3.1",
 ]
 
 [[package]]
