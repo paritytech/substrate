@@ -205,20 +205,21 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, network: &mut dyn Network<B>, who: PeerId, roles: Roles) {
-		// light nodes are not valid targets for consensus gossip messages
-		if !roles.is_full() {
-			return;
-		}
+		// light nodes are not valid targets for consensus gossip messagesre
+		return;
+		// if !roles.is_full() {
+		// 	return;
+		// }
 
-		trace!(target:"gossip", "Registering {:?} {}", roles, who);
-		self.peers.insert(who.clone(), PeerConsensus {
-			known_messages: HashSet::new(),
-			roles,
-		});
-		for (engine_id, v) in self.validators.clone() {
-			let mut context = NetworkContext { gossip: self, network, engine_id: engine_id.clone() };
-			v.new_peer(&mut context, &who, roles);
-		}
+		// trace!(target:"gossip", "Registering {:?} {}", roles, who);
+		// self.peers.insert(who.clone(), PeerConsensus {
+		// 	known_messages: HashSet::new(),
+		// 	roles,
+		// });
+		// for (engine_id, v) in self.validators.clone() {
+		// 	let mut context = NetworkContext { gossip: self, network, engine_id: engine_id.clone() };
+		// 	v.new_peer(&mut context, &who, roles);
+		// }
 	}
 
 	fn register_message_hashed(
@@ -264,27 +265,30 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Perform periodic maintenance
 	pub fn tick(&mut self, network: &mut dyn Network<B>) {
 		self.collect_garbage();
-		if Instant::now() >= self.next_broadcast {
-			self.rebroadcast(network);
-			self.next_broadcast = Instant::now() + REBROADCAST_INTERVAL;
-		}
+		return
+		// if Instant::now() >= self.next_broadcast {
+		// 	self.rebroadcast(network);
+		// 	self.next_broadcast = Instant::now() + REBROADCAST_INTERVAL;
+		// }
 	}
 
 	/// Rebroadcast all messages to all peers.
 	fn rebroadcast(&mut self, network: &mut dyn Network<B>) {
-		let messages = self.messages.iter()
-			.map(|entry| (&entry.message_hash, &entry.topic, &entry.message));
-		propagate(network, messages, MessageIntent::PeriodicRebroadcast, &mut self.peers, &self.validators);
+		return
+		// let messages = self.messages.iter()
+		// 	.map(|entry| (&entry.message_hash, &entry.topic, &entry.message));
+		// propagate(network, messages, MessageIntent::PeriodicRebroadcast, &mut self.peers, &self.validators);
 	}
 
 	/// Broadcast all messages with given topic.
 	pub fn broadcast_topic(&mut self, network: &mut dyn Network<B>, topic: B::Hash, force: bool) {
-		let messages = self.messages.iter()
-			.filter_map(|entry|
-				if entry.topic == topic { Some((&entry.message_hash, &entry.topic, &entry.message)) } else { None }
-			);
-		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
-		propagate(network, messages, intent, &mut self.peers, &self.validators);
+		return
+		// let messages = self.messages.iter()
+		// 	.filter_map(|entry|
+		// 		if entry.topic == topic { Some((&entry.message_hash, &entry.topic, &entry.message)) } else { None }
+		// 	);
+		// let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
+		// propagate(network, messages, intent, &mut self.peers, &self.validators);
 	}
 
 	/// Prune old or no longer relevant consensus messages. Provide a predicate
@@ -356,67 +360,68 @@ impl<B: BlockT> ConsensusGossip<B> {
 		who: PeerId,
 		messages: Vec<ConsensusMessage>,
 	) {
-		trace!(target:"gossip", "Received {} messages from peer {}", messages.len(), who);
-		for message in messages {
-			let message_hash = HashFor::<B>::hash(&message.data[..]);
+		return
+		// trace!(target:"gossip", "Received {} messages from peer {}", messages.len(), who);
+		// for message in messages {
+		// 	let message_hash = HashFor::<B>::hash(&message.data[..]);
 
-			if self.known_messages.contains(&message_hash) {
-				trace!(target:"gossip", "Ignored already known message from {}", who);
-				network.report_peer(who.clone(), rep::DUPLICATE_GOSSIP);
-				continue;
-			}
+		// 	if self.known_messages.contains(&message_hash) {
+		// 		trace!(target:"gossip", "Ignored already known message from {}", who);
+		// 		network.report_peer(who.clone(), rep::DUPLICATE_GOSSIP);
+		// 		continue;
+		// 	}
 
-			let engine_id = message.engine_id;
-			// validate the message
-			let validation = self.validators.get(&engine_id)
-				.cloned()
-				.map(|v| {
-					let mut context = NetworkContext { gossip: self, network, engine_id };
-					v.validate(&mut context, &who, &message.data)
-				});
+		// 	let engine_id = message.engine_id;
+		// 	// validate the message
+		// 	let validation = self.validators.get(&engine_id)
+		// 		.cloned()
+		// 		.map(|v| {
+		// 			let mut context = NetworkContext { gossip: self, network, engine_id };
+		// 			v.validate(&mut context, &who, &message.data)
+		// 		});
 
-			let validation_result = match validation {
-				Some(ValidationResult::ProcessAndKeep(topic)) => Some((topic, true)),
-				Some(ValidationResult::ProcessAndDiscard(topic)) => Some((topic, false)),
-				Some(ValidationResult::Discard) => None,
-				None => {
-					trace!(target:"gossip", "Unknown message engine id {:?} from {}", engine_id, who);
-					network.report_peer(who.clone(), rep::UNKNOWN_GOSSIP);
-					network.disconnect_peer(who.clone());
-					continue;
-				}
-			};
+		// 	let validation_result = match validation {
+		// 		Some(ValidationResult::ProcessAndKeep(topic)) => Some((topic, true)),
+		// 		Some(ValidationResult::ProcessAndDiscard(topic)) => Some((topic, false)),
+		// 		Some(ValidationResult::Discard) => None,
+		// 		None => {
+		// 			trace!(target:"gossip", "Unknown message engine id {:?} from {}", engine_id, who);
+		// 			network.report_peer(who.clone(), rep::UNKNOWN_GOSSIP);
+		// 			network.disconnect_peer(who.clone());
+		// 			continue;
+		// 		}
+		// 	};
 
-			if let Some((topic, keep)) = validation_result {
-				network.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
-				if let Some(ref mut peer) = self.peers.get_mut(&who) {
-					peer.known_messages.insert(message_hash);
-					if let Entry::Occupied(mut entry) = self.live_message_sinks.entry((engine_id, topic)) {
-						debug!(target: "gossip", "Pushing consensus message to sinks for {}.", topic);
-						entry.get_mut().retain(|sink| {
-							if let Err(e) = sink.unbounded_send(TopicNotification {
-								message: message.data.clone(),
-								sender: Some(who.clone())
-							}) {
-								trace!(target: "gossip", "Error broadcasting message notification: {:?}", e);
-							}
-							!sink.is_closed()
-						});
-						if entry.get().is_empty() {
-							entry.remove_entry();
-						}
-					}
-					if keep {
-						self.register_message_hashed(message_hash, topic, message, Some(who.clone()));
-					}
-				} else {
-					trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
-					network.report_peer(who.clone(), rep::UNREGISTERED_TOPIC);
-				}
-			} else {
-				trace!(target:"gossip", "Handled valid one hop message from peer {}", who);
-			}
-		}
+		// 	if let Some((topic, keep)) = validation_result {
+		// 		network.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
+		// 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
+		// 			peer.known_messages.insert(message_hash);
+		// 			if let Entry::Occupied(mut entry) = self.live_message_sinks.entry((engine_id, topic)) {
+		// 				debug!(target: "gossip", "Pushing consensus message to sinks for {}.", topic);
+		// 				entry.get_mut().retain(|sink| {
+		// 					if let Err(e) = sink.unbounded_send(TopicNotification {
+		// 						message: message.data.clone(),
+		// 						sender: Some(who.clone())
+		// 					}) {
+		// 						trace!(target: "gossip", "Error broadcasting message notification: {:?}", e);
+		// 					}
+		// 					!sink.is_closed()
+		// 				});
+		// 				if entry.get().is_empty() {
+		// 					entry.remove_entry();
+		// 				}
+		// 			}
+		// 			if keep {
+		// 				self.register_message_hashed(message_hash, topic, message, Some(who.clone()));
+		// 			}
+		// 		} else {
+		// 			trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
+		// 			network.report_peer(who.clone(), rep::UNREGISTERED_TOPIC);
+		// 		}
+		// 	} else {
+		// 		trace!(target:"gossip", "Handled valid one hop message from peer {}", who);
+		// 	}
+		// }
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -428,34 +433,35 @@ impl<B: BlockT> ConsensusGossip<B> {
 		engine_id: ConsensusEngineId,
 		force: bool
 	) {
-		let validator = self.validators.get(&engine_id);
-		let mut message_allowed = match validator {
-			None => return, // treat all messages with no validator as not allowed
-			Some(validator) => validator.message_allowed(),
-		};
+		return
+		// let validator = self.validators.get(&engine_id);
+		// let mut message_allowed = match validator {
+		// 	None => return, // treat all messages with no validator as not allowed
+		// 	Some(validator) => validator.message_allowed(),
+		// };
 
-		if let Some(ref mut peer) = self.peers.get_mut(who) {
-			for entry in self.messages.iter().filter(|m| m.topic == topic && m.message.engine_id == engine_id) {
-				let intent = if force {
-					MessageIntent::ForcedBroadcast
-				} else {
-					MessageIntent::Broadcast
-				};
+		// if let Some(ref mut peer) = self.peers.get_mut(who) {
+		// 	for entry in self.messages.iter().filter(|m| m.topic == topic && m.message.engine_id == engine_id) {
+		// 		let intent = if force {
+		// 			MessageIntent::ForcedBroadcast
+		// 		} else {
+		// 			MessageIntent::Broadcast
+		// 		};
 
-				if !force && peer.known_messages.contains(&entry.message_hash) {
-					continue;
-				}
+		// 		if !force && peer.known_messages.contains(&entry.message_hash) {
+		// 			continue;
+		// 		}
 
-				if !message_allowed(who, intent, &entry.topic, &entry.message.data) {
-					continue;
-				}
+		// 		if !message_allowed(who, intent, &entry.topic, &entry.message.data) {
+		// 			continue;
+		// 		}
 
-				peer.known_messages.insert(entry.message_hash.clone());
+		// 		peer.known_messages.insert(entry.message_hash.clone());
 
-				trace!(target: "gossip", "Sending topic message to {}: {:?}", who, entry.message);
-				network.write_notification(who.clone(), engine_id, entry.message.data.clone());
-			}
-		}
+		// 		trace!(target: "gossip", "Sending topic message to {}: {:?}", who, entry.message);
+		// 		network.write_notification(who.clone(), engine_id, entry.message.data.clone());
+		// 	}
+		// }
 	}
 
 	/// Multicast a message to all peers.
@@ -466,10 +472,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 		message: ConsensusMessage,
 		force: bool,
 	) {
-		let message_hash = HashFor::<B>::hash(&message.data);
-		self.register_message_hashed(message_hash, topic, message.clone(), None);
-		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
-		propagate(network, iter::once((&message_hash, &topic, &message)), intent, &mut self.peers, &self.validators);
+		return
+		// let message_hash = HashFor::<B>::hash(&message.data);
+		// self.register_message_hashed(message_hash, topic, message.clone(), None);
+		// let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
+		// propagate(network, iter::once((&message_hash, &topic, &message)), intent, &mut self.peers, &self.validators);
 	}
 
 	/// Send addressed message to a peer. The message is not kept or multicast
@@ -480,17 +487,18 @@ impl<B: BlockT> ConsensusGossip<B> {
 		who: &PeerId,
 		message: ConsensusMessage,
 	) {
-		let peer = match self.peers.get_mut(who) {
-			None => return,
-			Some(peer) => peer,
-		};
+		return
+		// let peer = match self.peers.get_mut(who) {
+		// 	None => return,
+		// 	Some(peer) => peer,
+		// };
 
-		let message_hash = HashFor::<B>::hash(&message.data);
+		// let message_hash = HashFor::<B>::hash(&message.data);
 
-		trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
+		// trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
 
-		peer.known_messages.insert(message_hash);
-		network.write_notification(who.clone(), message.engine_id, message.data);
+		// peer.known_messages.insert(message_hash);
+		// network.write_notification(who.clone(), message.engine_id, message.data);
 	}
 }
 
