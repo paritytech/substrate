@@ -22,7 +22,7 @@ use std::cell::RefCell;
 
 use crate::{Module, Trait};
 use sp_runtime::Perbill;
-use sp_staking::{SessionIndex, offence::ReportOffence};
+use sp_staking::{SessionIndex, offence::{ReportOffence, OffenceError}};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use sp_core::H256;
@@ -77,8 +77,9 @@ thread_local! {
 /// A mock offence report handler.
 pub struct OffenceHandler;
 impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
-	fn report_offence(reporters: Vec<u64>, offence: Offence) {
+	fn report_offence(reporters: Vec<u64>, offence: Offence) -> Result<(), OffenceError> {
 		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
+		Ok(())
 	}
 }
 
