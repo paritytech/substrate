@@ -258,6 +258,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			let mut context = NetworkContext { gossip: self, network, engine_id: engine_id.clone() };
 			v.peer_disconnected(&mut context, &who);
 		}
+		self.peers.remove(&who);
 	}
 
 	/// Perform periodic maintenance
@@ -643,5 +644,53 @@ mod tests {
 
 		let _ = consensus.live_message_sinks.remove(&([0, 0, 0, 0], topic));
 		assert_eq!(stream.next(), None);
+	}
+
+	#[test]
+	fn peer_is_removed_on_disconnect() {
+		struct TestNetwork;
+		impl Network<Block> for TestNetwork {
+			fn event_stream(
+				&self,
+			) -> std::pin::Pin<Box<dyn futures::Stream<Item = crate::Event> + Send>> {
+				unimplemented!("Not required in tests")
+			}
+
+			fn report_peer(&self, _: PeerId, _: crate::ReputationChange) {
+				unimplemented!("Not required in tests")
+			}
+
+			fn disconnect_peer(&self, _: PeerId) {
+				unimplemented!("Not required in tests")
+			}
+
+			fn write_notification(&self, _: PeerId, _: crate::ConsensusEngineId, _: Vec<u8>) {
+				unimplemented!("Not required in tests")
+			}
+
+			fn register_notifications_protocol(
+				&self,
+				_: ConsensusEngineId,
+				_: std::borrow::Cow<'static, [u8]>,
+			) {
+				unimplemented!("Not required in tests")
+			}
+
+			fn announce(&self, _: H256, _: Vec<u8>) {
+				unimplemented!("Not required in tests")
+			}
+		}
+
+		let mut consensus = ConsensusGossip::<Block>::new();
+		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
+
+		let mut network = TestNetwork;
+
+		let peer_id = PeerId::random();
+		consensus.new_peer(&mut network, peer_id.clone(), Roles::FULL);
+		assert!(consensus.peers.contains_key(&peer_id));
+
+		consensus.peer_disconnected(&mut network, peer_id.clone());
+		assert!(!consensus.peers.contains_key(&peer_id));
 	}
 }
