@@ -36,7 +36,7 @@ const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 const RESERVED_NODES: &'static str = "reserved";
 /// Amount of time between the moment we disconnect from a node and the moment we remove it from
 /// the list.
-const FORGET_AFTER: Duration = Duration::from_secs(300);
+const FORGET_AFTER: Duration = Duration::from_secs(3600);
 
 #[derive(Debug)]
 enum Action {
