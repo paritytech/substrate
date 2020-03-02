@@ -22,7 +22,7 @@ pallet-timestamp = { version = "2.0.0-alpha.2", default-features = false, path =
 sp-timestamp = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/timestamp" }
 pallet-session = { version = "2.0.0-alpha.2", default-features = false, path = "../session" }
 sp-consensus-babe = { version = "0.8.0-alpha.2", default-features = false, path = "../../primitives/consensus/babe" }
-sp-io ={ path = "../../primitives/io", default-features = false , version = "2.0.0-alpha.2"}
+sp-io ={ path = "../../primitives/io", default-features = false, version = "2.0.0-alpha.2"}
 
 [dev-dependencies]
 lazy_static = "1.4.0"

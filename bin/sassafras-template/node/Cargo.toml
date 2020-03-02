@@ -14,25 +14,24 @@ futures = "0.3.1"
 log = "0.4.8"
 structopt = "0.3.8"
 
-sc-cli = { version = "0.8.0", path = "../../../client/cli" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sc-executor = { version = "0.8", path = "../../../client/executor" }
-sc-service = { version = "0.8", path = "../../../client/service" }
-sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
-sc-transaction-pool = { version = "2.0.0", path = "../../../client/transaction-pool" }
-sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
-sc-network = { version = "0.8", path = "../../../client/network" }
-sc-consensus-sassafras = { version = "0.8", path = "../../../client/consensus/sassafras" }
-sp-consensus-sassafras = { version = "0.8", path = "../../../primitives/consensus/sassafras" }
-sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
-sc-client = { version = "0.8", path = "../../../client/" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+sc-cli = { path = "../../../client/cli" }
+sp-core = { path = "../../../primitives/core" }
+sc-executor = { path = "../../../client/executor" }
+sc-service = { path = "../../../client/service" }
+sp-inherents = { path = "../../../primitives/inherents" }
+sc-transaction-pool = { path = "../../../client/transaction-pool" }
+sp-transaction-pool = { path = "../../../primitives/transaction-pool" }
+sc-network = { path = "../../../client/network" }
+sc-consensus-sassafras = { path = "../../../client/consensus/sassafras" }
+sp-consensus-sassafras = { path = "../../../primitives/consensus/sassafras" }
+sp-consensus = { path = "../../../primitives/consensus/common" }
+sc-client = { path = "../../../client/" }
+sp-runtime = { path = "../../../primitives/runtime" }
 sc-basic-authorship = { path = "../../../client/basic-authorship" }
-grandpa = { version = "0.8", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
-grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
-
-sassafras-template-runtime = { version = "2.0.0", path = "../runtime" }
+grandpa = { package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
+grandpa-primitives = { package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
+sassafras-template-runtime = { path = "../runtime" }
 
 [build-dependencies]
 vergen = "3.0.4"
-build-script-utils = { version = "2.0.0", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
+build-script-utils = { package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }

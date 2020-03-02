@@ -8,14 +8,14 @@ edition = "2018"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], optional = true }
-sp-std = { path = "../../std", default-features = false }
-sp-core = { path = "../../core", default-features = false }
-sp-api = { version = "2.0.0", default-features = false, path = "../../api" }
-sp-consensus = { version = "0.8", optional = true, path = "../common" }
-sp-inherents = { path = "../../inherents", default-features = false }
-sp-timestamp = { path = "../../timestamp", default-features = false }
-sp-runtime = { path = "../../runtime", default-features = false }
-sp-application-crypto = { path = "../../application-crypto", default-features = false }
+sp-std = { version = "2.0.0-alpha.2", path = "../../std", default-features = false }
+sp-core = { version = "2.0.0-alpha.2", path = "../../core", default-features = false }
+sp-api = { version = "2.0.0-alpha.2", default-features = false, path = "../../api" }
+sp-consensus = { version = "0.8.0-alpha.2", optional = true, path = "../common" }
+sp-inherents = { version = "2.0.0-alpha.2", path = "../../inherents", default-features = false }
+sp-timestamp = { version = "2.0.0-alpha.2", path = "../../timestamp", default-features = false }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../runtime", default-features = false }
+sp-application-crypto = { version = "2.0.0-alpha.2", path = "../../application-crypto", default-features = false }
 
 [features]
 default = ["std"]
