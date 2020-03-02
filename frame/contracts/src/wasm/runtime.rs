@@ -348,30 +348,49 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Change the value at the given key in the storage or remove the entry.
-	// The value length must not exceed the maximum defined by the Contracts module parameters.
+	// Set the value at the given key in the contract storage.
 	//
-	// - key_ptr: pointer into the linear
-	//   memory where the location of the requested value is placed.
-	// - value_non_null: if set to 0, then the entry
-	//   at the given location will be removed.
-	// - value_ptr: pointer into the linear memory
-	//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
-	// - value_len: the length of the value. If `value_non_null` is set to 0, then this parameter is ignored.
-	ext_set_storage(ctx, key_ptr: u32, value_non_null: u32, value_ptr: u32, value_len: u32) => {
-		if value_non_null != 0 && ctx.ext.max_value_size() < value_len {
+	// The value length must not exceed the maximum defined by the contracts module parameters.
+	// Storing an empty value is disallowed.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: pointer into the linear memory where the location to store the value is placed.
+	// - `value_ptr`: pointer into the linear memory where the value to set is placed.
+	// - `value_len`: the length of the value in bytes.
+	//
+	// # Errors
+	//
+	// - If value length exceeds the configured maximum value length of a storage entry.
+	// - Upon trying to set an empty storage entry (value length is 0).
+	ext_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
+		if value_len > ctx.ext.max_value_size() {
+			// Bail out if value length exceeds the set maximum value size.
+			return Err(sp_sandbox::HostError);
+		}
+		if value_len == 0 {
+			// Bail out on setting storage to an emptry entry.
+			//
+			// We might remove this constraint later if there are actual
+			// use cases that require setting empty contract storage entries.
 			return Err(sp_sandbox::HostError);
 		}
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
-		let value =
-			if value_non_null != 0 {
-				Some(read_sandbox_memory(ctx, value_ptr, value_len)?)
-			} else {
-				None
-			};
+		let value = Some(read_sandbox_memory(ctx, value_ptr, value_len)?);
 		ctx.ext.set_storage(key, value).map_err(|_| sp_sandbox::HostError)?;
+		Ok(())
+	},
 
+	// Clear the value at the given key in the contract storage.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: pointer into the linear memory where the location to clear the value is placed.
+	ext_clear_storage(ctx, key_ptr: u32) => {
+		let mut key: StorageKey = [0; 32];
+		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
+		ctx.ext.set_storage(key, None).map_err(|_| sp_sandbox::HostError)?;
 		Ok(())
 	},
 
