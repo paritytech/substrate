@@ -954,7 +954,7 @@ decl_module! {
 		///
 		/// The dispatch origin of this call must be _Signed_.
 		///
-		/// - `proxy`: The account which will be deactivated as proxy.
+		/// - `proxy`: The account that will be deactivated as proxy.
 		///
 		/// # <weight>
 		/// - One DB clear.
