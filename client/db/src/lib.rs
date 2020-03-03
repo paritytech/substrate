@@ -84,6 +84,7 @@ use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
+use prometheus_endpoint::Registry;
 
 #[cfg(any(feature = "kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;
@@ -291,6 +292,7 @@ pub fn new_client<E, S, Block, RA>(
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
+	prometheus_registry: Option<Registry>,
 ) -> Result<(
 		sc_client::Client<
 			Backend<Block>,
@@ -317,6 +319,7 @@ pub fn new_client<E, S, Block, RA>(
 			fork_blocks,
 			bad_blocks,
 			execution_extensions,
+			prometheus_registry,
 		)?,
 		backend,
 	))

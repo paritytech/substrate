@@ -17,7 +17,7 @@
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
-use crate::config::{Configuration, DatabaseConfig, KeystoreConfig};
+use crate::config::{Configuration, DatabaseConfig, KeystoreConfig, PrometheusConfig};
 use sc_client_api::{
 	self,
 	BlockchainEvents,
@@ -46,7 +46,7 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	borrow::Cow,
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, pin::Pin
+	marker::PhantomData, sync::Arc, pin::Pin, net::SocketAddr,
 };
 use wasm_timer::SystemTime;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
@@ -92,6 +92,16 @@ impl ServiceMetrics {
 	}
 }
 
+fn get_registry_and_port(config: Option<&PrometheusConfig>) -> Result<Option<(Registry, SocketAddr)>, PrometheusError> {
+	Ok(match config {
+		Some(config) => match config.registry.as_ref() {
+			Some(registry) => Some((registry.clone(), config.port)),
+			None => Some((Registry::new_custom(Some("substrate".into()), None)?, config.port))
+		},
+		None => None
+	})
+}
+
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
 /// Aggregator for the components required to build a service.
@@ -128,7 +138,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TF
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 	background_tasks: Vec<(&'static str, BackgroundTask)>,
-	prometheus_registry: Option<Registry>
+	prometheus_registry_and_port: Option<(Registry, SocketAddr)>,
 }
 
 /// Full client type.
@@ -181,6 +191,7 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 	TFullClient<TBl, TRtApi, TExecDisp>,
 	Arc<TFullBackend<TBl>>,
 	Arc<RwLock<sc_keystore::Store>>,
+	Option<(Registry, SocketAddr)>,
 );
 
 /// Creates a new full client for the given config.
@@ -230,6 +241,8 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 		.cloned()
 		.unwrap_or_default();
 
+	let prometheus_registry_and_port = get_registry_and_port(config.prometheus_config.as_ref())?;
+
 	let (client, backend) = {
 		let db_config = sc_client_db::DatabaseSettings {
 			state_cache_size: config.state_cache_size,
@@ -259,10 +272,11 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 			fork_blocks,
 			bad_blocks,
 			extensions,
+			prometheus_registry_and_port.as_ref().map(|(r, _)| r.clone()),
 		)?
 	};
 
-	Ok((client, backend, keystore))
+	Ok((client, backend, keystore, prometheus_registry_and_port))
 }
 
 impl<TGen, TCSExt> ServiceBuilder<(), (), TGen, TCSExt, (), (), (), (), (), (), (), (), ()>
@@ -285,12 +299,11 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TFullBackend<TBl>,
 	>, Error> {
-		let (client, backend, keystore) = new_full_parts(&config)?;
+		let (client, backend, keystore, prometheus_registry_and_port) = new_full_parts(&config)?;
 
 		let client = Arc::new(client);
 
 		Ok(ServiceBuilder {
-			config,
 			client,
 			backend,
 			keystore,
@@ -304,7 +317,8 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			remote_backend: None,
 			background_tasks: Default::default(),
 			marker: PhantomData,
-			prometheus_registry: None,
+			prometheus_registry_and_port,
+			config,
 		})
 	}
 
@@ -368,14 +382,17 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		let fetcher = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
 		let backend = sc_client::light::new_light_backend(light_blockchain);
 		let remote_blockchain = backend.remote_blockchain();
+		
+		let prometheus_registry_and_port = get_registry_and_port(config.prometheus_config.as_ref())?;
+		
 		let client = Arc::new(sc_client::light::new_light(
 			backend.clone(),
 			config.expect_chain_spec(),
 			executor,
+			prometheus_registry_and_port.as_ref().map(|(r, _)| r.clone()),
 		)?);
 
 		Ok(ServiceBuilder {
-			config,
 			client,
 			backend,
 			keystore,
@@ -389,7 +406,8 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			remote_backend: Some(remote_blockchain),
 			background_tasks: Default::default(),
 			marker: PhantomData,
-			prometheus_registry: None,
+			prometheus_registry_and_port,
+			config,
 		})
 	}
 }
@@ -462,7 +480,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
-			prometheus_registry: self.prometheus_registry,
+			prometheus_registry_and_port: self.prometheus_registry_and_port,
 		})
 	}
 
@@ -505,7 +523,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
-			prometheus_registry: self.prometheus_registry,
+			prometheus_registry_and_port: self.prometheus_registry_and_port,
 		})
 	}
 
@@ -545,7 +563,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
-			prometheus_registry: self.prometheus_registry,
+			prometheus_registry_and_port: self.prometheus_registry_and_port,
 		})
 	}
 
@@ -609,7 +627,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
-			prometheus_registry: self.prometheus_registry,
+			prometheus_registry_and_port: self.prometheus_registry_and_port,
 		})
 	}
 
@@ -669,7 +687,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
-			prometheus_registry: self.prometheus_registry,
+			prometheus_registry_and_port: self.prometheus_registry_and_port,
 		})
 	}
 
@@ -697,29 +715,8 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
 			marker: self.marker,
-			prometheus_registry: self.prometheus_registry,
+			prometheus_registry_and_port: self.prometheus_registry_and_port,
 		})
-	}
-
-	/// Use an existing prometheus `Registry` to record metrics into.
-	pub fn with_prometheus_registry(self, registry: Registry) -> Self {
-		Self {
-			config: self.config,
-			client: self.client,
-			backend: self.backend,
-			keystore: self.keystore,
-			fetcher: self.fetcher,
-			select_chain: self.select_chain,
-			import_queue: self.import_queue,
-			finality_proof_request_builder: self.finality_proof_request_builder,
-			finality_proof_provider: self.finality_proof_provider,
-			transaction_pool: self.transaction_pool,
-			rpc_extensions: self.rpc_extensions,
-			remote_backend: self.remote_backend,
-			background_tasks: self.background_tasks,
-			marker: self.marker,
-			prometheus_registry: Some(registry),
-		}
 	}
 }
 
@@ -830,7 +827,7 @@ ServiceBuilder<
 			rpc_extensions,
 			remote_backend,
 			background_tasks,
-			prometheus_registry,
+			prometheus_registry_and_port,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -887,14 +884,6 @@ ServiceBuilder<
 
 		let block_announce_validator =
 			Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator::new(client.clone()));
-
-		let prometheus_registry_and_port = match config.prometheus_port {
-			Some(port) => match prometheus_registry {
-				Some(registry) => Some((registry, port)),
-				None => Some((Registry::new_custom(Some("substrate".into()), None)?, port))
-			},
-			None => None
-		};
 
 		let network_params = sc_network::config::Params {
 			roles: config.roles,

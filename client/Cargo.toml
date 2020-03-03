@@ -34,6 +34,7 @@ sp-blockchain = { version = "2.0.0-alpha.2", path = "../primitives/blockchain" }
 sp-state-machine = { version = "0.8.0-alpha.2", path = "../primitives/state-machine" }
 sc-telemetry = { version = "2.0.0-alpha.2", path = "telemetry" }
 sp-trie = { version = "2.0.0-alpha.2", path = "../primitives/trie" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0-alpha.2", path = "../utils/prometheus" }
 tracing = "0.1.10"
 
 [dev-dependencies]

@@ -27,6 +27,7 @@ use sc_chain_spec::{ChainSpec, NoExtension};
 use sp_core::crypto::Protected;
 use target_info::Target;
 use sc_telemetry::TelemetryEndpoints;
+use prometheus_endpoint::Registry;
 
 /// Executable version. Used to pass version information from the root crate.
 #[derive(Clone)]
@@ -93,8 +94,8 @@ pub struct Configuration<G, E = NoExtension> {
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
-	/// Prometheus endpoint Port. `None` if disabled.
-	pub prometheus_port: Option<SocketAddr>,
+	/// Prometheus endpoint configuration. `None` if disabled.
+	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
@@ -165,6 +166,14 @@ pub enum DatabaseConfig {
 	Custom(Arc<dyn KeyValueDB>),
 }
 
+/// Configuration of the Prometheus endpoint.
+pub struct PrometheusConfig {
+	/// Port to use.
+	pub port: SocketAddr,
+	/// A metrics registry to use. One will be created if `None`.
+	pub registry: Option<Registry>,
+}
+
 impl<G, E> Default for Configuration<G, E> {
 	/// Create a default config
 	fn default() -> Self {
@@ -190,7 +199,7 @@ impl<G, E> Default for Configuration<G, E> {
 			rpc_ws: None,
 			rpc_ws_max_connections: None,
 			rpc_cors: Some(vec![]),
-			prometheus_port: None,
+			prometheus_config: None,
 			telemetry_endpoints: None,
 			telemetry_external_transport: None,
 			default_heap_pages: None,
