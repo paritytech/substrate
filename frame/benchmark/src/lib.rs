@@ -154,12 +154,24 @@ decl_module! {
 
 		// Encode a vector of accounts to bytes.
 		pub fn encode_accounts(_origin, accounts: Vec<T::AccountId>) {
-			let _bytes = accounts.encode();
+			let bytes = accounts.encode();
+
+			// In an attempt to tell the compiler not to optimize away this benchmark, we will use
+			// the result of encoding the accounts.
+			if bytes.is_empty() {
+				frame_support::print("You are encoding zero accounts.");
+			}
 		}
 
 		// Decode bytes into a vector of accounts.
 		pub fn decode_accounts(_origin, bytes: Vec<u8>) {
-			let _accounts: Vec<T::AccountId> = Decode::decode(&mut bytes.as_slice()).map_err(|_| "Could not decode")?;
+			let accounts: Vec<T::AccountId> = Decode::decode(&mut bytes.as_slice()).map_err(|_| "Could not decode")?;
+
+			// In an attempt to tell the compiler not to optimize away this benchmark, we will use
+			// the result of decoding the bytes.
+			if accounts.is_empty() {
+				frame_support::print("You are decoding zero bytes.");
+			}
 		}
 	}
 }
