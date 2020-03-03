@@ -75,7 +75,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, marker::PhantomData};
-use frame_support::weights::{GetDispatchInfo, WeighBlock, DispatchInfo};
+use frame_support::{
+	storage::StorageValue,
+	weights::{GetDispatchInfo, WeighBlock, DispatchInfo}
+};
 use sp_runtime::{
 	generic::Digest,
 	ApplyExtrinsicResult,
@@ -178,8 +181,7 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
-		let last_runtime_upgrade = <frame_system::Module<System>>::last_runtime_upgrade();
-		if last_runtime_upgrade.map(|n| n + One::one() == *block_number).unwrap_or(false) {
+		if frame_system::RuntimeUpgraded::take() {
 			<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
 			<frame_system::Module<System>>::register_extra_weight_unchecked(
 				<AllModules as WeighBlock<System::BlockNumber>>::on_runtime_upgrade()

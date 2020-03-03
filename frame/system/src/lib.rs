@@ -368,8 +368,8 @@ decl_storage! {
 		/// no notification will be triggered thus the event might be lost.
 		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
 
-		/// Store the block number of last runtime upgrade.
-		LastRuntimeUpgrade get(fn last_runtime_upgrade): Option<T::BlockNumber>;
+		/// A bool to track if the runtime was upgraded last block.
+		pub RuntimeUpgraded: bool;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -489,7 +489,7 @@ decl_module! {
 			}
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
-			<LastRuntimeUpgrade<T>>::put(Self::block_number());
+			RuntimeUpgraded::put(true);
 			Self::deposit_event(RawEvent::CodeUpdated);
 		}
 
@@ -498,7 +498,7 @@ decl_module! {
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
-			<LastRuntimeUpgrade<T>>::put(Self::block_number());
+			RuntimeUpgraded::put(true);
 			Self::deposit_event(RawEvent::CodeUpdated);
 		}
 
