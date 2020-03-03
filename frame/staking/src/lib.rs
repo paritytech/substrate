@@ -1364,6 +1364,7 @@ decl_module! {
 			-> DispatchResult
 		{
 			let who = ensure_signed(origin)?;
+			Self::ensure_storage_upgraded();
 			Self::do_payout_nominator(who, era, validators)
 		}
 
@@ -1385,6 +1386,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn payout_validator(origin, era: EraIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			Self::ensure_storage_upgraded();
 			Self::do_payout_validator(who, era)
 		}
 
@@ -1413,6 +1415,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn set_history_depth(origin, #[compact] new_history_depth: EraIndex) {
 			ensure_root(origin)?;
+			Self::ensure_storage_upgraded();
 			if let Some(current_era) = Self::current_era() {
 				HistoryDepth::mutate(|history_depth| {
 					let last_kept = current_era.checked_sub(*history_depth).unwrap_or(0);
@@ -1941,6 +1944,7 @@ impl<T: Trait> Module<T> {
 	pub fn reward_by_ids(
 		validators_points: impl IntoIterator<Item = (T::AccountId, u32)>
 	) {
+		Self::ensure_storage_upgraded();
 		if let Some(active_era) = Self::active_era() {
 			<ErasRewardPoints<T>>::mutate(active_era.index, |era_rewards| {
 				for (validator, points) in validators_points.into_iter() {
@@ -2112,9 +2116,11 @@ impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {
+		Self::ensure_storage_upgraded();
 		Self::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
+		Self::ensure_storage_upgraded();
 		Self::end_session(end_index)
 	}
 }
@@ -2184,6 +2190,7 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 	for ExposureOf<T>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
+		<Module<T>>::ensure_storage_upgraded();
 		if let Some(active_era) = <Module<T>>::active_era() {
 			Some(<Module<T>>::eras_stakers(active_era.index, &validator))
 		} else {
