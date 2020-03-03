@@ -54,6 +54,8 @@ pub enum BehaviourOut<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
+	/// Started a random Kademlia discovery query.
+	RandomKademliaStarted,
 	Event(Event),
 }
 
@@ -94,6 +96,11 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	/// Adds a hard-coded address for the given peer, that never expires.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		self.discovery.add_known_address(peer_id, addr)
+	}
+
+	/// Returns the number of nodes that are in the Kademlia k-buckets.
+	pub fn num_kbuckets_entries(&mut self) -> usize {
+		self.discovery.num_kbuckets_entries()
 	}
 
 	/// Borrows `self` and returns a struct giving access to the information about a node.
@@ -215,6 +222,9 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 			}
 			DiscoveryOut::ValuePutFailed(key) => {
 				self.events.push(BehaviourOut::Event(Event::Dht(DhtEvent::ValuePutFailed(key))));
+			}
+			DiscoveryOut::RandomKademliaStarted => {
+				self.events.push(BehaviourOut::RandomKademliaStarted);
 			}
 		}
 	}
