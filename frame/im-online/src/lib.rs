@@ -222,7 +222,7 @@ pub trait Trait: new::SendTransactionTypes<Call<Self>> + pallet_session::histori
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
 	/// TODO when we remove `AppCrypto` it should just be the same as `AuthorityId`
-	type AuthorityId2: new::AppCrypto<Self>;
+	type AuthorityId2: new::AppCrypto<Self::Public, Self::Signature>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -620,7 +620,9 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 
 			let validator_set_count = keys.len() as u32;
 			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
-			T::ReportUnresponsiveness::report_offence(vec![], offence);
+			if let Err(e) = T::ReportUnresponsiveness::report_offence(vec![], offence) {
+				sp_runtime::print(e);
+			}
 		}
 	}
 
