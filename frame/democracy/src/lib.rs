@@ -64,7 +64,7 @@
 //! These calls can be made from any externally held account capable of creating
 //! a signed extrinsic.
 //!
-//! - `propose` - The submission of a sensitive action, represented as a hash. 
+//! - `propose` - Submits a sensitive action, represented as a hash. 
 //!	  Requires a deposit.
 //! - `second` - Signals agreement with a proposal, moves it higher on the
 //!   proposal queue, and requires a matching deposit to the original.
