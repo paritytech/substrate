@@ -927,8 +927,11 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_initialize() {
+		fn on_runtime_upgrade() {
 			Self::ensure_storage_upgraded();
+		}
+
+		fn on_initialize() {
 		}
 
 		fn on_finalize() {

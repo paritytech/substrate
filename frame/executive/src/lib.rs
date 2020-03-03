@@ -81,7 +81,7 @@ use sp_runtime::{
 	ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating,
+		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating, OnRuntimeUpgrade,
 	},
 	transaction_validity::TransactionValidity,
 };
@@ -110,6 +110,7 @@ impl<
 	Context: Default,
 	UnsignedValidator,
 	AllModules:
+		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber> +
@@ -135,6 +136,7 @@ impl<
 	Context: Default,
 	UnsignedValidator,
 	AllModules:
+		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber> +
@@ -183,6 +185,13 @@ where
 			digest,
 			frame_system::InitKind::Full,
 		);
+		let last_runtime_upgrade = <frame_system::Module<System>>::last_runtime_upgrade();
+		if last_runtime_upgrade.map(|n| n == *block_number).unwrap_or(false) {
+			<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
+			<frame_system::Module<System>>::register_extra_weight_unchecked(
+				<AllModules as WeighBlock<System::BlockNumber>>::on_runtime_upgrade()
+			);
+		}
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		<frame_system::Module<System>>::register_extra_weight_unchecked(
 			<AllModules as WeighBlock<System::BlockNumber>>::on_initialize(*block_number)
