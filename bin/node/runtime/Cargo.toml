@@ -85,7 +85,6 @@ std = [
 	"sp-consensus-babe/std",
 	"pallet-babe/std",
 	"pallet-balances/std",
-	"pallet-benchmark/std",
 	"sp-block-builder/std",
 	"codec/std",
 	"pallet-collective/std",

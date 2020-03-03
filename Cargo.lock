@@ -3500,7 +3500,6 @@ dependencies = [
  "pallet-authorship",
  "pallet-babe",
  "pallet-balances",
- "pallet-benchmark",
  "pallet-collective",
  "pallet-contracts",
  "pallet-contracts-primitives",
