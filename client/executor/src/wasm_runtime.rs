@@ -62,7 +62,7 @@ struct VersionedRuntime {
 	/// Runtime version according to `Core_version` if any.
 	version: Option<RuntimeVersion>,
 	/// Cached instance pool.
-	instances: RwLock<Vec<Mutex<Box<dyn WasmInstance>>>>,
+	instances: RwLock<[Option<Arc<Mutex<Box<dyn WasmInstance>>>>; MAX_INSTANCES]>,
 }
 
 const MAX_RUNTIMES: usize = 2;
@@ -206,20 +206,20 @@ impl RuntimeCache {
 		}
 
 		let result = {
-			let instance_pool = runtime.instances.upgradable_read();
 			// Find a free instance
-			let instance = instance_pool.iter().filter_map(|i| i.try_lock()).next();
-			if let Some(instance) = instance {
-				f(&**instance, runtime.version.as_ref(), ext)
+			let instance_pool = { runtime.instances.read().clone() };
+			let instance = instance_pool.iter().filter_map(|i| i.as_ref().and_then(|i| i.try_lock())).next();
+			if let Some(locked) = instance {
+				f(&**locked, runtime.version.as_ref(), ext)
 			} else {
 				// Allocate a new instance
 				drop(instance);
 				let instance = runtime.runtime.new_instance()?;
 
 				let result = f(&*instance, runtime.version.as_ref(), ext);
-				let mut instance_pool = RwLockUpgradableReadGuard::upgrade(instance_pool);
-				if instance_pool.len() < MAX_INSTANCES {
-					instance_pool.push(Mutex::new(instance));
+				let mut instance_pool = runtime.instances.write();
+				if let Some(ref mut slot) = instance_pool.iter_mut().find(|s| s.is_none()) {
+					**slot = Some(Arc::new(Mutex::new(instance)));
 					log::debug!(target: "wasm-cache", "Allocated WASM instance {}/{}", instance_pool.len(), MAX_INSTANCES);
 				} else {
 					log::warn!(target: "wasm-cache", "Ran out of free WASM instances");
@@ -315,7 +315,7 @@ fn create_versioned_wasm_runtime(
 		version,
 		heap_pages,
 		wasm_method,
-		instances: RwLock::new(Vec::with_capacity(MAX_INSTANCES)),
+		instances: RwLock::new([None, None, None, None, None, None, None, None]),
 	})
 }
 
