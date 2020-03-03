@@ -179,7 +179,7 @@ where
 		digest: &Digest<System::Hash>,
 	) {
 		let last_runtime_upgrade = <frame_system::Module<System>>::last_runtime_upgrade();
-		if last_runtime_upgrade.map(|n| n + 1 == *block_number).unwrap_or(false) {
+		if last_runtime_upgrade.map(|n| n + One::one() == *block_number).unwrap_or(false) {
 			<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
 			<frame_system::Module<System>>::register_extra_weight_unchecked(
 				<AllModules as WeighBlock<System::BlockNumber>>::on_runtime_upgrade()
@@ -582,7 +582,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("17caebd966d10cc6dc9659edf7fa3196511593f6c39f80f9b97cdbc3b0855cf3").into(),
+					state_root: hex!("c96987b52003684f590a6b9b55af9ded88b2e6f8d84441c456f46e59f5e73070").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
