@@ -181,7 +181,7 @@ macro_rules! impl_benchmark {
 					.map_err(|_| "Could not find extrinsic")?;
 				let selected_benchmark = match extrinsic {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
-					$( stringify!($extra) => return crate::benchmarking::$extra(steps, repeat), )*
+					$( stringify!($extra) => return super::benchmarking::$extra(steps, repeat), )*
 					
 					_ => return Err("Could not find extrinsic."),
 				};
@@ -190,7 +190,7 @@ macro_rules! impl_benchmark {
 				$crate::benchmarking::commit_db();
 				$crate::benchmarking::wipe_db();
 
-				let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
+				let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T, super::Call<T>, RawOrigin<T::AccountId>>>::components(&selected_benchmark);
 				let mut results: Vec<$crate::BenchmarkResults> = Vec::new();
 
 				// Default number of steps for a component.
@@ -230,13 +230,13 @@ macro_rules! impl_benchmark {
 						// Run the benchmark `repeat` times.
 						for _ in 0..repeat {
 							// Set up the externalities environment for the setup we want to benchmark.
-							let (call, caller) = <SelectedBenchmark as $crate::BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
+							let (call, caller) = <SelectedBenchmark as $crate::BenchmarkingSetup<T, super::Call<T>, RawOrigin<T::AccountId>>>::instance(&selected_benchmark, &c)?;
 							// Commit the externalities to the database, flushing the DB cache.
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
 							// Time the extrinsic logic.
 							let start_extrinsic = $crate::benchmarking::current_time();
-							<crate::Call<T> as $crate::Dispatchable>::dispatch(call, caller.into())?;
+							<super::Call<T> as $crate::Dispatchable>::dispatch(call, caller.into())?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
 							// Time the storage root recalculation.
@@ -280,7 +280,7 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			{ $( $common )* } ( $( $names )* ) ( $( $extras )* ) $name { $( $code )* }: { Ok((crate::Call::<T>::$dispatch($($arg),*), $origin)) } $( $rest )*
+			{ $( $common )* } ( $( $names )* ) ( $( $extras )* ) $name { $( $code )* }: { Ok((super::Call::<T>::$dispatch($($arg),*), $origin)) } $( $rest )*
 		}
 	};
 	// extra match arm:
@@ -453,7 +453,7 @@ macro_rules! benchmark_backend {
 		#[allow(non_camel_case_types)]
 		struct $name;
 		#[allow(unused_variables)]
-		impl<T: Trait> $crate::BenchmarkingSetup<T, crate::Call<T>, RawOrigin<T::AccountId>> for $name {
+		impl<T: Trait> $crate::BenchmarkingSetup<T, super::Call<T>, RawOrigin<T::AccountId>> for $name {
 			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
 				vec! [
 					$(
