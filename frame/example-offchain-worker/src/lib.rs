@@ -611,18 +611,19 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		use new::SignedPayload;
 
 		// Firstly let's check that we call the right function.
-		// if let Call::submit_price_unsigned_with_signed_payload(block_number, payload, signature) = call {
-        //     let signature_valid = payload.verify(&signature);
-		// 	if !signature_valid {
-		// 		return InvalidTransaction::BadProof.into();
-		// 	}
-        //     Self::validate_transaction_parameters(block_number, &payload.price)
-        // }
-		// else if let Call::submit_price_unsigned(block_number, new_price) = call {
-        //     Self::validate_transaction_parameters(block_number, new_price)
-        // } else {
-        //     InvalidTransaction::Call.into()
-        // }
-		unimplemented!()
+		if let Call::submit_price_unsigned_with_signed_payload(
+			ref block_number, ref payload, ref signature
+		) = call {
+            //let signature_valid = payload.verify::<T::AuthorityId>(signature.clone());
+			let signature_valid = false;
+			if !signature_valid {
+				return InvalidTransaction::BadProof.into();
+			}
+            Self::validate_transaction_parameters(block_number, &payload.price)
+        } else if let Call::submit_price_unsigned(block_number, new_price) = call {
+            Self::validate_transaction_parameters(block_number, new_price)
+        } else {
+            InvalidTransaction::Call.into()
+        }
     }
 }
