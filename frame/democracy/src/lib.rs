@@ -47,8 +47,8 @@
 //! as many lock periods after enactment.
 //! - **Vote:** A value that can either be in approval ("Aye") or rejection ("Nay")
 //!   of a particular referendum.
-//! - **Proposal:** A submission to the chain that represents an action that is 
-//!   being suggested for the system to adopt.
+//! - **Proposal:** A submission to the chain that represents an action that a proposer (either an
+//! account or an external origin) suggests that the system adopt.
 //! - **Referendum:** A proposal that is in the process of being voted on for 
 //!   either acceptance or rejection as a change to the system.
 //! - **Proxy:** An account that votes on behalf of a separate "Stash" account
