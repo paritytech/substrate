@@ -31,7 +31,8 @@
 
 mod noncanonical;
 mod pruning;
-#[cfg(test)] mod test;
+#[cfg(test)]
+mod test;
 
 use std::fmt;
 use parking_lot::RwLock;
@@ -40,6 +41,8 @@ use std::collections::{HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
+use parity_util_mem::{MallocSizeOf, malloc_size};
+use sc_client_api::{StateDbMemoryInfo, MemorySize};
 
 const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
@@ -120,7 +123,6 @@ pub struct ChangeSet<H: Hash> {
 	pub deleted: Vec<H>,
 }
 
-
 /// A set of changes to the backing database.
 #[derive(Default, Debug, Clone)]
 pub struct CommitSet<H: Hash> {
@@ -196,8 +198,11 @@ struct StateDbSync<BlockHash: Hash, Key: Hash> {
 	pinned: HashMap<BlockHash, u32>,
 }
 
-impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
-	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
+impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<BlockHash, Key> {
+	fn new<D: MetaDb>(
+		mode: PruningMode,
+		db: &D,
+	) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
 		trace!(target: "state-db", "StateDb settings: {:?}", mode);
 
 		// Check that settings match
@@ -234,7 +239,13 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn insert_block<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
+	fn insert_block<E: fmt::Debug>(
+		&mut self,
+		hash: &BlockHash,
+		number: u64,
+		parent_hash: &BlockHash,
+		mut changeset: ChangeSet<Key>,
+	) -> Result<CommitSet<Key>, Error<E>> {
 		let mut meta = ChangeSet::default();
 		if number == 0 {
 			// Save pruning mode when writing first block.
@@ -247,7 +258,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				// write changes immediately
 				Ok(CommitSet {
 					data: changeset,
-					meta: meta,
+					meta,
 				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
@@ -260,7 +271,10 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn canonicalize_block<E: fmt::Debug>(&mut self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<E>> {
+	fn canonicalize_block<E: fmt::Debug>(
+		&mut self,
+		hash: &BlockHash,
+	) -> Result<CommitSet<Key>, Error<E>> {
 		let mut commit = CommitSet::default();
 		if self.mode == PruningMode::ArchiveAll {
 			return Ok(commit)
@@ -280,18 +294,23 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		Ok(commit)
 	}
 
-	pub fn best_canonical(&self) -> Option<u64> {
+	fn best_canonical(&self) -> Option<u64> {
 		return self.non_canonical.last_canonicalized_block_number()
 	}
 
-	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
+	fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
 		match self.mode {
 			PruningMode::ArchiveAll => false,
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
 				if self.best_canonical().map(|c| number > c).unwrap_or(true) {
 					!self.non_canonical.have_block(hash)
 				} else {
-					self.pruning.as_ref().map_or(false, |pruning| number < pruning.pending() || !pruning.have_block(hash))
+					self.pruning
+						.as_ref()
+						.map_or(
+							false,
+							|pruning| number < pruning.pending() || !pruning.have_block(hash),
+						)
 				}
 			}
 		}
@@ -320,7 +339,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	/// Revert all non-canonical blocks with the best block number.
 	/// Returns a database commit or `None` if not possible.
 	/// For archive an empty commit set is returned.
-	pub fn revert_one(&mut self) -> Option<CommitSet<Key>> {
+	fn revert_one(&mut self) -> Option<CommitSet<Key>> {
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				Some(CommitSet::default())
@@ -331,7 +350,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn pin(&mut self, hash: &BlockHash) -> Result<(), PinError> {
+	fn pin(&mut self, hash: &BlockHash) -> Result<(), PinError> {
 		match self.mode {
 			PruningMode::ArchiveAll => Ok(()),
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
@@ -352,7 +371,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn unpin(&mut self, hash: &BlockHash) {
+	fn unpin(&mut self, hash: &BlockHash) {
 		match self.pinned.entry(hash.clone()) {
 			Entry::Occupied(mut entry) => {
 				*entry.get_mut() -= 1;
@@ -377,12 +396,14 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		db.get(key.as_ref()).map_err(|e| Error::Db(e))
 	}
 
-	pub fn apply_pending(&mut self) {
+	fn apply_pending(&mut self) {
 		self.non_canonical.apply_pending();
 		if let Some(pruning) = &mut self.pruning {
 			pruning.apply_pending();
 		}
-		trace!(target: "forks", "First available: {:?} ({}), Last canon: {:?} ({}), Best forks: {:?}",
+		trace!(
+			target: "forks",
+			"First available: {:?} ({}), Last canon: {:?} ({}), Best forks: {:?}",
 			self.pruning.as_ref().and_then(|p| p.next_hash()),
 			self.pruning.as_ref().map(|p| p.pending()).unwrap_or(0),
 			self.non_canonical.last_canonicalized_hash(),
@@ -391,11 +412,19 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		);
 	}
 
-	pub fn revert_pending(&mut self) {
+	fn revert_pending(&mut self) {
 		if let Some(pruning) = &mut self.pruning {
 			pruning.revert_pending();
 		}
 		self.non_canonical.revert_pending();
+	}
+
+	fn memory_info(&self) -> StateDbMemoryInfo {
+		StateDbMemoryInfo {
+			non_canonical: MemorySize::from_bytes(malloc_size(&self.non_canonical)),
+			pruning: self.pruning.as_ref().map(|p| MemorySize::from_bytes(malloc_size(p))),
+			pinned: MemorySize::from_bytes(malloc_size(&self.pinned)),
+		}
 	}
 }
 
@@ -405,21 +434,33 @@ pub struct StateDb<BlockHash: Hash, Key: Hash> {
 	db: RwLock<StateDbSync<BlockHash, Key>>,
 }
 
-impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
+impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash, Key> {
 	/// Creates a new instance. Does not expect any metadata in the database.
-	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> {
+	pub fn new<D: MetaDb>(
+		mode: PruningMode,
+		db: &D,
+	) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> {
 		Ok(StateDb {
 			db: RwLock::new(StateDbSync::new(mode, db)?)
 		})
 	}
 
 	/// Add a new non-canonical block.
-	pub fn insert_block<E: fmt::Debug>(&self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
+	pub fn insert_block<E: fmt::Debug>(
+		&self,
+		hash: &BlockHash,
+		number: u64,
+		parent_hash: &BlockHash,
+		changeset: ChangeSet<Key>,
+	) -> Result<CommitSet<Key>, Error<E>> {
 		self.db.write().insert_block(hash, number, parent_hash, changeset)
 	}
 
 	/// Finalize a previously inserted block.
-	pub fn canonicalize_block<E: fmt::Debug>(&self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<E>> {
+	pub fn canonicalize_block<E: fmt::Debug>(
+		&self,
+		hash: &BlockHash,
+	) -> Result<CommitSet<Key>, Error<E>> {
 		self.db.write().canonicalize_block(hash)
 	}
 
@@ -465,6 +506,11 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	/// Revert all pending changes
 	pub fn revert_pending(&self) {
 		self.db.write().revert_pending();
+	}
+
+	/// Returns the current memory statistics of this instance.
+	pub fn memory_info(&self) -> StateDbMemoryInfo {
+		self.db.read().memory_info()
 	}
 }
 
