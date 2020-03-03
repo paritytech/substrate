@@ -368,13 +368,6 @@ define_env!(Env, <E: Ext>,
 			// Bail out if value length exceeds the set maximum value size.
 			return Err(sp_sandbox::HostError);
 		}
-		if value_len == 0 {
-			// Bail out on setting storage to an emptry entry.
-			//
-			// We might remove this constraint later if there are actual
-			// use cases that require setting empty contract storage entries.
-			return Err(sp_sandbox::HostError);
-		}
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		let value = Some(read_sandbox_memory(ctx, value_ptr, value_len)?);
