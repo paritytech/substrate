@@ -38,9 +38,13 @@
 //!
 //! ### Terminology
 //!
-//! - **Conviction:** A multiplier that is added to a vote based on the length
-//!   of time the voter has opted to lock their tokens. Longer lock-up periods
-//!   grant a stronger vote.
+//! - **Enactment Period:** The minimum period of locking and the period between a proposal being
+//! approved and enacted. 
+//! - **Lock Period:** A period of time after proposal enactment that the tokens of _winning_ voters
+//! will be locked.
+//! - **Conviction:** An indication of a voter's strength of belief in their vote. An increase
+//! of one in conviction indicates that a token holder is willing to lock their tokens for twice
+//! as many lock periods after enactment.
 //! - **Vote:** A value that can either be in approval ("Aye") or rejection ("Nay")
 //!   of a particular referendum.
 //! - **Proposal:** A submission to the chain that represents an action that is 
