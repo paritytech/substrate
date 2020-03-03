@@ -40,20 +40,26 @@
 //! one unsigned transaction floating in the network.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use frame_system::{
+    self as system,
+    ensure_signed,
+    ensure_none,
+    offchain::{self, new::{self, SendUnsignedTransaction, SendRawUnsignedTransaction}}
+};
 use frame_support::{
 	debug,
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	traits::Get,
 	weights::SimpleDispatchInfo,
 };
-use frame_system::{self as system, ensure_signed, ensure_none, offchain};
-use serde_json as json;
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	offchain::{http, Duration, storage::StorageValueRef},
 	traits::Zero,
 	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionValidity},
 };
+use codec::Encode;
+use serde_json as json;
 
 #[cfg(test)]
 mod tests;
@@ -77,7 +83,10 @@ pub mod crypto {
 }
 
 /// This pallet's configuration trait
-pub trait Trait: frame_system::Trait {
+pub trait Trait: new::SendTransactionTypes<Call<Self>> {
+	/// The identifier type for an offchain worker.
+    type AuthorityId: new::AppCrypto<Self>;
+
 	/// The type to sign and submit transactions.
 	type SubmitSignedTransaction:
 		offchain::SubmitSignedTransaction<Self, <Self as Trait>::Call>;
@@ -103,6 +112,30 @@ pub trait Trait: frame_system::Trait {
 	///
 	/// This ensures that we only accept unsigned transactions once, every `UnsignedInterval` blocks.
 	type UnsignedInterval: Get<Self::BlockNumber>;
+}
+
+struct PricePayload<T: new::SigningTypes> {
+    price: u32,
+    public: T::Public
+}
+
+impl<T: new::SigningTypes> PricePayload<T> {
+    fn new(price: u32, public: T::Public) -> PricePayload<T> {
+        PricePayload {
+            price,
+            public
+        }
+    }
+}
+
+impl<T: new::SigningTypes> new::SignedPayload<T> for PricePayload<T> {
+    fn public(&self) -> T::Public {
+        self.public.clone()
+    }
+}
+
+impl<T: new::SigningTypes> Encode for PricePayload<T> {
+    fn encode(&self) -> Vec<u8> { Encode::encode(&self.price) }
 }
 
 decl_storage! {
