@@ -18,6 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod tests;
 mod utils;
 pub use utils::*;
 #[doc(hidden)]
@@ -156,7 +157,7 @@ macro_rules! benchmarks_iter {
 	) => {
 		$crate::benchmarks_iter! {
 			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: { 
-				crate::Call::<T>::$dispatch($($arg),*).dispatch($origin.into())?;
+				Call::<T>::$dispatch($($arg),*).dispatch($origin.into())?;
 			} $( $rest )*
 		}
 	};
