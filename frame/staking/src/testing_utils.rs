@@ -151,7 +151,7 @@ where
 /// which has a less score than the seq-phragmen.
 pub fn get_weak_solution<T: Trait>(
 	do_reduce: bool,
-) -> (Vec<ValidatorIndex>, Compact, PhragmenScore) {
+) -> (Vec<ValidatorIndex>, CompactAssignments, PhragmenScore) {
 	use sp_std::collections::btree_map::BTreeMap;
 	let mut backing_stake_of: BTreeMap<T::AccountId, BalanceOf<T>> = BTreeMap::new();
 
@@ -286,9 +286,12 @@ pub fn get_weak_solution<T: Trait>(
 	};
 
 	// compact encode the assignment.
-	let compact =
-		Compact::from_assignment(low_accuracy_assignment, nominator_index, validator_index)
-			.unwrap();
+	let compact = CompactAssignments::from_assignment(
+		low_accuracy_assignment,
+		nominator_index,
+		validator_index,
+	)
+	.unwrap();
 
 	// winners to index.
 	let winners = winners
@@ -310,7 +313,7 @@ pub fn get_weak_solution<T: Trait>(
 /// worker code.
 pub fn get_seq_phragmen_solution<T: Trait>(
 	do_reduce: bool,
-) -> (Vec<ValidatorIndex>, Compact, PhragmenScore) {
+) -> (Vec<ValidatorIndex>, CompactAssignments, PhragmenScore) {
 	let sp_phragmen::PhragmenResult {
 		winners,
 		assignments,

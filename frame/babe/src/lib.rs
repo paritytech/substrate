@@ -320,10 +320,10 @@ impl<T: Trait> Module<T> {
 	/// In other word, this is only accurate if no slots are missed. Given missed slots, the slot
 	/// number will grow while the block number will not. Hence, the result can be interpreted as an
 	/// upper bound.
-	///
-	/// -------------- IMPORTANT NOTE --------------
-	/// This implementation is linked to how [`should_epoch_change`] is working. This might need to
-	/// be updated accordingly, if the underlying mechanics of slot and epochs change.
+	//
+	// -------------- IMPORTANT NOTE --------------
+	// This implementation is linked to how [`should_epoch_change`] is working. This might need to
+	// be updated accordingly, if the underlying mechanics of slot and epochs change.
 	pub fn next_expected_epoch_change(now: T::BlockNumber) -> T::BlockNumber {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		let slots_remaining = next_slot

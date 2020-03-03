@@ -16,7 +16,9 @@
 
 //! Helpers for offchain worker election.
 
-use crate::{Call, Compact, Module, NominatorIndex, OffchainAccuracy, Trait, ValidatorIndex};
+use crate::{
+	Call, CompactAssignments, Module, NominatorIndex, OffchainAccuracy, Trait, ValidatorIndex,
+};
 use codec::Encode;
 use frame_support::debug;
 use frame_system::offchain::SubmitUnsignedTransaction;
@@ -48,7 +50,7 @@ pub enum OffchainElectionError {
 /// The type of signature data encoded with the unsigned submission
 pub(crate) type SignaturePayload<'a> = (
 	&'a [ValidatorIndex],
-	&'a Compact,
+	&'a CompactAssignments,
 	&'a PhragmenScore,
 	&'a u32,
 );
@@ -154,7 +156,7 @@ pub fn prepare_submission<T: Trait>(
 	assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>>,
 	winners: Vec<(T::AccountId, ExtendedBalance)>,
 	do_reduce: bool,
-) -> Result<(Vec<ValidatorIndex>, Compact, PhragmenScore), OffchainElectionError>
+) -> Result<(Vec<ValidatorIndex>, CompactAssignments, PhragmenScore), OffchainElectionError>
 where
 	ExtendedBalance: From<<OffchainAccuracy as PerThing>::Inner>,
 {
@@ -217,9 +219,12 @@ where
 	};
 
 	// compact encode the assignment.
-	let compact =
-		Compact::from_assignment(low_accuracy_assignment, nominator_index, validator_index)
-			.unwrap();
+	let compact = CompactAssignments::from_assignment(
+		low_accuracy_assignment,
+		nominator_index,
+		validator_index,
+	)
+	.unwrap();
 
 	// winners to index.
 	let winners = winners

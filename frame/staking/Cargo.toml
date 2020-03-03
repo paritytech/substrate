@@ -38,7 +38,12 @@ env_logger = "0.7.1"
 
 [features]
 migrate = []
-testing-utils = ["std"]
+testing-utils = [
+	"std",
+	"pallet-indices/std",
+	"sp-core/std",
+	"rand/std",
+]
 default = ["std"]
 std = [
 	"serde",

@@ -243,7 +243,7 @@
 //! - [Session](../pallet_session/index.html): Used to manage sessions. Also, a list of new
 //!   validators is stored in the Session module's `Validators` at the end of each era.
 
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -304,7 +304,7 @@ pub(crate) const MAX_VALIDATORS: u32 = ValidatorIndex::max_value() as u32;
 pub(crate) const MAX_NOMINATORS: u32 = NominatorIndex::max_value();
 
 // Note: Maximum nomination limit is set here -- 16.
-generate_compact_solution_type!(pub CompactAssignments, 16);
+generate_compact_solution_type!(pub GenericCompactAssignments, 16);
 
 /// Data type used to index nominators in the compact type
 pub type NominatorIndex = u32;
@@ -329,11 +329,8 @@ pub type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 /// The compact type for election solutions.
-pub type Compact = CompactAssignments<
-	NominatorIndex,
-	ValidatorIndex,
-	OffchainAccuracy,
->;
+pub type CompactAssignments =
+	GenericCompactAssignments<NominatorIndex, ValidatorIndex, OffchainAccuracy>;
 
 type PositiveImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
@@ -737,7 +734,7 @@ pub trait Trait: frame_system::Trait {
 	/// The NPoS reward curve to use.
 	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
 
-	/// Something that can predict the next session change.
+	/// Something that can estimate the next session change, accurately or as a best effort guess.
 	type NextSessionChange: EstimateNextSessionChange<Self::BlockNumber>;
 
 	/// How many blocks ahead of the era do we try to run the phragmen offchain? Setting this to
@@ -1290,7 +1287,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - The transaction's complexity is proportional to the size of `targets`,
-		/// which is capped at Compact::LIMIT.
+		/// which is capped at CompactAssignments::LIMIT.
 		/// - Both the reads and writes follow a similar pattern.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
@@ -1302,7 +1299,7 @@ decl_module! {
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			let targets = targets.into_iter()
-				.take(<Compact as VotingLimit>::LIMIT)
+				.take(<CompactAssignments as VotingLimit>::LIMIT)
 				.map(|t| T::Lookup::lookup(t))
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
@@ -1585,7 +1582,7 @@ decl_module! {
 		pub fn submit_election_solution(
 			origin,
 			winners: Vec<ValidatorIndex>,
-			compact_assignments: Compact,
+			compact_assignments: CompactAssignments,
 			score: PhragmenScore,
 		) {
 			let _who = ensure_signed(origin)?;
@@ -1603,7 +1600,7 @@ decl_module! {
 		pub fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<ValidatorIndex>,
-			compact_assignments: Compact,
+			compact_assignments: CompactAssignments,
 			score: PhragmenScore,
 			// already used and checked in ValidateUnsigned.
 			_validator_index: u32,
@@ -1791,7 +1788,7 @@ impl<T: Trait> Module<T> {
 	/// of the next round. This may be called by both a signed and an unsigned transaction.
 	fn check_and_replace_solution(
 		winners: Vec<ValidatorIndex>,
-		compact_assignments: Compact,
+		compact_assignments: CompactAssignments,
 		compute: ElectionCompute,
 		claimed_score: PhragmenScore,
 	) -> Result<(), Error<T>> {

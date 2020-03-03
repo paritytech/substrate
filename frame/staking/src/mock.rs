@@ -751,11 +751,7 @@ pub fn on_offence_now(
 // distributed evenly.
 pub fn horrible_phragmen_with_post_processing(
 	do_reduce: bool,
-) -> (
-	Compact,
-	Vec<ValidatorIndex>,
-	PhragmenScore,
-) {
+) -> (CompactAssignments, Vec<ValidatorIndex>, PhragmenScore) {
 	use std::collections::BTreeMap;
 
 	let mut backing_stake_of: BTreeMap<AccountId, Balance> = BTreeMap::new();
@@ -848,16 +844,12 @@ pub fn horrible_phragmen_with_post_processing(
 	};
 
 	// convert back to ratio assignment. This takes less space.
-	let assignments_reduced = sp_phragmen::assignment_staked_to_ratio::<
-		AccountId,
-		OffchainAccuracy,
-	>(staked_assignment);
+	let assignments_reduced =
+		sp_phragmen::assignment_staked_to_ratio::<AccountId, OffchainAccuracy>(staked_assignment);
 
-	let compact = Compact::from_assignment(
-		assignments_reduced,
-		nominator_index,
-		validator_index,
-	).unwrap();
+	let compact =
+		CompactAssignments::from_assignment(assignments_reduced, nominator_index, validator_index)
+			.unwrap();
 
 	// winner ids to index
 	let winners = winners.into_iter().map(|w| validator_index(&w).unwrap()).collect::<Vec<_>>();
@@ -870,11 +862,7 @@ pub fn horrible_phragmen_with_post_processing(
 pub fn prepare_submission_with(
 	do_reduce: bool,
 	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
-) -> (
-	Compact,
-	Vec<ValidatorIndex>,
-	PhragmenScore,
-) {
+) -> (CompactAssignments, Vec<ValidatorIndex>, PhragmenScore) {
 	// run phragmen on the default stuff.
 	let sp_phragmen::PhragmenResult {
 		winners,
@@ -922,11 +910,9 @@ pub fn prepare_submission_with(
 		evaluate_support::<AccountId>(&support_map)
 	};
 
-	let compact = Compact::from_assignment(
-		assignments_reduced,
-		nominator_index,
-		validator_index,
-	).unwrap();
+	let compact =
+		CompactAssignments::from_assignment(assignments_reduced, nominator_index, validator_index)
+			.unwrap();
 
 
 	// winner ids to index

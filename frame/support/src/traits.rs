@@ -87,7 +87,7 @@ impl<
 	Created: Happened<K>,
 	Removed: Happened<K>,
 	K: FullCodec,
-	T: FullCodec
+	T: FullCodec,
 > StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
 	fn get(k: &K) -> T { S::get(k) }
 	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
@@ -138,9 +138,11 @@ impl<
 	}
 }
 
-/// Something that can predict at which block number the next era change will happen.
+/// Something that can estimate at which block number the next era change will happen in a best
+/// effort manner. The result may or may night be accurate, based on the chain configuration and
+/// semantics.
 pub trait EstimateNextSessionChange<BlockNumber> {
-	/// Return the block number at which the next era change will happen.
+	/// Return the block number at which the next era change is estimated to happen.
 	fn estimate_next_session_change(now: BlockNumber) -> BlockNumber;
 }
 
