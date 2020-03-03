@@ -2037,14 +2037,8 @@ macro_rules! __check_reserved_fn_name {
 	(on_runtime_upgrade $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error on_runtime_upgrade);
 	};
-	(on_initialise $( $rest:ident )*) => {
-		$crate::__check_reserved_fn_name!(@compile_error_renamed on_initialise on_initialize);
-	};
 	(on_finalize $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error on_finalize);
-	};
-	(on_finalise $( $rest:ident )*) => {
-		$crate::__check_reserved_fn_name!(@compile_error_renamed on_finalise on_finalize);
 	};
 	(offchain_worker $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error offchain_worker);

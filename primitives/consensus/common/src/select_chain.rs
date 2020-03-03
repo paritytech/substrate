@@ -23,11 +23,11 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 /// specific chain build.
 ///
 /// The Strategy can be customized for the two use cases of authoring new blocks
-/// upon the best chain or which fork to finalise. Unless implemented differently
+/// upon the best chain or which fork to finalize. Unless implemented differently
 /// by default finalization methods fall back to use authoring, so as a minimum
 /// `_authoring`-functions must be implemented.
 ///
-/// Any particular user must make explicit, however, whether they intend to finalise
+/// Any particular user must make explicit, however, whether they intend to finalize
 /// or author through the using the right function call, as these might differ in
 /// some implementations.
 ///

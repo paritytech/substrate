@@ -241,7 +241,7 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 			sp_io::offchain::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
 		}
 
-		// finalise the request
+		// finalize the request
 		sp_io::offchain::http_request_write_body(id, &[], self.deadline)?;
 
 		Ok(PendingRequest {
