@@ -58,7 +58,7 @@ use sp_runtime::{
 	traits::Zero,
 	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionValidity},
 };
-use codec::Encode;
+use codec::{Encode, Decode};
 use serde_json as json;
 
 #[cfg(test)]
@@ -114,6 +114,7 @@ pub trait Trait: new::SendTransactionTypes<Call<Self>> {
 	type UnsignedInterval: Get<Self::BlockNumber>;
 }
 
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
 struct PricePayload<T: new::SigningTypes> {
     price: u32,
     public: T::Public
@@ -132,10 +133,6 @@ impl<T: new::SigningTypes> new::SignedPayload<T> for PricePayload<T> {
     fn public(&self) -> T::Public {
         self.public.clone()
     }
-}
-
-impl<T: new::SigningTypes> Encode for PricePayload<T> {
-    fn encode(&self) -> Vec<u8> { Encode::encode(&self.price) }
 }
 
 decl_storage! {
@@ -222,14 +219,14 @@ decl_module! {
         pub fn submit_price_unsigned_with_signed_payload(
             origin,
             block_number: T::BlockNumber,
-            price: u32,
+            price_payload: PricePayload<T>,
             signature: T::Signature
         ) -> DispatchResult
         {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
-			Self::add_price(Default::default(), price);
+			Self::add_price(Default::default(), price_payload.price);
 			// now increment the block number at which we expect next unsigned transaction.
 			let current_block = <system::Module<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
@@ -442,7 +439,7 @@ impl<T: Trait> Module<T> {
         let _result_signed_payload = new::Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
             |account| PricePayload::new(price, account.public.clone()),
             |payload, signature| {
-                Call::submit_price_unsigned_with_signed_payload(block_number, payload.price, signature)
+                Call::submit_price_unsigned_with_signed_payload(block_number, payload, signature)
             }
         );
 
@@ -546,6 +543,58 @@ impl<T: Trait> Module<T> {
 			Some(prices.iter().fold(0_u32, |a, b| a.saturating_add(*b)) / prices.len() as u32)
 		}
 	}
+
+    fn validate_transaction_parameters(
+        block_number: &T::BlockNumber,
+        new_price: &u32
+    ) -> TransactionValidity {
+        // Now let's check if the transaction has any chance to succeed.
+        let next_unsigned_at = <NextUnsignedAt<T>>::get();
+        if &next_unsigned_at > block_number {
+            return InvalidTransaction::Stale.into();
+        }
+        // Let's make sure to reject transactions from the future.
+        let current_block = <system::Module<T>>::block_number();
+        if &current_block < block_number {
+            return InvalidTransaction::Future.into();
+        }
+
+        // We prioritize transactions that are more far away from current average.
+        //
+        // Note this doesn't make much sense when building an actual oracle, but this example
+        // is here mostly to show off offchain workers capabilities, not about building an
+        // oracle.
+        let avg_price = Self::average_price()
+            .map(|price| if &price > new_price { price - new_price } else { new_price - price })
+            .unwrap_or(0);
+
+        Ok(ValidTransaction {
+            // We set base priority to 2**20 to make sure it's included before any other
+            // transactions in the pool. Next we tweak the priority depending on how much
+            // it differs from the current average. (the more it differs the more priority it
+            // has).
+            priority: (1 << 20) + avg_price as u64,
+            // This transaction does not require anything else to go before into the pool.
+            // In theory we could require `previous_unsigned_at` transaction to go first,
+            // but it's not necessary in our case.
+            requires: vec![],
+            // We set the `provides` tag to be the same as `next_unsigned_at`. This makes
+            // sure only one transaction produced after `next_unsigned_at` will ever
+            // get to the transaction pool and will end up in the block.
+            // We can still have multiple transactions compete for the same "spot",
+            // and the one with higher priority will replace other one in the pool.
+            provides: vec![codec::Encode::encode(&(KEY_TYPE.0, next_unsigned_at))],
+            // The transaction is only valid for next 5 blocks. After that it's
+            // going to be revalidated by the pool.
+            longevity: 5,
+            // It's fine to propagate that transaction to other peers, which means it can be
+            // created even by nodes that don't produce blocks.
+            // Note that sometimes it's better to keep it for yourself (if you are the block
+            // producer), since for instance in some schemes others may copy your solution and
+            // claim a reward.
+            propagate: true,
+        })
+    }
 }
 
 #[allow(deprecated)] // ValidateUnsigned
@@ -559,55 +608,17 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	/// are being whitelisted and marked as valid.
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		// Firstly let's check that we call the right function.
-		if let Call::submit_price_unsigned(block_number, new_price) = call {
-			// Now let's check if the transaction has any chance to succeed.
-			let next_unsigned_at = <NextUnsignedAt<T>>::get();
-			if &next_unsigned_at > block_number {
-				return InvalidTransaction::Stale.into();
+		if let Call::submit_price_unsigned_with_signed_payload(block_number, payload, signature) = call {
+            let signature_valid = payload.verify(&signature);
+			if !signature_valid {
+				return InvalidTransaction::BadProof.into();
 			}
-			// Let's make sure to reject transactions from the future.
-			let current_block = <system::Module<T>>::block_number();
-			if &current_block < block_number {
-				return InvalidTransaction::Future.into();
-			}
-
-			// We prioritize transactions that are more far away from current average.
-			//
-			// Note this doesn't make much sense when building an actual oracle, but this example
-			// is here mostly to show off offchain workers capabilities, not about building an
-			// oracle.
-			let avg_price = Self::average_price()
-				.map(|price| if &price > new_price { price - new_price } else { new_price - price })
-				.unwrap_or(0);
-
-			Ok(ValidTransaction {
-				// We set base priority to 2**20 to make sure it's included before any other
-				// transactions in the pool. Next we tweak the priority depending on how much
-				// it differs from the current average. (the more it differs the more priority it
-				// has).
-				priority: (1 << 20) + avg_price as u64,
-				// This transaction does not require anything else to go before into the pool.
-				// In theory we could require `previous_unsigned_at` transaction to go first,
-				// but it's not necessary in our case.
-				requires: vec![],
-				// We set the `provides` tag to be the same as `next_unsigned_at`. This makes
-				// sure only one transaction produced after `next_unsigned_at` will ever
-				// get to the transaction pool and will end up in the block.
-				// We can still have multiple transactions compete for the same "spot",
-				// and the one with higher priority will replace other one in the pool.
-				provides: vec![codec::Encode::encode(&(KEY_TYPE.0, next_unsigned_at))],
-				// The transaction is only valid for next 5 blocks. After that it's
-				// going to be revalidated by the pool.
-				longevity: 5,
-				// It's fine to propagate that transaction to other peers, which means it can be
-				// created even by nodes that don't produce blocks.
-				// Note that sometimes it's better to keep it for yourself (if you are the block
-				// producer), since for instance in some schemes others may copy your solution and
-				// claim a reward.
-				propagate: true,
-			})
-		} else {
-			InvalidTransaction::Call.into()
-		}
-	}
+            Self::validate_transaction_parameters(block_number, payload.price)
+        }
+		else if let Call::submit_price_unsigned(block_number, new_price) = call {
+            Self::validate_transaction_parameters(block_number, new_price)
+        } else {
+            InvalidTransaction::Call.into()
+        }
+    }
 }
