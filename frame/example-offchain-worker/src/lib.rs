@@ -391,7 +391,6 @@ impl<T: Trait> Module<T> {
 
 	/// A helper function to fetch the price and send unsigned transaction.
 	fn fetch_price_and_send_unsigned(block_number: T::BlockNumber) -> Result<(), String> {
-		use system::offchain::SubmitUnsignedTransaction;
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
@@ -410,13 +409,21 @@ impl<T: Trait> Module<T> {
 		// passing `price` as an argument.
 		let call = Call::submit_price_unsigned(block_number, price);
 
-		// Now let's create an unsigned transaction out of this call and submit it to the pool.
+		// Now let's create a transaction out of this call and submit it to the pool.
+		// Here we showcase multiple ways to send a transaction:
+		// 1. An unsigned transaction / unsigned payload (raw)
+		// 2. An unsigned transaction with a signed payload
+		// 3. A signed transaction
+		//
 		// By default unsigned transactions are disallowed, so we need to whitelist this case
 		// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefuly
 		// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
 		// attack vectors. See validation logic docs for more details.
-		T::SubmitUnsignedTransaction::submit_unsigned(call)
-			.map_err(|()| "Unable to submit unsigned transaction.".into())
+		let _result_raw: Result<(), String> = new::Signer::<T, T::AuthorityId>::send_raw_unsigned_transaction(call)
+    		.map_err(|()| "Unable to submit unsigned transaction.".into());
+        Ok(())
+		// T::SubmitUnsignedTransaction::submit_unsigned(call)
+		// 	.map_err(|()| "Unable to submit unsigned transaction.".into())
 
 	}
 
