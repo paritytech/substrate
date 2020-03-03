@@ -219,6 +219,23 @@ decl_module! {
 			Ok(())
 		}
 
+        pub fn submit_price_unsigned_with_signed_payload(
+            origin,
+            block_number: T::BlockNumber,
+            price: u32,
+            signature: T::Signature
+        ) -> DispatchResult
+        {
+			// This ensures that the function can only be called via unsigned transaction.
+			ensure_none(origin)?;
+			// Add the price to the on-chain list, but mark it as coming from an empty address.
+			Self::add_price(Default::default(), price);
+			// now increment the block number at which we expect next unsigned transaction.
+			let current_block = <system::Module<T>>::block_number();
+			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
+			Ok(())
+        }
+
 		/// Offchain Worker entry point.
 		///
 		/// By implementing `fn offchain_worker` within `decl_module!` you declare a new offchain
@@ -421,6 +438,14 @@ impl<T: Trait> Module<T> {
 		// attack vectors. See validation logic docs for more details.
 		let _result_raw: Result<(), String> = new::Signer::<T, T::AuthorityId>::send_raw_unsigned_transaction(call)
     		.map_err(|()| "Unable to submit unsigned transaction.".into());
+
+        let _result_signed_payload = new::Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
+            |account| PricePayload::new(price, account.public.clone()),
+            |payload, signature| {
+                Call::submit_price_unsigned_with_signed_payload(block_number, payload.price, signature)
+            }
+        );
+
         Ok(())
 		// T::SubmitUnsignedTransaction::submit_unsigned(call)
 		// 	.map_err(|()| "Unable to submit unsigned transaction.".into())
