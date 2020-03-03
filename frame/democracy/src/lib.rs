@@ -106,22 +106,22 @@
 //!
 //! This call can only be made by the `ExternalMajorityOrigin`.
 //!
-//! - `external_propose_majority` - Schedules a majority-carries referendum once
-//!   it is legal for an externally proposed referendum.
+//! - `external_propose_majority` - Schedules a proposal to become a majority-carries
+//!	 referendum once it is legal for an externally proposed referendum.
 //!
 //! #### External Default Origin
 //!
 //! This call can only be made by the `ExternalDefaultOrigin`.
 //!
-//! - `external_propose_default` - Schedules a negative-turnout-bias referendum
-//!   to be tabled once it is legal for an externally proposed referendum.
+//! - `external_propose_default` - Schedules a proposal to become a negative-turnout-bias
+//!   referendum once it is legal for an externally proposed referendum.
 //!
 //! #### Fast Track Origin
 //!
 //! This call can only be made by the `FastTrackOrigin`.
 //!
-//! - `fast_track` - Schedules the current externally proposed referendum that
-//!   is "majority-carries" to be tabled immediately.
+//! - `fast_track` - Schedules the current externally proposed proposal that
+//!   is "majority-carries" to become a referendum immediately.
 //!
 //! #### Veto Origin
 //! 
