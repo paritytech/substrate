@@ -53,7 +53,7 @@
 //!   either acceptance or rejection as a change to the system.
 //! - **Proxy:** An account that votes on behalf of a separate "Stash" account
 //!   that holds the funds.
-//! - **Delegation:** Granting your voting power to the decisions of another account.
+//! - **Delegation:** The act of granting your voting power to the decisions of another account.
 //!
 //! ## Interface
 //!
