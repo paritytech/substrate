@@ -1,16 +1,19 @@
 [package]
 name = "sc-keystore"
-version = "2.0.0-dev"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Keystore (and session key management) for ed25519 based chains like Polkadot."
+documentation = "https://docs.rs/sc-keystore"
+
 
 [dependencies]
 derive_more = "0.99.2"
-sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
-sp-application-crypto = { version = "2.0.0-dev", path = "../../primitives/application-crypto" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
+sp-application-crypto = { version = "2.0.0-alpha.2", path = "../../primitives/application-crypto" }
 hex = "0.4.0"
 rand = "0.7.2"
 serde_json = "1.0.41"

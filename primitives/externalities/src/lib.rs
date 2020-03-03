@@ -203,13 +203,21 @@ pub trait Externalities: ExtensionStore {
 	/// Returns the SCALE encoded hash.
 	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
 
-	fn wipe(&mut self) {
-		unimplemented!()
-	}
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Wipes all changes from caches and the database.
+	///
+	/// The state will be reset to genesis.
+	fn wipe(&mut self);
 
-	fn commit(&mut self) {
-		unimplemented!()
-	}
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Commits all changes to the database and clears all caches.
+	fn commit(&mut self);
 }
 
 /// Extension for the [`Externalities`] trait.

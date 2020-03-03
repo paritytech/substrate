@@ -22,15 +22,14 @@ use log::info;
 use structopt::StructOpt;
 use sc_service::{
 	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
-	config::DatabaseConfig,
+	config::DatabaseConfig, Roles,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
 use crate::VersionInfo;
 use crate::runtime::run_until_exit;
-use crate::params::SharedParams;
-use crate::params::BlockNumber;
+use crate::params::{SharedParams, BlockNumber, PruningParams};
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -51,13 +50,17 @@ pub struct ExportBlocksCmd {
 	#[structopt(long = "to", value_name = "BLOCK")]
 	pub to: Option<BlockNumber>,
 
-	/// Use JSON output rather than binary.
-	#[structopt(long = "json")]
-	pub json: bool,
+	/// Use binary output rather than JSON.
+	#[structopt(long = "binary", value_name = "BOOL", parse(try_from_str), default_value("false"))]
+	pub binary: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub pruning_params: PruningParams,
 }
 
 impl ExportBlocksCmd {
@@ -82,7 +85,7 @@ impl ExportBlocksCmd {
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());
 
-		let json = self.json;
+		let binary = self.binary;
 
 		let file: Box<dyn io::Write> = match &self.output {
 			Some(filename) => Box::new(fs::File::create(filename)?),
@@ -90,7 +93,7 @@ impl ExportBlocksCmd {
 		};
 
 		run_until_exit(config, |config| {
-			Ok(builder(config)?.export_blocks(file, from.into(), to, json))
+			Ok(builder(config)?.export_blocks(file, from.into(), to, binary))
 		})
 	}
 
@@ -106,6 +109,7 @@ impl ExportBlocksCmd {
 		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		self.pruning_params.update_config(&mut config, Roles::FULL, true)?;
 		config.use_in_memory_keystore()?;
 
 		Ok(())
