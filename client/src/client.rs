@@ -1236,6 +1236,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				hash: finalized_hash,
 			};
 
+			trace!(target: "blockchain_events", "Sending Finality notification to {:} listeners", sinks.len());
 			sinks.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 		}
 
@@ -1261,8 +1262,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			retracted: notify_import.retracted,
 		};
 
-		self.import_notification_sinks.lock()
-			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+
+		let mut n = self.import_notification_sinks.lock();
+		trace!(target: "blockchain_events", "Sending Import notification to {:} listeners", n.len());
+		n.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 
 		Ok(())
 	}
@@ -1791,13 +1794,18 @@ where
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> ImportNotifications<Block> {
 		let (sink, stream) = mpsc::unbounded();
-		self.import_notification_sinks.lock().push(sink);
+		let mut sinks = self.import_notification_sinks.lock();
+		sinks.push(sink);
+		trace!(target: "blockchain_events", "Another import stream created. Total: {:}", sinks.len());
 		stream
 	}
 
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
+		trace!(target: "blockchain_events", "Another finality stream created");
 		let (sink, stream) = mpsc::unbounded();
-		self.finality_notification_sinks.lock().push(sink);
+		let mut sinks = self.finality_notification_sinks.lock();
+		sinks.push(sink);
+		trace!(target: "blockchain_events", "Another finality stream created. Total: {:}", sinks.len());
 		stream
 	}
 
