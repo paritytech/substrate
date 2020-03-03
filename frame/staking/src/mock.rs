@@ -450,13 +450,13 @@ pub fn start_session(session_index: SessionIndex) {
 
 pub fn start_era(era_index: EraIndex) {
 	start_session((era_index * 3).into());
-	assert_eq!(Staking::active_era().unwrap(), era_index);
+	assert_eq!(Staking::active_era().unwrap().index, era_index);
 }
 
 pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 	inflation::compute_total_payout(
 		<Test as Trait>::RewardCurve::get(),
-		Staking::eras_total_stake(Staking::active_era().unwrap()),
+		Staking::eras_total_stake(Staking::active_era().unwrap().index),
 		Balances::total_issuance(),
 		duration,
 	).0
@@ -488,7 +488,7 @@ pub fn on_offence_in_era(
 		}
 	}
 
-	if Staking::active_era().unwrap() == era {
+	if Staking::active_era().unwrap().index == era {
 		Staking::on_offence(offenders, slash_fraction, Staking::eras_start_session_index(era).unwrap());
 	} else {
 		panic!("cannot slash in era {}", era);
@@ -499,7 +499,7 @@ pub fn on_offence_now(
 	offenders: &[OffenceDetails<AccountId, pallet_session::historical::IdentificationTuple<Test>>],
 	slash_fraction: &[Perbill],
 ) {
-	let now = Staking::active_era().unwrap();
+	let now = Staking::active_era().unwrap().index;
 	on_offence_in_era(offenders, slash_fraction, now)
 }
 

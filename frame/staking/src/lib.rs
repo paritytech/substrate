@@ -298,6 +298,18 @@ pub type EraIndex = u32;
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
 
+/// Information regarding the active era (era in used in session).
+#[derive(Encode, Decode, Debug)]
+pub struct ActiveEraInfo<Moment> {
+	/// Index of era.
+	index: EraIndex,
+	/// Moment of start
+	///
+	/// Start can be none if start hasn't been set for the era yet,
+	/// Start is set on the first on_finalize of the era to guarantee usage of `Time`.
+	start: Option<Moment>,
+}
+
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
@@ -715,13 +727,11 @@ decl_storage! {
 		/// set, it might be active or not.
 		pub CurrentEra get(fn current_era): Option<EraIndex>;
 
-		/// The active era index, the era currently rewarded.
+		/// The active era information, it holds index and start.
 		///
+		/// The active era is the era currently rewarded.
 		/// Validator set of this era must be equal to `SessionInterface::validators`.
-		pub ActiveEra get(fn active_era): Option<EraIndex>;
-
-		/// The start of the active era.
-		pub ActiveEraStart get(fn active_era_start): Option<MomentOf<T>>;
+		pub ActiveEra get(fn active_era): Option<ActiveEraInfo<MomentOf<T>>>;
 
 		/// The session index at which the era start for the last `HISTORY_DEPTH` eras
 		pub ErasStartSessionIndex get(fn eras_start_session_index):
@@ -923,8 +933,11 @@ decl_module! {
 
 		fn on_finalize() {
 			// Set the start of the first era.
-			if Self::active_era().is_some() && Self::active_era_start().is_none() {
-				<ActiveEraStart<T>>::put(T::Time::now());
+			if let Some(mut active_era) = Self::active_era() {
+				if active_era.start.is_none() {
+					active_era.start = Some(T::Time::now());
+					<ActiveEra<T>>::put(active_era);
+				}
 			}
 		}
 
@@ -1625,8 +1638,10 @@ impl<T: Trait> Module<T> {
 
 	/// Start a session potentially starting an era.
 	fn start_session(start_session: SessionIndex) {
-		let next_active_era = Self::active_era().map(|e| e + 1).unwrap_or(0);
-		if let Some(next_active_era_start_session_index) = Self::eras_start_session_index(next_active_era) {
+		let next_active_era = Self::active_era().map(|e| e.index + 1).unwrap_or(0);
+		if let Some(next_active_era_start_session_index) =
+			Self::eras_start_session_index(next_active_era)
+		{
 			if next_active_era_start_session_index == start_session {
 				Self::start_era(start_session);
 			} else if next_active_era_start_session_index < start_session {
@@ -1641,11 +1656,14 @@ impl<T: Trait> Module<T> {
 	/// End a session potentially ending an era.
 	fn end_session(session_index: SessionIndex) {
 		if let Some(active_era) = Self::active_era() {
-			let next_active_era_start_session_index = Self::eras_start_session_index(active_era + 1)
-				.unwrap_or_else(|| {
-					frame_support::print("Error: start_session_index must be set for active_era + 1");
-					0
-				});
+			let next_active_era_start_session_index =
+				Self::eras_start_session_index(active_era.index + 1)
+					.unwrap_or_else(|| {
+						frame_support::print(
+							"Error: start_session_index must be set for active_era + 1"
+						);
+						0
+					});
 
 			if next_active_era_start_session_index == session_index + 1 {
 				Self::end_era(active_era, session_index);
@@ -1653,15 +1671,19 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Increment `ActiveEra`, reset `ActiveEraStart`, update `BondedEras` and apply slashes.
+	/// * Increment `active_era.index`,
+	/// * reset `active_era.start`,
+	/// * update `BondedEras` and apply slashes.
 	fn start_era(start_session: SessionIndex) {
-		let active_era = ActiveEra::mutate(|s| {
-			*s = Some(s.map(|s| s + 1).unwrap_or(0));
-			s.unwrap()
+		let active_era = <ActiveEra<T>>::mutate(|active_era| {
+			let new_index = active_era.as_ref().map(|info| info.index + 1).unwrap_or(0);
+			*active_era = Some(ActiveEraInfo {
+				index: new_index,
+				// Set new active era start in next `on_finalize`. To guarantee usage of `Time`
+				start: None,
+			});
+			new_index
 		});
-
-		// Set new active era start in next `on_finalize`. To guarantee usage of `Time::now`.
-		<ActiveEraStart<T>>::kill();
 
 		let bonding_duration = T::BondingDuration::get();
 
@@ -1691,22 +1713,22 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Compute payout for era.
-	fn end_era(active_era: EraIndex, _session_index: SessionIndex) {
+	fn end_era(active_era: ActiveEraInfo<MomentOf<T>>, _session_index: SessionIndex) {
 		// Note: active_era_start can be None if end era is called during genesis config.
-		if let Some(active_era_start) = Self::active_era_start() {
+		if let Some(active_era_start) = active_era.start {
 			let now = T::Time::now();
 
 			let era_duration = now - active_era_start;
 			let (total_payout, _max_payout) = inflation::compute_total_payout(
 				&T::RewardCurve::get(),
-				Self::eras_total_stake(&active_era),
+				Self::eras_total_stake(&active_era.index),
 				T::Currency::total_issuance(),
 				// Duration of era; more than u64::MAX is rewarded as u64::MAX.
 				era_duration.saturated_into::<u64>(),
 			);
 
 			// Set ending era reward.
-			<ErasValidatorReward<T>>::insert(&active_era, total_payout);
+			<ErasValidatorReward<T>>::insert(&active_era.index, total_payout);
 		}
 	}
 
@@ -1920,7 +1942,7 @@ impl<T: Trait> Module<T> {
 		validators_points: impl IntoIterator<Item = (T::AccountId, u32)>
 	) {
 		if let Some(active_era) = Self::active_era() {
-			<ErasRewardPoints<T>>::mutate(active_era, |era_rewards| {
+			<ErasRewardPoints<T>>::mutate(active_era.index, |era_rewards| {
 				for (validator, points) in validators_points.into_iter() {
 					*era_rewards.individual.entry(validator).or_default() += points;
 					era_rewards.total += points;
@@ -2020,9 +2042,12 @@ impl<T: Trait> Module<T> {
 
 		let current_era_start_index = deprecated::CurrentEraStartSessionIndex::get();
 		let current_era = <Module<T> as Store>::CurrentEra::get().unwrap_or(0);
+		let current_era_start = deprecated::CurrentEraStart::<T>::get();
 		<Module<T> as Store>::ErasStartSessionIndex::insert(current_era, current_era_start_index);
-		<Module<T> as Store>::ActiveEra::put(current_era);
-		<Module<T> as Store>::ActiveEraStart::put(deprecated::CurrentEraStart::<T>::get());
+		<Module<T> as Store>::ActiveEra::put(ActiveEraInfo {
+			index: current_era,
+			start: Some(current_era_start),
+		});
 
 		let current_elected = deprecated::CurrentElected::<T>::get();
 		let mut current_total_stake = <BalanceOf<T>>::zero();
@@ -2160,7 +2185,7 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
 		if let Some(active_era) = <Module<T>>::active_era() {
-			Some(<Module<T>>::eras_stakers(active_era, &validator))
+			Some(<Module<T>>::eras_stakers(active_era.index, &validator))
 		} else {
 			None
 		}
@@ -2192,7 +2217,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 			if active_era.is_none() {
 				return
 			}
-			active_era.unwrap()
+			active_era.unwrap().index
 		};
 		let active_era_start_session_index = Self::eras_start_session_index(active_era)
 			.unwrap_or_else(|| {
