@@ -685,9 +685,7 @@ mod tests {
 	use super::*;
 
 	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
-	use frame_benchmarking::{BenchmarkingSetup, BenchmarkParameter};
 	use sp_core::H256;
-
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
@@ -825,5 +823,4 @@ mod tests {
 		let info = custom_call.get_dispatch_info();
 		assert_eq!(info.weight, 2000);
 	}
-
 }
