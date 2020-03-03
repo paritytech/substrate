@@ -26,15 +26,15 @@ use sp_inherents::InherentData;
 use log::{error, info, debug, trace};
 use sp_core::ExecutionContext;
 use sp_runtime::{
-	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
 	generic::BlockId,
+	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
 };
 use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::prelude::*;
-use sp_blockchain::HeaderBackend;
+use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
 /// Proposer factory.
@@ -230,7 +230,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
-				Err(sp_blockchain::Error::ApplyExtrinsicFailed(sp_blockchain::ApplyExtrinsicFailed::Validity(e)))
+				Err(sp_blockchain::Error::ApplyExtrinsicFailed(ApplyExtrinsicFailed::Validity(e)))
 						if e.exhausted_resources() => {
 					if is_first {
 						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
@@ -245,6 +245,13 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 						debug!("Block is full, proceed with proposing.");
 						break;
 					}
+				}
+				Err(e) if skipped > 0 => {
+					trace!(
+						"[{:?}] Ignoring invalid transaction when skipping: {}",
+						pending_tx_hash,
+						e
+					);
 				}
 				Err(e) => {
 					debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
@@ -395,4 +402,41 @@ mod tests {
 			storage_changes.transaction_storage_root,
 		);
 	}
+
+	#[test]
+	fn should_not_remove_invalid_transactions_when_skipping() {
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let txpool = Arc::new(
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+		);
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), {
+				let mut v = Vec::new();
+				for i in 0..50 {
+					v.push(extrinsic(i));
+				}
+				v
+			})
+		).unwrap();
+
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || time::Instant::now()),
+		);
+
+		// when
+		let deadline = time::Duration::from_secs(9);
+		let block = futures::executor::block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
+		).map(|r| r.block).unwrap();
+
+		// then
+		// block should have some extrinsics although we have some more in the pool.
+		assert_eq!(block.extrinsics().len(), 16);
+		assert_eq!(txpool.ready().count(), 50);
+	}
 }
+

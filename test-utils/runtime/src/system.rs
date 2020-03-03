@@ -192,6 +192,10 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 /// This doesn't attempt to validate anything regarding the block.
 pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
+	// Arbitrary limit on test-runtime block size.
+	if extrinsic_index > 15 {
+		return Err(InvalidTransaction::ExhaustsResources.into());
+	}
 	let result = execute_transaction_backend(&utx);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
