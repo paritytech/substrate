@@ -16,7 +16,7 @@
 
 //! Module helpers for off-chain calls.
 
-use codec::Encode;
+use codec::{self, Encode};
 use sp_std::convert::{TryInto, TryFrom};
 use sp_std::fmt::Debug;
 use sp_std::prelude::Vec;
@@ -305,9 +305,9 @@ pub mod new {
 	pub trait SigningTypes: crate::Trait {
 		//type AccountId;
 		// TODO [ToDr] Could this be just `T::Signature as traits::Verify>::Signer`?
-		type Public: Clone
+		type Public: Clone + codec::Codec
 			+ IdentifyAccount<AccountId = Self::AccountId>;
-		type Signature: Debug + Clone + PartialEq + codec::Encode + codec::Decode;
+		type Signature: Debug + Clone + PartialEq + codec::Codec;
 	}
 
 	pub trait SendTransactionTypes<LocalCall>: SigningTypes {

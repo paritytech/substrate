@@ -115,13 +115,13 @@ pub trait Trait: new::SendTransactionTypes<Call<Self>> {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-struct PricePayload<T: new::SigningTypes> {
+struct PricePayload<Public> {
     price: u32,
-    public: T::Public
+    public: Public
 }
 
-impl<T: new::SigningTypes> PricePayload<T> {
-    fn new(price: u32, public: T::Public) -> PricePayload<T> {
+impl<Public> PricePayload<Public> {
+    fn new(price: u32, public: Public) -> PricePayload<Public> {
         PricePayload {
             price,
             public
@@ -129,7 +129,7 @@ impl<T: new::SigningTypes> PricePayload<T> {
     }
 }
 
-impl<T: new::SigningTypes> new::SignedPayload<T> for PricePayload<T> {
+impl<T: new::SigningTypes> new::SignedPayload<T> for PricePayload<T::Public> {
     fn public(&self) -> T::Public {
         self.public.clone()
     }
