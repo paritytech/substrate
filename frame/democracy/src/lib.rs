@@ -28,9 +28,10 @@
 //! and 2) the external queue consisting of a single proposal that originates
 //! from one of the _external_ origins (such as a collective group).
 //!
-//! Every launch period, a proposal will be taken from either the proposal queue
-//! or the external queue in turn. The taken proposal will become a referendum
-//! that can be voted on by any token holder in the system. The voting system
+//! Every launch period - a length defined in the runtime - the Democracy pallet 
+//! launches a referendum from a proposal that it takes from either the proposal
+//! queue or the external queue in turn. Any token holder in the system can vote
+//! on referenda. The voting system
 //! uses time-lock voting by allowing the token holder to set their _conviction_
 //! behind a vote. The conviction will dictate the length of time the tokens
 //! will be locked, as well as the multiplier that scales the vote power.
