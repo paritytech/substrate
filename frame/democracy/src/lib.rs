@@ -907,7 +907,7 @@ decl_module! {
 		///
 		/// The dispatch origin of this call must be _Signed_.
 		///
-		/// - `proxy`: The account which will be activated as proxy.
+		/// - `proxy`: The account that will be activated as proxy.
 		///
 		/// # <weight>
 		/// - One extra DB entry.
