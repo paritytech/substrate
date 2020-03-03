@@ -11,7 +11,7 @@ description = "Support code for the runtime."
 [dependencies]
 log = "0.4"
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 frame-metadata = { version = "11.0.0-alpha.2", default-features = false, path = "../metadata" }
 sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/std" }
 sp-io ={ path = "../../primitives/io", default-features = false , version = "2.0.0-alpha.2"}

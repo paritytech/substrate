@@ -13,7 +13,7 @@ documentation = "https://docs.rs/sp-version"
 [dependencies]
 impl-serde = { version = "0.2.3", optional = true }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "1.1.2", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../std" }
 sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../runtime" }
 
