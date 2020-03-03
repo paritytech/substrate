@@ -12,7 +12,7 @@ sp-block-builder = { version = "2.0.0-alpha.2", path = "../../../primitives/bloc
 sc-cli = { version = "0.8.0-alpha.2", path = "../../../client/cli" }
 sc-client-api = { version = "2.0.0-alpha.2", path = "../../../client/api" }
 sc-client = { version = "0.8.0-alpha.2", path = "../../../client" }
-codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/common" }
 log = "0.4.8"
 sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
