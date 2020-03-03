@@ -19,7 +19,7 @@ log = "0.4.8"
 threadpool = "1.7"
 num_cpus = "1.10"
 sp-offchain = { version = "2.0.0-alpha.2", path = "../../primitives/offchain" }
-codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 parking_lot = "0.10.0"
 sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
 rand = "0.7.2"
