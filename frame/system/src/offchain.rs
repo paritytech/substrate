@@ -305,7 +305,7 @@ pub mod new {
 	pub trait SigningTypes: crate::Trait {
 		//type AccountId;
 		// TODO [ToDr] Could this be just `T::Signature as traits::Verify>::Signer`?
-		type Public: Clone + codec::Codec
+		type Public: Debug + Clone + PartialEq + codec::Codec
 			+ IdentifyAccount<AccountId = Self::AccountId>;
 		type Signature: Debug + Clone + PartialEq + codec::Codec;
 	}

@@ -44,7 +44,12 @@ use frame_system::{
     self as system,
     ensure_signed,
     ensure_none,
-    offchain::{self, new::{self, SendUnsignedTransaction, SendRawUnsignedTransaction}}
+    offchain::{self, new::{
+        self,
+        SendUnsignedTransaction,
+        SendRawUnsignedTransaction,
+        SignedPayload
+    }}
 };
 use frame_support::{
 	debug,
@@ -54,6 +59,7 @@ use frame_support::{
 };
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
+	RuntimeDebug,
 	offchain::{http, Duration, storage::StorageValueRef},
 	traits::Zero,
 	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionValidity},
@@ -114,19 +120,10 @@ pub trait Trait: new::SendTransactionTypes<Call<Self>> {
 	type UnsignedInterval: Get<Self::BlockNumber>;
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-struct PricePayload<Public> {
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PricePayload<Public> {
     price: u32,
     public: Public
-}
-
-impl<Public> PricePayload<Public> {
-    fn new(price: u32, public: Public) -> PricePayload<Public> {
-        PricePayload {
-            price,
-            public
-        }
-    }
 }
 
 impl<T: new::SigningTypes> new::SignedPayload<T> for PricePayload<T::Public> {
@@ -219,7 +216,7 @@ decl_module! {
         pub fn submit_price_unsigned_with_signed_payload(
             origin,
             block_number: T::BlockNumber,
-            price_payload: PricePayload<T>,
+            price_payload: PricePayload<T::Public>,
             signature: T::Signature
         ) -> DispatchResult
         {
@@ -437,7 +434,11 @@ impl<T: Trait> Module<T> {
     		.map_err(|()| "Unable to submit unsigned transaction.".into());
 
         let _result_signed_payload = new::Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
-            |account| PricePayload::new(price, account.public.clone()),
+            |account| PricePayload
+            {
+                price: price,
+                public: account.public.clone()
+            },
             |payload, signature| {
                 Call::submit_price_unsigned_with_signed_payload(block_number, payload, signature)
             }
@@ -609,11 +610,11 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		// Firstly let's check that we call the right function.
 		if let Call::submit_price_unsigned_with_signed_payload(block_number, payload, signature) = call {
-            let signature_valid = payload.verify(&signature);
+            let signature_valid = SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
 			if !signature_valid {
 				return InvalidTransaction::BadProof.into();
 			}
-            Self::validate_transaction_parameters(block_number, payload.price)
+            Self::validate_transaction_parameters(block_number, &payload.price)
         }
 		else if let Call::submit_price_unsigned(block_number, new_price) = call {
             Self::validate_transaction_parameters(block_number, new_price)
