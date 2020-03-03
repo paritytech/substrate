@@ -16,7 +16,7 @@ prost-build = "0.6.1"
 [dependencies]
 bitflags = "1.2.0"
 bytes = "0.5.0"
-codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 derive_more = "0.99.2"
 either = "1.5.3"
 erased-serde = "0.3.9"
