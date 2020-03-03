@@ -52,6 +52,7 @@ sp-consensus = { version = "0.8.0-alpha.2", path = "../../primitives/consensus/c
 sp-consensus-babe = { version = "0.8.0-alpha.2", path = "../../primitives/consensus/babe" }
 sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0-alpha.2", path = "../../utils/prometheus" }
 thiserror = "1"
 unsigned-varint = { version = "0.3.1", features = ["futures", "futures-codec"] }
 void = "1.0.2"

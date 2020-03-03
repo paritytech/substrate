@@ -35,6 +35,7 @@ sc-network = { version = "0.8.0-alpha.2", path = "../network" }
 sc-network-gossip = { version = "0.8.0-alpha.2", path = "../network-gossip" }
 sp-finality-tracker = { version = "2.0.0-alpha.2", path = "../../primitives/finality-tracker" }
 sp-finality-grandpa = { version = "2.0.0-alpha.2", path = "../../primitives/finality-grandpa" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0-alpha.2" }
 sc-block-builder = { version = "0.8.0-alpha.2", path = "../block-builder" }
 finality-grandpa = { version = "0.11.1", features = ["derive-codec"] }
 pin-project = "0.4.6"
