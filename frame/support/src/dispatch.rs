@@ -2082,7 +2082,7 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::sp_runtime::traits::{OnInitialize, OnFinalize};
+	use crate::sp_runtime::traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade};
 	use crate::weights::{DispatchInfo, DispatchClass};
 	use crate::traits::{CallMetadata, GetCallMetadata, GetCallName};
 
@@ -2104,8 +2104,8 @@ mod tests {
 		}
 	}
 
-	struct BLockWeight;
-	impl<BlockNumber: Into<u32>> WeighData<BlockNumber> for BLockWeight {
+	struct BlockWeight;
+	impl<BlockNumber: Into<u32>> WeighData<BlockNumber> for BlockWeight {
 		fn weigh_data(&self, target: BlockNumber) -> Weight {
 			let target: u32 = target.into();
 			if target % 2 == 0 { 10 } else { 0 }
@@ -2125,8 +2125,10 @@ mod tests {
 
 			#[weight = SimpleDispatchInfo::FixedNormal(7)]
 			fn on_initialize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_initialize") } }
-			#[weight = BLockWeight]
+			#[weight = BlockWeight]
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
+			#[weight = SimpleDispatchInfo::FixedOperational(69)]
+			fn on_runtime_upgrade() { }
 			fn offchain_worker() {}
 
 			#[weight = SimpleDispatchInfo::FixedOperational(5)]
@@ -2266,6 +2268,11 @@ mod tests {
 	#[should_panic(expected = "on_finalize")]
 	fn on_finalize_should_work() {
 		<Module<TraitImpl> as OnFinalize<u32>>::on_finalize(42);
+	}
+
+	#[test]
+	fn on_runtime_upgrade_should_work() {
+		<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade();
 	}
 
 	#[test]
