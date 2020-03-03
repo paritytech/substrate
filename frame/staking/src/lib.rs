@@ -1447,7 +1447,7 @@ impl<T: Trait> Module<T> {
 			return Err(Error::<T>::InvalidNumberOfNominations.into());
 		}
 
-		// Note: if era has no reward to be claimed, era may be futur. better not to update
+		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `nominator_ledger.last_reward` in this case.
 		let era_payout = <ErasValidatorReward<T>>::get(&era)
 			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
@@ -1502,7 +1502,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn do_payout_validator(who: T::AccountId, era: EraIndex) -> DispatchResult {
-		// Note: if era has no reward to be claimed, era may be futur. better not to update
+		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `ledger.last_reward` in this case.
 		let era_payout = <ErasValidatorReward<T>>::get(&era)
 			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
