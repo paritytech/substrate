@@ -48,7 +48,6 @@ use frame_system::{
         self,
         SendUnsignedTransaction,
         SendRawUnsignedTransaction,
-        SignedPayload
     }}
 };
 use frame_support::{
@@ -121,12 +120,13 @@ pub trait Trait: new::SendTransactionTypes<Call<Self>> {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PricePayload<Public> {
+pub struct PricePayload<Public, BlockNumber> {
+    block_number: BlockNumber,
     price: u32,
     public: Public
 }
 
-impl<T: new::SigningTypes> new::SignedPayload<T> for PricePayload<T::Public> {
+impl<T: new::SigningTypes> new::SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
     fn public(&self) -> T::Public {
         self.public.clone()
     }
@@ -215,9 +215,8 @@ decl_module! {
 
         pub fn submit_price_unsigned_with_signed_payload(
             origin,
-            block_number: T::BlockNumber,
-            price_payload: PricePayload<T::Public>,
-            signature: T::Signature
+            price_payload: PricePayload<T::Public, T::BlockNumber>,
+            _signature: T::Signature
         ) -> DispatchResult
         {
 			// This ensures that the function can only be called via unsigned transaction.
@@ -434,13 +433,13 @@ impl<T: Trait> Module<T> {
     		.map_err(|()| "Unable to submit unsigned transaction.".into());
 
         let _result_signed_payload = new::Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
-            |account| PricePayload
-            {
-                price: price,
+            |account| PricePayload {
+                price,
+                block_number,
                 public: account.public.clone()
             },
             |payload, signature| {
-                Call::submit_price_unsigned_with_signed_payload(block_number, payload, signature)
+                Call::submit_price_unsigned_with_signed_payload(payload, signature)
             }
         );
 
@@ -612,13 +611,13 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 
 		// Firstly let's check that we call the right function.
 		if let Call::submit_price_unsigned_with_signed_payload(
-			ref block_number, ref payload, ref signature
+			ref payload, ref signature
 		) = call {
             let signature_valid = SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
 			if !signature_valid {
 				return InvalidTransaction::BadProof.into();
 			}
-            Self::validate_transaction_parameters(block_number, &payload.price)
+            Self::validate_transaction_parameters(&payload.block_number, &payload.price)
         } else if let Call::submit_price_unsigned(block_number, new_price) = call {
             Self::validate_transaction_parameters(block_number, new_price)
         } else {
