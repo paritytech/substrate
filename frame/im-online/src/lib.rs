@@ -222,7 +222,7 @@ pub trait Trait: new::SendTransactionTypes<Call<Self>> + pallet_session::histori
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
 	/// TODO when we remove `AppCrypto` it should just be the same as `AuthorityId`
-	type AuthorityId2: new::AppCrypto<Self>;
+	type AuthorityId2: new::AppCrypto<Self::Public, Self::Signature>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;

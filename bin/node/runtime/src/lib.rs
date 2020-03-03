@@ -462,7 +462,7 @@ impl frame_system::offchain::new::SigningTypes for Runtime {
 impl<LocalCall> frame_system::offchain::new::CreateSignedTransaction<LocalCall> for Runtime where
 	Call: From<LocalCall>,
 {
-	fn create_transaction<C: frame_system::offchain::new::AppCrypto<Self>>(
+	fn create_transaction<C: frame_system::offchain::new::AppCrypto<Self::Public, Self::Signature>>(
 		call: Call,
 		crypto: C::RuntimeAppPublic,
 		public: <Signature as traits::Verify>::Signer,
@@ -481,7 +481,7 @@ impl<C> frame_system::offchain::new::SendTransactionTypes<C> for Runtime where
 }
 
 pub struct ImOnlineAuthId;
-impl frame_system::offchain::new::AppCrypto<Runtime> for ImOnlineAuthId {
+impl frame_system::offchain::new::AppCrypto<<Signature as traits::Verify>::Signer, Signature> for ImOnlineAuthId {
 	// TODO [ToDr] Get rid of this trait and instead
 	// have `RuntimeAppPublic` be able to give you `GenericSignature/GenericPublic`
 	// or see the proposal at `system/src/offchain.rs`.

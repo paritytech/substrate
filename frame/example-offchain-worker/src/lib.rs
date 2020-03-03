@@ -85,7 +85,7 @@ pub mod crypto {
 /// This pallet's configuration trait
 pub trait Trait: new::SendTransactionTypes<Call<Self>> {
 	/// The identifier type for an offchain worker.
-    type AuthorityId: new::AppCrypto<Self>;
+    type AuthorityId: new::AppCrypto<Self::Public, Self::Signature>;
 
 	/// The type to sign and submit transactions.
 	type SubmitSignedTransaction:
@@ -114,8 +114,9 @@ pub trait Trait: new::SendTransactionTypes<Call<Self>> {
 	type UnsignedInterval: Get<Self::BlockNumber>;
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-struct PricePayload<Public> {
+// TODO [ToDr] This should be RuntimeDebug
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
+pub struct PricePayload<Public> {
     price: u32,
     public: Public
 }
@@ -219,7 +220,7 @@ decl_module! {
         pub fn submit_price_unsigned_with_signed_payload(
             origin,
             block_number: T::BlockNumber,
-            price_payload: PricePayload<T>,
+            price_payload: PricePayload<T::Public>,
             signature: T::Signature
         ) -> DispatchResult
         {
@@ -607,18 +608,21 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	/// here we make sure that some particular calls (the ones produced by offchain worker)
 	/// are being whitelisted and marked as valid.
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		use new::SignedPayload;
+
 		// Firstly let's check that we call the right function.
-		if let Call::submit_price_unsigned_with_signed_payload(block_number, payload, signature) = call {
-            let signature_valid = payload.verify(&signature);
-			if !signature_valid {
-				return InvalidTransaction::BadProof.into();
-			}
-            Self::validate_transaction_parameters(block_number, payload.price)
-        }
-		else if let Call::submit_price_unsigned(block_number, new_price) = call {
-            Self::validate_transaction_parameters(block_number, new_price)
-        } else {
-            InvalidTransaction::Call.into()
-        }
+		// if let Call::submit_price_unsigned_with_signed_payload(block_number, payload, signature) = call {
+        //     let signature_valid = payload.verify(&signature);
+		// 	if !signature_valid {
+		// 		return InvalidTransaction::BadProof.into();
+		// 	}
+        //     Self::validate_transaction_parameters(block_number, &payload.price)
+        // }
+		// else if let Call::submit_price_unsigned(block_number, new_price) = call {
+        //     Self::validate_transaction_parameters(block_number, new_price)
+        // } else {
+        //     InvalidTransaction::Call.into()
+        // }
+		unimplemented!()
     }
 }
