@@ -931,9 +931,6 @@ decl_module! {
 			Self::ensure_storage_upgraded();
 		}
 
-		fn on_initialize() {
-		}
-
 		fn on_finalize() {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {
@@ -1135,8 +1132,6 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn validate(origin, prefs: ValidatorPrefs) {
-			Self::ensure_storage_upgraded();
-
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
@@ -1157,8 +1152,6 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
-			Self::ensure_storage_upgraded();
-
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
@@ -1436,7 +1429,6 @@ decl_module! {
 		///
 		/// - `stash`: The stash account to reap. Its balance must be zero.
 		fn reap_stash(_origin, stash: T::AccountId) {
-			Self::ensure_storage_upgraded();
 			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
 			Self::kill_stash(&stash)?;
 			T::Currency::remove_lock(STAKING_ID, &stash);
@@ -2111,7 +2103,6 @@ impl<T: Trait> Module<T> {
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		Self::ensure_storage_upgraded();
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {
