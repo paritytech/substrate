@@ -45,13 +45,8 @@ where
 	Origin: From<Option<AccountId>>,
 	Info: Clone,
 {
-	type AccountId = AccountId;
 	type Call = Call;
 	type DispatchInfo = Info;
-
-	fn sender(&self) -> Option<&Self::AccountId> {
-		self.signed.as_ref().map(|x| &x.0)
-	}
 
 	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
 		&self,

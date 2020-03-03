@@ -410,11 +410,8 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 	Origin: From<Option<u64>>,
 	Info: Clone,
 {
-	type AccountId = u64;
 	type Call = Call;
 	type DispatchInfo = Info;
-
-	fn sender(&self) -> Option<&Self::AccountId> { self.signature.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
