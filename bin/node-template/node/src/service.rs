@@ -37,27 +37,24 @@ macro_rules! new_full_start {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
 				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api)))
 			})?
-			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
+			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 
 				let (grandpa_block_import, grandpa_link) =
-					grandpa::block_import::<_, _, _, node_template_runtime::RuntimeApi, _>(
-						client.clone(), &*client, select_chain
-					)?;
+					grandpa::block_import(client.clone(), &*client, select_chain)?;
 
 				let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
 					grandpa_block_import.clone(), client.clone(),
 				);
 
-				let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
+				let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair>(
 					sc_consensus_aura::slot_duration(&*client)?,
 					aura_block_import,
 					Some(Box::new(grandpa_block_import.clone())),
 					None,
 					client,
 					inherent_data_providers.clone(),
-					Some(transaction_pool),
 				)?;
 
 				import_setup = Some((grandpa_block_import, grandpa_link));
@@ -96,10 +93,10 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 		.build()?;
 
 	if participates_in_consensus {
-		let proposer = sc_basic_authorship::ProposerFactory {
-			client: service.client(),
-			transaction_pool: service.transaction_pool(),
-		};
+		let proposer = sc_basic_authorship::ProposerFactory::new(
+			service.client(),
+			service.transaction_pool()
+		);
 
 		let client = service.client();
 		let select_chain = service.select_chain()
@@ -203,21 +200,20 @@ pub fn new_light(config: Configuration<GenesisConfig>)
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi>(
+			let grandpa_block_import = grandpa::light_block_import(
 				client.clone(), backend, &*client.clone(), Arc::new(fetch_checker),
 			)?;
 			let finality_proof_import = grandpa_block_import.clone();
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, ()>(
+			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair>(
 				sc_consensus_aura::slot_duration(&*client)?,
 				grandpa_block_import,
 				None,
 				Some(Box::new(finality_proof_import)),
 				client,
 				inherent_data_providers.clone(),
-				None,
 			)?;
 
 			Ok((import_queue, finality_proof_request_builder))

@@ -53,7 +53,7 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
-use prometheus_exporter::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
+use substrate_prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
 
 struct ServiceMetrics {
 	block_height_number: GaugeVec<U64>,
@@ -742,7 +742,7 @@ pub trait ServiceBuilderCommand {
 		output: impl Write + 'static,
 		from: NumberFor<Self::Block>,
 		to: Option<NumberFor<Self::Block>>,
-		json: bool
+		binary: bool
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>>;
 
 	/// Performs a revert of `blocks` blocks.
@@ -1020,7 +1020,7 @@ ServiceBuilder<
 			));
 		}
 
-		// Prometheus exporter and metrics
+		// Prometheus endpoint and metrics
 		let metrics = if let Some(port) = config.prometheus_port {
 			let registry = match prometheus_registry {
 				Some(registry) => registry,
@@ -1030,7 +1030,7 @@ ServiceBuilder<
 			let metrics = ServiceMetrics::register(&registry)?;
 
 			let future = select(
-				prometheus_exporter::init_prometheus(port, registry).boxed(),
+				substrate_prometheus_endpoint::init_prometheus(port, registry).boxed(),
 				exit.clone()
 			).map(drop);
 
@@ -1085,10 +1085,18 @@ ServiceBuilder<
 				"finalized_hash" => ?info.chain.finalized_hash,
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => info.usage.as_ref().map(|usage| usage.memory.state_cache).unwrap_or(0),
-				"used_db_cache_size" => info.usage.as_ref().map(|usage| usage.memory.database_cache).unwrap_or(0),
-				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
-				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
+				"used_state_cache_size" => info.usage.as_ref()
+					.map(|usage| usage.memory.state_cache.as_bytes())
+					.unwrap_or(0),
+				"used_db_cache_size" => info.usage.as_ref()
+					.map(|usage| usage.memory.database_cache.as_bytes())
+					.unwrap_or(0),
+				"disk_read_per_sec" => info.usage.as_ref()
+					.map(|usage| usage.io.bytes_read)
+					.unwrap_or(0),
+				"disk_write_per_sec" => info.usage.as_ref()
+					.map(|usage| usage.io.bytes_written)
+					.unwrap_or(0),
 			);
 			if let Some(metrics) = metrics.as_ref() {
 				metrics.memory_usage_bytes.set(memory);

@@ -11,19 +11,10 @@ labels=(
 )
 
 version="$CI_COMMIT_TAG"
-last_version=$(git tag -l | sort -V | grep -B 1 -x "$version" | head -n 1)
-echo "[+] Version: $version; Previous version: $last_version"
 
-# Check that a signed tag exists on github for this version
-echo '[+] Checking tag has been signed'
-#check_tag "paritytech/substrate" "$version"
-case $? in
-  0) echo '[+] Tag found and has been signed'
-    ;;
-  1) echo '[!] Tag found but has not been signed. Aborting release.'; exit 1
-    ;;
-  2) echo '[!] Tag not found. Aborting release.'; exit
-esac
+# Note that this is not the last *tagged* version, but the last *published* version
+last_version=$(last_github_release 'paritytech/substrate')
+echo "[+] Version: $version; Previous version: $last_version"
 
 all_changes="$(sanitised_git_logs "$last_version" "$version")"
 labelled_changes=""
@@ -50,7 +41,7 @@ $labelled_changes"
 
 echo "[+] Release text generated: "
 echo "$release_text"
-exit
+
 echo "[+] Pushing release to github"
 # Create release on github
 release_name="Substrate $version"
@@ -90,6 +81,6 @@ formatted_msg_body=$(cat <<EOF
 Draft release created: $html_url
 EOF
 )
-send_message "$(structure_message "$msg_body" "$formatted_msg_body")" "$MATRIX_ACCESS_TOKEN"
+send_message "$(structure_message "$msg_body" "$formatted_msg_body")" "$MATRIX_ROOM_ID" "$MATRIX_ACCESS_TOKEN"
 
 echo "[+] Done! Maybe the release worked..."

@@ -1,24 +1,25 @@
 [package]
 name = "pallet-treasury"
-version = "2.0.0-dev"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet to manage treasury"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "2.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0-dev", default-features = false, path = "../system" }
-pallet-balances = { version = "2.0.0-dev", default-features = false, path = "../balances" }
+sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
+pallet-balances = { version = "2.0.0-alpha.2", default-features = false, path = "../balances" }
 
 [dev-dependencies]
-sp-io ={ version = "2.0.0-dev", path = "../../primitives/io" }
-sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
+sp-io ={ version = "2.0.0-alpha.2", path = "../../primitives/io" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
 
 [features]
 default = ["std"]

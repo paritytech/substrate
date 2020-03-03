@@ -1,17 +1,18 @@
 [package]
 name = "pallet-contracts-primitives"
-version = "2.0.0-dev"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "A crate that hosts a common definitions that are relevant for the pallet-contracts."
 
 [dependencies]
 # This crate should not rely on any of the frame primitives.
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0-dev", default-features = false, path = "../../../primitives/std" }
-sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/std" }
+sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/runtime" }
 
 [features]
 default = ["std"]

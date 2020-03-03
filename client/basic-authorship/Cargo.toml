@@ -1,30 +1,30 @@
 [package]
 name = "sc-basic-authorship"
-version = "0.8.0-dev"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Basic implementation of block-authoring logic."
 
 [dependencies]
 log = "0.4.8"
 futures = "0.3.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sp-api = { version = "2.0.0-dev", path = "../../primitives/api" }
-sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
-sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
-sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
-sc-client = { version = "0.8.0-dev", path = "../" }
-sc-client-api = { version = "2.0.0-dev", path = "../api" }
-sp-consensus = { version = "0.8.0-dev", path = "../../primitives/consensus/common" }
-sp-inherents = { version = "2.0.0-dev", path = "../../primitives/inherents" }
-sc-telemetry = { version = "2.0.0-dev", path = "../telemetry" }
-sp-transaction-pool = { version = "2.0.0-dev", path = "../../primitives/transaction-pool" }
-sc-block-builder = { version = "0.8.0-dev", path = "../block-builder" }
+sp-api = { version = "2.0.0-alpha.2", path = "../../primitives/api" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../../primitives/blockchain" }
+sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
+sp-consensus = { version = "0.8.0-alpha.2", path = "../../primitives/consensus/common" }
+sp-inherents = { version = "2.0.0-alpha.2", path = "../../primitives/inherents" }
+sc-telemetry = { version = "2.0.0-alpha.2", path = "../telemetry" }
+sp-transaction-pool = { version = "2.0.0-alpha.2", path = "../../primitives/transaction-pool" }
+sc-block-builder = { version = "0.8.0-alpha.2", path = "../block-builder" }
 tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
 
 [dev-dependencies]
-sc-transaction-pool = { version = "2.0.0-dev", path = "../../client/transaction-pool" }
+sc-transaction-pool = { version = "2.0.0-alpha.2", path = "../../client/transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
 parking_lot = "0.10.0"

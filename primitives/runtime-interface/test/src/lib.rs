@@ -33,7 +33,6 @@ fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 		(
 			HF,
 			sp_io::SubstrateHostFunctions,
-			sc_executor::deprecated_host_interface::SubstrateExternals
 		)
 	>(
 		method,
@@ -127,4 +126,9 @@ fn test_encoded_return_value_memory_is_freed() {
 #[test]
 fn test_array_return_value_memory_is_freed() {
 	call_wasm_method::<HostFunctions>("test_array_return_value_memory_is_freed");
+}
+
+#[test]
+fn test_ext_blake2_256() {
+	call_wasm_method::<HostFunctions>("test_ext_blake2_256");
 }

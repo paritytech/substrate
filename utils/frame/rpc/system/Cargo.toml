@@ -1,14 +1,15 @@
 [package]
 name = "substrate-frame-rpc-system"
-version = "2.0.0-dev"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "FRAME's system exposed over Substrate RPC"
 
 [dependencies]
-sc-client = { version = "0.8.0-dev", path = "../../../../client/" }
+sc-client = { version = "0.8.0-alpha.2", path = "../../../../client/" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 futures = "0.3.1"
 jsonrpc-core = "14.0.3"
@@ -16,14 +17,14 @@ jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
 log = "0.4.8"
 serde = { version = "1.0.101", features = ["derive"] }
-sp-runtime = { version = "2.0.0-dev", path = "../../../../primitives/runtime" }
-sp-api = { version = "2.0.0-dev", path = "../../../../primitives/api" }
-frame-system-rpc-runtime-api = { version = "2.0.0-dev", path = "../../../../frame/system/rpc/runtime-api" }
-sp-core = { version = "2.0.0-dev", path = "../../../../primitives/core" }
-sp-blockchain = { version = "2.0.0-dev", path = "../../../../primitives/blockchain" }
-sp-transaction-pool = { version = "2.0.0-dev", path = "../../../../primitives/transaction-pool" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../../../primitives/runtime" }
+sp-api = { version = "2.0.0-alpha.2", path = "../../../../primitives/api" }
+frame-system-rpc-runtime-api = { version = "2.0.0-alpha.2", path = "../../../../frame/system/rpc/runtime-api" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../../../primitives/core" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../../primitives/blockchain" }
+sp-transaction-pool = { version = "2.0.0-alpha.2", path = "../../../../primitives/transaction-pool" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../../test-utils/runtime/client" }
 env_logger = "0.7.0"
-sc-transaction-pool = { version = "2.0.0-dev", path = "../../../../client/transaction-pool" }
+sc-transaction-pool = { version = "2.0.0-alpha.2", path = "../../../../client/transaction-pool" }

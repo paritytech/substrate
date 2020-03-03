@@ -1,25 +1,26 @@
 [package]
 name = "pallet-contracts-rpc"
-version = "0.8.0-dev"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Node-specific RPC methods for interaction with contracts."
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
-sp-blockchain = { version = "2.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
-sp-rpc = { version = "2.0.0-dev", path = "../../../primitives/rpc" }
+sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockchain" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
+sp-rpc = { version = "2.0.0-alpha.2", path = "../../../primitives/rpc" }
 serde = { version = "1.0.101", features = ["derive"] }
-sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
-sp-api = { version = "2.0.0-dev", path = "../../../primitives/api" }
-pallet-contracts-primitives = { version = "2.0.0-dev", path = "../common" }
-pallet-contracts-rpc-runtime-api = { version = "0.8.0-dev", path = "./runtime-api" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
+sp-api = { version = "2.0.0-alpha.2", path = "../../../primitives/api" }
+pallet-contracts-primitives = { version = "2.0.0-alpha.2", path = "../common" }
+pallet-contracts-rpc-runtime-api = { version = "0.8.0-alpha.2", path = "./runtime-api" }
 
 [dev-dependencies]
 serde_json = "1.0.41"
