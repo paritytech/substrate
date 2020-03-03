@@ -463,7 +463,7 @@ macro_rules! benchmark_backend {
 			}
 
 			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
-				-> Result<(crate::Call<T>, RawOrigin<T::AccountId>), &'static str>
+				-> Result<(super::Call<T>, RawOrigin<T::AccountId>), &'static str>
 			{
 				$(
 					let $common = $common_from;
