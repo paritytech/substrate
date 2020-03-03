@@ -737,8 +737,9 @@ pub trait Trait: frame_system::Trait {
 	/// Something that can estimate the next session change, accurately or as a best effort guess.
 	type NextSessionChange: EstimateNextSessionChange<Self::BlockNumber>;
 
-	/// How many blocks ahead of the era do we try to run the phragmen offchain? Setting this to
-	/// zero will disable the offchain compute and only on-chain seq-phragmen will be used.
+	/// How many blocks ahead of the era, within the last do we try to run the phragmen offchain?
+	/// Setting this to zero will disable the offchain compute and only on-chain seq-phragmen will
+	/// be used.
 	type ElectionLookahead: Get<Self::BlockNumber>;
 
 	/// The overarching call type.

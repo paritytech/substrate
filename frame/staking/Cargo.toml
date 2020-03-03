@@ -11,7 +11,6 @@ description = "FRAME pallet staking"
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-keyring = { version = "2.0.0-alpha.2", optional = true, path = "../../primitives/keyring" }
 sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/std" }
 sp-phragmen = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/phragmen" }
 sp-io ={ path = "../../primitives/io", default-features = false , version = "2.0.0-alpha.2"}
@@ -55,9 +54,7 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"pallet-session/std",
-	"pallet-indices/std",
 	"frame-system/std",
 	"pallet-authorship/std",
 	"sp-core/std",
-	"rand/std"
 ]
