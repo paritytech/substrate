@@ -29,11 +29,13 @@ type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hash
 fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 	let mut ext = TestExternalities::default();
 	let mut ext_ext = ext.ext();
+	let mut host_functions = HF::host_functions();
+	host_functions.extend(sp_io::SubstrateHostFunctions::host_functions());
 
 	let executor = sc_executor::WasmExecutor::new(
 		sc_executor::WasmExecutionMethod::Interpreted,
 		Some(8),
-		HF::host_functions(),
+		host_functions,
 		false,
 	);
 	executor.call_in_wasm(
@@ -86,7 +88,7 @@ fn test_return_input_public_key() {
 
 #[test]
 #[should_panic(
-	expected = "Other(\"Instantiation: Export ext_test_api_return_input_version_1 not found\")"
+	expected = "\"Instantiation: Export ext_test_api_return_input_version_1 not found\""
 )]
 fn host_function_not_found() {
 	call_wasm_method::<()>("test_return_data");
@@ -95,8 +97,9 @@ fn host_function_not_found() {
 #[test]
 #[should_panic(
 	expected =
-		"FunctionExecution(\"ext_test_api_invalid_utf8_data_version_1\", \
-		\"Invalid utf8 data provided\")"
+		"Executes `test_invalid_utf8_data_should_return_an_error`: \
+		\"Trap: Trap { kind: Host(FunctionExecution(\\\"ext_test_api_invalid_utf8_data_version_1\\\", \
+		\\\"Invalid utf8 data provided\\\")) }\""
 )]
 fn test_invalid_utf8_data_should_return_an_error() {
 	call_wasm_method::<HostFunctions>("test_invalid_utf8_data_should_return_an_error");
