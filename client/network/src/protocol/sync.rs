@@ -751,7 +751,7 @@ impl<B: BlockT> ChainSync<B> {
 						| PeerSyncState::DownloadingFinalityProof(..) => Vec::new()
 					}
 				} else {
-					// When request.is_none() just accept blocks
+					// When request.is_none() this is a block announcement. Just accept blocks.
 					blocks.into_iter().map(|b| {
 						IncomingBlock {
 							hash: b.hash,
@@ -1167,8 +1167,7 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	/// Restart the sync process.
-	fn restart<'a>(&'a mut self) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a
-	{
+	fn restart<'a>(&'a mut self) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a {
 		self.queue_blocks.clear();
 		self.blocks.clear();
 		let info = self.client.info();
