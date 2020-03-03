@@ -18,6 +18,7 @@
 
 use codec::Encode;
 use sp_std::convert::{TryInto, TryFrom};
+use sp_std::fmt::Debug;
 use sp_std::prelude::Vec;
 use sp_runtime::app_crypto::{RuntimeAppPublic, AppPublic, AppSignature};
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
@@ -306,7 +307,7 @@ pub mod new {
 		// TODO [ToDr] Could this be just `T::Signature as traits::Verify>::Signer`?
 		type Public: Clone
 			+ IdentifyAccount<AccountId = Self::AccountId>;
-		type Signature;
+		type Signature: Debug + Clone + PartialEq + codec::Encode + codec::Decode;
 	}
 
 	pub trait SendTransactionTypes<LocalCall>: SigningTypes {
