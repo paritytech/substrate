@@ -11,8 +11,11 @@ description = "State database maintenance. Handles canonicalization and pruning 
 [dependencies]
 parking_lot = "0.10.0"
 log = "0.4.8"
+sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
 sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+parity-util-mem = "0.5.1"
+parity-util-mem-derive = "0.1.0"
 
 [dev-dependencies]
 env_logger = "0.7.0"
