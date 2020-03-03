@@ -55,6 +55,19 @@
 //!   that holds the funds.
 //! - **Delegation:** The act of granting your voting power to the decisions of another account.
 //!
+//! ### Adaptive Quorum Biasing
+//!
+//! A _referendum_ can be either simple majority-carries in which 50%+1 of the
+//! votes decide the outcome or _adaptive quorum biased_. Adaptive quorum biasing
+//! makes the threshold for passing or rejecting a referendum higher or lower
+//! depending on how the referendum was original proposed. There are two types of 
+//! adaptive quorum biasing: 1) _positive turnout bias_ makes a referendum
+//! require a super-majority to pass that decreases as turnout increases and
+//! 2) _negative turnout bias_ makes a referendum require a super-majority to
+//! reject that decreases as turnout increases. Another way to think about the
+//! quorum biasing is that _positive bias_ referendums will be rejected by
+//! default and _negative bias_ referendums get passed by default.
+//!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
