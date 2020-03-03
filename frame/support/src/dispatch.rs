@@ -197,9 +197,9 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// The following reserved functions also take the block number (with type `T::BlockNumber`) as an optional input:
 ///
 /// * `on_runtime_upgrade`: Executes at the beginning of a block prior to on_initialize when there
-/// is a runtime ugprade. This allow each module to upgrade their storage, calling other module
-/// must be avoided.  Using this function will implement the
-/// [`OnInitialize`](../sp_runtime/traits/trait.OnInitialize.html) trait.
+/// is a runtime upgrade. This allow each module to upgrade their storage before the storage items are used.
+/// As such, **calling other module must be avoided**!! Using this function will implement the
+/// [`OnRuntimeUpgrade`](../sp_runtime/traits/trait.OnRuntimeUpgrade.html) trait.
 /// * `on_initialize`: Executes at the beginning of a block. Using this function will
 /// implement the [`OnInitialize`](../sp_runtime/traits/trait.OnInitialize.html) trait.
 /// * `on_finalize`: Executes at the end of a block. Using this function will

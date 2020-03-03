@@ -65,8 +65,8 @@ pub trait StorageValue<T: FullCodec> {
 	///
 	/// # Usage
 	///
-	/// This would typically be called inside the module implementation of on_initialize, while
-	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// This would typically be called inside the module implementation of on_runtime_upgrade, while
+	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()>;
 
@@ -265,8 +265,8 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	///
 	/// # Usage
 	///
-	/// This would typically be called inside the module implementation of on_initialize, while
-	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// This would typically be called inside the module implementation of on_runtime_upgrade, while
+	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), Option<K2>>
 		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> K, TV: Fn(V2) -> V;
@@ -460,8 +460,8 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	///
 	/// # Usage
 	///
-	/// This would typically be called inside the module implementation of on_initialize, while
-	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// This would typically be called inside the module implementation of on_runtime_upgrade, while
+	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate_values<OldValue, TV>(translate_val: TV) -> Result<(), u32>
 		where OldValue: Decode, TV: Fn(OldValue) -> Value

@@ -67,8 +67,8 @@ pub trait ClassifyDispatch<T> {
 	fn classify_dispatch(&self, target: T) -> DispatchClass;
 }
 
-/// Means of determining the weight of a block's life cycle hooks: `on_initialize`, `on_finalize` and
-/// such.
+/// Means of determining the weight of a block's life cycle hooks: `on_initialize`, `on_finalize`,
+///  `on_runtime_upgrade`, and such.
 pub trait WeighBlock<BlockNumber> {
 	/// Return the weight of the block's on_runtime_upgrade hook.
 	fn on_runtime_upgrade() -> Weight { Zero::zero() }
