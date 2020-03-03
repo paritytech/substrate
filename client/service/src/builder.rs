@@ -1085,10 +1085,18 @@ ServiceBuilder<
 				"finalized_hash" => ?info.chain.finalized_hash,
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => info.usage.as_ref().map(|usage| usage.memory.state_cache).unwrap_or(0),
-				"used_db_cache_size" => info.usage.as_ref().map(|usage| usage.memory.database_cache).unwrap_or(0),
-				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
-				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
+				"used_state_cache_size" => info.usage.as_ref()
+					.map(|usage| usage.memory.state_cache.as_bytes())
+					.unwrap_or(0),
+				"used_db_cache_size" => info.usage.as_ref()
+					.map(|usage| usage.memory.database_cache.as_bytes())
+					.unwrap_or(0),
+				"disk_read_per_sec" => info.usage.as_ref()
+					.map(|usage| usage.io.bytes_read)
+					.unwrap_or(0),
+				"disk_write_per_sec" => info.usage.as_ref()
+					.map(|usage| usage.io.bytes_written)
+					.unwrap_or(0),
 			);
 			if let Some(metrics) = metrics.as_ref() {
 				metrics.memory_usage_bytes.set(memory);

@@ -46,9 +46,11 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::HashMap;
 
-use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo};
-use sc_client_api::backend::NewBlockState;
-use sc_client_api::backend::PrunableStateChangesTrieStorage;
+use sc_client_api::{
+	ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo, MemorySize,
+	execution_extensions::ExecutionExtensions,
+	backend::{NewBlockState, PrunableStateChangesTrieStorage},
+};
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	well_known_cache_keys, HeaderBackend,
@@ -1455,13 +1457,17 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				self.state_usage.take(),
 			)
 		);
-		let database_cache = parity_util_mem::malloc_size(&*self.storage.db);
-		let state_cache = (*&self.shared_cache).lock().used_storage_cache_size();
+		let database_cache = MemorySize::from_bytes(parity_util_mem::malloc_size(&*self.storage.db));
+		let state_cache = MemorySize::from_bytes(
+			(*&self.shared_cache).lock().used_storage_cache_size(),
+		);
+		let state_db = self.storage.state_db.memory_info();
 
 		Some(UsageInfo {
 			memory: MemoryInfo {
 				state_cache,
 				database_cache,
+				state_db,
 			},
 			io: IoInfo {
 				transactions: io_stats.transactions,
