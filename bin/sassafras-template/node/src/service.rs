@@ -7,7 +7,6 @@ use sc_client::LongestChain;
 use sassafras_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use sp_inherents::InherentDataProviders;
-use sc_network::{construct_simple_protocol};
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 
@@ -17,11 +16,6 @@ native_executor_instance!(
 	sassafras_template_runtime::api::dispatch,
 	sassafras_template_runtime::native_version,
 );
-
-construct_simple_protocol! {
-	/// Demo protocol attachment for substrate.
-	pub struct NodeProtocol where Block = Block { }
-}
 
 /// Starts a `ServiceBuilder` for a full service.
 ///
@@ -98,17 +92,17 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 		import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-	let service = builder.with_network_protocol(|_| Ok(NodeProtocol::new()))?
+	let service = builder
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
 		.build()?;
 
 	if participates_in_consensus {
-		let proposer = sc_basic_authorship::ProposerFactory {
-			client: service.client(),
-			transaction_pool: service.transaction_pool(),
-		};
+		let proposer = sc_basic_authorship::ProposerFactory::new(
+			service.client(),
+			service.transaction_pool()
+		);
 
 		let client = service.client();
 		let select_chain = service.select_chain()
@@ -152,41 +146,36 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 		is_authority,
 	};
 
-	match (is_authority, disable_grandpa) {
-		(false, false) => {
-			// start the lightweight GRANDPA observer
-			service.spawn_task("grandpa-observer", grandpa::run_grandpa_observer(
-				grandpa_config,
-				grandpa_link,
-				service.network(),
-				service.on_exit(),
-				service.spawn_task_handle(),
-			)?);
-		},
-		(true, false) => {
-			// start the full GRANDPA voter
-			let voter_config = grandpa::GrandpaParams {
-				config: grandpa_config,
-				link: grandpa_link,
-				network: service.network(),
-				inherent_data_providers: inherent_data_providers.clone(),
-				on_exit: service.on_exit(),
-				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
-				voting_rule: grandpa::VotingRulesBuilder::default().build(),
-				executor: service.spawn_task_handle(),
-			};
+	let enable_grandpa = !disable_grandpa;
+	if enable_grandpa {
+		// start the full GRANDPA voter
+		// NOTE: non-authorities could run the GRANDPA observer protocol, but at
+		// this point the full voter should provide better guarantees of block
+		// and vote data availability than the observer. The observer has not
+		// been tested extensively yet and having most nodes in a network run it
+		// could lead to finality stalls.
+		let grandpa_config = grandpa::GrandpaParams {
+			config: grandpa_config,
+			link: grandpa_link,
+			network: service.network(),
+			inherent_data_providers: inherent_data_providers.clone(),
+			on_exit: service.on_exit(),
+			telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
+			voting_rule: grandpa::VotingRulesBuilder::default().build(),
+		};
 
-			// the GRANDPA voter task is considered infallible, i.e.
-			// if it fails we take down the service with it.
-			service.spawn_essential_task("grandpa", grandpa::run_grandpa_voter(voter_config)?);
-		},
-		(_, true) => {
-			grandpa::setup_disabled_grandpa(
-				service.client(),
-				&inherent_data_providers,
-				service.network(),
-			)?;
-		},
+		// the GRANDPA voter task is considered infallible, i.e.
+		// if it fails we take down the service with it.
+		service.spawn_essential_task(
+			"grandpa-voter",
+			grandpa::run_grandpa_voter(grandpa_config)?
+		);
+	} else {
+		grandpa::setup_disabled_grandpa(
+			service.client(),
+			&inherent_data_providers,
+			service.network(),
+		)?;
 	}
 
 	Ok(service)
@@ -216,7 +205,7 @@ pub fn new_light(config: Configuration<GenesisConfig>)
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi>(
+			let grandpa_block_import = grandpa::light_block_import(
 				client.clone(), backend, &*client.clone(), Arc::new(fetch_checker),
 			)?;
 
@@ -243,7 +232,6 @@ pub fn new_light(config: Configuration<GenesisConfig>)
 
 			Ok((import_queue, finality_proof_request_builder))
 		})?
-		.with_network_protocol(|_| Ok(NodeProtocol::new()))?
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?

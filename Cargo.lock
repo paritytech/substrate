@@ -6048,6 +6048,7 @@ dependencies = [
  "sc-executor",
  "sc-keystore",
  "sc-network",
+ "sc-network-gossip",
  "sc-network-test",
  "sc-service",
  "sc-telemetry",

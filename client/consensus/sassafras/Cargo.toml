@@ -29,6 +29,8 @@ sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockch
 sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/common" }
 sc-consensus-uncles = { version = "0.8.0-alpha.2", path = "../uncles" }
 sc-consensus-slots = { version = "0.8.0-alpha.2", path = "../slots" }
+sc-network = { version = "0.8.0-alpha.2", path = "../../network" }
+sc-network-gossip = { version = "0.8.0-alpha.2", path = "../../network-gossip" }
 sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
 fork-tree = { version = "2.0.0-alpha.2", path = "../../../utils/fork-tree" }
 futures = "0.3.1"

@@ -81,6 +81,7 @@ mod aux_schema;
 mod verification;
 mod authorship;
 mod utils;
+mod communication;
 
 /// Set that are generating.
 #[derive(Debug, Clone, Encode, Decode)]
@@ -570,27 +571,15 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Sassafra
 			let signature = pair.sign(header_hash.as_ref());
 			let digest_item = <DigestItemFor<B> as CompatibleDigestItem>::sassafras_seal(signature);
 
-			BlockImportParams {
-				origin: BlockOrigin::Own,
-				header,
-				justification: None,
-				post_digests: vec![digest_item],
-				body: Some(body),
-				storage_changes: Some(storage_changes),
-				finalized: false,
-				auxiliary: Vec::new(), // block-weight is written in block import.
-				intermediates: {
-					let mut intermediates = HashMap::new();
-					intermediates.insert(
-						Cow::from(INTERMEDIATE_KEY),
-						Box::new(SassafrasIntermediate::<B> { epoch_descriptor }) as Box<dyn Any>,
-					);
-					intermediates
-				},
-				fork_choice: None,
-				allow_missing_state: false,
-				import_existing: false,
-			}
+			let mut params = BlockImportParams::new(BlockOrigin::Own, header);
+			params.post_digests.push(digest_item);
+			params.body = Some(body);
+			params.storage_changes = Some(storage_changes);
+			params.intermediates.insert(
+				Cow::from(INTERMEDIATE_KEY),
+				Box::new(SassafrasIntermediate::<B> { epoch_descriptor }) as Box<dyn Any>,
+			);
+			params
 		})
 	}
 
@@ -964,28 +953,16 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 					"sassafras.checked_and_importing";
 					"pre_header" => ?pre_header);
 
-				let mut intermediates = HashMap::new();
-				intermediates.insert(
+				let mut block_import_params = BlockImportParams::new(origin, pre_header);
+				block_import_params.post_digests.push(verified_info.seal);
+				block_import_params.body = body;
+				block_import_params.justification = justification;
+				block_import_params.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
 					Box::new(SassafrasIntermediate::<Block> {
 						epoch_descriptor,
 					}) as Box<dyn Any>,
 				);
-
-				let block_import_params = BlockImportParams {
-					origin,
-					header: pre_header,
-					post_digests: vec![verified_info.seal],
-					body,
-					storage_changes: None,
-					finalized: false,
-					justification,
-					auxiliary: Vec::new(),
-					intermediates,
-					fork_choice: None,
-					allow_missing_state: false,
-					import_existing: false,
-				};
 
 				Ok((block_import_params, Default::default()))
 			}
@@ -1084,7 +1061,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, 
 		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		let hash = block.post_header().hash();
+		let hash = block.post_hash();
 		let number = block.header.number().clone();
 
 		// early exit if block already in chain, otherwise the check for
