@@ -88,7 +88,7 @@
 //! - `close_proxy` - Clears the proxy status, called by the proxy.
 //! - `deactivate_proxy` - Deactivates a proxy back to the open status, called by
 //!   the stash.
-//! - `open_proxy` -  Opens a proxy account on behalf of the sender.
+//! - `open_proxy` - Opens a proxy account on behalf of the sender.
 //! - `delegate` - Delegates the voting power (tokens * conviction) to another
 //!   account.
 //! - `undelegate` - Stops the delegation of voting power to another account.
