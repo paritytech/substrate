@@ -152,12 +152,12 @@ decl_module! {
 			MyMemberList::<T>::append(&[who])?;
 		}
 
-		// Append user to the list.
+		// Encode a vector of accounts to bytes.
 		pub fn encode_accounts(_origin, accounts: Vec<T::AccountId>) {
 			let _bytes = accounts.encode();
 		}
 
-		// Append user to the list.
+		// Decode bytes into a vector of accounts.
 		pub fn decode_accounts(_origin, bytes: Vec<u8>) {
 			let _accounts: Vec<T::AccountId> = Decode::decode(&mut bytes.as_slice()).map_err(|_| "Could not decode")?;
 		}
