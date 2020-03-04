@@ -2827,7 +2827,7 @@ mod offchain_phragmen {
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(37));
 
 				run_to_block(40);
-				assert_session_era!(4, 0); // TODO @guillaume I was expecting active era to be bumped by this point. Double check
+				assert_session_era!(4, 0);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 				assert!(Staking::snapshot_nominators().is_none());
 				assert!(Staking::snapshot_validators().is_none());
@@ -4212,4 +4212,3 @@ fn set_history_depth_works() {
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
 	});
 }
-
