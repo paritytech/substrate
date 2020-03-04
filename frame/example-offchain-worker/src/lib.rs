@@ -47,6 +47,7 @@ use frame_system::{
     offchain::{self, new::{
         self,
         SendUnsignedTransaction,
+        SendSignedTransaction,
         SendRawUnsignedTransaction,
     }}
 };
@@ -429,9 +430,12 @@ impl<T: Trait> Module<T> {
 		// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefuly
 		// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
 		// attack vectors. See validation logic docs for more details.
+		//
+		// Method 1
 		let _result_raw: Result<(), String> = new::Signer::<T, T::AuthorityId>::send_raw_unsigned_transaction(call)
     		.map_err(|()| "Unable to submit unsigned transaction.".into());
 
+        // Method 2
         let _result_signed_payload = new::Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
             |account| PricePayload {
                 price,
@@ -441,6 +445,11 @@ impl<T: Trait> Module<T> {
             |payload, signature| {
                 Call::submit_price_unsigned_with_signed_payload(payload, signature)
             }
+        );
+
+        // Method 3
+        let _result_signed_transaction = new::Signer::<T, T::AuthorityId>::all_accounts().send_signed_transaction(
+             |_account| Call::submit_price(price)
         );
 
         Ok(())
