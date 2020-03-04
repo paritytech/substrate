@@ -199,6 +199,35 @@ fn should_notify_about_latest_block() {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
+		api.subscribe_all_heads(Default::default(), subscriber);
+
+		// assert id assigned
+		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		client.import(BlockOrigin::Own, block).unwrap();
+	}
+
+	// assert initial head sent.
+	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	assert!(notification.is_some());
+	// assert notification sent to transport
+	let (notification, next) = core.block_on(next.into_future()).unwrap();
+	assert!(notification.is_some());
+	// no more notifications on this channel
+	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+}
+
+#[test]
+fn should_notify_about_best_block() {
+	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+	let (subscriber, id, transport) = Subscriber::new_test("test");
+
+	{
+		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+
 		api.subscribe_new_heads(Default::default(), subscriber);
 
 		// assert id assigned
