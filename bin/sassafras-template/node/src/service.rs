@@ -122,6 +122,7 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 			force_authoring,
 			sassafras_link,
 			can_author_with,
+			network: service.network(),
 		};
 
 		let sassafras = sc_consensus_sassafras::start_sassafras(sassafras_config)?;

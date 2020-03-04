@@ -1,4 +1,5 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc, pin::Pin, task::{Poll, Context}};
+use futures::prelude::*;
 use sp_runtime::traits::Block as BlockT;
 use sc_network::PeerId;
 use sc_network_gossip::{
@@ -50,5 +51,13 @@ impl<Block: BlockT, N> NetworkBridge<Block, N> where
 			gossip_engine,
 			validator,
 		}
+	}
+}
+
+impl<Block: BlockT, N: Unpin> Future for NetworkBridge<Block, N> {
+	type Output = ();
+
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		self.gossip_engine.poll_unpin(cx)
 	}
 }

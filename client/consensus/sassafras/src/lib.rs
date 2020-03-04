@@ -359,7 +359,7 @@ impl std::ops::Deref for Config {
 }
 
 /// Parameters for Sassafras.
-pub struct SassafrasParams<B: BlockT, C, E, I, SO, SC, CAW> {
+pub struct SassafrasParams<B: BlockT, C, E, I, SO, SC, CAW, N> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: KeyStorePtr,
 
@@ -391,10 +391,13 @@ pub struct SassafrasParams<B: BlockT, C, E, I, SO, SC, CAW> {
 
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
+
+	/// The network instance.
+	pub network: N,
 }
 
 /// Start the sassafras worker. The returned future should be run in a tokio runtime.
-pub fn start_sassafras<B, C, SC, E, I, SO, CAW, Error>(SassafrasParams {
+pub fn start_sassafras<B, C, SC, E, I, SO, CAW, N, Error>(SassafrasParams {
 	keystore,
 	client,
 	select_chain,
@@ -405,7 +408,8 @@ pub fn start_sassafras<B, C, SC, E, I, SO, CAW, Error>(SassafrasParams {
 	force_authoring,
 	sassafras_link,
 	can_author_with,
-}: SassafrasParams<B, C, E, I, SO, SC, CAW>) -> Result<
+	network,
+}: SassafrasParams<B, C, E, I, SO, SC, CAW, N>) -> Result<
 	impl futures::Future<Output=()>,
 	sp_consensus::Error,
 > where
@@ -421,6 +425,7 @@ pub fn start_sassafras<B, C, SC, E, I, SO, CAW, Error>(SassafrasParams {
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	CAW: CanAuthorWith<B> + Send,
+	N: sc_network_gossip::Network<B> + Clone + Send + Unpin + 'static,
 {
 	let config = sassafras_link.config;
 	let worker = SassafrasWorker {
@@ -441,16 +446,21 @@ pub fn start_sassafras<B, C, SC, E, I, SO, CAW, Error>(SassafrasParams {
 		&inherent_data_providers,
 	)?;
 
+	let network = communication::NetworkBridge::new(network);
+
 	info!(target: "sassafras", "Starting Sassafras authorship worker");
-	Ok(sc_consensus_slots::start_slot_worker(
-		config.0,
-		select_chain,
-		worker,
-		sync_oracle,
-		inherent_data_providers,
-		sassafras_link.time_source,
-		can_author_with,
-	))
+	Ok(future::select(
+		sc_consensus_slots::start_slot_worker(
+			config.0,
+			select_chain,
+			worker,
+			sync_oracle,
+			inherent_data_providers,
+			sassafras_link.time_source,
+			can_author_with,
+		),
+		network
+	).map(drop))
 }
 
 struct SassafrasWorker<B: BlockT, C, E, I, SO> {
