@@ -1020,19 +1020,6 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b7dcd30ba50cdf88b55b033456138b7c0ac4afdc436d82e1b79f370f24cc66d"
-dependencies = [
- "byteorder 1.3.4",
- "clear_on_drop",
- "digest",
- "rand_core 0.3.1",
- "subtle 2.2.2",
-]
-
-[[package]]
-name = "curve25519-dalek"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26778518a7f6cffa1d25a44b602b62b979bd88adb9e99ffec546998cf3404839"
@@ -1041,7 +1028,7 @@ dependencies = [
  "digest",
  "rand_core 0.5.1",
  "subtle 2.2.2",
- "zeroize 1.1.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -1121,7 +1108,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "978710b352437433c97b2bff193f2fb1dfd58a093f863dd95e225a19baa599a2"
 dependencies = [
  "clear_on_drop",
- "curve25519-dalek 2.0.0",
+ "curve25519-dalek",
  "rand 0.7.3",
  "sha2",
 ]
@@ -2695,7 +2682,7 @@ dependencies = [
  "thiserror",
  "unsigned-varint 0.3.1",
  "void",
- "zeroize 1.1.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -2859,7 +2846,7 @@ version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15a8a3d71f898beb6f854c8aae27aa1d198e0d1f2e49412261c2d90ef39675a"
 dependencies = [
- "curve25519-dalek 2.0.0",
+ "curve25519-dalek",
  "futures 0.3.4",
  "lazy_static",
  "libp2p-core",
@@ -2871,7 +2858,7 @@ dependencies = [
  "snow",
  "static_assertions",
  "x25519-dalek",
- "zeroize 1.1.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -3187,14 +3174,14 @@ checksum = "71d96e3f3c0b6325d8ccd83c33b28acb183edcb6c67938ba104ec546854b0882"
 
 [[package]]
 name = "merlin"
-version = "1.3.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b0942b357c1b4d0dc43ba724674ec89c3218e6ca2b3e8269e7cb53bcecd2f6e"
+checksum = "c6feca46f4fa3443a01769d768727f10c10a20fdb65e52dc16a81f0c8269bb78"
 dependencies = [
  "byteorder 1.3.4",
  "keccak",
- "rand_core 0.4.2",
- "zeroize 1.1.0",
+ "rand_core 0.5.1",
+ "zeroize",
 ]
 
 [[package]]
@@ -6213,7 +6200,7 @@ dependencies = [
  "unsigned-varint 0.3.1",
  "void",
  "wasm-timer",
- "zeroize 1.1.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -6566,19 +6553,20 @@ dependencies = [
 
 [[package]]
 name = "schnorrkel"
-version = "0.8.5"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eacd8381b3c37840c9c9f40472af529e49975bdcbc24f83c31059fd6539023d3"
+checksum = "e00ca6f74cf5e9b1bfa1b3764c4907c118bc6caa26e72e5240c3ad14b30bc2fa"
 dependencies = [
- "curve25519-dalek 1.2.3",
- "failure",
+ "arrayref",
+ "arrayvec 0.5.1",
+ "curve25519-dalek",
+ "getrandom",
  "merlin",
- "rand 0.6.5",
- "rand_core 0.4.2",
- "rand_os",
+ "rand 0.7.3",
+ "rand_core 0.5.1",
  "sha2",
  "subtle 2.2.2",
- "zeroize 0.9.3",
+ "zeroize",
 ]
 
 [[package]]
@@ -7131,7 +7119,7 @@ dependencies = [
  "tiny-keccak 2.0.1",
  "twox-hash",
  "wasmi",
- "zeroize 1.1.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -7599,9 +7587,9 @@ dependencies = [
 
 [[package]]
 name = "substrate-bip39"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3be511be555a3633e71739a79e4ddff6a6aaa6579fa6114182a51d72c3eb93c5"
+checksum = "a71f83e790f01b8f83129217dd044ae76fece0d39a5771aed3c6a67cedd27d91"
 dependencies = [
  "hmac",
  "pbkdf2",
@@ -9124,9 +9112,9 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "637ff90c9540fa3073bb577e65033069e4bae7c79d49d74aa3ffdf5342a53217"
 dependencies = [
- "curve25519-dalek 2.0.0",
+ "curve25519-dalek",
  "rand_core 0.5.1",
- "zeroize 1.1.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -9149,12 +9137,6 @@ dependencies = [
  "rand 0.7.3",
  "thiserror",
 ]
-
-[[package]]
-name = "zeroize"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45af6a010d13e4cf5b54c94ba5a2b2eba5596b9e46bf5875612d332a1f2b3f86"
 
 [[package]]
 name = "zeroize"
