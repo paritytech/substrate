@@ -348,6 +348,21 @@ impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 	}
 }
 
+// A value placed in storage that represents the current version of the Balances storage.
+// This value is used by the `on_runtime_upgrade` logic to determine whether we run
+// storage migration logic. This should match directly with the semantic versions of the Rust crate.
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+enum Releases {
+	V1_0_0,
+	V2_0_0,
+}
+
+impl Default for Releases {
+	fn default() -> Self {
+		Releases::V1_0_0
+	}
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Balances {
 		/// The total units issued in the system.
@@ -367,10 +382,10 @@ decl_storage! {
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
 		pub Locks get(fn locks): map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
-		/// Module version number.
+		/// Storage version of the pallet.
 		///
-		/// Default to version 1 for new networks.
-		ModuleVersion build(|_: &GenesisConfig<T, I>| 1): u8;
+		/// This is set to v2.0.0 for new networks.
+		StorageVersion build(|_: &GenesisConfig<T, I>| Releases::V2_0_0): Releases;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
