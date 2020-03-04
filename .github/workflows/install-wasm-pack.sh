@@ -8,7 +8,7 @@ WASM_PACK_VERSION=$(echo $WASM_PACK_RELEASE | sed -e 's/.*"tag_name":"\([^"]*\)"
 if [ "$(uname -s)" == "Darwin" ]; then
   WASM_PACK_HOST_TRIPLE="x86_64-apple-darwin"
 else
-  WASM_PACK_HOST_TRIPLE="x86_64-unknown-linux-gnu"
+  WASM_PACK_HOST_TRIPLE="x86_64-unknown-linux-musl"
 fi
 WASM_PACK_BASENAME="wasm-pack-$WASM_PACK_VERSION-$WASM_PACK_HOST_TRIPLE"
 WASM_PACK_URL="https://github.com/rustwasm/wasm-pack/releases/download/$WASM_PACK_VERSION/wasm-pack-$WASM_PACK_VERSION-$WASM_PACK_HOST_TRIPLE.tar.gz"
