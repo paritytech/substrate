@@ -23,6 +23,7 @@ mod utils;
 pub use utils::*;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
+pub use sp_runtime::traits::Dispatchable;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -157,7 +158,7 @@ macro_rules! benchmarks_iter {
 	) => {
 		$crate::benchmarks_iter! {
 			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: { 
-				Call::<T>::$dispatch($($arg),*).dispatch($origin.into())?;
+				<Call<T> as $crate::Dispatchable>::dispatch(Call::<T>::$dispatch($($arg),*), $origin.into())?;
 			} $( $rest )*
 		}
 	};
