@@ -3967,6 +3967,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-benchmark"
+version = "2.0.0-alpha.3"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-collective"
 version = "2.0.0-alpha.3"
 dependencies = [
