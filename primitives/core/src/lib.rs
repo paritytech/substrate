@@ -133,6 +133,15 @@ impl Deref for Bytes {
 	fn deref(&self) -> &[u8] { &self.0[..] }
 }
 
+#[cfg(feature = "std")]
+impl sp_std::str::FromStr for Bytes {
+	type Err = bytes::FromHexError;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		bytes::from_hex(s).map(Bytes)
+	}
+}
+
 /// Stores the encoded `RuntimeMetadata` for the native side as opaque type.
 #[derive(Encode, Decode, PartialEq)]
 pub struct OpaqueMetadata(Vec<u8>);
@@ -201,7 +210,7 @@ impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
 }
 
 /// A value that is never in a native representation.
-/// This is type is useful in conjuction with `NativeOrEncoded`.
+/// This is type is useful in conjunction with `NativeOrEncoded`.
 #[cfg(feature = "std")]
 #[derive(PartialEq)]
 pub enum NeverNativeValue {}

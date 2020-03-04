@@ -30,7 +30,7 @@ use frame_support::{
 };
 use sp_runtime::traits::Hash;
 use sp_staking::{
-	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails},
+	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails, OffenceError},
 };
 use codec::{Encode, Decode};
 use frame_system as system;
@@ -90,7 +90,7 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>>
 where
 	T::IdentificationTuple: Clone,
 {
-	fn report_offence(reporters: Vec<T::AccountId>, offence: O) {
+	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
 		let validator_set_count = offence.validator_set_count();
@@ -104,7 +104,7 @@ where
 		) {
 			Some(triage) => triage,
 			// The report contained only duplicates, so there is no need to slash again.
-			None => return,
+			None => return Err(OffenceError::DuplicateReport),
 		};
 
 		// Deposit the event.
@@ -123,6 +123,8 @@ where
 			&slash_perbill,
 			offence.session_index(),
 		);
+
+		Ok(())
 	}
 }
 
@@ -187,7 +189,7 @@ struct TriageOutcome<T: Trait> {
 	concurrent_offenders: Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>,
 }
 
-/// An auxilary struct for working with storage of indexes localized for a specific offence
+/// An auxiliary struct for working with storage of indexes localized for a specific offence
 /// kind (specified by the `O` type parameter).
 ///
 /// This struct is responsible for aggregating storage writes and the underlying storage should not

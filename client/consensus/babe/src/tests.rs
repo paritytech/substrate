@@ -23,7 +23,7 @@ use super::*;
 use authorship::claim_slot;
 
 use sp_consensus_babe::{AuthorityPair, SlotNumber};
-use sc_block_builder::BlockBuilder;
+use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
 	NoNetwork as DummyOracle, Proposal, RecordProof,
 	import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport},
@@ -32,10 +32,9 @@ use sc_network_test::*;
 use sc_network_test::{Block as TestBlock, PeersClient};
 use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
-use tokio::runtime::current_thread;
 use sc_client_api::{BlockchainEvents, backend::TransactionFor};
 use log::debug;
-use std::{time::Duration, cell::RefCell};
+use std::{time::Duration, cell::RefCell, task::Poll};
 
 type Item = DigestItem<Hash>;
 
@@ -199,20 +198,14 @@ impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<
 }
 
 pub struct BabeTestNet {
-	peers: Vec<Peer<Option<PeerData>, DummySpecialization>>,
+	peers: Vec<Peer<Option<PeerData>>>,
 }
 
 type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
-	inner: BabeVerifier<
-		substrate_test_runtime_client::Backend,
-		substrate_test_runtime_client::Executor,
-		TestBlock,
-		substrate_test_runtime_client::runtime::RuntimeApi,
-		PeersFullClient,
-	>,
+	inner: BabeVerifier<TestBlock, PeersFullClient>,
 	mutator: Mutator,
 }
 
@@ -229,7 +222,7 @@ impl Verifier<TestBlock> for TestVerifier {
 	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut header, Stage::PostSeal);
-		Ok(self.inner.verify(origin, header, justification, body).expect("verification failed!"))
+		self.inner.verify(origin, header, justification, body)
 	}
 }
 
@@ -242,7 +235,6 @@ pub struct PeerData {
 }
 
 impl TestNetFactory for BabeTestNet {
-	type Specialization = DummySpecialization;
 	type Verifier = TestVerifier;
 	type PeerData = Option<PeerData>;
 
@@ -269,7 +261,6 @@ impl TestNetFactory for BabeTestNet {
 		let config = Config::get_or_compute(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(
 			config,
-			client.clone(),
 			client.clone(),
 			client.clone(),
 		).expect("can initialize block-import");
@@ -305,7 +296,6 @@ impl TestNetFactory for BabeTestNet {
 		TestVerifier {
 			inner: BabeVerifier {
 				client: client.clone(),
-				api: client,
 				inherent_data_providers: data.inherent_data_providers.clone(),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
@@ -315,17 +305,17 @@ impl TestNetFactory for BabeTestNet {
 		}
 	}
 
-	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, DummySpecialization> {
-		trace!(target: "babe", "Retreiving a peer");
+	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData> {
+		trace!(target: "babe", "Retrieving a peer");
 		&mut self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Peer<Self::PeerData, DummySpecialization>> {
-		trace!(target: "babe", "Retreiving peers");
+	fn peers(&self) -> &Vec<Peer<Self::PeerData>> {
+		trace!(target: "babe", "Retrieving peers");
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, DummySpecialization>>)>(
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData>>)>(
 		&mut self,
 		closure: F,
 	) {
@@ -363,7 +353,7 @@ fn run_one_test(
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
-	let mut runtime = current_thread::Runtime::new().unwrap();
+	let mut babe_futures = Vec::new();
 	let mut keystore_paths = Vec::new();
 
 	for (peer_id, seed) in peers {
@@ -408,7 +398,7 @@ fn run_one_test(
 		);
 
 
-		runtime.spawn(start_babe(BabeParams {
+		babe_futures.push(start_babe(BabeParams {
 			block_import: data.block_import.lock().take().expect("import set up during init"),
 			select_chain,
 			client,
@@ -419,16 +409,23 @@ fn run_one_test(
 			babe_link: data.link.clone(),
 			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
-		}).expect("Starts babe").unit_error().compat());
+		}).expect("Starts babe"));
 	}
 
-	runtime.spawn(futures01::future::poll_fn(move || {
-		net.lock().poll();
-		Ok::<_, ()>(futures01::Async::NotReady::<()>)
-	}));
-
-	runtime.block_on(future::join_all(import_notifications)
-		.unit_error().compat()).unwrap();
+	futures::executor::block_on(future::select(
+		futures::future::poll_fn(move |cx| {
+			let mut net = net.lock();
+			net.poll(cx);
+			for p in net.peers() {
+				for (h, e) in p.failed_verifications() {
+					panic!("Verification failed for {:?}: {}", h, e);
+				}
+			}
+	
+			Poll::<()>::Pending
+		}),
+		future::select(future::join_all(import_notifications), future::join_all(babe_futures))
+	));
 }
 
 #[test]
@@ -593,30 +590,15 @@ fn propose_and_import_block<Transaction>(
 		h
 	};
 
-	let import_result = block_import.import_block(
-		BlockImportParams {
-			origin: BlockOrigin::Own,
-			header: block.header,
-			justification: None,
-			post_digests: vec![seal],
-			body: Some(block.extrinsics),
-			storage_changes: None,
-			finalized: false,
-			auxiliary: Vec::new(),
-			intermediates: {
-				let mut intermediates = HashMap::new();
-				intermediates.insert(
-					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
-				);
-				intermediates
-			},
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		},
-		Default::default(),
-	).unwrap();
+	let mut import = BlockImportParams::new(BlockOrigin::Own, block.header);
+	import.post_digests.push(seal);
+	import.body = Some(block.extrinsics);
+	import.intermediates.insert(
+		Cow::from(INTERMEDIATE_KEY),
+		Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+	);
+	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+	let import_result = block_import.import_block(import, Default::default()).unwrap();
 
 	match import_result {
 		ImportResult::Imported(_) => {},

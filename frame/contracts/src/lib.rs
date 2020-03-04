@@ -125,7 +125,7 @@ use frame_support::{
 	parameter_types, IsSubType,
 	weights::DispatchInfo,
 };
-use frame_support::traits::{OnReapAccount, OnUnbalanced, Currency, Get, Time, Randomness};
+use frame_support::traits::{OnKilledAccount, OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
 use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use pallet_contracts_primitives::{RentProjection, ContractAccessError};
@@ -143,7 +143,7 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
-/// Information for managing an acocunt and its sub trie abstraction.
+/// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account
 #[derive(Encode, Decode, RuntimeDebug)]
 pub enum ContractInfo<T: Trait> {
@@ -432,8 +432,8 @@ pub trait Trait: frame_system::Trait {
 /// and the account id that requested the account creation.
 ///
 /// Formula: `blake2_256(blake2_256(code) + blake2_256(data) + origin)`
-pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
-impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminator<T>
+pub struct SimpleAddressDeterminer<T: Trait>(PhantomData<T>);
+impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminer<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
@@ -494,7 +494,7 @@ decl_module! {
 		/// The minimum amount required to generate a tombstone.
 		const TombstoneDeposit: BalanceOf<T> = T::TombstoneDeposit::get();
 
-		/// Size of a contract at the time of instantiaion. This is a simple way to ensure that
+		/// Size of a contract at the time of instantiation. This is a simple way to ensure that
 		/// empty contracts eventually gets deleted.
 		const StorageSizeOffset: u32 = T::StorageSizeOffset::get();
 
@@ -941,8 +941,12 @@ decl_storage! {
 	}
 }
 
-impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
-	fn on_reap_account(who: &T::AccountId) {
+// TODO: this should be removed in favour of a self-destruct contract host function allowing the
+// contract to delete all storage and the `ContractInfoOf` key and transfer remaining balance to
+// some other account. As it stands, it's an economic insecurity on any smart-contract chain.
+// https://github.com/paritytech/substrate/issues/4952
+impl<T: Trait> OnKilledAccount<T::AccountId> for Module<T> {
+	fn on_killed_account(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
 			child::kill_storage(&info.trie_id, info.child_trie_unique_id());
 		}

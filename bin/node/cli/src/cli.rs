@@ -17,15 +17,10 @@
 use sc_cli::{SharedParams, ImportParams, RunCmd};
 use structopt::StructOpt;
 
-#[allow(missing_docs)]
+/// An overarching CLI command definition.
 #[derive(Clone, Debug, StructOpt)]
-#[structopt(settings = &[
-	structopt::clap::AppSettings::GlobalVersion,
-	structopt::clap::AppSettings::ArgsNegateSubcommands,
-	structopt::clap::AppSettings::SubcommandsNegateReqs,
-])]
 pub struct Cli {
-	#[allow(missing_docs)]
+	/// Possible subcommand with parameters.
 	#[structopt(subcommand)]
 	pub subcommand: Option<Subcommand>,
 	#[allow(missing_docs)]
@@ -33,10 +28,10 @@ pub struct Cli {
 	pub run: RunCmd,
 }
 
-#[allow(missing_docs)]
+/// Possible subcommands of the main binary.
 #[derive(Clone, Debug, StructOpt)]
 pub enum Subcommand {
-	#[allow(missing_docs)]
+	/// A set of base subcommands handled by `sc_cli`.
 	#[structopt(flatten)]
 	Base(sc_cli::Subcommand),
 	/// The custom factory subcommmand for manufacturing transactions.
@@ -46,6 +41,20 @@ pub enum Subcommand {
 		Only supported for development or local testnet."
 	)]
 	Factory(FactoryCmd),
+
+	/// The custom inspect subcommmand for decoding blocks and extrinsics.
+	#[structopt(
+		name = "inspect",
+		about = "Decode given block or extrinsic using current native runtime."
+	)]
+	Inspect(node_inspect::cli::InspectCmd),
+
+	/// The custom benchmark subcommmand benchmarking runtime pallets.
+	#[structopt(
+		name = "benchmark",
+		about = "Benchmark runtime pallets."
+	)]
+	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 }
 
 /// The `factory` command used to generate transactions.

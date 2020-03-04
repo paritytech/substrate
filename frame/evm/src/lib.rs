@@ -177,7 +177,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		/// Despoit balance from currency/balances module into EVM.
+		/// Deposit balance from currency/balances module into EVM.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn deposit_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;

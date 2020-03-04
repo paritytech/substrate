@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! An opt-in utility for tracking historical sessions in SRML-session.
+//! An opt-in utility for tracking historical sessions in FRAME-session.
 //!
 //! This is generally useful when implementing blockchains that require accountable
 //! safety where validators from some amount f prior sessions must remain slashable.
@@ -108,6 +108,7 @@ pub trait SessionManager<ValidatorId, FullIdentification>: crate::SessionManager
 	/// If there was a validator set change, its returns the set of new validators along with their
 	/// full identifications.
 	fn new_session(new_index: SessionIndex) -> Option<Vec<(ValidatorId, FullIdentification)>>;
+	fn start_session(start_index: SessionIndex);
 	fn end_session(end_index: SessionIndex);
 }
 
@@ -145,6 +146,9 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 		}
 
 		new_validators
+	}
+	fn start_session(start_index: SessionIndex) {
+		<I as SessionManager<_, _>>::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
 		<I as SessionManager<_, _>>::end_session(end_index)
@@ -318,7 +322,7 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
+				l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
 			),
 		}.assimilate_storage(&mut t).unwrap();
 		sp_io::TestExternalities::new(t)
