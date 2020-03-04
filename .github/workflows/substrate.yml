@@ -349,6 +349,8 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[check-web-wasm]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
+      - name:                        Restore ./target
+        uses:                        actions/cache@v1.1.2
         with:
           path:                      target
           key:                       cargo-build-[check-web-wasm]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
