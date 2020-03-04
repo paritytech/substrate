@@ -623,7 +623,7 @@ impl StateSnapshot {
 	}
 }
 
-/// A runtime along with its initial state snapshot.
+/// A runtime along with initial copy of data segments.
 pub struct WasmiRuntime {
 	/// A wasm module.
 	module: Module,
@@ -633,7 +633,7 @@ pub struct WasmiRuntime {
 	/// These stubs will error when the wasm blob tries to call them.
 	allow_missing_func_imports: bool,
 	/// Numer of heap pages this runtime uses.
-	heap_pages: u64, 
+	heap_pages: u64,
 	/// Data segments created for each new instance.
 	data_segments: Vec<DataSegment>,
 }
@@ -690,7 +690,7 @@ pub fn create_runtime(
 	})
 }
 
-/// Wasmi instance wrapper
+/// Wasmi instance wrapper along with the state snapshot.
 pub struct WasmiInstance {
 	/// A wasm module instance.
 	instance: ModuleRef,
@@ -706,7 +706,6 @@ pub struct WasmiInstance {
 	/// List of missing functions detected during function resolution
 	missing_functions: Vec<String>,
 }
-
 
 // This is safe because `WasmiInstance` does not leak any references to `self.memory` and `self.instance`
 unsafe impl Send for WasmiInstance {}

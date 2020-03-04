@@ -714,8 +714,7 @@ checksum = "e7ca8a5221364ef15ce201e8ed2f609fc312682a8f4e0e3d4aa5879764e0fa3b"
 [[package]]
 name = "cranelift-bforest"
 version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45a9c21f8042b9857bda93f6c1910b9f9f24100187a3d3d52f214a34e3dc5818"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "cranelift-entity",
 ]
@@ -723,8 +722,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen"
 version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7853f77a6e4a33c67a69c40f5e1bb982bd2dc5c4a22e17e67b65bbccf9b33b2e"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "byteorder 1.3.4",
  "cranelift-bforest",
@@ -742,8 +740,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-meta"
 version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "084cd6d5fb0d1da28acd72c199471bfb09acc703ec8f3bf07b1699584272a3b9"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -752,14 +749,12 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "701b599783305a58c25027a4d73f2d6b599b2d8ef3f26677275f480b4d51e05d"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 
 [[package]]
 name = "cranelift-entity"
 version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b88e792b28e1ebbc0187b72ba5ba880dad083abe9231a99d19604d10c9e73f38"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "serde",
 ]
@@ -767,8 +762,7 @@ dependencies = [
 [[package]]
 name = "cranelift-frontend"
 version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "518344698fa6c976d853319218415fdfb4f1bc6b42d0b2e2df652e55dff1f778"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "cranelift-codegen",
  "log 0.4.8",
@@ -779,8 +773,7 @@ dependencies = [
 [[package]]
 name = "cranelift-native"
 version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32daf082da21c0c05d93394ff4842c2ab7c4991b1f3186a1d952f8ac660edd0b"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -790,8 +783,7 @@ dependencies = [
 [[package]]
 name = "cranelift-wasm"
 version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2aa816f554a3ef739a5d17ca3081a1f8983f04c944ea8ff60fb8d9dd8cd2d7b"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -8833,7 +8825,7 @@ checksum = "aeb1956b19469d1c5e63e459d29e7b5aa0f558d9f16fcef09736f8a265e6c10a"
 [[package]]
 name = "wasmtime"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#64633294faf612c25fdbc84bef4c068a87468b4f"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -8855,7 +8847,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-debug"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#64633294faf612c25fdbc84bef4c068a87468b4f"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "anyhow",
  "faerie",
@@ -8870,7 +8862,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-environ"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#64633294faf612c25fdbc84bef4c068a87468b4f"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "anyhow",
  "base64 0.11.0",
@@ -8898,7 +8890,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-jit"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#64633294faf612c25fdbc84bef4c068a87468b4f"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -8922,7 +8914,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-profiling"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#64633294faf612c25fdbc84bef4c068a87468b4f"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "gimli",
  "goblin",
@@ -8937,7 +8929,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-runtime"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#64633294faf612c25fdbc84bef4c068a87468b4f"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
 dependencies = [
  "backtrace",
  "cc",

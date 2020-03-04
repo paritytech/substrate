@@ -27,11 +27,11 @@ pub trait WasmRuntime: Sync + Send {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>, Error>;
 }
 
-/// A trait that defines an abstract wasm runtime.
+/// A trait that defines an abstract wasm machine instance.
 ///
 /// This can be implemented by an execution engine.
 pub trait WasmInstance: Send {
-	/// Call a method in the Substrate runtime and reset this instance.
+	/// Call a method in the wasm code and reset this instance.
 	/// Returns the encoded result on success.
 	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error>;
 

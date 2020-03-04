@@ -133,8 +133,8 @@ impl RuntimeCache {
 		host_functions: &[&'static dyn Function],
 		allow_missing_func_imports: bool,
 		f: F,
-	) -> Result<R, Error>
-		where F: FnOnce(&dyn WasmInstance, Option<&RuntimeVersion>, &mut dyn Externalities) -> R,
+	) -> Result<Result<R, Error>, Error>
+		where F: FnOnce(&dyn WasmInstance, Option<&RuntimeVersion>, &mut dyn Externalities) -> Result<R, Error>,
 	{
 		let (code_hash, heap_pages) = match &code {
 			CodeSource::Externalities => {
@@ -181,7 +181,7 @@ impl RuntimeCache {
 					allow_missing_func_imports,
 				);
 				if let Err(ref err) = result {
-					log::warn!(target: "wasm-cache", "Cannot create a runtime: {:?}", err);
+					log::warn!(target: "wasm-runtime", "Cannot create a runtime: {:?}", err);
 				}
 				Arc::new(result?)
 			}
@@ -209,20 +209,31 @@ impl RuntimeCache {
 			// Find a free instance
 			let instance_pool = { runtime.instances.read().clone() };
 			let instance = instance_pool.iter().filter_map(|i| i.as_ref().and_then(|i| i.try_lock())).next();
-			if let Some(locked) = instance {
-				f(&**locked, runtime.version.as_ref(), ext)
+			if let Some(mut locked) = instance {
+				let result = f(&**locked, runtime.version.as_ref(), ext);
+				if let Err(e) = &result {
+					log::warn!(target: "wasm-runtime", "Evicting failed runtime instance: {:?}", e);
+					*locked = runtime.runtime.new_instance()?;
+				}
+				result
 			} else {
 				// Allocate a new instance
-				drop(instance);
 				let instance = runtime.runtime.new_instance()?;
 
 				let result = f(&*instance, runtime.version.as_ref(), ext);
-				let mut instance_pool = runtime.instances.write();
-				if let Some(ref mut slot) = instance_pool.iter_mut().find(|s| s.is_none()) {
-					**slot = Some(Arc::new(Mutex::new(instance)));
-					log::debug!(target: "wasm-cache", "Allocated WASM instance {}/{}", instance_pool.len(), MAX_INSTANCES);
-				} else {
-					log::warn!(target: "wasm-cache", "Ran out of free WASM instances");
+				match &result {
+					Ok(_) => {
+						let mut instance_pool = runtime.instances.write();
+						if let Some(ref mut slot) = instance_pool.iter_mut().find(|s| s.is_none()) {
+							**slot = Some(Arc::new(Mutex::new(instance)));
+							log::debug!(target: "wasm-runtime", "Allocated WASM instance {}/{}", instance_pool.len(), MAX_INSTANCES);
+						} else {
+							log::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
+						}
+					}
+					Err(e) => {
+						log::warn!(target: "wasm-runtime", "Fresh runtime instance failed with {:?}", e);
+					}
 				}
 				result
 			}
@@ -230,21 +241,6 @@ impl RuntimeCache {
 
 		Ok(result)
 	}
-	/*
-	/// Invalidate the runtime for the given `wasm_method` and `code_hash`.
-	///
-	/// Invalidation of a runtime is useful when there was a `panic!` in native while executing it.
-	/// The `panic!` maybe have brought the runtime into a poisoned state and so, it is better to
-	/// invalidate this runtime instance.
-	fn invalidate_runtime(
-		&mut self,
-		wasm_method: WasmExecutionMethod,
-		code_hash: Vec<u8>,
-	) {
-		// Just remove the instance, it will be re-created the next time it is requested.
-		self.instances.remove(&(wasm_method, code_hash));
-	}
-	*/
 }
 
 /// Create a wasm runtime with the given `code`.
@@ -303,7 +299,7 @@ fn create_versioned_wasm_runtime(
 		Err(_) => None,
 	};
 	log::debug!(
-		target: "wasm-cache",
+		target: "wasm-runtime",
 		"Prepared new runtime version {:?} in {} ms.",
 		version,
 		time.elapsed().as_millis()
@@ -315,7 +311,7 @@ fn create_versioned_wasm_runtime(
 		version,
 		heap_pages,
 		wasm_method,
-		instances: RwLock::new([None, None, None, None, None, None, None, None]),
+		instances: Default::default(),
 	})
 }
 

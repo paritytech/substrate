@@ -65,8 +65,8 @@ impl WasmRuntime for WasmtimeRuntime {
 	}
 }
 
-/// A `WasmRuntime` implementation using wasmtime to compile the runtime module to machine code
-/// and execute the compiled code.
+/// A `WasmInstance` implementation that reuses compiled module and spawns instances
+/// to execute the compiled code.
 pub struct WasmtimeInstance {
 	module: Arc<Module>,
 	imports: Imports,
@@ -80,6 +80,7 @@ unsafe impl Send for WasmtimeInstance {}
 
 impl WasmInstance for WasmtimeInstance {
 	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
+		// TODO: reuse the instance and reset globals after call
 		let instance = Rc::new(InstanceWrapper::new(&self.module, &self.imports, self.heap_pages)?);
 		call_method(
 			instance,
