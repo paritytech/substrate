@@ -57,7 +57,7 @@ impl<A: PartialEq> PartialEq for NodeId<A> {
 impl<A: PartialEq> Eq for NodeId<A> {}
 
 #[cfg(feature = "std")]
-impl<A: fmt::Debug + Clone> sp_std::fmt::Debug for NodeId<A> {
+impl<A: fmt::Debug> sp_std::fmt::Debug for NodeId<A> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(
 			f,

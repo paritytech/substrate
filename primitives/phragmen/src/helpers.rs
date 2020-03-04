@@ -33,8 +33,8 @@ where
 	ratio
 		.into_iter()
 		.map(|a| {
-			let who = a.who.clone();
-			a.into_staked(stake_of(&who), true)
+			let stake = stake_of(&a.who);
+			a.into_staked(stake, true)
 		})
 		.collect()
 }

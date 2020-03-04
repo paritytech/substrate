@@ -43,8 +43,16 @@ pub enum OffchainElectionError {
 	ElectionFailed,
 	/// The snapshot data is not available.
 	SnapshotUnavailable,
-	/// Failed to create the compact type.
-	CompactFailed,
+	/// Error from phragmen crate. This usually relates to compact operation.
+	PhragmenError(sp_phragmen::Error),
+	/// One of the computed winners is invalid.
+	InvalidWinner,
+}
+
+impl From<sp_phragmen::Error> for OffchainElectionError {
+	fn from(e: sp_phragmen::Error) -> Self {
+		Self::PhragmenError(e)
+	}
 }
 
 /// The type of signature data encoded with the unsigned submission
@@ -213,8 +221,7 @@ where
 			<Module<T>>::slashable_balance_of_extended,
 		);
 
-		let (support_map, _) =
-			build_support_map::<T::AccountId>(winners.as_slice(), staked.as_slice());
+		let (support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
 		evaluate_support::<T::AccountId>(&support_map)
 	};
 
@@ -223,21 +230,20 @@ where
 		low_accuracy_assignment,
 		nominator_index,
 		validator_index,
-	)
-	.unwrap();
+	).map_err(|e| OffchainElectionError::from(e))?;
 
 	// winners to index.
-	let winners = winners
-		.into_iter()
-		.map(|w| {
-			snapshot_validators
-				.iter()
-				.position(|v| *v == w)
-				.unwrap()
+	let mut winners_indexed: Vec<ValidatorIndex> = Vec::with_capacity(winners.len());
+	for w in winners {
+		if let Some(idx) = snapshot_validators.iter().position(|v| *v == w) {
+			let compact_index: ValidatorIndex = idx
 				.try_into()
-				.unwrap()
-		})
-		.collect::<Vec<ValidatorIndex>>();
+				.map_err(|_| OffchainElectionError::InvalidWinner)?;
+			winners_indexed.push(compact_index);
+		} else {
+			return Err(OffchainElectionError::InvalidWinner);
+		}
+	}
 
-	Ok((winners, compact, score))
+	Ok((winners_indexed, compact, score))
 }

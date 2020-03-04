@@ -21,18 +21,19 @@ frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "..
 pallet-session = { version = "2.0.0-alpha.2", features = ["historical"], path = "../session", default-features = false }
 pallet-authorship = { version = "2.0.0-alpha.2", default-features = false, path = "../authorship" }
 sp-application-crypto = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/application-crypto" }
+static_assertions = "1.1.0"
 
 # Optional imports for tesing-utils feature
-pallet-indices = { version = "2.0.0-alpha.2", optional = true, path = "../indices" }
-sp-core = { version = "2.0.0-alpha.2", optional = true, path = "../../primitives/core" }
-rand = { version = "0.7.3", optional = true }
+pallet-indices = { version = "2.0.0-alpha.2", optional = true, path = "../indices", default-features = false }
+sp-core = { version = "2.0.0-alpha.2", optional = true, path = "../../primitives/core", default-features = false }
+rand = { version = "0.7.3", optional = true, default-features = false }
 
 [dev-dependencies]
 pallet-balances = { version = "2.0.0-alpha.2", path = "../balances" }
 pallet-timestamp = { version = "2.0.0-alpha.2", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "2.0.0-alpha.2",  path = "../staking/reward-curve" }
 substrate-test-utils = { version = "2.0.0-alpha.2", path = "../../test-utils" }
-parking_lot = { version = "0.10.0" }
+parking_lot = "0.10.0"
 env_logger = "0.7.1"
 
 [features]

@@ -3676,11 +3676,6 @@ mod offchain_phragmen {
 			);
 		})
 	}
-
-	#[test]
-	fn forcing_eras_works_with_offchain_fallback_or_submission() {
-		unimplemented!();
-	}
 }
 
 #[test]
