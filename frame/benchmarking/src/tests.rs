@@ -21,10 +21,7 @@
 use super::*;
 use codec::Decode;
 use sp_std::prelude::*;
-use sp_runtime::{
-	traits::{Dispatchable, BlakeTwo256, IdentityLookup},
-	testing::{H256, Header},
-};
+use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::{H256, Header}};
 use frame_support::{dispatch::DispatchResult, decl_module, impl_outer_origin};
 use frame_system::{RawOrigin, ensure_signed, ensure_none};
 
