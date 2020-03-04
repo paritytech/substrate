@@ -164,6 +164,12 @@ fn record_proof_works() {
 	let block_id = BlockId::Number(client.chain_info().best_number);
 	let storage_root = longest_chain.best_chain().unwrap().state_root().clone();
 
+	let runtime_code = sp_core::traits::RuntimeCode {
+		code: client.code_at(&block_id).unwrap(),
+		hash: vec![1],
+		heap_pages: None,
+	};
+
 	let transaction = Transfer {
 		amount: 1000,
 		nonce: 0,
@@ -192,5 +198,6 @@ fn record_proof_works() {
 		&executor,
 		"Core_execute_block",
 		&block.encode(),
+		&runtime_code,
 	).expect("Executes block while using the proof backend");
 }
