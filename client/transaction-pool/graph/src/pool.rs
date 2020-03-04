@@ -524,7 +524,11 @@ mod tests {
 	}
 
 	fn uxt(transfer: Transfer) -> Extrinsic {
-		Extrinsic::Transfer(transfer, Default::default())
+		Extrinsic::Transfer {
+			transfer,
+			signature: Default::default(),
+			exhaust_resources: false,
+		}
 	}
 
 	fn pool() -> Pool<TestApi> {
