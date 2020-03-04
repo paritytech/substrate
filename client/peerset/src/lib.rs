@@ -23,7 +23,7 @@ use std::{collections::{HashSet, HashMap}, collections::VecDeque};
 use futures::{prelude::*, channel::mpsc};
 use log::{debug, error, trace};
 use serde_json::json;
-use std::{pin::Pin, task::Context, task::Poll};
+use std::{pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
 
 pub use libp2p::PeerId;
@@ -34,6 +34,9 @@ const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
 const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// Reserved peers group ID
 const RESERVED_NODES: &'static str = "reserved";
+/// Amount of time between the moment we disconnect from a node and the moment we remove it from
+/// the list.
+const FORGET_AFTER: Duration = Duration::from_secs(3600);
 
 #[derive(Debug)]
 enum Action {
@@ -310,10 +313,11 @@ impl Peerset {
 	/// Updates the value of `self.latest_time_update` and performs all the updates that happen
 	/// over time, such as reputation increases for staying connected.
 	fn update_time(&mut self) {
+		let now = Instant::now();
+
 		// We basically do `(now - self.latest_update).as_secs()`, except that by the way we do it
 		// we know that we're not going to miss seconds because of rounding to integers.
 		let secs_diff = {
-			let now = Instant::now();
 			let elapsed_latest = self.latest_time_update - self.created;
 			let elapsed_now = now - self.created;
 			self.latest_time_update = now;
@@ -345,10 +349,16 @@ impl Peerset {
 						peer.set_reputation(after)
 					}
 					peersstate::Peer::NotConnected(mut peer) => {
-						let before = peer.reputation();
-						let after = reput_tick(before);
-						trace!(target: "peerset", "Fleeting {}: {} -> {}", peer_id, before, after);
-						peer.set_reputation(after)
+						if peer.reputation() == 0 &&
+							peer.last_connected_or_discovered() + FORGET_AFTER < now
+						{
+							peer.forget_peer();
+						} else {
+							let before = peer.reputation();
+							let after = reput_tick(before);
+							trace!(target: "peerset", "Fleeting {}: {} -> {}", peer_id, before, after);
+							peer.set_reputation(after)
+						}
 					}
 					peersstate::Peer::Unknown(_) => unreachable!("We iterate over known peers; qed")
 				};
@@ -414,7 +424,10 @@ impl Peerset {
 		let not_connected = match self.data.peer(&peer_id) {
 			// If we're already connected, don't answer, as the docs mention.
 			peersstate::Peer::Connected(_) => return,
-			peersstate::Peer::NotConnected(entry) => entry,
+			peersstate::Peer::NotConnected(mut entry) => {
+				entry.bump_last_connected_or_discovered();
+				entry
+			},
 			peersstate::Peer::Unknown(entry) => entry.discover(),
 		};
 
