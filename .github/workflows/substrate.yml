@@ -360,7 +360,7 @@ jobs:
           path:                      target
           key:                       cargo-build-[check-web-wasm]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Sccache statistics
-        run:                         sccache --show-stats&&rustup show
+        run:                         sccache --show-stats&&rustup update
       - name:                        Run cargo build sp-io
         run:    cargo build --target=wasm32-unknown-unknown -p sp-io
       - name:                        Run cargo build sp-runtime
