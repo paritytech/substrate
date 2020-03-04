@@ -83,6 +83,19 @@ mod authorship;
 mod utils;
 mod communication;
 
+/// Information about a local pending proof.
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct PendingProof {
+	/// Attempt integer number.
+	pub attempt: u64,
+	/// Validator index.
+	pub authority_index: u32,
+	/// VRF output.
+	pub vrf_output: VRFOutput,
+	/// VRF proof.
+	pub vrf_proof: VRFProof,
+}
+
 /// Set that are generating.
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct GeneratingSet {
@@ -93,7 +106,7 @@ pub struct GeneratingSet {
 	/// Randomness for this epoch.
 	pub randomness: Randomness,
 	/// Local pending proofs collected.
-	pub pending: Vec<(u64, u32, VRFOutput, VRFProof)>,
+	pub pending: Vec<PendingProof>,
 }
 
 impl GeneratingSet {
@@ -120,7 +133,7 @@ pub struct PublishingSet {
 	/// Proofs of all VRFs collected.
 	pub proofs: Vec<VRFProof>,
 	/// Local pending proofs collected.
-	pub pending: Vec<(u64, u32, VRFOutput, VRFProof)>,
+	pub pending: Vec<PendingProof>,
 }
 
 impl PublishingSet {
@@ -151,7 +164,7 @@ pub struct ValidatingSet {
 	/// Proofs as ordered by slot numbers.
 	pub proofs: Vec<(SlotNumber, VRFProof)>,
 	/// Pending local proofs.
-	pub pending: Vec<(u64, u32, VRFOutput, VRFProof)>,
+	pub pending: Vec<PendingProof>,
 }
 
 impl ValidatingSet {
@@ -472,6 +485,8 @@ struct SassafrasWorker<B: BlockT, C, E, I, SO> {
 	keystore: KeyStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	config: Config,
+	// local_out_proofs: UnboundedSender<VRFProof>,
+	// remote_in_proofs: UnboundedReceiver<VRFProof>,
 }
 
 impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for SassafrasWorker<B, C, E, I, SO> where
@@ -481,7 +496,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Sassafra
 		HeaderBackend<B> +
 		HeaderMetadata<B, Error = ClientError>,
 	C::Api: SassafrasApi<B>,
-	E: Environment<B, Error = Error>,
+	E: Environment<B, Error = Error> + Send,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,

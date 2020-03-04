@@ -32,7 +32,7 @@ use sp_consensus_sassafras::{
 use sc_consensus_epochs::ViableEpochDescriptor;
 use sc_keystore::KeyStorePtr;
 use log::trace;
-use super::{Epoch, GeneratingSet};
+use super::{Epoch, GeneratingSet, PendingProof};
 
 /// Calculates the primary selection threshold for a given authority, taking
 /// into account `c` (`1 - c` represents the probability of a slot being empty).
@@ -103,9 +103,10 @@ fn claim_primary_slot(
 	let ticket_vrf_index = epoch.validating.proofs.iter().position(|(s, _)| *s == slot_number)? as u32;
 	let ticket_vrf_proof = epoch.validating.proofs[ticket_vrf_index as usize].clone().1;
 	let pending_index = epoch.validating.pending.iter()
-		.position(|(_, _, _, p)| *p == ticket_vrf_proof)?;
-	let (ticket_vrf_attempt, authority_index, ticket_vrf_output, _) =
-		epoch.validating.pending[pending_index].clone();
+		.position(|p| p.vrf_proof == ticket_vrf_proof)?;
+	let ticket_vrf_attempt = epoch.validating.pending[pending_index].attempt;
+	let authority_index = epoch.validating.pending[pending_index].authority_index;
+	let ticket_vrf_output = epoch.validating.pending[pending_index].vrf_output.clone();
 
 	let keystore = keystore.read();
 	let pair = keystore.key_pair::<AuthorityPair>(
@@ -121,11 +122,11 @@ fn claim_primary_slot(
 	let post_vrf_proof = VRFProof(post_vrf_proof);
 
 	let mut commitments = Vec::new();
-	for (_, _, _, proof) in &epoch.publishing.pending {
+	for pending_proof in &epoch.publishing.pending {
 		if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS &&
-			epoch.publishing.proofs.iter().position(|p| p == proof).is_none()
+			epoch.publishing.proofs.iter().position(|p| *p == pending_proof.vrf_proof).is_none()
 		{
-			commitments.push(proof.clone());
+			commitments.push(pending_proof.vrf_proof.clone());
 		}
 	}
 	trace!(target: "sassafras", "Appending commitment length: {}", commitments.len());
@@ -179,12 +180,12 @@ impl GeneratingSet {
 						check_primary_threshold(inout, threshold)
 					})
 				{
-					self.pending.push((
+					self.pending.push(PendingProof {
 						attempt,
-						authority_index as u32,
-						VRFOutput(inout.to_output()),
-						VRFProof(proof)
-					));
+						authority_index: authority_index as u32,
+						vrf_output: VRFOutput(inout.to_output()),
+						vrf_proof: VRFProof(proof)
+					});
 				}
 			}
 
@@ -225,11 +226,12 @@ fn claim_secondary_slot(
 	{
 		if pair.public() == *expected_author {
 			let mut commitments = Vec::new();
-			for (_, _, _, proof) in &epoch.publishing.pending {
-				if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS &&
-					epoch.publishing.proofs.iter().position(|p| p == proof).is_none()
+			for pending_proof in &epoch.publishing.pending {
+				if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS && epoch.publishing.proofs.iter()
+					.position(|p| *p == pending_proof.vrf_proof)
+					.is_none()
 				{
-					commitments.push(proof.clone());
+					commitments.push(pending_proof.vrf_proof.clone());
 				}
 			}
 			trace!(target: "sassafras", "Appending commitment length: {}", commitments.len());
