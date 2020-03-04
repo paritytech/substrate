@@ -25,7 +25,7 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[linux-cargo-check-benches]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ${{ CARGO_HOME }}/.cargo/git
+      - name:                        Restore $CARGO_HOME/.cargo/git
         uses:                        actions/cache@v1.1.2
         with:
           path:                      ${{ CARGO_HOME }}/.cargo/git
