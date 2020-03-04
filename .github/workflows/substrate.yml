@@ -2,21 +2,8 @@ name:                                Substrate
 
 on:                                  [push]
 jobs:
-  linux-cache-tools:
-    name:                            Cache tools
-    runs-on:                         ubuntu-latest
-    container:                       parity/rust-builder:latest
-    env:
-      CC:                            "clang-9"
-      CXX:                           "clang-9"
-      CARGO_INCREMENTAL:               0
-    steps:
-      - name:                        Disk statistics
-        run:                         df -h --total
-
   linux-cargo-check-benches:
     name:                            Cargo check benches
-    needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
     container:                       parity/rust-builder:latest
     env:
@@ -72,12 +59,9 @@ jobs:
 
   linux-cargo-check-subkey:
     name:                            Cargo check subkey
-    needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
     container:                       parity/rust-builder:latest
     env:
-      CC:                            "clang-9"
-      CXX:                           "clang-9"
       BUILD_DUMMY_WASM_BINARY:       1
       CARGO_INCREMENTAL:               0
     steps:
@@ -127,12 +111,9 @@ jobs:
 
   linux-test-stable:
     name:                            Test linux stable
-    needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
     container:                       parity/rust-builder:latest
     env:
-      CC:                            "clang-9"
-      CXX:                           "clang-9"
       RUSTFLAGS:                     "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:               0
       BUILD_DUMMY_WASM_BINARY: 1
@@ -183,12 +164,9 @@ jobs:
 
   linux-test-frame-staking:
     name:                            Test frame staking
-    needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
     container:                       parity/rust-builder:latest
     env:
-      CC:                            "clang-9"
-      CXX:                           "clang-9"
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:               0
       RUST_BACKTRACE:                1
@@ -239,7 +217,6 @@ jobs:
 
   linux-test-wasmtime:
     name:                            Test wasmtime
-    needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
     container:                       parity/rust-builder:latest
     env:
@@ -295,12 +272,9 @@ jobs:
 
   linux-test-stable-int:
     name:                            Test linux stable int
-    needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
     container:                       parity/rust-builder:latest
     env:
-      CC:                            "clang-9"
-      CXX:                           "clang-9"
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:               0
       BUILD_DUMMY_WASM_BINARY:       1
@@ -353,12 +327,9 @@ jobs:
 
   check-web-wasm:
     name:                            Check web wasm
-    needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
     container:                       parity/rust-builder:latest
     env:
-      CC:                            "clang-9"
-      CXX:                           "clang-9"
       CARGO_INCREMENTAL:               0
     steps:
       - name:                        Checkout sources
@@ -389,12 +360,9 @@ jobs:
           path:                      target
           key:                       cargo-build-[check-web-wasm]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Sccache statistics
-        run:                         sccache --show-stats
+        run:                         sccache --show-stats&&rustup show
       - name:                        Run cargo build sp-io
-        uses:                        actions-rs/cargo@v1
-        with:
-          command:                   build
-          args:                      --target=wasm32-unknown-unknown -p sp-io
+        run:    cargo build --target=wasm32-unknown-unknown -p sp-io
       - name:                        Run cargo build sp-runtime
         uses:                        actions-rs/cargo@v1
         continue-on-error:           true
@@ -453,12 +421,9 @@ jobs:
 
   test-full-crypto-feature:
     name:                            Test full crypto feature
-    needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
     container:                       parity/rust-builder:latest
     env:
-      CC:                            "clang-9"
-      CXX:                           "clang-9"
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:               0
       RUST_BACKTRACE:                1
