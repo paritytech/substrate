@@ -116,7 +116,7 @@ benchmarks! {
 // Custom implementation to handle benchmarking of storage recalculation.
 // Puts `repeat` number of items into random storage keys, and then times how
 // long it takes to recalculate the storage root.
-fn storage_recalc(steps: Vec<u32>, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
+fn storage_recalc<T>(steps: Vec<u32>, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
 	let mut results: Vec<BenchmarkResults> = Vec::new();
 
 	let s = if steps.is_empty() { 10 } else { steps[0] };
@@ -143,7 +143,7 @@ fn storage_recalc(steps: Vec<u32>, repeat: u32) -> Result<Vec<BenchmarkResults>,
 
 // Custom implementation to handle benchmarking of calling a host function.
 // Will check how long it takes to call `current_time()`.
-fn current_time(steps: Vec<u32>, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
+fn current_time<T>(steps: Vec<u32>, repeat: u32) -> Result<Vec<BenchmarkResults>, &'static str> {
 	let mut results: Vec<BenchmarkResults> = Vec::new();
 
 	let s = if steps.is_empty() { 10 } else { steps[0] };

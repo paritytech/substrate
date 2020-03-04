@@ -181,7 +181,7 @@ macro_rules! impl_benchmark {
 					.map_err(|_| "Could not find extrinsic")?;
 				let selected_benchmark = match extrinsic {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
-					$( stringify!($extra) => return super::benchmarking::$extra(steps, repeat), )*
+					$( stringify!($extra) => return super::benchmarking::$extra::<T>(steps, repeat), )*
 					
 					_ => return Err("Could not find extrinsic."),
 				};
