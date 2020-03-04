@@ -19,6 +19,7 @@ pallet-session = { version = "2.0.0-alpha.2", default-features = false, path = "
 sp-io = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/staking" }
+frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../benchmarking" }
 frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
 
@@ -37,4 +38,5 @@ std = [
 	"sp-staking/std",
 	"frame-support/std",
 	"frame-system/std",
+	"frame-benchmarking/std",
 ]
