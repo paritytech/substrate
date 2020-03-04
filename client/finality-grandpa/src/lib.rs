@@ -56,7 +56,11 @@ use futures::prelude::*;
 use futures::StreamExt;
 use log::{debug, info};
 use futures::channel::mpsc;
-use sc_client_api::{LockImportRun, BlockchainEvents, CallExecutor, backend::{AuxStore, Backend}, ExecutionStrategy, Finalizer, TransactionFor, ExecutorProvider};
+use sc_client_api::{
+	backend::{AuxStore, Backend},
+	LockImportRun, BlockchainEvents, CallExecutor,
+	ExecutionStrategy, Finalizer, TransactionFor, ExecutorProvider,
+};
 use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
 use parity_scale_codec::{Decode, Encode};
 use sp_runtime::generic::BlockId;
