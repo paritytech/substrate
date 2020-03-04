@@ -86,7 +86,6 @@ jobs:
           args:                --root ~/tools --git https://github.com/alexcrichton/wasm-gc
       - name:                  Install cargo-web, wasm-pack
         uses:                  actions-rs/cargo@v1
-        continue-on-error:     true
         with:
           command:             install
           toolchain:           stable
@@ -100,8 +99,19 @@ jobs:
         if:                    always()
         run:                   sccache --stop-server
       - name:                  Disk statistics
-        run:                   df -h --total&&ls ~/tools/bin
-
+        run:                   df -h --total
+      - name:                  Show software
+        continue-on-error:     true
+        shell: bash
+        run: |
+          la /mnt
+          la /home/runner
+          rustup show
+          cargo --version
+          sccache --version
+          cargo-web --version
+          wasm-pack --version
+          wasm-gc --version
 
   linux-cargo-check-benches:
     name:                      Cargo check benches

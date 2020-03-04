@@ -2,7 +2,7 @@
 $os=$args[0]
 $SCCACHE_CACHE_SIZE="1G"
 $SCCACHE_IDLE_TIMEOUT=0
-$version="0.2.12"
+$version="0.2.13"
 echo "Current OS:" $os
 switch ($os){
    "macOS" {$platform = "x86_64-apple-darwin"}
