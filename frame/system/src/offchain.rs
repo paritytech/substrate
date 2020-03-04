@@ -119,7 +119,6 @@ pub mod new {
 					}
 				}
 			}
-
 			None
 		}
 	}
@@ -170,58 +169,35 @@ pub mod new {
 		T: CreateSignedTransaction<LocalCall>,
 		C: AppCrypto<T::Public, T::Signature>,
 		LocalCall,
-	> SendSignedTransaction<T, LocalCall> for Signer<T, C, ForAny> {
+	> SendSignedTransaction<T, C, LocalCall> for Signer<T, C, ForAny> {
 		type Result = Option<(Account<T>, Result<(), ()>)>;
 
 		fn send_signed_transaction(
 			&self,
 			f: impl Fn(&Account<T>) -> LocalCall,
 		) -> Self::Result {
-			self.for_any(|account| {
+			 self.for_any(|account| {
 				let call = f(account);
-				let mut account_data = crate::Account::<T>::get(&account.id);
-				debug::native::debug!(
-					target: "offchain",
-					"Creating signed transaction from account: {:?} (nonce: {:?})",
-					account.id,
-					account_data.nonce,
-				);
-				let p: C::GenericPublic = account.public.clone().try_into().ok()?;
-				let x = Into::<C::RuntimeAppPublic>::into(p);
-				let (call, signature) = T::create_transaction::<C>(
-					call.into(),
-					x,
-					account.public.clone(),
-					account.id.clone(),
-					account_data.nonce
-				)?;
-				let xt = T::Extrinsic::new(call, Some(signature))?;
-				let res = sp_io::offchain::submit_transaction(xt.encode());
-
-				if res.is_ok() {
-					// increment the nonce. This is fine, since the code should always
-					// be running in off-chain context, so we NEVER persists data.
-					account_data.nonce += One::one();
-					crate::Account::<T>::insert(&account.id, account_data);
-				}
-
-				Some(res)
+				self.submit_transaction(account, call)
 			})
 		}
 	}
 
 	impl<
-		T: SendTransactionTypes<LocalCall>,
+		T: CreateSignedTransaction<LocalCall>,
 		C: AppCrypto<T::Public, T::Signature>,
 		LocalCall,
-	> SendSignedTransaction<T, LocalCall> for Signer<T, C, ForAll> {
+	> SendSignedTransaction<T, C, LocalCall> for Signer<T, C, ForAll> {
 		type Result = Vec<(Account<T>, Result<(), ()>)>;
 
 		fn send_signed_transaction(
 			&self,
-			_f: impl Fn(&Account<T>) -> LocalCall,
+			f: impl Fn(&Account<T>) -> LocalCall,
 		) -> Self::Result {
-			unimplemented!()
+			self.for_all(|account| {
+				let call = f(account);
+				self.submit_transaction(account, call)
+			})
 		}
 	}
 
@@ -371,15 +347,50 @@ pub mod new {
 	}
 
 	pub trait SendSignedTransaction<
-		T: SigningTypes + SendTransactionTypes<C>,
-		C,
+		T: SigningTypes + CreateSignedTransaction<LocalCall>,
+		C: AppCrypto<T::Public, T::Signature>,
+		LocalCall
 	> {
 		type Result;
 
 		fn send_signed_transaction(
 			&self,
-			f: impl Fn(&Account<T>) -> C,
+			f: impl Fn(&Account<T>) -> LocalCall,
 		) -> Self::Result;
+
+		fn submit_transaction(
+			&self,
+			account: &Account<T>,
+			call: LocalCall
+		) -> Option<Result<(), ()>> {
+			let mut account_data = crate::Account::<T>::get(&account.id);
+			debug::native::debug!(
+				target: "offchain",
+				"Creating signed transaction from account: {:?} (nonce: {:?})",
+				account.id,
+				account_data.nonce,
+			);
+			let p: C::GenericPublic = account.public.clone().try_into().ok()?;
+			let x = Into::<C::RuntimeAppPublic>::into(p);
+			let (call, signature) = T::create_transaction::<C>(
+				call.into(),
+				x,
+				account.public.clone(),
+				account.id.clone(),
+				account_data.nonce
+			)?;
+			let xt = T::Extrinsic::new(call, Some(signature))?;
+			let res = sp_io::offchain::submit_transaction(xt.encode());
+
+			if res.is_ok() {
+				// increment the nonce. This is fine, since the code should always
+				// be running in off-chain context, so we NEVER persists data.
+				account_data.nonce += One::one();
+				crate::Account::<T>::insert(&account.id, account_data);
+			}
+
+			Some(res)
+		}
 	}
 
 	pub trait SendUnsignedTransaction<
