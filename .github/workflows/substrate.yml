@@ -30,14 +30,12 @@ jobs:
         with:
           path: tools/bin
           key: tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
-      - name: Install sccache and wasm-pack
+      - name: Install sccache
         if: steps.cache-tools-bin.outputs.cache-hit != 'true'
         run: |
           mkdir -p tools/bin
             SCCACHE_LATEST_URL=`curl -sL    https://api.github.com/repos/mozilla/sccache/releases/latest | jq -r '.assets[4].browser_download_url'`
-          WASM_PACK_LATEST_URL=`curl -sL https://api.github.com/repos/rustwasm/wasm-pack/releases/latest | jq -r '.assets[3].browser_download_url'`
           curl -L   $SCCACHE_LATEST_URL | tar zxf - --overwrite --strip-components=1 -C tools/bin
-          curl -L $WASM_PACK_LATEST_URL | tar zxf - --overwrite --strip-components=1 -C tools/bin
       # if /home/runner/tools/bin wasn't cached, restore rustup
       - name: Restore /home/runner/.rustup
         if: "steps.cache-tools-bin.outputs.cache-hit != 'true'"
@@ -50,7 +48,7 @@ jobs:
       - name: Install rust & wasm toolchain
         if: "steps.cache-tools-bin.outputs.cache-hit != 'true' && steps.cache-rustup   .outputs.cache-hit != 'true'"
         run: |
-          rustup set profile minimal
+          rustup set profile default
           rustup toolchain install $RUST_TOOLCHAIN --component clippy rustfmt
           rustup toolchain install nightly --component clippy rustfmt
           rustup target add wasm32-unknown-unknown
