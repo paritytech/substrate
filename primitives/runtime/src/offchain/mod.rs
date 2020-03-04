@@ -18,3 +18,5 @@
 
 pub mod http;
 pub mod storage;
+
+pub use sp_core::offchain::*;

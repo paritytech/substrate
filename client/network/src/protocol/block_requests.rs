@@ -38,7 +38,14 @@ use libp2p::{
 		upgrade::{InboundUpgrade, ReadOneError, UpgradeInfo, Negotiated},
 		upgrade::{DeniedUpgrade, read_one, write_one}
 	},
-	swarm::{NetworkBehaviour, NetworkBehaviourAction, OneShotHandler, PollParameters, SubstreamProtocol}
+	swarm::{
+		NegotiatedSubstream,
+		NetworkBehaviour,
+		NetworkBehaviourAction,
+		OneShotHandler,
+		PollParameters,
+		SubstreamProtocol
+	}
 };
 use prost::Message;
 use sp_runtime::{generic::BlockId, traits::{Block, Header, One, Zero}};
@@ -104,27 +111,24 @@ impl Config {
 		let mut v = Vec::new();
 		v.extend_from_slice(b"/");
 		v.extend_from_slice(id.as_bytes());
-		v.extend_from_slice(b"/sync/1");
+		v.extend_from_slice(b"/sync/2");
 		self.protocol = v.into();
 		self
 	}
 }
 
 /// The block request handling behaviour.
-pub struct BlockRequests<T, B: Block> {
+pub struct BlockRequests<B: Block> {
 	/// This behaviour's configuration.
 	config: Config,
 	/// Blockchain client.
 	chain: Arc<dyn Client<B>>,
 	/// Futures sending back the block request response.
 	outgoing: FuturesUnordered<BoxFuture<'static, ()>>,
-	/// Type witness term.
-	_marker: std::marker::PhantomData<T>
 }
 
-impl<T, B> BlockRequests<T, B>
+impl<B> BlockRequests<B>
 where
-	T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	B: Block,
 {
 	pub fn new(cfg: Config, chain: Arc<dyn Client<B>>) -> Self {
@@ -132,7 +136,6 @@ where
 			config: cfg,
 			chain,
 			outgoing: FuturesUnordered::new(),
-			_marker: std::marker::PhantomData
 		}
 	}
 
@@ -143,8 +146,7 @@ where
 		, request: &api::v1::BlockRequest
 		) -> Result<api::v1::BlockResponse, Error>
 	{
-		log::trace!("block request {} from peer {}: from block {:?} to block {:?}, max blocks {:?}",
-			request.id,
+		log::trace!("block request from peer {}: from block {:?} to block {:?}, max blocks {:?}",
 			peer,
 			request.from_block,
 			request.to_block,
@@ -239,16 +241,15 @@ where
 			}
 		}
 
-		Ok(api::v1::BlockResponse { id: request.id, blocks })
+		Ok(api::v1::BlockResponse { blocks })
 	}
 }
 
-impl<T, B> NetworkBehaviour for BlockRequests<T, B>
+impl<B> NetworkBehaviour for BlockRequests<B>
 where
-	T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	B: Block
 {
-	type ProtocolsHandler = OneShotHandler<T, Protocol, DeniedUpgrade, Request<Negotiated<T>>>;
+	type ProtocolsHandler = OneShotHandler<Protocol, DeniedUpgrade, Request<NegotiatedSubstream>>;
 	type OutEvent = Void;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
@@ -269,13 +270,13 @@ where
 	fn inject_disconnected(&mut self, _peer: &PeerId, _info: ConnectedPoint) {
 	}
 
-	fn inject_node_event(&mut self, peer: PeerId, Request(request, mut stream): Request<Negotiated<T>>) {
+	fn inject_node_event(&mut self, peer: PeerId, Request(request, mut stream): Request<NegotiatedSubstream>) {
 		match self.on_block_request(&peer, &request) {
 			Ok(res) => {
-				log::trace!("enqueueing block response {} for peer {} with {} blocks", res.id, peer, res.blocks.len());
+				log::trace!("enqueueing block response for peer {} with {} blocks", peer, res.blocks.len());
 				let mut data = Vec::with_capacity(res.encoded_len());
 				if let Err(e) = res.encode(&mut data) {
-					log::debug!("error encoding block response {} for peer {}: {}", res.id, peer, e)
+					log::debug!("error encoding block response for peer {}: {}", peer, e)
 				} else {
 					let future = async move {
 						if let Err(e) = write_one(&mut stream, data).await {
@@ -285,7 +286,7 @@ where
 					self.outgoing.push(future.boxed())
 				}
 			}
-			Err(e) => log::debug!("error handling block request {} from peer {}: {}", request.id, peer, e)
+			Err(e) => log::debug!("error handling block request from peer {}: {}", peer, e)
 		}
 	}
 

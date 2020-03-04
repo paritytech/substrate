@@ -65,6 +65,7 @@ mod periodic;
 pub(crate) mod tests;
 
 pub use sp_finality_grandpa::GRANDPA_ENGINE_ID;
+pub const GRANDPA_PROTOCOL_NAME: &[u8] = b"/paritytech/grandpa/1";
 
 // cost scalars for reporting peers.
 mod cost {
@@ -74,7 +75,7 @@ mod cost {
 	pub(super) const MALFORMED_CATCH_UP: Rep = Rep::new(-1000, "Grandpa: Malformed cath-up");
 	pub(super) const MALFORMED_COMMIT: Rep = Rep::new(-1000, "Grandpa: Malformed commit");
 	pub(super) const FUTURE_MESSAGE: Rep = Rep::new(-500, "Grandpa: Future message");
-	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "Grandpa: Uknown voter");
+	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "Grandpa: Unknown voter");
 
 	pub(super) const INVALID_VIEW_CHANGE: Rep = Rep::new(-500, "Grandpa: Invalid view change");
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
@@ -83,7 +84,7 @@ mod cost {
 	pub(super) const INVALID_CATCH_UP: Rep = Rep::new(-5000, "Grandpa: Invalid catch-up");
 	pub(super) const INVALID_COMMIT: Rep = Rep::new(-5000, "Grandpa: Invalid commit");
 	pub(super) const OUT_OF_SCOPE_MESSAGE: Rep = Rep::new(-500, "Grandpa: Out-of-scope message");
-	pub(super) const CATCH_UP_REQUEST_TIMEOUT: Rep = Rep::new(-200, "Grandpa: Catch-up reqeust timeout");
+	pub(super) const CATCH_UP_REQUEST_TIMEOUT: Rep = Rep::new(-200, "Grandpa: Catch-up request timeout");
 
 	// cost of answering a catch up request
 	pub(super) const CATCH_UP_REPLY: Rep = Rep::new(-200, "Grandpa: Catch-up reply");
@@ -119,9 +120,8 @@ pub trait Network<Block: BlockT>: GossipNetwork<Block> + Clone + Send + 'static 
 	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
-impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
+impl<B, H> Network<B> for Arc<NetworkService<B, H>> where
 	B: BlockT,
-	S: sc_network::specialization::NetworkSpecialization<B>,
 	H: sc_network::ExHashT,
 {
 	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
@@ -153,14 +153,14 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 
 	/// `NeighborPacketWorker` processing packets sent through the `NeighborPacketSender`.
 	//
-	// `NetworkBridge` is required to be clonable, thus one needs to be able to clone its children,
-	// thus one has to wrap neighor_packet_worker with an `Arc` `Mutex`.
+	// `NetworkBridge` is required to be cloneable, thus one needs to be able to clone its children,
+	// thus one has to wrap `neighbor_packet_worker` with an `Arc` `Mutex`.
 	neighbor_packet_worker: Arc<Mutex<periodic::NeighborPacketWorker<B>>>,
 
 	/// Receiver side of the peer report stream populated by the gossip validator, forwarded to the
 	/// gossip engine.
 	//
-	// `NetworkBridge` is required to be clonable, thus one needs to be able to clone its children,
+	// `NetworkBridge` is required to be cloneable, thus one needs to be able to clone its children,
 	// thus one has to wrap gossip_validator_report_stream with an `Arc` `Mutex`. Given that it is
 	// just an `UnboundedReceiver`, one could also switch to a multi-producer-*multi*-consumer
 	// channel implementation.
@@ -185,7 +185,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 
 		let validator = Arc::new(validator);
-		let gossip_engine = GossipEngine::new(service.clone(), GRANDPA_ENGINE_ID, validator.clone());
+		let gossip_engine = GossipEngine::new(
+			service.clone(),
+			GRANDPA_ENGINE_ID,
+			GRANDPA_PROTOCOL_NAME,
+			validator.clone()
+		);
 
 		{
 			// register all previous votes with the gossip service so that they're

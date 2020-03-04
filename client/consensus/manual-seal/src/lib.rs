@@ -250,11 +250,11 @@ mod tests {
 		let client = Arc::new(builder.build());
 		let select_chain = LongestChain::new(backend.clone());
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api()));
-		let env = ProposerFactory {
-			transaction_pool: pool.clone(),
-			client: client.clone(),
-		};
+		let pool = Arc::new(BasicPool::new(Options::default(), api()).0);
+		let env = ProposerFactory::new(
+			client.clone(),
+			pool.clone()
+		);
 		// this test checks that blocks are created as soon as transactions are imported into the pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
 		let mut sender = Arc::new(Some(sender));
@@ -315,11 +315,11 @@ mod tests {
 		let client = Arc::new(builder.build());
 		let select_chain = LongestChain::new(backend.clone());
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api()));
-		let env = ProposerFactory {
-			transaction_pool: pool.clone(),
-			client: client.clone(),
-		};
+		let pool = Arc::new(BasicPool::new(Options::default(), api()).0);
+		let env = ProposerFactory::new(
+			client.clone(),
+			pool.clone()
+		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(
@@ -384,11 +384,11 @@ mod tests {
 		let select_chain = LongestChain::new(backend.clone());
 		let inherent_data_providers = InherentDataProviders::new();
 		let pool_api = api();
-		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone()));
-		let env = ProposerFactory {
-			transaction_pool: pool.clone(),
-			client: client.clone(),
-		};
+		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone()).0);
+		let env = ProposerFactory::new(
+			client.clone(),
+			pool.clone(),
+		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(

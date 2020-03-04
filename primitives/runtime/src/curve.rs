@@ -65,7 +65,7 @@ impl<'a> PiecewiseLinear<'a> {
 			next.0.deconstruct().saturating_sub(prev.0.deconstruct()),
 		);
 
-		// If both substration are same sign then result is positive
+		// If both subtractions are same sign then result is positive
 		if (n > prev.0 * d.clone()) == (next.1.deconstruct() > prev.1.deconstruct()) {
 			(prev.1 * d).saturating_add(delta_y)
 		// Otherwise result is negative

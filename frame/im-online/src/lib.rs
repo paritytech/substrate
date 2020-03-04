@@ -233,7 +233,7 @@ pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
 	/// An expected duration of the session.
 	///
 	/// This parameter is used to determine the longevity of `heartbeat` transaction
-	/// and a rough time when we should start considering sending hearbeats,
+	/// and a rough time when we should start considering sending heartbeats,
 	/// since the workers avoids sending them at the very beginning of the session, assuming
 	/// there is a chance the authority will produce a block and they won't be necessary.
 	type SessionDuration: Get<Self::BlockNumber>;
@@ -341,8 +341,6 @@ decl_module! {
 
 		// Runs after every block.
 		fn offchain_worker(now: T::BlockNumber) {
-			debug::RuntimeLogger::init();
-
 			// Only send messages if we are a potential validator.
 			if sp_io::offchain::is_validator() {
 				for res in Self::send_heartbeats(now).into_iter().flatten() {
@@ -369,7 +367,7 @@ decl_module! {
 type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Trait>::BlockNumber>>;
 
 /// Keep track of number of authored blocks per authority, uncles are counted as
-/// well since they're a valid proof of onlineness.
+/// well since they're a valid proof of being online.
 impl<T: Trait + pallet_authorship::Trait> pallet_authorship::EventHandler<T::ValidatorId, T::BlockNumber> for Module<T> {
 	fn note_author(author: T::ValidatorId) {
 		Self::note_authorship(author);
@@ -576,7 +574,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	{
 		// Tell the offchain worker to start making the next session's heartbeats.
 		// Since we consider producing blocks as being online,
-		// the heartbeat is defered a bit to prevent spaming.
+		// the heartbeat is deferred a bit to prevent spamming.
 		let block_number = <frame_system::Module<T>>::block_number();
 		let half_session = T::SessionDuration::get() / 2.into();
 		<HeartbeatAfter<T>>::put(block_number + half_session);
@@ -610,7 +608,9 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 
 			let validator_set_count = keys.len() as u32;
 			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
-			T::ReportUnresponsiveness::report_offence(vec![], offence);
+			if let Err(e) = T::ReportUnresponsiveness::report_offence(vec![], offence) {
+				sp_runtime::print(e);
+			}
 		}
 	}
 
@@ -619,7 +619,6 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
-#[allow(deprecated)]
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 

@@ -31,12 +31,13 @@ const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
 
 /// See module documentation.
+#[derive(parity_util_mem_derive::MallocSizeOf)]
 pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	/// A queue of keys that should be deleted for each block in the pruning window.
 	death_rows: VecDeque<DeathRow<BlockHash, Key>>,
 	/// An index that maps each key from `death_rows` to block number.
 	death_index: HashMap<Key, u64>,
-	/// Block number that corresponts to the front of `death_rows`
+	/// Block number that corresponds to the front of `death_rows`.
 	pending_number: u64,
 	/// Number of call of `note_canonical` after
 	/// last call `apply_pending` or `revert_pending`
@@ -46,7 +47,7 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	pending_prunings: usize,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, parity_util_mem_derive::MallocSizeOf)]
 struct DeathRow<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,
@@ -348,7 +349,7 @@ mod tests {
 	}
 
 	#[test]
-	fn reinserted_survivew_pending() {
+	fn reinserted_survive_pending() {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
 		let mut commit = make_commit(&[], &[2]);

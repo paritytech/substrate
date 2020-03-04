@@ -60,7 +60,6 @@ use libp2p::Multiaddr;
 use log::{debug, error, log_enabled, warn};
 use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::specialization::NetworkSpecialization;
 use sc_network::{DhtEvent, ExHashT, NetworkStateInfo};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
@@ -477,10 +476,9 @@ pub trait NetworkProvider: NetworkStateInfo {
 	fn get_value(&self, key: &libp2p::kad::record::Key);
 }
 
-impl<B, S, H> NetworkProvider for sc_network::NetworkService<B, S, H>
+impl<B, H> NetworkProvider for sc_network::NetworkService<B, H>
 where
 	B: BlockT + 'static,
-	S: NetworkSpecialization<B>,
 	H: ExHashT,
 {
 	fn set_priority_group(
