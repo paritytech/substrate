@@ -361,56 +361,21 @@ jobs:
           key:                       cargo-build-[check-web-wasm]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Sccache statistics
         run:                         sccache --show-stats&&rustup update
-      - name:                        Run cargo build sp-io
+      - name:                        Run cargo build wasm
         continue-on-error:           true
-        run:    cargo build --target=wasm32-unknown-unknown -p sp-io
-      - name:                        Run cargo build sp-runtime
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   build
-          args:                      --target=wasm32-unknown-unknown -p sp-runtime
-      - name:                        Run cargo build sp-std
-        uses:                        actions-rs/cargo@v1
-        with:
-          command:                   build
-          args:                      --target=wasm32-unknown-unknown -p sp-std
-      - name:                        Run cargo build sc-client
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   build
-          args:                      --target=wasm32-unknown-unknown -p sc-client
-      - name:                        Run cargo build sc-consensus-aura
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   build
-          args:                      --target=wasm32-unknown-unknown -p sc-consensus-aura
-      - name:                        Run cargo build sc-consensus-babe
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   build
-          args:                      --target=wasm32-unknown-unknown -p sc-consensus-babe
-      - name:                        Run cargo build sp-consensus
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   build
-          args:                      --target=wasm32-unknown-unknown -p sp-consensus
-      - name:                        Run cargo build sc-telemetry
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   build
-          args:                      --target=wasm32-unknown-unknown -p sc-telemetry
-      - name:                        Run cargo build "browser"
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   build
-          args:                      --target=wasm32-unknown-unknown --manifest-path "./bin/node/cli/Cargo.toml" --no-default-features --features "browser"
+        run: |
+           # WASM support is in progress. As more and more crates support WASM, we
+           # should add entries here. See https://github.com/paritytech/substrate/issues/2416
+           time cargo build --target=wasm32-unknown-unknown -p sp-io
+           time cargo build --target=wasm32-unknown-unknown -p sp-runtime
+           time cargo build --target=wasm32-unknown-unknown -p sp-std
+           time cargo build --target=wasm32-unknown-unknown -p sc-client
+           time cargo build --target=wasm32-unknown-unknown -p sc-consensus-aura
+           time cargo build --target=wasm32-unknown-unknown -p sc-consensus-babe
+           time cargo build --target=wasm32-unknown-unknown -p sp-consensus
+           time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
+           # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
+           time cargo build --target=wasm32-unknown-unknown --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser"
       - name:                        Stop sccache
         if:                          always()
         run:                         sccache --stop-server
