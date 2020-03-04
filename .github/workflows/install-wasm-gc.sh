@@ -22,3 +22,4 @@ chmod +x wasm-gc
 
 #mkdir -p ~/.cargo/bin
 mv wasm-gc /usr/share/rust/.cargo/bin
+wasm-gc --version
