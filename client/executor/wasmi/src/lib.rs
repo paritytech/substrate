@@ -668,6 +668,8 @@ impl WasmModule for WasmiRuntime {
 	}
 }
 
+/// Create a new `WasmiRuntime` given the code. This function loads the module and
+/// stores it in the instance.
 pub fn create_runtime(
 	code: &[u8],
 	heap_pages: u64,
@@ -738,7 +740,7 @@ impl WasmInstance for WasmiInstance {
 	fn get_global_const(&self, name: &str) -> Result<Option<sp_wasm_interface::Value>, Error> {
 		match self.instance.export_by_name(name) {
 			Some(global) => Ok(Some(
-					global
+				global
 					.as_global()
 					.ok_or_else(|| format!("`{}` is not a global", name))?
 					.get()

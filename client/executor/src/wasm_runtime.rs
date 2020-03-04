@@ -22,7 +22,7 @@
 use std::sync::Arc;
 use std::borrow::Cow;
 use crate::error::{Error, WasmError};
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
+use parking_lot::{Mutex, RwLock};
 use codec::Decode;
 use sp_core::{storage::well_known_keys, traits::Externalities};
 use sp_version::RuntimeVersion;
@@ -84,7 +84,7 @@ pub struct RuntimeCache {
 	/// A cache of runtimes along with metadata.
 	///
 	/// Runtimes sorted by recent usage. The most recently used is at the front.
-	runtimes: RwLock<[Option<Arc<VersionedRuntime>>; MAX_RUNTIMES]>,
+	runtimes: Mutex<[Option<Arc<VersionedRuntime>>; MAX_RUNTIMES]>,
 }
 
 impl RuntimeCache {
@@ -155,7 +155,7 @@ impl RuntimeCache {
 			}
 		};
 
-		let runtimes = self.runtimes.upgradable_read(); // this must be released prior to calling f
+		let mut runtimes = self.runtimes.lock(); // this must be released prior to calling f
 		let pos = runtimes.iter().position(|r| r.as_ref().map_or(
 			false,
 			|r| r.wasm_method == wasm_method &&
@@ -196,28 +196,27 @@ impl RuntimeCache {
 
 		// Rearrange runtimes by last recently used.
 		match pos {
-			Some(0) => { drop(runtimes) },
+			Some(0) => {},
 			Some(n) => {
-				let mut runtimes = RwLockUpgradableReadGuard::upgrade(runtimes);
 				for i in (1 .. n + 1).rev() {
 					runtimes.swap(i, i - 1);
 				}
 			}
 			None => {
-				let mut runtimes = RwLockUpgradableReadGuard::upgrade(runtimes);
 				runtimes[MAX_RUNTIMES-1] = Some(runtime.clone());
 				for i in (1 .. MAX_RUNTIMES).rev() {
 					runtimes.swap(i, i - 1);
 				}
 			}
 		}
+		drop(runtimes);
 
 		let result = {
 			// Find a free instance
-			let instance_pool = { runtime.instances.read().clone() };
+			let instance_pool = runtime.instances.read().clone();
 			let instance = instance_pool
 				.iter()
-				.filter_map(|i| i.as_ref().and_then(|i| i.try_lock())).next();
+				.find_map(|i| i.as_ref().and_then(|i| i.try_lock()));
 			if let Some(mut locked) = instance {
 				let result = f(&**locked, runtime.version.as_ref(), ext);
 				if let Err(e) = &result {
