@@ -66,5 +66,8 @@ decl_storage! {
         ///
         /// This is keyed by the stash account.
         pub Stakers: map hasher(blake2_256) T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
+
+        /// Old upgrade flag.
+        pub IsUpgraded: bool;
     }
 }

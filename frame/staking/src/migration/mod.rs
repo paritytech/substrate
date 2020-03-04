@@ -49,6 +49,8 @@ mod test_upgrade_from_master_dataset;
 pub fn on_runtime_upgrade<T: Trait>() {
 	if StorageVersion::get() == Releases::V2_0_0 { return };
 
+	deprecated::IsUpgraded::kill();
+
 	let current_era_start_index = deprecated::CurrentEraStartSessionIndex::get();
 	let current_era = <Module<T> as Store>::CurrentEra::get().unwrap_or(0);
 	let current_era_start = deprecated::CurrentEraStart::<T>::get();

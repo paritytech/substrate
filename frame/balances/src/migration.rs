@@ -77,5 +77,7 @@ pub fn on_runtime_upgrade<T: Trait<I>, I: Instance>() {
 		put_storage_value(b"System", b"Account", &hash, (nonce, refs, &balances));
 	}
 
+	take_storage_value::<T::Index>(b"Balances", b"IsUpgraded", &[]);
+
 	StorageVersion::<I>::put(Releases::V2_0_0);
 }
