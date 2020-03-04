@@ -197,7 +197,12 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 
 		// Add the custom host functions provided by the user.
 		host_functions.extend(D::ExtendHostFunctions::host_functions());
-		let wasm_executor = WasmExecutor::new(fallback_method, default_heap_pages, host_functions, false);
+		let wasm_executor = WasmExecutor::new(
+			fallback_method,
+			default_heap_pages,
+			host_functions,
+			false
+		);
 
 		NativeExecutor {
 			_dummy: Default::default(),
@@ -217,7 +222,8 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		ext: &mut dyn Externalities,
 	) -> Result<RuntimeVersion> {
 		self.wasm.with_instance(CodeSource::Externalities, ext,
-			|_instance, version, _ext| Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
+			|_instance, version, _ext|
+				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
 		)
 	}
 }
@@ -238,8 +244,13 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 				native_call: Option<NC>,
 			) -> (Result<NativeOrEncoded<R>>, bool){
 				let mut used_native = false;
-				let result = self.wasm.with_instance(CodeSource::Externalities, ext, |instance, onchain_version, mut ext| {
-					let onchain_version = onchain_version.ok_or_else(|| Error::ApiError("Unknown version".into()))?;
+				let result = self.wasm.with_instance(
+					CodeSource::Externalities,
+					ext,
+					|instance, onchain_version, mut ext| {
+					let onchain_version = onchain_version.ok_or_else(
+						|| Error::ApiError("Unknown version".into())
+					)?;
 					match (
 						use_native,
 						onchain_version.can_call_with(&self.native_version.runtime_version),
@@ -267,7 +278,8 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 						(true, true, Some(call)) => {
 							trace!(
 								target: "executor",
-								"Request for native execution with native call succeeded (native: {}, chain: {}).",
+								"Request for native execution with native call succeeded \
+								(native: {}, chain: {}).",
 								self.native_version.runtime_version,
 								onchain_version,
 							);

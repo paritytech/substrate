@@ -21,18 +21,18 @@ use std::sync::Arc;
 use crate::host::HostState;
 use crate::imports::{Imports, resolve_imports};
 use crate::instance_wrapper::InstanceWrapper;
-use crate::state_holder::StateHolder;
+use crate::state_holder;
 
 use sc_executor_common::{
 	error::{Error, Result, WasmError},
-	wasm_runtime::{WasmRuntime, WasmInstance},
+	wasm_runtime::{WasmModule, WasmInstance},
 };
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize, Value};
 use wasmtime::{Config, Engine, Module, Store};
 
-/// A `WasmRuntime` implementation using wasmtime to compile the runtime module to machine code
+/// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
 	module: Arc<Module>,
@@ -41,14 +41,11 @@ pub struct WasmtimeRuntime {
 	host_functions: Vec<&'static dyn Function>,
 }
 
-impl WasmRuntime for WasmtimeRuntime {
+impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
-		let state_holder = StateHolder::new();
-
 		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 		// and results.
 		let imports = resolve_imports(
-			&state_holder,
 			&self.module,
 			&self.host_functions,
 			self.heap_pages,
@@ -59,7 +56,6 @@ impl WasmRuntime for WasmtimeRuntime {
 		Ok(Box::new(WasmtimeInstance {
 			module: self.module.clone(),
 			imports,
-			state_holder,
 			heap_pages: self.heap_pages,
 		}))
 	}
@@ -70,12 +66,11 @@ impl WasmRuntime for WasmtimeRuntime {
 pub struct WasmtimeInstance {
 	module: Arc<Module>,
 	imports: Imports,
-	state_holder: StateHolder,
 	heap_pages: u32,
 }
 
 // This is safe because `WasmtimeInstance` does not leak reference to `self.imports`
-// and all imports don't reference any externals, other than host functions and memory
+// and all imports don't reference any anything, other than host functions and memory
 unsafe impl Send for WasmtimeInstance {}
 
 impl WasmInstance for WasmtimeInstance {
@@ -84,7 +79,6 @@ impl WasmInstance for WasmtimeInstance {
 		let instance = Rc::new(InstanceWrapper::new(&self.module, &self.imports, self.heap_pages)?);
 		call_method(
 			instance,
-			&self.state_holder,
 			method,
 			data,
 		)
@@ -125,7 +119,6 @@ pub fn create_runtime(
 /// Call a function inside a precompiled Wasm module.
 fn call_method(
 	instance_wrapper: Rc<InstanceWrapper>,
-	state_holder: &StateHolder,
 	method: &str,
 	data: &[u8],
 ) -> Result<Vec<u8>> {
@@ -133,12 +126,11 @@ fn call_method(
 	let heap_base = instance_wrapper.extract_heap_base()?;
 	let allocator = FreeingBumpHeapAllocator::new(heap_base);
 
-	perform_call(data, state_holder, instance_wrapper, entrypoint, allocator)
+	perform_call(data, instance_wrapper, entrypoint, allocator)
 }
 
 fn perform_call(
 	data: &[u8],
-	state_holder: &StateHolder,
 	instance_wrapper: Rc<InstanceWrapper>,
 	entrypoint: wasmtime::Func,
 	mut allocator: FreeingBumpHeapAllocator,
@@ -146,7 +138,7 @@ fn perform_call(
 	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
 
 	let host_state = HostState::new(allocator, instance_wrapper.clone());
-	let ret = state_holder.with_initialized_state(&host_state, || {
+	let ret = state_holder::with_initialized_state(&host_state, || {
 		match entrypoint.call(&[
 			wasmtime::Val::I32(u32::from(data_ptr) as i32),
 			wasmtime::Val::I32(u32::from(data_len) as i32),

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! This crate provides an implementation of `WasmRuntime` that is baked by wasmi.
+//! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
 use sc_executor_common::{error::{Error, WasmError}, sandbox};
 use std::{str, mem, cell::RefCell, sync::Arc};
@@ -30,7 +30,7 @@ use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
 use sp_runtime_interface::unpack_ptr_and_len;
-use sc_executor_common::wasm_runtime::{WasmRuntime, WasmInstance};
+use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance};
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
@@ -638,7 +638,7 @@ pub struct WasmiRuntime {
 	data_segments: Vec<DataSegment>,
 }
 
-impl WasmRuntime for WasmiRuntime {
+impl WasmModule for WasmiRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>, Error> {
 		// Instantiate this module.
 		let (instance, missing_functions, memory) = instantiate_module(
