@@ -317,11 +317,10 @@ pub fn new_light(config: NodeConfiguration)
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let exec_provider = client.clone() as Arc<_>;
 			let grandpa_block_import = grandpa::light_block_import(
 				client.clone(),
 				backend,
-				&exec_provider,
+				&(client.clone() as Arc<_>),
 				Arc::new(fetch_checker),
 			)?;
 
