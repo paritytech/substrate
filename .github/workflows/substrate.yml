@@ -100,7 +100,7 @@ jobs:
         if:                    always()
         run:                   sccache --stop-server
       - name:                  Disk statistics
-        run:                   df -h --total&&s ~/tools
+        run:                   df -h --total&&ls ~/tools/bin
 
 
   linux-cargo-check-benches:
@@ -126,7 +126,7 @@ jobs:
           rm -rf ~/.cargo/git
           rm -rf ~/.cargo/registry
           rm -rf ~/tools
-          echo "::add-path::$GITHUB_WORKSPACE/tools"
+          echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
           printenv
       - name:                  Restore ~/.rustup
         uses:                  actions/cache@v1.1.2
@@ -202,7 +202,7 @@ jobs:
           rm -rf ~/.cargo/git
           rm -rf ~/.cargo/registry
           rm -rf ~/tools
-          echo "::add-path::$GITHUB_WORKSPACE/tools"
+          echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
           printenv
       - name:                  Restore ~/.rustup
         uses:                  actions/cache@v1.1.2
@@ -278,7 +278,7 @@ jobs:
           rm -rf ~/.cargo/git
           rm -rf ~/.cargo/registry
           rm -rf ~/tools
-          echo "::add-path::$GITHUB_WORKSPACE/tools"
+          echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
           printenv
       - name:                  Restore ~/.rustup
         uses:                  actions/cache@v1.1.2
@@ -354,7 +354,7 @@ jobs:
           rm -rf ~/.cargo/git
           rm -rf ~/.cargo/registry
           rm -rf ~/tools
-          echo "::add-path::$GITHUB_WORKSPACE/tools"
+          echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
           printenv
       - name:                  Restore ~/.rustup
         uses:                  actions/cache@v1.1.2
@@ -430,7 +430,7 @@ jobs:
           rm -rf ~/.cargo/git
           rm -rf ~/.cargo/registry
           rm -rf ~/tools
-          echo "::add-path::$GITHUB_WORKSPACE/tools"
+          echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
           printenv
       - name:                  Restore ~/.rustup
         uses:                  actions/cache@v1.1.2
@@ -506,7 +506,7 @@ jobs:
           rm -rf ~/.cargo/git
           rm -rf ~/.cargo/registry
           rm -rf ~/tools
-          echo "::add-path::$GITHUB_WORKSPACE/tools"
+          echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
           printenv
       - name:                  Restore ~/.rustup
         uses:                  actions/cache@v1.1.2
@@ -582,7 +582,7 @@ jobs:
           rm -rf ~/.cargo/git
           rm -rf ~/.cargo/registry
           rm -rf ~/tools
-          echo "::add-path::$GITHUB_WORKSPACE/tools"
+          echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
           printenv
       - name:                  Restore ~/.rustup
         uses:                  actions/cache@v1.1.2
@@ -704,7 +704,7 @@ jobs:
           rm -rf ~/.cargo/git
           rm -rf ~/.cargo/registry
           rm -rf ~/tools
-          echo "::add-path::$GITHUB_WORKSPACE/tools"
+          echo "::add-path::$GITHUB_WORKSPACE/tools/bin"
           printenv
       - name:                  Restore ~/.rustup
         uses:                  actions/cache@v1.1.2
