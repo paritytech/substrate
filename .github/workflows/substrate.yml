@@ -362,6 +362,7 @@ jobs:
       - name:                        Sccache statistics
         run:                         sccache --show-stats&&rustup update
       - name:                        Run cargo build sp-io
+        continue-on-error:           true
         run:    cargo build --target=wasm32-unknown-unknown -p sp-io
       - name:                        Run cargo build sp-runtime
         uses:                        actions-rs/cargo@v1
