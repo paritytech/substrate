@@ -851,9 +851,22 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-im-online" | b"im-online" => ImOnline::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-utility" | b"utility" => Utility::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				_ => Err("Benchmark not found for this pallet."),
 			};
-
 			result.map_err(|e| e.into())
 		}
 	}

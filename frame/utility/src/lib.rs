@@ -71,6 +71,9 @@ use frame_support::{traits::{Get, ReservableCurrency, Currency},
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
+use core::convert::From;
+
+pub mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
@@ -80,7 +83,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + From<crate::Call<Self>>;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
