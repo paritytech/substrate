@@ -497,7 +497,7 @@ jobs:
 #build
   build-linux-substrate:
     name:                            Build linux Substrate
-    needs:                           [linux-cache-tools, linux-test-stable]
+    needs:                           [linux-test-stable]
     runs-on:                         ubuntu-latest
     env:
       CC:                            "clang"
@@ -557,7 +557,7 @@ jobs:
 
   build-linux-subkey:
     name:                            Build linux Subkey
-    needs:                           [linux-cache-tools, linux-test-stable]
+    needs:                           [linux-test-stable]
     runs-on:                         ubuntu-latest
     env:
       CC:                            "clang"
@@ -617,7 +617,7 @@ jobs:
 
   build-rust-doc-release:
     name:                            Build Rust doc release
-    needs:                           [linux-cache-tools, linux-test-stable]
+    needs:                           [linux-test-stable]
     runs-on:                         ubuntu-latest
     env:
       CC:                            "clang"
