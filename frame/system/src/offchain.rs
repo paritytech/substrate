@@ -75,17 +75,17 @@ pub mod new {
 					})
 					.collect()
 			} else {
-                C::RuntimeAppPublic::all()
-                    .into_iter()
-                    .enumerate()
-                    .filter_map(|(index, key)| {
-                        let generic_public = C::GenericPublic::from(key);
-                        let public = generic_public.into();
-                        let account_id = public.clone().into_account();
-                        let account = Account::new(index, account_id, public.clone());
-                        f(&account).map(|res| (account, res))
-                    })
-                    .collect()
+				C::RuntimeAppPublic::all()
+					.into_iter()
+					.enumerate()
+					.filter_map(|(index, key)| {
+						let generic_public = C::GenericPublic::from(key);
+						let public = generic_public.into();
+						let account_id = public.clone().into_account();
+						let account = Account::new(index, account_id, public.clone());
+						f(&account).map(|res| (account, res))
+					})
+					.collect()
 			}
 		}
 	}
@@ -104,20 +104,20 @@ pub mod new {
 					}
 				}
 			} else {
-                let runtime_keys = C::RuntimeAppPublic::all()
-                    .into_iter()
-                    .enumerate();
+				let runtime_keys = C::RuntimeAppPublic::all()
+					.into_iter()
+					.enumerate();
 
-                for (index, key) in runtime_keys {
-                    let generic_public = C::GenericPublic::from(key);
-                    let public = generic_public.into();
-                    let account_id = public.clone().into_account();
-                    let account = Account::new(index, account_id, public.clone());
-                    let res = f(&account);
-                    if let Some(res) = res {
-                        return Some((account, res));
-                    }
-                }
+				for (index, key) in runtime_keys {
+					let generic_public = C::GenericPublic::from(key);
+					let public = generic_public.into();
+					let account_id = public.clone().into_account();
+					let account = Account::new(index, account_id, public.clone());
+					let res = f(&account);
+					if let Some(res) = res {
+						return Some((account, res));
+					}
+				}
 			}
 
 			None
