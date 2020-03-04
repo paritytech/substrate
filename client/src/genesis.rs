@@ -89,6 +89,8 @@ mod tests {
 		};
 		let hash = header.hash();
 		let mut overlay = OverlayedChanges::default();
+		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
+			.expect("Code is part of the backend");
 
 		StateMachine::new(
 			backend,
@@ -98,6 +100,7 @@ mod tests {
 			"Core_initialize_block",
 			&header.encode(),
 			Default::default(),
+			&runtime_code,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -111,6 +114,7 @@ mod tests {
 				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
 				Default::default(),
+				&runtime_code,
 			).execute(
 				ExecutionStrategy::NativeElseWasm,
 			).unwrap();
@@ -124,6 +128,7 @@ mod tests {
 			"BlockBuilder_finalize_block",
 			&[],
 			Default::default(),
+			&runtime_code,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -161,6 +166,8 @@ mod tests {
 
 		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
+		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
+			.expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
@@ -171,6 +178,7 @@ mod tests {
 			"Core_execute_block",
 			&b1data,
 			Default::default(),
+			&runtime_code,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -189,6 +197,8 @@ mod tests {
 
 		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
+		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
+			.expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
@@ -199,6 +209,7 @@ mod tests {
 			"Core_execute_block",
 			&b1data,
 			Default::default(),
+			&runtime_code,
 		).execute(
 			ExecutionStrategy::AlwaysWasm,
 		).unwrap();
@@ -217,6 +228,8 @@ mod tests {
 
 		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
+		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
+			.expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
 		let r = StateMachine::new(
@@ -227,6 +240,7 @@ mod tests {
 			"Core_execute_block",
 			&b1data,
 			Default::default(),
+			&runtime_code,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		);

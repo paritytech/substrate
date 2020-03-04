@@ -24,7 +24,7 @@ use std::borrow::Cow;
 use crate::error::{Error, WasmError};
 use parking_lot::{Mutex, RwLock};
 use codec::Decode;
-use sp_core::{storage::well_known_keys, traits::Externalities};
+use sp_core::traits::{Externalities, RuntimeCode};
 use sp_version::RuntimeVersion;
 use std::panic::AssertUnwindSafe;
 use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance};
@@ -102,8 +102,7 @@ impl RuntimeCache {
 	///
 	/// `code` - Provides external code or tells the executor to fetch it from storage.
 	///
-	/// `ext` - Externalities to use for the runtime. This is used for setting
-	/// up an initial runtime instance.
+	/// `runtime_code` - The runtime wasm code used setup the runtime.
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	///
@@ -183,6 +182,7 @@ impl RuntimeCache {
 					code_hash,
 					ext,
 					wasm_method,
+					runtime_code,
 					heap_pages,
 					host_functions.into(),
 					allow_missing_func_imports,
@@ -293,6 +293,7 @@ fn create_versioned_wasm_runtime(
 	code_hash: Vec<u8>,
 	ext: &mut dyn Externalities,
 	wasm_method: WasmExecutionMethod,
+	runtime_code: &RuntimeCode,
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
@@ -301,7 +302,7 @@ fn create_versioned_wasm_runtime(
 	let mut runtime = create_wasm_runtime_with_code(
 		wasm_method,
 		heap_pages,
-		&code,
+		&runtime_code.code,
 		host_functions,
 		allow_missing_func_imports,
 	)?;

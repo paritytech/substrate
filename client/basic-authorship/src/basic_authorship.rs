@@ -471,4 +471,3 @@ mod tests {
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 }
-

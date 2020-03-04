@@ -20,7 +20,7 @@ use crate::{
 };
 use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
-use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
+use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities, RuntimeCode}};
 use log::trace;
 use std::{result, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc};
 use sp_wasm_interface::{HostFunctions, Function};
@@ -219,7 +219,8 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 
 	fn runtime_version(
 		&self,
-		ext: &mut dyn Externalities,
+		ext: &mut E,
+		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
 		self.wasm.with_instance(CodeSource::Externalities, ext,
 			|_instance, version, _ext|
@@ -236,7 +237,8 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(
 		&self,
-		ext: &mut dyn Externalities,
+		ext: &mut E,
+		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
