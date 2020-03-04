@@ -714,7 +714,7 @@ checksum = "e7ca8a5221364ef15ce201e8ed2f609fc312682a8f4e0e3d4aa5879764e0fa3b"
 [[package]]
 name = "cranelift-bforest"
 version = "0.59.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "cranelift-entity",
 ]
@@ -722,7 +722,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen"
 version = "0.59.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "byteorder 1.3.4",
  "cranelift-bforest",
@@ -740,7 +740,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-meta"
 version = "0.59.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -749,12 +749,12 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.59.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 
 [[package]]
 name = "cranelift-entity"
 version = "0.59.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "serde",
 ]
@@ -762,7 +762,7 @@ dependencies = [
 [[package]]
 name = "cranelift-frontend"
 version = "0.59.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "cranelift-codegen",
  "log 0.4.8",
@@ -773,7 +773,7 @@ dependencies = [
 [[package]]
 name = "cranelift-native"
 version = "0.59.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -783,7 +783,7 @@ dependencies = [
 [[package]]
 name = "cranelift-wasm"
 version = "0.59.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -8825,7 +8825,7 @@ checksum = "aeb1956b19469d1c5e63e459d29e7b5aa0f558d9f16fcef09736f8a265e6c10a"
 [[package]]
 name = "wasmtime"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -8847,7 +8847,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-debug"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "anyhow",
  "faerie",
@@ -8862,7 +8862,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-environ"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "anyhow",
  "base64 0.11.0",
@@ -8890,7 +8890,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-jit"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -8914,7 +8914,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-profiling"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "gimli",
  "goblin",
@@ -8929,7 +8929,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-runtime"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#50f7ed2f366ec9deeae2d27ce0fab76353bbe664"
+source = "git+https://github.com/paritytech/wasmtime?branch=a-thread-safe-api#851887d84d03543f931f6312448d0dd5d8a9324e"
 dependencies = [
  "backtrace",
  "cc",
