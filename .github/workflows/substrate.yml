@@ -791,7 +791,7 @@ jobs:
       CC:                            "clang"
       CXX:                           "clang++"
       RUST_TOOLCHAIN:                stable
-          steps:
+    steps:
       - run:                         echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
@@ -856,7 +856,7 @@ jobs:
       CC:                            "clang"
       CXX:                           "clang++"
       RUST_TOOLCHAIN:                stable
-          steps:
+    steps:
       - run:                         echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
@@ -921,7 +921,7 @@ jobs:
       CC:                            "clang"
       CXX:                           "clang++"
       RUST_TOOLCHAIN:                stable
-          steps:
+    steps:
       - run:                         echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
