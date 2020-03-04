@@ -5,7 +5,7 @@ jobs:
   linux-cargo-check-benches:
     name:                            Cargo check benches
     runs-on:                         ubuntu-latest
-    container:                       parity/rust-builder:latest
+    container:                       generalbeck/rust-builder:latest
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
@@ -61,7 +61,7 @@ jobs:
   linux-cargo-check-subkey:
     name:                            Cargo check subkey
     runs-on:                         ubuntu-latest
-    container:                       parity/rust-builder:latest
+    container:                       generalbeck/rust-builder:latest
     env:
       BUILD_DUMMY_WASM_BINARY:       1
       CARGO_HOME:                    "/usr/local/cargo"
@@ -114,7 +114,7 @@ jobs:
   linux-test-stable:
     name:                            Test linux stable
     runs-on:                         ubuntu-latest
-    container:                       parity/rust-builder:latest
+    container:                       generalbeck/rust-builder:latest
     env:
       RUSTFLAGS:                     "-Cdebug-assertions=y"
       CARGO_HOME:                    "/usr/local/cargo"
@@ -168,7 +168,7 @@ jobs:
   linux-test-frame-staking:
     name:                            Test frame staking
     runs-on:                         ubuntu-latest
-    container:                       parity/rust-builder:latest
+    container:                       generalbeck/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_HOME:                    "/usr/local/cargo"
@@ -222,7 +222,7 @@ jobs:
   linux-test-wasmtime:
     name:                            Test wasmtime
     runs-on:                         ubuntu-latest
-    container:                       parity/rust-builder:latest
+    container:                       generalbeck/rust-builder:latest
     env:
       CARGO_HOME:                    "/usr/local/cargo"
       RUSTFLAGS:               "-Cdebug-assertions=y"
@@ -276,7 +276,7 @@ jobs:
   linux-test-stable-int:
     name:                            Test linux stable int
     runs-on:                         ubuntu-latest
-    container:                       parity/rust-builder:latest
+    container:                       generalbeck/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_HOME:                    "/usr/local/cargo"
@@ -332,7 +332,7 @@ jobs:
   check-web-wasm:
     name:                            Check web wasm
     runs-on:                         ubuntu-latest
-    container:                       parity/rust-builder:latest
+    container:                       generalbeck/rust-builder:latest
     env:
       CARGO_INCREMENTAL:               0
       CARGO_HOME:                    "/usr/local/cargo"
@@ -349,18 +349,6 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[check-web-wasm]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/git
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      $CARGO_HOME/.cargo/git
-          key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/registry
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      $CARGO_HOME/.cargo/registry
-          key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
         with:
           path:                      target
           key:                       cargo-build-[check-web-wasm]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
@@ -393,7 +381,7 @@ jobs:
   test-full-crypto-feature:
     name:                            Test full crypto feature
     runs-on:                         ubuntu-latest
-    container:                       parity/rust-builder:latest
+    container:                       generalbeck/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:               0
