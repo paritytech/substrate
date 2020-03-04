@@ -1037,13 +1037,11 @@ ServiceBuilder<
 		// Prometheus metrics
 		let metrics = if let Some((registry, port)) = prometheus_registry_and_port.clone() {
 			let metrics = ServiceMetrics::register(&registry)?;
-
-      metrics.node_roles.set(u64::from(config.roles.bits()));
+			metrics.node_roles.set(u64::from(config.roles.bits()));
 			spawn_handle.spawn(
 				"prometheus-endpoint",
 				prometheus_endpoint::init_prometheus(port, registry).map(drop)
 			);
-
 			Some(metrics)
 		} else {
 			None
