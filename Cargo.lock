@@ -1456,6 +1456,8 @@ dependencies = [
 name = "frame-benchmarking"
 version = "2.0.0-alpha.3"
 dependencies = [
+ "frame-support",
+ "frame-system",
  "parity-scale-codec",
  "sp-api",
  "sp-io",
@@ -4119,6 +4121,7 @@ dependencies = [
 name = "pallet-example"
 version = "2.0.0-alpha.3"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",

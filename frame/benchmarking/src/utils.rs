@@ -17,7 +17,7 @@
 //! Interfaces, types and utils for benchmarking a FRAME runtime.
 
 use codec::{Encode, Decode};
-use sp_std::vec::Vec;
+use sp_std::{vec::Vec, prelude::Box};
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeString;
 
@@ -93,12 +93,12 @@ pub trait Benchmarking<T> {
 }
 
 /// The required setup for creating a benchmark.
-pub trait BenchmarkingSetup<T, Call, RawOrigin> {
+pub trait BenchmarkingSetup<T> {
 	/// Return the components and their ranges which should be tested in this benchmark.
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
-	/// Set up the storage, and prepare a call and caller to test in a single run of the benchmark.
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(Call, RawOrigin), &'static str>;
+	/// Set up the storage, and prepare a closure to test in a single run of the benchmark.
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// Grab an account, seeded by a name and index.
