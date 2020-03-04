@@ -101,7 +101,24 @@ impl Transfer {
 	pub fn into_signed_tx(self) -> Extrinsic {
 		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
 			.expect("Creates keyring from public key.").sign(&self.encode()).into();
-		Extrinsic::Transfer(self, signature)
+		Extrinsic::Transfer {
+			transfer: self,
+			signature,
+			exhaust_resources: false,
+		}
+	}
+
+	/// Convert into a signed extrinsic, which will not end up included
+	/// in block due to resource exhaustion.
+	#[cfg(feature = "std")]
+	pub fn into_exhaust_tx(self) -> Extrinsic {
+		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
+			.expect("Creates keyring from public key.").sign(&self.encode()).into();
+		Extrinsic::Transfer {
+			transfer: self,
+			signature,
+			exhaust_resources: true,
+		}
 	}
 }
 
@@ -109,7 +126,11 @@ impl Transfer {
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
-	Transfer(Transfer, AccountSignature),
+	Transfer {
+		transfer: Transfer,
+		signature: AccountSignature,
+		exhaust_resources: bool,
+	},
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
@@ -130,9 +151,9 @@ impl BlindCheckable for Extrinsic {
 	fn check(self, _signature: CheckSignature) -> Result<Self, TransactionValidityError> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
-			Extrinsic::Transfer(transfer, signature) => {
+			Extrinsic::Transfer { transfer, signature, exhaust_resources } => {
 				if sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
-					Ok(Extrinsic::Transfer(transfer, signature))
+					Ok(Extrinsic::Transfer { transfer, signature, exhaust_resources })
 				} else {
 					Err(InvalidTransaction::BadProof.into())
 				}
@@ -165,7 +186,7 @@ impl ExtrinsicT for Extrinsic {
 impl Extrinsic {
 	pub fn transfer(&self) -> &Transfer {
 		match self {
-			Extrinsic::Transfer(ref transfer, _) => transfer,
+			Extrinsic::Transfer { ref transfer, .. } => transfer,
 			_ => panic!("cannot convert to transfer ref"),
 		}
 	}

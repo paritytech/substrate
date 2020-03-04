@@ -412,13 +412,19 @@ mod tests {
 		);
 
 		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), {
-				let mut v = Vec::new();
-				for i in 0..50 {
-					v.push(extrinsic(i));
-				}
-				v
-			})
+			txpool.submit_at(&BlockId::number(0), vec![
+				extrinsic(0),
+				extrinsic(1),
+				Transfer {
+					amount: Default::default(),
+					nonce: 2,
+					from: AccountKeyring::Alice.into(),
+					to: Default::default(),
+				}.into_exhaust_tx(),
+				extrinsic(3),
+				extrinsic(4),
+				extrinsic(5),
+			])
 		).unwrap();
 
 		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
@@ -435,8 +441,8 @@ mod tests {
 
 		// then
 		// block should have some extrinsics although we have some more in the pool.
-		assert_eq!(block.extrinsics().len(), 16);
-		assert_eq!(txpool.ready().count(), 50);
+		assert_eq!(block.extrinsics().len(), 2);
+		assert_eq!(txpool.ready().count(), 6);
 	}
 }
 
