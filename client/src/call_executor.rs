@@ -25,7 +25,7 @@ use sp_state_machine::{
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
-use sp_core::{NativeOrEncoded, NeverNativeValue, traits::CodeExecutor};
+use sp_core::{NativeOrEncoded, NeverNativeValue, traits::{CodeExecutor, RuntimeCode}};
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor};
 
@@ -90,6 +90,7 @@ where
 			method,
 			call_data,
 			extensions.unwrap_or_default(),
+			&sp_state_machine::backend::get_runtime_code(&state)?,
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			None,
@@ -140,6 +141,8 @@ where
 
 		// make sure to destroy state before exiting this function
 		let mut state = self.backend.state_at(*at)?;
+		let runtime_code = sp_state_machine::backend::get_runtime_code(&state)?;
+
 		let result = match recorder {
 			Some(recorder) => state.as_trie_backend()
 				.ok_or_else(||
@@ -160,6 +163,7 @@ where
 						method,
 						call_data,
 						extensions.unwrap_or_default(),
+						&runtime_code,
 					)
 					// TODO: https://github.com/paritytech/substrate/issues/4455
 					// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
@@ -173,6 +177,7 @@ where
 				method,
 				call_data,
 				extensions.unwrap_or_default(),
+				&runtime_code,
 			)
 			.with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
 			.execute_using_consensus_failure_handler(execution_manager, native_call)
@@ -197,7 +202,8 @@ where
 			changes_trie_state,
 			None,
 		);
-		let version = self.executor.runtime_version(&mut ext);
+		let wasm_code = RuntimeCode::from_externalities(&ext).map_err(|e| e.to_string().into());
+		let version = wasm_code.and_then(|c| self.executor.runtime_version(&mut ext, &c));
 		{
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
@@ -218,6 +224,7 @@ where
 			&self.executor,
 			method,
 			call_data,
+			&sp_state_machine::backend::get_runtime_code(trie_state)?,
 		)
 		.map_err(Into::into)
 	}
