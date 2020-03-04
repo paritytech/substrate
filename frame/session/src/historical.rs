@@ -266,6 +266,13 @@ pub struct Proof {
 	trie_nodes: Vec<Vec<u8>>,
 }
 
+impl Proof {
+	/// Returns a session this proof was generated for.
+	pub fn session(&self) -> SessionIndex {
+		self.session
+	}
+}
+
 impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
 	for Module<T>
 {
