@@ -497,7 +497,8 @@ fn incoming_global<B: BlockT>(
 			return None;
 		}
 
-		let round = msg.round.0;
+		let round = msg.round;
+		let set_id = msg.set_id;
 		let commit = msg.message;
 		let finalized_number = commit.target_number;
 		let gossip_validator = gossip_validator.clone();
@@ -509,6 +510,8 @@ fn incoming_global<B: BlockT>(
 				// any discrepancy between the actual ghost and the claimed
 				// finalized number.
 				gossip_validator.note_commit_finalized(
+					round,
+					set_id,
 					finalized_number,
 					|to, neighbor| neighbor_sender.send(to, neighbor),
 				);
@@ -525,7 +528,7 @@ fn incoming_global<B: BlockT>(
 
 		let cb = voter::Callback::Work(Box::new(cb));
 
-		Some(voter::CommunicationIn::Commit(round, commit, cb))
+		Some(voter::CommunicationIn::Commit(round.0, commit, cb))
 	};
 
 	let process_catch_up = move |
@@ -1015,7 +1018,7 @@ impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
 		};
 
 		let message = GossipMessage::Commit(FullCommitMessage::<Block> {
-			round: round,
+			round,
 			set_id: self.set_id,
 			message: compact_commit,
 		});
@@ -1025,6 +1028,8 @@ impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
 		// the gossip validator needs to be made aware of the best commit-height we know of
 		// before gossiping
 		self.gossip_validator.note_commit_finalized(
+			round,
+			self.set_id,
 			commit.target_number,
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
