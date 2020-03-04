@@ -24,15 +24,15 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[linux-cargo-check-benches]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/git
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/git
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~/.cargo/git
+          path:                      ${{ CARGO_HOME }}/.cargo/git
           key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/registry
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/registry
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~.cargo/registry
+          path:                      ${{ CARGO_HOME }}/.cargo/registry
           key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ./target
         uses:                        actions/cache@v1.1.2
@@ -77,15 +77,15 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[linux-cargo-check-subkey]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/git
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/git
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~/.cargo/git
+          path:                      ${{ CARGO_HOME }}/.cargo/git
           key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/registry
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/registry
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~.cargo/registry
+          path:                      ${{ CARGO_HOME }}/.cargo/registry
           key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ./target
         uses:                        actions/cache@v1.1.2
@@ -130,15 +130,15 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[linux-test-stable]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/git
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/git
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~/.cargo/git
+          path:                      ${{ CARGO_HOME }}/.cargo/git
           key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/registry
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/registry
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~.cargo/registry
+          path:                      ${{ CARGO_HOME }}/.cargo/registry
           key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ./target
         uses:                        actions/cache@v1.1.2
@@ -183,15 +183,15 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[linux-test-frame-staking]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/git
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/git
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~/.cargo/git
+          path:                      ${{ CARGO_HOME }}/.cargo/git
           key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/registry
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/registry
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~.cargo/registry
+          path:                      ${{ CARGO_HOME }}/.cargo/registry
           key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ./target
         uses:                        actions/cache@v1.1.2
@@ -238,15 +238,15 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[linux-test-wasmtime]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/git
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/git
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~/.cargo/git
+          path:                      ${{ CARGO_HOME }}/.cargo/git
           key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/registry
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/registry
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~.cargo/registry
+          path:                      ${{ CARGO_HOME }}/.cargo/registry
           key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ./target
         uses:                        actions/cache@v1.1.2
@@ -291,15 +291,15 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[linux-test-stable-int]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/git
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/git
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~/.cargo/git
+          path:                      ${{ CARGO_HOME }}/.cargo/git
           key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/registry
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/registry
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~.cargo/registry
+          path:                      ${{ CARGO_HOME }}/.cargo/registry
           key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ./target
         uses:                        actions/cache@v1.1.2
@@ -344,15 +344,15 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[check-web-wasm]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/git
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/git
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~/.cargo/git
+          path:                      ${{ CARGO_HOME }}/.cargo/git
           key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/registry
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/registry
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~.cargo/registry
+          path:                      ${{ CARGO_HOME }}/.cargo/registry
           key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ./target
         uses:                        actions/cache@v1.1.2
@@ -360,7 +360,7 @@ jobs:
           path:                      target
           key:                       cargo-build-[check-web-wasm]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Sccache statistics
-        run:                         sccache --show-stats&&rustup update
+        run:                         sccache --show-stats&&rustup show
       - name:                        Run cargo build wasm
         continue-on-error:           true
         run: |
@@ -406,15 +406,15 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[test-full-crypto-feature]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/git
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/git
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~/.cargo/git
+          path:                      ${{ CARGO_HOME }}/.cargo/git
           key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ~/.cargo/registry
+      - name:                        Restore ${{ CARGO_HOME }}/.cargo/registry
         uses:                        actions/cache@v1.1.2
         with:
-          path:                      ~.cargo/registry
+          path:                      ${{ CARGO_HOME }}/.cargo/registry
           key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ./target
         uses:                        actions/cache@v1.1.2
