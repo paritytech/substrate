@@ -426,10 +426,9 @@ impl RunCmd {
 			config.prometheus_config = None;
 		} else if config.prometheus_config.is_none() {
 			let prometheus_interface: &str = if self.prometheus_external { "0.0.0.0" } else { "127.0.0.1" };
-			config.prometheus_config = Some(PrometheusConfig {
-				port: parse_address(&format!("{}:{}", prometheus_interface, 9615), self.prometheus_port)?,
-				registry: None
-			});
+			config.prometheus_config = Some(PrometheusConfig::new_with_default_registry(
+				parse_address(&format!("{}:{}", prometheus_interface, 9615), self.prometheus_port)?,
+			));
 		}
 
 		config.tracing_targets = self.import_params.tracing_targets.clone().into();

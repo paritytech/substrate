@@ -167,11 +167,25 @@ pub enum DatabaseConfig {
 }
 
 /// Configuration of the Prometheus endpoint.
+#[derive(Clone)]
 pub struct PrometheusConfig {
 	/// Port to use.
 	pub port: SocketAddr,
-	/// A metrics registry to use. One will be created if `None`.
-	pub registry: Option<Registry>,
+	/// A metrics registry to use. Useful for setting the metric prefix.
+	pub registry: Registry,
+}
+
+impl PrometheusConfig {
+	/// Create a new config using the default registry.
+	///
+	/// The default registry prefixes metrics with `substrate`.
+	pub fn new_with_default_registry(port: SocketAddr) -> Self {
+		Self {
+			port,
+			registry: Registry::new_custom(Some("substrate".into()), None)
+				.expect("this can only fail if the prefix is empty")
+		}
+	}
 }
 
 impl<G, E> Default for Configuration<G, E> {
