@@ -645,7 +645,7 @@ pub struct ElectionResult<AccountId, Balance: HasCompact> {
 	/// Flat list of new exposures, to be updated in the [`Exposure`] storage.
 	exposures: Vec<(AccountId, Exposure<AccountId, Balance>)>,
 	/// Type of the result. This is kept on chain only to track and report the best score's
-	/// submission type. An optimisation can could remove this.
+	/// submission type. An optimisation could remove this.
 	compute: ElectionCompute,
 }
 

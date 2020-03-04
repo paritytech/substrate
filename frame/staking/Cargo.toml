@@ -57,5 +57,6 @@ std = [
 	"pallet-session/std",
 	"frame-system/std",
 	"pallet-authorship/std",
+	"sp-application-crypto/std",
 	"sp-core/std",
 ]
