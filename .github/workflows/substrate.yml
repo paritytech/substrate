@@ -2,14 +2,13 @@ name:                          Substrate
 
 on:                            [push]
 jobs:
-  env:
-    CC:                      "clang-9"
-    CXX:                     "clang-9"
-    RUSTC_WRAPPER:           sccache
-
   linux-cache-tools:
     name:                      Cache tools
     runs-on:                   ubuntu-latest
+    env:
+      CC:                      "clang-9"
+      CXX:                     "clang-9"
+      RUSTC_WRAPPER:           sccache
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
@@ -109,6 +108,9 @@ jobs:
     needs:                     [linux-cache-tools]
     runs-on:                   ubuntu-latest
     env:
+      CC:                      "clang-9"
+      CXX:                     "clang-9"
+      RUSTC_WRAPPER:           sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
       - name:                  Checkout sources
@@ -182,6 +184,9 @@ jobs:
     needs:                     [linux-cache-tools]
     runs-on:                   ubuntu-latest
     env:
+      CC:                      "clang-9"
+      CXX:                     "clang-9"
+      RUSTC_WRAPPER:           sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
       - name:                  Checkout sources
@@ -330,6 +335,9 @@ jobs:
     needs:                     [linux-cache-tools]
     runs-on:                   ubuntu-latest
     env:
+      CC:                      "clang-9"
+      CXX:                     "clang-9"
+      RUSTC_WRAPPER:           sccache
       RUSTFLAGS:               "-Cdebug-assertions=y"
       RUST_BACKTRACE:          1
     steps:
@@ -403,6 +411,9 @@ jobs:
     needs:                     [linux-cache-tools]
     runs-on:                   ubuntu-latest
     env:
+      CC:                      "clang-9"
+      CXX:                     "clang-9"
+      RUSTC_WRAPPER:           sccache
       RUSTFLAGS:               "-Cdebug-assertions=y"
       RUST_BACKTRACE:          1
     steps:
@@ -476,6 +487,9 @@ jobs:
     needs:                     [linux-cache-tools]
     runs-on:                   ubuntu-latest
     env:
+      CC:                      "clang-9"
+      CXX:                     "clang-9"
+      RUSTC_WRAPPER:           sccache
       RUSTFLAGS:               "-Cdebug-assertions=y"
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
@@ -551,6 +565,9 @@ jobs:
     needs:                     [linux-cache-tools]
     runs-on:                   ubuntu-latest
     env:
+      CC:                      "clang-9"
+      CXX:                     "clang-9"
+      RUSTC_WRAPPER:           sccache
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
@@ -668,6 +685,9 @@ jobs:
     needs:                     [linux-cache-tools]
     runs-on:                   ubuntu-latest
     env:
+      CC:                      "clang-9"
+      CXX:                     "clang-9"
+      RUSTC_WRAPPER:           sccache
       RUSTFLAGS:               "-Cdebug-assertions=y"
       RUST_BACKTRACE:          1
     steps:
