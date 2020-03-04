@@ -31,6 +31,8 @@ use frame_support::weights::SimpleDispatchInfo;
 use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
+pub mod benchmarking;
+
 const MAX_UNCLES: usize = 10;
 
 pub trait Trait: frame_system::Trait {
