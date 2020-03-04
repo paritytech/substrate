@@ -67,11 +67,6 @@ jobs:
         with:
           path:                      ~/.cargo/git
           key:                       ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Cache sccache
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.cache/sccache
-          key:                       ${{ runner.os }}-sccache-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Disk statistics
         run:                         df -h --total
 
@@ -131,9 +126,9 @@ jobs:
       - name:                        Install wasm-gc, wasm-pack, cargo-web
         shell:                       bash
         run:                         |
-          .github/workflows/install-wasm-gc.sh
-          .github/workflows/install-wasm-pack.sh
-          .github/workflows/install-cargo-web.sh
+          bash .github/workflows/install-wasm-gc.sh
+          bash .github/workflows/install-wasm-pack.sh
+          bash .github/workflows/install-cargo-web.sh
       - name:                        Install sccache for Linux
         shell:                       pwsh
         run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
@@ -216,9 +211,9 @@ jobs:
       - name:                        Install wasm-gc, wasm-pack, cargo-web
         shell:                       bash
         run:                         |
-          .github/workflows/install-wasm-gc.sh
-          .github/workflows/install-wasm-pack.sh
-          .github/workflows/install-cargo-web.sh
+          bash .github/workflows/install-wasm-gc.sh
+          bash .github/workflows/install-wasm-pack.sh
+          bash .github/workflows/install-cargo-web.sh
       - name:                        Run cargo check subkey
         uses:                        actions-rs/cargo@v1
         continue-on-error:           true
@@ -291,9 +286,9 @@ jobs:
       - name:                        Install wasm-gc, wasm-pack, cargo-web
         shell:                       bash
         run:                         |
-          .github/workflows/install-wasm-gc.sh
-          .github/workflows/install-wasm-pack.sh
-          .github/workflows/install-cargo-web.sh
+          bash .github/workflows/install-wasm-gc.sh
+          bash .github/workflows/install-wasm-pack.sh
+          bash .github/workflows/install-cargo-web.sh
       - name:                        Install sccache for Linux
         shell:                       pwsh
         run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
@@ -371,9 +366,9 @@ jobs:
       - name:                        Install wasm-gc, wasm-pack, cargo-web
         shell:                       bash
         run:                         |
-          .github/workflows/install-wasm-gc.sh
-          .github/workflows/install-wasm-pack.sh
-          .github/workflows/install-cargo-web.sh
+          bash .github/workflows/install-wasm-gc.sh
+          bash .github/workflows/install-wasm-pack.sh
+          bash .github/workflows/install-cargo-web.sh
       - name:                        Install sccache for Linux
         shell:                       pwsh
         run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
@@ -451,9 +446,9 @@ jobs:
       - name:                        Install wasm-gc, wasm-pack, cargo-web
         shell:                       bash
         run:                         |
-          .github/workflows/install-wasm-gc.sh
-          .github/workflows/install-wasm-pack.sh
-          .github/workflows/install-cargo-web.sh
+          bash .github/workflows/install-wasm-gc.sh
+          bash .github/workflows/install-wasm-pack.sh
+          bash .github/workflows/install-cargo-web.sh
       - name:                        Install sccache for Linux
         shell:                       pwsh
         run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
@@ -531,9 +526,9 @@ jobs:
       - name:                        Install wasm-gc, wasm-pack, cargo-web
         shell:                       bash
         run:                         |
-          .github/workflows/install-wasm-gc.sh
-          .github/workflows/install-wasm-pack.sh
-          .github/workflows/install-cargo-web.sh
+          bash .github/workflows/install-wasm-gc.sh
+          bash .github/workflows/install-wasm-pack.sh
+          bash .github/workflows/install-cargo-web.sh
       - name:                        Install sccache for Linux
         shell:                       pwsh
         run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
@@ -611,9 +606,9 @@ jobs:
       - name:                        Install wasm-gc, wasm-pack, cargo-web
         shell:                       bash
         run:                         |
-          .github/workflows/install-wasm-gc.sh
-          .github/workflows/install-wasm-pack.sh
-          .github/workflows/install-cargo-web.sh
+          bash .github/workflows/install-wasm-gc.sh
+          bash .github/workflows/install-wasm-pack.sh
+          bash .github/workflows/install-cargo-web.sh
       - name:                        Install sccache for Linux
         shell:                       pwsh
         run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
@@ -737,9 +732,9 @@ jobs:
       - name:                        Install wasm-gc, wasm-pack, cargo-web
         shell:                       bash
         run:                         |
-          .github/workflows/install-wasm-gc.sh
-          .github/workflows/install-wasm-pack.sh
-          .github/workflows/install-cargo-web.sh
+          bash .github/workflows/install-wasm-gc.sh
+          bash .github/workflows/install-wasm-pack.sh
+          bash .github/workflows/install-cargo-web.sh
       - name:                        Install sccache for Linux
         shell:                       pwsh
         run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
