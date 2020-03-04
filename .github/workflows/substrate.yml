@@ -5,64 +5,12 @@ jobs:
   linux-cache-tools:
     name:                            Cache tools
     runs-on:                         ubuntu-latest
+    container:                       parity/rust-builder:latest
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
       CARGO_INCREMENTAL:               0
     steps:
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
-        with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Install stable toolchain
-        id:                          stable-toolchain
-        uses:                        actions-rs/toolchain@v1.0.5
-        with:
-          toolchain:                 stable
-          profile:                   minimal
-          override:                  true
-          default:                   true
-          components:                clippy, rustfmt
-      - name:                        Install nightly toolchain
-        id:                          nightly-toolchain
-        uses:                        actions-rs/toolchain@v1.0.5
-        with:
-          toolchain:                 nightly
-          profile:                   minimal
-          override:                  true
-          components:                clippy, rustfmt
-      - name:                        Add wasm32 stable
-        id:                          stable-wasm32
-        uses:                        actions-rs/toolchain@v1.0.5
-        with:
-          toolchain:                 stable
-          target:                    wasm32-unknown-unknown
-      - name:                        Add wasm32 nightly
-        id:                          nightly-wasm32
-        uses:                        actions-rs/toolchain@v1.0.5
-        with:
-          toolchain:                 nightly
-          target:                    wasm32-unknown-unknown
-      - name:                        Cache cargo registry
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.cargo/registry
-          key:                       ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Cleanup toolchains
-        run:                         rm -rf /home/runner/.rustup/toolchains/*/share
-      - name:                        Cache rustup
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.rustup
-          key:                       ${{ runner.os }}-cargo-rustup-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Cache cargo index
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.cargo/git
-          key:                       ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Disk statistics
         run:                         df -h --total
 
@@ -70,6 +18,7 @@ jobs:
     name:                            Cargo check benches
     needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
+    container:                       parity/rust-builder:latest
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
@@ -83,18 +32,6 @@ jobs:
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
-      - name:                        Prepare for restoring caches
-        run:                         |
-          rm -rf ~/.rustup
-          rm -rf ~/.cargo/git
-          rm -rf ~/.cargo/registry
-          rm -rf ~/tools
-          printenv
-      - name:                        Restore ~/.rustup
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.rustup
-          key:                       ${{ runner.os }}-cargo-rustup-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ~/.cache/sccache
         uses:                        actions/cache@v1.1.2
         with:
@@ -115,15 +52,6 @@ jobs:
         with:
           path:                      target
           key:                       cargo-build-[linux-cargo-check-benches]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Install wasm-gc, wasm-pack, cargo-web
-        shell:                       bash
-        run:                         |
-          bash .github/workflows/install-wasm-gc.sh
-          bash .github/workflows/install-wasm-pack.sh
-          bash .github/workflows/install-cargo-web.sh
-      - name:                        Install sccache for Linux
-        shell:                       pwsh
-        run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
       - name:                        Sccache statistics
         run:                         sccache --show-stats
       - name:                        Run cargo check benches
@@ -146,6 +74,7 @@ jobs:
     name:                            Cargo check subkey
     needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
+    container:                       parity/rust-builder:latest
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
@@ -159,18 +88,6 @@ jobs:
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
-      - name:                        Prepare for restoring caches
-        run:                         |
-          rm -rf ~/.rustup
-          rm -rf ~/.cargo/git
-          rm -rf ~/.cargo/registry
-          rm -rf ~/tools
-          printenv
-      - name:                        Restore ~/.rustup
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.rustup
-          key:                       ${{ runner.os }}-cargo-rustup-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ~/.cache/sccache
         uses:                        actions/cache@v1.1.2
         with:
@@ -191,17 +108,8 @@ jobs:
         with:
           path:                      target
           key:                       cargo-build-[linux-cargo-check-subkey]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Install sccache for Linux
-        shell:                       pwsh
-        run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
       - name:                        Sccache statistics
         run:                         sccache --show-stats
-      - name:                        Install wasm-gc, wasm-pack, cargo-web
-        shell:                       bash
-        run:                         |
-          bash .github/workflows/install-wasm-gc.sh
-          bash .github/workflows/install-wasm-pack.sh
-          bash .github/workflows/install-cargo-web.sh
       - name:                        Run cargo check subkey
         uses:                        actions-rs/cargo@v1
         continue-on-error:           true
@@ -221,6 +129,7 @@ jobs:
     name:                            Test linux stable
     needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
+    container:                       parity/rust-builder:latest
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
@@ -235,18 +144,6 @@ jobs:
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
-      - name:                        Prepare for restoring caches
-        run:                         |
-          rm -rf ~/.rustup
-          rm -rf ~/.cargo/git
-          rm -rf ~/.cargo/registry
-          rm -rf ~/tools
-          printenv
-      - name:                        Restore ~/.rustup
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.rustup
-          key:                       ${{ runner.os }}-cargo-rustup-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ~/.cache/sccache
         uses:                        actions/cache@v1.1.2
         with:
@@ -267,15 +164,6 @@ jobs:
         with:
           path:                      target
           key:                       cargo-build-[linux-test-stable]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Install wasm-gc, wasm-pack, cargo-web
-        shell:                       bash
-        run:                         |
-          bash .github/workflows/install-wasm-gc.sh
-          bash .github/workflows/install-wasm-pack.sh
-          bash .github/workflows/install-cargo-web.sh
-      - name:                        Install sccache for Linux
-        shell:                       pwsh
-        run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
       - name:                        Sccache statistics
         run:                         sccache --show-stats
       - name:                        Run cargo Test linux stable
@@ -297,6 +185,7 @@ jobs:
     name:                            Test frame staking
     needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
+    container:                       parity/rust-builder:latest
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
@@ -311,18 +200,6 @@ jobs:
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
-      - name:                        Prepare for restoring caches
-        run:                         |
-          rm -rf ~/.rustup
-          rm -rf ~/.cargo/git
-          rm -rf ~/.cargo/registry
-          rm -rf ~/tools
-          printenv
-      - name:                        Restore ~/.rustup
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.rustup
-          key:                       ${{ runner.os }}-cargo-rustup-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ~/.cache/sccache
         uses:                        actions/cache@v1.1.2
         with:
@@ -343,15 +220,6 @@ jobs:
         with:
           path:                      target
           key:                       cargo-build-[linux-test-frame-staking]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Install wasm-gc, wasm-pack, cargo-web
-        shell:                       bash
-        run:                         |
-          bash .github/workflows/install-wasm-gc.sh
-          bash .github/workflows/install-wasm-pack.sh
-          bash .github/workflows/install-cargo-web.sh
-      - name:                        Install sccache for Linux
-        shell:                       pwsh
-        run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
       - name:                        Sccache statistics
         run:                         sccache --show-stats
       - name:                        Run cargo Test frame staking
@@ -373,6 +241,7 @@ jobs:
     name:                            Test wasmtime
     needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
+    container:                       parity/rust-builder:latest
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
@@ -387,18 +256,6 @@ jobs:
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
-      - name:                        Prepare for restoring caches
-        run:                         |
-          rm -rf ~/.rustup
-          rm -rf ~/.cargo/git
-          rm -rf ~/.cargo/registry
-          rm -rf ~/tools
-          printenv
-      - name:                        Restore ~/.rustup
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.rustup
-          key:                       ${{ runner.os }}-cargo-rustup-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ~/.cache/sccache
         uses:                        actions/cache@v1.1.2
         with:
@@ -419,15 +276,6 @@ jobs:
         with:
           path:                      target
           key:                       cargo-build-[linux-test-wasmtime]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Install wasm-gc, wasm-pack, cargo-web
-        shell:                       bash
-        run:                         |
-          bash .github/workflows/install-wasm-gc.sh
-          bash .github/workflows/install-wasm-pack.sh
-          bash .github/workflows/install-cargo-web.sh
-      - name:                        Install sccache for Linux
-        shell:                       pwsh
-        run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
       - name:                        Sccache statistics
         run:                         sccache --show-stats
       - name:                        Run cargo Test wasmtime
@@ -449,6 +297,7 @@ jobs:
     name:                            Test linux stable int
     needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
+    container:                       parity/rust-builder:latest
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
@@ -463,18 +312,6 @@ jobs:
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
-      - name:                        Prepare for restoring caches
-        run:                         |
-          rm -rf ~/.rustup
-          rm -rf ~/.cargo/git
-          rm -rf ~/.cargo/registry
-          rm -rf ~/tools
-          printenv
-      - name:                        Restore ~/.rustup
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.rustup
-          key:                       ${{ runner.os }}-cargo-rustup-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ~/.cache/sccache
         uses:                        actions/cache@v1.1.2
         with:
@@ -495,15 +332,6 @@ jobs:
         with:
           path:                      target
           key:                       cargo-build-[linux-test-stable-int]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Install wasm-gc, wasm-pack, cargo-web
-        shell:                       bash
-        run:                         |
-          bash .github/workflows/install-wasm-gc.sh
-          bash .github/workflows/install-wasm-pack.sh
-          bash .github/workflows/install-cargo-web.sh
-      - name:                        Install sccache for Linux
-        shell:                       pwsh
-        run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
       - name:                        Sccache statistics
         run:                         sccache --show-stats
       - name:                        Run cargo Test linux stable int
@@ -527,6 +355,7 @@ jobs:
     name:                            Check web wasm
     needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
+    container:                       parity/rust-builder:latest
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
@@ -539,18 +368,6 @@ jobs:
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
-      - name:                        Prepare for restoring caches
-        run:                         |
-          rm -rf ~/.rustup
-          rm -rf ~/.cargo/git
-          rm -rf ~/.cargo/registry
-          rm -rf ~/tools
-          printenv
-      - name:                        Restore ~/.rustup
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.rustup
-          key:                       ${{ runner.os }}-cargo-rustup-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ~/.cache/sccache
         uses:                        actions/cache@v1.1.2
         with:
@@ -571,15 +388,6 @@ jobs:
         with:
           path:                      target
           key:                       cargo-build-[check-web-wasm]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Install wasm-gc, wasm-pack, cargo-web
-        shell:                       bash
-        run:                         |
-          bash .github/workflows/install-wasm-gc.sh
-          bash .github/workflows/install-wasm-pack.sh
-          bash .github/workflows/install-cargo-web.sh
-      - name:                        Install sccache for Linux
-        shell:                       pwsh
-        run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
       - name:                        Sccache statistics
         run:                         sccache --show-stats
       - name:                        Run cargo build sp-io
@@ -647,6 +455,7 @@ jobs:
     name:                            Test full crypto feature
     needs:                           [linux-cache-tools]
     runs-on:                         ubuntu-latest
+    container:                       parity/rust-builder:latest
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
@@ -661,18 +470,6 @@ jobs:
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
-      - name:                        Prepare for restoring caches
-        run:                         |
-          rm -rf ~/.rustup
-          rm -rf ~/.cargo/git
-          rm -rf ~/.cargo/registry
-          rm -rf ~/tools
-          printenv
-      - name:                        Restore ~/.rustup
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.rustup
-          key:                       ${{ runner.os }}-cargo-rustup-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Restore ~/.cache/sccache
         uses:                        actions/cache@v1.1.2
         with:
@@ -693,15 +490,6 @@ jobs:
         with:
           path:                      target
           key:                       cargo-build-[test-full-crypto-feature]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Install wasm-gc, wasm-pack, cargo-web
-        shell:                       bash
-        run:                         |
-          bash .github/workflows/install-wasm-gc.sh
-          bash .github/workflows/install-wasm-pack.sh
-          bash .github/workflows/install-cargo-web.sh
-      - name:                        Install sccache for Linux
-        shell:                       pwsh
-        run:                         pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
       - name:                        Sccache statistics
         run:                         sccache --show-stats
       - name:                        Run cargo build crypto core
