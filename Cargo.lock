@@ -1227,6 +1227,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethbloom"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32cfe1c169414b709cf28aa30c74060bdb830a03a8ba473314d079ac79d80a5f"
+dependencies = [
+ "crunchy",
+ "fixed-hash",
+ "impl-rlp",
+ "impl-serde 0.2.3",
+ "tiny-keccak 1.5.0",
+]
+
+[[package]]
+name = "ethereum-types"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba744248e3553a393143d5ebb68939fc3a4ec0c22a269682535f5ffe7fed728c"
+dependencies = [
+ "ethbloom",
+ "fixed-hash",
+ "impl-rlp",
+ "impl-serde 0.2.3",
+ "primitive-types",
+ "uint",
+]
+
+[[package]]
 name = "evm"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4590,9 +4617,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "1.1.2"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f747c06d9f3b2ad387ac881b9667298c81b1243aa9833f086e05996937c35507"
+checksum = "f509c5e67ca0605ee17dcd3f91ef41cadd685c75a298fb6261b781a5acb3f910"
 dependencies = [
  "arrayvec 0.5.1",
  "bitvec",
@@ -4603,9 +4630,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec-derive"
-version = "1.1.1"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34e513ff3e406f3ede6796dcdc83d0b32ffb86668cea1ccf7363118abeb00476"
+checksum = "5a0ec292e92e8ec7c58e576adacc1e3f399c597c8f263c42f18420abe58e7245"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -4626,7 +4653,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef1476e40bf8f5c6776e9600983435821ca86eb9819d74a6207cca69d091406a"
 dependencies = [
  "cfg-if",
+ "ethereum-types",
+ "hashbrown",
  "impl-trait-for-tuples",
+ "lru",
  "parity-util-mem-derive",
  "parking_lot 0.10.0",
  "primitive-types",
@@ -6090,6 +6120,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.2.12",
@@ -6174,6 +6205,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-test-primitives",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
@@ -6432,7 +6464,10 @@ dependencies = [
  "env_logger 0.7.1",
  "log 0.4.8",
  "parity-scale-codec",
+ "parity-util-mem",
+ "parity-util-mem-derive",
  "parking_lot 0.10.0",
+ "sc-client-api",
  "sp-core",
 ]
 

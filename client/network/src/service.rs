@@ -39,6 +39,7 @@ use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent};
 use parking_lot::Mutex;
 use sc_peerset::PeersetHandle;
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
+use prometheus_endpoint::{Registry, Gauge, U64, register, PrometheusError};
 
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
 use crate::{transport, config::NonReservedPeerMode, ReputationChange};
@@ -294,6 +295,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			from_worker,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
 			event_streams: Vec::new(),
+			metrics: match params.metrics_registry {
+				Some(registry) => Some(Metrics::register(&registry)?),
+				None => None
+			}
 		})
 	}
 
@@ -727,6 +732,26 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 	/// Senders for events that happen on the network.
 	event_streams: Vec<mpsc::UnboundedSender<Event>>,
+	/// Prometheus network metrics.
+	metrics: Option<Metrics>
+}
+
+struct Metrics {
+	is_major_syncing: Gauge<U64>,
+	peers_count: Gauge<U64>,
+}
+
+impl Metrics {
+	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			is_major_syncing: register(Gauge::new(
+				"is_major_syncing", "Whether the node is performing a major sync or not.",
+			)?, registry)?,
+			peers_count: register(Gauge::new(
+				"peers_count", "Number of network gossip peers",
+			)?, registry)?,
+		})
+	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
@@ -818,16 +843,26 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			};
 		}
 
+		let num_connected_peers = this.network_service.user_protocol_mut().num_connected_peers();
+
 		// Update the variables shared with the `NetworkService`.
-		this.num_connected.store(this.network_service.user_protocol_mut().num_connected_peers(), Ordering::Relaxed);
+		this.num_connected.store(num_connected_peers, Ordering::Relaxed);
 		{
 			let external_addresses = Swarm::<B, H>::external_addresses(&this.network_service).cloned().collect();
 			*this.external_addresses.lock() = external_addresses;
 		}
-		this.is_major_syncing.store(match this.network_service.user_protocol_mut().sync_state() {
+
+		let is_major_syncing = match this.network_service.user_protocol_mut().sync_state() {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
-		}, Ordering::Relaxed);
+		};
+
+		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
+		
+		if let Some(metrics) = this.metrics.as_ref() {
+			metrics.is_major_syncing.set(is_major_syncing as u64);
+			metrics.peers_count.set(num_connected_peers as u64);
+		}
 
 		Poll::Pending
 	}

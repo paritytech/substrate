@@ -114,6 +114,7 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	_offchain_workers: Option<Arc<TOc>>,
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
+	prometheus_registry: Option<prometheus_endpoint::Registry>,
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
@@ -225,6 +226,9 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 
 	/// Get a handle to a future that will resolve on exit.
 	fn on_exit(&self) -> ::exit_future::Exit;
+
+	/// Get the prometheus metrics registry, if available.
+	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
@@ -327,6 +331,10 @@ where
 
 	fn on_exit(&self) -> exit_future::Exit {
 		self.exit.clone()
+	}
+
+	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
+		self.prometheus_registry.clone()
 	}
 }
 

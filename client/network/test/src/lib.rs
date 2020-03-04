@@ -640,7 +640,8 @@ pub trait TestNetFactory: Sized {
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
-			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
+			metrics_registry: None,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -713,7 +714,8 @@ pub trait TestNetFactory: Sized {
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
-			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
+			metrics_registry: None,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
