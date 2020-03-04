@@ -75,7 +75,17 @@ pub mod new {
 					})
 					.collect()
 			} else {
-				unimplemented!()
+                C::RuntimeAppPublic::all()
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(index, key)| {
+                        let generic_public = C::GenericPublic::from(key);
+                        let public = generic_public.into();
+                        let account_id = public.clone().into_account();
+                        let account = Account::new(index, account_id, public.clone());
+                        f(&account).map(|res| (account, res))
+                    })
+                    .collect()
 			}
 		}
 	}
@@ -94,7 +104,20 @@ pub mod new {
 					}
 				}
 			} else {
-				unimplemented!()
+                let runtime_keys = C::RuntimeAppPublic::all()
+                    .into_iter()
+                    .enumerate();
+
+                for (index, key) in runtime_keys {
+                    let generic_public = C::GenericPublic::from(key);
+                    let public = generic_public.into();
+                    let account_id = public.clone().into_account();
+                    let account = Account::new(index, account_id, public.clone());
+                    let res = f(&account);
+                    if let Some(res) = res {
+                        return Some((account, res));
+                    }
+                }
 			}
 
 			None
@@ -269,10 +292,6 @@ pub mod new {
 	}
 
 	pub trait AppCrypto<Public, Signature> {
-		// TODO [ToDr]
-		// since now the `SignintTypes` trait extends `System` trait, we can't
-		// really have a single `RuntimeAppPublic` here.
-		// `RuntimeAppPublic` thus needs to be passed in some other way to all the functions.
 		type RuntimeAppPublic: RuntimeAppPublic;
 		// TODO [ToDr] The conversions are messy, clean them up.
 		//
