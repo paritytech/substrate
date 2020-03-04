@@ -950,25 +950,28 @@ decl_storage! {
 
 		/// Snapshot of validators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
-		pub SnapshotValidators get(fn snapshot_validators): Option<Vec<T::AccountId>>;
+		SnapshotValidators get(fn snapshot_validators): Option<Vec<T::AccountId>>;
 
 		/// Snapshot of nominators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
-		pub SnapshotNominators get(fn snapshot_nominators): Option<Vec<T::AccountId>>;
+		SnapshotNominators get(fn snapshot_nominators): Option<Vec<T::AccountId>>;
 
 		/// The current set of staking keys.
-		pub Keys get(fn keys): Vec<T::KeyType>;
+		Keys get(fn keys): Vec<T::KeyType>;
 
 		/// The next validator set. At the end of an era, if this is available (potentially from the
 		/// result of an offchain worker), it is immediately used. Otherwise, the on-chain election
 		/// is executed.
-		pub QueuedElected get(fn queued_elected): Option<ElectionResult<T::AccountId, BalanceOf<T>>>;
+		QueuedElected get(fn queued_elected): Option<ElectionResult<T::AccountId, BalanceOf<T>>>;
 
 		/// The score of the current [`QueuedElected`].
-		pub QueuedScore get(fn queued_score): Option<PhragmenScore>;
+		QueuedScore get(fn queued_score): Option<PhragmenScore>;
 
 		/// Flag to control the execution of the offchain election.
-		pub EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
+		EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
+
+		/// True of the current planned session is final
+		IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
 
 		/// True if network has been upgraded to this version.
 		///
@@ -1100,7 +1103,8 @@ decl_module! {
 		///    this block until the end of the era.
 		fn on_initialize(now: T::BlockNumber) {
 			Self::ensure_storage_upgraded();
-			// @guillaume check: can this ever be none? except for the initial one? And what should I use here? this or ActiveEra?
+			// @guillaume Is using active era okay here? not current era? These two tests are related
+			// offchain_election_flag_is_triggered and is_current_session_final_works
 			let maybe_current_era = Self::active_era();
 			if maybe_current_era.is_none() { return; }
 			let current_era = maybe_current_era.expect("value checked to be 'Some'").index;
@@ -1108,8 +1112,7 @@ decl_module! {
 			if
 				// if we don't have any ongoing offchain compute.
 				Self::era_election_status() == ElectionStatus::Closed &&
-				// and an era is about to be changed.
-				Self::is_current_session_final(current_era)
+				Self::is_current_session_final()
 			{
 				let next_session_change =
 					T::NextSessionChange::estimate_next_session_change(now);
@@ -1801,25 +1804,13 @@ impl<T: Trait> Module<T> {
 		) as ExtendedBalance
 	}
 
-	/// The session index of the current era TODO: @guillaume check
+	/// The session index of the given era.
 	fn start_session_index_of(era: EraIndex) -> SessionIndex {
 		Self::eras_start_session_index(era)
 			.unwrap_or_else(|| {
 				frame_support::print("Error: start_session_index must be set for current_era");
 				0
 			})
-	}
-
-	/// returns true if the end of the current session leads to an era change.
-	fn is_current_session_final(current_era: EraIndex) -> bool {
-		let current_index = T::SessionInterface::current_index();
-		let era_length = current_index
-			.checked_sub(Self::start_session_index_of(current_era))
-			.unwrap_or(0);
-		let session_per_era = T::SessionsPerEra::get()
-			.checked_sub(One::one())
-			.unwrap_or(0);
-		era_length >= session_per_era
 	}
 
 	/// Dump the list of validators and nominators into vectors and keep them on-chain.
@@ -2018,7 +2009,6 @@ impl<T: Trait> Module<T> {
 
 	/// Plan a new session potentially trigger a new era.
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		println!("new session");
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
 
@@ -2027,20 +2017,21 @@ impl<T: Trait> Module<T> {
 			let era_length = session_index.checked_sub(current_era_start_session_index)
 				.unwrap_or(0); // Must never happen.
 
-			dbg!(
-				<frame_system::Module<T>>::block_number(),
-				Self::current_era(),
-				current_era_start_session_index,
-				session_index,
-			);
 			match ForceEra::get() {
 				Forcing::ForceNew => ForceEra::kill(),
 				Forcing::ForceAlways => (),
 				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
-				_ => return None,
+				_ => {
+					// not forcing, not a new era either. If final, set the flag.
+					if era_length + 1 >= <T::SessionsPerEra as Get<SessionIndex>>::get() {
+						IsCurrentSessionFinal::put(true);
+					}
+					return None
+				},
 			}
 
-			dbg!("NEW ERAAAAAAA");
+			// new era.
+			IsCurrentSessionFinal::put(false);
 			Self::new_era(session_index)
 		} else {
 			// Set initial era
@@ -2411,9 +2402,10 @@ impl<T: Trait> Module<T> {
 
 			debug::native::info!(
 				target: "staking",
-				"new validator set of size {:?} has been elected via {:?}",
+				"new validator set of size {:?} has been elected via {:?} for era {:?}",
 				elected_stashes.len(),
 				compute,
+				current_era,
 			);
 
 			Some(elected_stashes)

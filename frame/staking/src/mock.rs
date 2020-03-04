@@ -472,7 +472,7 @@ impl ExtBuilder {
 	}
 	pub fn offchain_phragmen_ext(self) -> Self {
 		self
-			.session_per_era(3)
+			.session_per_era(4)
 			.session_length(5)
 			.election_lookahead(3)
 			.local_key_account(11)
@@ -680,7 +680,7 @@ pub fn advance_session() {
 }
 
 pub fn start_session(session_index: SessionIndex) {
-	assert_eq!(<SessionsPerEra as Get<SessionIndex>>::get(), 1, "start_session can only be used with session length 1.");
+	assert_eq!(<Period as Get<BlockNumber>>::get(), 1, "start_session can only be used with session length 1.");
 	for i in Session::current_index()..session_index {
 		Staking::on_finalize(System::block_number());
 		System::set_block_number((i + 1).into());

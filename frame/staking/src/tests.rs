@@ -1920,7 +1920,6 @@ fn era_is_always_same_length() {
 		let session_per_era = <SessionsPerEra as Get<SessionIndex>>::get();
 
 		start_era(1);
-		// TODO: @guillaume maybe we can use start_session_index_of here.
 		assert_eq!(Staking::eras_start_session_index(active_era()).unwrap(), session_per_era);
 
 		start_era(2);
@@ -2770,29 +2769,20 @@ mod offchain_phragmen {
 			.build()
 			.execute_with(|| {
 				start_era(1);
-				assert_eq!(Session::current_index(), 4);
+				assert_eq!(Session::current_index(), 3);
 				assert_eq!(Staking::current_era(), Some(1));
-				assert_eq!(Staking::is_current_session_final(
-					Staking::active_era().unwrap().index),
-					false,
-				);
+				assert_eq!(Staking::is_current_session_final(), false);
 
 				start_session(4);
-				assert_eq!(Session::current_index(), 5);
+				assert_eq!(Session::current_index(), 4);
 				assert_eq!(Staking::current_era(), Some(1));
-				assert_eq!(Staking::is_current_session_final(
-					Staking::active_era().unwrap().index),
-					true,
-				);
+				assert_eq!(Staking::is_current_session_final(), true);
 
 				start_session(5);
-				assert_eq!(Session::current_index(), 6);
+				assert_eq!(Session::current_index(), 5);
 				// era changed.
 				assert_eq!(Staking::current_era(), Some(2));
-				assert_eq!(Staking::is_current_session_final(
-					Staking::active_era().unwrap().index),
-					false,
-				);
+				assert_eq!(Staking::is_current_session_final(), false);
 			})
 	}
 
@@ -2815,40 +2805,47 @@ mod offchain_phragmen {
 
 				run_to_block(18);
 				assert_session_era!(1, 0);
-				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
-				assert!(Staking::snapshot_nominators().is_none());
-				assert!(Staking::snapshot_validators().is_none());
 
-				run_to_block(39);
+				run_to_block(27);
+				assert_session_era!(2, 0);
+
+				run_to_block(36);
 				assert_session_era!(3, 0);
 
+				// fist era has session 0, which has 0 blocks length, so we have in total 40 blocks
+				// in the era.
+				run_to_block(37);
+				assert_session_era!(3, 0);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(37));
+				assert!(Staking::snapshot_nominators().is_some());
+				assert!(Staking::snapshot_validators().is_some());
+
+				run_to_block(38);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(37));
+
+				run_to_block(39);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(37));
+
 				run_to_block(40);
-				assert_session_era!(4, 0);
+				assert_session_era!(4, 0); // TODO @guillaume I was expecting active era to be bumped by this point. Double check
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 				assert!(Staking::snapshot_nominators().is_none());
 				assert!(Staking::snapshot_validators().is_none());
 
-				run_to_block(46);
-				assert_session_era!(4, 0);
+				run_to_block(86);
+				assert_session_era!(8, 1);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 				assert!(Staking::snapshot_nominators().is_none());
 				assert!(Staking::snapshot_validators().is_none());
 
-				run_to_block(47);
-				assert_session_era!(4, 0);
-				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(47));
+				// second era onwards has 50 blocks per era.
+				run_to_block(87);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(87));
 				assert!(Staking::snapshot_nominators().is_some());
 				assert!(Staking::snapshot_validators().is_some());
 
-				run_to_block(49);
-				assert_session_era!(4, 0);
-				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(47));
-				assert!(Staking::snapshot_nominators().is_some());
-				assert!(Staking::snapshot_validators().is_some());
-
-				run_to_block(50);
-				dbg!("HERE");
-				assert_session_era!(5, 1);
+				run_to_block(90);
+				assert_session_era!(9, 1);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 				assert!(Staking::snapshot_nominators().is_none());
 				assert!(Staking::snapshot_validators().is_none());
@@ -3526,7 +3523,7 @@ mod offchain_phragmen {
 				run_to_block(15);
 
 				// open the election window and create snapshots.
-				run_to_block(27);
+				run_to_block(32);
 
 				// a solution that has been prepared before the slash.
 				let (pre_compact, pre_winners, pre_score) = prepare_submission_with(false, |_| {});
@@ -3678,6 +3675,11 @@ mod offchain_phragmen {
 				Err("fork."),
 			);
 		})
+	}
+
+	#[test]
+	fn forcing_eras_works_with_offchain_fallback_or_submission() {
+		unimplemented!();
 	}
 }
 
