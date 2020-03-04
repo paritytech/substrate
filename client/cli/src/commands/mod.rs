@@ -21,6 +21,11 @@ mod import_blocks_cmd;
 mod check_block_cmd;
 mod revert_cmd;
 mod purge_chain_cmd;
+mod generate_node_key;
+mod generate;
+mod inspect;
+mod sign;
+mod sign_transaction;
 
 use std::fmt::Debug;
 use structopt::StructOpt;
@@ -69,6 +74,9 @@ pub enum Subcommand {
 
 	/// Remove the whole chain data.
 	PurgeChain(purge_chain_cmd::PurgeChainCmd),
+
+	/// Generate a key for a node
+	// GenerateNodeKey(generate_node_key::GenerateNodeKeyCmd),
 }
 
 impl Subcommand {

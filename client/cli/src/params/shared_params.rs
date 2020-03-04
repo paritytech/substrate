@@ -46,6 +46,20 @@ pub struct SharedParams {
 	/// Sets a custom logging filter.
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
 	pub log: Option<String>,
+
+	/// Use interactive shell for entering the password used by the keystore.
+	#[structopt(
+		long = "password-interactive",
+		conflicts_with_all = &[ "password", "password-filename" ]
+	)]
+	pub password_interactive: bool,
+
+	/// Password used by the keystore.
+	#[structopt(
+		long = "password",
+		conflicts_with_all = &[ "password-interactive", "password-filename" ]
+	)]
+	pub password: Option<String>,
 }
 
 impl SharedParams {
