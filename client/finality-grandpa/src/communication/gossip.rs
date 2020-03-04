@@ -1396,17 +1396,16 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 				None => return false, // cannot evaluate until we have a local view.
 			};
 
-			let our_best_commit = local_view.last_commit;
-			let peer_best_commit = peer.view.last_commit;
-
 			match GossipMessage::<Block>::decode(&mut data) {
 				Err(_) => false,
 				Ok(GossipMessage::Commit(full)) => {
-					// we only broadcast our best commit and only if it's
-					// better than last received by peer.
-					Some(full.message.target_number) == our_best_commit &&
-						Some(full.message.target_number) > peer_best_commit
-				}
+                    // we only broadcast commit messages if they're for the same
+                    // set the peer is in and if the commit is better than the
+                    // last received by peer, additionally we make sure to only
+                    // broadcast our best commit.
+                    peer.view.consider_global(set_id, full.message.target_number) == Consider::Accept &&
+                        Some(full.message.target_number) == local_view.last_commit
+                }
 				Ok(GossipMessage::Neighbor(_)) => false,
 				Ok(GossipMessage::CatchUpRequest(_)) => false,
 				Ok(GossipMessage::CatchUp(_)) => false,
