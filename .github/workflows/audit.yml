@@ -1,5 +1,6 @@
 name: Security audit
 on:
+  push:
   pull_request:
     paths: Cargo.lock
   schedule:
