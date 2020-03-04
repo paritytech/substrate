@@ -29,7 +29,6 @@ use sp_externalities::Extensions;
 use sp_state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
-	merge_storage_proofs,
 };
 use hash_db::Hasher;
 
@@ -206,7 +205,7 @@ pub fn prove_execution<Block, S, E>(
 		method,
 		call_data,
 	)?;
-	let total_proof = merge_storage_proofs(vec![init_proof, exec_proof]);
+	let total_proof = StorageProof::merge(vec![init_proof, exec_proof]);
 
 	Ok((result, total_proof))
 }
@@ -259,12 +258,17 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 	let mut changes = OverlayedChanges::default();
 	let trie_backend = create_proof_check_backend(root, remote_proof)?;
 	let next_header = make_next_header(&request.header);
+
+	// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
+	let runtime_code = sp_state_machine::backend::get_runtime_code(&trie_backend)?;
+
 	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
 		&trie_backend,
 		&mut changes,
 		executor,
 		"Core_initialize_block",
 		&next_header.encode(),
+		&runtime_code,
 	)?;
 
 	// execute method
@@ -274,7 +278,9 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 		executor,
 		&request.method,
 		&request.call_data,
-	).map_err(Into::into)
+		&runtime_code,
+	)
+	.map_err(Into::into)
 }
 
 #[cfg(test)]
