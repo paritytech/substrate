@@ -14,7 +14,7 @@ WASM_PACK_URL="https://github.com/rustwasm/wasm-pack/releases/download/$WASM_PAC
 
 
 echo "Downloading wasm-pack from: $WASM_PACK_URL"
-curl -L $WASM_PACK_URL | gzip -d > wasm-pack
+curl -L $WASM_PACK_URL | tar -xzvf > wasm-pack
 chmod +x wasm-pack
 
 #mkdir -p ~/.cargo/bin

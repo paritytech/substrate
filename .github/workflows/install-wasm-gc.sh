@@ -14,7 +14,7 @@ WASM_GC_URL="https://github.com/alexcrichton/wasm-gc/releases/download/$WASM_GC_
 
 
 echo "Downloading wasm-gc from: $WASM_GC_URL"
-curl -L $WASM_GC_URL | gzip -d > wasm-gc
+curl -L $WASM_GC_URL | tar -xzvf > wasm-gc
 chmod +x wasm-gc
 
 #mkdir -p ~/.cargo/bin
