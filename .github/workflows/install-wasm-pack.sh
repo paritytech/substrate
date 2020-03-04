@@ -10,7 +10,7 @@ if [ "$(uname -s)" == "Darwin" ]; then
 else
   WASM_PACK_HOST_TRIPLE="x86_64-unknown-linux-gnu"
 fi
-WASM_PACK_URL="https://github.com/rustwasm/wasm-pack/releases/download/$WASM_PACK_VERSION/wasm-pack-$WASM_PACK_VERSION-$WASM_PACK_HOST_TRIPLE.gz"
+WASM_PACK_URL="https://github.com/rustwasm/wasm-pack/releases/download/$WASM_PACK_VERSION/wasm-pack-$WASM_PACK_VERSION-$WASM_PACK_HOST_TRIPLE.tar.gz"
 
 
 echo "Downloading wasm-pack from: $WASM_PACK_URL"

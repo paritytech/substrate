@@ -10,7 +10,7 @@ if [ "$(uname -s)" == "Darwin" ]; then
 else
   WASM_GC_HOST_TRIPLE="x86_64-unknown-linux-musl"
 fi
-WASM_GC_URL="https://github.com/alexcrichton/wasm-gc/releases/download/$WASM_GC_VERSION/wasm-gc-$WASM_GC_HOST_TRIPLE.gz"
+WASM_GC_URL="https://github.com/alexcrichton/wasm-gc/releases/download/$WASM_GC_VERSION/wasm-gc-$WASM_GC_HOST_TRIPLE.tar.gz"
 
 
 echo "Downloading wasm-gc from: $WASM_GC_URL"

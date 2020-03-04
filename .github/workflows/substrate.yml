@@ -45,11 +45,6 @@ jobs:
         with:
           toolchain:                 nightly
           target:                    wasm32-unknown-unknown
-      - name:                        Chown fix
-        shell:                       bash
-        run:                         |
-          sudo chown -R runner ~/.cargo/registry
-          sudo chown -R runner ~/.rustup
       - name:                        Cache cargo registry
         uses:                        actions/cache@v1.1.2
         with:
