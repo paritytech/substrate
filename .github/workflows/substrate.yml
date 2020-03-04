@@ -9,6 +9,7 @@ jobs:
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
+      CARGO_HOME:                    "/usr/local/cargo"
       BUILD_DUMMY_WASM_BINARY:       1
       CARGO_INCREMENTAL:               0
     steps:
@@ -63,6 +64,7 @@ jobs:
     container:                       parity/rust-builder:latest
     env:
       BUILD_DUMMY_WASM_BINARY:       1
+      CARGO_HOME:                    "/usr/local/cargo"
       CARGO_INCREMENTAL:               0
     steps:
       - name:                        Checkout sources
@@ -115,6 +117,7 @@ jobs:
     container:                       parity/rust-builder:latest
     env:
       RUSTFLAGS:                     "-Cdebug-assertions=y"
+      CARGO_HOME:                    "/usr/local/cargo"
       CARGO_INCREMENTAL:               0
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
@@ -168,6 +171,7 @@ jobs:
     container:                       parity/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
+      CARGO_HOME:                    "/usr/local/cargo"
       CARGO_INCREMENTAL:               0
       RUST_BACKTRACE:                1
     steps:
@@ -220,8 +224,7 @@ jobs:
     runs-on:                         ubuntu-latest
     container:                       parity/rust-builder:latest
     env:
-      CC:                            "clang-9"
-      CXX:                           "clang-9"
+      CARGO_HOME:                    "/usr/local/cargo"
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:               0
       RUST_BACKTRACE:                1
@@ -276,6 +279,7 @@ jobs:
     container:                       parity/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
+      CARGO_HOME:                    "/usr/local/cargo"
       CARGO_INCREMENTAL:               0
       BUILD_DUMMY_WASM_BINARY:       1
     steps:
@@ -331,6 +335,7 @@ jobs:
     container:                       parity/rust-builder:latest
     env:
       CARGO_INCREMENTAL:               0
+      CARGO_HOME:                    "/usr/local/cargo"
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
@@ -392,6 +397,7 @@ jobs:
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:               0
+      CARGO_HOME:                    "/usr/local/cargo"
       RUST_BACKTRACE:                1
     steps:
       - name:                        Checkout sources
