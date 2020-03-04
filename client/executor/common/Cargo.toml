@@ -12,7 +12,7 @@ documentation = "https://docs.rs/sc-executor-common/"
 [dependencies]
 log = "0.4.8"
 derive_more = "0.99.2"
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+codec = { package = "parity-scale-codec", version = "1.2.0" }
 wasmi = "0.6.2"
 sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
 sp-allocator = { version = "2.0.0-alpha.2", path = "../../../primitives/allocator" }

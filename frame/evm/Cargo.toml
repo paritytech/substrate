@@ -10,7 +10,7 @@ description = "FRAME EVM contracts pallet"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false }
 frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
 pallet-timestamp = { version = "2.0.0-alpha.2", default-features = false, path = "../timestamp" }
