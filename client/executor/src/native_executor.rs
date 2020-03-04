@@ -101,10 +101,6 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	pub fn new(fallback_method: WasmExecutionMethod, default_heap_pages: Option<u64>) -> Self {
 		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions();
-		// Add the old and deprecated host functions as well, so that we support old wasm runtimes.
-		host_functions.extend(
-			crate::deprecated_host_interface::SubstrateExternals::host_functions(),
-		);
 
 		// Add the custom host functions provided by the user.
 		host_functions.extend(D::ExtendHostFunctions::host_functions());

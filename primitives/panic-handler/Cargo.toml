@@ -1,12 +1,13 @@
 [package]
 name = "sp-panic-handler"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Substrate panic handler."
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Custom panic hook with bug report link"
+documentation = "https://docs.rs/sp-panic-handler"
 
 [dependencies]
 backtrace = "0.3.38"

@@ -65,7 +65,7 @@ mod known_os {
 		Http(hyper::http::Error),
 		/// i/o error.
 		Io(std::io::Error),
-		#[display(fmt = "Prometheus exporter port {} already in use.", _0)]
+		#[display(fmt = "Prometheus port {} already in use.", _0)]
 		PortInUse(SocketAddr)
 	}
 

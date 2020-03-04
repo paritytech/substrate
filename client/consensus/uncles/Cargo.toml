@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-uncles"
-version = "0.8.0-alpha.1"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic uncle inclusion utilities for consensus"
 edition = "2018"
@@ -9,10 +9,10 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sc-client-api = { version = "2.0.0-alpha.1", path = "../../api" }
-sp-core = { version = "2.0.0-alpha.1", path = "../../../primitives/core" }
-sp-runtime = { version = "2.0.0-alpha.1", path = "../../../primitives/runtime" }
-sp-authorship = { version = "2.0.0-alpha.1", path = "../../../primitives/authorship" }
-sp-consensus = { version = "0.8.0-alpha.1", path = "../../../primitives/consensus/common" }
-sp-inherents = { version = "2.0.0-alpha.1", path = "../../../primitives/inherents" }
+sc-client-api = { version = "2.0.0-alpha.2", path = "../../api" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
+sp-authorship = { version = "2.0.0-alpha.2", path = "../../../primitives/authorship" }
+sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/common" }
+sp-inherents = { version = "2.0.0-alpha.2", path = "../../../primitives/inherents" }
 log = "0.4.8"

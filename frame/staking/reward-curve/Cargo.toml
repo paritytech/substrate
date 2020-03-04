@@ -1,11 +1,12 @@
 [package]
 name = "pallet-staking-reward-curve"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Reward Curve for FRAME staking pallet"
 
 [lib]
 proc-macro = true
@@ -17,4 +18,4 @@ proc-macro2 = "1.0.6"
 proc-macro-crate = "0.1.4"
 
 [dev-dependencies]
-sp-runtime = { version = "2.0.0-alpha.1", path = "../../../primitives/runtime" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
