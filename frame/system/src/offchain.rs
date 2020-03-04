@@ -178,7 +178,7 @@ pub mod new {
 		) -> Self::Result {
 			 self.for_any(|account| {
 				let call = f(account);
-				self.submit_transaction(account, call)
+				self.submit_signed_transaction(account, call)
 			})
 		}
 	}
@@ -196,7 +196,7 @@ pub mod new {
 		) -> Self::Result {
 			self.for_all(|account| {
 				let call = f(account);
-				self.submit_transaction(account, call)
+				self.submit_signed_transaction(account, call)
 			})
 		}
 	}
@@ -206,18 +206,23 @@ pub mod new {
 		C: AppCrypto<T::Public, T::Signature>,
 		LocalCall,
 	> SendUnsignedTransaction<T, LocalCall> for Signer<T, C, ForAny> {
-		type Result = (Account<T>, Result<(), ()>);
+		type Result = Option<(Account<T>, Result<(), ()>)>;
 
 		fn send_unsigned_transaction<TPayload, F>(
 			&self,
-			_f: F,
-			_f2: impl Fn(TPayload, T::Signature) -> LocalCall,
+			f: F,
+			f2: impl Fn(TPayload, T::Signature) -> LocalCall,
 		) -> Self::Result
 		where
 			F: Fn(&Account<T>) -> TPayload,
 			TPayload: SignedPayload<T>
 		{
-				unimplemented!()
+			self.for_any(|account| {
+				let payload = f(account);
+				let signature= payload.sign::<C>()?;
+				let call = f2(payload, signature);
+				self.submit_unsigned_transaction(call)
+			})
 		}
 	}
 
@@ -226,17 +231,22 @@ pub mod new {
 		C: AppCrypto<T::Public, T::Signature>,
 		LocalCall,
 	> SendUnsignedTransaction<T, LocalCall> for Signer<T, C, ForAll> {
-		type Result = Vec<Option<T::Signature>>;
+		type Result = Vec<(Account<T>, Result<(), ()>)>;
 
 		fn send_unsigned_transaction<TPayload, F>(
 			&self,
-			_f: F,
-			_f2: impl Fn(TPayload, T::Signature) -> LocalCall,
+			f: F,
+			f2: impl Fn(TPayload, T::Signature) -> LocalCall,
 		) -> Self::Result
 		where
 			F: Fn(&Account<T>) -> TPayload,
 			TPayload: SignedPayload<T> {
-				unimplemented!()
+			self.for_all(|account| {
+				let payload = f(account);
+				let signature = payload.sign::<C>()?;
+				let call = f2(payload, signature);
+				self.submit_unsigned_transaction(call)
+			})
 		}
 	}
 
@@ -358,7 +368,7 @@ pub mod new {
 			f: impl Fn(&Account<T>) -> LocalCall,
 		) -> Self::Result;
 
-		fn submit_transaction(
+		fn submit_signed_transaction(
 			&self,
 			account: &Account<T>,
 			call: LocalCall
@@ -394,19 +404,27 @@ pub mod new {
 	}
 
 	pub trait SendUnsignedTransaction<
-		T: SigningTypes + SendTransactionTypes<C>,
-		C,
+		T: SigningTypes + SendTransactionTypes<LocalCall>,
+		LocalCall,
 	> {
 		type Result;
 
 		fn send_unsigned_transaction<TPayload, F>(
 			&self,
 			f: F,
-			f2: impl Fn(TPayload, T::Signature) -> C,
+			f2: impl Fn(TPayload, T::Signature) -> LocalCall,
 		) -> Self::Result
 		where
 			F: Fn(&Account<T>) -> TPayload,
 			TPayload: SignedPayload<T>;
+
+		fn submit_unsigned_transaction(
+			&self,
+			call: LocalCall
+		) -> Option<Result<(), ()>> {
+			let xt = T::Extrinsic::new(call.into(), None)?;
+			Some(sp_io::offchain::submit_transaction(xt.encode()))
+		}
 	}
 
 	pub trait SendRawUnsignedTransaction<T: SendTransactionTypes<C>, C> {
