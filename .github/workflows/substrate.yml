@@ -63,11 +63,6 @@ jobs:
         with:
           path:                ~/.cargo/git
           key:                 ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Cache cargo build
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                target
-          key:                 ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Cache sccache
         uses:                  actions/cache@v1.1.2
         with:
@@ -104,8 +99,8 @@ jobs:
         continue-on-error:     true
         shell: bash
         run: |
-          la /mnt
-          la /home/runner
+          ls -a /mnt
+          ls -a /home/runner
           rustup show
           cargo --version
           sccache --version
