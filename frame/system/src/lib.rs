@@ -526,6 +526,9 @@ decl_module! {
 			ensure_root(origin)?;
 			for i in &items {
 				storage::unhashed::put_raw(&i.0, &i.1);
+				if i.0 == well_known_keys::CODE {
+					RuntimeUpgraded::put(true);
+				}
 			}
 		}
 
@@ -1976,6 +1979,26 @@ mod tests {
 				System::events(),
 				vec![EventRecord { phase: Phase::ApplyExtrinsic(0), event: 102u16, topics: vec![] }],
 			);
+
+			assert_eq!(RuntimeUpgraded::get(), true);
+		});
+	}
+
+	#[test]
+	fn runtime_upgraded_with_set_storage() {
+		let executor = substrate_test_runtime_client::new_native_executor();
+		let mut ext = new_test_ext();
+		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
+		ext.execute_with(|| {
+			System::set_storage(
+				RawOrigin::Root.into(),
+				vec![(
+					well_known_keys::CODE.to_vec(),
+					substrate_test_runtime_client::runtime::WASM_BINARY.to_vec()
+				)],
+			).unwrap();
+
+			assert_eq!(RuntimeUpgraded::get(), true);
 		});
 	}
 }
