@@ -152,12 +152,20 @@ where
 
 	/// Push onto the block's list of extrinsics.
 	///
-	/// This will treat incoming extrinsic `xt` as trusted and skip signature check (for signed transactions).
-	pub fn push_trusted(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
+	/// This will treat incoming extrinsic `xt` as trusted and skip signature check
+	/// (for signed transactions).
+	pub fn push_trusted(
+		&mut self,
+		xt: <Block as BlockT>::Extrinsic,
+	) -> Result<(), ApiErrorFor<A, Block>> {
 		self.push_internal(xt, true)
 	}
 
-	fn push_internal(&mut self, xt: <Block as BlockT>::Extrinsic, skip_signature: bool) -> Result<(), ApiErrorFor<A, Block>> {
+	fn push_internal(
+		&mut self,
+		xt: <Block as BlockT>::Extrinsic,
+		skip_signature: bool,
+	) -> Result<(), ApiErrorFor<A, Block>> {
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
@@ -248,15 +256,21 @@ mod tests {
 	use sp_blockchain::HeaderBackend;
 	use sp_core::Blake2Hasher;
 	use sp_state_machine::Backend;
+	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
 
 	#[test]
 	fn block_building_storage_proof_does_not_include_runtime_by_default() {
-		let client = substrate_test_runtime_client::new();
+		let builder = substrate_test_runtime_client::TestClientBuilder::new();
+		let backend = builder.backend();
+		let client = builder.build();
 
-		let block = client.new_block_at(
-			&BlockId::Hash(client.info().best_hash),
-			Default::default(),
+		let block = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
 			RecordProof::Yes,
+			Default::default(),
+			&*backend,
 		).unwrap().build().unwrap();
 
 		let proof = block.proof.expect("Proof is build on request");
