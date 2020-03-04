@@ -276,7 +276,7 @@ use sp_runtime::{
 	Perbill, PerU16, PerThing, RuntimeDebug, RuntimeAppPublic,
 	curve::PiecewiseLinear,
 	traits::{
-		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
+		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
 		EnsureOrigin, Member, SignedExtension,
 	},
 	transaction_validity::{
@@ -1489,14 +1489,14 @@ decl_module! {
 			}
 		}
 
+		// ----- Root calls.
+
 		/// The ideal number of validators.
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
 		}
-
-		// ----- Root calls.
 
 		/// Force there to be no new eras indefinitely.
 		///
@@ -1812,15 +1812,6 @@ impl<T: Trait> Module<T> {
 		) as ExtendedBalance
 	}
 
-	/// The session index of the given era.
-	fn start_session_index_of(era: EraIndex) -> SessionIndex {
-		Self::eras_start_session_index(era)
-			.unwrap_or_else(|| {
-				frame_support::print("Error: start_session_index must be set for current_era");
-				0
-			})
-	}
-
 	/// Dump the list of validators and nominators into vectors and keep them on-chain.
 	///
 	/// This data is used to efficiently evaluate election results. returns `true` if the operation
@@ -2022,7 +2013,11 @@ impl<T: Trait> Module<T> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
 
-			let current_era_start_session_index = Self::start_session_index_of(current_era);
+			let current_era_start_session_index = Self::eras_start_session_index(current_era)
+				.unwrap_or_else(|| {
+					frame_support::print("Error: start_session_index must be set for current_era");
+					0
+				});
 
 			let era_length = session_index.checked_sub(current_era_start_session_index)
 				.unwrap_or(0); // Must never happen.
@@ -2033,7 +2028,7 @@ impl<T: Trait> Module<T> {
 				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 				_ => {
 					// not forcing, not a new era either. If final, set the flag.
-					if era_length + 1 >= <T::SessionsPerEra as Get<SessionIndex>>::get() {
+					if era_length + 1 >= T::SessionsPerEra::get() {
 						IsCurrentSessionFinal::put(true);
 					}
 					return None
@@ -3053,16 +3048,24 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 		if let Some(inner_call) = call.is_sub_type() {
 			if let ElectionStatus::Open(_) = <Module<T>>::era_election_status() {
 				match inner_call {
-					Call::<T>::bond(..) |
-					Call::<T>::unbond(..) |
-					Call::<T>::bond_extra(..) |
-					Call::<T>::rebond(..) |
-					Call::<T>::validate(..) |
-					Call::<T>::nominate(..) |
-					Call::<T>::chill(..) => {
+					Call::<T>::set_payee(..) |
+					Call::<T>::set_controller(..) |
+					Call::<T>::set_validator_count(..) |
+					Call::<T>::force_no_eras(..) |
+					Call::<T>::force_new_era(..) |
+					Call::<T>::set_invulnerables(..) |
+					Call::<T>::force_unstake(..) |
+					Call::<T>::force_new_era_always(..) |
+					Call::<T>::cancel_deferred_slash(..) |
+					Call::<T>::set_history_depth(..) |
+					Call::<T>::reap_stash(..) |
+					Call::<T>::submit_election_solution(..) |
+					Call::<T>::submit_election_solution_unsigned(..) => {
+						// These calls are allowed. Nothing.
+					}
+					_ => {
 						return Err(InvalidTransaction::Stale.into());
 					}
-					_ => { /* no problem */ }
 				}
 			}
 		}
