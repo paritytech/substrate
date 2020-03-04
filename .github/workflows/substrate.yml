@@ -8,11 +8,12 @@ jobs:
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
+      CARGO_INCREMENTAL:               0
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -73,11 +74,12 @@ jobs:
       CC:                            "clang-9"
       CXX:                           "clang-9"
       BUILD_DUMMY_WASM_BINARY:       1
+      CARGO_INCREMENTAL:               0
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -148,11 +150,12 @@ jobs:
       CC:                            "clang-9"
       CXX:                           "clang-9"
       BUILD_DUMMY_WASM_BINARY:       1
+      CARGO_INCREMENTAL:               0
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -222,12 +225,13 @@ jobs:
       CC:                            "clang-9"
       CXX:                           "clang-9"
       RUSTFLAGS:                     "-Cdebug-assertions=y"
+      CARGO_INCREMENTAL:               0
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -297,12 +301,13 @@ jobs:
       CC:                            "clang-9"
       CXX:                           "clang-9"
       RUSTFLAGS:               "-Cdebug-assertions=y"
+      CARGO_INCREMENTAL:               0
       RUST_BACKTRACE:                1
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -372,12 +377,13 @@ jobs:
       CC:                            "clang-9"
       CXX:                           "clang-9"
       RUSTFLAGS:               "-Cdebug-assertions=y"
+      CARGO_INCREMENTAL:               0
       RUST_BACKTRACE:                1
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -447,12 +453,13 @@ jobs:
       CC:                            "clang-9"
       CXX:                           "clang-9"
       RUSTFLAGS:               "-Cdebug-assertions=y"
+      CARGO_INCREMENTAL:               0
       BUILD_DUMMY_WASM_BINARY:       1
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -523,11 +530,12 @@ jobs:
     env:
       CC:                            "clang-9"
       CXX:                           "clang-9"
+      CARGO_INCREMENTAL:               0
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -643,12 +651,13 @@ jobs:
       CC:                            "clang-9"
       CXX:                           "clang-9"
       RUSTFLAGS:               "-Cdebug-assertions=y"
+      CARGO_INCREMENTAL:               0
       RUST_BACKTRACE:                1
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -725,7 +734,7 @@ jobs:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -746,7 +755,7 @@ jobs:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -806,7 +815,7 @@ jobs:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
@@ -866,7 +875,7 @@ jobs:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
         with:
-          fetch-depth:               50
+          fetch-depth:               100
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
