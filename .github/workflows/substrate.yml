@@ -8,6 +8,7 @@ jobs:
     env:
       CC:                      "clang-9"
       CXX:                     "clang-9"
+      RUSTC_WRAPPER:           sccache
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
@@ -54,6 +55,13 @@ jobs:
         with:
           path:                ~/.cargo/registry
           key:                 ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Cleanup toolchains
+        run:                   rm -rf /home/runner/.rustup/toolchains/*/share
+      - name:                  Cache rustup
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ~/.rustup
+          key:                 ${{ runner.os }}-cargo-rustup-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Cache cargo index
         uses:                  actions/cache@v1.1.2
         with:
@@ -67,27 +75,39 @@ jobs:
       - name:                  Cache sccache
         uses:                  actions/cache@v1.1.2
         with:
-          path:                "/home/runner/.cache/sccache"
-          key:                 ${{ runner.os }}-sccache--${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Cleanup toolchains
-        run:                   rm -rf /home/runner/.rustup/toolchains/*/share
+          path:                ~/.cache/sccache
+          key:                 ${{ runner.os }}-sccache-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Install sccache for Linux
         shell:                 pwsh
         run:                   pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
       - name:                  Sccache statistics
         run:                   sccache --show-stats
-      - name:                  Run cargo check benches
+      - name:                  Install wasm-gc
         uses:                  actions-rs/cargo@v1
         with:
           command:             install
           toolchain:           nightly
-          args:                --git https://github.com/alexcrichton/wasm-gc
+          args:                --root tools --git https://github.com/alexcrichton/wasm-gc
       - name:                  Install cargo-web, wasm-pack
         uses:                  actions-rs/cargo@v1
+        continue-on-error:     true
         with:
           command:             install
           toolchain:           stable
-          args:                --root tools --force cargo-audit cargo-web wasm-pack
+          args:                --root tools cargo-web wasm-pack
+      - name:                  Cache tools
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ~/tools
+          key:                 ${{ runner.os }}-cargo-tools-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Stop sccache
+        if:                    always()
+        run:                   sccache --stop-server
+      - name:                  Prepare build directory for cache
+        shell:                 bash
+        run:                   bash scripts/actions/clean-target.sh
+      - name:                  Disk statistics
+        run:                   df -h --total
 
 
   linux-cargo-check-benches:
@@ -95,13 +115,11 @@ jobs:
     needs:                     [linux-cache-tools]
     runs-on:                   ubuntu-latest
     env:
-      CC:                      "clang"
-      CXX:                     "clang++"
-      RUST_TOOLCHAIN:          stable
+      CC:                      "clang-9"
+      CXX:                     "clang-9"
       RUSTC_WRAPPER:           sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
-      - run:                   echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
@@ -111,58 +129,73 @@ jobs:
         run:                   git submodule update --init --recursive
       - name:                  Prepare for restoring caches
         run:                   |
-          rm -rf /home/runner/.rustup
-          rm -rf /home/runner/.cargo/git
-          rm -rf /home/runner/.cargo/registry
-      - name:                  Restore /home/runner/.rustup
+          rm -rf ~/.rustup
+          rm -rf ~/.cargo/git
+          rm -rf ~/.cargo/registry
+          rm -rf ~/tools
+          echo "::add-path::$GITHUB_WORKSPACE/tools"
+          printenv
+      - name:                  Restore ~/.rustup
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /home/runner/.rustup
-          key:                 rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
-      - name:                  Restore /home/runner/.cache/sccache
+          path:                ~/.rustup
+          key:                 ${{ runner.os }}-cargo-rustup-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ~/.cache/sccache
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /home/runner/.cache/sccache
-          key:                 sccache-[linux-cargo-check-benches]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
-      - name:                  Restore /home/runner/tools/bin
+          path:                ~/.cache/sccache
+          key:                 sccache-[linux-cargo-check-benches]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ~/tools/
         uses:                  actions/cache@v1.1.2
         with:
-          path:                tools/bin
-          key:                 tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
-      - name:                  Restore /home/runner/.cargo/git
+          path:                ~/tools
+          key:                 ${{ runner.os }}-cargo-tools-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ~/.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /home/runner/.cargo/git
+          path:                ~/.cargo/git
           key:                 cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore /home/runner/.cargo/registry
+      - name:                  Restore ~/.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /home/runner/.cargo/registry
+          path:                ~.cargo/registry
           key:                 cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
         with:
           path:                target
           key:                 cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Install sccache for Linux
+        shell:                 pwsh
+        run:                   pwsh .github/workflows/install-sccache.ps1 ${{ runner.os}}
+      - name:                  Sccache statistics
+        run:                   sccache --show-stats
       - name:                  Run cargo check benches
         uses:                  actions-rs/cargo@v1
         with:
           command:             check
           toolchain:           nightly
           args:                --benches --all
+      - name:                  Stop sccache
+        if:                    always()
+        run:                   sccache --stop-server
+      - name:                  Prepare build directory for cache
+        shell:                 bash
+        run:                   bash scripts/actions/clean-target.sh
+      - name:                  Disk statistics
+        run:                   df -h --total
 
   linux-cargo-check-subkey:
     name:                      Cargo check subkey
     needs:                     [linux-cache-tools]
     runs-on:                   ubuntu-latest
     env:
-      CC:                      "clang"
-      CXX:                     "clang++"
-      RUST_TOOLCHAIN:          stable
+      CC:                      "clang-9"
+      CXX:                     "clang-9"
       RUSTC_WRAPPER:           sccache
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
-      - run:                   echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
+      - run:                   echo "::add-path::$GITHUB_WORKSPACE/tools" && printenv
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
