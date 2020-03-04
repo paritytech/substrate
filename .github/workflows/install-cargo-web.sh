@@ -8,7 +8,7 @@ CARGO_WEB_VERSION=$(echo $CARGO_WEB_RELEASE | sed -e 's/.*"tag_name":"\([^"]*\)"
 if [ "$(uname -s)" == "Darwin" ]; then
   CARGO_WEB_HOST_TRIPLE="x86_64-apple-darwin"
 else
-  CARGO_WEB_HOST_TRIPLE="x86_64-unknown-linux-musl"
+  CARGO_WEB_HOST_TRIPLE="x86_64-unknown-linux-gnu"
 fi
 CARGO_WEB_URL="https://github.com/koute/cargo-web/releases/download/$CARGO_WEB_VERSION/cargo-web-$CARGO_WEB_HOST_TRIPLE.gz"
 
