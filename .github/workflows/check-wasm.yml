@@ -28,7 +28,12 @@ jobs:
         run: |
            rustup update
            rustup show
-           rustup target add wasm32-unknown-unknown
+           echo "CARGO_HOME: "$CARGO_HOME
+           ls -a $CARGO_HOME/.cargo/git
+           ls -a $CARGO_HOME/.cargo/registry
+           printenv
+
+           # rustup target add wasm32-unknown-unknown
            # WASM support is in progress. As more and more crates support WASM, we
            # should add entries here. See https://github.com/paritytech/substrate/issues/2416
            time cargo build --target=wasm32-unknown-unknown -p sp-io
@@ -41,6 +46,8 @@ jobs:
            time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
            # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
            time cargo build --target=wasm32-unknown-unknown --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser"
+           echo "-----------"
+           ls -a target 
       - name:                        Stop sccache
         if:                          always()
         run:                         sccache --stop-server
