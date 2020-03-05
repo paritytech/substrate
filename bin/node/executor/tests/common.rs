@@ -71,7 +71,7 @@ pub fn executor_call<
 	native_call: Option<NC>,
 ) -> (Result<NativeOrEncoded<R>>, bool) {
 	let mut t = t.ext();
-	executor().call::<_, R, NC>(
+	executor().call::<R, NC>(
 		&mut t,
 		method,
 		data,

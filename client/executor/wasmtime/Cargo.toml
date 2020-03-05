@@ -10,7 +10,7 @@ description = "Defines a `WasmRuntime` that uses the Wasmtime JIT to execute."
 
 [dependencies]
 log = "0.4.8"
-wasmi = "0.6.2"
+scoped-tls = "1.0"
 parity-wasm = "0.41.0"
 codec = { package = "parity-scale-codec", version = "1.2.0" }
 sc-executor-common = { version = "0.8.0-alpha.2", path = "../common" }
@@ -18,8 +18,7 @@ sp-wasm-interface = { version = "2.0.0-alpha.2", path = "../../../primitives/was
 sp-runtime-interface = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
 sp-allocator = { version = "2.0.0-alpha.2", path = "../../../primitives/allocator" }
-
-wasmtime = "0.11"
+wasmtime = { git = "https://github.com/paritytech/wasmtime", branch = "a-thread-safe-api" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
