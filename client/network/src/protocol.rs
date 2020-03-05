@@ -539,6 +539,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.behaviour.is_open(peer_id)
 	}
 
+	/// Returns the list of all the peers that the peerset currently requests us to be connected to.
+	pub fn requested_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.behaviour.requested_peers()
+	}
+
+	/// Returns the number of discovered nodes that we keep in memory.
+	pub fn num_discovered_peers(&self) -> usize {
+		self.behaviour.num_discovered_peers()
+	}
+
 	/// Disconnects the given peer if we are connected to it.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId) {
 		self.behaviour.disconnect_peer(peer_id)
