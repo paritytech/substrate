@@ -180,6 +180,8 @@ impl<N: Ord> View<N> {
 	}
 }
 
+/// A local view of protocol state. Only differs from `View` in that we also
+/// track the round and set id at which the last commit was observed.
 struct LocalView<N> {
 	round: Round,
 	set_id: SetId,
@@ -187,6 +189,8 @@ struct LocalView<N> {
 }
 
 impl<N> LocalView<N> {
+	/// Converts the local view to a `View` discarding round and set id
+	/// information about the last commit.
 	fn as_view(&self) -> View<&N> {
 		View {
 			round: self.round,
@@ -203,6 +207,7 @@ impl<N> LocalView<N> {
 		}
 	}
 
+	/// Returns the height of the block that the last observed commit finalizes.
 	fn last_commit_height(&self) -> Option<&N> {
 		self.last_commit.as_ref().map(|(number, _, _)| number)
 	}
