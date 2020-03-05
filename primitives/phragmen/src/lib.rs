@@ -613,7 +613,7 @@ pub fn evaluate_support<AccountId>(
 }
 
 /// Compares two sets of phragmen scores based on desirability and returns true if `that` is
-/// better `this`.
+/// better than `this`.
 ///
 /// Evaluation is done in a lexicographic manner.
 ///
@@ -639,11 +639,11 @@ pub fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool {
 ///
 /// No value is returned from the function and the `supports` parameter is updated.
 ///
-/// `assignments`: exactly the same is the output of phragmen.
-/// `supports`: mutable reference to s `SupportMap`. This parameter is updated.
-/// `tolerance`: maximum difference that can occur before an early quite happens.
-/// `iterations`: maximum number of iterations that will be processed.
-/// `stake_of`: something that can return the stake stake of a particular candidate or voter.
+/// - `assignments`: exactly the same is the output of phragmen.
+/// - `supports`: mutable reference to s `SupportMap`. This parameter is updated.
+/// - `tolerance`: maximum difference that can occur before an early quite happens.
+/// - `iterations`: maximum number of iterations that will be processed.
+/// - `stake_of`: something that can return the stake stake of a particular candidate or voter.
 pub fn equalize<Balance, AccountId, C, FS>(
 	mut assignments: Vec<StakedAssignment<AccountId>>,
 	supports: &mut SupportMap<AccountId>,
