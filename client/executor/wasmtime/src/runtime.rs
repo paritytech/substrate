@@ -75,6 +75,7 @@ unsafe impl Send for WasmtimeInstance {}
 impl WasmInstance for WasmtimeInstance {
 	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
 		// TODO: reuse the instance and reset globals after call
+		// https://github.com/paritytech/substrate/issues/5141
 		let instance = Rc::new(InstanceWrapper::new(&self.module, &self.imports, self.heap_pages)?);
 		call_method(
 			instance,
