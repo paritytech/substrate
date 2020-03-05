@@ -349,6 +349,7 @@ pub mod tests {
 	use sp_runtime::{generic::BlockId, traits::BlakeTwo256};
 	use sp_state_machine::Backend;
 	use super::*;
+	use sc_client_api::{StorageProvider, ProofProvider};
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
@@ -378,7 +379,7 @@ pub mod tests {
 			.and_then(|v| Decode::decode(&mut &v.0[..]).ok()).unwrap();
 		let remote_read_proof = remote_client.read_proof(
 			&remote_block_id,
-			&[well_known_keys::HEAP_PAGES],
+			&mut std::iter::once(well_known_keys::HEAP_PAGES),
 		).unwrap();
 
 		// check remote read proof locally
@@ -426,7 +427,7 @@ pub mod tests {
 			&remote_block_id,
 			b":child_storage:default:child1",
 			CHILD_INFO_1,
-			&[b"key1"],
+			&mut std::iter::once("key1".as_bytes()),
 		).unwrap();
 
 		// check locally

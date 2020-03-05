@@ -39,10 +39,9 @@ use rpc::{
 };
 
 use sc_rpc_api::Subscriptions;
-use sc_client_api::backend::Backend;
-use sp_blockchain::Error as ClientError;
+use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sc_client::{
-	BlockchainEvents, Client, CallExecutor,
+	BlockchainEvents,
 	light::{
 		blockchain::{future_header, RemoteBlockchain},
 		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest},
@@ -60,8 +59,8 @@ use super::{StateBackend, error::{FutureResult, Error}, client_err};
 type StorageMap = HashMap<StorageKey, Option<StorageData>>;
 
 /// State API backend for light nodes.
-pub struct LightState<Block: BlockT, F: Fetcher<Block>, B, E, RA> {
-	client: Arc<Client<B, E, Block, RA>>,
+pub struct LightState<Block: BlockT, F: Fetcher<Block>, Client> {
+	client: Arc<Client>,
 	subscriptions: Subscriptions,
 	version_subscriptions: SimpleSubscriptions<Block::Hash, RuntimeVersion>,
 	storage_subscriptions: Arc<Mutex<StorageSubscriptions<Block>>>,
@@ -134,16 +133,14 @@ impl<Hash, V> SharedRequests<Hash, V> for SimpleSubscriptions<Hash, V> where
 	}
 }
 
-impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, B, E, RA>
+impl<Block: BlockT, F: Fetcher<Block> + 'static, Client> LightState<Block, F, Client>
 	where
 		Block: BlockT,
-		B: Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
+		Client: HeaderBackend<Block> + Send + Sync + 'static,
 {
 	/// Create new state API backend for light nodes.
 	pub fn new(
-		client: Arc<Client<B, E, Block, RA>>,
+		client: Arc<Client>,
 		subscriptions: Subscriptions,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
@@ -164,16 +161,14 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, 
 
 	/// Returns given block hash or best block hash if None is passed.
 	fn block_or_best(&self, hash: Option<Block::Hash>) -> Block::Hash {
-		hash.unwrap_or_else(|| self.client.chain_info().best_hash)
+		hash.unwrap_or_else(|| self.client.info().best_hash)
 	}
 }
 
-impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, B, E, RA>
+impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Client>
 	where
 		Block: BlockT,
-		B: Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
+		Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 		F: Fetcher<Block> + 'static
 {
 	fn call(
