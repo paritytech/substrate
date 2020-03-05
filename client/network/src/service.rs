@@ -738,68 +738,60 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 
 struct Metrics {
 	// This list is ordered alphabetically
-	average_download_per_sec: Gauge<U64>,
-	average_upload_per_sec: Gauge<U64>,
-	import_queue_block_submits: Counter<U64>,
-	import_queue_finality_proofs_submits: Counter<U64>,
-	import_queue_justification_submits: Counter<U64>,
+	connections: Gauge<U64>,
+	import_queue_blocks_submitted: Counter<U64>,
+	import_queue_finality_proofs_submitted: Counter<U64>,
+	import_queue_justifications_submitted: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
 	kbuckets_num_nodes: Gauge<U64>,
-	libp2p_connections: Gauge<U64>,
-	notifications_in: CounterVec<U64>,
-	notifications_out: CounterVec<U64>,
+	network_per_sec_bytes: GaugeVec<U64>,
+	notifications_total: CounterVec<U64>,
 	num_event_stream_channels: Gauge<U64>,
 	opened_notification_streams: GaugeVec<U64>,
 	peers_count: Gauge<U64>,
 	peerset_num_discovered: Gauge<U64>,
 	peerset_num_requested: Gauge<U64>,
-	random_kademalia_queries: Counter<U64>,
+	random_kademalia_queries_total: Counter<U64>,
 }
 
 impl Metrics {
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			// This list is ordered alphabetically
-			average_download_per_sec: register(Gauge::new(
-				"sub_libp2p_average_download_per_sec", "Average number of bytes downloaded per second",
+			connections: register(Gauge::new(
+				"sub_libp2p_connections", "Number of libp2p connections"
 			)?, registry)?,
-			average_upload_per_sec: register(Gauge::new(
-				"sub_libp2p_average_upload_per_sec", "Average number of bytes uploaded per second",
-			)?, registry)?,
-			import_queue_block_submits: register(Counter::new(
-				"import_queue_block_submits",
+			import_queue_blocks_submitted: register(Counter::new(
+				"import_queue_blocks_submitted",
 				"Number of blocks submitted to the import queue.",
 			)?, registry)?,
-			import_queue_finality_proofs_submits: register(Counter::new(
-				"import_queue_finality_proofs_submits",
+			import_queue_finality_proofs_submitted: register(Counter::new(
+				"import_queue_finality_proofs_submitted",
 				"Number of finality proofs submitted to the import queue.",
 			)?, registry)?,
-			import_queue_justification_submits: register(Counter::new(
-				"import_queue_justification_submits",
+			import_queue_justifications_submitted: register(Counter::new(
+				"import_queue_justifications_submitted",
 				"Number of justifications submitted to the import queue.",
 			)?, registry)?,
 			is_major_syncing: register(Gauge::new(
 				"sub_libp2p_is_major_syncing", "Whether the node is performing a major sync or not.",
 			)?, registry)?,
-			libp2p_connections: register(Gauge::new(
-				"sub_libp2p_libp2p_connections", "Number of libp2p connections to a given node"
-			)?, registry)?,
 			kbuckets_num_nodes: register(Gauge::new(
 				"sub_libp2p_kbuckets_num_nodes", "Number of nodes in the Kademlia k-buckets"
 			)?, registry)?,
-			notifications_in: register(CounterVec::new(
+			network_per_sec_bytes: register(GaugeVec::new(
 				Opts::new(
-					"sub_libp2p_notifications_in",
+					"sub_libp2p_network_per_sec_bytes",
+					"Average bandwidth usage per second"
+				),
+				&["direction"]
+			)?, registry)?,
+			notifications_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_notifications_total",
 					"Number of notification received from all nodes"
 				),
-				&["protocol"]
-			)?, registry)?,
-			notifications_out: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_notifications_out",
-					"Number of notification emitted to all nodes"
-				),
-				&["protocol"]
+				&["direction", "protocol"]
 			)?, registry)?,
 			num_event_stream_channels: register(Gauge::new(
 				"sub_libp2p_num_event_stream_channels",
@@ -808,7 +800,7 @@ impl Metrics {
 			opened_notification_streams: register(GaugeVec::new(
 				Opts::new(
 					"sub_libp2p_opened_notification_streams",
-					"Number of notification substreams opens with a given node"
+					"Number of open notification substreams"
 				),
 				&["protocol"]
 			)?, registry)?,
@@ -821,8 +813,8 @@ impl Metrics {
 			peerset_num_requested: register(Gauge::new(
 				"sub_libp2p_peerset_num_requested", "Number of nodes that the peerset manager wants us to be connected to",
 			)?, registry)?,
-			random_kademalia_queries: register(Counter::new(
-				"sub_libp2p_random_kademalia_queries", "Number of random Kademlia queries started",
+			random_kademalia_queries_total: register(Counter::new(
+				"sub_libp2p_random_kademalia_queries_total", "Number of random Kademlia queries started",
 			)?, registry)?,
 		})
 	}
@@ -837,7 +829,7 @@ impl Metrics {
 			},
 			Event::NotificationsReceived { messages, .. } => {
 				for (engine_id, _) in messages {
-					self.notifications_in.with_label_values(&[&engine_id_to_string(&engine_id)]).inc();
+					self.notifications_total.with_label_values(&["in", &engine_id_to_string(&engine_id)]).inc();
 				}
 			},
 			_ => {}
@@ -892,7 +884,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.event_streams.push(sender),
 				ServiceToWorkerMsg::WriteNotification { message, engine_id, target } => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.notifications_out.with_label_values(&[&engine_id_to_string(&engine_id)]).inc();
+						metrics.notifications_total.with_label_values(&["out", &engine_id_to_string(&engine_id)]).inc();
 					}
 					this.network_service.user_protocol_mut().write_notification(target, engine_id, message)
 				},
@@ -918,25 +910,25 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				Poll::Pending => break,
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockImport(origin, blocks))) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_block_submits.inc();
+						metrics.import_queue_blocks_submitted.inc();
 					}
 					this.import_queue.import_blocks(origin, blocks);
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::JustificationImport(origin, hash, nb, justification))) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_justification_submits.inc();
+						metrics.import_queue_justifications_submitted.inc();
 					}
 					this.import_queue.import_justification(origin, hash, nb, justification);
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::FinalityProofImport(origin, hash, nb, proof))) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_finality_proofs_submits.inc();
+						metrics.import_queue_finality_proofs_submitted.inc();
 					}
 					this.import_queue.import_finality_proof(origin, hash, nb, proof);
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted)) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.random_kademalia_queries.inc();
+						metrics.random_kademalia_queries_total.inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Event(ev))) => {
@@ -948,13 +940,13 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				Poll::Ready(SwarmEvent::Connected(peer_id)) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.libp2p_connections.inc();
+						metrics.connections.inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::Disconnected(peer_id)) => {
 					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?})", peer_id);
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.libp2p_connections.dec();
+						metrics.connections.dec();
 					}
 				},
 				Poll::Ready(SwarmEvent::NewListenAddr(addr)) =>
@@ -985,8 +977,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			metrics.average_download_per_sec.set(this.service.bandwidth.average_download_per_sec());
-			metrics.average_upload_per_sec.set(this.service.bandwidth.average_upload_per_sec());
+			metrics.network_per_sec_bytes.with_label_values(&["in"]).set(this.service.bandwidth.average_download_per_sec());
+			metrics.network_per_sec_bytes.with_label_values(&["out"]).set(this.service.bandwidth.average_upload_per_sec());
 			metrics.is_major_syncing.set(is_major_syncing as u64);
 			metrics.kbuckets_num_nodes.set(this.network_service.num_kbuckets_entries() as u64);
 			metrics.num_event_stream_channels.set(this.event_streams.len() as u64);
