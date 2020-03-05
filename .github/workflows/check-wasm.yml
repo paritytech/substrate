@@ -20,9 +20,9 @@ jobs:
         uses:                        actions/cache@v1.1.2
         with:
           path:                      ~/.cache/sccache
-          key:                       sccache-[check-web-wasm]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
+          key:                       sccache-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
       - name:                        Sccache statistics
-        run:                         sccache --show-stats&&rustup show
+        run:                         sccache --show-stats
       - name:                        Run cargo build wasm
         continue-on-error:           true
         run: |
