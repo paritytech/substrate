@@ -105,7 +105,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 			self.client(),
 			self.subscriptions(),
 			subscriber,
-			|| self.client().chain_info().best_hash,
+			|| self.client().info().best_hash,
 			|| self.client().import_notification_stream()
 				.map(|notification| Ok::<_, ()>(notification.header))
 				.compat(),

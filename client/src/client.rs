@@ -102,46 +102,6 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	_phantom: PhantomData<RA>,
 }
 
-/// An `Iterator` that iterates keys in a given block under a prefix.
-pub struct KeyIterator<'a, State, Block> {
-	state: State,
-	prefix: Option<&'a StorageKey>,
-	current_key: Vec<u8>,
-	_phantom: PhantomData<Block>,
-}
-
-impl <'a, State, Block> KeyIterator<'a, State, Block> {
-	fn new(state: State, prefix: Option<&'a StorageKey>, current_key: Vec<u8>) -> Self {
-		Self {
-			state,
-			prefix,
-			current_key,
-			_phantom: PhantomData,
-		}
-	}
-}
-
-impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
-	Block: BlockT,
-	State: StateBackend<HashFor<Block>>,
-{
-	type Item = StorageKey;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		let next_key = self.state
-			.next_storage_key(&self.current_key)
-			.ok()
-			.flatten()?;
-		if let Some(prefix) = self.prefix {
-			if !next_key.starts_with(&prefix.0[..]) {
-				return None;
-			}
-		}
-		self.current_key = next_key.clone();
-		Some(StorageKey(next_key))
-	}
-}
-
 // used in importing a block, where additional changes are made after the runtime
 // executed.
 enum PrePostHeader<H> {
@@ -1391,7 +1351,7 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 				zero: config_zero.clone(),
 				end: config_end.map(|(config_end_number, _)| config_end_number),
 			};
-			let result_range: Vec<(NumberFor<Block>, u32)> = key_changes::<HasherFor<Block>, _>(
+			let result_range: Vec<(NumberFor<Block>, u32)> = key_changes::<HashFor<Block>, _>(
 				config_range,
 				storage.storage(),
 				range_first,

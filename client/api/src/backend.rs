@@ -261,7 +261,7 @@ impl <'a, State, Block> KeyIterator<'a, State, Block> {
 
 impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
 	Block: BlockT,
-	State: StateBackend<HasherFor<Block>>,
+	State: StateBackend<HashFor<Block>>,
 {
 	type Item = StorageKey;
 
