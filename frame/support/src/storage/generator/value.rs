@@ -91,6 +91,14 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		unhashed::put(&Self::storage_value_final_key(), &val)
 	}
 
+	fn set(maybe_val: Self::Query) {
+		if let Some(val) = G::from_query_to_optional_value(maybe_val) {
+			unhashed::put(&Self::storage_value_final_key(), &val)
+		} else {
+			unhashed::kill(&Self::storage_value_final_key())
+		}
+	}
+
 	fn kill() {
 		unhashed::kill(&Self::storage_value_final_key())
 	}
