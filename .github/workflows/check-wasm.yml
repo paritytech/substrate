@@ -1,31 +1,41 @@
-name:                                Check web wasm
+name:                      Check web wasm
 
-on:                                  [push]
+on:                        [push]
 jobs:
   check-web-wasm:
-    name:                            Check web wasm
-    runs-on:                         self-hosted
-    container:                       parity/rust-builder:latest
+    name:                  Check web wasm
+    runs-on:               self-hosted
+    container:             generalbeck/rust-builder:latest
     env:
-      CARGO_INCREMENTAL:               0
+      CARGO_INCREMENTAL:   0
     steps:
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
+      - name:              Checkout sources
+        uses:              actions/checkout@v2
         with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Restore ~/.cache/sccache
-        uses:                        actions/cache@v1.1.2
+          fetch-depth:     100
+      - name:              Checkout submodules
+        shell:             bash
+        run:               git submodule update --init --recursive
+      - name:                  Restore $CARGO_HOME/.cargo/git
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      ~/.cache/sccache
-          key:                       sccache-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Sccache statistics
-        run:                         sccache --show-stats
-      - name:                        Run cargo build wasm
-        continue-on-error:           true
-        run: |
+          path:                $CARGO_HOME/.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore $CARGO_HOME/.cargo/registry
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                $CARGO_HOME/.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[check-web-wasm]-${{ hashFiles('**/Cargo.lock') }}
+      - name:              Sccache statistics
+        run:               sccache --show-stats
+      - name:              Run cargo build wasm
+        continue-on-error: true
+        run:               |
            rustup update
            rustup show
            echo "CARGO_HOME: "$CARGO_HOME
@@ -44,7 +54,7 @@ jobs:
            time cargo build --target=wasm32-unknown-unknown -p sc-consensus-babe
            time cargo build --target=wasm32-unknown-unknown -p sp-consensus
            time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
-           # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
+           # Note:         the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
            time cargo build --target=wasm32-unknown-unknown --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser"
            echo "-----------"
            ls -a target
@@ -52,8 +62,6 @@ jobs:
            ls -a /usr/local/cargo/
            ls -a /usr/local/cargo/git
            ls -a $PWD
-      - name:                        Stop sccache
-        if:                          always()
-        run:                         sccache --stop-server
-      - name:                        Disk statistics
-        run:                         df -h --total
+      - name:              Stop sccache
+        if:                always()
+        run:               sccache --stop-server

@@ -1,587 +1,469 @@
-name:                                Substrate
+name:                          Substrate
 
-on:                                  [push]
+on:                            [push]
 jobs:
-  linux-cargo-check-benches:
-    name:                            Cargo check benches
-    runs-on:                         self-hosted
-    container:                       parity/rust-builder:latest
+  cargo-check-benches:
+    name:                      Cargo check benches
+    runs-on:                   self-hosted
+    container:                 generalbeck/rust-builder:latest
     env:
-      CC:                            "clang-9"
-      CXX:                           "clang-9"
-      CARGO_HOME:                    "/usr/local/cargo"
-      BUILD_DUMMY_WASM_BINARY:       1
-      CARGO_INCREMENTAL:               0
+      BUILD_DUMMY_WASM_BINARY: 1
+      CARGO_INCREMENTAL:       0
     steps:
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
+      - name:                  Checkout sources
+        uses:                  actions/checkout@v2
         with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Restore ~/.cache/sccache
-        uses:                        actions/cache@v1.1.2
+          fetch-depth:         100
+      - name:                  Checkout submodules
+        shell:                 bash
+        run:                   git submodule update --init --recursive
+      - name:                  Restore $CARGO_HOME/.cargo/git
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      ~/.cache/sccache
-          key:                       sccache-[linux-cargo-check-benches]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/git
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[cargo-check-benches]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore $CARGO_HOME/.cargo/registry
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/git
-          key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/registry
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[cargo-check-benches]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/registry
-          key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[cargo-check-benches]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Sccache statistics
+        run:                   sccache --show-stats
+      - name:                  Run cargo check benches
+        uses:                  actions-rs/cargo@v1
+        continue-on-error:     true
         with:
-          path:                      target
-          key:                       cargo-build-[linux-cargo-check-benches]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Sccache statistics
-        run:                         sccache --show-stats
-      - name:                        Run cargo check benches
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   check
-          toolchain:                 nightly
-          args:                      --benches --all
-      - name:                        Stop sccache
-        if:                          always()
-        run:                         sccache --stop-server
-      - name:                        Prepare build directory for cache
-        shell:                       bash
-        run:                         bash .github/workflows/clean-target.sh
-      - name:                        Disk statistics
-        run:                         df -h --total
+          command:             check
+          toolchain:           nightly
+          args:                --benches --all
+      - name:                  Stop sccache
+        if:                    always()
+        run:                   sccache --stop-server
+      - name:                  Prepare build directory for cache
+        shell:                 bash
+        run:                   bash .github/workflows/clean-target.sh
 
-  linux-cargo-check-subkey:
-    name:                            Cargo check subkey
-    runs-on:                         self-hosted
-    container:                       parity/rust-builder:latest
+  cargo-check-subkey:
+    name:                      Cargo check subkey
+    runs-on:                   [self-hosted, macos-latest, windows-latest]
+    container:                 generalbeck/rust-builder:latest
     env:
-      BUILD_DUMMY_WASM_BINARY:       1
-      CARGO_HOME:                    "/usr/local/cargo"
-      CARGO_INCREMENTAL:               0
+      BUILD_DUMMY_WASM_BINARY: 1
+      CARGO_INCREMENTAL:       0
     steps:
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
+      - name:                  Checkout sources
+        uses:                  actions/checkout@v2
         with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Restore ~/.cache/sccache
-        uses:                        actions/cache@v1.1.2
+          fetch-depth:         100
+      - name:                  Checkout submodules
+        shell:                 bash
+        run:                   git submodule update --init --recursive
+      - name:                  Restore $CARGO_HOME/.cargo/git
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      ~/.cache/sccache
-          key:                       sccache-[linux-cargo-check-subkey]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/git
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[cargo-check-subkey]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore $CARGO_HOME/.cargo/registry
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/git
-          key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/registry
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[cargo-check-subkey]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/registry
-          key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[cargo-check-subkey]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Sccache statistics
+        run:                   sccache --show-stats
+      - name:                  Run cargo check subkey
+        uses:                  actions-rs/cargo@v1
+        continue-on-error:     true
         with:
-          path:                      target
-          key:                       cargo-build-[linux-cargo-check-subkey]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Sccache statistics
-        run:                         sccache --show-stats
-      - name:                        Run cargo check subkey
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   check
-          args:                      --manifest-path "bin/utils/subkey/Cargo.toml" --release
-      - name:                        Stop sccache
-        if:                          always()
-        run:                         sccache --stop-server
-      - name:                        Prepare build directory for cache
-        shell:                       bash
-        run:                         bash .github/workflows/clean-target.sh
-      - name:                        Disk statistics
-        run:                         df -h --total
+          command:             check
+          args:                --manifest-path "bin/utils/subkey/Cargo.toml" --release
+      - name:                  Stop sccache
+        if:                    always()
+        run:                   sccache --stop-server
+      - name:                  Prepare build directory for cache
+        shell:                 bash
+        run:                   bash .github/workflows/clean-target.sh
 
-  linux-test-stable:
-    name:                            Test linux stable
-    runs-on:                         self-hosted
-    container:                       parity/rust-builder:latest
+  test-stable:
+    name:                      Test linux stable
+    runs-on:                   self-hosted
+    container:                 generalbeck/rust-builder:latest
     env:
-      RUSTFLAGS:                     "-Cdebug-assertions=y"
-      CARGO_HOME:                    "/usr/local/cargo"
-      CARGO_INCREMENTAL:               0
+      RUSTFLAGS:               "-Cdebug-assertions=y"
+      CARGO_INCREMENTAL:       0
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
+      - name:                  Checkout sources
+        uses:                  actions/checkout@v2
         with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Restore ~/.cache/sccache
-        uses:                        actions/cache@v1.1.2
+          fetch-depth:         100
+      - name:                  Checkout submodules
+        shell:                 bash
+        run:                   git submodule update --init --recursive
+      - name:                  Restore $CARGO_HOME/.cargo/git
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      ~/.cache/sccache
-          key:                       sccache-[linux-test-stable]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/git
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[test-stable]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore $CARGO_HOME/.cargo/registry
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/git
-          key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/registry
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[test-stable]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/registry
-          key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[linux-test-stable]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Sccache statistics
+        run:                   sccache --show-stats
+      - name:                  Run cargo Test linux stable
+        uses:                  actions-rs/cargo@v1
+        continue-on-error:     true
         with:
-          path:                      target
-          key:                       cargo-build-[linux-test-stable]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Sccache statistics
-        run:                         sccache --show-stats
-      - name:                        Run cargo Test linux stable
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   test
-          args:                      --all --release --verbose --locked
-      - name:                        Stop sccache
-        if:                          always()
-        run:                         sccache --stop-server
-      - name:                        Prepare build directory for cache
-        shell:                       bash
-        run:                         bash .github/workflows/clean-target.sh
-      - name:                        Disk statistics
-        run:                         df -h --total
+          command:             test
+          args:                --all --release --verbose --locked
+      - name:                  Stop sccache
+        if:                    always()
+        run:                   sccache --stop-server
+      - name:                  Prepare build directory for cache
+        shell:                 bash
+        run:                   bash .github/workflows/clean-target.sh
 
-  linux-test-frame-staking:
-    name:                            Test frame staking
-    runs-on:                         self-hosted
-    container:                       parity/rust-builder:latest
+  test-frame-staking:
+    name:                      Test frame staking
+    runs-on:                   self-hosted
+    container:                 generalbeck/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
-      CARGO_HOME:                    "/usr/local/cargo"
-      CARGO_INCREMENTAL:               0
-      RUST_BACKTRACE:                1
+      CARGO_INCREMENTAL:       0
+      RUST_BACKTRACE:          1
     steps:
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
+      - name:                  Checkout sources
+        uses:                  actions/checkout@v2
         with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Restore ~/.cache/sccache
-        uses:                        actions/cache@v1.1.2
+          fetch-depth:         100
+      - name:                  Checkout submodules
+        shell:                 bash
+        run:                   git submodule update --init --recursive
+      - name:                  Restore $CARGO_HOME/.cargo/git
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      ~/.cache/sccache
-          key:                       sccache-[linux-test-frame-staking]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/git
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[test-frame-staking]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore $CARGO_HOME/.cargo/registry
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/git
-          key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/registry
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[test-frame-staking]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/registry
-          key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[test-frame-staking]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Sccache statistics
+        run:                   sccache --show-stats
+      - name:                  Run cargo Test frame staking
+        continue-on-error:     true
+        uses:                  actions-rs/cargo@v1
         with:
-          path:                      target
-          key:                       cargo-build-[linux-test-frame-staking]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Sccache statistics
-        run:                         sccache --show-stats
-      - name:                        Run cargo Test frame staking
-        continue-on-error:           true
-        uses:                        actions-rs/cargo@v1
-        with:
-          command:                   test
-          args:                      --manifest-path "./frame/staking/Cargo.toml" --release --verbose --no-default-features --features std
-      - name:                        Stop sccache
-        if:                          always()
-        run:                         sccache --stop-server
-      - name:                        Prepare build directory for cache
-        shell:                       bash
-        run:                         bash .github/workflows/clean-target.sh
-      - name:                        Disk statistics
-        run:                         df -h --total
+          command:             test
+          args:                --manifest-path "./frame/staking/Cargo.toml" --release --verbose --no-default-features --features std
+      - name:                  Stop sccache
+        if:                    always()
+        run:                   sccache --stop-server
+      - name:                  Prepare build directory for cache
+        shell:                 bash
+        run:                   bash .github/workflows/clean-target.sh
 
-  linux-test-wasmtime:
-    name:                            Test wasmtime
-    runs-on:                         self-hosted
-    container:                       parity/rust-builder:latest
-    env:
-      CARGO_HOME:                    "/usr/local/cargo"
-      RUSTFLAGS:               "-Cdebug-assertions=y"
-      CARGO_INCREMENTAL:               0
-      RUST_BACKTRACE:                1
-    steps:
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
-        with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Restore ~/.cache/sccache
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.cache/sccache
-          key:                       sccache-[linux-test-wasmtime]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/git
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      $CARGO_HOME/.cargo/git
-          key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/registry
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      $CARGO_HOME/.cargo/registry
-          key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      target
-          key:                       cargo-build-[linux-test-wasmtime]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Sccache statistics
-        run:                         sccache --show-stats
-      - name:                        Run cargo Test wasmtime
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   test
-          args:                      --manifest-path "./client/executor/Cargo.toml" --release --verbose --features wasmtime
-      - name:                        Stop sccache
-        if:                          always()
-        run:                         sccache --stop-server
-      - name:                        Prepare build directory for cache
-        shell:                       bash
-        run:                         bash .github/workflows/clean-target.sh
-      - name:                        Disk statistics
-        run:                         df -h --total
-
-  linux-test-stable-int:
-    name:                            Test linux stable int
-    runs-on:                         self-hosted
-    container:                       parity/rust-builder:latest
+  test-wasmtime:
+    name:                      Test wasmtime
+    runs-on:                   self-hosted
+    container:                 generalbeck/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
-      CARGO_HOME:                    "/usr/local/cargo"
-      CARGO_INCREMENTAL:               0
-      BUILD_DUMMY_WASM_BINARY:       1
+      CARGO_INCREMENTAL:       0
+      RUST_BACKTRACE:          1
     steps:
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
+      - name:                  Checkout sources
+        uses:                  actions/checkout@v2
         with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Restore ~/.cache/sccache
-        uses:                        actions/cache@v1.1.2
+          fetch-depth:         100
+      - name:                  Checkout submodules
+        shell:                 bash
+        run:                   git submodule update --init --recursive
+      - name:                  Restore $CARGO_HOME/.cargo/git
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      ~/.cache/sccache
-          key:                       sccache-[linux-test-stable-int]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/git
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[test-wasmtime]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore $CARGO_HOME/.cargo/registry
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/git
-          key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/registry
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[test-wasmtime]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/registry
-          key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[test-wasmtime]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Sccache statistics
+        run:                   sccache --show-stats
+      - name:                  Run cargo Test wasmtime
+        uses:                  actions-rs/cargo@v1
+        continue-on-error:     true
         with:
-          path:                      target
-          key:                       cargo-build-[linux-test-stable-int]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Sccache statistics
-        run:                         sccache --show-stats
-      - name:                        Run cargo Test linux stable int
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
+          command:             test
+          args:                --manifest-path "./client/executor/Cargo.toml" --release --verbose --features wasmtime
+      - name:                  Stop sccache
+        if:                    always()
+        run:                   sccache --stop-server
+      - name:                  Prepare build directory for cache
+        shell:                 bash
+        run:                   bash .github/workflows/clean-target.sh
+
+  test-stable-int:
+    name:                      Test linux stable int
+    runs-on:                   self-hosted
+    container:                 generalbeck/rust-builder:latest
+    env:
+      RUSTFLAGS:               "-Cdebug-assertions=y"
+      CARGO_INCREMENTAL:       0
+      BUILD_DUMMY_WASM_BINARY: 1
+    steps:
+      - name:                  Checkout sources
+        uses:                  actions/checkout@v2
         with:
-          command:                   test
-          args:                      -p node-cli --release --verbose --locked -- --ignored
+          fetch-depth:         100
+      - name:                  Checkout submodules
+        shell:                 bash
+        run:                   git submodule update --init --recursive
+      - name:                  Restore $CARGO_HOME/.cargo/git
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                $CARGO_HOME/.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[test-stable-int]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore $CARGO_HOME/.cargo/registry
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                $CARGO_HOME/.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[test-stable-int]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[test-stable-int]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Sccache statistics
+        run:                   sccache --show-stats
+      - name:                  Run cargo Test linux stable int
+        uses:                  actions-rs/cargo@v1
+        continue-on-error:     true
+        with:
+          command:             test
+          args:                -p node-cli --release --verbose --locked -- --ignored
         env:
-          RUST_LOG:                  "sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace"
-      - name:                        Stop sccache
-        if:                          always()
-        run:                         sccache --stop-server
-      - name:                        Prepare build directory for cache
-        shell:                       bash
-        run:                         bash .github/workflows/clean-target.sh
-      - name:                        Disk statistics
-        run:                         df -h --total
+          RUST_LOG:            "sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace"
+      - name:                  Stop sccache
+        if:                    always()
+        run:                   sccache --stop-server
+      - name:                  Prepare build directory for cache
+        shell:                 bash
+        run:                   bash .github/workflows/clean-target.sh
 
   test-full-crypto-feature:
-    name:                            Test full crypto feature
-    runs-on:                         self-hosted
-    container:                       parity/rust-builder:latest
+    name:                      Test full crypto feature
+    runs-on:                   self-hosted
+    container:                 generalbeck/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
-      CARGO_INCREMENTAL:               0
-      CARGO_HOME:                    "/usr/local/cargo"
-      RUST_BACKTRACE:                1
+      CARGO_INCREMENTAL:       0
+      RUST_BACKTRACE:          1
     steps:
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
+      - name:                  Checkout sources
+        uses:                  actions/checkout@v2
         with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Restore ~/.cache/sccache
-        uses:                        actions/cache@v1.1.2
+          fetch-depth:         100
+      - name:                  Checkout submodules
+        shell:                 bash
+        run:                   git submodule update --init --recursive
+      - name:                  Restore $CARGO_HOME/.cargo/git
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      ~/.cache/sccache
-          key:                       sccache-[test-full-crypto-feature]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/git
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[test-full-crypto-feature]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore $CARGO_HOME/.cargo/registry
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/git
-          key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore $CARGO_HOME/.cargo/registry
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[test-full-crypto-feature]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      $CARGO_HOME/.cargo/registry
-          key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[test-full-crypto-feature]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Sccache statistics
+        run:                   sccache --show-stats
+      - name:                  Run cargo build crypto core
+        uses:                  actions-rs/cargo@v1
+        continue-on-error:     true
         with:
-          path:                      target
-          key:                       cargo-build-[test-full-crypto-feature]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Sccache statistics
-        run:                         sccache --show-stats
-      - name:                        Run cargo build crypto core
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
+          command:             build
+          toolchain:           nightly
+          args:                --manifest-path "./primitives/core/Cargo.toml" --verbose --no-default-features --features full_crypto
+      - name:                  Run cargo build crypto apps
+        uses:                  actions-rs/cargo@v1
+        continue-on-error:     true
         with:
-          command:                   build
-          toolchain:                 nightly
-          args:                      --manifest-path "./primitives/core/Cargo.toml" --verbose --no-default-features --features full_crypto
-      - name:                        Run cargo build crypto apps
-        uses:                        actions-rs/cargo@v1
-        continue-on-error:           true
-        with:
-          command:                   build
-          toolchain:                 nightly
-          args:                      --manifest-path "./primitives/application-crypto/Cargo.toml"--verbose --no-default-features --features full_crypto
-      - name:                        Stop sccache
-        if:                          always()
-        run:                         sccache --stop-server
-      - name:                        Prepare build directory for cache
-        shell:                       bash
-        run:                         bash .github/workflows/clean-target.sh
-      - name:                        Disk statistics
-        run:                         df -h --total
+          command:             build
+          toolchain:           nightly
+          args:                --manifest-path "./primitives/application-crypto/Cargo.toml"--verbose --no-default-features --features full_crypto
+      - name:                  Stop sccache
+        if:                    always()
+        run:                   sccache --stop-server
+      - name:                  Prepare build directory for cache
+        shell:                 bash
+        run:                   bash .github/workflows/clean-target.sh
 
   linux-dependency-rules:
-    name:                            Test dependency rules
-    runs-on:                         self-hosted
+    name:                      Test dependency rules
+    runs-on:                   self-hosted
+    container:                 generalbeck/rust-builder:latest
     steps:
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
+      - name:                  Checkout sources
+        uses:                  actions/checkout@v2
         with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Test dependency rules
-        shell:                       bash
-        run:                         .maintain/ensure-deps.sh
+          fetch-depth:         100
+      - name:                  Checkout submodules
+        shell:                 bash
+        run:                   git submodule update --init --recursive
+      - name:                  Test dependency rules
+        shell:                 bash
+        run:                   bash .maintain/ensure-deps.sh
 #build
-  build-linux-substrate:
-    name:                            Build linux Substrate
-    needs:                           [linux-test-stable]
-    runs-on:                         self-hosted
-    env:
-      CC:                            "clang"
-      CXX:                           "clang++"
-      RUST_TOOLCHAIN:                stable
+  build-substrate:
+    name:                      Build linux Substrate
+    needs:                     [linux-test-stable]
+    runs-on:                   self-hosted
+    container:                 generalbeck/rust-builder:latest
     steps:
-      - run:                         echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
+      - name:                  Checkout sources
+        uses:                  actions/checkout@v2
         with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Prepare for restoring caches
-        run:                         |
-          rm -rf /home/runner/.rustup
-          rm -rf /home/runner/.cargo/git
-          rm -rf /home/runner/.cargo/registry
-      - name:                        Restore /home/runner/.rustup
-        uses:                        actions/cache@v1.1.2
+          fetch-depth:         100
+      - name:                  Checkout submodules
+        shell:                 bash
+        run:                   git submodule update --init --recursive
+      - name:                  Restore $CARGO_HOME/.cargo/git
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      /home/runner/.rustup
-          key:                       rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
-      - name:                        Restore /home/runner/.cache/sccache
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore $CARGO_HOME/.cargo/registry
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      /home/runner/.cache/sccache
-          key:                       sccache-[build-linux-substrate]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
-      - name:                        Restore /home/runner/.cargo/git
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      /home/runner/.cargo/git
-          key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore /home/runner/.cargo/registry
-        uses:                        actions/cache@v1.1.2
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Sccache statistics
+        run:                   sccache --show-stats
+      - name:                  Run cargo build Substrate
+        uses:                  actions-rs/cargo@v1
         with:
-          path:                      /home/runner/.cargo/registry
-          key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
+          command:             build
+          args:                --release --verbose
+      - name:                  Upload artifact
+        uses:                  actions/upload-artifact@v1
+        continue-on-error:     true
         with:
-          path:                      target
-          key:                       cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Run cargo build Substrate
-        uses:                        actions-rs/cargo@v1
-        with:
-          command:                   build
-          toolchain:                 ${{ env.RUST_TOOLCHAIN }}
-          args:                      --release --verbose
-      - name:                        Upload artifact
-        uses:                        actions/upload-artifact@v1
-        continue-on-error:           true
-        with:
-          name:                      substrate
-          path:                      target/release
+          name:                substrate
+          path:                target/release
 
-  build-linux-subkey:
-    name:                            Build linux Subkey
-    needs:                           [linux-test-stable]
-    runs-on:                         self-hosted
-    env:
-      CC:                            "clang"
-      CXX:                           "clang++"
-      RUST_TOOLCHAIN:                stable
+  build-subkey:
+    name:                      Build linux Subkey
+    needs:                     [linux-test-stable]
+    runs-on:                   [self-hosted, macos-latest, windows-latest]
     steps:
-      - run:                         echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
+      - name:                  Checkout sources
+        uses:                  actions/checkout@v2
         with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Prepare for restoring caches
-        run:                         |
-          rm -rf /home/runner/.rustup
-          rm -rf /home/runner/.cargo/git
-          rm -rf /home/runner/.cargo/registry
-      - name:                        Restore /home/runner/.rustup
-        uses:                        actions/cache@v1.1.2
+          fetch-depth:         100
+      - name:                  Checkout submodules
+        shell:                 bash
+        run:                   git submodule update --init --recursive
+      - name:                  Restore $CARGO_HOME/.cargo/git
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      /home/runner/.rustup
-          key:                       rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
-      - name:                        Restore /home/runner/.cache/sccache
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[build-subkey]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore $CARGO_HOME/.cargo/registry
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      /home/runner/.cache/sccache
-          key:                       sccache-[build-linux-subkey]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
-      - name:                        Restore /home/runner/.cargo/git
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[build-subkey]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      /home/runner/.cargo/git
-          key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore /home/runner/.cargo/registry
-        uses:                        actions/cache@v1.1.2
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[build-subkey]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Sccache statistics
+        run:                   sccache --show-stats
+      - name:                  Run cargo build Subkey
+        uses:                  actions-rs/cargo@v1
         with:
-          path:                      /home/runner/.cargo/registry
-          key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
+          command:             build
+          args:                --release --verbose
+      - name:                  Upload artifact
+        uses:                  actions/upload-artifact@v1
+        continue-on-error:     true
         with:
-          path:                      target
-          key:                       cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Run cargo build Subkey
-        uses:                        actions-rs/cargo@v1
-        with:
-          command:                   build
-          toolchain:                 ${{ env.RUST_TOOLCHAIN }}
-          args:                      --release --verbose
-      - name:                        Upload artifact
-        uses:                        actions/upload-artifact@v1
-        continue-on-error:           true
-        with:
-          name:                      subkey
-          path:                      target/release
+          name:                subkey
+          path:                target/release
 
   build-rust-doc-release:
-    name:                            Build Rust doc release
-    needs:                           [linux-test-stable]
-    runs-on:                         self-hosted
-    env:
-      CC:                            "clang"
-      CXX:                           "clang++"
-      RUST_TOOLCHAIN:                stable
+    name:                      Build Rust doc release
+    needs:                     [linux-test-stable]
+    runs-on:                   self-hosted
     steps:
-      - run:                         echo "::add-path::$GITHUB_WORKSPACE/tools/bin" && printenv
-      - name:                        Checkout sources
-        uses:                        actions/checkout@v2
+      - name:                  Checkout sources
+        uses:                  actions/checkout@v2
         with:
-          fetch-depth:               100
-      - name:                        Checkout submodules
-        shell:                       bash
-        run:                         git submodule update --init --recursive
-      - name:                        Prepare for restoring caches
-        run:                         |
-          rm -rf /home/runner/.rustup
-          rm -rf /home/runner/.cargo/git
-          rm -rf /home/runner/.cargo/registry
-      - name:                        Restore /home/runner/.rustup
-        uses:                        actions/cache@v1.1.2
+          fetch-depth:         100
+      - name:                  Checkout submodules
+        shell:                 bash
+        run:                   git submodule update --init --recursive
+      - name:                  Restore $CARGO_HOME/.cargo/git
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      /home/runner/.rustup
-          key:                       rustup-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('rust-toolchain') }}
-      - name:                        Restore /home/runner/.cache/sccache
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[build-rust-doc-release]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore $CARGO_HOME/.cargo/registry
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      /home/runner/.cache/sccache
-          key:                       sccache-[build-rust-doc-release]-${{ runner.OS }}-s${{ hashFiles('.github/caching/sccache.lock') }}
-      - name:                        Restore /home/runner/tools/bin
-        uses:                        actions/cache@v1.1.2
+          path:                $CARGO_HOME/.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[build-rust-doc-release]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
         with:
-          path:                      tools/bin
-          key:                       tools-bin-${{ runner.OS }}-[${{ env.RUST_TOOLCHAIN }}]-${{ hashFiles('.github/caching/tools-cache.lock') }}
-      - name:                        Restore /home/runner/.cargo/git
-        uses:                        actions/cache@v1.1.2
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[build-rust-doc-release]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Sccache statistics
+        run:                   sccache --show-stats
+      - name:                  Run cargo doc release
+        uses:                  actions-rs/cargo@v1
         with:
-          path:                      /home/runner/.cargo/git
-          key:                       cargo-git-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore /home/runner/.cargo/registry
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      /home/runner/.cargo/registry
-          key:                       cargo-registry-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      target
-          key:                       cargo-build-target-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
-      - run:                         rm -f ./crate-docs/index.html
-      - name:                        Run cargo doc release
-        uses:                        actions-rs/cargo@v1
-        with:
-          command:                   doc
-          toolchain:                 nightly
-          args:                      --release --all --verbose
+          command:             doc
+          toolchain:           nightly
+          args:                --release --all --verbose
