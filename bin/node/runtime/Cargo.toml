@@ -35,7 +35,7 @@ sp-version = { version = "2.0.0-alpha.2", default-features = false, path = "../.
 
 # frame dependencies
 frame-executive = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/executive" }
-frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/benchmarking" }
+frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/benchmarking", optional = true }
 frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/system" }
 frame-system-rpc-runtime-api = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
@@ -132,3 +132,4 @@ std = [
 	"pallet-recovery/std",
 	"pallet-vesting/std",
 ]
+runtime-benchmarks = ["frame-benchmarking"]

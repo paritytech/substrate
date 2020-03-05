@@ -29,7 +29,7 @@ use sc_client_api::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
 use substrate_test_client::sp_consensus::BlockOrigin;
 use substrate_test_runtime::{self, Transfer};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, HasherFor};
+use sp_runtime::traits::{Block as BlockT, HashFor};
 use sc_block_builder::BlockBuilderProvider;
 
 /// helper to test the `leaves` implementation for various backends
@@ -37,7 +37,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	B: backend::Backend<substrate_test_runtime::Block>,
 	// Rust bug: https://github.com/rust-lang/rust/issues/24159
 	backend::StateBackendFor<B, substrate_test_runtime::Block>:
-		sp_api::StateBackend<HasherFor<substrate_test_runtime::Block>>,
+		sp_api::StateBackend<HashFor<substrate_test_runtime::Block>>,
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -206,7 +206,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	B: backend::LocalBackend<substrate_test_runtime::Block>,
 	// Rust bug: https://github.com/rust-lang/rust/issues/24159
 	<B as backend::Backend<substrate_test_runtime::Block>>::State:
-		sp_api::StateBackend<HasherFor<substrate_test_runtime::Block>>,
+		sp_api::StateBackend<HashFor<substrate_test_runtime::Block>>,
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -336,7 +336,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	B: backend::LocalBackend<substrate_test_runtime::Block>,
 	// Rust bug: https://github.com/rust-lang/rust/issues/24159
 	<B as backend::Backend<substrate_test_runtime::Block>>::State:
-		sp_api::StateBackend<HasherFor<substrate_test_runtime::Block>>,
+		sp_api::StateBackend<HashFor<substrate_test_runtime::Block>>,
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5

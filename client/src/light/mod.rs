@@ -26,7 +26,7 @@ use std::sync::Arc;
 use sc_executor::RuntimeInfo;
 use sp_core::traits::CodeExecutor;
 use sp_runtime::BuildStorage;
-use sp_runtime::traits::{Block as BlockT, HasherFor};
+use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_blockchain::Result as ClientResult;
 
 use crate::call_executor::LocalCallExecutor;
@@ -45,7 +45,7 @@ pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: S) -> A
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S, HasherFor<B>>>
+pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S, HashFor<B>>>
 	where
 		B: BlockT,
 		S: BlockchainStorage<B>,
@@ -55,15 +55,15 @@ pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S,
 
 /// Create an instance of light client.
 pub fn new_light<B, S, GS, RA, E>(
-	backend: Arc<Backend<S, HasherFor<B>>>,
+	backend: Arc<Backend<S, HashFor<B>>>,
 	genesis_storage: &GS,
 	code_executor: E,
 ) -> ClientResult<
 		Client<
-			Backend<S, HasherFor<B>>,
+			Backend<S, HashFor<B>>,
 			GenesisCallExecutor<
-				Backend<S, HasherFor<B>>,
-				LocalCallExecutor<Backend<S, HasherFor<B>>, E>
+				Backend<S, HashFor<B>>,
+				LocalCallExecutor<Backend<S, HashFor<B>>, E>
 			>,
 			B,
 			RA
@@ -91,7 +91,7 @@ pub fn new_light<B, S, GS, RA, E>(
 pub fn new_fetch_checker<E, B: BlockT, S: BlockchainStorage<B>>(
 	blockchain: Arc<Blockchain<S>>,
 	executor: E,
-) -> LightDataChecker<E, HasherFor<B>, B, S>
+) -> LightDataChecker<E, HashFor<B>, B, S>
 	where
 		E: CodeExecutor,
 {
