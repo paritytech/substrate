@@ -24,7 +24,7 @@ use sp_core::offchain::storage::{
 	InMemOffchainStorage as OffchainStorage
 };
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HasherFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor};
 use sp_runtime::{Justification, Storage};
 use sp_state_machine::{
 	ChangesTrieTransaction, InMemoryBackend, Backend as StateBackend, StorageCollection,
@@ -462,8 +462,8 @@ impl<Block: BlockT> sc_client_api::light::Storage<Block> for Blockchain<Block>
 pub struct BlockImportOperation<Block: BlockT> {
 	pending_block: Option<PendingBlock<Block>>,
 	pending_cache: HashMap<CacheKeyId, Vec<u8>>,
-	old_state: InMemoryBackend<HasherFor<Block>>,
-	new_state: Option<InMemoryBackend<HasherFor<Block>>>,
+	old_state: InMemoryBackend<HashFor<Block>>,
+	new_state: Option<InMemoryBackend<HashFor<Block>>>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
@@ -472,7 +472,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> where
 	Block::Hash: Ord,
 {
-	type State = InMemoryBackend<HasherFor<Block>>;
+	type State = InMemoryBackend<HashFor<Block>>;
 
 	fn state(&self) -> sp_blockchain::Result<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
@@ -499,7 +499,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 
 	fn update_db_storage(
 		&mut self,
-		update: <InMemoryBackend<HasherFor<Block>> as StateBackend<HasherFor<Block>>>::Transaction,
+		update: <InMemoryBackend<HashFor<Block>> as StateBackend<HashFor<Block>>>::Transaction,
 	) -> sp_blockchain::Result<()> {
 		self.new_state = Some(self.old_state.update(update));
 		Ok(())
@@ -507,7 +507,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 
 	fn update_changes_trie(
 		&mut self,
-		_update: ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>,
+		_update: ChangesTrieTransaction<HashFor<Block>, NumberFor<Block>>,
 	) -> sp_blockchain::Result<()> {
 		Ok(())
 	}
@@ -564,7 +564,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 /// > **Warning**: Doesn't support all the features necessary for a proper database. Only use this
 /// > struct for testing purposes. Do **NOT** use in production.
 pub struct Backend<Block: BlockT> where Block::Hash: Ord {
-	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HasherFor<Block>>>>,
+	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HashFor<Block>>>>,
 	blockchain: Blockchain<Block>,
 	import_lock: RwLock<()>,
 }
@@ -599,7 +599,7 @@ impl<Block: BlockT> backend::AuxStore for Backend<Block> where Block::Hash: Ord 
 impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash: Ord {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
-	type State = InMemoryBackend<HasherFor<Block>>;
+	type State = InMemoryBackend<HashFor<Block>>;
 	type OffchainStorage = OffchainStorage;
 
 	fn begin_operation(&self) -> sp_blockchain::Result<Self::BlockImportOperation> {

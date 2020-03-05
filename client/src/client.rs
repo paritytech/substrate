@@ -34,15 +34,14 @@ use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
-		Block as BlockT, Header as HeaderT, Zero, NumberFor, HasherFor, SaturatedConversion, One,
+		Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor, SaturatedConversion, One,
 		DigestFor,
 	},
 };
 use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProof,
-	merge_storage_proofs,
+	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo};
 use sp_consensus::{
@@ -55,6 +54,7 @@ use sp_blockchain::{self as blockchain,
 	well_known_cache_keys::Id as CacheKeyId,
 	HeaderMetadata, CachedHeaderMetadata,
 };
+use sp_trie::StorageProof;
 
 use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
@@ -121,7 +121,7 @@ impl <'a, State, Block> KeyIterator<'a, State, Block> {
 
 impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
 	Block: BlockT,
-	State: StateBackend<HasherFor<Block>>,
+	State: StateBackend<HashFor<Block>>,
 {
 	type Item = StorageKey;
 
@@ -487,9 +487,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		method: &str,
 		call_data: &[u8]
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
+		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
+		// backwards compatible.
+		//
+		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
+		let code_proof = self.read_proof(
+			id,
+			&[well_known_keys::CODE.to_vec(), well_known_keys::HEAP_PAGES.to_vec()],
+		)?;
+
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
 		prove_execution(state, header, &self.executor, method, call_data)
+			.map(|p| (p.0, StorageProof::merge(vec![p.1, code_proof])))
 	}
 
 	/// Reads given header and generates CHT-based header proof.
@@ -522,7 +532,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Some(old_current_num)
 		});
 		let headers = cht_range.map(|num| self.block_hash(num));
-		let proof = cht::build_proof::<Block::Header, HasherFor<Block>, _, _>(
+		let proof = cht::build_proof::<Block::Header, HashFor<Block>, _, _>(
 			cht_size,
 			cht_num,
 			std::iter::once(block_num),
@@ -595,7 +605,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				zero: config_zero.clone(),
 				end: config_end.map(|(config_end_number, _)| config_end_number),
 			};
-			let result_range: Vec<(NumberFor<Block>, u32)> = key_changes::<HasherFor<Block>, _>(
+			let result_range: Vec<(NumberFor<Block>, u32)> = key_changes::<HashFor<Block>, _>(
 				config_range,
 				storage.storage(),
 				range_first,
@@ -649,12 +659,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		cht_size: NumberFor<Block>,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
 		struct AccessedRootsRecorder<'a, Block: BlockT> {
-			storage: &'a dyn ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>,
+			storage: &'a dyn ChangesTrieStorage<HashFor<Block>, NumberFor<Block>>,
 			min: NumberFor<Block>,
 			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, Block::Hash>>,
 		};
 
-		impl<'a, Block: BlockT> ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>> for
+		impl<'a, Block: BlockT> ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>> for
 			AccessedRootsRecorder<'a, Block>
 		{
 			fn build_anchor(&self, hash: Block::Hash)
@@ -681,11 +691,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		}
 
-		impl<'a, Block: BlockT> ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>> for
+		impl<'a, Block: BlockT> ChangesTrieStorage<HashFor<Block>, NumberFor<Block>> for
 			AccessedRootsRecorder<'a, Block>
 		{
 			fn as_roots_storage(&self)
-				-> &dyn sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>>
+				-> &dyn sp_state_machine::ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>>
 			{
 				self
 			}
@@ -729,7 +739,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				zero: config_zero,
 				end: config_end.map(|(config_end_number, _)| config_end_number),
 			};
-			let proof_range = key_changes_proof::<HasherFor<Block>, _>(
+			let proof_range = key_changes_proof::<HashFor<Block>, _>(
 				config_range,
 				&recording_storage,
 				first_number,
@@ -774,7 +784,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Ok(())
 		}, ())?;
 
-		Ok(merge_storage_proofs(proofs))
+		Ok(StorageProof::merge(proofs))
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
@@ -796,7 +806,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.map(|block|
 				block.and_then(|block| block.digest().log(DigestItem::as_changes_trie_root).cloned()))
 			);
-		let proof = cht::build_proof::<Block::Header, HasherFor<Block>, _, _>(
+		let proof = cht::build_proof::<Block::Header, HashFor<Block>, _, _>(
 			cht_size,
 			cht_num,
 			blocks,

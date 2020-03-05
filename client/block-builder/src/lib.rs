@@ -28,9 +28,7 @@ use codec::Encode;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{
-		Header as HeaderT, Hash, Block as BlockT, HashFor, DigestFor, NumberFor, One, HasherFor,
-	},
+	traits::{Header as HeaderT, Hash, Block as BlockT, HashFor, DigestFor, NumberFor, One},
 };
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
@@ -47,7 +45,7 @@ use sc_client_api::backend;
 /// backend to get the state of the block. Furthermore an optional `proof` is included which
 /// can be used to proof that the build block contains the expected data. The `proof` will
 /// only be set when proof recording was activated.
-pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HasherFor<Block>>> {
+pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> {
 	/// The actual block that was build.
 	pub block: Block,
 	/// The changes that need to be applied to the backend to get the state of the build block.
@@ -56,7 +54,7 @@ pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HasherF
 	pub proof: Option<StorageProof>,
 }
 
-impl<Block: BlockT, StateBackend: backend::StateBackend<HasherFor<Block>>> BuiltBlock<Block, StateBackend> {
+impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> BuiltBlock<Block, StateBackend> {
 	/// Convert into the inner values.
 	pub fn into_inner(self) -> (Block, StorageChanges<StateBackend, Block>, Option<StorageProof>) {
 		(self.block, self.storage_changes, self.proof)
@@ -152,12 +150,20 @@ where
 
 	/// Push onto the block's list of extrinsics.
 	///
-	/// This will treat incoming extrinsic `xt` as trusted and skip signature check (for signed transactions).
-	pub fn push_trusted(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
+	/// This will treat incoming extrinsic `xt` as trusted and skip signature check
+	/// (for signed transactions).
+	pub fn push_trusted(
+		&mut self,
+		xt: <Block as BlockT>::Extrinsic,
+	) -> Result<(), ApiErrorFor<A, Block>> {
 		self.push_internal(xt, true)
 	}
 
-	fn push_internal(&mut self, xt: <Block as BlockT>::Extrinsic, skip_signature: bool) -> Result<(), ApiErrorFor<A, Block>> {
+	fn push_internal(
+		&mut self,
+		xt: <Block as BlockT>::Extrinsic,
+		skip_signature: bool,
+	) -> Result<(), ApiErrorFor<A, Block>> {
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
@@ -175,7 +181,7 @@ where
 					ExecutionContext::BlockConstruction,
 					xt.clone(),
 				)?
-			} else  {
+			} else {
 				api.apply_extrinsic_with_context(
 					block_id,
 					ExecutionContext::BlockConstruction,
@@ -239,5 +245,43 @@ where
 			storage_changes: storage_changes?,
 			proof,
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_blockchain::HeaderBackend;
+	use sp_core::Blake2Hasher;
+	use sp_state_machine::Backend;
+	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
+
+	#[test]
+	fn block_building_storage_proof_does_not_include_runtime_by_default() {
+		let builder = substrate_test_runtime_client::TestClientBuilder::new();
+		let backend = builder.backend();
+		let client = builder.build();
+
+		let block = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		).unwrap().build().unwrap();
+
+		let proof = block.proof.expect("Proof is build on request");
+
+		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
+			block.storage_changes.transaction_storage_root,
+			proof,
+		).unwrap();
+
+		assert!(
+			backend.storage(&sp_core::storage::well_known_keys::CODE)
+				.unwrap_err()
+				.contains("Database missing expected key"),
+		);
 	}
 }

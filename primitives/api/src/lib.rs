@@ -50,7 +50,7 @@ pub use sp_core::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
 pub use sp_runtime::{
 	traits::{
-		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HasherFor, NumberFor,
+		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HashFor, NumberFor,
 		Header as HeaderT, Hash as HashT,
 	},
 	generic::BlockId, transaction_validity::TransactionValidity,
@@ -228,22 +228,20 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 
 /// A type that records all accessed trie nodes and generates a proof out of it.
 #[cfg(feature = "std")]
-pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<
-	<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher
->;
+pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<HashFor<B>>;
 
 /// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
 pub type StorageTransactionCache<Block, Backend> =
 	sp_state_machine::StorageTransactionCache<
-		<Backend as StateBackend<HasherFor<Block>>>::Transaction, HasherFor<Block>, NumberFor<Block>
+		<Backend as StateBackend<HashFor<Block>>>::Transaction, HashFor<Block>, NumberFor<Block>
 	>;
 
 #[cfg(feature = "std")]
 pub type StorageChanges<SBackend, Block> =
 	sp_state_machine::StorageChanges<
-		<SBackend as StateBackend<HasherFor<Block>>>::Transaction,
-		HasherFor<Block>,
+		<SBackend as StateBackend<HashFor<Block>>>::Transaction,
+		HashFor<Block>,
 		NumberFor<Block>
 	>;
 
@@ -255,7 +253,7 @@ pub type StateBackendFor<P, Block> =
 /// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
 #[cfg(feature = "std")]
 pub type TransactionFor<P, Block> =
-	<StateBackendFor<P, Block> as StateBackend<HasherFor<Block>>>::Transaction;
+	<StateBackendFor<P, Block> as StateBackend<HashFor<Block>>>::Transaction;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -279,7 +277,7 @@ pub trait ApiErrorExt {
 #[cfg(feature = "std")]
 pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HasherFor<Block>>;
+	type StateBackend: StateBackend<HashFor<Block>>;
 
 	/// The given closure will be called with api instance. Inside the closure any api call is
 	/// allowed. After doing the api call, the closure is allowed to map the `Result` to a
@@ -328,7 +326,7 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	fn into_storage_changes(
 		&self,
 		backend: &Self::StateBackend,
-		changes_trie_state: Option<&ChangesTrieState<HasherFor<Block>, NumberFor<Block>>>,
+		changes_trie_state: Option<&ChangesTrieState<HashFor<Block>, NumberFor<Block>>>,
 		parent_hash: Block::Hash,
 	) -> Result<StorageChanges<Self::StateBackend, Block>, String> where Self: Sized;
 }
@@ -355,7 +353,7 @@ pub enum InitializeBlock<'a, Block: BlockT> {
 
 /// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
-pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HasherFor<Block>>> {
+pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashFor<Block>>> {
 	/// A reference to something that implements the [`Core`] api.
 	pub core_api: &'a C,
 	/// The block id that determines the state that should be setup when calling the function.
@@ -389,7 +387,7 @@ pub trait CallApiAt<Block: BlockT> {
 	type Error: std::fmt::Debug + From<String>;
 
 	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HasherFor<Block>>;
+	type StateBackend: StateBackend<HashFor<Block>>;
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.

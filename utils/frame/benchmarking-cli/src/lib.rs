@@ -121,6 +121,7 @@ impl BenchmarkCmd {
 				self.repeat,
 			).encode(),
 			Default::default(),
+			&sp_state_machine::backend::get_runtime_code(&state)?,
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;

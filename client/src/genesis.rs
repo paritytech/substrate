@@ -53,7 +53,7 @@ mod tests {
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, Sr25519Keyring,
 	};
-	use sp_core::Blake2Hasher;
+	use sp_runtime::traits::BlakeTwo256;
 	use hex_literal::*;
 
 	native_executor_instance!(
@@ -67,7 +67,7 @@ mod tests {
 	}
 
 	fn construct_block(
-		backend: &InMemoryBackend<Blake2Hasher>,
+		backend: &InMemoryBackend<BlakeTwo256>,
 		number: BlockNumber,
 		parent_hash: Hash,
 		state_root: Hash,
@@ -78,7 +78,7 @@ mod tests {
 		let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
 
 		let iter = transactions.iter().map(Encode::encode);
-		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(iter).into();
+		let extrinsics_root = Layout::<BlakeTwo256>::ordered_trie_root(iter).into();
 
 		let mut header = Header {
 			parent_hash,
@@ -89,6 +89,8 @@ mod tests {
 		};
 		let hash = header.hash();
 		let mut overlay = OverlayedChanges::default();
+		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
+			.expect("Code is part of the backend");
 
 		StateMachine::new(
 			backend,
@@ -98,6 +100,7 @@ mod tests {
 			"Core_initialize_block",
 			&header.encode(),
 			Default::default(),
+			&runtime_code,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -111,6 +114,7 @@ mod tests {
 				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
 				Default::default(),
+				&runtime_code,
 			).execute(
 				ExecutionStrategy::NativeElseWasm,
 			).unwrap();
@@ -124,6 +128,7 @@ mod tests {
 			"BlockBuilder_finalize_block",
 			&[],
 			Default::default(),
+			&runtime_code,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -132,7 +137,7 @@ mod tests {
 		(vec![].and(&Block { header, extrinsics: transactions }), hash)
 	}
 
-	fn block1(genesis_hash: Hash, backend: &InMemoryBackend<Blake2Hasher>) -> (Vec<u8>, Hash) {
+	fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8>, Hash) {
 		construct_block(
 			backend,
 			1,
@@ -161,6 +166,8 @@ mod tests {
 
 		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
+		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
+			.expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
@@ -171,6 +178,7 @@ mod tests {
 			"Core_execute_block",
 			&b1data,
 			Default::default(),
+			&runtime_code,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -189,6 +197,8 @@ mod tests {
 
 		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
+		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
+			.expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
@@ -199,6 +209,7 @@ mod tests {
 			"Core_execute_block",
 			&b1data,
 			Default::default(),
+			&runtime_code,
 		).execute(
 			ExecutionStrategy::AlwaysWasm,
 		).unwrap();
@@ -217,6 +228,8 @@ mod tests {
 
 		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
+		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
+			.expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
 		let r = StateMachine::new(
@@ -227,6 +240,7 @@ mod tests {
 			"Core_execute_block",
 			&b1data,
 			Default::default(),
+			&runtime_code,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		);

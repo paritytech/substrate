@@ -19,7 +19,7 @@
 use std::{panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, HasherFor},
+	generic::BlockId, traits::{Block as BlockT, HashFor},
 };
 use sp_state_machine::{
 	OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
@@ -89,7 +89,7 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: sp_state_machine::Backend<HasherFor<B>>>(
+	fn prove_at_state<S: sp_state_machine::Backend<HashFor<B>>>(
 		&self,
 		mut state: S,
 		overlay: &mut OverlayedChanges,
@@ -107,9 +107,9 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<B>>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<B>>>(
 		&self,
-		trie_state: &sp_state_machine::TrieBackend<S, HasherFor<B>>,
+		trie_state: &sp_state_machine::TrieBackend<S, HashFor<B>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]

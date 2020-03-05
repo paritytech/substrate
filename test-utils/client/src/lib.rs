@@ -33,7 +33,7 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring,
 	sr25519::Keyring as Sr25519Keyring,
 };
-pub use sp_core::{Blake2Hasher, traits::BareCryptoStorePtr};
+pub use sp_core::traits::BareCryptoStorePtr;
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
 pub use self::client_ext::{ClientExt, ClientBlockImportExt};
@@ -41,13 +41,13 @@ pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 use std::sync::Arc;
 use std::collections::HashMap;
 use sp_core::storage::{well_known_keys, ChildInfo};
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
 use sc_client::LocalCallExecutor;
 
 /// Test client light database backend.
 pub type LightBackend<Block> = sc_client::light::backend::Backend<
 	sc_client_db::light::LightStorage<Block>,
-	Blake2Hasher,
+	BlakeTwo256,
 >;
 
 /// A genesis storage initialization trait.
