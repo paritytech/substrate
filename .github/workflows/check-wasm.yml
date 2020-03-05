@@ -5,7 +5,7 @@ jobs:
   check-web-wasm:
     name:                            Check web wasm
     runs-on:                         ubuntu-latest
-    container:                       generalbeck/rust-builder:latest
+    container:                       parity/rust-builder:00f5094-20200221
     env:
       CARGO_INCREMENTAL:               0
     steps:
