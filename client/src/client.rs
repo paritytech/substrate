@@ -830,15 +830,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					&state,
 					changes_trie_state.as_ref(),
 					*parent_hash,
-				);
-
-				{
-					let _lock = self.backend.get_import_lock().read();
-					self.backend.destroy_state(state)?;
-				}
-
-				// Make sure to consume the error, only after we have destroyed the state.
-				let gen_storage_changes = gen_storage_changes?;
+				)?;
 
 				if import_block.header.state_root()
 					!= &gen_storage_changes.transaction_storage_root
@@ -1792,7 +1784,9 @@ where
 	fn best_block_header(&self) -> sp_blockchain::Result<<Block as BlockT>::Header> {
 		let info = self.backend.blockchain().info();
 		let import_lock = self.backend.get_import_lock();
-		let best_hash = self.backend.blockchain().best_containing(info.best_hash, None, import_lock)?
+		let best_hash = self.backend
+			.blockchain()
+			.best_containing(info.best_hash, None, import_lock)?
 			.unwrap_or(info.best_hash);
 
 		Ok(self.backend.blockchain().header(BlockId::Hash(best_hash))?
