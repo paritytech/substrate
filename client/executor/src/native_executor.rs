@@ -231,82 +231,81 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	type Error = Error;
 
-	fn call
-		<
-			R: Decode + Encode + PartialEq,
-			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-			>(
-				&self,
-				ext: &mut dyn Externalities,
-				method: &str,
-				data: &[u8],
-				use_native: bool,
-				native_call: Option<NC>,
-			) -> (Result<NativeOrEncoded<R>>, bool){
-				let mut used_native = false;
-				let result = self.wasm.with_instance(
-					CodeSource::Externalities,
-					ext,
-					|instance, onchain_version, mut ext| {
-					let onchain_version = onchain_version.ok_or_else(
-						|| Error::ApiError("Unknown version".into())
-					)?;
-					match (
-						use_native,
-						onchain_version.can_call_with(&self.native_version.runtime_version),
-						native_call,
-					) {
-						(_, false, _) => {
-							trace!(
-								target: "executor",
-								"Request for native execution failed (native: {}, chain: {})",
-								self.native_version.runtime_version,
-								onchain_version,
-							);
+	fn call<
+		R: Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
+	>(
+		&self,
+		ext: &mut dyn Externalities,
+		method: &str,
+		data: &[u8],
+		use_native: bool,
+		native_call: Option<NC>,
+	) -> (Result<NativeOrEncoded<R>>, bool){
+		let mut used_native = false;
+		let result = self.wasm.with_instance(
+			CodeSource::Externalities,
+			ext,
+			|instance, onchain_version, mut ext| {
+			let onchain_version = onchain_version.ok_or_else(
+				|| Error::ApiError("Unknown version".into())
+			)?;
+			match (
+				use_native,
+				onchain_version.can_call_with(&self.native_version.runtime_version),
+				native_call,
+			) {
+				(_, false, _) => {
+					trace!(
+						target: "executor",
+						"Request for native execution failed (native: {}, chain: {})",
+						self.native_version.runtime_version,
+						onchain_version,
+					);
 
-							with_externalities_safe(
-								&mut **ext,
-								move || instance.call(method, data).map(NativeOrEncoded::Encoded)
-							)
-						}
-						(false, _, _) => {
-							with_externalities_safe(
-								&mut **ext,
-								move || instance.call(method, data).map(NativeOrEncoded::Encoded)
-							)
-						},
-						(true, true, Some(call)) => {
-							trace!(
-								target: "executor",
-								"Request for native execution with native call succeeded \
-								(native: {}, chain: {}).",
-								self.native_version.runtime_version,
-								onchain_version,
-							);
+					with_externalities_safe(
+						&mut **ext,
+						move || instance.call(method, data).map(NativeOrEncoded::Encoded)
+					)
+				}
+				(false, _, _) => {
+					with_externalities_safe(
+						&mut **ext,
+						move || instance.call(method, data).map(NativeOrEncoded::Encoded)
+					)
+				},
+				(true, true, Some(call)) => {
+					trace!(
+						target: "executor",
+						"Request for native execution with native call succeeded \
+						(native: {}, chain: {}).",
+						self.native_version.runtime_version,
+						onchain_version,
+					);
 
-							used_native = true;
-							let res = with_externalities_safe(&mut **ext, move || (call)())
-								.and_then(|r| r
-									.map(NativeOrEncoded::Native)
-									.map_err(|s| Error::ApiError(s.to_string()))
-								);
+					used_native = true;
+					let res = with_externalities_safe(&mut **ext, move || (call)())
+						.and_then(|r| r
+							.map(NativeOrEncoded::Native)
+							.map_err(|s| Error::ApiError(s.to_string()))
+						);
 
-							Ok(res)
-						}
-						_ => {
-							trace!(
-								target: "executor",
-								"Request for native execution succeeded (native: {}, chain: {})",
-								self.native_version.runtime_version,
-								onchain_version
-							);
+					Ok(res)
+				}
+				_ => {
+					trace!(
+						target: "executor",
+						"Request for native execution succeeded (native: {}, chain: {})",
+						self.native_version.runtime_version,
+						onchain_version
+					);
 
-							used_native = true;
-							Ok(D::dispatch(&mut **ext, method, data).map(NativeOrEncoded::Encoded))
-						}
-					}
-				});
-				(result, used_native)
+					used_native = true;
+					Ok(D::dispatch(&mut **ext, method, data).map(NativeOrEncoded::Encoded))
+				}
+			}
+		});
+		(result, used_native)
 	}
 }
 
