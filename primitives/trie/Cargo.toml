@@ -27,6 +27,7 @@ trie-bench = "0.20.0"
 trie-standardmap = "0.15.2"
 criterion = "0.2.11"
 hex-literal = "0.2.1"
+sp-runtime = { version = "2.0.0-alpha.2", path = "../runtime" }
 
 [features]
 default = ["std"]

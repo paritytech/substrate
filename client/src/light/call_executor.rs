@@ -23,7 +23,7 @@ use std::{
 use codec::{Encode, Decode};
 use sp_core::{convert_hash, NativeOrEncoded, traits::CodeExecutor};
 use sp_runtime::{
-	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HasherFor},
+	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HashFor},
 };
 use sp_externalities::Extensions;
 use sp_state_machine::{
@@ -153,9 +153,9 @@ impl<Block, B, Local> CallExecutor<Block> for
 		}
 	}
 
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<Block>>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<Block>>>(
 		&self,
-		_state: &sp_state_machine::TrieBackend<S, HasherFor<Block>>,
+		_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
@@ -181,7 +181,7 @@ pub fn prove_execution<Block, S, E>(
 ) -> ClientResult<(Vec<u8>, StorageProof)>
 	where
 		Block: BlockT,
-		S: StateBackend<HasherFor<Block>>,
+		S: StateBackend<HashFor<Block>>,
 		E: CallExecutor<Block>,
 {
 	let trie_state = state.as_trie_backend()
@@ -285,9 +285,10 @@ mod tests {
 		runtime::{Header, Digest, Block}, TestClient, ClientBlockImportExt,
 	};
 	use sc_executor::{NativeExecutor, WasmExecutionMethod};
-	use sp_core::{Blake2Hasher, H256};
+	use sp_core::H256;
 	use sc_client_api::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
+	use sp_runtime::traits::BlakeTwo256;
 
 	struct DummyCallExecutor;
 
@@ -342,9 +343,9 @@ mod tests {
 			unreachable!()
 		}
 
-		fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<Block>>>(
+		fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<Block>>>(
 			&self,
-			_trie_state: &sp_state_machine::TrieBackend<S, HasherFor<Block>>,
+			_trie_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
 			_overlay: &mut OverlayedChanges,
 			_method: &str,
 			_call_data: &[u8]
@@ -375,7 +376,7 @@ mod tests {
 			).unwrap();
 
 			// check remote execution proof locally
-			let local_result = check_execution_proof::<_, _, Blake2Hasher>(
+			let local_result = check_execution_proof::<_, _, BlakeTwo256>(
 				&local_executor(),
 				&RemoteCallRequest {
 					block: substrate_test_runtime_client::runtime::Hash::default(),
@@ -402,7 +403,7 @@ mod tests {
 			).unwrap();
 
 			// check remote execution proof locally
-			let execution_result = check_execution_proof_with_make_header::<_, _, Blake2Hasher, _>(
+			let execution_result = check_execution_proof_with_make_header::<_, _, BlakeTwo256, _>(
 				&local_executor(),
 				&RemoteCallRequest {
 					block: substrate_test_runtime_client::runtime::Hash::default(),

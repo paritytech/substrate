@@ -23,7 +23,7 @@ use sp_runtime_interface::*;
 use sp_runtime_interface_test_wasm::{WASM_BINARY, test_api::HostFunctions};
 use sp_wasm_interface::HostFunctions as HostFunctionsT;
 
-type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher, u64>;
+type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits::BlakeTwo256, u64>;
 
 fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 	let mut ext = TestExternalities::default();
@@ -126,9 +126,4 @@ fn test_encoded_return_value_memory_is_freed() {
 #[test]
 fn test_array_return_value_memory_is_freed() {
 	call_wasm_method::<HostFunctions>("test_array_return_value_memory_is_freed");
-}
-
-#[test]
-fn test_ext_blake2_256() {
-	call_wasm_method::<HostFunctions>("test_ext_blake2_256");
 }
