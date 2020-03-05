@@ -16,13 +16,13 @@ jobs:
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
-#      - name:                        Restore ~/.cache/sccache
-#        uses:                        actions/cache@v1.1.2
-#        with:
-#          path:                      ~/.cache/sccache
-#          key:                       sccache-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-#      - name:                        Sccache statistics
-#        run:                         sccache --show-stats
+      - name:                        Restore ~/.cache/sccache
+        uses:                        actions/cache@v1.1.2
+        with:
+          path:                      ~/.cache/sccache
+          key:                       sccache-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
+      - name:                        Sccache statistics
+        run:                         sccache --show-stats
       - name:                        Run cargo build wasm
         continue-on-error:           true
         run: |
