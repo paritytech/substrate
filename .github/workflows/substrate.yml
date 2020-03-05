@@ -32,8 +32,8 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[cargo-check-benches]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Sccache statistics
-        run:                   sccache --show-stats
+      - name:                  Environment
+        run:                   printenv
       - name:                  Run cargo check benches
         uses:                  actions-rs/cargo@v1
         continue-on-error:     true
@@ -78,8 +78,8 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[cargo-check-subkey]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Sccache statistics
-        run:                   sccache --show-stats
+      - name:                  Environment
+        run:                   printenv
       - name:                  Run cargo check subkey
         uses:                  actions-rs/cargo@v1
         continue-on-error:     true
@@ -351,7 +351,7 @@ jobs:
 #build
   build-substrate:
     name:                      Build linux Substrate
-    needs:                     [linux-test-stable]
+    needs:                     [test-stable]
     runs-on:                   self-hosted
     container:                 generalbeck/rust-builder:latest
     steps:
@@ -393,7 +393,7 @@ jobs:
 
   build-subkey:
     name:                      Build linux Subkey
-    needs:                     [linux-test-stable]
+    needs:                     [test-stable]
     runs-on:                   [self-hosted, macos-latest, windows-latest]
     steps:
       - name:                  Checkout sources
@@ -434,7 +434,7 @@ jobs:
 
   build-rust-doc-release:
     name:                      Build Rust doc release
-    needs:                     [linux-test-stable]
+    needs:                     [test-stable]
     runs-on:                   self-hosted
     steps:
       - name:                  Checkout sources

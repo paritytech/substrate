@@ -31,8 +31,8 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[check-web-wasm]-${{ hashFiles('**/Cargo.lock') }}
-      - name:              Sccache statistics
-        run:               sccache --show-stats
+      - name:              Environment
+        run:               printenv
       - name:              Run cargo build wasm
         continue-on-error: true
         run:               |
