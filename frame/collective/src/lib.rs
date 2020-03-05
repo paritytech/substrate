@@ -308,7 +308,7 @@ decl_module! {
 			ensure!(voting.index == index, Error::<T, I>::WrongIndex);
 			ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
-			// default to true only if there's a prime and they vpted in favour.
+			// default to true only if there's a prime and they voted in favour.
 			let default = Self::prime().map_or(
 				false,
 				|who| voting.ayes.iter().any(|a| a == &who),
