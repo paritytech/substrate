@@ -38,7 +38,11 @@ jobs:
         run:                   time cargo +nightly check --benches --all
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   .github/workflows/clean-target.sh
+        run:                   |
+          echo "Prepare build directory for cache"
+          find ./target/debug -maxdepth 1 -type f -delete;
+          rm -fr ./target/debug/{deps,.fingerprint}/*;
+          rm -f  ./target/.rustc_info.json;
 
   cargo-check-subkey:
     name:                      Cargo check subkey
@@ -76,7 +80,12 @@ jobs:
         run:                   time cargo check --release --manifest-path "bin/utils/subkey/Cargo.toml" --release
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   .github/workflows/clean-target.sh
+        run:                   |
+          echo "Prepare build directory for cache"
+          find ./target/debug -maxdepth 1 -type f -delete;
+          rm -fr ./target/debug/{deps,.fingerprint}/*;
+          rm -f  ./target/.rustc_info.json;
+
 
   test-stable:
     name:                      Test linux stable
@@ -115,7 +124,12 @@ jobs:
         run:                   cargo test --all --release --verbose --locked
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   .github/workflows/clean-target.sh
+        run:                   |
+          echo "Prepare build directory for cache"
+          find ./target/debug -maxdepth 1 -type f -delete;
+          rm -fr ./target/debug/{deps,.fingerprint}/*{substrate}*;
+          rm -f  ./target/.rustc_info.json;
+
 
   test-frame-staking:
     name:                      Test frame staking
@@ -154,7 +168,11 @@ jobs:
         run:                   cargo test --manifest-path "./frame/staking/Cargo.toml" --release --verbose --no-default-features --features std
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   .github/workflows/clean-target.sh
+        run:                   |
+          echo "Prepare build directory for cache"
+          find ./target/debug -maxdepth 1 -type f -delete;
+          rm -fr ./target/debug/{deps,.fingerprint}/*;
+          rm -f  ./target/.rustc_info.json;
 
   test-wasmtime:
     name:                      Test wasmtime
@@ -193,7 +211,11 @@ jobs:
         run:                   cargo test --manifest-path "./client/executor/Cargo.toml" --release --verbose --features wasmtime
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   .github/workflows/clean-target.sh
+        run:                   |
+          echo "Prepare build directory for cache"
+          find ./target/debug -maxdepth 1 -type f -delete;
+          rm -fr ./target/debug/{deps,.fingerprint}/*;
+          rm -f  ./target/.rustc_info.json;
 
   test-stable-int:
     name:                      Test linux stable int
@@ -234,7 +256,11 @@ jobs:
           RUST_LOG:            "sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace"
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   .github/workflows/clean-target.sh
+        run:                   |
+          echo "Prepare build directory for cache"
+          find ./target/debug -maxdepth 1 -type f -delete;
+          rm -fr ./target/debug/{deps,.fingerprint}/*;
+          rm -f  ./target/.rustc_info.json;
 
   test-full-crypto-feature:
     name:                      Test full crypto feature
@@ -277,7 +303,11 @@ jobs:
         run:                   cargo +nightly build --manifest-path "./primitives/application-crypto/Cargo.toml"--verbose --no-default-features --features full_crypto
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   .github/workflows/clean-target.sh
+        run:                   |
+          echo "Prepare build directory for cache"
+          find ./target/debug -maxdepth 1 -type f -delete;
+          rm -fr ./target/debug/{deps,.fingerprint}/*;
+          rm -f  ./target/.rustc_info.json;
 
   linux-dependency-rules:
     name:                      Test dependency rules

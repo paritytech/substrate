@@ -36,6 +36,9 @@ jobs:
       - name:              Run cargo build wasm
         continue-on-error: true
         run:               |
+           rustup show
+           cargo --version
+           sccache --show-stats
            # WASM support is in progress. As more and more crates support WASM, we
            # should add entries here. See https://github.com/paritytech/substrate/issues/2416
            time cargo build --target=wasm32-unknown-unknown -p sp-io
