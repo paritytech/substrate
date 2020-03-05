@@ -172,6 +172,18 @@ decl_storage! {
 			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) [u8; 32]
 			=> Option<Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
 	}
+	add_extra_genesis {
+		config(multi_accounts): Vec<(T::AccountId, u16, Vec<T::AccountId>)>;
+		build(|config: &GenesisConfig<T>| {
+			for &(ref depositor, threshold, ref other_signatories) in config.multi_accounts.iter() {
+				<Module<T>>::create(
+					T::Origin::from(Some(depositor.clone()).into()),
+					threshold,
+					other_signatories.clone(),
+				).expect("unable to create multi accounts with the provided genesis");
+			}
+		});
+	}
 }
 
 decl_error! {
