@@ -32,8 +32,6 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[cargo-check-benches]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Environment
-        run:                   printenv
       - name:                  Run cargo check benches
         uses:                  actions-rs/cargo@v1
         continue-on-error:     true
@@ -78,8 +76,6 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[cargo-check-subkey]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Environment
-        run:                   printenv
       - name:                  Run cargo check subkey
         uses:                  actions-rs/cargo@v1
         continue-on-error:     true
@@ -124,8 +120,6 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[linux-test-stable]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Sccache statistics
-        run:                   sccache --show-stats
       - name:                  Run cargo Test linux stable
         uses:                  actions-rs/cargo@v1
         continue-on-error:     true
@@ -170,8 +164,6 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[test-frame-staking]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Sccache statistics
-        run:                   sccache --show-stats
       - name:                  Run cargo Test frame staking
         continue-on-error:     true
         uses:                  actions-rs/cargo@v1
@@ -216,8 +208,6 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[test-wasmtime]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Sccache statistics
-        run:                   sccache --show-stats
       - name:                  Run cargo Test wasmtime
         uses:                  actions-rs/cargo@v1
         continue-on-error:     true
@@ -262,8 +252,6 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[test-stable-int]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Sccache statistics
-        run:                   sccache --show-stats
       - name:                  Run cargo Test linux stable int
         uses:                  actions-rs/cargo@v1
         continue-on-error:     true
@@ -310,8 +298,6 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[test-full-crypto-feature]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Sccache statistics
-        run:                   sccache --show-stats
       - name:                  Run cargo build crypto core
         uses:                  actions-rs/cargo@v1
         continue-on-error:     true
@@ -377,8 +363,6 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Sccache statistics
-        run:                   sccache --show-stats
       - name:                  Run cargo build Substrate
         uses:                  actions-rs/cargo@v1
         with:
@@ -418,8 +402,6 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[build-subkey]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Sccache statistics
-        run:                   sccache --show-stats
       - name:                  Run cargo build Subkey
         uses:                  actions-rs/cargo@v1
         with:

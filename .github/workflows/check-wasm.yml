@@ -38,11 +38,6 @@ jobs:
         run:               |
            rustup update
            rustup show
-           echo "CARGO_HOME: "$CARGO_HOME
-           printenv
-           ls -a $HOME
-           ls -a /usr/local/cargo/
-           ls -a /usr/local/cargo/git
            rustup target add wasm32-unknown-unknown
            # WASM support is in progress. As more and more crates support WASM, we
            # should add entries here. See https://github.com/paritytech/substrate/issues/2416
