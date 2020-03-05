@@ -17,7 +17,7 @@
 use codec::{Encode, Decode};
 use frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
-use sp_core::{NeverNativeValue, NativeOrEncoded, traits::{CodeExecutor, RuntimeCode}};
+use sp_core::{NeverNativeValue, NativeOrEncoded, traits::CodeExecutor};
 use sp_runtime::{ApplyExtrinsicResult, traits::{Header as HeaderT, BlakeTwo256}};
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
 use sc_executor::error::Result;
@@ -71,11 +71,8 @@ pub fn executor_call<
 	native_call: Option<NC>,
 ) -> (Result<NativeOrEncoded<R>>, bool) {
 	let mut t = t.ext();
-	let runtime_code = RuntimeCode::from_externalities(&t)
-		.expect("Code should be part of the externalities");
 	executor().call::<_, R, NC>(
 		&mut t,
-		&runtime_code,
 		method,
 		data,
 		use_native,
