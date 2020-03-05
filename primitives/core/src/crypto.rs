@@ -454,6 +454,8 @@ ss58_address_format!(
 		(36, "centrifuge", "Centrifuge Chain mainnet, direct checksum, standard account (*25519).")
 	SubstraTeeAccountDirect =>
 		(44, "substratee", "Any SubstraTEE off-chain network private account, direct checksum, standard account (*25519).")
+	DarwiniaAccountDirect =>
+		(18, "darwinia", "Darwinia Chain mainnet, direct checksum, standard account (*25519).")
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
