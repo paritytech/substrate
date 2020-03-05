@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
-use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
+use crate::{TaskManagerBuilder, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
 use crate::config::{Configuration, DatabaseConfig, KeystoreConfig};
 use sc_client_api::{
@@ -30,7 +30,7 @@ use sp_consensus::import_queue::ImportQueue;
 use futures::{
 	Future, FutureExt, StreamExt,
 	channel::mpsc,
-	future::{select, ready}
+	future::ready,
 };
 use sc_keystore::{Store as Keystore};
 use log::{info, warn, error};
@@ -44,7 +44,6 @@ use sp_runtime::traits::{
 use sp_api::ProvideRuntimeApi;
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
-	borrow::Cow,
 	io::{Read, Write, Seek},
 	marker::PhantomData, sync::Arc, pin::Pin
 };
@@ -117,6 +116,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TF
 	config: Configuration<TGen, TCSExt>,
 	pub (crate) client: Arc<TCl>,
 	backend: Arc<Backend>,
+	tasks_builder: TaskManagerBuilder,
 	keystore: Arc<RwLock<Keystore>>,
 	fetcher: Option<TFchr>,
 	select_chain: Option<TSc>,
@@ -181,6 +181,7 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 	TFullClient<TBl, TRtApi, TExecDisp>,
 	Arc<TFullBackend<TBl>>,
 	Arc<RwLock<sc_keystore::Store>>,
+	TaskManagerBuilder,
 );
 
 /// Creates a new full client for the given config.
@@ -211,6 +212,8 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 		KeystoreConfig::InMemory => Keystore::new_in_memory(),
 		KeystoreConfig::None => return Err("No keystore config provided!".into()),
 	};
+
+	let tasks_builder = TaskManagerBuilder::new();
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
@@ -262,7 +265,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 		)?
 	};
 
-	Ok((client, backend, keystore))
+	Ok((client, backend, keystore, tasks_builder))
 }
 
 impl<TGen, TCSExt> ServiceBuilder<(), (), TGen, TCSExt, (), (), (), (), (), (), (), (), ()>
@@ -285,7 +288,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TFullBackend<TBl>,
 	>, Error> {
-		let (client, backend, keystore) = new_full_parts(&config)?;
+		let (client, backend, keystore, tasks_builder) = new_full_parts(&config)?;
 
 		let client = Arc::new(client);
 
@@ -294,6 +297,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			client,
 			backend,
 			keystore,
+			tasks_builder,
 			fetcher: None,
 			select_chain: None,
 			import_queue: (),
@@ -326,6 +330,8 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
+		let tasks_builder = TaskManagerBuilder::new();
+
 		let keystore = match &config.keystore {
 			KeystoreConfig::Path { path, password } => Keystore::open(
 				path.clone(),
@@ -378,6 +384,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			config,
 			client,
 			backend,
+			tasks_builder,
 			keystore,
 			fetcher: Some(fetcher.clone()),
 			select_chain: None,
@@ -451,6 +458,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
+			tasks_builder: self.tasks_builder,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain,
@@ -494,6 +502,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
+			tasks_builder: self.tasks_builder,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -534,6 +543,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
+			tasks_builder: self.tasks_builder,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -598,6 +608,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
+			tasks_builder: self.tasks_builder,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -657,6 +668,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 		Ok(ServiceBuilder {
 			config: self.config,
 			client: self.client,
+			tasks_builder: self.tasks_builder,
 			backend: self.backend,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
@@ -686,6 +698,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
+			tasks_builder: self.tasks_builder,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -707,6 +720,7 @@ impl<TBl, TRtApi, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, T
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
+			tasks_builder: self.tasks_builder,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -819,6 +833,7 @@ ServiceBuilder<
 			marker: _,
 			mut config,
 			client,
+			tasks_builder,
 			fetcher: on_demand,
 			backend,
 			keystore,
@@ -838,12 +853,6 @@ ServiceBuilder<
 			&BlockId::Hash(client.chain_info().best_hash),
 			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 		)?;
-
-		let (signal, exit) = exit_future::signal();
-
-		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
-		let (to_spawn_tx, to_spawn_rx) =
-			mpsc::unbounded::<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>();
 
 		// A side-channel for essential tasks to communicate shutdown.
 		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
@@ -869,7 +878,7 @@ ServiceBuilder<
 			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
-			executor: SpawnTaskHandle { sender: to_spawn_tx.clone(), on_exit: exit.clone() },
+			executor: tasks_builder.spawn_handle(),
 		});
 
 		let protocol_id = {
@@ -899,11 +908,9 @@ ServiceBuilder<
 		let network_params = sc_network::config::Params {
 			roles: config.roles,
 			executor: {
-				let to_spawn_tx = to_spawn_tx.clone();
+				let spawn_handle = tasks_builder.spawn_handle();
 				Some(Box::new(move |fut| {
-					if let Err(e) = to_spawn_tx.unbounded_send((fut, From::from("libp2p-node"))) {
-						error!("Failed to spawn libp2p background task: {:?}", e);
-					}
+					spawn_handle.spawn("libp2p-node", fut);
 				}))
 			},
 			network_config: config.network.clone(),
@@ -935,20 +942,19 @@ ServiceBuilder<
 			_ => None,
 		};
 
+		let spawn_handle = tasks_builder.spawn_handle();
+
 		// Spawn background tasks which were stacked during the
 		// service building.
 		for (title, background_task) in background_tasks {
-			let _ = to_spawn_tx.unbounded_send((
-				background_task,
-				title.into(),
-			));
+			spawn_handle.spawn(title, background_task);
 		}
 
 		{
 			// block notifications
 			let txpool = Arc::downgrade(&transaction_pool);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
-			let to_spawn_tx_ = to_spawn_tx.clone();
+			let notifications_spawn_handle = tasks_builder.spawn_handle();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 			let is_validator = config.roles.is_authority();
 
@@ -970,15 +976,14 @@ ServiceBuilder<
 						let offchain = offchain.as_ref().and_then(|o| o.upgrade());
 						match offchain {
 							Some(offchain) if is_new_best => {
-								let future = offchain.on_block_imported(
-									&header,
-									network_state_info.clone(),
-									is_validator,
+								notifications_spawn_handle.spawn(
+									"offchain-on-block",
+									offchain.on_block_imported(
+										&header,
+										network_state_info.clone(),
+										is_validator,
+									),
 								);
-								let _ = to_spawn_tx_.unbounded_send((
-									Box::pin(future),
-									From::from("offchain-on-block"),
-								));
 							},
 							Some(_) => log::debug!(
 									target: "sc_offchain",
@@ -991,20 +996,19 @@ ServiceBuilder<
 
 					let txpool = txpool.upgrade();
 					if let Some(txpool) = txpool.as_ref() {
-						let future = txpool.maintain(event);
-						let _ = to_spawn_tx_.unbounded_send((
-							Box::pin(future),
-							From::from("txpool-maintain")
-						));
+						notifications_spawn_handle.spawn(
+							"txpool-maintain",
+							txpool.maintain(event),
+						);
 					}
 
 					ready(())
 				});
 
-			let _ = to_spawn_tx.unbounded_send((
-				Box::pin(select(events, exit.clone()).map(drop)),
-				From::from("txpool-and-offchain-notif"),
-			));
+			spawn_handle.spawn(
+				"txpool-and-offchain-notif",
+				events,
+			);
 		}
 
 		{
@@ -1024,28 +1028,20 @@ ServiceBuilder<
 					ready(())
 				});
 
-			let _ = to_spawn_tx.unbounded_send((
-				Box::pin(select(events, exit.clone()).map(drop)),
-				From::from("telemetry-on-block"),
-			));
+			spawn_handle.spawn(
+				"telemetry-on-block",
+				events,
+			);
 		}
 
 		// Prometheus metrics
 		let metrics = if let Some((registry, port)) = prometheus_registry_and_port.clone() {
 			let metrics = ServiceMetrics::register(&registry)?;
-
 			metrics.node_roles.set(u64::from(config.roles.bits()));
-
-			let future = select(
-				prometheus_endpoint::init_prometheus(port, registry).boxed(),
-				exit.clone()
-			).map(drop);
-
-			let _ = to_spawn_tx.unbounded_send((
-				Box::pin(future),
-				From::from("prometheus-endpoint")
-			));
-
+			spawn_handle.spawn(
+				"prometheus-endpoint",
+				prometheus_endpoint::init_prometheus(port, registry).map(drop)
+			);
 			Some(metrics)
 		} else {
 			None
@@ -1123,10 +1119,10 @@ ServiceBuilder<
 			ready(())
 		});
 
-		let _ = to_spawn_tx.unbounded_send((
-			Box::pin(select(tel_task, exit.clone()).map(drop)),
-			From::from("telemetry-periodic-send"),
-		));
+		spawn_handle.spawn(
+			"telemetry-periodic-send",
+			tel_task,
+		);
 
 		// Periodically send the network state to the telemetry.
 		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
@@ -1139,10 +1135,10 @@ ServiceBuilder<
 			);
 			ready(())
 		});
-		let _ = to_spawn_tx.unbounded_send((
-			Box::pin(select(tel_task_2, exit.clone()).map(drop)),
-			From::from("telemetry-periodic-network-state"),
-		));
+		spawn_handle.spawn(
+			"telemetry-periodic-network-state",
+			tel_task_2,
+		);
 
 		// RPC
 		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
@@ -1156,10 +1152,7 @@ ServiceBuilder<
 				properties: chain_spec.properties().clone(),
 			};
 
-			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(SpawnTaskHandle {
-				sender: to_spawn_tx.clone(),
-				on_exit: exit.clone()
-			}));
+			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(tasks_builder.spawn_handle()));
 
 			let (chain, state) = if let (Some(remote_backend), Some(on_demand)) =
 				(remote_backend.as_ref(), on_demand.as_ref()) {
@@ -1217,18 +1210,17 @@ ServiceBuilder<
 		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 
-
-		let _ = to_spawn_tx.unbounded_send((
-			Box::pin(select(build_network_future(
+		spawn_handle.spawn(
+			"network-worker",
+			build_network_future(
 				config.roles,
 				network_mut,
 				client.clone(),
 				network_status_sinks.clone(),
 				system_rpc_rx,
 				has_bootnodes,
-			), exit.clone()).map(drop)),
-			From::from("network-worker"),
-		));
+			),
+		);
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -1269,9 +1261,12 @@ ServiceBuilder<
 					});
 					ready(())
 				});
-			let _ = to_spawn_tx.unbounded_send((Box::pin(select(
-				future, exit.clone()
-			).map(drop)), From::from("telemetry-worker")));
+
+			spawn_handle.spawn(
+				"telemetry-worker",
+				future,
+			);
+
 			telemetry
 		});
 
@@ -1288,21 +1283,13 @@ ServiceBuilder<
 
 		Ok(Service {
 			client,
+			task_manager: tasks_builder.into_task_manager(config.task_executor.ok_or(Error::TaskExecutorRequired)?),
 			network,
 			network_status_sinks,
 			select_chain,
 			transaction_pool,
-			exit,
-			signal: Some(signal),
 			essential_failed_tx,
 			essential_failed_rx,
-			to_spawn_tx,
-			to_spawn_rx,
-			task_executor: if let Some(exec) = config.task_executor {
-				exec
-			} else {
-				return Err(Error::TaskExecutorRequired);
-			},
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,
