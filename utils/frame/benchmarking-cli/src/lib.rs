@@ -39,6 +39,14 @@ pub struct BenchmarkCmd {
 	#[structopt(short, long, use_delimiter = true)]
 	pub steps: Vec<u32>,
 
+	/// Indicates lowest values for each of the component ranges.
+	#[structopt(long, use_delimiter = true)]
+	pub lowest_range_values: Vec<u32>,
+
+	/// Indicates highest values for each of the component ranges.
+	#[structopt(long, use_delimiter = true)]
+	pub highest_range_values: Vec<u32>,
+
 	/// Select how many repetitions of this benchmark should run.
 	#[structopt(short, long, default_value = "1")]
 	pub repeat: u32,
@@ -104,39 +112,50 @@ impl BenchmarkCmd {
 			&mut changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
-			&(&self.pallet, &self.extrinsic, self.steps.clone(), self.repeat).encode(),
+			&(
+				&self.pallet,
+				&self.extrinsic,
+				self.lowest_range_values.clone(),
+				self.highest_range_values.clone(),
+				self.steps.clone(),
+				self.repeat,
+			).encode(),
 			Default::default(),
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
-		let results = <Option<Vec<BenchmarkResults>> as Decode>::decode(&mut &result[..])
-			.unwrap_or(None);
 
-		if let Some(results) = results {
-			// Print benchmark metadata
-			println!(
-				"Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}",
-				self.pallet,
-				self.extrinsic,
-				self.steps,
-				self.repeat,
-			);
+		let results = <Result<Vec<BenchmarkResults>, String> as Decode>::decode(&mut &result[..])
+			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
-			// Print the table header
-			results[0].0.iter().for_each(|param| print!("{:?},", param.0));
+		match results {
+			Ok(results) => {
+				// Print benchmark metadata
+				println!(
+					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
+					self.pallet,
+					self.extrinsic,
+					self.lowest_range_values,
+					self.highest_range_values,
+					self.steps,
+					self.repeat,
+				);
 
-			print!("extrinsic_time,storage_root_time\n");
-			// Print the values
-			results.iter().for_each(|result| {
-				let parameters = &result.0;
-				parameters.iter().for_each(|param| print!("{:?},", param.1));
-				// Print extrinsic time and storage root time
-				print!("{:?},{:?}\n", result.1, result.2);
-			});
+				// Print the table header
+				results[0].0.iter().for_each(|param| print!("{:?},", param.0));
 
-			eprintln!("Done.");
-		} else {
-			eprintln!("No Results.");
+				print!("extrinsic_time,storage_root_time\n");
+				// Print the values
+				results.iter().for_each(|result| {
+					let parameters = &result.0;
+					parameters.iter().for_each(|param| print!("{:?},", param.1));
+					// Print extrinsic time and storage root time
+					print!("{:?},{:?}\n", result.1, result.2);
+				});
+
+				eprintln!("Done.");
+			}
+			Err(error) => eprintln!("Error: {:?}", error),
 		}
 
 		Ok(())

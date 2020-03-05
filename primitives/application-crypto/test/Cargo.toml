@@ -10,8 +10,8 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-core = { version = "2.0.0-alpha.1", default-features = false, path = "../../core" }
+sp-core = { version = "2.0.0-alpha.2", default-features = false, path = "../../core" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }
-sp-runtime = { version = "2.0.0-alpha.1", path = "../../runtime" }
-sp-api = { version = "2.0.0-alpha.1", path = "../../api" }
-sp-application-crypto = { version = "2.0.0-alpha.1", path = "../" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../runtime" }
+sp-api = { version = "2.0.0-alpha.2", path = "../../api" }
+sp-application-crypto = { version = "2.0.0-alpha.2", path = "../" }

@@ -46,9 +46,11 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::HashMap;
 
-use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo};
-use sc_client_api::backend::NewBlockState;
-use sc_client_api::backend::PrunableStateChangesTrieStorage;
+use sc_client_api::{
+	ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo, MemorySize,
+	execution_extensions::ExecutionExtensions,
+	backend::{NewBlockState, PrunableStateChangesTrieStorage},
+};
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	well_known_cache_keys, HeaderBackend,
@@ -65,7 +67,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HasherFor,
+	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HashFor,
 };
 use sc_executor::RuntimeInfo;
 use sp_state_machine::{
@@ -82,6 +84,7 @@ use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_s
 use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
+use prometheus_endpoint::Registry;
 
 #[cfg(any(feature = "kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;
@@ -97,7 +100,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState<B> = sp_state_machine::TrieBackend<
-	Arc<dyn sp_state_machine::Storage<HasherFor<B>>>, HasherFor<B>
+	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
 >;
 
 /// Re-export the KVDB trait so that one can pass an implementation of it.
@@ -137,10 +140,10 @@ impl<Block: BlockT> std::fmt::Debug for RefTrackingState<Block> {
 	}
 }
 
-impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
-	type Error =  <DbState<B> as StateBackend<HasherFor<B>>>::Error;
-	type Transaction = <DbState<B> as StateBackend<HasherFor<B>>>::Transaction;
-	type TrieBackendStorage = <DbState<B> as StateBackend<HasherFor<B>>>::TrieBackendStorage;
+impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
+	type Error =  <DbState<B> as StateBackend<HashFor<B>>>::Error;
+	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
+	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.storage(key)
@@ -249,7 +252,7 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 	}
 
 	fn as_trie_backend(&mut self)
-		-> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HasherFor<B>>>
+		-> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>>>
 	{
 		self.state.as_trie_backend()
 	}
@@ -289,6 +292,7 @@ pub fn new_client<E, S, Block, RA>(
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
+	prometheus_registry: Option<Registry>,
 ) -> Result<(
 		sc_client::Client<
 			Backend<Block>,
@@ -315,6 +319,7 @@ pub fn new_client<E, S, Block, RA>(
 			fork_blocks,
 			bad_blocks,
 			execution_extensions,
+			prometheus_registry,
 		)?,
 		backend,
 	))
@@ -519,10 +524,10 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: SyncingCachingState<RefTrackingState<Block>, Block>,
-	db_updates: PrefixedMemoryDB<HasherFor<Block>>,
+	db_updates: PrefixedMemoryDB<HashFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
-	changes_trie_updates: MemoryDB<HasherFor<Block>>,
+	changes_trie_updates: MemoryDB<HashFor<Block>>,
 	changes_trie_build_cache_update: Option<ChangesTrieCacheAction<Block::Hash, NumberFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	pending_block: Option<PendingBlock<Block>>,
@@ -574,7 +579,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		// Currently cache isn't implemented on full nodes.
 	}
 
-	fn update_db_storage(&mut self, update: PrefixedMemoryDB<HasherFor<Block>>) -> ClientResult<()> {
+	fn update_db_storage(&mut self, update: PrefixedMemoryDB<HashFor<Block>>) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -621,7 +626,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 	fn update_changes_trie(
 		&mut self,
-		update: ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>,
+		update: ChangesTrieTransaction<HashFor<Block>, NumberFor<Block>>,
 	) -> ClientResult<()> {
 		self.changes_trie_updates = update.0;
 		self.changes_trie_build_cache_update = Some(update.1);
@@ -666,9 +671,9 @@ struct StorageDb<Block: BlockT> {
 	pub state_db: StateDb<Block::Hash, Vec<u8>>,
 }
 
-impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for StorageDb<Block> {
+impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		let key = prefixed_key::<HasherFor<Block>>(key, prefix);
+		let key = prefixed_key::<HashFor<Block>>(key, prefix);
 		self.state_db.get(&key, self)
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
@@ -688,13 +693,13 @@ struct DbGenesisStorage<Block: BlockT>(pub Block::Hash);
 impl<Block: BlockT> DbGenesisStorage<Block> {
 	pub fn new() -> Self {
 		let mut root = Block::Hash::default();
-		let mut mdb = MemoryDB::<HasherFor<Block>>::default();
-		sp_state_machine::TrieDBMut::<HasherFor<Block>>::new(&mut mdb, &mut root);
+		let mut mdb = MemoryDB::<HashFor<Block>>::default();
+		sp_state_machine::TrieDBMut::<HashFor<Block>>::new(&mut mdb, &mut root);
 		DbGenesisStorage(root)
 	}
 }
 
-impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for DbGenesisStorage<Block> {
+impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStorage<Block> {
 	fn get(&self, _key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
@@ -1473,13 +1478,17 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				self.state_usage.take(),
 			)
 		);
-		let database_cache = parity_util_mem::malloc_size(&*self.storage.db);
-		let state_cache = (*&self.shared_cache).lock().used_storage_cache_size();
+		let database_cache = MemorySize::from_bytes(parity_util_mem::malloc_size(&*self.storage.db));
+		let state_cache = MemorySize::from_bytes(
+			(*&self.shared_cache).lock().used_storage_cache_size(),
+		);
+		let state_db = self.storage.state_db.memory_info();
 
 		Some(UsageInfo {
 			memory: MemoryInfo {
 				state_cache,
 				database_cache,
+				state_db,
 			},
 			io: IoInfo {
 				transactions: io_stats.transactions,
@@ -1676,7 +1685,7 @@ pub(crate) mod tests {
 	use hash_db::{HashDB, EMPTY_PREFIX};
 	use super::*;
 	use crate::columns;
-	use sp_core::{Blake2Hasher, H256};
+	use sp_core::H256;
 	use sc_client_api::backend::{Backend as BTrait, BlockImportOperation as Op};
 	use sc_client::blockchain::Backend as BLBTrait;
 	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
@@ -1687,11 +1696,11 @@ pub(crate) mod tests {
 
 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
-	pub fn prepare_changes(changes: Vec<(Vec<u8>, Vec<u8>)>) -> (H256, MemoryDB<Blake2Hasher>) {
+	pub fn prepare_changes(changes: Vec<(Vec<u8>, Vec<u8>)>) -> (H256, MemoryDB<BlakeTwo256>) {
 		let mut changes_root = H256::default();
-		let mut changes_trie_update = MemoryDB::<Blake2Hasher>::default();
+		let mut changes_trie_update = MemoryDB::<BlakeTwo256>::default();
 		{
-			let mut trie = TrieDBMut::<Blake2Hasher>::new(
+			let mut trie = TrieDBMut::<BlakeTwo256>::new(
 				&mut changes_trie_update,
 				&mut changes_root
 			);
@@ -1924,7 +1933,7 @@ pub(crate) mod tests {
 			backend.commit_operation(op).unwrap();
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
-				&sp_trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
 			).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
@@ -1961,7 +1970,7 @@ pub(crate) mod tests {
 			backend.commit_operation(op).unwrap();
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
-				&sp_trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
 			).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
@@ -1999,7 +2008,7 @@ pub(crate) mod tests {
 
 			assert!(backend.storage.db.get(
 				columns::STATE,
-				&sp_trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
 			).unwrap().is_some());
 			hash
 		};
@@ -2033,7 +2042,7 @@ pub(crate) mod tests {
 			backend.commit_operation(op).unwrap();
 			assert!(backend.storage.db.get(
 				columns::STATE,
-				&sp_trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
 			).unwrap().is_none());
 		}
 
@@ -2042,7 +2051,7 @@ pub(crate) mod tests {
 		backend.finalize_block(BlockId::Number(3), None).unwrap();
 		assert!(backend.storage.db.get(
 			columns::STATE,
-			&sp_trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+			&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
 		).unwrap().is_none());
 	}
 

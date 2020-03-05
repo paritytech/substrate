@@ -18,8 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use log::{info, trace, warn};
 use parking_lot::RwLock;
-use sc_client::Client;
-use sc_client_api::{CallExecutor, backend::{AuxStore, Backend, Finalizer, TransactionFor}};
+use sc_client_api::backend::{AuxStore, Backend, Finalizer, TransactionFor};
 use sp_blockchain::{HeaderBackend, Error as ClientError, well_known_cache_keys};
 use parity_scale_codec::{Encode, Decode};
 use sp_consensus::{
@@ -48,17 +47,15 @@ const LIGHT_AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const LIGHT_CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 
 /// Create light block importer.
-pub fn light_block_import<B, E, Block: BlockT, RA>(
-	client: Arc<Client<B, E, Block, RA>>,
-	backend: Arc<B>,
+pub fn light_block_import<BE, Block: BlockT, Client>(
+	client: Arc<Client>,
+	backend: Arc<BE>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
-) -> Result<GrandpaLightBlockImport<B, E, Block, RA>, ClientError>
+) -> Result<GrandpaLightBlockImport<BE, Block, Client>, ClientError>
 	where
-		B: Backend<Block> + 'static,
-		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
-		Client<B, E, Block, RA>: AuxStore,
+		BE: Backend<Block>,
+		Client: crate::ClientForGrandpa<Block, BE>,
 {
 	let info = client.info();
 	let import_data = load_aux_import_data(
@@ -79,14 +76,14 @@ pub fn light_block_import<B, E, Block: BlockT, RA>(
 /// It is responsible for:
 /// - checking GRANDPA justifications;
 /// - fetching finality proofs for blocks that are enacting consensus changes.
-pub struct GrandpaLightBlockImport<B, E, Block: BlockT, RA> {
-	client: Arc<Client<B, E, Block, RA>>,
-	backend: Arc<B>,
+pub struct GrandpaLightBlockImport<BE, Block: BlockT, Client> {
+	client: Arc<Client>,
+	backend: Arc<BE>,
 	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
 	data: Arc<RwLock<LightImportData<Block>>>,
 }
 
-impl<B, E, Block: BlockT, RA> Clone for GrandpaLightBlockImport<B, E, Block, RA> {
+impl<BE, Block: BlockT, Client> Clone for GrandpaLightBlockImport<BE, Block, Client> {
 	fn clone(&self) -> Self {
 		GrandpaLightBlockImport {
 			client: self.client.clone(),
@@ -111,27 +108,26 @@ struct LightAuthoritySet {
 	authorities: AuthorityList,
 }
 
-impl<B, E, Block: BlockT, RA> GrandpaLightBlockImport<B, E, Block, RA> {
+impl<BE, Block: BlockT, Client> GrandpaLightBlockImport<BE, Block, Client> {
 	/// Create finality proof request builder.
 	pub fn create_finality_proof_request_builder(&self) -> BoxFinalityProofRequestBuilder<Block> {
 		Box::new(GrandpaFinalityProofRequestBuilder(self.data.clone())) as _
 	}
 }
 
-impl<B, E, Block: BlockT, RA> BlockImport<Block>
-	for GrandpaLightBlockImport<B, E, Block, RA> where
+impl<BE, Block: BlockT, Client> BlockImport<Block>
+	for GrandpaLightBlockImport<BE, Block, Client> where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
-		B: Backend<Block> + 'static,
-		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		RA: Send + Sync,
-		for<'a> &'a Client<B, E, Block, RA>:
-			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<B, Block>>
-			+ Finalizer<Block, B>
+		BE: Backend<Block> + 'static,
+		for<'a> &'a Client:
+			HeaderBackend<Block>
+			+ BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<BE, Block>>
+			+ Finalizer<Block, BE>
 			+ AuxStore,
 {
 	type Error = ConsensusError;
-	type Transaction = TransactionFor<B, Block>;
+	type Transaction = TransactionFor<BE, Block>;
 
 	fn import_block(
 		&mut self,
@@ -151,23 +147,22 @@ impl<B, E, Block: BlockT, RA> BlockImport<Block>
 	}
 }
 
-impl<B, E, Block: BlockT, RA> FinalityProofImport<Block>
-	for GrandpaLightBlockImport<B, E, Block, RA> where
+impl<BE, Block: BlockT, Client> FinalityProofImport<Block>
+	for GrandpaLightBlockImport<BE, Block, Client> where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
-		B: Backend<Block> + 'static,
-		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		RA: Send + Sync,
-		for<'a> &'a Client<B, E, Block, RA>:
-			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<B, Block>>
-			+ Finalizer<Block, B>
+		BE: Backend<Block> + 'static,
+		for<'a> &'a Client:
+			HeaderBackend<Block>
+			+ BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<BE, Block>>
+			+ Finalizer<Block, BE>
 			+ AuxStore,
 {
 	type Error = ConsensusError;
 
 	fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
 		let mut out = Vec::new();
-		let chain_info = self.client.chain_info();
+		let chain_info = (&*self.client).info();
 
 		let data = self.data.read();
 		for (pending_number, pending_hash) in data.consensus_changes.pending_changes() {
@@ -567,7 +562,7 @@ fn on_post_finalization_error(error: ClientError, value_type: &str) -> Consensus
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use sp_consensus::ForkChoiceStrategy;
+	use sp_consensus::{ForkChoiceStrategy, BlockImport};
 	use sp_finality_grandpa::AuthorityId;
 	use sp_core::{H256, crypto::Public};
 	use substrate_test_runtime_client::sc_client::in_mem::Blockchain as InMemoryAuxStore;
@@ -575,37 +570,36 @@ pub mod tests {
 	use crate::tests::TestApi;
 	use crate::finality_proof::tests::TestJustification;
 
-	pub struct NoJustificationsImport<B, E, Block: BlockT, RA>(
-		pub GrandpaLightBlockImport<B, E, Block, RA>
+	pub struct NoJustificationsImport<BE, Block: BlockT, Client>(
+		pub GrandpaLightBlockImport<BE, Block, Client>
 	);
 
-	impl<B, E, Block: BlockT, RA> Clone
-		for NoJustificationsImport<B, E, Block, RA> where
+	impl<BE, Block: BlockT, Client> Clone
+		for NoJustificationsImport<BE, Block, Client> where
 			NumberFor<Block>: finality_grandpa::BlockNumberOps,
-			B: Backend<Block> + 'static,
-			E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 			DigestFor<Block>: Encode,
-			RA: Send + Sync,
+			BE: Backend<Block> + 'static,
 	{
 		fn clone(&self) -> Self {
 			NoJustificationsImport(self.0.clone())
 		}
 	}
 
-	impl<B, E, Block: BlockT, RA> BlockImport<Block>
-		for NoJustificationsImport<B, E, Block, RA> where
+	impl<BE, Block: BlockT, Client> BlockImport<Block>
+		for NoJustificationsImport<BE, Block, Client> where
 			NumberFor<Block>: finality_grandpa::BlockNumberOps,
-			B: Backend<Block> + 'static,
-			E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 			DigestFor<Block>: Encode,
-			RA: Send + Sync,
-			for<'a> &'a Client<B, E, Block, RA>:
-				BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<B, Block>>
-				+ Finalizer<Block, B>
+			BE: Backend<Block> + 'static,
+			for <'a > &'a Client:
+				HeaderBackend<Block>
+				+ BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<BE, Block>>
+				+ Finalizer<Block, BE>
 				+ AuxStore,
+			GrandpaLightBlockImport<BE, Block, Client>:
+				BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = ConsensusError>
 	{
 		type Error = ConsensusError;
-		type Transaction = TransactionFor<B, Block>;
+		type Transaction = TransactionFor<BE, Block>;
 
 		fn import_block(
 			&mut self,
@@ -624,16 +618,15 @@ pub mod tests {
 		}
 	}
 
-	impl<B, E, Block: BlockT, RA> FinalityProofImport<Block>
-		for NoJustificationsImport<B, E, Block, RA> where
+	impl<BE, Block: BlockT, Client> FinalityProofImport<Block>
+		for NoJustificationsImport<BE, Block, Client> where
 			NumberFor<Block>: finality_grandpa::BlockNumberOps,
-			B: Backend<Block> + 'static,
-			E: CallExecutor<Block> + 'static + Clone + Send + Sync,
+			BE: Backend<Block> + 'static,
 			DigestFor<Block>: Encode,
-			RA: Send + Sync,
-			for<'a> &'a Client<B, E, Block, RA>:
-				BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<B, Block>>
-				+ Finalizer<Block, B>
+			for <'a > &'a Client:
+				HeaderBackend<Block>
+				+ BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<BE, Block>>
+				+ Finalizer<Block, BE>
 				+ AuxStore,
 	{
 		type Error = ConsensusError;
@@ -654,19 +647,15 @@ pub mod tests {
 	}
 
 	/// Creates light block import that ignores justifications that came outside of finality proofs.
-	pub fn light_block_import_without_justifications<B, E, Block: BlockT, RA>(
-		client: Arc<Client<B, E, Block, RA>>,
-		backend: Arc<B>,
+	pub fn light_block_import_without_justifications<BE, Block: BlockT, Client>(
+		client: Arc<Client>,
+		backend: Arc<BE>,
 		genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 		authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
-	) -> Result<NoJustificationsImport<B, E, Block, RA>, ClientError>
+	) -> Result<NoJustificationsImport<BE, Block, Client>, ClientError>
 		where
-			B: Backend<Block> + 'static,
-			E: CallExecutor<Block> + 'static + Clone + Send + Sync,
-			RA: Send + Sync,
-			Client<B, E, Block, RA>: BlockImport<Block, Error = ConsensusError>
-				+ Finalizer<Block, B>
-				+ AuxStore,
+			BE: Backend<Block> + 'static,
+			Client: crate::ClientForGrandpa<Block, BE>,
 	{
 		light_block_import(client, backend, genesis_authorities_provider, authority_set_provider)
 			.map(NoJustificationsImport)
@@ -677,6 +666,7 @@ pub mod tests {
 		justification: Option<Justification>,
 	) -> ImportResult {
 		let (client, _backend) = substrate_test_runtime_client::new_light();
+		let client = Arc::new(client);
 		let mut import_data = LightImportData {
 			last_finalized: Default::default(),
 			authority_set: LightAuthoritySet::genesis(vec![(AuthorityId::from_slice(&[1; 32]), 1)]),
@@ -696,7 +686,7 @@ pub mod tests {
 		block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		do_import_block::<_, _, _, TestJustification>(
-			&client,
+			&*client,
 			&mut import_data,
 			block,
 			new_cache,

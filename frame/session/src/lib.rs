@@ -162,10 +162,15 @@ pub trait SessionManager<ValidatorId> {
 	/// Because the session pallet can queue validator set the ending session can be lower than the
 	/// last new session index.
 	fn end_session(end_index: SessionIndex);
+	/// Start the session.
+	///
+	/// The session start to be used for validation
+	fn start_session(start_index: SessionIndex);
 }
 
 impl<A> SessionManager<A> for () {
 	fn new_session(_: SessionIndex) -> Option<Vec<A>> { None }
+	fn start_session(_: SessionIndex) {}
 	fn end_session(_: SessionIndex) {}
 }
 
@@ -423,6 +428,8 @@ decl_storage! {
 
 			<Validators<T>>::put(initial_validators_0);
 			<QueuedKeys<T>>::put(queued_keys);
+
+			T::SessionManager::start_session(0);
 		});
 	}
 }
@@ -520,6 +527,8 @@ impl<T: Trait> Module<T> {
 		// Inform the session handlers that a session is going to end.
 		T::SessionHandler::on_before_session_ending();
 
+		T::SessionManager::end_session(session_index);
+
 		// Get queued session keys and validators.
 		let session_keys = <QueuedKeys<T>>::get();
 		let validators = session_keys.iter()
@@ -532,11 +541,11 @@ impl<T: Trait> Module<T> {
 			DisabledValidators::take();
 		}
 
-		T::SessionManager::end_session(session_index);
-
 		// Increment session index.
 		let session_index = session_index + 1;
 		CurrentIndex::put(session_index);
+
+		T::SessionManager::start_session(session_index);
 
 		// Get next validator set.
 		let maybe_next_validators = T::SessionManager::new_session(session_index + 1);

@@ -2079,6 +2079,22 @@ fn deploy_and_call_other_contract() {
 	});
 }
 
+#[test]
+fn deploy_works_without_gas_price() {
+	let (wasm, code_hash) = compile_module::<Test>(CODE_GET_RUNTIME_STORAGE).unwrap();
+	ExtBuilder::default().existential_deposit(50).gas_price(0).build().execute_with(|| {
+		Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			100,
+			100_000,
+			code_hash.into(),
+			vec![],
+		));
+	});
+}
+
 const CODE_SELF_DESTRUCT: &str = r#"
 (module
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
