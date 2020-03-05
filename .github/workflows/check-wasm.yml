@@ -5,7 +5,7 @@ jobs:
   check-web-wasm:
     name:                            Check web wasm
     runs-on:                         ubuntu-latest
-    container:                       parity/rust-builder:00f5094-20200221
+    container:                       parity/rust-builder:latest
     env:
       CARGO_INCREMENTAL:               0
     steps:
@@ -16,16 +16,17 @@ jobs:
       - name:                        Checkout submodules
         shell:                       bash
         run:                         git submodule update --init --recursive
-      - name:                        Restore ~/.cache/sccache
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      ~/.cache/sccache
-          key:                       sccache-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Sccache statistics
-        run:                         sccache --show-stats
+#      - name:                        Restore ~/.cache/sccache
+#        uses:                        actions/cache@v1.1.2
+#        with:
+#          path:                      ~/.cache/sccache
+#          key:                       sccache-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
+#      - name:                        Sccache statistics
+#        run:                         sccache --show-stats
       - name:                        Run cargo build wasm
         continue-on-error:           true
         run: |
+           rustup update
            # WASM support is in progress. As more and more crates support WASM, we
            # should add entries here. See https://github.com/paritytech/substrate/issues/2416
            time cargo build --target=wasm32-unknown-unknown -p sp-io
