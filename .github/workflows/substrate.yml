@@ -33,15 +33,12 @@ jobs:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[cargo-check-benches]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo check benches
-        uses:                  actions-rs/cargo@v1
+        shell:                 bash
         continue-on-error:     true
-        with:
-          command:             check
-          toolchain:           nightly
-          args:                --benches --all
+        run:                   time cargo +nightly check --benches --all
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   bash .github/workflows/clean-target.sh
+        run:                   .github/workflows/clean-target.sh
 
   cargo-check-subkey:
     name:                      Cargo check subkey
@@ -74,14 +71,12 @@ jobs:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[cargo-check-subkey]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo check subkey
-        uses:                  actions-rs/cargo@v1
+        shell:                 bash
         continue-on-error:     true
-        with:
-          command:             check
-          args:                --manifest-path "bin/utils/subkey/Cargo.toml" --release
+        run:                   time cargo check --release --manifest-path "bin/utils/subkey/Cargo.toml" --release
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   bash .github/workflows/clean-target.sh
+        run:                   .github/workflows/clean-target.sh
 
   test-stable:
     name:                      Test linux stable
@@ -115,14 +110,12 @@ jobs:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[linux-test-stable]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo Test linux stable
-        uses:                  actions-rs/cargo@v1
+        shell:                 bash
         continue-on-error:     true
-        with:
-          command:             test
-          args:                --all --release --verbose --locked
+        run:                   cargo test --all --release --verbose --locked
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   bash .github/workflows/clean-target.sh
+        run:                   .github/workflows/clean-target.sh
 
   test-frame-staking:
     name:                      Test frame staking
@@ -156,14 +149,12 @@ jobs:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[test-frame-staking]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo Test frame staking
+        shell:                 bash
         continue-on-error:     true
-        uses:                  actions-rs/cargo@v1
-        with:
-          command:             test
-          args:                --manifest-path "./frame/staking/Cargo.toml" --release --verbose --no-default-features --features std
+        run:                   cargo test --manifest-path "./frame/staking/Cargo.toml" --release --verbose --no-default-features --features std
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   bash .github/workflows/clean-target.sh
+        run:                   .github/workflows/clean-target.sh
 
   test-wasmtime:
     name:                      Test wasmtime
@@ -197,14 +188,12 @@ jobs:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[test-wasmtime]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo Test wasmtime
-        uses:                  actions-rs/cargo@v1
+        shell:                 bash
         continue-on-error:     true
-        with:
-          command:             test
-          args:                --manifest-path "./client/executor/Cargo.toml" --release --verbose --features wasmtime
+        run:                   cargo test --manifest-path "./client/executor/Cargo.toml" --release --verbose --features wasmtime
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   bash .github/workflows/clean-target.sh
+        run:                   .github/workflows/clean-target.sh
 
   test-stable-int:
     name:                      Test linux stable int
@@ -238,16 +227,14 @@ jobs:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[test-stable-int]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo Test linux stable int
-        uses:                  actions-rs/cargo@v1
+        shell:                 bash
         continue-on-error:     true
-        with:
-          command:             test
-          args:                -p node-cli --release --verbose --locked -- --ignored
+        run:                   cargo test -p node-cli --release --verbose --locked -- --ignored
         env:
           RUST_LOG:            "sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace"
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   bash .github/workflows/clean-target.sh
+        run:                   .github/workflows/clean-target.sh
 
   test-full-crypto-feature:
     name:                      Test full crypto feature
@@ -281,22 +268,16 @@ jobs:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[test-full-crypto-feature]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo build crypto core
-        uses:                  actions-rs/cargo@v1
+        shell:                 bash
         continue-on-error:     true
-        with:
-          command:             build
-          toolchain:           nightly
-          args:                --manifest-path "./primitives/core/Cargo.toml" --verbose --no-default-features --features full_crypto
+        run:                   cargo +nightly build --manifest-path "./primitives/core/Cargo.toml" --verbose --no-default-features --features full_crypto
       - name:                  Run cargo build crypto apps
-        uses:                  actions-rs/cargo@v1
+        shell:                 bash
         continue-on-error:     true
-        with:
-          command:             build
-          toolchain:           nightly
-          args:                --manifest-path "./primitives/application-crypto/Cargo.toml"--verbose --no-default-features --features full_crypto
+        run:                   cargo +nightly build --manifest-path "./primitives/application-crypto/Cargo.toml"--verbose --no-default-features --features full_crypto
       - name:                  Prepare build directory for cache
         shell:                 bash
-        run:                   bash .github/workflows/clean-target.sh
+        run:                   .github/workflows/clean-target.sh
 
   linux-dependency-rules:
     name:                      Test dependency rules
@@ -312,7 +293,7 @@ jobs:
         run:                   git submodule update --init --recursive
       - name:                  Test dependency rules
         shell:                 bash
-        run:                   bash .maintain/ensure-deps.sh
+        run:                   .maintain/ensure-deps.sh
 #build
   build-substrate:
     name:                      Build linux Substrate
@@ -343,10 +324,8 @@ jobs:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo build Substrate
-        uses:                  actions-rs/cargo@v1
-        with:
-          command:             build
-          args:                --release --verbose
+        shell:                 bash
+        run:                   cargo build --release --verbose
       - name:                  Upload artifact
         uses:                  actions/upload-artifact@v1
         continue-on-error:     true
@@ -383,10 +362,8 @@ jobs:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[build-subkey]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo build Subkey
-        uses:                  actions-rs/cargo@v1
-        with:
-          command:             build
-          args:                --release --verbose
+        shell:                 bash
+        run:                   cargo build --release --verbose
       - name:                  Upload artifact
         uses:                  actions/upload-artifact@v1
         continue-on-error:     true
@@ -423,8 +400,5 @@ jobs:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[build-rust-doc-release]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo doc release
-        uses:                  actions-rs/cargo@v1
-        with:
-          command:             doc
-          toolchain:           nightly
-          args:                --release --all --verbose
+        shell:                 bash
+        run:                   cargo +nightly doc --release --all --verbose
