@@ -23,6 +23,7 @@ pub mod client;
 pub mod execution_extensions;
 pub mod light;
 pub mod notifications;
+pub mod proof_provider;
 
 pub use sp_blockchain as blockchain;
 pub use backend::*;
@@ -31,6 +32,7 @@ pub use call_executor::*;
 pub use client::*;
 pub use light::*;
 pub use notifications::*;
+pub use proof_provider::*;
 
 pub use sp_state_machine::{StorageProof, ExecutionStrategy};
 
