@@ -27,6 +27,8 @@ jobs:
         continue-on-error:           true
         run: |
            rustup update
+           rustup show
+           rustup target add wasm32-unknown-unknown
            # WASM support is in progress. As more and more crates support WASM, we
            # should add entries here. See https://github.com/paritytech/substrate/issues/2416
            time cargo build --target=wasm32-unknown-unknown -p sp-io
