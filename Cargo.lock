@@ -7819,6 +7819,7 @@ dependencies = [
  "build-helper",
  "cargo_metadata",
  "fs2",
+ "itertools",
  "tempfile",
  "toml",
  "walkdir",
