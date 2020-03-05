@@ -10,7 +10,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+codec = { package = "parity-scale-codec", version = "1.2.0" }
 sc-client-api = { version = "2.0.0-alpha.2", path = "../../api" }
 sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
 sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockchain" }

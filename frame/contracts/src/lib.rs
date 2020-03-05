@@ -254,7 +254,7 @@ where
 		let mut buf = Vec::new();
 		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
 		buf.extend_from_slice(code_hash.as_ref());
-		RawTombstoneContractInfo(Hasher::hash(&buf[..]), PhantomData)
+		RawTombstoneContractInfo(<Hasher as Hash>::hash(&buf[..]), PhantomData)
 	}
 }
 

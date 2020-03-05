@@ -94,7 +94,33 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		Ok(self.client().chain_info().finalized_hash)
 	}
 
-	/// New head subscription
+	/// All new head subscription
+	fn subscribe_all_heads(
+		&self,
+		_metadata: crate::metadata::Metadata,
+		subscriber: Subscriber<Block::Header>,
+	) {
+		subscribe_headers(
+			self.client(),
+			self.subscriptions(),
+			subscriber,
+			|| self.client().chain_info().best_hash,
+			|| self.client().import_notification_stream()
+				.map(|notification| Ok::<_, ()>(notification.header))
+				.compat(),
+		)
+	}
+
+	/// Unsubscribe from all head subscription.
+	fn unsubscribe_all_heads(
+		&self,
+		_metadata: Option<crate::metadata::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
+		Ok(self.subscriptions().cancel(id))
+	}
+
+	/// New best head subscription
 	fn subscribe_new_heads(
 		&self,
 		_metadata: crate::metadata::Metadata,
@@ -112,7 +138,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		)
 	}
 
-	/// Unsubscribe from new head subscription.
+	/// Unsubscribe from new best head subscription.
 	fn unsubscribe_new_heads(
 		&self,
 		_metadata: Option<crate::metadata::Metadata>,
@@ -121,7 +147,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		Ok(self.subscriptions().cancel(id))
 	}
 
-	/// New head subscription
+	/// Finalized head subscription
 	fn subscribe_finalized_heads(
 		&self,
 		_metadata: crate::metadata::Metadata,
@@ -138,7 +164,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		)
 	}
 
-	/// Unsubscribe from new head subscription.
+	/// Unsubscribe from finalized head subscription.
 	fn unsubscribe_finalized_heads(
 		&self,
 		_metadata: Option<crate::metadata::Metadata>,
@@ -227,6 +253,14 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 
 	fn finalized_head(&self) -> Result<Block::Hash> {
 		self.backend.finalized_head()
+	}
+
+	fn subscribe_all_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
+		self.backend.subscribe_all_heads(metadata, subscriber)
+	}
+
+	fn unsubscribe_all_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+		self.backend.unsubscribe_all_heads(metadata, id)
 	}
 
 	fn subscribe_new_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {

@@ -19,7 +19,7 @@ mod sandbox;
 use codec::{Encode, Decode};
 use hex_literal::hex;
 use sp_core::{
-	Blake2Hasher, blake2_128, blake2_256, ed25519, sr25519, map, Pair,
+	blake2_128, blake2_256, ed25519, sr25519, map, Pair,
 	offchain::{OffchainExt, testing},
 	traits::Externalities,
 };
@@ -28,10 +28,11 @@ use sp_state_machine::TestExternalities as CoreTestExternalities;
 use test_case::test_case;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_wasm_interface::HostFunctions as _;
+use sp_runtime::traits::BlakeTwo256;
 
 use crate::WasmExecutionMethod;
 
-pub type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
+pub type TestExternalities = CoreTestExternalities<BlakeTwo256, u64>;
 type HostFunctions = sp_io::SubstrateHostFunctions;
 
 fn call_in_wasm<E: Externalities>(
@@ -440,7 +441,7 @@ fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 			wasm_method,
 			&mut ext.ext(),
 		).unwrap(),
-		Layout::<Blake2Hasher>::ordered_trie_root(trie_input.iter()).as_bytes().encode(),
+		Layout::<BlakeTwo256>::ordered_trie_root(trie_input.iter()).as_bytes().encode(),
 	);
 }
 

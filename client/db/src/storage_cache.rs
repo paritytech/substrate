@@ -21,7 +21,7 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
-use sp_runtime::traits::{Block as BlockT, Header, HasherFor, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
 use sp_core::hexdisplay::HexDisplay;
 use sp_core::storage::ChildInfo;
 use sp_state_machine::{
@@ -281,7 +281,7 @@ pub struct CacheChanges<B: BlockT> {
 	/// Shared canonical state cache.
 	shared_cache: SharedCache<B>,
 	/// Local cache of values for this state.
-	local_cache: RwLock<LocalCache<HasherFor<B>>>,
+	local_cache: RwLock<LocalCache<HashFor<B>>>,
 	/// Hash of the block on top of which this instance was created or
 	/// `None` if cache is disabled
 	pub parent_hash: Option<B::Hash>,
@@ -296,7 +296,7 @@ pub struct CacheChanges<B: BlockT> {
 /// For canonical instances local cache is accumulated and applied
 /// in `sync_cache` along with the change overlay.
 /// For non-canonical clones local cache and changes are dropped.
-pub struct CachingState<S: StateBackend<HasherFor<B>>, B: BlockT> {
+pub struct CachingState<S: StateBackend<HashFor<B>>, B: BlockT> {
 	/// Usage statistics
 	usage: StateUsageStats,
 	/// Backing state.
@@ -305,7 +305,7 @@ pub struct CachingState<S: StateBackend<HasherFor<B>>, B: BlockT> {
 	pub cache: CacheChanges<B>,
 }
 
-impl<S: StateBackend<HasherFor<B>>, B: BlockT> std::fmt::Debug for CachingState<S, B> {
+impl<S: StateBackend<HashFor<B>>, B: BlockT> std::fmt::Debug for CachingState<S, B> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "Block {:?}", self.cache.parent_hash)
 	}
@@ -420,7 +420,7 @@ impl<B: BlockT> CacheChanges<B> {
 
 }
 
-impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
+impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 	/// Create a new instance wrapping generic State and shared cache.
 	pub fn new(state: S, shared_cache: SharedCache<B>, parent_hash: Option<B::Hash>) -> Self {
 		CachingState {
@@ -489,7 +489,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 	}
 }
 
-impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for CachingState<S, B> {
+impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for CachingState<S, B> {
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
@@ -659,7 +659,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		self.state.child_keys(storage_key, child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HasherFor<B>>> {
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
 		self.state.as_trie_backend()
 	}
 
@@ -671,9 +671,11 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::{
+		traits::BlakeTwo256,
+		testing::{H256, Block as RawBlock, ExtrinsicWrapper},
+	};
 	use sp_state_machine::InMemoryBackend;
-	use sp_core::Blake2Hasher;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
@@ -695,7 +697,7 @@ mod tests {
 		// blocks  [ 3a(c) 2a(c) 2b 1b 1a(c) 0 ]
 		// state   [ 5     5     4  3  2     2 ]
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(root_parent),
 		);
@@ -710,14 +712,14 @@ mod tests {
 		);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h0),
 		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1a), Some(1), true);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h0),
 		);
@@ -732,7 +734,7 @@ mod tests {
 		);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h1b),
 		);
@@ -747,7 +749,7 @@ mod tests {
 		);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h1a),
 		);
@@ -762,35 +764,35 @@ mod tests {
 		);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h2a),
 		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h3a), Some(3), true);
 
 		let s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h3a),
 		);
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![5]);
 
 		let s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h1a),
 		);
 		assert!(s.storage(&key).unwrap().is_none());
 
 		let s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h2b),
 		);
 		assert!(s.storage(&key).unwrap().is_none());
 
 		let s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h1b),
 		);
@@ -799,7 +801,7 @@ mod tests {
 		// reorg to 3b
 		// blocks  [ 3b(c) 3a 2a 2b(c) 1b 1a 0 ]
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h2b),
 		);
@@ -813,7 +815,7 @@ mod tests {
 			true,
 		);
 		let s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h3a),
 		);
@@ -834,7 +836,7 @@ mod tests {
 		let shared = new_shared_cache::<Block>(256*1024, (0,1));
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(root_parent),
 		);
@@ -849,14 +851,14 @@ mod tests {
 		);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h1),
 		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h1),
 		);
@@ -871,7 +873,7 @@ mod tests {
 		);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h2b),
 		);
@@ -886,7 +888,7 @@ mod tests {
 		);
 
 		let s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h2a),
 		);
@@ -906,21 +908,21 @@ mod tests {
 		let shared = new_shared_cache::<Block>(256*1024, (0,1));
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(root_parent),
 		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), true);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h1),
 		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h2a),
 		);
@@ -935,14 +937,14 @@ mod tests {
 		);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h1),
 		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2b), Some(2), false);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h2b),
 		);
@@ -957,7 +959,7 @@ mod tests {
 		);
 
 		let s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h3a),
 		);
@@ -971,7 +973,7 @@ mod tests {
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()),
+			InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(root_parent.clone()),
 		);
 
 		let key = H256::random()[..].to_vec();
@@ -1009,7 +1011,7 @@ mod tests {
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(root_parent),
 		);
@@ -1053,7 +1055,7 @@ mod tests {
 
 		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(root_parent.clone()),
 		);
@@ -1068,7 +1070,7 @@ mod tests {
 		);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h0),
 		);
@@ -1083,7 +1085,7 @@ mod tests {
 		);
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h1),
 		);
@@ -1106,7 +1108,7 @@ mod tests {
 		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, true);
 
 		let s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
+			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
 			Some(h1),
 		);
@@ -1121,9 +1123,11 @@ mod qc {
 	use quickcheck::{quickcheck, TestResult, Arbitrary};
 
 	use super::*;
-	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::{
+		traits::BlakeTwo256,
+		testing::{H256, Block as RawBlock, ExtrinsicWrapper},
+	};
 	use sp_state_machine::InMemoryBackend;
-	use sp_core::Blake2Hasher;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
@@ -1250,22 +1254,22 @@ mod qc {
 			}
 		}
 
-		fn head_state(&self, hash: H256) -> CachingState<InMemoryBackend<Blake2Hasher>, Block> {
+		fn head_state(&self, hash: H256) -> CachingState<InMemoryBackend<BlakeTwo256>, Block> {
 			CachingState::new(
-				InMemoryBackend::<Blake2Hasher>::default(),
+				InMemoryBackend::<BlakeTwo256>::default(),
 				self.shared.clone(),
 				Some(hash)
 			)
 		}
 
-		fn canon_head_state(&self) -> CachingState<InMemoryBackend<Blake2Hasher>, Block> {
+		fn canon_head_state(&self) -> CachingState<InMemoryBackend<BlakeTwo256>, Block> {
 			self.head_state(self.canon.last().expect("Expected to be one commit").hash)
 		}
 
 		fn mutate_static(
 			&mut self,
 			action: Action,
-		) -> CachingState<InMemoryBackend<Blake2Hasher>, Block> {
+		) -> CachingState<InMemoryBackend<BlakeTwo256>, Block> {
 			self.mutate(action).expect("Expected to provide only valid actions to the mutate_static")
 		}
 
@@ -1284,7 +1288,7 @@ mod qc {
 		fn mutate(
 			&mut self,
 			action: Action,
-		) -> Result<CachingState<InMemoryBackend<Blake2Hasher>, Block>, ()> {
+		) -> Result<CachingState<InMemoryBackend<BlakeTwo256>, Block>, ()> {
 			let state = match action {
 				Action::Fork { depth, hash, changes } => {
 					let pos = self.canon.len() as isize - depth as isize;
@@ -1321,7 +1325,7 @@ mod qc {
 					};
 
 					let mut state = CachingState::new(
-						InMemoryBackend::<Blake2Hasher>::default(),
+						InMemoryBackend::<BlakeTwo256>::default(),
 						self.shared.clone(),
 						Some(parent)
 					);
@@ -1360,7 +1364,7 @@ mod qc {
 					}
 
 					let mut state = CachingState::new(
-						InMemoryBackend::<Blake2Hasher>::default(),
+						InMemoryBackend::<BlakeTwo256>::default(),
 						self.shared.clone(),
 						Some(parent_hash)
 					);
@@ -1407,7 +1411,7 @@ mod qc {
 							self.canon.push(node);
 
 							let mut state = CachingState::new(
-								InMemoryBackend::<Blake2Hasher>::default(),
+								InMemoryBackend::<BlakeTwo256>::default(),
 								self.shared.clone(),
 								Some(fork_at)
 							);

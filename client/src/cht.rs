@@ -331,8 +331,8 @@ pub fn decode_cht_value(value: &[u8]) -> Option<H256> {
 
 #[cfg(test)]
 mod tests {
-	use sp_core::Blake2Hasher;
 	use substrate_test_runtime_client::runtime::Header;
+	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
 
 	#[test]
@@ -398,7 +398,7 @@ mod tests {
 
 	#[test]
 	fn compute_root_works() {
-		assert!(compute_root::<Header, Blake2Hasher, _>(
+		assert!(compute_root::<Header, BlakeTwo256, _>(
 			SIZE as _,
 			42,
 			::std::iter::repeat_with(|| Ok(Some(H256::from_low_u64_be(1))))
@@ -409,7 +409,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn build_proof_panics_when_querying_wrong_block() {
-		assert!(build_proof::<Header, Blake2Hasher, _, _>(
+		assert!(build_proof::<Header, BlakeTwo256, _, _>(
 			SIZE as _,
 			0,
 			vec![(SIZE * 1000) as u64],
@@ -420,7 +420,7 @@ mod tests {
 
 	#[test]
 	fn build_proof_works() {
-		assert!(build_proof::<Header, Blake2Hasher, _, _>(
+		assert!(build_proof::<Header, BlakeTwo256, _, _>(
 			SIZE as _,
 			0,
 			vec![(SIZE / 2) as u64],

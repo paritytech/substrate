@@ -25,7 +25,7 @@ pub mod system;
 use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use sp_core::{Blake2Hasher, OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
+use sp_core::{OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
 use sp_application_crypto::{ed25519, sr25519, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::PrefixedMemoryDB;
@@ -419,7 +419,7 @@ fn code_using_trie() -> u64 {
 	let mut root = sp_std::default::Default::default();
 	let _ = {
 		let v = &pairs;
-		let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
+		let mut t = TrieDBMut::<BlakeTwo256>::new(&mut mdb, &mut root);
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;
@@ -430,7 +430,7 @@ fn code_using_trie() -> u64 {
 		t
 	};
 
-	if let Ok(trie) = TrieDB::<Blake2Hasher>::new(&mdb, &root) {
+	if let Ok(trie) = TrieDB::<BlakeTwo256>::new(&mdb, &root) {
 		if let Ok(iter) = trie.iter() {
 			let mut iter_pairs = Vec::new();
 			for pair in iter {
