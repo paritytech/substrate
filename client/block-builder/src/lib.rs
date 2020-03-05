@@ -150,20 +150,12 @@ where
 
 	/// Push onto the block's list of extrinsics.
 	///
-	/// This will treat incoming extrinsic `xt` as trusted and skip signature check
-	/// (for signed transactions).
-	pub fn push_trusted(
-		&mut self,
-		xt: <Block as BlockT>::Extrinsic,
-	) -> Result<(), ApiErrorFor<A, Block>> {
+	/// This will treat incoming extrinsic `xt` as trusted and skip signature check (for signed transactions).
+	pub fn push_trusted(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
 		self.push_internal(xt, true)
 	}
 
-	fn push_internal(
-		&mut self,
-		xt: <Block as BlockT>::Extrinsic,
-		skip_signature: bool,
-	) -> Result<(), ApiErrorFor<A, Block>> {
+	fn push_internal(&mut self, xt: <Block as BlockT>::Extrinsic, skip_signature: bool) -> Result<(), ApiErrorFor<A, Block>> {
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
@@ -181,7 +173,7 @@ where
 					ExecutionContext::BlockConstruction,
 					xt.clone(),
 				)?
-			} else {
+			} else  {
 				api.apply_extrinsic_with_context(
 					block_id,
 					ExecutionContext::BlockConstruction,
@@ -245,43 +237,5 @@ where
 			storage_changes: storage_changes?,
 			proof,
 		})
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use sp_blockchain::HeaderBackend;
-	use sp_core::Blake2Hasher;
-	use sp_state_machine::Backend;
-	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
-
-	#[test]
-	fn block_building_storage_proof_does_not_include_runtime_by_default() {
-		let builder = substrate_test_runtime_client::TestClientBuilder::new();
-		let backend = builder.backend();
-		let client = builder.build();
-
-		let block = BlockBuilder::new(
-			&client,
-			client.info().best_hash,
-			client.info().best_number,
-			RecordProof::Yes,
-			Default::default(),
-			&*backend,
-		).unwrap().build().unwrap();
-
-		let proof = block.proof.expect("Proof is build on request");
-
-		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
-			block.storage_changes.transaction_storage_root,
-			proof,
-		).unwrap();
-
-		assert!(
-			backend.storage(&sp_core::storage::well_known_keys::CODE)
-				.unwrap_err()
-				.contains("Database missing expected key"),
-		);
 	}
 }
