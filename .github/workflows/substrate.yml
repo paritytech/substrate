@@ -1,13 +1,10 @@
 name:                                Substrate
 
-on:
-  push:
-    branches:
-      - stable
+on:                                  [push]
 jobs:
   linux-cargo-check-benches:
     name:                            Cargo check benches
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     container:                       parity/rust-builder:latest
     env:
       CC:                            "clang-9"
@@ -63,7 +60,7 @@ jobs:
 
   linux-cargo-check-subkey:
     name:                            Cargo check subkey
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     container:                       parity/rust-builder:latest
     env:
       BUILD_DUMMY_WASM_BINARY:       1
@@ -116,7 +113,7 @@ jobs:
 
   linux-test-stable:
     name:                            Test linux stable
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     container:                       parity/rust-builder:latest
     env:
       RUSTFLAGS:                     "-Cdebug-assertions=y"
@@ -170,7 +167,7 @@ jobs:
 
   linux-test-frame-staking:
     name:                            Test frame staking
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     container:                       parity/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
@@ -224,7 +221,7 @@ jobs:
 
   linux-test-wasmtime:
     name:                            Test wasmtime
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     container:                       parity/rust-builder:latest
     env:
       CARGO_HOME:                    "/usr/local/cargo"
@@ -278,7 +275,7 @@ jobs:
 
   linux-test-stable-int:
     name:                            Test linux stable int
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     container:                       parity/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
@@ -334,7 +331,7 @@ jobs:
 
   test-full-crypto-feature:
     name:                            Test full crypto feature
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     container:                       parity/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
@@ -396,7 +393,7 @@ jobs:
 
   linux-dependency-rules:
     name:                            Test dependency rules
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
@@ -412,7 +409,7 @@ jobs:
   build-linux-substrate:
     name:                            Build linux Substrate
     needs:                           [linux-test-stable]
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     env:
       CC:                            "clang"
       CXX:                           "clang++"
@@ -472,7 +469,7 @@ jobs:
   build-linux-subkey:
     name:                            Build linux Subkey
     needs:                           [linux-test-stable]
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     env:
       CC:                            "clang"
       CXX:                           "clang++"
@@ -532,7 +529,7 @@ jobs:
   build-rust-doc-release:
     name:                            Build Rust doc release
     needs:                           [linux-test-stable]
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     env:
       CC:                            "clang"
       CXX:                           "clang++"
