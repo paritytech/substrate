@@ -147,7 +147,7 @@ impl RuntimeCache {
 					ext
 						.storage(well_known_keys::HEAP_PAGES)
 						.and_then(|pages| u64::decode(&mut &pages[..]).ok())
-						.unwrap_or(default_heap_pages)
+						.unwrap_or(default_heap_pages),
 				)
 			},
 			CodeSource::Custom(code) => {
