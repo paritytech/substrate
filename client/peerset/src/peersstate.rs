@@ -17,8 +17,9 @@
 //! Contains the state storage behind the peerset.
 
 use libp2p::PeerId;
+use log::{error, warn};
 use std::{borrow::Cow, collections::{HashSet, HashMap}};
-use log::warn;
+use wasm_timer::Instant;
 
 /// State storage behind the peerset.
 ///
@@ -69,7 +70,9 @@ struct Node {
 impl Default for Node {
 	fn default() -> Node {
 		Node {
-			connection_state: ConnectionState::NotConnected,
+			connection_state: ConnectionState::NotConnected {
+				last_connected: Instant::now(),
+			},
 			reputation: 0,
 		}
 	}
@@ -83,7 +86,11 @@ enum ConnectionState {
 	/// We are connected through an outgoing connection.
 	Out,
 	/// We are not connected to this node.
-	NotConnected,
+	NotConnected {
+		/// When we were last connected to the node, or if we were never connected when we
+		/// discovered it.
+		last_connected: Instant,
+	},
 }
 
 impl ConnectionState {
@@ -92,7 +99,7 @@ impl ConnectionState {
 		match self {
 			ConnectionState::In => true,
 			ConnectionState::Out => true,
-			ConnectionState::NotConnected => false,
+			ConnectionState::NotConnected { .. } => false,
 		}
 	}
 }
@@ -212,11 +219,13 @@ impl PeersState {
 				match node.connection_state {
 					ConnectionState::In => self.num_in -= 1,
 					ConnectionState::Out => self.num_out -= 1,
-					ConnectionState::NotConnected =>
+					ConnectionState::NotConnected { .. } =>
 						debug_assert!(false, "State inconsistency: disconnecting a disconnected node")
 				}
 			}
-			node.connection_state = ConnectionState::NotConnected;
+			node.connection_state = ConnectionState::NotConnected {
+				last_connected: Instant::now(),
+			};
 		} else {
 			warn!(target: "peerset", "Attempting to disconnect unknown peer {}", peer_id);
 		}
@@ -292,7 +301,7 @@ impl PeersState {
 					match peer.connection_state {
 						ConnectionState::In => self.num_in += 1,
 						ConnectionState::Out => self.num_out += 1,
-						ConnectionState::NotConnected => {},
+						ConnectionState::NotConnected { .. } => {},
 					}
 				}
 			}
@@ -305,7 +314,7 @@ impl PeersState {
 				match peer.connection_state {
 					ConnectionState::In => self.num_in -= 1,
 					ConnectionState::Out => self.num_out -= 1,
-					ConnectionState::NotConnected => {},
+					ConnectionState::NotConnected { .. } => {},
 				}
 			}
 		}
@@ -467,6 +476,45 @@ impl<'a> NotConnectedPeer<'a> {
 		self.peer_id.into_owned()
 	}
 
+	/// Bumps the value that `last_connected_or_discovered` would return to now, even if we
+	/// didn't connect or disconnect.
+	pub fn bump_last_connected_or_discovered(&mut self) {
+		let state = match self.state.nodes.get_mut(&*self.peer_id) {
+			Some(s) => s,
+			None => return,
+		};
+
+		if let ConnectionState::NotConnected { last_connected } = &mut state.connection_state {
+			*last_connected = Instant::now();
+		}
+	}
+
+	/// Returns when we were last connected to this peer, or when we discovered it if we were
+	/// never connected.
+	///
+	/// Guaranteed to be earlier than calling `Instant::now()` after the function returns.
+	pub fn last_connected_or_discovered(&self) -> Instant {
+		let state = match self.state.nodes.get(&*self.peer_id) {
+			Some(s) => s,
+			None => {
+				error!(
+					target: "peerset",
+					"State inconsistency with {}; not connected after borrow",
+					self.peer_id
+				);
+				return Instant::now();
+			}
+		};
+
+		match state.connection_state {
+			ConnectionState::NotConnected { last_connected } => last_connected,
+			_ => {
+				error!(target: "peerset", "State inconsistency with {}", self.peer_id);
+				Instant::now()
+			}
+		}
+	}
+
 	/// Tries to set the peer as connected as an outgoing connection.
 	///
 	/// If there are enough slots available, switches the node to "connected" and returns `Ok`. If
@@ -518,6 +566,22 @@ impl<'a> NotConnectedPeer<'a> {
 	pub fn add_reputation(&mut self, modifier: i32) {
 		self.state.add_reputation(&self.peer_id, modifier)
 	}
+
+	/// Un-discovers the peer. Removes it from the list.
+	pub fn forget_peer(self) -> UnknownPeer<'a> {
+		if self.state.nodes.remove(&*self.peer_id).is_none() {
+			error!(
+				target: "peerset",
+				"State inconsistency with {} when forgetting peer",
+				self.peer_id
+			);
+		}
+
+		UnknownPeer {
+			parent: self.state,
+			peer_id: self.peer_id,
+		}
+	}
 }
 
 /// A peer that we have never heard of.
@@ -533,7 +597,9 @@ impl<'a> UnknownPeer<'a> {
 	/// values using the `NotConnectedPeer` that this method returns.
 	pub fn discover(self) -> NotConnectedPeer<'a> {
 		self.parent.nodes.insert(self.peer_id.clone().into_owned(), Node {
-			connection_state: ConnectionState::NotConnected,
+			connection_state: ConnectionState::NotConnected {
+				last_connected: Instant::now(),
+			},
 			reputation: 0,
 		});
 

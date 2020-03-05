@@ -62,7 +62,12 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	) -> Result<StorageProof, Error>;
 
 	/// Get method execution proof.
-	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, StorageProof), Error>;
+	fn execution_proof(
+		&self,
+		block: &Block::Hash,
+		method: &str,
+		data: &[u8],
+	) -> Result<(Vec<u8>, StorageProof), Error>;
 
 	/// Get key changes proof.
 	fn key_changes_proof(
@@ -152,11 +157,7 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		method: &str,
 		data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), Error> {
-		(self as &SubstrateClient<B, E, Block, RA>).execution_proof(
-			&BlockId::Hash(block.clone()),
-			method,
-			data,
-		)
+		SubstrateClient::execution_proof(self, &BlockId::Hash(block.clone()), method, data)
 	}
 
 	fn key_changes_proof(
@@ -168,7 +169,14 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		storage_key: Option<&StorageKey>,
 		key: &StorageKey,
 	) -> Result<ChangesProof<Block::Header>, Error> {
-		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(first, last, min, max, storage_key, key)
+		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(
+			first,
+			last,
+			min,
+			max,
+			storage_key,
+			key,
+		)
 	}
 
 	fn is_descendent_of(&self, base: &Block::Hash, block: &Block::Hash) -> Result<bool, Error> {

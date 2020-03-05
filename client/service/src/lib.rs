@@ -114,7 +114,10 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	_offchain_workers: Option<Arc<TOc>>,
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
+	prometheus_registry: Option<prometheus_endpoint::Registry>,
 }
+
+impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
 
 /// Alias for a an implementation of `futures::future::Executor`.
 pub type TaskExecutor = Arc<dyn Spawn + Send + Sync>;
@@ -223,13 +226,16 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 
 	/// Get a handle to a future that will resolve on exit.
 	fn on_exit(&self) -> ::exit_future::Exit;
+
+	/// Get the prometheus metrics registry, if available.
+	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
 	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
 		NetworkService<TBl, TBl::Hash>, TExPool, TOc>
 where
-	TBl: BlockT + Unpin,
+	TBl: BlockT,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl>,
 	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
@@ -326,9 +332,13 @@ where
 	fn on_exit(&self) -> exit_future::Exit {
 		self.exit.clone()
 	}
+
+	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
+		self.prometheus_registry.clone()
+	}
 }
 
-impl<TBl: Unpin, TCl, TSc: Unpin, TNetStatus, TNet, TTxPool, TOc> Future for
+impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
 	type Output = Result<(), Error>;

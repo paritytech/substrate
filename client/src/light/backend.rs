@@ -172,9 +172,9 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 				match maybe_val {
 					Some(val) => self.blockchain.storage().insert_aux(
 						&[(&key[..], &val[..])],
-						::std::iter::empty(),
+						std::iter::empty(),
 					)?,
-					None => self.blockchain.storage().insert_aux(::std::iter::empty(), &[&key[..]])?,
+					None => self.blockchain.storage().insert_aux(std::iter::empty(), &[&key[..]])?,
 				}
 			}
 		}

@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::mem;
 use std::cmp;
 use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
@@ -104,8 +103,7 @@ impl<B: BlockT> BlockCollection<B> {
 		common: NumberFor<B>,
 		max_parallel: u32,
 		max_ahead: u32,
-	) -> Option<Range<NumberFor<B>>>
-	{
+	) -> Option<Range<NumberFor<B>>> {
 		if peer_best <= common {
 			// Bail out early
 			return None;
@@ -165,20 +163,20 @@ impl<B: BlockT> BlockCollection<B> {
 	pub fn drain(&mut self, from: NumberFor<B>) -> Vec<BlockData<B>> {
 		let mut drained = Vec::new();
 		let mut ranges = Vec::new();
-		{
-			let mut prev = from;
-			for (start, range_data) in &mut self.blocks {
-				match range_data {
-					&mut BlockRangeState::Complete(ref mut blocks) if *start <= prev => {
-							prev = *start + (blocks.len() as u32).into();
-							let mut blocks = mem::replace(blocks, Vec::new());
-							drained.append(&mut blocks);
-							ranges.push(*start);
-					},
-					_ => break,
-				}
+
+		let mut prev = from;
+		for (start, range_data) in &mut self.blocks {
+			match range_data {
+				&mut BlockRangeState::Complete(ref mut blocks) if *start <= prev => {
+					prev = *start + (blocks.len() as u32).into();
+					// Remove all elements from `blocks` and add them to `drained`
+					drained.append(blocks);
+					ranges.push(*start);
+				},
+				_ => break,
 			}
 		}
+
 		for r in ranges {
 			self.blocks.remove(&r);
 		}

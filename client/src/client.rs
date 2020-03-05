@@ -41,8 +41,7 @@ use sp_runtime::{
 use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProof,
-	merge_storage_proofs,
+	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo};
 use sp_consensus::{
@@ -55,18 +54,19 @@ use sp_blockchain::{self as blockchain,
 	well_known_cache_keys::Id as CacheKeyId,
 	HeaderMetadata, CachedHeaderMetadata,
 };
+use sp_trie::StorageProof;
 
 use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
 	CallApiAtParams,
 };
-use sc_block_builder::BlockBuilderApi;
+use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 
 pub use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
-		changes_tries_state_at_block,
+		LockImportRun, changes_tries_state_at_block,
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
@@ -216,6 +216,61 @@ impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
 	Block: BlockT,
 {
 	type Type = Block;
+}
+
+impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
+	where
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
+{
+	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err>
+		where
+			F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
+			Err: From<sp_blockchain::Error>,
+	{
+		let inner = || {
+			let _import_lock = self.backend.get_import_lock().write();
+
+			let mut op = ClientImportOperation {
+				op: self.backend.begin_operation()?,
+				notify_imported: None,
+				notify_finalized: Vec::new(),
+			};
+
+			let r = f(&mut op)?;
+
+			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
+			self.backend.commit_operation(op)?;
+			self.notify_finalized(notify_finalized)?;
+
+			if let Some(notify_imported) = notify_imported {
+				self.notify_imported(notify_imported)?;
+			}
+
+			Ok(r)
+		};
+
+		let result = inner();
+		*self.importing_block.write() = None;
+
+		result
+	}
+}
+
+impl<B, E, Block, RA> LockImportRun<Block, B> for &Client<B, E, Block, RA>
+	where
+		Block: BlockT,
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+{
+	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err>
+		where
+			F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
+			Err: From<sp_blockchain::Error>,
+	{
+		(**self).lock_import_and_run(f)
+	}
 }
 
 impl<B, E, Block, RA> Client<B, E, Block, RA> where
@@ -427,9 +482,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		method: &str,
 		call_data: &[u8]
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
+		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
+		// backwards compatible.
+		//
+		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
+		let code_proof = self.read_proof(
+			id,
+			&[well_known_keys::CODE.to_vec(), well_known_keys::HEAP_PAGES.to_vec()],
+		)?;
+
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
 		prove_execution(state, header, &self.executor, method, call_data)
+			.map(|p| (p.0, StorageProof::merge(vec![p.1, code_proof])))
 	}
 
 	/// Reads given header and generates CHT-based header proof.
@@ -714,7 +779,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Ok(())
 		}, ())?;
 
-		Ok(merge_storage_proofs(proofs))
+		Ok(StorageProof::merge(proofs))
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
@@ -806,66 +871,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			inherent_digests,
 			&self.backend,
 		)
-	}
-
-	/// Create a new block, built on top of `parent`.
-	///
-	/// When proof recording is enabled, all accessed trie nodes are saved.
-	/// These recorded trie nodes can be used by a third party to proof the
-	/// output of this block builder without having access to the full storage.
-	pub fn new_block_at<R: Into<RecordProof>>(
-		&self,
-		parent: &BlockId<Block>,
-		inherent_digests: DigestFor<Block>,
-		record_proof: R,
-	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> where
-		E: Clone + Send + Sync,
-		RA: Send + Sync,
-		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error> +
-			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-	{
-		sc_block_builder::BlockBuilder::new(
-			self,
-			self.expect_block_hash_from_id(parent)?,
-			self.expect_block_number_from_id(parent)?,
-			record_proof.into(),
-			inherent_digests,
-			&self.backend
-		)
-	}
-
-	/// Lock the import lock, and run operations inside.
-	pub fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err> where
-		F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
-		Err: From<sp_blockchain::Error>,
-	{
-		let inner = || {
-			let _import_lock = self.backend.get_import_lock().write();
-
-			let mut op = ClientImportOperation {
-				op: self.backend.begin_operation()?,
-				notify_imported: None,
-				notify_finalized: Vec::new(),
-			};
-
-			let r = f(&mut op)?;
-
-			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
-			self.backend.commit_operation(op)?;
-			self.notify_finalized(notify_finalized)?;
-
-			if let Some(notify_imported) = notify_imported {
-				self.notify_imported(notify_imported)?;
-			}
-
-			Ok(r)
-		};
-
-		let result = inner();
-		*self.importing_block.write() = None;
-
-		result
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
@@ -1396,6 +1401,32 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			parent_header.hash(),
 			Default::default(),
 		))
+	}
+}
+
+impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Block, RA>
+	where
+		B: backend::Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static,
+		Block: BlockT,
+		Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
+		<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
+			+ BlockBuilderApi<Block, Error = Error>,
+{
+	fn new_block_at<R: Into<RecordProof>>(
+		&self,
+		parent: &BlockId<Block>,
+		inherent_digests: DigestFor<Block>,
+		record_proof: R,
+	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
+		sc_block_builder::BlockBuilder::new(
+			self,
+			self.expect_block_hash_from_id(parent)?,
+			self.expect_block_number_from_id(parent)?,
+			record_proof.into(),
+			inherent_digests,
+			&self.backend
+		)
 	}
 }
 

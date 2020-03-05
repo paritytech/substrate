@@ -30,10 +30,7 @@
 #![recursion_limit="128"]
 
 #[macro_use]
-mod wasm_utils;
-#[macro_use]
 mod native_executor;
-pub mod deprecated_host_interface;
 mod wasm_runtime;
 #[cfg(test)]
 mod integration_tests;
@@ -113,8 +110,12 @@ pub trait RuntimeInfo {
 	/// Native runtime information.
 	fn native_version(&self) -> &NativeVersion;
 
-	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities> (&self, ext: &mut E) -> error::Result<RuntimeVersion>;
+	/// Extract [`RuntimeVersion`](sp_version::RuntimeVersion) of the given `runtime_code`.
+	fn runtime_version<E: Externalities>(
+		&self,
+		ext: &mut E,
+		runtime_code: &sp_core::traits::RuntimeCode,
+	) -> error::Result<RuntimeVersion>;
 }
 
 #[cfg(test)]
