@@ -249,7 +249,7 @@ impl RuntimeCache {
 							target:
 							"wasm-runtime",
 							"Fresh runtime instance failed with {:?}",
-							e
+							e,
 						);
 					}
 				}
