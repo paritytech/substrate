@@ -101,4 +101,6 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() {
 	}
 
 	take_storage_value::<T::Index>(b"Balances", b"IsUpgraded", &[]);
+
+	StorageVersion::<I>::put(Releases::V2_0_0);
 }
