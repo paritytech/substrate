@@ -5749,6 +5749,7 @@ dependencies = [
  "sp-std",
  "sp-trie",
  "sp-version",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
  "tracing",
@@ -5812,6 +5813,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-trie",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
 ]

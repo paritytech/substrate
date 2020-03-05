@@ -28,6 +28,7 @@ use sp_core::traits::CodeExecutor;
 use sp_runtime::BuildStorage;
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_blockchain::Result as ClientResult;
+use prometheus_endpoint::Registry;
 
 use crate::call_executor::LocalCallExecutor;
 use crate::client::Client;
@@ -58,6 +59,7 @@ pub fn new_light<B, S, GS, RA, E>(
 	backend: Arc<Backend<S, HashFor<B>>>,
 	genesis_storage: &GS,
 	code_executor: E,
+	prometheus_registry: Option<Registry>,
 ) -> ClientResult<
 		Client<
 			Backend<S, HashFor<B>>,
@@ -84,6 +86,7 @@ pub fn new_light<B, S, GS, RA, E>(
 		Default::default(),
 		Default::default(),
 		Default::default(),
+		prometheus_registry,
 	)
 }
 
