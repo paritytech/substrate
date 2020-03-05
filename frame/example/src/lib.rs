@@ -263,7 +263,7 @@ use frame_benchmarking::{benchmarks, account};
 use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	traits::{SignedExtension, Bounded, SaturatedConversion, Dispatchable},
+	traits::{SignedExtension, Bounded, SaturatedConversion},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},

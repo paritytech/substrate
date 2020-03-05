@@ -27,26 +27,26 @@ use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{Result as RpcResult, futures::{Future, future::result}};
 
 use sc_rpc_api::Subscriptions;
-use sc_client::{Client, CallExecutor, light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
+use sc_client::{light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
 use sp_core::{Bytes, storage::{StorageKey, StorageData, StorageChangeSet}};
 use sp_version::RuntimeVersion;
 use sp_runtime::traits::Block as BlockT;
 
-use sp_api::{Metadata, ProvideRuntimeApi};
+use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
 use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
+use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend};
+use sp_blockchain::{HeaderMetadata, HeaderBackend};
 
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
 /// State backend API.
-pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
+pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	where
 		Block: BlockT + 'static,
-		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: sc_client::CallExecutor<Block> + Send + Sync + 'static,
-		RA: Send + Sync + 'static,
+		Client: Send + Sync + 'static,
 {
 	/// Call runtime method at given block.
 	fn call(
@@ -194,18 +194,18 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 }
 
 /// Create new state API that works on full node.
-pub fn new_full<B, E, Block: BlockT, RA>(
-	client: Arc<Client<B, E, Block, RA>>,
+pub fn new_full<BE, Block: BlockT, Client>(
+	client: Arc<Client>,
 	subscriptions: Subscriptions,
-) -> State<B, E, Block, RA>
+) -> State<Block, Client>
 	where
 		Block: BlockT + 'static,
-		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
-		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-			Metadata<Block, Error = sp_blockchain::Error>,
+		BE: Backend<Block> + 'static,
+		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + HeaderBackend<Block>
+			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
+			+ CallApiAt<Block, Error = sp_blockchain::Error>
+			+ ProvideRuntimeApi<Block> + Send + Sync + 'static,
+		Client::Api: Metadata<Block, Error = sp_blockchain::Error>,
 {
 	State {
 		backend: Box::new(self::state_full::FullState::new(client, subscriptions)),
@@ -213,17 +213,19 @@ pub fn new_full<B, E, Block: BlockT, RA>(
 }
 
 /// Create new state API that works on light node.
-pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
-	client: Arc<Client<B, E, Block, RA>>,
+pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
+	client: Arc<Client>,
 	subscriptions: Subscriptions,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
-) -> State<B, E, Block, RA>
+) -> State<Block, Client>
 	where
 		Block: BlockT + 'static,
-		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
+		BE: Backend<Block> + 'static,
+		Client: ExecutorProvider<Block> + StorageProvider<Block, BE>
+			+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+			+ ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockchainEvents<Block>
+			+ Send + Sync + 'static,
 		F: Send + Sync + 'static,
 {
 	State {
@@ -237,16 +239,14 @@ pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
 }
 
 /// State API with subscriptions support.
-pub struct State<B, E, Block, RA> {
-	backend: Box<dyn StateBackend<B, E, Block, RA>>,
+pub struct State<Block, Client> {
+	backend: Box<dyn StateBackend<Block, Client>>,
 }
 
-impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
+impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 	where
 		Block: BlockT + 'static,
-		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
+		Client: Send + Sync + 'static,
 {
 	type Metadata = crate::metadata::Metadata;
 

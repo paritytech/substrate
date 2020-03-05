@@ -350,7 +350,7 @@ mod tests {
 			top: Default::default(),
 			children: map![
 				child_storage.clone() => StorageChild {
-					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
+					data: map![ b"doe".to_vec() => b"reindeer".to_vec() ],
 					child_info: CHILD_INFO_1.to_owned(),
 				}
 			]

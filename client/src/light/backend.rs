@@ -31,7 +31,7 @@ use sp_state_machine::{
 	StorageCollection, ChildStorageCollection,
 };
 use sp_runtime::{generic::BlockId, Justification, Storage};
-use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HasherFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HashFor};
 use crate::in_mem::check_genesis_storage;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
@@ -65,7 +65,7 @@ pub struct ImportOperation<Block: BlockT, S> {
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
 	set_head: Option<BlockId<Block>>,
-	storage_update: Option<InMemoryBackend<HasherFor<Block>>>,
+	storage_update: Option<InMemoryBackend<HashFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	_phantom: std::marker::PhantomData<S>,
 }
@@ -111,7 +111,7 @@ impl<S: AuxStore, H: Hasher> AuxStore for Backend<S, H> {
 	}
 }
 
-impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
+impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 	where
 		Block: BlockT,
 		S: BlockchainStorage<Block>,
@@ -119,7 +119,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 {
 	type BlockImportOperation = ImportOperation<Block, S>;
 	type Blockchain = Blockchain<S>;
-	type State = GenesisOrUnavailableState<HasherFor<Block>>;
+	type State = GenesisOrUnavailableState<HashFor<Block>>;
 	type OffchainStorage = InMemOffchainStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
@@ -238,7 +238,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 	}
 }
 
-impl<S, Block> RemoteBackend<Block> for Backend<S, HasherFor<Block>>
+impl<S, Block> RemoteBackend<Block> for Backend<S, HashFor<Block>>
 where
 	Block: BlockT,
 	S: BlockchainStorage<Block> + 'static,
@@ -262,7 +262,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		S: BlockchainStorage<Block>,
 		Block::Hash: Ord,
 {
-	type State = GenesisOrUnavailableState<HasherFor<Block>>;
+	type State = GenesisOrUnavailableState<HashFor<Block>>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		// None means 'locally-stateless' backend
@@ -287,7 +287,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 
 	fn update_db_storage(
 		&mut self,
-		_update: <Self::State as StateBackend<HasherFor<Block>>>::Transaction,
+		_update: <Self::State as StateBackend<HashFor<Block>>>::Transaction,
 	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
@@ -295,7 +295,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 
 	fn update_changes_trie(
 		&mut self,
-		_update: ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>,
+		_update: ChangesTrieTransaction<HashFor<Block>, NumberFor<Block>>,
 	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
@@ -515,10 +515,10 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 #[cfg(test)]
 mod tests {
-	use sp_core::Blake2Hasher;
 	use substrate_test_runtime_client::{self, runtime::Block};
 	use sc_client_api::backend::NewBlockState;
 	use crate::light::blockchain::tests::{DummyBlockchain, DummyStorage};
+	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
 
 	#[test]
@@ -526,7 +526,9 @@ mod tests {
 		let def = Default::default();
 		let header0 = substrate_test_runtime_client::runtime::Header::new(0, def, def, def, Default::default());
 
-		let backend: Backend<_, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+		let backend: Backend<_, BlakeTwo256> = Backend::new(
+			Arc::new(DummyBlockchain::new(DummyStorage::new())),
+		);
 		let mut op = backend.begin_operation().unwrap();
 		op.set_block_data(header0, None, None, NewBlockState::Final).unwrap();
 		op.reset_storage(Default::default()).unwrap();
@@ -540,7 +542,9 @@ mod tests {
 
 	#[test]
 	fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
-		let backend: Backend<_, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+		let backend: Backend<_, BlakeTwo256> = Backend::new(
+			Arc::new(DummyBlockchain::new(DummyStorage::new())),
+		);
 
 		match backend.state_at(BlockId::Number(0)).unwrap() {
 			GenesisOrUnavailableState::Unavailable => (),
