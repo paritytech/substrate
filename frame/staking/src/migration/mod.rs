@@ -47,8 +47,13 @@ mod tests;
 mod test_upgrade_from_master_dataset;
 
 pub fn on_runtime_upgrade<T: Trait>() {
-	if StorageVersion::get() == Releases::V2_0_0 { return };
+	match StorageVersion::get() {
+		Releases::V2_0_0 => return,
+		Releases::V1_0_0 => upgrade_v1_to_v2::<T>(),
+	}
+}
 
+fn upgrade_v1_to_v2<T: Trait>() {
 	deprecated::IsUpgraded::kill();
 
 	let current_era_start_index = deprecated::CurrentEraStartSessionIndex::get();

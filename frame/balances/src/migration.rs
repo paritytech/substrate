@@ -2,8 +2,13 @@ use super::*;
 
 // Upgrade from the pre-#4649 balances/vesting into the new balances.
 pub fn on_runtime_upgrade<T: Trait<I>, I: Instance>() {
-	if StorageVersion::<I>::get() == Releases::V2_0_0 { return };
+	match StorageVersion::<I>::get() {
+		Releases::V2_0_0 => return,
+		Releases::V1_0_0 => upgrade_v1_to_v2::<T, I>(),
+	}
+}
 
+fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() {
 	sp_runtime::print("Upgrading account balances...");
 	// First, migrate from old FreeBalance to new Account.
 	// We also move all locks across since only accounts with FreeBalance values have locks.
