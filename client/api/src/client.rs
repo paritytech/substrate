@@ -21,7 +21,8 @@ use futures::channel::mpsc;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
-	generic::{BlockId, SignedBlock}
+	generic::{BlockId, SignedBlock},
+	Justification,
 };
 use sp_consensus::BlockOrigin;
 
@@ -74,7 +75,7 @@ pub trait BlockchainEvents<Block: BlockT> {
 }
 
 /// Fetch block body by ID.
-pub trait BlockBody<Block: BlockT> {
+pub trait BlockProvider<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
 	fn block_body(
 		&self,
@@ -83,6 +84,12 @@ pub trait BlockBody<Block: BlockT> {
 
 	/// Get full block by id.
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
+
+	/// Get block status.
+	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<sp_consensus::BlockStatus>;
+
+	/// Get block justification set by id.
+	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>>;
 }
 
 /// Provide a list of potential uncle headers for a given block.
