@@ -40,7 +40,7 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
 	backend::RemoteBackend,
 	light::RemoteCallRequest,
-	call_executor::CallExecutor
+	call_executor::CallExecutor,
 };
 use sc_executor::{RuntimeVersion, NativeVersion};
 
@@ -288,6 +288,7 @@ mod tests {
 	use sp_core::H256;
 	use sc_client_api::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
+	use sc_client_api::ProofProvider;
 	use sp_runtime::traits::BlakeTwo256;
 
 	struct DummyCallExecutor;

@@ -91,7 +91,7 @@ fn construct_block<E: Externalities>(
 	};
 
 	// execute the block to get the real header.
-	executor.call::<_, NeverNativeValue, fn() -> _>(
+	executor.call::<NeverNativeValue, fn() -> _>(
 		ext,
 		"Core_initialize_block",
 		&header.encode(),
@@ -100,7 +100,7 @@ fn construct_block<E: Externalities>(
 	).0.unwrap();
 
 	for i in extrinsics.iter() {
-		executor.call::<_, NeverNativeValue, fn() -> _>(
+		executor.call::<NeverNativeValue, fn() -> _>(
 			ext,
 			"BlockBuilder_apply_extrinsic",
 			&i.encode(),
@@ -109,7 +109,7 @@ fn construct_block<E: Externalities>(
 		).0.unwrap();
 	}
 
-	let header = match executor.call::<_, NeverNativeValue, fn() -> _>(
+	let header = match executor.call::<NeverNativeValue, fn() -> _>(
 		ext,
 		"BlockBuilder_finalize_block",
 		&[0u8;0],
@@ -175,7 +175,7 @@ fn bench_execute_block(c: &mut Criterion) {
 				|| new_test_ext(&genesis_config),
 				|test_ext| {
 					for block in blocks.iter() {
-						executor.call::<_, NeverNativeValue, fn() -> _>(
+						executor.call::<NeverNativeValue, fn() -> _>(
 							&mut test_ext.ext(),
 							"Core_execute_block",
 							&block.0,

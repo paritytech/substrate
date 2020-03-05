@@ -39,7 +39,7 @@ use sp_consensus::{
 use std::{
 	collections::{HashMap, HashSet},
 	result,
-	pin::Pin, task,
+	pin::Pin,
 };
 use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
@@ -170,8 +170,7 @@ impl TestNetFactory for GrandpaTestNet {
 	) -> Option<Arc<dyn sc_network::config::FinalityProofProvider<Block>>> {
 		match client {
 			PeersClient::Full(_, ref backend)  => {
-				let authorities_provider = Arc::new(self.test_config.clone());
-				Some(Arc::new(FinalityProofProvider::new(backend.clone(), authorities_provider)))
+				Some(Arc::new(FinalityProofProvider::new(backend.clone(), self.test_config.clone())))
 			},
 			PeersClient::Light(_, _) => None,
 		}
