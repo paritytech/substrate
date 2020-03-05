@@ -155,6 +155,7 @@ mod tests_composite;
 #[cfg(test)]
 #[macro_use]
 mod tests;
+#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 use sp_std::prelude::*;
