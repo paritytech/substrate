@@ -35,8 +35,8 @@ const PREFIX: &'static str = "votes";
 ///
 /// ```ignore
 /// // generate a struct with nominator and edge weight u128, with maximum supported
-/// // edge per voter of 32.
-/// generate_compact_solution_type(pub TestCompact, 32)
+/// // edge per voter of 16.
+/// generate_compact_solution_type(pub TestCompact, 16)
 /// ```
 ///
 /// This generates:
