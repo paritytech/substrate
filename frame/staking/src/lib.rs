@@ -680,7 +680,7 @@ impl Default for Forcing {
 	fn default() -> Self { Forcing::NotForcing }
 }
 
-// A value placed in storage that represents the current version of the Balances storage.
+// A value placed in storage that represents the current version of the Staking storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
 // storage migration logic. This should match directly with the semantic versions of the Rust crate.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]

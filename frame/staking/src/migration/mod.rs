@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-/// Update storage from v1.0.0 to v2.0.0
-///
-/// In old version the staking module has several issue about handling session delay, the
-/// current era was always considered the active one.
-///
-/// After the migration the current era will still be considered the active one for the era of
-/// the upgrade. And the delay issue will be fixed when planning the next era.
+//! Update storage from v1.0.0 to v2.0.0
+//!
+//! In old version the staking module has several issue about handling session delay, the
+//! current era was always considered the active one.
+//!
+//! After the migration the current era will still be considered the active one for the era of
+//! the upgrade. And the delay issue will be fixed when planning the next era.
 // * create:
 //   * ActiveEraStart
 //   * ErasRewardPoints
