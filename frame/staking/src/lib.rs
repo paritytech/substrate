@@ -254,6 +254,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod slashing;
+mod migration;
 
 pub mod inflation;
 
@@ -679,6 +680,21 @@ impl Default for Forcing {
 	fn default() -> Self { Forcing::NotForcing }
 }
 
+// A value placed in storage that represents the current version of the Staking storage.
+// This value is used by the `on_runtime_upgrade` logic to determine whether we run
+// storage migration logic. This should match directly with the semantic versions of the Rust crate.
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+enum Releases {
+	V1_0_0,
+	V2_0_0,
+}
+
+impl Default for Releases {
+	fn default() -> Self {
+		Releases::V1_0_0
+	}
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
 		/// Number of era to keep in history.
@@ -832,10 +848,10 @@ decl_storage! {
 		/// The earliest era for which we have a pending, unapplied slash.
 		EarliestUnappliedSlash: Option<EraIndex>;
 
-		/// True if network has been upgraded to this version.
+		/// Storage version of the pallet.
 		///
-		/// True for new networks.
-		IsUpgraded build(|_| true): bool;
+		/// This is set to v2.0.0 for new networks.
+		StorageVersion build(|_: &GenesisConfig<T>| Releases::V2_0_0): Releases;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -927,8 +943,8 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_initialize() {
-			Self::ensure_storage_upgraded();
+		fn on_runtime_upgrade() {
+			migration::on_runtime_upgrade::<T>();
 		}
 
 		fn on_finalize() {
@@ -1132,8 +1148,6 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn validate(origin, prefs: ValidatorPrefs) {
-			Self::ensure_storage_upgraded();
-
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
@@ -1154,8 +1168,6 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
-			Self::ensure_storage_upgraded();
-
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
@@ -1433,7 +1445,6 @@ decl_module! {
 		///
 		/// - `stash`: The stash account to reap. Its balance must be zero.
 		fn reap_stash(_origin, stash: T::AccountId) {
-			Self::ensure_storage_upgraded();
 			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
 			Self::kill_stash(&stash)?;
 			T::Currency::remove_lock(STAKING_ID, &stash);
@@ -1575,14 +1586,6 @@ impl<T: Trait> Module<T> {
 	fn chill_stash(stash: &T::AccountId) {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
-	}
-
-	/// Ensures storage is upgraded to most recent necessary state.
-	fn ensure_storage_upgraded() {
-		if !IsUpgraded::get() {
-			IsUpgraded::put(true);
-			Self::do_upgrade();
-		}
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -1958,147 +1961,6 @@ impl<T: Trait> Module<T> {
 			_ => ForceEra::put(Forcing::ForceNew),
 		}
 	}
-
-	/// Update storages to current version
-	///
-	/// In old version the staking module has several issue about handling session delay, the
-	/// current era was always considered the active one.
-	///
-	/// After the migration the current era will still be considered the active one for the era of
-	/// the upgrade. And the delay issue will be fixed when planning the next era.
-	// * create:
-	//   * ActiveEraStart
-	//   * ErasRewardPoints
-	//   * ActiveEra
-	//   * ErasStakers
-	//   * ErasStakersClipped
-	//   * ErasValidatorPrefs
-	//   * ErasTotalStake
-	//   * ErasStartSessionIndex
-	// * translate StakingLedger
-	// * removal of:
-	//   * Stakers
-	//   * SlotStake
-	//   * CurrentElected
-	//   * CurrentEraStart
-	//   * CurrentEraStartSessionIndex
-	//   * CurrentEraPointsEarned
-	fn do_upgrade() {
-		/// Deprecated storages used for migration only.
-		mod deprecated {
-			use crate::{Trait, BalanceOf, MomentOf, SessionIndex, Exposure};
-			use codec::{Encode, Decode};
-			use frame_support::{decl_module, decl_storage};
-			use sp_std::prelude::*;
-
-			/// Reward points of an era. Used to split era total payout between validators.
-			#[derive(Encode, Decode, Default)]
-			pub struct EraPoints {
-				/// Total number of points. Equals the sum of reward points for each validator.
-				pub total: u32,
-				/// The reward points earned by a given validator. The index of this vec corresponds to the
-				/// index into the current validator set.
-				pub individual: Vec<u32>,
-			}
-
-			decl_module! {
-				pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
-			}
-
-			decl_storage! {
-				pub trait Store for Module<T: Trait> as Staking {
-					pub SlotStake: BalanceOf<T>;
-
-					/// The currently elected validator set keyed by stash account ID.
-					pub CurrentElected: Vec<T::AccountId>;
-
-					/// The start of the current era.
-					pub CurrentEraStart: MomentOf<T>;
-
-					/// The session index at which the current era started.
-					pub CurrentEraStartSessionIndex: SessionIndex;
-
-					/// Rewards for the current era. Using indices of current elected set.
-					pub CurrentEraPointsEarned: EraPoints;
-
-					/// Nominators for a particular account that is in action right now. You can't iterate
-					/// through validators here, but you can find them in the Session module.
-					///
-					/// This is keyed by the stash account.
-					pub Stakers: map hasher(blake2_256) T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
-				}
-			}
-		}
-
-		#[derive(Encode, Decode)]
-		struct OldStakingLedger<AccountId, Balance: HasCompact> {
-			stash: AccountId,
-			#[codec(compact)]
-			total: Balance,
-			#[codec(compact)]
-			active: Balance,
-			unlocking: Vec<UnlockChunk<Balance>>,
-		}
-
-		let current_era_start_index = deprecated::CurrentEraStartSessionIndex::get();
-		let current_era = <Module<T> as Store>::CurrentEra::get().unwrap_or(0);
-		let current_era_start = deprecated::CurrentEraStart::<T>::get();
-		<Module<T> as Store>::ErasStartSessionIndex::insert(current_era, current_era_start_index);
-		<Module<T> as Store>::ActiveEra::put(ActiveEraInfo {
-			index: current_era,
-			start: Some(current_era_start),
-		});
-
-		let current_elected = deprecated::CurrentElected::<T>::get();
-		let mut current_total_stake = <BalanceOf<T>>::zero();
-		for validator in &current_elected {
-			let exposure = deprecated::Stakers::<T>::get(validator);
-			current_total_stake += exposure.total;
-			<Module<T> as Store>::ErasStakers::insert(current_era, validator, &exposure);
-
-			let mut exposure_clipped = exposure;
-			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
-			if exposure_clipped.others.len() > clipped_max_len {
-				exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value).reverse());
-				exposure_clipped.others.truncate(clipped_max_len);
-			}
-			<Module<T> as Store>::ErasStakersClipped::insert(current_era, validator, exposure_clipped);
-
-			let pref = <Module<T> as Store>::Validators::get(validator);
-			<Module<T> as Store>::ErasValidatorPrefs::insert(current_era, validator, pref);
-		}
-		<Module<T> as Store>::ErasTotalStake::insert(current_era, current_total_stake);
-
-		let points = deprecated::CurrentEraPointsEarned::get();
-		<Module<T> as Store>::ErasRewardPoints::insert(current_era, EraRewardPoints {
-			total: points.total,
-			individual: current_elected.iter().cloned().zip(points.individual.iter().cloned()).collect(),
-		});
-
-		let res = <Module<T> as Store>::Ledger::translate_values(
-			|old: OldStakingLedger<T::AccountId, BalanceOf<T>>| StakingLedger {
-				stash: old.stash,
-				total: old.total,
-				active: old.active,
-				unlocking: old.unlocking,
-				last_reward: None,
-			}
-		);
-		if let Err(e) = res {
-			frame_support::print("Encountered error in migration of Staking::Ledger map.");
-			frame_support::print("The number of removed key/value is:");
-			frame_support::print(e);
-		}
-
-
-		// Kill old storages
-		deprecated::Stakers::<T>::remove_all();
-		deprecated::SlotStake::<T>::kill();
-		deprecated::CurrentElected::<T>::kill();
-		deprecated::CurrentEraStart::<T>::kill();
-		deprecated::CurrentEraStartSessionIndex::kill();
-		deprecated::CurrentEraPointsEarned::kill();
-	}
 }
 
 /// In this implementation `new_session(session)` must be called before `end_session(session-1)`
@@ -2108,7 +1970,6 @@ impl<T: Trait> Module<T> {
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		Self::ensure_storage_upgraded();
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {
@@ -2208,8 +2069,6 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
 	) {
-		<Module<T>>::ensure_storage_upgraded();
-
 		let reward_proportion = SlashRewardFraction::get();
 
 		let active_era = {
@@ -2297,8 +2156,6 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	O: Offence<Offender>,
 {
 	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
-		<Module<T>>::ensure_storage_upgraded();
-
 		// disallow any slashing from before the current bonding period.
 		let offence_session = offence.session_index();
 		let bonded_eras = BondedEras::get();

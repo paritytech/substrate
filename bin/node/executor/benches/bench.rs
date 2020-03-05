@@ -23,12 +23,13 @@ use node_runtime::{
 };
 use node_runtime::constants::currency::*;
 use node_testing::keyring::*;
-use sp_core::{Blake2Hasher, NativeOrEncoded, NeverNativeValue};
+use sp_core::{NativeOrEncoded, NeverNativeValue};
 use sp_core::storage::well_known_keys;
 use sp_core::traits::CodeExecutor;
 use	frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 use sc_executor::{NativeExecutor, RuntimeInfo, WasmExecutionMethod, Externalities};
+use sp_runtime::traits::BlakeTwo256;
 
 criterion_group!(benches, bench_execute_block);
 criterion_main!(benches);
@@ -54,7 +55,7 @@ fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 	node_testing::keyring::sign(xt, VERSION, GENESIS_HASH)
 }
 
-fn new_test_ext(genesis_config: &GenesisConfig) -> TestExternalities<Blake2Hasher> {
+fn new_test_ext(genesis_config: &GenesisConfig) -> TestExternalities<BlakeTwo256> {
 	let mut test_ext = TestExternalities::new_with_code(
 		COMPACT_CODE,
 		genesis_config.build_storage().unwrap(),
@@ -76,7 +77,7 @@ fn construct_block<E: Externalities>(
 	let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 
 	// calculate the header fields that we can.
-	let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(
+	let extrinsics_root = Layout::<BlakeTwo256>::ordered_trie_root(
 		extrinsics.iter().map(Encode::encode)
 	).to_fixed_bytes()
 		.into();
@@ -90,7 +91,7 @@ fn construct_block<E: Externalities>(
 	};
 
 	// execute the block to get the real header.
-	executor.call::<_, NeverNativeValue, fn() -> _>(
+	executor.call::<NeverNativeValue, fn() -> _>(
 		ext,
 		"Core_initialize_block",
 		&header.encode(),
@@ -99,7 +100,7 @@ fn construct_block<E: Externalities>(
 	).0.unwrap();
 
 	for i in extrinsics.iter() {
-		executor.call::<_, NeverNativeValue, fn() -> _>(
+		executor.call::<NeverNativeValue, fn() -> _>(
 			ext,
 			"BlockBuilder_apply_extrinsic",
 			&i.encode(),
@@ -108,7 +109,7 @@ fn construct_block<E: Externalities>(
 		).0.unwrap();
 	}
 
-	let header = match executor.call::<_, NeverNativeValue, fn() -> _>(
+	let header = match executor.call::<NeverNativeValue, fn() -> _>(
 		ext,
 		"BlockBuilder_finalize_block",
 		&[0u8;0],
@@ -174,7 +175,7 @@ fn bench_execute_block(c: &mut Criterion) {
 				|| new_test_ext(&genesis_config),
 				|test_ext| {
 					for block in blocks.iter() {
-						executor.call::<_, NeverNativeValue, fn() -> _>(
+						executor.call::<NeverNativeValue, fn() -> _>(
 							&mut test_ext.ext(),
 							"Core_execute_block",
 							&block.0,

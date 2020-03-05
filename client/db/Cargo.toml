@@ -30,6 +30,7 @@ sc-state-db = { version = "0.8.0-alpha.2", path = "../state-db" }
 sp-trie = { version = "2.0.0-alpha.2", path = "../../primitives/trie" }
 sp-consensus = { version = "0.8.0-alpha.2", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "2.0.0-alpha.2", path = "../../primitives/blockchain" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0-alpha.2", path = "../../utils/prometheus" }
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0-alpha.2", path = "../../primitives/keyring" }

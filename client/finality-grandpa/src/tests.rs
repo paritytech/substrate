@@ -42,7 +42,7 @@ use std::{
 	pin::Pin, task,
 };
 use parity_scale_codec::Decode;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HasherFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::{H256, NativeOrEncoded, ExecutionContext, crypto::Public};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
@@ -190,17 +190,6 @@ impl TestNetFactory for GrandpaTestNet {
 	}
 }
 
-#[derive(Clone)]
-struct Exit;
-
-impl futures::Future for Exit {
-	type Output = ();
-
-	fn poll(self: Pin<&mut Self>, _: &mut task::Context) -> task::Poll<()> {
-		task::Poll::Pending
-	}
-}
-
 #[derive(Default, Clone)]
 pub(crate) struct TestApi {
 	genesis_authorities: AuthorityList,
@@ -289,7 +278,7 @@ impl ApiExt<Block> for RuntimeApi {
 	fn into_storage_changes(
 		&self,
 		_: &Self::StateBackend,
-		_: Option<&sp_api::ChangesTrieState<sp_api::HasherFor<Block>, sp_api::NumberFor<Block>>>,
+		_: Option<&sp_api::ChangesTrieState<sp_api::HashFor<Block>, sp_api::NumberFor<Block>>>,
 		_: <Block as sp_api::BlockT>::Hash,
 	) -> std::result::Result<sp_api::StorageChanges<Self::StateBackend, Block>, String>
 		where Self: Sized
@@ -323,7 +312,7 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
 		let authorities = self.authorities(block)?;
-		let backend = <InMemoryBackend<HasherFor<Block>>>::from(vec![
+		let backend = <InMemoryBackend<HashFor<Block>>>::from(vec![
 			(None, vec![(b"authorities".to_vec(), Some(authorities.encode()))])
 		]);
 		let proof = prove_read(backend, vec![b"authorities"])
@@ -339,7 +328,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 		header: <Block as BlockT>::Header,
 		proof: StorageProof,
 	) -> Result<AuthorityList> {
-		let results = read_proof_check::<HasherFor<Block>, _>(
+		let results = read_proof_check::<HashFor<Block>, _>(
 			*header.state_root(), proof, vec![b"authorities"]
 		)
 			.expect("failure checking read proof for authorities");
@@ -444,7 +433,6 @@ fn run_to_completion_with<F>(
 			link: link,
 			network: net_service,
 			inherent_data_providers: InherentDataProviders::new(),
-			on_exit: Exit,
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -576,7 +564,6 @@ fn finalize_3_voters_1_full_observer() {
 			link: link,
 			network: net_service,
 			inherent_data_providers: InherentDataProviders::new(),
-			on_exit: Exit,
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -740,7 +727,6 @@ fn transition_3_voters_twice_1_full_observer() {
 			link: link,
 			network: net_service,
 			inherent_data_providers: InherentDataProviders::new(),
-			on_exit: Exit,
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -1166,7 +1152,6 @@ fn voter_persists_its_votes() {
 							link,
 							network: this.net.lock().peers[0].network_service().clone(),
 							inherent_data_providers: InherentDataProviders::new(),
-							on_exit: Exit,
 							telemetry_on_connect: None,
 							voting_rule: VotingRulesBuilder::default().build(),
 							prometheus_registry: None,
@@ -1382,7 +1367,6 @@ fn finalize_3_voters_1_light_observer() {
 				},
 				link,
 				net.lock().peers[3].network_service().clone(),
-				Exit,
 			).unwrap()
 		);
 
@@ -1512,7 +1496,6 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
 			inherent_data_providers: InherentDataProviders::new(),
-			on_exit: Exit,
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
