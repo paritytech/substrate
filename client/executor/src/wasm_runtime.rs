@@ -303,7 +303,7 @@ fn create_versioned_wasm_runtime(
 		heap_pages,
 		&code,
 		host_functions,
-		allow_missing_func_imports
+		allow_missing_func_imports,
 	)?;
 
 	// Call to determine runtime version.
