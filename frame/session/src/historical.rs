@@ -27,7 +27,7 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sp_runtime::KeyTypeId;
+use sp_runtime::{KeyTypeId, RuntimeDebug};
 use sp_runtime::traits::{Convert, OpaqueKeys};
 use frame_support::{decl_module, decl_storage};
 use frame_support::{Parameter, print};
@@ -258,10 +258,17 @@ impl<T: Trait> ProvingTrie<T> {
 }
 
 /// Proof of ownership of a specific key.
-#[derive(Encode, Decode, Clone)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
 pub struct Proof {
 	session: SessionIndex,
 	trie_nodes: Vec<Vec<u8>>,
+}
+
+impl Proof {
+	/// Returns a session this proof was generated for.
+	pub fn session(&self) -> SessionIndex {
+		self.session
+	}
 }
 
 impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
