@@ -723,9 +723,7 @@ impl<T: Trait> Module<T> {
 				&outgoing.clone(),
 				&new_members_ids,
 			);
-			if let Some(prime) = most_popular {
-				T::ChangeMembers::set_prime(prime);
-			}
+			T::ChangeMembers::set_prime(most_popular);
 
 			// outgoing candidates lose their bond.
 			let mut to_burn_bond = outgoing.to_vec();
@@ -906,8 +904,8 @@ mod tests {
 			PRIME.with(|p| *p.borrow_mut() = None);
 		}
 
-		fn set_prime(who: u64) {
-			PRIME.with(|p| *p.borrow_mut() = Some(who));
+		fn set_prime(who: Option<u64>) {
+			PRIME.with(|p| *p.borrow_mut() = who);
 		}
 	}
 

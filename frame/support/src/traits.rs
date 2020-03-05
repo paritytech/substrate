@@ -873,14 +873,14 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	}
 
 	/// Set the prime member.
-	fn set_prime(_prime: AccountId) {}
+	fn set_prime(_prime: Option<AccountId>) {}
 }
 
 impl<T: Clone + Ord> ChangeMembers<T> for () {
 	fn change_members(_: &[T], _: &[T], _: Vec<T>) {}
 	fn change_members_sorted(_: &[T], _: &[T], _: &[T]) {}
 	fn set_members_sorted(_: &[T], _: &[T]) {}
-	fn set_prime(_: T) {}
+	fn set_prime(_: Option<T>) {}
 }
 
 

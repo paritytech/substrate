@@ -47,80 +47,7 @@ use frame_support::{
 	decl_storage, decl_error, ensure,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
-/*
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct SortedVec<T>(Vec<T>);
 
-pub enum SortedVecEntry<'a, T>{
-	Occupied((&'a SortedVec<T>, usize)),
-	Empty((&'a SortedVec<T>, usize)),
-}
-
-impl<T: PartialOrd> SortedVec<T> {
-	pub fn insert(&mut self, t: T) -> usize {
-		let p = self.0.binary_search(&t).unwrap_or_else(|p| p);
-		self.0.insert(p, t);
-		p
-	}
-	pub fn insert_unique(&mut self, t: T) -> Result<usize, usize> {
-		match self.0.binary_search(&t) {
-			Ok(p) => Err(p),
-			Err(p) => {
-				self.0.insert(p, t);
-				Ok(p)
-			}
-		}
-	}
-	pub fn contains(&self, t: &T) -> bool {
-		self.0.binary_search(t).is_ok()
-	}
-	pub fn remove_one(&mut self, t: &T) -> Result<(), usize> {
-		match self.0.binary_search(&t) {
-			Err(p) => Err(p),
-			Ok(p) => {
-				self.0.remove(p);
-				Ok(())
-			}
-		}
-	}
-	pub fn remove_all(&mut self, t: &T) -> usize {
-		match self.0.binary_search(&t) {
-			Err(p) => 0,
-			Ok(p) => {
-				let mut begin = p;
-				while begin > 0 && &self.0[begin - 1] == t {
-					begin -= 1;
-				}
-				let mut end = p + 1;
-				while end < self.0.len() && &self.0[end] == t {
-					end += 1;
-				}
-				self.0.splice(begin..end, &[]);
-				end - begin
-			},
-		}
-	}
-	pub fn as_vec(&self) -> &Vec<T> { &self.0 }
-}
-
-impl<T> AsRef<Vec<T>> for SortedVec<T> {
-	fn as_ref(&self) -> &Vec<T> {
-		&self.0
-	}
-}
-
-impl<T> From<Vec<T>> for SortedVec<T> {
-	fn from(v: Vec<T>) -> Self {
-		Self(v)
-	}
-}
-
-impl<T> From<SortedVec<T>> for Vec<T> {
-	fn from(v: SortedVec<T>) -> Self {
-		v.0
-	}
-}
-*/
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
 
@@ -373,6 +300,7 @@ decl_module! {
 		///   - `M` is number of members,
 		///   - `P` is number of active proposals,
 		///   - `L` is the encoded length of `proposal` preimage.
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
 		fn close(origin, proposal: T::Hash, #[compact] index: ProposalIndex) {
 			let _ = ensure_signed(origin)?;
 
@@ -473,8 +401,8 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		Prime::<T, I>::kill();
 	}
 
-	fn set_prime(prime: T::AccountId) {
-		Prime::<T, I>::put(prime);
+	fn set_prime(prime: Option<T::AccountId>) {
+		Prime::<T, I>::set(prime);
 	}
 }
 
