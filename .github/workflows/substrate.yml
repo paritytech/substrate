@@ -335,7 +335,6 @@ jobs:
     container:                       generalbeck/rust-builder:latest
     env:
       CARGO_INCREMENTAL:               0
-      CARGO_HOME:                    "/usr/local/cargo"
     steps:
       - name:                        Checkout sources
         uses:                        actions/checkout@v2
@@ -349,11 +348,6 @@ jobs:
         with:
           path:                      ~/.cache/sccache
           key:                       sccache-[check-web-wasm]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
-      - name:                        Restore ./target
-        uses:                        actions/cache@v1.1.2
-        with:
-          path:                      target
-          key:                       cargo-build-[check-web-wasm]-${{ runner.OS }}-${{ hashFiles('**/Cargo.lock') }}
       - name:                        Sccache statistics
         run:                         sccache --show-stats&&rustup show
       - name:                        Run cargo build wasm
@@ -374,9 +368,6 @@ jobs:
       - name:                        Stop sccache
         if:                          always()
         run:                         sccache --stop-server
-      - name:                        Prepare build directory for cache
-        shell:                       bash
-        run:                         bash .github/workflows/clean-target.sh
       - name:                        Disk statistics
         run:                         df -h --total
 
