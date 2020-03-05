@@ -68,6 +68,7 @@ use impls::{CurrencyToVoteHandler, Author, LinearWeightToFee, TargetedFeeAdjustm
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
+use frame_system::Trait;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -339,7 +340,7 @@ impl pallet_collective::Trait<CouncilCollective> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
-	type MotionDuration = CountilMotionDuration;
+	type MotionDuration = CouncilMotionDuration;
 }
 
 parameter_types! {
@@ -383,6 +384,7 @@ impl pallet_membership::Trait<pallet_membership::Instance1> for Runtime {
 	type RemoveOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type SwapOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type ResetOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type PrimeOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type MembershipInitialized = TechnicalCommittee;
 	type MembershipChanged = TechnicalCommittee;
 }
