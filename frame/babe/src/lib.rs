@@ -491,8 +491,8 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-impl<T: Trait> frame_support::traits::EstimateNextSessionChange<T::BlockNumber> for Module<T> {
-	fn estimate_next_session_change(now: T::BlockNumber) -> T::BlockNumber {
+impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
+	fn estimate_next_session_rotation(now: T::BlockNumber) -> T::BlockNumber {
 		Self::next_expected_epoch_change(now)
 	}
 }

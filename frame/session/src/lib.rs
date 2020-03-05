@@ -103,10 +103,14 @@ use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
 use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use frame_support::weights::SimpleDispatchInfo;
-use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
+use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys, Saturating};
 use sp_staking::SessionIndex;
-use frame_support::{ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId};
-use frame_support::{traits::{Get, FindAuthor, ValidatorRegistration}, Parameter};
+use frame_support::{
+	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
+};
+use frame_support::traits::{
+	Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
+};
 use frame_support::dispatch::{self, DispatchResult, DispatchError};
 use frame_system::{self as system, ensure_signed};
 
@@ -143,6 +147,31 @@ impl<
 	}
 }
 
+impl<
+	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd + Saturating + Clone,
+	Period: Get<BlockNumber>,
+	Offset: Get<BlockNumber>,
+> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset> {
+	fn estimate_next_session_rotation(now: BlockNumber) -> BlockNumber {
+		let offset = Offset::get();
+		let period = Period::get();
+		if now > offset {
+			let block_after_last_session = (now.clone() - offset) % period.clone();
+			match block_after_last_session > Zero::zero() {
+				true =>
+				{
+					now.saturating_add(
+						period.saturating_sub(block_after_last_session)
+					)
+				}
+				false => Zero::zero()
+			}
+		} else {
+			offset
+		}
+	}
+}
+
 /// A trait for managing creation of new validator set.
 pub trait SessionManager<ValidatorId> {
 	/// Plan a new session, and optionally provide the new validator set.
@@ -155,7 +184,7 @@ pub trait SessionManager<ValidatorId> {
 	/// The returned validator set, if any, will not be applied until `new_index`.
 	/// `new_index` is strictly greater than from previous call.
 	///
-	/// The first session start at index 0.
+	/// The first session starts at index 0.
 	fn new_session(new_index: SessionIndex) -> Option<Vec<ValidatorId>>;
 	/// End the session.
 	///
@@ -323,6 +352,11 @@ pub trait Trait: frame_system::Trait {
 
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
+
+	/// Something that can predict the next session rotation. This should typically come from the
+	/// same logical unit that provides [`ShouldEndSession`], yet, it gives a best effort estimate.
+	/// It is helpful to implement [`EstimateNextNewSession`].
+	type NextSessionRotation: EstimateNextSessionRotation<Self::BlockNumber>;
 
 	/// Handler for managing new session.
 	type SessionManager: SessionManager<Self::ValidatorId>;
@@ -744,6 +778,14 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 	}
 }
 
+impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
+	/// This session module always calls new_session and next_session at the same time, hence we
+	/// do a simple proxy and pass the function to next rotation.
+	fn estimate_next_new_session(now: T::BlockNumber) -> T::BlockNumber {
+		T::NextSessionRotation::estimate_next_session_rotation(now)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1001,17 +1043,19 @@ mod tests {
 			fn get() -> u64 { 3 }
 		}
 
-
 		type P = PeriodicSessions<Period, Offset>;
 
 		for i in 0..3 {
+			assert_eq!(P::estimate_next_session_rotation(i), 3);
 			assert!(!P::should_end_session(i));
 		}
 
 		assert!(P::should_end_session(3));
+		assert_eq!(P::estimate_next_session_rotation(3), 3);
 
-		for i in (1..10).map(|i| 3 + i) {
+		for i in 4..13 {
 			assert!(!P::should_end_session(i));
+			assert_eq!(P::estimate_next_session_rotation(i), 13);
 		}
 
 		assert!(P::should_end_session(13));

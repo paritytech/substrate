@@ -138,17 +138,29 @@ impl<
 	}
 }
 
-/// Something that can estimate at which block number the next era change will happen in a best
-/// effort manner. The result may or may night be accurate, based on the chain configuration and
-/// semantics.
-pub trait EstimateNextSessionChange<BlockNumber> {
-	/// Return the block number at which the next era change is estimated to happen.
-	fn estimate_next_session_change(now: BlockNumber) -> BlockNumber;
+/// Something that can estimate at which block the next session rotation will happen. This should
+/// be the same logical unit that dictates `ShouldEndSession` to the session module. No Assumptions
+/// are made about the scheduling of the sessions.
+pub trait EstimateNextSessionRotation<BlockNumber> {
+	/// Return the block number at which the next session rotation is estimated to happen.
+	fn estimate_next_session_rotation(now: BlockNumber) -> BlockNumber;
 }
 
-impl<BlockNumber: Bounded> EstimateNextSessionChange<BlockNumber> for () {
-	fn estimate_next_session_change(_: BlockNumber) -> BlockNumber {
-		// practically never
+impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
+	fn estimate_next_session_rotation(_: BlockNumber) -> BlockNumber {
+		Bounded::max_value()
+	}
+}
+
+/// Something that can estimate at which block the next `new_session` will be triggered. This must
+/// always be implemented by the session module.
+pub trait EstimateNextNewSession<BlockNumber> {
+	/// Return the block number at which the next new session is estimated to happen.
+	fn estimate_next_new_session(now: BlockNumber) -> BlockNumber;
+}
+
+impl<BlockNumber: Bounded> EstimateNextNewSession<BlockNumber> for () {
+	fn estimate_next_new_session(_: BlockNumber) -> BlockNumber {
 		Bounded::max_value()
 	}
 }

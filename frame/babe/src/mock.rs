@@ -86,6 +86,7 @@ impl pallet_session::Trait for Test {
 	type ValidatorIdOf = ();
 	type Keys = MockSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type NextSessionRotation = Babe;
 }
 
 impl pallet_timestamp::Trait for Test {

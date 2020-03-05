@@ -18,7 +18,6 @@
 
 use sp_runtime::traits::{Convert, SaturatedConversion};
 use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
-use frame_support::traits::{Get, EstimateNextSessionChange};
 
 type AccountId = u64;
 type AccountIndex = u32;
@@ -29,6 +28,7 @@ type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
 type Staking = pallet_staking::Module<Test>;
 type Indices = pallet_indices::Module<Test>;
+type Session = pallet_session::Module<Test>;
 
 impl_outer_origin! {
 	pub enum Origin for Test  where system = frame_system {}
@@ -49,18 +49,6 @@ impl Convert<u64, u64> for CurrencyToVoteHandler {
 impl Convert<u128, u64> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> u64 {
 		x.saturated_into()
-	}
-}
-
-pub struct PeriodicSessionChange<P>(sp_std::marker::PhantomData<P>);
-impl<P> EstimateNextSessionChange<BlockNumber> for PeriodicSessionChange<P>
-where
-	P: Get<BlockNumber>,
-{
-	fn estimate_next_session_change(now: BlockNumber) -> BlockNumber {
-		let period = P::get();
-		let excess = now % period;
-		now - excess + period
 	}
 }
 
@@ -142,6 +130,7 @@ impl pallet_session::Trait for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<(), ()>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<(), ()>;
 	type SessionHandler = TestSessionHandler;
 	type Event = ();
 	type ValidatorId = AccountId;
@@ -160,6 +149,7 @@ pallet_staking_reward_curve::build! {
 }
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
+	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
@@ -183,9 +173,10 @@ impl pallet_staking::Trait for Test {
 	type BondingDuration = ();
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
-	type NextSessionChange = PeriodicSessionChange<()>;
+	type NextNewSession = Session;
 	type ElectionLookahead = ();
 	type Call = Call;
 	type SubmitTransaction = SubmitTransaction;
 	type KeyType = sp_runtime::testing::UintAuthorityId;
+	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 }

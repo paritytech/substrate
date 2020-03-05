@@ -29,7 +29,7 @@ use sp_core::H256;
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue, StorageMap,
 	impl_outer_dispatch, StorageDoubleMap, impl_outer_event,
-	traits::{Currency, Get, FindAuthor, EstimateNextSessionChange},
+	traits::{Currency, Get, FindAuthor},
 	weights::Weight,
 };
 use frame_system::offchain::{CreateTransaction, Signer, TransactionSubmitter};
@@ -178,18 +178,6 @@ impl_outer_event! {
 	}
 }
 
-pub struct PeriodicSessionChange<P>(sp_std::marker::PhantomData<P>);
-impl<P> EstimateNextSessionChange<BlockNumber> for PeriodicSessionChange<P>
-where
-	P: Get<BlockNumber>,
-{
-	fn estimate_next_session_change(now: BlockNumber) -> BlockNumber {
-		let period = P::get();
-		let excess = now % period;
-		now - excess + period
-	}
-}
-
 /// Author of block is always 11
 pub struct Author11;
 impl FindAuthor<u64> for Author11 {
@@ -267,6 +255,7 @@ impl pallet_session::Trait for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 }
 
 impl pallet_session::historical::Trait for Test {
@@ -317,7 +306,7 @@ impl Trait for Test {
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
-	type NextSessionChange = PeriodicSessionChange<Period>;
+	type NextNewSession = Session;
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
 	type SubmitTransaction = SubmitTransaction;

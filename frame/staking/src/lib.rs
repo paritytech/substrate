@@ -268,7 +268,7 @@ use frame_support::{
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		Time, EstimateNextSessionChange,
+		Time, EstimateNextNewSession,
 	}
 };
 use pallet_session::historical;
@@ -770,7 +770,7 @@ pub trait Trait: frame_system::Trait {
 	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
 
 	/// Something that can estimate the next session change, accurately or as a best effort guess.
-	type NextSessionChange: EstimateNextSessionChange<Self::BlockNumber>;
+	type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
 
 	/// How many blocks ahead of the era, within the last do we try to run the phragmen offchain?
 	/// Setting this to zero will disable the offchain compute and only on-chain seq-phragmen will
@@ -1125,7 +1125,7 @@ decl_module! {
 				Self::is_current_session_final()
 			{
 				let next_session_change =
-					T::NextSessionChange::estimate_next_session_change(now);
+					T::NextNewSession::estimate_next_new_session(now);
 				if let Some(remaining) = next_session_change.checked_sub(&now) {
 					if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
 						// create snapshot.
@@ -3132,10 +3132,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				priority: score[0].saturated_into(),
 				requires: vec![],
 				provides: vec![(Self::current_era(), validator_key).encode()],
-				// longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(150_u64),
-				longevity: TryInto::<u64>::try_into(
-					T::NextSessionChange::estimate_next_session_change(<frame_system::Module<T>>::block_number()) - <frame_system::Module<T>>::block_number()
-				).unwrap_or(150_u64),
+				longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(150_u64),
 				propagate: true,
 			})
 		} else {

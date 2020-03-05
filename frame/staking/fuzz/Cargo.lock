@@ -321,6 +321,8 @@ dependencies = [
 name = "frame-benchmarking"
 version = "2.0.0-alpha.3"
 dependencies = [
+ "frame-support 2.0.0-alpha.3",
+ "frame-system 2.0.0-alpha.3",
  "parity-scale-codec 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0-alpha.3",
  "sp-io 2.0.0-alpha.3",

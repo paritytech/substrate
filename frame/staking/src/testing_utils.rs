@@ -152,7 +152,6 @@ where
 pub fn get_weak_solution<T: Trait>(
 	do_reduce: bool,
 ) -> (Vec<ValidatorIndex>, CompactAssignments, PhragmenScore) {
-	use sp_std::collections::btree_map::BTreeMap;
 	let mut backing_stake_of: BTreeMap<T::AccountId, BalanceOf<T>> = BTreeMap::new();
 
 	// self stake
@@ -323,16 +322,19 @@ pub fn get_seq_phragmen_solution<T: Trait>(
 }
 
 /// Remove all validator, nominators, votes and exposures.
-pub fn clean<T: Trait>() {
+pub fn clean<T: Trait>(era: EraIndex)
+	where
+		<T as frame_system::Trait>::AccountId: codec::EncodeLike<u32>,
+		u32: codec::EncodeLike<T::AccountId>,
+{
 	<Validators<T>>::enumerate().for_each(|(k, _)| {
 		let ctrl = <Module<T>>::bonded(&k).unwrap();
 		<Bonded<T>>::remove(&k);
 		<Validators<T>>::remove(&k);
-		<Stakers<T>>::remove(&k);
 		<Ledger<T>>::remove(&ctrl);
+		<ErasStakers<T>>::remove(k, era);
 	});
 	<Nominators<T>>::enumerate().for_each(|(k, _)| <Nominators<T>>::remove(k));
-	<Stakers<T>>::remove_all();
 	<Ledger<T>>::remove_all();
 	<Bonded<T>>::remove_all();
 	<QueuedElected<T>>::kill();
