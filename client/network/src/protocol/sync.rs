@@ -1202,6 +1202,27 @@ impl<B: BlockT> ChainSync<B> {
 	fn is_already_downloading(&self, hash: &B::Hash) -> bool {
 		self.peers.iter().any(|(_, p)| p.state == PeerSyncState::DownloadingStale(*hash))
 	}
+
+	/// Return some key metrics.
+	pub(crate) fn metrics(&self) -> Metrics {
+		use std::convert::TryInto;
+		Metrics {
+			queued_blocks: self.queue_blocks.len().try_into().unwrap_or(std::u32::MAX),
+			fork_targets: self.fork_targets.len().try_into().unwrap_or(std::u32::MAX),
+			finality_proofs: self.extra_finality_proofs.metrics(),
+			justifications: self.extra_justifications.metrics(),
+			_priv: ()
+		}
+	}
+}
+
+#[derive(Debug)]
+pub(crate) struct Metrics {
+	pub(crate) queued_blocks: u32,
+	pub(crate) fork_targets: u32,
+	pub(crate) finality_proofs: extra_requests::Metrics,
+	pub(crate) justifications: extra_requests::Metrics,
+	_priv: ()
 }
 
 /// Request the ancestry for a block. Sends a request for header and justification for the given
