@@ -31,9 +31,9 @@ jobs:
            echo "CARGO_HOME: "$CARGO_HOME
            printenv
            ls -a $HOME
-           ls -a /usr/local/cargo/bin
            ls -a /usr/local/cargo/
-           #rustup target add wasm32-unknown-unknown
+           ls -a /usr/local/cargo/git
+           rustup target add wasm32-unknown-unknown
            # WASM support is in progress. As more and more crates support WASM, we
            # should add entries here. See https://github.com/paritytech/substrate/issues/2416
            time cargo build --target=wasm32-unknown-unknown -p sp-io
@@ -48,6 +48,10 @@ jobs:
            time cargo build --target=wasm32-unknown-unknown --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser"
            echo "-----------"
            ls -a target
+           ls -a $HOME
+           ls -a /usr/local/cargo/
+           ls -a /usr/local/cargo/git
+           ls -a $PWD
       - name:                        Stop sccache
         if:                          always()
         run:                         sccache --stop-server
