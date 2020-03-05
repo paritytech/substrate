@@ -591,14 +591,14 @@ impl pallet_society::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const VestingDeposit: Balance = 100 * DOLLARS;
+	pub const MinVestedTransfer: Balance = 100 * DOLLARS;
 }
 
 impl pallet_vesting::Trait for Runtime {
 	type Event = Event;
 	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;
-	type VestingDeposit = VestingDeposit;
+	type MinVestedTransfer = MinVestedTransfer;
 }
 
 construct_runtime!(

@@ -72,8 +72,8 @@ pub trait Trait: frame_system::Trait {
 	/// Convert the block number into a balance.
 	type BlockNumberToBalance: Convert<Self::BlockNumber, BalanceOf<Self>>;
 
-	/// The minimum amount to be transferred to create a new vesting schedule.
-	type VestingDeposit: Get<BalanceOf<Self>>;
+	/// The minimum amount transferred to call `vested_transfer`.
+	type MinVestedTransfer: Get<BalanceOf<Self>>;
 }
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
@@ -174,7 +174,7 @@ decl_module! {
 		type Error = Error<T>;
 
 		/// The minimum amount to be transferred to create a new vesting schedule.
-		const VestingDeposit: BalanceOf<T> = T::VestingDeposit::get();
+		const MinVestedTransfer: BalanceOf<T> = T::MinVestedTransfer::get();
 
 		fn deposit_event() = default;
 
@@ -238,7 +238,7 @@ decl_module! {
 			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 		) -> DispatchResult {
 			let transactor = ensure_signed(origin)?;
-			ensure!(schedule.locked >= T::VestingDeposit::get(), Error::<T>::AmountLow);
+			ensure!(schedule.locked >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 
 			let who = T::Lookup::lookup(target)?;
 			ensure!(!Vesting::<T>::contains_key(&who), Error::<T>::ExistingVestingSchedule);
@@ -393,13 +393,13 @@ mod tests {
 		type AccountStore = System;
 	}
 	parameter_types! {
-		pub const VestingDeposit: u64 = 256 * 2;
+		pub const MinVestedTransfer: u64 = 256 * 2;
 	}
 	impl Trait for Test {
 		type Event = ();
 		type Currency = Balances;
 		type BlockNumberToBalance = Identity;
-		type VestingDeposit = VestingDeposit;
+		type MinVestedTransfer = MinVestedTransfer;
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
