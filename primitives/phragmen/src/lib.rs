@@ -613,7 +613,7 @@ pub fn evaluate_support<AccountId>(
 }
 
 /// Compares two sets of phragmen scores based on desirability and returns true if `that` is
-/// better `this`.
+/// better than `this`.
 ///
 /// Evaluation is done in a lexicographic manner.
 ///
