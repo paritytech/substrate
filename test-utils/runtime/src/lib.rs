@@ -104,20 +104,21 @@ impl Transfer {
 		Extrinsic::Transfer {
 			transfer: self,
 			signature,
-			exhaust_resources: false,
+			exhaust_resources_when_not_first: false,
 		}
 	}
 
-	/// Convert into a signed extrinsic, which will not end up included
-	/// in block due to resource exhaustion.
+	/// Convert into a signed extrinsic, which will only end up included in the block
+	/// if it's the first transaction. Otherwise it will cause `ResourceExhaustion` error
+	/// which should be considered as block being full.
 	#[cfg(feature = "std")]
-	pub fn into_exhaust_tx(self) -> Extrinsic {
+	pub fn into_resources_exhausting_tx(self) -> Extrinsic {
 		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
 			.expect("Creates keyring from public key.").sign(&self.encode()).into();
 		Extrinsic::Transfer {
 			transfer: self,
 			signature,
-			exhaust_resources: true,
+			exhaust_resources_when_not_first: true,
 		}
 	}
 }
@@ -129,7 +130,7 @@ pub enum Extrinsic {
 	Transfer {
 		transfer: Transfer,
 		signature: AccountSignature,
-		exhaust_resources: bool,
+		exhaust_resources_when_not_first: bool,
 	},
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
@@ -151,9 +152,9 @@ impl BlindCheckable for Extrinsic {
 	fn check(self, _signature: CheckSignature) -> Result<Self, TransactionValidityError> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
-			Extrinsic::Transfer { transfer, signature, exhaust_resources } => {
+			Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first } => {
 				if sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
-					Ok(Extrinsic::Transfer { transfer, signature, exhaust_resources })
+					Ok(Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first })
 				} else {
 					Err(InvalidTransaction::BadProof.into())
 				}

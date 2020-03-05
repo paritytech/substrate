@@ -299,10 +299,10 @@ mod tests {
 	use super::*;
 
 	use parking_lot::Mutex;
-	use sp_consensus::Proposer;
+	use sp_consensus::{BlockOrigin, Proposer};
 	use substrate_test_runtime_client::{
-		runtime::{Extrinsic, Transfer}, AccountKeyring, DefaultTestClientBuilderExt,
-		TestClientBuilderExt,
+		prelude::*,
+		runtime::{Extrinsic, Transfer},
 	};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_api::Core;
@@ -406,7 +406,7 @@ mod tests {
 	#[test]
 	fn should_not_remove_invalid_transactions_when_skipping() {
 		// given
-		let client = Arc::new(substrate_test_runtime_client::new());
+		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
 			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
 		);
@@ -420,29 +420,55 @@ mod tests {
 					nonce: 2,
 					from: AccountKeyring::Alice.into(),
 					to: Default::default(),
-				}.into_exhaust_tx(),
+				}.into_resources_exhausting_tx(),
 				extrinsic(3),
-				extrinsic(4),
+				Transfer {
+					amount: Default::default(),
+					nonce: 4,
+					from: AccountKeyring::Alice.into(),
+					to: Default::default(),
+				}.into_resources_exhausting_tx(),
 				extrinsic(5),
+				extrinsic(6),
 			])
 		).unwrap();
 
 		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
-		let mut proposer = proposer_factory.init_with_now(
-			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-			Box::new(move || time::Instant::now()),
-		);
+		let mut propose_block = |
+			client: &TestClient,
+			number,
+			expected_block_extrinsics,
+			expected_pool_transactions,
+		| {
+			let mut proposer = proposer_factory.init_with_now(
+				&client.header(&BlockId::number(number)).unwrap().unwrap(),
+				Box::new(move || time::Instant::now()),
+			);
 
-		// when
-		let deadline = time::Duration::from_secs(9);
-		let block = futures::executor::block_on(
-			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
-		).map(|r| r.block).unwrap();
+			// when
+			let deadline = time::Duration::from_secs(9);
+			let block = futures::executor::block_on(
+				proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
+			).map(|r| r.block).unwrap();
 
-		// then
-		// block should have some extrinsics although we have some more in the pool.
-		assert_eq!(block.extrinsics().len(), 2);
-		assert_eq!(txpool.ready().count(), 6);
+			// then
+			// block should have some extrinsics although we have some more in the pool.
+			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
+			assert_eq!(txpool.ready().count(), expected_pool_transactions);
+
+			block
+		};
+
+		// let's create one block and import it
+		let block = propose_block(&client, 0, 2, 7);
+		client.import(BlockOrigin::Own, block).unwrap();
+
+		// now let's make sure that we can still make some progress
+
+		// This is most likely incorrect, and caused by #5139
+		let tx_remaining = 0;
+		let block = propose_block(&client, 1, 2, tx_remaining);
+		client.import(BlockOrigin::Own, block).unwrap();
 	}
 }
 

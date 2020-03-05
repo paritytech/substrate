@@ -192,7 +192,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 /// This doesn't attempt to validate anything regarding the block.
 pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
-	let result = execute_transaction_backend(&utx);
+	let result = execute_transaction_backend(&utx, extrinsic_index);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
 	result
@@ -247,10 +247,10 @@ fn check_signature(utx: &Extrinsic) -> Result<(), TransactionValidityError> {
 	utx.clone().check(CheckSignature::Yes).map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
 }
 
-fn execute_transaction_backend(utx: &Extrinsic) -> ApplyExtrinsicResult {
+fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyExtrinsicResult {
 	check_signature(utx)?;
 	match utx {
-		Extrinsic::Transfer { exhaust_resources: true, .. } =>
+		Extrinsic::Transfer { exhaust_resources_when_not_first: true, .. } if extrinsic_index != 0 =>
 			Err(InvalidTransaction::ExhaustsResources.into()),
 		Extrinsic::Transfer { ref transfer, .. } =>
 			execute_transfer_backend(transfer),

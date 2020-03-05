@@ -1154,6 +1154,19 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
+version = "0.5.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15b0a4d2e39f8420210be8b27eeda28029729e2fd4291019455016c348240c38"
+dependencies = [
+ "atty",
+ "humantime",
+ "log 0.4.8",
+ "regex",
+ "termcolor",
+]
+
+[[package]]
+name = "env_logger"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aafcde04e90a5226a6443b7aabdb016ba2f8307c847d524724bd9b346dd1a2d3"
@@ -5603,6 +5616,7 @@ dependencies = [
 name = "sc-basic-authorship"
 version = "0.8.0-alpha.3"
 dependencies = [
+ "env_logger 0.5.13",
  "futures 0.3.4",
  "log 0.4.8",
  "parity-scale-codec",

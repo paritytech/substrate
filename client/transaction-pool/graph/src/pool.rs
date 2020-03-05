@@ -527,7 +527,7 @@ mod tests {
 		Extrinsic::Transfer {
 			transfer,
 			signature: Default::default(),
-			exhaust_resources: false,
+			exhaust_resources_when_not_first: false,
 		}
 	}
 
