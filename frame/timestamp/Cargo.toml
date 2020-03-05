@@ -14,10 +14,10 @@ documentation = "https://docs.rs/pallet-timestamp"
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/io" }
+sp-io = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/io", optional = true }
 sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
 sp-inherents = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/inherents" }
-frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../benchmarking" }
+frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
 sp-timestamp = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/timestamp" }
@@ -40,3 +40,4 @@ std = [
 	"frame-system/std",
 	"sp-timestamp/std"
 ]
+runtime-benchmarks = ["frame-benchmarking", "sp-io"]

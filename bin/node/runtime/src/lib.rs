@@ -818,6 +818,7 @@ impl_runtime_apis! {
 		}
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn dispatch_benchmark(
 			module: Vec<u8>,

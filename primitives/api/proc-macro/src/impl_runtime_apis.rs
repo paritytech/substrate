@@ -27,7 +27,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
 use syn::{
-	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, Path, Signature,
+	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, Path, Signature, Attribute,
 	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument, TypePath,
 	fold::{self, Fold}, parse_quote,
 };
@@ -141,7 +141,7 @@ fn extract_runtime_block_ident(trait_: &Path) -> Result<&TypePath> {
 fn generate_impl_calls(
 	impls: &[ItemImpl],
 	input: &Ident
-) -> Result<Vec<(Ident, Ident, TokenStream)>> {
+) -> Result<Vec<(Ident, Ident, TokenStream, Vec<Attribute>)>> {
 	let mut impl_calls = Vec::new();
 
 	for impl_ in impls {
@@ -162,9 +162,12 @@ fn generate_impl_calls(
 					&impl_trait
 				)?;
 
-				impl_calls.push(
-					(impl_trait_ident.clone(), method.sig.ident.clone(), impl_call)
-				);
+				impl_calls.push((
+					impl_trait_ident.clone(),
+					 method.sig.ident.clone(),
+					 impl_call,
+					 filter_cfg_attrs(&impl_.attrs),
+				));
 			}
 		}
 	}
@@ -178,9 +181,12 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let impl_calls = generate_impl_calls(impls, &data)?
 		.into_iter()
-		.map(|(trait_, fn_name, impl_)| {
+		.map(|(trait_, fn_name, impl_, attrs)| {
 			let name = prefix_function_with_trait(&trait_, &fn_name);
-			quote!( #name => Some(#c::Encode::encode(&{ #impl_ })), )
+			quote!(
+				#( #attrs )*
+				#name => Some(#c::Encode::encode(&{ #impl_ })),
+			)
 		});
 
 	Ok(quote!(
@@ -200,13 +206,14 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let impl_calls = generate_impl_calls(impls, &input)?
 		.into_iter()
-		.map(|(trait_, fn_name, impl_)| {
+		.map(|(trait_, fn_name, impl_, attrs)| {
 			let fn_name = Ident::new(
 				&prefix_function_with_trait(&trait_, &fn_name),
 				Span::call_site()
 			);
 
 			quote!(
+				#( #attrs )*
 				#[cfg(not(feature = "std"))]
 				#[no_mangle]
 				pub fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
@@ -237,7 +244,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static>
 			where
 				// Rust bug: https://github.com/rust-lang/rust/issues/24159
-				C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
+				C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
 		{
 			call: &'static C,
 			commit_on_success: std::cell::RefCell<bool>,
@@ -257,7 +264,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			for RuntimeApiImpl<Block, C>
 				where
 					// Rust bug: https://github.com/rust-lang/rust/issues/24159
-					C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
+					C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
 		{}
 
 		#[cfg(any(feature = "std", test))]
@@ -265,7 +272,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			for RuntimeApiImpl<Block, C>
 				where
 					// Rust bug: https://github.com/rust-lang/rust/issues/24159
-					C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
+					C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
 		{}
 
 		#[cfg(any(feature = "std", test))]
@@ -273,7 +280,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			for RuntimeApiImpl<Block, C>
 				where
 					// Rust bug: https://github.com/rust-lang/rust/issues/24159
-					C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
+					C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
 		{
 			type Error = C::Error;
 		}
@@ -283,7 +290,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			RuntimeApiImpl<Block, C>
 				where
 					// Rust bug: https://github.com/rust-lang/rust/issues/24159
-					C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
+					C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
 		{
 			type StateBackend = C::StateBackend;
 
@@ -327,7 +334,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				&self,
 				backend: &Self::StateBackend,
 				changes_trie_state: Option<&#crate_::ChangesTrieState<
-					#crate_::HasherFor<Block>,
+					#crate_::HashFor<Block>,
 					#crate_::NumberFor<Block>,
 				>>,
 				parent_hash: Block::Hash,
@@ -351,7 +358,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				where
 					C: #crate_::CallApiAt<Block> + 'static,
 					// Rust bug: https://github.com/rust-lang/rust/issues/24159
-					C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
+					C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
 		{
 			type RuntimeApi = RuntimeApiImpl<Block, C>;
 
@@ -373,7 +380,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> RuntimeApiImpl<Block, C>
 			where
 				// Rust bug: https://github.com/rust-lang/rust/issues/24159
-				C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
+				C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
 		{
 			fn call_api_at<
 				R: #crate_::Encode + #crate_::Decode + PartialEq,
@@ -447,6 +454,7 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 		let trait_ = extend_with_runtime_decl_path(trait_);
 
 		impl_.trait_.as_mut().unwrap().1 = trait_;
+		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
 		impls_prepared.push(impl_);
 	}
 
@@ -603,7 +611,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		where_clause.predicates.push(
 			parse_quote! {
 				RuntimeApiImplCall::StateBackend:
-					#crate_::StateBackend<#crate_::HasherFor<__SR_API_BLOCK__>>
+					#crate_::StateBackend<#crate_::HashFor<__SR_API_BLOCK__>>
 			}
 		);
 
@@ -621,6 +629,8 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				__SR_API_BLOCK__::Header: std::panic::UnwindSafe + std::panic::RefUnwindSafe
 			}
 		);
+
+		input.attrs = filter_cfg_attrs(&input.attrs);
 
 		// The implementation for the `RuntimeApiImpl` is only required when compiling with
 		// the feature `std` or `test`.
@@ -695,8 +705,12 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 		let id: Path = parse_quote!( #path ID );
 		let version: Path = parse_quote!( #path VERSION );
+		let attrs = filter_cfg_attrs(&impl_.attrs);
 
-		result.push(quote!( (#id, #version) ));
+		result.push(quote!(
+			#( #attrs )*
+			(#id, #version)
+		));
 	}
 
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
@@ -744,4 +758,33 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 			}
 		)
 	)
+}
+
+// Filters all attributes except the cfg ones.
+fn filter_cfg_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
+	attrs.into_iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn filter_non_cfg_attributes() {
+		let cfg_std: Attribute = parse_quote!(#[cfg(feature = "std")]);
+		let cfg_benchmarks: Attribute = parse_quote!(#[cfg(feature = "runtime-benchmarks")]);
+
+		let attrs = vec![
+			cfg_std.clone(),
+			parse_quote!(#[derive(Debug)]),
+			parse_quote!(#[test]),
+			cfg_benchmarks.clone(),
+			parse_quote!(#[allow(non_camel_case_types)]),
+		];
+
+		let filtered = filter_cfg_attrs(&attrs);
+		assert_eq!(filtered.len(), 2);
+		assert_eq!(cfg_std, filtered[0]);
+		assert_eq!(cfg_benchmarks, filtered[1]);
+	}
 }
