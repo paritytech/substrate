@@ -155,6 +155,7 @@ impl BenchDb {
 			None,
 			None,
 			ExecutionExtensions::new(profile.into_execution_strategies(), None),
+			None,
 		).expect("Should not fail");
 
 		(client, backend)

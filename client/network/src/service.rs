@@ -210,7 +210,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.finality_proof_request_builder,
 			params.protocol_id.clone(),
 			peerset_config,
-			params.block_announce_validator
+			params.block_announce_validator,
+			params.metrics_registry.as_ref()
 		)?;
 
 		// Build the swarm.

@@ -13,7 +13,7 @@ documentation = "https://docs.rs/sp-debug-derive"
 proc-macro = true
 
 [dependencies]
-quote = "1.0.2"
+quote = "=1.0.2"
 syn = "1.0.7"
 proc-macro2 = "1.0"
 
