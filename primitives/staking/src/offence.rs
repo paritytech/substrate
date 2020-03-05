@@ -142,11 +142,18 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 	/// Zero is a valid value for a fraction.
 	///
 	/// The `session` parameter is the session index of the offence.
+	///
+	/// The receiver might decide to not accept this offence. In this case, the call site is
+	/// responsible for queuing the report and re-submitting again.
 	fn on_offence(
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		session: SessionIndex,
-	);
+	) -> Result<(), ()>;
+
+	/// Can an offence be reported now or not? This should always be false if a direct call to
+	/// [`on_offence`] was to return `Err`.
+	fn can_report() -> bool;
 }
 
 impl<Reporter, Offender> OnOffenceHandler<Reporter, Offender> for () {
@@ -154,7 +161,9 @@ impl<Reporter, Offender> OnOffenceHandler<Reporter, Offender> for () {
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		_slash_fraction: &[Perbill],
 		_session: SessionIndex,
-	) {}
+	) -> Result<(), ()> { Ok(()) }
+
+	fn can_report() -> bool { true }
 }
 
 /// A details about an offending authority for a particular kind of offence.

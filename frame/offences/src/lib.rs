@@ -28,8 +28,9 @@ use sp_std::vec::Vec;
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter,
 };
-use sp_runtime::traits::Hash;
+use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
+	SessionIndex,
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails, OffenceError},
 };
 use codec::{Encode, Decode};
@@ -54,7 +55,16 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
 		/// The primary structure that holds all offence records keyed by report identifiers.
-		Reports get(fn reports): map hasher(blake2_256) ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
+		Reports get(fn reports): map hasher(blake2_256) ReportIdOf<T>
+			=> Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
+
+		/// Deferred reports that have been rejected by the offence handler and need to be submitted
+		/// at a later time.
+		DeferredOffences get(deferred_reports): Vec<(
+			Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>,
+			Vec<Perbill>,
+			SessionIndex,
+		)>;
 
 		/// A vector of reports of the same kind that happened at the same time slot.
 		ConcurrentReportsIndex:
@@ -80,11 +90,22 @@ decl_event!(
 );
 
 decl_module! {
-	/// Offences module, currently just responsible for taking offence reports.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
+
+		fn on_initialize(_now: T::BlockNumber) {
+			// only decode storage if we can actually submit anything again.
+			if T::OnOffenceHandler::can_report() {
+				// defensive only. Per definition, `OnOffenceHandler` should accept reports when
+				// `can_report` is true.
+				<DeferredOffences<T>>::take()
+					.iter()
+					.for_each(|(o, p, s)| Self::report_or_store_offence(o, p, *s));
+			}
+		}
 	}
 }
+
 impl<T: Trait, O: Offence<T::IdentificationTuple>>
 	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Module<T>
 where
@@ -118,17 +139,31 @@ where
 		let slash_perbill: Vec<_> = (0..concurrent_offenders.len())
 			.map(|_| new_fraction.clone()).collect();
 
-		T::OnOffenceHandler::on_offence(
-			&concurrent_offenders,
-			&slash_perbill,
-			offence.session_index(),
-		);
+		Self::report_or_store_offence(&concurrent_offenders, &slash_perbill, offence.session_index());
 
 		Ok(())
 	}
 }
 
 impl<T: Trait> Module<T> {
+	/// Tries (without checking) report an offence. Stores them in [`DeferredOffences`] in case it
+	/// fails
+	fn report_or_store_offence(
+		concurrent_offenders: &[OffenceDetails<T::AccountId, T::IdentificationTuple>],
+		slash_perbill: &[Perbill],
+		session_index: SessionIndex,
+	) {
+		let _ = T::OnOffenceHandler::on_offence(
+			&concurrent_offenders,
+			&slash_perbill,
+			session_index,
+		).map_err(|_| {
+			<DeferredOffences<T>>::mutate(|d|
+				d.push((concurrent_offenders.to_vec(), slash_perbill.to_vec(), session_index))
+			)
+		});
+	}
+
 	/// Compute the ID for the given report properties.
 	///
 	/// The report id depends on the offence kind, time slot and the id of offender.

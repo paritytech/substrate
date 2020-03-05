@@ -2868,6 +2868,10 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 	) {
 		<Module<T>>::ensure_storage_upgraded();
 
+		if Self::era_election_status().is_open() {
+			return Err(())
+		}
+
 		let reward_proportion = SlashRewardFraction::get();
 
 		let active_era = {
@@ -2939,6 +2943,12 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 				}
 			}
 		}
+
+		Ok(())
+	}
+
+	fn can_report() -> bool {
+		Self::era_election_status().is_closed()
 	}
 }
 
