@@ -734,7 +734,7 @@ impl<S, B: BlockT> std::fmt::Debug for SyncingCachingState<S, B> {
 	}
 }
 
-impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for SyncingCachingState<S, B> {
+impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for SyncingCachingState<S, B> {
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
@@ -845,7 +845,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Sy
 		self.caching_state().child_keys(storage_key, child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HasherFor<B>>> {
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
 		self.caching_state
 			.as_mut()
 			.expect("`caching_state` is valid for the lifetime of the object; qed")
