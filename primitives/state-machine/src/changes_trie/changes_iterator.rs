@@ -376,13 +376,13 @@ impl<'a, H, Number> Iterator for ProvingDrilldownIterator<'a, H, Number>
 #[cfg(test)]
 mod tests {
 	use std::iter::FromIterator;
-	use sp_core::Blake2Hasher;
 	use crate::changes_trie::Configuration;
 	use crate::changes_trie::input::InputPair;
 	use crate::changes_trie::storage::InMemoryStorage;
+	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
 
-	fn prepare_for_drilldown() -> (Configuration, InMemoryStorage<Blake2Hasher, u64>) {
+	fn prepare_for_drilldown() -> (Configuration, InMemoryStorage<BlakeTwo256, u64>) {
 		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 		let backend = InMemoryStorage::with_inputs(vec![
 			// digest: 1..4 => [(3, 0)]
@@ -447,7 +447,7 @@ mod tests {
 	#[test]
 	fn drilldown_iterator_works() {
 		let (config, storage) = prepare_for_drilldown();
-		let drilldown_result = key_changes::<Blake2Hasher, u64>(
+		let drilldown_result = key_changes::<BlakeTwo256, u64>(
 			configuration_range(&config, 0),
 			&storage,
 			1,
@@ -458,7 +458,7 @@ mod tests {
 		).and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));
 
-		let drilldown_result = key_changes::<Blake2Hasher, u64>(
+		let drilldown_result = key_changes::<BlakeTwo256, u64>(
 			configuration_range(&config, 0),
 			&storage,
 			1,
@@ -469,7 +469,7 @@ mod tests {
 		).and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![]));
 
-		let drilldown_result = key_changes::<Blake2Hasher, u64>(
+		let drilldown_result = key_changes::<BlakeTwo256, u64>(
 			configuration_range(&config, 0),
 			&storage,
 			1,
@@ -480,7 +480,7 @@ mod tests {
 		).and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(3, 0)]));
 
-		let drilldown_result = key_changes::<Blake2Hasher, u64>(
+		let drilldown_result = key_changes::<BlakeTwo256, u64>(
 			configuration_range(&config, 0),
 			&storage,
 			1,
@@ -491,7 +491,7 @@ mod tests {
 		).and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(6, 3), (3, 0)]));
 
-		let drilldown_result = key_changes::<Blake2Hasher, u64>(
+		let drilldown_result = key_changes::<BlakeTwo256, u64>(
 			configuration_range(&config, 0),
 			&storage,
 			7,
@@ -502,7 +502,7 @@ mod tests {
 		).and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1)]));
 
-		let drilldown_result = key_changes::<Blake2Hasher, u64>(
+		let drilldown_result = key_changes::<BlakeTwo256, u64>(
 			configuration_range(&config, 0),
 			&storage,
 			5,
@@ -519,7 +519,7 @@ mod tests {
 		let (config, storage) = prepare_for_drilldown();
 		storage.clear_storage();
 
-		assert!(key_changes::<Blake2Hasher, u64>(
+		assert!(key_changes::<BlakeTwo256, u64>(
 			configuration_range(&config, 0),
 			&storage,
 			1,
@@ -529,7 +529,7 @@ mod tests {
 			&[42],
 		).and_then(|i| i.collect::<Result<Vec<_>, _>>()).is_err());
 
-		assert!(key_changes::<Blake2Hasher, u64>(
+		assert!(key_changes::<BlakeTwo256, u64>(
 			configuration_range(&config, 0),
 			&storage,
 			1,
@@ -543,7 +543,7 @@ mod tests {
 	#[test]
 	fn drilldown_iterator_fails_when_range_is_invalid() {
 		let (config, storage) = prepare_for_drilldown();
-		assert!(key_changes::<Blake2Hasher, u64>(
+		assert!(key_changes::<BlakeTwo256, u64>(
 			configuration_range(&config, 0),
 			&storage,
 			1,
@@ -552,7 +552,7 @@ mod tests {
 			None,
 			&[42],
 		).is_err());
-		assert!(key_changes::<Blake2Hasher, u64>(
+		assert!(key_changes::<BlakeTwo256, u64>(
 			configuration_range(&config, 0),
 			&storage,
 			20,
@@ -570,12 +570,12 @@ mod tests {
 
 		// create drilldown iterator that records all trie nodes during drilldown
 		let (remote_config, remote_storage) = prepare_for_drilldown();
-		let remote_proof = key_changes_proof::<Blake2Hasher, u64>(
+		let remote_proof = key_changes_proof::<BlakeTwo256, u64>(
 			configuration_range(&remote_config, 0), &remote_storage, 1,
 			&AnchorBlockId { hash: Default::default(), number: 16 }, 16, None, &[42]).unwrap();
 
 		let (remote_config, remote_storage) = prepare_for_drilldown();
-		let remote_proof_child = key_changes_proof::<Blake2Hasher, u64>(
+		let remote_proof_child = key_changes_proof::<BlakeTwo256, u64>(
 			configuration_range(&remote_config, 0), &remote_storage, 1,
 			&AnchorBlockId { hash: Default::default(), number: 16 }, 16, Some(&b"1"[..]), &[42]).unwrap();
 
@@ -584,13 +584,13 @@ mod tests {
 		// create drilldown iterator that works the same, but only depends on trie
 		let (local_config, local_storage) = prepare_for_drilldown();
 		local_storage.clear_storage();
-		let local_result = key_changes_proof_check::<Blake2Hasher, u64>(
+		let local_result = key_changes_proof_check::<BlakeTwo256, u64>(
 			configuration_range(&local_config, 0), &local_storage, remote_proof, 1,
 			&AnchorBlockId { hash: Default::default(), number: 16 }, 16, None, &[42]);
 
 		let (local_config, local_storage) = prepare_for_drilldown();
 		local_storage.clear_storage();
-		let local_result_child = key_changes_proof_check::<Blake2Hasher, u64>(
+		let local_result_child = key_changes_proof_check::<BlakeTwo256, u64>(
 			configuration_range(&local_config, 0), &local_storage, remote_proof_child, 1,
 			&AnchorBlockId { hash: Default::default(), number: 16 }, 16, Some(&b"1"[..]), &[42]);
 
@@ -621,7 +621,7 @@ mod tests {
 		input[91 - 1].1.push(InputPair::DigestIndex(DigestIndex { block: 91, key: vec![42] }, vec![80]));
 		let storage = InMemoryStorage::with_inputs(input, vec![]);
 
-		let drilldown_result = key_changes::<Blake2Hasher, u64>(
+		let drilldown_result = key_changes::<BlakeTwo256, u64>(
 			config_range,
 			&storage,
 			1,

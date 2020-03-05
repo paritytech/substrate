@@ -28,7 +28,7 @@
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_runtime::KeyTypeId;
-use sp_runtime::traits::{Convert, OpaqueKeys, Hash as HashT};
+use sp_runtime::traits::{Convert, OpaqueKeys};
 use frame_support::{decl_module, decl_storage};
 use frame_support::{Parameter, print};
 use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
@@ -155,14 +155,12 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 	}
 }
 
-type HasherOf<T> = <<T as frame_system::Trait>::Hashing as HashT>::Hasher;
-
 /// A tuple of the validator's ID and their full identification.
 pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait>::FullIdentification);
 
 /// a trie instance for checking and generating proofs.
 pub struct ProvingTrie<T: Trait> {
-	db: MemoryDB<HasherOf<T>>,
+	db: MemoryDB<T::Hashing>,
 	root: T::Hash,
 }
 

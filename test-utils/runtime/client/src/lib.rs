@@ -33,7 +33,7 @@ pub use self::block_builder_ext::BlockBuilderExt;
 use sp_core::{sr25519, ChangesTrieConfiguration};
 use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HasherFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HashFor};
 use sc_client::{
 	light::fetcher::{
 		Fetcher,
@@ -82,7 +82,7 @@ pub type LightExecutor = sc_client::light::call_executor::GenesisCallExecutor<
 	sc_client::LocalCallExecutor<
 		sc_client::light::backend::Backend<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
-			HasherFor<substrate_test_runtime::Block>
+			HashFor<substrate_test_runtime::Block>
 		>,
 		NativeExecutor<LocalExecutor>
 	>
@@ -243,7 +243,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,
 	// Rust bug: https://github.com/rust-lang/rust/issues/24159
 	<B as sc_client_api::backend::Backend<substrate_test_runtime::Block>>::State:
-		sp_api::StateBackend<HasherFor<substrate_test_runtime::Block>>,
+		sp_api::StateBackend<HashFor<substrate_test_runtime::Block>>,
 {
 	fn genesis_init_mut(&mut self) -> &mut GenesisParameters {
 		Self::genesis_init_mut(self)
