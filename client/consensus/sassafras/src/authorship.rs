@@ -180,12 +180,13 @@ impl GeneratingSet {
 						check_primary_threshold(inout, threshold)
 					})
 				{
-					self.pending.push(PendingProof {
+					self.pending.push(PendingProof::new(
 						attempt,
-						authority_index: authority_index as u32,
-						vrf_output: VRFOutput(inout.to_output()),
-						vrf_proof: VRFProof(proof)
-					});
+						authority_index as u32,
+						self.authorities.len() as u32,
+						VRFOutput(inout.to_output()),
+						VRFProof(proof)
+					));
 				}
 			}
 

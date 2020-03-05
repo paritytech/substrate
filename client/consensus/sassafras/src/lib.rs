@@ -42,7 +42,7 @@ use sp_runtime::{
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use sc_keystore::KeyStorePtr;
 use parking_lot::Mutex;
-use sp_core::{U512, Pair};
+use sp_core::{U512, U256, Pair, blake2_256};
 use sp_inherents::{InherentDataProviders, InherentData};
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sp_consensus::{
@@ -94,6 +94,31 @@ pub struct PendingProof {
 	pub vrf_output: VRFOutput,
 	/// VRF proof.
 	pub vrf_proof: VRFProof,
+	/// Whether the proof has been submitted.
+	pub submit_status: Option<SlotNumber>,
+	/// Paired authority index for submission.
+	pub submit_authority_index: u32,
+}
+
+impl PendingProof {
+	/// Create a new pending proof.
+	pub fn new(
+		attempt: u64,
+		authority_index: u32,
+		authority_len: u32,
+		vrf_output: VRFOutput,
+		vrf_proof: VRFProof
+	) -> Self {
+		let h = U256::from(blake2_256(
+			&(&attempt, &authority_index, &vrf_output, &vrf_proof).encode()
+		));
+		let submit_authority_index = (h % U256::from(authority_len)).as_u32();
+
+		Self {
+			attempt, authority_index, vrf_output, vrf_proof,
+			submit_status: None, submit_authority_index,
+		}
+	}
 }
 
 /// Set that are generating.
