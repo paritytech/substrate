@@ -82,7 +82,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 227,
+	spec_version: 228,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -360,12 +360,16 @@ impl pallet_elections_phragmen::Trait for Runtime {
 	type TermDuration = TermDuration;
 }
 
+parameter_types! {
+	type MotionDuration = 5 * DAYS;
+}
+
 type TechnicalCollective = pallet_collective::Instance2;
 impl pallet_collective::Trait<TechnicalCollective> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
-	type MotionDuration = 5 * DAYS;
+	type MotionDuration = MotionDuration;
 }
 
 impl pallet_membership::Trait<pallet_membership::Instance1> for Runtime {
