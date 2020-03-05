@@ -55,7 +55,7 @@ pub struct ImportParams {
 	pub execution_strategies: ExecutionStrategies,
 
 	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB", default_value = "32")]
+	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
 	pub database_cache_size: u32,
 
 	/// Specify the state cache size.
