@@ -208,11 +208,9 @@ impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
 
 			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
 			self.backend.commit_operation(op)?;
-			self.notify_finalized(notify_finalized)?;
 
-			if let Some(notify_imported) = notify_imported {
-				self.notify_imported(notify_imported)?;
-			}
+			self.notify_finalized(notify_finalized)?;
+			self.notify_imported(notify_imported)?;
 
 			Ok(r)
 		};
@@ -919,6 +917,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<()> {
 		let mut sinks = self.finality_notification_sinks.lock();
 
+		if notify_finalized.is_empty() {
+			// cleanup any closed finality notification sinks
+			// since we won't be running the loop below which
+			// would also remove any closed sinks.
+			sinks.retain(|sink| !sink.is_closed());
+
+			return Ok(());
+		}
+
 		for finalized_hash in notify_finalized {
 			let header = self.header(&BlockId::Hash(finalized_hash))?
 				.expect("header already known to exist in DB because it is indicated in the tree route; qed");
@@ -939,7 +946,27 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	fn notify_imported(&self, notify_import: ImportSummary<Block>) -> sp_blockchain::Result<()> {
+	fn notify_imported(
+		&self,
+		notify_import: Option<ImportSummary<Block>>,
+	) -> sp_blockchain::Result<()> {
+		let notify_import = match notify_import {
+			Some(notify_import) => notify_import,
+			None => {
+				// cleanup any closed import notification sinks since we won't
+				// be sending any notifications below which would remove any
+				// closed sinks. this is necessary since during initial sync we
+				// won't send any import notifications which could lead to a
+				// temporary leak of closed/discarded notification sinks (e.g.
+				// from consensus code).
+				self.import_notification_sinks
+					.lock()
+					.retain(|sink| !sink.is_closed());
+
+				return Ok(());
+			}
+		};
+
 		if let Some(storage_changes) = notify_import.storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 			self.storage_notifications.lock()
