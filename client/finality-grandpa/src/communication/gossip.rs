@@ -2350,4 +2350,133 @@ mod tests {
 			}
 		}
 	}
+
+	#[test]
+	fn only_gossip_commits_to_peers_on_same_set() {
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
+
+		// the validator start at set id 1
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// add a new peer at set id 1
+		let peer1 = PeerId::random();
+
+		val.inner
+			.write()
+			.peers
+			.new_peer(peer1.clone(), Roles::AUTHORITY);
+
+		val.inner
+			.write()
+			.peers
+			.update_peer_state(
+				&peer1,
+				NeighborPacket {
+					round: Round(1),
+					set_id: SetId(1),
+					commit_finalized_height: 1,
+				},
+			)
+			.unwrap();
+
+		// peer2 will default to set id 0
+		let peer2 = PeerId::random();
+		val.inner
+			.write()
+			.peers
+			.new_peer(peer2.clone(), Roles::AUTHORITY);
+
+		// create a commit for round 1 of set id 1
+		// targeting a block at height 2
+		let commit = {
+			let commit = finality_grandpa::CompactCommit {
+				target_hash: H256::random(),
+				target_number: 2,
+				precommits: Vec::new(),
+				auth_data: Vec::new(),
+			};
+
+			crate::communication::gossip::GossipMessage::<Block>::Commit(
+				crate::communication::gossip::FullCommitMessage {
+					round: Round(1),
+					set_id: SetId(1),
+					message: commit,
+				},
+			)
+			.encode()
+		};
+
+		// note the commit in the validator
+		val.note_commit_finalized(Round(1), SetId(1), 2, |_, _| {});
+
+		let mut message_allowed = val.message_allowed();
+
+		// the commit should be allowed to peer 1
+		assert!(message_allowed(
+			&peer1,
+			MessageIntent::Broadcast,
+			&crate::communication::global_topic::<Block>(1),
+			&commit,
+		));
+
+		// but disallowed to peer 2 since the peer is on set id 0
+		// the commit should be allowed to peer 1
+		assert!(!message_allowed(
+			&peer2,
+			MessageIntent::Broadcast,
+			&crate::communication::global_topic::<Block>(1),
+			&commit,
+		));
+	}
+
+	#[test]
+	fn expire_commits_from_older_rounds() {
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
+
+		let commit = |round, set_id, target_number| {
+			let commit = finality_grandpa::CompactCommit {
+				target_hash: H256::random(),
+				target_number,
+				precommits: Vec::new(),
+				auth_data: Vec::new(),
+			};
+
+			crate::communication::gossip::GossipMessage::<Block>::Commit(
+				crate::communication::gossip::FullCommitMessage {
+					round: Round(round),
+					set_id: SetId(set_id),
+					message: commit,
+				},
+			)
+			.encode()
+		};
+
+		// note the beginning of a new set with id 1
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// note a commit for round 1 in the validator
+		// finalizing a block at height 2
+		val.note_commit_finalized(Round(1), SetId(1), 2, |_, _| {});
+
+		let mut message_expired = val.message_expired();
+
+		// a commit message for round 1 that finalizes the same height as we
+		// have observed previously should not be expired
+		assert!(!message_expired(
+			crate::communication::global_topic::<Block>(1),
+			&commit(1, 1, 2),
+		));
+
+		// it should be expired if it is for a lower block
+		assert!(message_expired(
+			crate::communication::global_topic::<Block>(1),
+			&commit(1, 1, 1),
+		));
+
+		// or the same block height but from the previous round
+		assert!(message_expired(
+			crate::communication::global_topic::<Block>(1),
+			&commit(0, 1, 2),
+		));
+	}
 }
