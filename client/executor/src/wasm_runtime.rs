@@ -238,7 +238,7 @@ impl RuntimeCache {
 								target: "wasm-runtime",
 								"Allocated WASM instance {}/{}",
 								instance_pool.len(),
-								MAX_INSTANCES
+								MAX_INSTANCES,
 							);
 						} else {
 							log::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
