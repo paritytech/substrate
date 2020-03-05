@@ -166,7 +166,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 		self.with_instance(CodeSource::Custom(wasm_blob), ext, |instance, _, mut ext| {
 			with_externalities_safe(
 				&mut **ext,
-				move || instance.call(method, call_data)
+				move || instance.call(method, call_data),
 			)
 		}).map_err(|e| e.to_string())
 	}
