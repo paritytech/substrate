@@ -1,0 +1,45 @@
+name:                                Check web wasm
+
+on:                                  [push]
+jobs:
+  check-web-wasm:
+    name:                            Check web wasm
+    runs-on:                         ubuntu-latest
+    container:                       generalbeck/rust-builder:latest
+    env:
+      CARGO_INCREMENTAL:               0
+    steps:
+      - name:                        Checkout sources
+        uses:                        actions/checkout@v2
+        with:
+          fetch-depth:               100
+      - name:                        Checkout submodules
+        shell:                       bash
+        run:                         git submodule update --init --recursive
+      - name:                        Restore ~/.cache/sccache
+        uses:                        actions/cache@v1.1.2
+        with:
+          path:                      ~/.cache/sccache
+          key:                       sccache-[check-web-wasm]-${{ runner.OS }}-s${{ hashFiles('**/Cargo.lock') }}
+      - name:                        Sccache statistics
+        run:                         sccache --show-stats&&rustup show
+      - name:                        Run cargo build wasm
+        continue-on-error:           true
+        run: |
+           # WASM support is in progress. As more and more crates support WASM, we
+           # should add entries here. See https://github.com/paritytech/substrate/issues/2416
+           time cargo build --target=wasm32-unknown-unknown -p sp-io
+           time cargo build --target=wasm32-unknown-unknown -p sp-runtime
+           time cargo build --target=wasm32-unknown-unknown -p sp-std
+           time cargo build --target=wasm32-unknown-unknown -p sc-client
+           time cargo build --target=wasm32-unknown-unknown -p sc-consensus-aura
+           time cargo build --target=wasm32-unknown-unknown -p sc-consensus-babe
+           time cargo build --target=wasm32-unknown-unknown -p sp-consensus
+           time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
+           # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
+           time cargo build --target=wasm32-unknown-unknown --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser"
+      - name:                        Stop sccache
+        if:                          always()
+        run:                         sccache --stop-server
+      - name:                        Disk statistics
+        run:                         df -h --total
