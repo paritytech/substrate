@@ -342,12 +342,12 @@ pub mod tests {
 	};
 	use sp_consensus::BlockOrigin;
 
-	use crate::in_mem::{Blockchain as InMemoryBlockchain};
+	use crate::in_mem::Blockchain as InMemoryBlockchain;
 	use crate::light::fetcher::{FetchChecker, LightDataChecker, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
-	use sp_core::{blake2_256, Blake2Hasher, ChangesTrieConfiguration, H256};
+	use sp_core::{blake2_256, ChangesTrieConfiguration, H256};
 	use sp_core::storage::{well_known_keys, StorageKey, ChildInfo};
-	use sp_runtime::generic::BlockId;
+	use sp_runtime::{generic::BlockId, traits::BlakeTwo256};
 	use sp_state_machine::Backend;
 	use super::*;
 
@@ -355,7 +355,7 @@ pub mod tests {
 
 	type TestChecker = LightDataChecker<
 		NativeExecutor<substrate_test_runtime_client::LocalExecutor>,
-		Blake2Hasher,
+		BlakeTwo256,
 		Block,
 		DummyStorage,
 	>;
@@ -465,7 +465,7 @@ pub mod tests {
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
-		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(4, 0, local_headers_hashes).unwrap();
+		let local_cht_root = cht::compute_root::<Header, BlakeTwo256, _>(4, 0, local_headers_hashes).unwrap();
 		if insert_cht {
 			local_storage.insert_cht_root(1, local_cht_root);
 		}
@@ -479,7 +479,7 @@ pub mod tests {
 	fn header_with_computed_extrinsics_root(extrinsics: Vec<Extrinsic>) -> Header {
 		use sp_trie::{TrieConfiguration, trie_types::Layout};
 		let iter = extrinsics.iter().map(Encode::encode);
-		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(iter);
+		let extrinsics_root = Layout::<BlakeTwo256>::ordered_trie_root(iter);
 
 		// only care about `extrinsics_root`
 		Header::new(0, extrinsics_root, H256::zero(), H256::zero(), Default::default())
@@ -625,7 +625,7 @@ pub mod tests {
 		).unwrap();
 
 		// prepare local checker, having a root of changes trie CHT#0
-		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
+		let local_cht_root = cht::compute_root::<Header, BlakeTwo256, _>(4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
 		let mut local_storage = DummyStorage::new();
 		local_storage.changes_tries_cht_roots.insert(0, local_cht_root);
 		let local_checker = TestChecker::new(
@@ -732,7 +732,7 @@ pub mod tests {
 		// we're testing this test case here:
 		// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
-		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(
+		let local_cht_root = cht::compute_root::<Header, BlakeTwo256, _>(
 			4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
 		let dave = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
 		let dave = StorageKey(dave);

@@ -42,7 +42,7 @@ use std::{
 	pin::Pin, task,
 };
 use parity_scale_codec::Decode;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HasherFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::{H256, NativeOrEncoded, ExecutionContext, crypto::Public};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
@@ -289,7 +289,7 @@ impl ApiExt<Block> for RuntimeApi {
 	fn into_storage_changes(
 		&self,
 		_: &Self::StateBackend,
-		_: Option<&sp_api::ChangesTrieState<sp_api::HasherFor<Block>, sp_api::NumberFor<Block>>>,
+		_: Option<&sp_api::ChangesTrieState<sp_api::HashFor<Block>, sp_api::NumberFor<Block>>>,
 		_: <Block as sp_api::BlockT>::Hash,
 	) -> std::result::Result<sp_api::StorageChanges<Self::StateBackend, Block>, String>
 		where Self: Sized
@@ -323,7 +323,7 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
 		let authorities = self.authorities(block)?;
-		let backend = <InMemoryBackend<HasherFor<Block>>>::from(vec![
+		let backend = <InMemoryBackend<HashFor<Block>>>::from(vec![
 			(None, vec![(b"authorities".to_vec(), Some(authorities.encode()))])
 		]);
 		let proof = prove_read(backend, vec![b"authorities"])
@@ -339,7 +339,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 		header: <Block as BlockT>::Header,
 		proof: StorageProof,
 	) -> Result<AuthorityList> {
-		let results = read_proof_check::<HasherFor<Block>, _>(
+		let results = read_proof_check::<HashFor<Block>, _>(
 			*header.state_root(), proof, vec![b"authorities"]
 		)
 			.expect("failure checking read proof for authorities");

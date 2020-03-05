@@ -52,7 +52,7 @@ use sp_core::{
 	Bytes, OpaqueMetadata, storage::{StorageKey, StorageData, StorageChangeSet},
 };
 use sp_version::RuntimeVersion;
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HasherFor}};
+use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HashFor}};
 
 use super::{StateBackend, error::{FutureResult, Error}, client_err};
 
@@ -241,7 +241,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		Box::new(self
 			.storage(block, key)
 			.and_then(|maybe_storage|
-				result(Ok(maybe_storage.map(|storage| HasherFor::<Block>::hash(&storage.0))))
+				result(Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0))))
 			)
 		)
 	}
@@ -302,7 +302,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		Box::new(self
 			.child_storage(block, child_storage_key, child_info, child_type, key)
 			.and_then(|maybe_storage|
-				result(Ok(maybe_storage.map(|storage| HasherFor::<Block>::hash(&storage.0))))
+				result(Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0))))
 			)
 		)
 	}

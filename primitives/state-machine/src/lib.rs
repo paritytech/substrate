@@ -727,9 +727,8 @@ mod tests {
 	use super::*;
 	use super::ext::Ext;
 	use super::changes_trie::Configuration as ChangesTrieConfig;
-	use sp_core::{
-		Blake2Hasher, map, traits::{Externalities, RuntimeCode}, storage::ChildStorageKey,
-	};
+	use sp_core::{map, traits::{Externalities, RuntimeCode}, storage::ChildStorageKey};
+	use sp_runtime::traits::BlakeTwo256;
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
@@ -912,7 +911,7 @@ mod tests {
 		).unwrap();
 
 		// check proof locally
-		let local_result = execution_proof_check::<Blake2Hasher, u64, _>(
+		let local_result = execution_proof_check::<BlakeTwo256, u64, _>(
 			remote_root,
 			remote_proof,
 			&mut Default::default(),
@@ -935,7 +934,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let mut state = InMemoryBackend::<Blake2Hasher>::from(initial);
+		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges {
 			committed: map![
@@ -978,7 +977,7 @@ mod tests {
 
 	#[test]
 	fn set_child_storage_works() {
-		let mut state = InMemoryBackend::<Blake2Hasher>::default();
+		let mut state = InMemoryBackend::<BlakeTwo256>::default();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1025,12 +1024,12 @@ mod tests {
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
  		// check proof locally
-		let local_result1 = read_proof_check::<Blake2Hasher, _>(
+		let local_result1 = read_proof_check::<BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone(),
 			&[b"value2"],
 		).unwrap();
-		let local_result2 = read_proof_check::<Blake2Hasher, _>(
+		let local_result2 = read_proof_check::<BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone(),
 			&[&[0xff]],
@@ -1050,13 +1049,13 @@ mod tests {
 			CHILD_INFO_1,
 			&[b"value3"],
 		).unwrap();
-		let local_result1 = read_child_proof_check::<Blake2Hasher, _>(
+		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone(),
 			b":child_storage:default:sub1",
 			&[b"value3"],
 		).unwrap();
-		let local_result2 = read_child_proof_check::<Blake2Hasher, _>(
+		let local_result2 = read_child_proof_check::<BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone(),
 			b":child_storage:default:sub1",
