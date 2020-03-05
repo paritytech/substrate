@@ -365,6 +365,7 @@ impl pallet_collective::Trait<TechnicalCollective> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
+	type MotionDuration = 5 * DAYS;
 }
 
 impl pallet_membership::Trait<pallet_membership::Instance1> for Runtime {

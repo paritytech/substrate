@@ -690,6 +690,7 @@ impl<T: Trait> Module<T> {
 			// split new set into winners and runners up.
 			let split_point = desired_seats.min(new_set_with_stake.len());
 			let mut new_members = (&new_set_with_stake[..split_point]).to_vec();
+			let most_popular = new_members.first().map(|x| x.0.clone());
 
 			// save the runners up as-is. They are sorted based on desirability.
 			// sort and save the members.
@@ -722,6 +723,9 @@ impl<T: Trait> Module<T> {
 				&outgoing.clone(),
 				&new_members_ids,
 			);
+			if let Some(prime) = most_popular {
+				T::ChangeMembers::set_prime(prime);
+			}
 
 			// outgoing candidates lose their bond.
 			let mut to_burn_bond = outgoing.to_vec();
@@ -864,6 +868,7 @@ mod tests {
 
 	thread_local! {
 		pub static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+		pub static PRIME: RefCell<Option<u64>> = RefCell::new(None);
 	}
 
 	pub struct TestChangeMembers;
@@ -898,6 +903,11 @@ mod tests {
 			assert_eq!(old_plus_incoming, new_plus_outgoing);
 
 			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
+			PRIME.with(|p| *p.borrow_mut() = None);
+		}
+
+		fn set_prime(who: u64) {
+			PRIME.with(|p| *p.borrow_mut() = Some(who));
 		}
 	}
 
@@ -1247,6 +1257,30 @@ mod tests {
 			assert_eq!(Elections::candidates(), vec![]);
 
 			assert_ok!(Elections::vote(Origin::signed(3), vec![4, 5], 10));
+		});
+	}
+
+	#[test]
+	fn prime_works() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+
+			assert_ok!(Elections::vote(Origin::signed(1), vec![4, 3], 10));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![4], 20));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![4, 5]);
+			assert_eq!(Elections::candidates(), vec![]);
+
+			assert_ok!(Elections::vote(Origin::signed(3), vec![4, 5], 10));
+			assert_eq!(PRIME.with(|p| *p.borrow()), Some(4));
 		});
 	}
 
