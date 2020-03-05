@@ -66,7 +66,8 @@ pub use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
-		LockImportRun, changes_tries_state_at_block,
+		changes_tries_state_at_block, StorageProvider,
+		LockImportRun,
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
@@ -75,7 +76,7 @@ pub use sc_client_api::{
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	notifications::{StorageNotifications, StorageEventStream},
-	CallExecutor,
+	CallExecutor, ExecutorProvider, ProofProvider,
 };
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
@@ -85,6 +86,7 @@ use crate::{
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
 	in_mem, genesis, cht, block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
+use crate::client::backend::KeyIterator;
 
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
@@ -98,46 +100,6 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	_phantom: PhantomData<RA>,
-}
-
-/// An `Iterator` that iterates keys in a given block under a prefix.
-pub struct KeyIterator<'a, State, Block> {
-	state: State,
-	prefix: Option<&'a StorageKey>,
-	current_key: Vec<u8>,
-	_phantom: PhantomData<Block>,
-}
-
-impl <'a, State, Block> KeyIterator<'a, State, Block> {
-	fn new(state: State, prefix: Option<&'a StorageKey>, current_key: Vec<u8>) -> Self {
-		Self {
-			state,
-			prefix,
-			current_key,
-			_phantom: PhantomData,
-		}
-	}
-}
-
-impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
-	Block: BlockT,
-	State: StateBackend<HashFor<Block>>,
-{
-	type Item = StorageKey;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		let next_key = self.state
-			.next_storage_key(&self.current_key)
-			.ok()
-			.flatten()?;
-		if let Some(prefix) = self.prefix {
-			if !next_key.starts_with(&prefix.0[..]) {
-				return None;
-			}
-		}
-		self.current_key = next_key.clone();
-		Some(StorageKey(next_key))
-	}
 }
 
 // used in importing a block, where additional changes are made after the runtime
@@ -324,119 +286,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		})
 	}
 
-	/// Get a reference to the execution extensions.
-	pub fn execution_extensions(&self) -> &ExecutionExtensions<Block> {
-		&self.execution_extensions
-	}
-
 	/// Get a reference to the state at a given block.
 	pub fn state_at(&self, block: &BlockId<Block>) -> sp_blockchain::Result<B::State> {
 		self.backend.state_at(*block)
 	}
 
-	/// Given a `BlockId` and a key prefix, return the matching storage keys in that block.
-	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
-		Ok(keys)
-	}
-
-	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in that block.
-	pub fn storage_pairs(&self, id: &BlockId<Block>, key_prefix: &StorageKey)
-		-> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>
-	{
-		let state = self.state_at(id)?;
-		let keys = state
-			.keys(&key_prefix.0)
-			.into_iter()
-			.map(|k| {
-				let d = state.storage(&k).ok().flatten().unwrap_or_default();
-				(StorageKey(k), StorageData(d))
-			})
-			.collect();
-		Ok(keys)
-	}
-
-	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in that block.
-	pub fn storage_keys_iter<'a>(
-		&self,
-		id: &BlockId<Block>,
-		prefix: Option<&'a StorageKey>,
-		start_key: Option<&StorageKey>
-	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
-		let state = self.state_at(id)?;
-		let start_key = start_key
-			.or(prefix)
-			.map(|key| key.0.clone())
-			.unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new(state, prefix, start_key))
-	}
-
-	/// Given a `BlockId` and a key, return the value under the key in that block.
-	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey)
-		-> sp_blockchain::Result<Option<StorageData>>
-	{
-		Ok(self.state_at(id)?
-			.storage(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-			.map(StorageData)
-		)
-	}
-
-	/// Given a `BlockId` and a key, return the value under the hash in that block.
-	pub fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey)
-		-> sp_blockchain::Result<Option<Block::Hash>>
-	{
-		Ok(self.state_at(id)?
-			.storage_hash(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-		)
-	}
-
-	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
-	pub fn child_storage_keys(
-		&self,
-		id: &BlockId<Block>,
-		child_storage_key: &StorageKey,
-		child_info: ChildInfo,
-		key_prefix: &StorageKey
-	) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let keys = self.state_at(id)?
-			.child_keys(&child_storage_key.0, child_info, &key_prefix.0)
-			.into_iter()
-			.map(StorageKey)
-			.collect();
-		Ok(keys)
-	}
-
-	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that block.
-	pub fn child_storage(
-		&self,
-		id: &BlockId<Block>,
-		storage_key: &StorageKey,
-		child_info: ChildInfo,
-		key: &StorageKey
-	) -> sp_blockchain::Result<Option<StorageData>> {
-		Ok(self.state_at(id)?
-			.child_storage(&storage_key.0, child_info, &key.0)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-			.map(StorageData))
-	}
-
-	/// Given a `BlockId`, a key and a child storage key, return the hash under the key in that block.
-	pub fn child_storage_hash(
-		&self,
-		id: &BlockId<Block>,
-		storage_key: &StorageKey,
-		child_info: ChildInfo,
-		key: &StorageKey
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		Ok(self.state_at(id)?
-			.child_storage_hash(&storage_key.0, child_info, &key.0)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-		)
-	}
-
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Vec<u8>> {
-		Ok(self.storage(id, &StorageKey(well_known_keys::CODE.to_vec()))?
+		Ok(StorageProvider::storage(self, id, &StorageKey(well_known_keys::CODE.to_vec()))?
 			.expect("None is returned if there's no value stored for the given key;\
 				':code' key is always defined; qed").0)
 	}
@@ -444,57 +301,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		self.executor.runtime_version(id)
-	}
-
-	/// Get call executor reference.
-	pub fn executor(&self) -> &E {
-		&self.executor
-	}
-
-	/// Reads storage value at a given block + key, returning read proof.
-	pub fn read_proof<I>(&self, id: &BlockId<Block>, keys: I) -> sp_blockchain::Result<StorageProof> where
-		I: IntoIterator,
-		I::Item: AsRef<[u8]>,
-	{
-		self.state_at(id)
-			.and_then(|state| prove_read(state, keys)
-				.map_err(Into::into))
-	}
-
-	/// Reads child storage value at a given block + storage_key + key, returning
-	/// read proof.
-	pub fn read_child_proof<I>(
-		&self,
-		id: &BlockId<Block>,
-		storage_key: &[u8],
-		child_info: ChildInfo,
-		keys: I,
-	) -> sp_blockchain::Result<StorageProof> where
-		I: IntoIterator,
-		I::Item: AsRef<[u8]>,
-	{
-		self.state_at(id)
-			.and_then(|state| prove_child_read(state, storage_key, child_info, keys)
-				.map_err(Into::into))
-	}
-
-	/// Execute a call to a contract on top of state in a block of given hash
-	/// AND returning execution proof.
-	///
-	/// No changes are made.
-	pub fn execution_proof(&self,
-		id: &BlockId<Block>,
-		method: &str,
-		call_data: &[u8]
-	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let state = self.state_at(id)?;
-		let header = self.prepare_environment_block(id)?;
-		prove_execution(state, header, &self.executor, method, call_data)
-	}
-
-	/// Reads given header and generates CHT-based header proof.
-	pub fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, StorageProof)> {
-		self.header_proof_with_cht_size(id, cht::size())
 	}
 
 	/// Get block hash by number.
@@ -529,112 +335,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			headers,
 		)?;
 		Ok((header, proof))
-	}
-
-	/// Get longest range within [first; last] that is possible to use in `key_changes`
-	/// and `key_changes_proof` calls.
-	/// Range could be shortened from the beginning if some changes tries have been pruned.
-	/// Returns Ok(None) if changes tries are not supported.
-	pub fn max_key_changes_range(
-		&self,
-		first: NumberFor<Block>,
-		last: BlockId<Block>,
-	) -> sp_blockchain::Result<Option<(NumberFor<Block>, BlockId<Block>)>> {
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
-		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
-		if first > last_number {
-			return Err(sp_blockchain::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
-		}
-
-		let (storage, configs) = match self.require_changes_trie(first, last_hash, false).ok() {
-			Some((storage, configs)) => (storage, configs),
-			None => return Ok(None),
-		};
-
-		let first_available_changes_trie = configs.last().map(|config| config.0);
-		match first_available_changes_trie {
-			Some(first_available_changes_trie) => {
-				let oldest_unpruned = storage.oldest_pruned_digest_range_end();
-				let first = std::cmp::max(first_available_changes_trie, oldest_unpruned);
-				Ok(Some((first, last)))
-			},
-			None => Ok(None)
-		}
-	}
-
-	/// Get pairs of (block, extrinsic) where key has been changed at given blocks range.
-	/// Works only for runtimes that are supporting changes tries.
-	///
-	/// Changes are returned in descending order (i.e. last block comes first).
-	pub fn key_changes(
-		&self,
-		first: NumberFor<Block>,
-		last: BlockId<Block>,
-		storage_key: Option<&StorageKey>,
-		key: &StorageKey
-	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>> {
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
-		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
-		let (storage, configs) = self.require_changes_trie(first, last_hash, true)?;
-
-		let mut result = Vec::new();
-		let best_number = self.backend.blockchain().info().best_number;
-		for (config_zero, config_end, config) in configs {
-			let range_first = ::std::cmp::max(first, config_zero + One::one());
-			let range_anchor = match config_end {
-				Some((config_end_number, config_end_hash)) => if last_number > config_end_number {
-					ChangesTrieAnchorBlockId { hash: config_end_hash, number: config_end_number }
-				} else {
-					ChangesTrieAnchorBlockId { hash: convert_hash(&last_hash), number: last_number }
-				},
-				None => ChangesTrieAnchorBlockId { hash: convert_hash(&last_hash), number: last_number },
-			};
-
-			let config_range = ChangesTrieConfigurationRange {
-				config: &config,
-				zero: config_zero.clone(),
-				end: config_end.map(|(config_end_number, _)| config_end_number),
-			};
-			let result_range: Vec<(NumberFor<Block>, u32)> = key_changes::<HashFor<Block>, _>(
-				config_range,
-				storage.storage(),
-				range_first,
-				&range_anchor,
-				best_number,
-				storage_key.as_ref().map(|x| &x.0[..]),
-				&key.0)
-			.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
-			.map_err(|err| sp_blockchain::Error::ChangesTrieAccessFailed(err))?;
-			result.extend(result_range);
-		}
-
-		Ok(result)
-	}
-
-	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
-	/// `min` is the hash of the first block, which changes trie root is known to the requester - when we're using
-	/// changes tries from ascendants of this block, we should provide proofs for changes tries roots
-	/// `max` is the hash of the last block known to the requester - we can't use changes tries from descendants
-	/// of this block.
-	/// Works only for runtimes that are supporting changes tries.
-	pub fn key_changes_proof(
-		&self,
-		first: Block::Hash,
-		last: Block::Hash,
-		min: Block::Hash,
-		max: Block::Hash,
-		storage_key: Option<&StorageKey>,
-		key: &StorageKey,
-	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
-		self.key_changes_proof_with_cht_size(
-			first,
-			last,
-			min,
-			max,
-			storage_key,
-			key,
-			cht::size(),
-		)
 	}
 
 	/// Does the same work as `key_changes_proof`, but assumes that CHTs are of passed size.
@@ -1344,17 +1044,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.blockchain().justification(*id)
 	}
 
-	/// Get full block by id.
-	pub fn block(&self, id: &BlockId<Block>)
-		-> sp_blockchain::Result<Option<SignedBlock<Block>>>
-	{
-		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
-			(Some(header), Some(extrinsics), justification) =>
-				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
-			_ => None,
-		})
-	}
-
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		let load_header = |id: Block::Hash| -> sp_blockchain::Result<Block::Header> {
@@ -1399,6 +1088,70 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 }
 
+impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+{
+	fn read_proof(
+		&self,
+		id: &BlockId<Block>,
+		keys: &mut dyn Iterator<Item=&[u8]>,
+	) -> sp_blockchain::Result<StorageProof> {
+		self.state_at(id)
+			.and_then(|state| prove_read(state, keys)
+				.map_err(Into::into))
+	}
+
+	fn read_child_proof(
+		&self,
+		id: &BlockId<Block>,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		keys: &mut dyn Iterator<Item=&[u8]>,
+	) -> sp_blockchain::Result<StorageProof> {
+		self.state_at(id)
+			.and_then(|state| prove_child_read(state, storage_key, child_info, keys)
+				.map_err(Into::into))
+	}
+
+	fn execution_proof(
+		&self,
+		id: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8]
+	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
+		let state = self.state_at(id)?;
+		let header = self.prepare_environment_block(id)?;
+		prove_execution(state, header, &self.executor, method, call_data)
+	}
+
+	fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, StorageProof)> {
+		self.header_proof_with_cht_size(id, cht::size())
+	}
+
+	fn key_changes_proof(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		min: Block::Hash,
+		max: Block::Hash,
+		storage_key: Option<&StorageKey>,
+		key: &StorageKey,
+	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
+		self.key_changes_proof_with_cht_size(
+			first,
+			last,
+			min,
+			max,
+			storage_key,
+			key,
+			cht::size(),
+		)
+	}
+}
+
+
 impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Block, RA>
 	where
 		B: backend::Backend<Block> + Send + Sync + 'static,
@@ -1422,6 +1175,196 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 			inherent_digests,
 			&self.backend
 		)
+	}
+}
+
+impl<B, E, Block, RA>  ExecutorProvider<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+{
+	type Executor = E;
+
+	fn executor(&self) -> &Self::Executor {
+		&self.executor
+	}
+
+	fn execution_extensions(&self) -> &ExecutionExtensions<Block> {
+		&self.execution_extensions
+	}
+}
+
+impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+{
+	fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> sp_blockchain::Result<Vec<StorageKey>> {
+		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
+		Ok(keys)
+	}
+
+	fn storage_pairs(&self, id: &BlockId<Block>, key_prefix: &StorageKey)
+		-> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>
+	{
+		let state = self.state_at(id)?;
+		let keys = state
+			.keys(&key_prefix.0)
+			.into_iter()
+			.map(|k| {
+				let d = state.storage(&k).ok().flatten().unwrap_or_default();
+				(StorageKey(k), StorageData(d))
+			})
+			.collect();
+		Ok(keys)
+	}
+
+
+	fn storage_keys_iter<'a>(
+		&self,
+		id: &BlockId<Block>,
+		prefix: Option<&'a StorageKey>,
+		start_key: Option<&StorageKey>
+	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
+		let state = self.state_at(id)?;
+		let start_key = start_key
+			.or(prefix)
+			.map(|key| key.0.clone())
+			.unwrap_or_else(Vec::new);
+		Ok(KeyIterator::new(state, prefix, start_key))
+	}
+
+
+	fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<StorageData>>
+	{
+		Ok(self.state_at(id)?
+			.storage(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+			.map(StorageData)
+		)
+	}
+
+
+	fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<Block::Hash>>
+	{
+		Ok(self.state_at(id)?
+			.storage_hash(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+		)
+	}
+
+
+	fn child_storage_keys(
+		&self,
+		id: &BlockId<Block>,
+		child_storage_key: &StorageKey,
+		child_info: ChildInfo,
+		key_prefix: &StorageKey
+	) -> sp_blockchain::Result<Vec<StorageKey>> {
+		let keys = self.state_at(id)?
+			.child_keys(&child_storage_key.0, child_info, &key_prefix.0)
+			.into_iter()
+			.map(StorageKey)
+			.collect();
+		Ok(keys)
+	}
+
+
+	fn child_storage(
+		&self,
+		id: &BlockId<Block>,
+		storage_key: &StorageKey,
+		child_info: ChildInfo,
+		key: &StorageKey
+	) -> sp_blockchain::Result<Option<StorageData>> {
+		Ok(self.state_at(id)?
+			.child_storage(&storage_key.0, child_info, &key.0)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+			.map(StorageData))
+	}
+
+
+	fn child_storage_hash(
+		&self,
+		id: &BlockId<Block>,
+		storage_key: &StorageKey,
+		child_info: ChildInfo,
+		key: &StorageKey
+	) -> sp_blockchain::Result<Option<Block::Hash>> {
+		Ok(self.state_at(id)?
+			.child_storage_hash(&storage_key.0, child_info, &key.0)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+		)
+	}
+
+	fn max_key_changes_range(
+		&self,
+		first: NumberFor<Block>,
+		last: BlockId<Block>,
+	) -> sp_blockchain::Result<Option<(NumberFor<Block>, BlockId<Block>)>> {
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
+		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
+		if first > last_number {
+			return Err(sp_blockchain::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
+		}
+
+		let (storage, configs) = match self.require_changes_trie(first, last_hash, false).ok() {
+			Some((storage, configs)) => (storage, configs),
+			None => return Ok(None),
+		};
+
+		let first_available_changes_trie = configs.last().map(|config| config.0);
+		match first_available_changes_trie {
+			Some(first_available_changes_trie) => {
+				let oldest_unpruned = storage.oldest_pruned_digest_range_end();
+				let first = std::cmp::max(first_available_changes_trie, oldest_unpruned);
+				Ok(Some((first, last)))
+			},
+			None => Ok(None)
+		}
+	}
+
+	fn key_changes(
+		&self,
+		first: NumberFor<Block>,
+		last: BlockId<Block>,
+		storage_key: Option<&StorageKey>,
+		key: &StorageKey
+	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>> {
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
+		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
+		let (storage, configs) = self.require_changes_trie(first, last_hash, true)?;
+
+		let mut result = Vec::new();
+		let best_number = self.backend.blockchain().info().best_number;
+		for (config_zero, config_end, config) in configs {
+			let range_first = ::std::cmp::max(first, config_zero + One::one());
+			let range_anchor = match config_end {
+				Some((config_end_number, config_end_hash)) => if last_number > config_end_number {
+					ChangesTrieAnchorBlockId { hash: config_end_hash, number: config_end_number }
+				} else {
+					ChangesTrieAnchorBlockId { hash: convert_hash(&last_hash), number: last_number }
+				},
+				None => ChangesTrieAnchorBlockId { hash: convert_hash(&last_hash), number: last_number },
+			};
+
+			let config_range = ChangesTrieConfigurationRange {
+				config: &config,
+				zero: config_zero.clone(),
+				end: config_end.map(|(config_end_number, _)| config_end_number),
+			};
+			let result_range: Vec<(NumberFor<Block>, u32)> = key_changes::<HashFor<Block>, _>(
+				config_range,
+				storage.storage(),
+				range_first,
+				&range_anchor,
+				best_number,
+				storage_key.as_ref().map(|x| &x.0[..]),
+				&key.0)
+				.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
+				.map_err(|err| sp_blockchain::Error::ChangesTrieAccessFailed(err))?;
+			result.extend(result_range);
+		}
+
+		Ok(result)
 	}
 }
 
@@ -1901,6 +1844,15 @@ impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
 		id: &BlockId<Block>,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.body(id)
+	}
+
+	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>
+	{
+		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
+			(Some(header), Some(extrinsics), justification) =>
+				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
+			_ => None,
+		})
 	}
 }
 

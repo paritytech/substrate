@@ -23,6 +23,7 @@ use sc_client_api::{
 	BlockchainEvents,
 	backend::RemoteBackend, light::RemoteBlockchain,
 	execution_extensions::ExtensionsFactory,
+	ExecutorProvider, CallExecutor
 };
 use sc_client::Client;
 use sc_chain_spec::{RuntimeGenesis, Extension};
@@ -799,7 +800,9 @@ ServiceBuilder<
 			TBackend::OffchainStorage,
 			TBl
 		>,
-	>, Error> {
+	>, Error>
+		where TExec: CallExecutor<TBl, Backend = TBackend>,
+	{
 		let ServiceBuilder {
 			marker: _,
 			mut config,

@@ -541,8 +541,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 	}
 }
 
-impl<BE, Block: BlockT, Client, SC>
-	GrandpaBlockImport<BE, Block, Client, SC>
+impl<BE, Block: BlockT, Client, SC> GrandpaBlockImport<BE, Block, Client, SC>
 where
 	BE: Backend<Block>,
 	Client: crate::ClientForGrandpa<Block, BE>,

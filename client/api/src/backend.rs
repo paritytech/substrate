@@ -26,6 +26,7 @@ use sp_state_machine::{
 	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
 	StorageCollection, ChildStorageCollection,
 };
+use sp_storage::{StorageData, StorageKey, ChildInfo};
 use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
@@ -38,6 +39,7 @@ use sp_consensus::BlockOrigin;
 use parking_lot::RwLock;
 
 pub use sp_state_machine::Backend as StateBackend;
+use std::marker::PhantomData;
 
 /// Extracts the state backend type for the given backend.
 pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
@@ -235,6 +237,123 @@ pub trait AuxStore {
 
 	/// Query auxiliary data from key-value store.
 	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>>;
+}
+
+/// An `Iterator` that iterates keys in a given block under a prefix.
+pub struct KeyIterator<'a, State, Block> {
+	state: State,
+	prefix: Option<&'a StorageKey>,
+	current_key: Vec<u8>,
+	_phantom: PhantomData<Block>,
+}
+
+impl <'a, State, Block> KeyIterator<'a, State, Block> {
+	/// create a KeyIterator instance
+	pub fn new(state: State, prefix: Option<&'a StorageKey>, current_key: Vec<u8>) -> Self {
+		Self {
+			state,
+			prefix,
+			current_key,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
+	Block: BlockT,
+	State: StateBackend<HashFor<Block>>,
+{
+	type Item = StorageKey;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let next_key = self.state
+			.next_storage_key(&self.current_key)
+			.ok()
+			.flatten()?;
+		// this terminates the iterator the first time it fails.
+		if let Some(prefix) = self.prefix {
+			if !next_key.starts_with(&prefix.0[..]) {
+				return None;
+			}
+		}
+		self.current_key = next_key.clone();
+		Some(StorageKey(next_key))
+	}
+}
+/// Provides acess to storage primitives
+pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
+	/// Given a `BlockId` and a key, return the value under the key in that block.
+	fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<StorageData>>;
+
+	/// Given a `BlockId` and a key prefix, return the matching storage keys in that block.
+	fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> sp_blockchain::Result<Vec<StorageKey>>;
+
+	/// Given a `BlockId` and a key, return the value under the hash in that block.
+	fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<Block::Hash>>;
+
+	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in that block.
+	fn storage_pairs(
+		&self,
+		id: &BlockId<Block>,
+		key_prefix: &StorageKey
+	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>;
+
+	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in that block.
+	fn storage_keys_iter<'a>(
+		&self,
+		id: &BlockId<Block>,
+		prefix: Option<&'a StorageKey>,
+		start_key: Option<&StorageKey>
+	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
+
+	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that block.
+	fn child_storage(
+		&self,
+		id: &BlockId<Block>,
+		storage_key: &StorageKey,
+		child_info: ChildInfo,
+		key: &StorageKey
+	) -> sp_blockchain::Result<Option<StorageData>>;
+
+	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
+	fn child_storage_keys(
+		&self,
+		id: &BlockId<Block>,
+		child_storage_key: &StorageKey,
+		child_info: ChildInfo,
+		key_prefix: &StorageKey
+	) -> sp_blockchain::Result<Vec<StorageKey>>;
+
+	/// Given a `BlockId`, a key and a child storage key, return the hash under the key in that block.
+	fn child_storage_hash(
+		&self,
+		id: &BlockId<Block>,
+		storage_key: &StorageKey,
+		child_info: ChildInfo,
+		key: &StorageKey
+	) -> sp_blockchain::Result<Option<Block::Hash>>;
+
+	/// Get longest range within [first; last] that is possible to use in `key_changes`
+	/// and `key_changes_proof` calls.
+	/// Range could be shortened from the beginning if some changes tries have been pruned.
+	/// Returns Ok(None) if changes tries are not supported.
+	fn max_key_changes_range(
+		&self,
+		first: NumberFor<Block>,
+		last: BlockId<Block>,
+	) -> sp_blockchain::Result<Option<(NumberFor<Block>, BlockId<Block>)>>;
+
+	/// Get pairs of (block, extrinsic) where key has been changed at given blocks range.
+	/// Works only for runtimes that are supporting changes tries.
+	///
+	/// Changes are returned in descending order (i.e. last block comes first).
+	fn key_changes(
+		&self,
+		first: NumberFor<Block>,
+		last: BlockId<Block>,
+		storage_key: Option<&StorageKey>,
+		key: &StorageKey
+	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>>;
 }
 
 /// Client backend.
