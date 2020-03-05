@@ -43,6 +43,7 @@ pallet-authority-discovery = { version = "2.0.0-alpha.2", default-features = fal
 pallet-authorship = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/authorship" }
 pallet-babe = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/babe" }
 pallet-balances = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/balances" }
+pallet-benchmark = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/benchmark" }
 pallet-collective = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/contracts" }
 pallet-contracts-primitives = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/contracts/common/" }
@@ -96,6 +97,7 @@ std = [
 	"frame-executive/std",
 	"pallet-finality-tracker/std",
 	"pallet-grandpa/std",
+	"pallet-benchmark/std",
 	"pallet-im-online/std",
 	"pallet-indices/std",
 	"sp-inherents/std",
@@ -132,4 +134,9 @@ std = [
 	"pallet-recovery/std",
 	"pallet-vesting/std",
 ]
-runtime-benchmarks = ["frame-benchmarking"]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"pallet-timestamp/runtime-benchmarks",
+	"pallet-identity/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+]
