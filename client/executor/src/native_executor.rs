@@ -241,7 +241,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 		data: &[u8],
 		use_native: bool,
 		native_call: Option<NC>,
-	) -> (Result<NativeOrEncoded<R>>, bool){
+	) -> (Result<NativeOrEncoded<R>>, bool) {
 		let mut used_native = false;
 		let result = self.wasm.with_instance(
 			CodeSource::Externalities,
