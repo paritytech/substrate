@@ -47,7 +47,6 @@
 //! ```
 //! use std::sync::Arc;
 //! use sc_client::{Client, in_mem::Backend, LocalCallExecutor};
-//! use sp_core::Blake2Hasher;
 //! use sp_runtime::Storage;
 //! use sc_executor::{NativeExecutor, WasmExecutionMethod};
 //!

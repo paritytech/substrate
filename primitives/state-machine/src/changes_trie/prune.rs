@@ -114,14 +114,15 @@ fn prune_trie<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 mod tests {
 	use std::collections::HashSet;
 	use sp_trie::MemoryDB;
-	use sp_core::{H256, Blake2Hasher};
+	use sp_core::H256;
 	use crate::backend::insert_into_memory_db;
 	use crate::changes_trie::storage::InMemoryStorage;
 	use codec::Encode;
+	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
 
 	fn prune_by_collect(
-		storage: &dyn Storage<Blake2Hasher, u64>,
+		storage: &dyn Storage<BlakeTwo256, u64>,
 		first: u64,
 		last: u64,
 		current_block: u64,
@@ -135,27 +136,26 @@ mod tests {
 
 	#[test]
 	fn prune_works() {
-		fn prepare_storage() -> InMemoryStorage<Blake2Hasher, u64> {
-
+		fn prepare_storage() -> InMemoryStorage<BlakeTwo256, u64> {
 			let child_key = ChildIndex { block: 67u64, storage_key: b"1".to_vec() }.encode();
-			let mut mdb1 = MemoryDB::<Blake2Hasher>::default();
-			let root1 = insert_into_memory_db::<Blake2Hasher, _>(
+			let mut mdb1 = MemoryDB::<BlakeTwo256>::default();
+			let root1 = insert_into_memory_db::<BlakeTwo256, _>(
 				&mut mdb1, vec![(vec![10], vec![20])]).unwrap();
-			let mut mdb2 = MemoryDB::<Blake2Hasher>::default();
-			let root2 = insert_into_memory_db::<Blake2Hasher, _>(
+			let mut mdb2 = MemoryDB::<BlakeTwo256>::default();
+			let root2 = insert_into_memory_db::<BlakeTwo256, _>(
 				&mut mdb2,
 				vec![(vec![11], vec![21]), (vec![12], vec![22])],
 			).unwrap();
-			let mut mdb3 = MemoryDB::<Blake2Hasher>::default();
-			let ch_root3 = insert_into_memory_db::<Blake2Hasher, _>(
+			let mut mdb3 = MemoryDB::<BlakeTwo256>::default();
+			let ch_root3 = insert_into_memory_db::<BlakeTwo256, _>(
 				&mut mdb3, vec![(vec![110], vec![120])]).unwrap();
-			let root3 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb3, vec![
+			let root3 = insert_into_memory_db::<BlakeTwo256, _>(&mut mdb3, vec![
 				(vec![13], vec![23]),
 				(vec![14], vec![24]),
 				(child_key, ch_root3.as_ref().encode()),
 			]).unwrap();
-			let mut mdb4 = MemoryDB::<Blake2Hasher>::default();
-			let root4 = insert_into_memory_db::<Blake2Hasher, _>(
+			let mut mdb4 = MemoryDB::<BlakeTwo256>::default();
+			let root4 = insert_into_memory_db::<BlakeTwo256, _>(
 				&mut mdb4,
 				vec![(vec![15], vec![25])],
 			).unwrap();

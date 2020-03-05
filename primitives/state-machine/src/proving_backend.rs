@@ -308,16 +308,17 @@ mod tests {
 	use crate::InMemoryBackend;
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
-	use sp_core::{Blake2Hasher, storage::ChildStorageKey};
+	use sp_core::storage::ChildStorageKey;
 	use crate::proving_backend::create_proof_check_backend;
 	use sp_trie::PrefixedMemoryDB;
+	use sp_runtime::traits::BlakeTwo256;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
 
 	fn test_proving<'a>(
-		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>,Blake2Hasher>,
-	) -> ProvingBackend<'a, PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher> {
+		trie_backend: &'a TrieBackend<PrefixedMemoryDB<BlakeTwo256>,BlakeTwo256>,
+	) -> ProvingBackend<'a, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		ProvingBackend::new(trie_backend)
 	}
 
@@ -338,7 +339,7 @@ mod tests {
 	#[test]
 	fn proof_is_invalid_when_does_not_contains_root() {
 		use sp_core::H256;
-		let result = create_proof_check_backend::<Blake2Hasher>(
+		let result = create_proof_check_backend::<BlakeTwo256>(
 			H256::from_low_u64_be(1),
 			StorageProof::empty()
 		);
@@ -361,7 +362,7 @@ mod tests {
 	#[test]
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
-		let in_memory = InMemoryBackend::<Blake2Hasher>::default();
+		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(vec![(None, contents)]);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -376,7 +377,7 @@ mod tests {
 
 		let proof = proving.extract_proof();
 
-		let proof_check = create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
 		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 	}
 
@@ -393,7 +394,7 @@ mod tests {
 			(Some((own2.clone(), CHILD_INFO_2.to_owned())),
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let in_memory = InMemoryBackend::<Blake2Hasher>::default();
+		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
 			::std::iter::empty(),
@@ -425,7 +426,7 @@ mod tests {
 
 		let proof = proving.extract_proof();
 
-		let proof_check = create_proof_check_backend::<Blake2Hasher>(
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(
 			in_memory_root.into(),
 			proof
 		).unwrap();
@@ -439,7 +440,7 @@ mod tests {
 		assert_eq!(proving.child_storage(&own1[..], CHILD_INFO_1, &[64]), Ok(Some(vec![64])));
 
 		let proof = proving.extract_proof();
-		let proof_check = create_proof_check_backend::<Blake2Hasher>(
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(
 			in_memory_root.into(),
 			proof
 		).unwrap();

@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use sp_core::ChangesTrieConfigurationRange;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{generic::BlockId, Justification, Storage};
-use sp_runtime::traits::{Block as BlockT, NumberFor, HasherFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
 	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
 	StorageCollection, ChildStorageCollection,
@@ -43,7 +43,7 @@ pub use sp_state_machine::Backend as StateBackend;
 pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
 
 /// Extracts the transaction for the given state backend.
-pub type TransactionForSB<B, Block> = <B as StateBackend<HasherFor<Block>>>::Transaction;
+pub type TransactionForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::Transaction;
 
 /// Extracts the transaction for the given backend.
 pub type TransactionFor<B, Block> = TransactionForSB<StateBackendFor<B, Block>, Block>;
@@ -111,7 +111,7 @@ impl NewBlockState {
 /// Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation<Block: BlockT> {
 	/// Associated state backend type.
-	type State: StateBackend<HasherFor<Block>>;
+	type State: StateBackend<HashFor<Block>>;
 
 	/// Returns pending state.
 	///
@@ -149,7 +149,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(
 		&mut self,
-		update: ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>,
+		update: ChangesTrieTransaction<HashFor<Block>, NumberFor<Block>>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Insert auxiliary keys.
@@ -253,7 +253,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Associated blockchain backend type.
 	type Blockchain: BlockchainBackend<Block>;
 	/// Associated state backend type.
-	type State: StateBackend<HasherFor<Block>> + Send;
+	type State: StateBackend<HashFor<Block>> + Send;
 	/// Offchain workers local storage.
 	type OffchainStorage: OffchainStorage;
 
@@ -344,10 +344,10 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 /// Changes trie storage that supports pruning.
 pub trait PrunableStateChangesTrieStorage<Block: BlockT>:
-	StateChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>
+	StateChangesTrieStorage<HashFor<Block>, NumberFor<Block>>
 {
 	/// Get reference to StateChangesTrieStorage.
-	fn storage(&self) -> &dyn StateChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>;
+	fn storage(&self) -> &dyn StateChangesTrieStorage<HashFor<Block>, NumberFor<Block>>;
 	/// Get configuration at given block.
 	fn configuration_at(&self, at: &BlockId<Block>) -> sp_blockchain::Result<
 		ChangesTrieConfigurationRange<NumberFor<Block>, Block::Hash>
@@ -377,7 +377,7 @@ pub trait RemoteBackend<Block: BlockT>: Backend<Block> {
 pub fn changes_tries_state_at_block<'a, Block: BlockT>(
 	block: &BlockId<Block>,
 	maybe_storage: Option<&'a dyn PrunableStateChangesTrieStorage<Block>>,
-) -> sp_blockchain::Result<Option<ChangesTrieState<'a, HasherFor<Block>, NumberFor<Block>>>> {
+) -> sp_blockchain::Result<Option<ChangesTrieState<'a, HashFor<Block>, NumberFor<Block>>>> {
 	let storage = match maybe_storage {
 		Some(storage) => storage,
 		None => return Ok(None),

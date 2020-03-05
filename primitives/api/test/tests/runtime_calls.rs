@@ -18,9 +18,9 @@ use sp_api::ProvideRuntimeApi;
 use substrate_test_runtime_client::{
 	prelude::*,
 	DefaultTestClientBuilderExt, TestClientBuilder,
-	runtime::{TestAPI, DecodeFails, Transfer, Header},
+	runtime::{TestAPI, DecodeFails, Transfer, Block},
 };
-use sp_runtime::{generic::BlockId, traits::{Header as HeaderT, Hash as HashT}};
+use sp_runtime::{generic::BlockId, traits::{Header as HeaderT, HashFor}};
 use sp_state_machine::{
 	ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend,
@@ -184,7 +184,7 @@ fn record_proof_works() {
 	builder.push(transaction.clone()).unwrap();
 	let (block, _, proof) = builder.build().expect("Bake block").into_inner();
 
-	let backend = create_proof_check_backend::<<<Header as HeaderT>::Hashing as HashT>::Hasher>(
+	let backend = create_proof_check_backend::<HashFor<Block>>(
 		storage_root,
 		proof.expect("Proof was generated"),
 	).expect("Creates proof backend.");
