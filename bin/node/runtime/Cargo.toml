@@ -132,4 +132,9 @@ std = [
 	"pallet-recovery/std",
 	"pallet-vesting/std",
 ]
-runtime-benchmarks = ["frame-benchmarking"]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"pallet-timestamp/runtime-benchmarks",
+	"pallet-identity/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+]
