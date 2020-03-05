@@ -1959,6 +1959,7 @@ fn offence_forces_new_era() {
 fn offence_ensures_new_era_without_clobbering() {
 	ExtBuilder::default().build().execute_with(|| {
 		assert_ok!(Staking::force_new_era_always(Origin::ROOT));
+		assert_eq!(Staking::force_era(), Forcing::ForceAlways);
 
 		on_offence_now(
 			&[OffenceDetails {
@@ -1976,10 +1977,11 @@ fn offence_ensures_new_era_without_clobbering() {
 }
 
 #[test]
-fn offence_deselects_validator_when_slash_is_zero() {
+fn offence_deselects_validator_even_when_slash_is_zero() {
 	ExtBuilder::default().build().execute_with(|| {
 		assert!(Session::validators().contains(&11));
 		assert!(<Validators<Test>>::contains_key(11));
+
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (
@@ -1990,9 +1992,12 @@ fn offence_deselects_validator_when_slash_is_zero() {
 			}],
 			&[Perbill::from_percent(0)],
 		);
+
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
 		assert!(!<Validators<Test>>::contains_key(11));
+
 		start_era(1);
+
 		assert!(!Session::validators().contains(&11));
 		assert!(!<Validators<Test>>::contains_key(11));
 	});
@@ -2033,6 +2038,7 @@ fn slash_in_old_span_does_not_deselect() {
 
 		assert!(<Validators<Test>>::contains_key(11));
 		assert!(Session::validators().contains(&11));
+
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (
@@ -2043,6 +2049,7 @@ fn slash_in_old_span_does_not_deselect() {
 			}],
 			&[Perbill::from_percent(0)],
 		);
+
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
 		assert!(!<Validators<Test>>::contains_key(11));
 
@@ -2070,7 +2077,7 @@ fn slash_in_old_span_does_not_deselect() {
 			1,
 		);
 
-		// not for zero-slash.
+		// not forcing for zero-slash and previous span.
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 		assert!(<Validators<Test>>::contains_key(11));
 		assert!(Session::validators().contains(&11));
@@ -2091,7 +2098,7 @@ fn slash_in_old_span_does_not_deselect() {
 		// or non-zero.
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 		assert!(<Validators<Test>>::contains_key(11));
-    assert!(Session::validators().contains(&11));
+		assert!(Session::validators().contains(&11));
 		assert_ledger_consistent(11);
 	});
 }
@@ -2130,7 +2137,7 @@ fn reporters_receive_their_slice() {
 #[test]
 fn subsequent_reports_in_same_span_pay_out_less() {
 	// This test verifies that the reporters of the offence receive their slice from the slashed
-	// amount.
+	// amount, but less and less if they submit multiple reports in one span.
 	ExtBuilder::default().build().execute_with(|| {
 		// The reporters' reward is calculated from the total exposure.
 		let initial_balance = 1125;
@@ -2237,12 +2244,16 @@ fn dont_slash_if_fraction_is_zero() {
 
 		// The validator hasn't been slashed. The new era is not forced.
 		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Staking::force_era(), Forcing::ForceNew);
+
 		assert_ledger_consistent(11);
 	});
 }
 
 #[test]
 fn only_slash_for_max_in_era() {
+	// multiple slashes within one era are only applied if it is more than any previous slash in the
+	// same era.
 	ExtBuilder::default().build().execute_with(|| {
 		assert_eq!(Balances::free_balance(11), 1000);
 
@@ -2291,6 +2302,7 @@ fn only_slash_for_max_in_era() {
 
 #[test]
 fn garbage_collection_after_slashing() {
+	// ensures that `SlashingSpans` and `SpanSlash` of an account is removed after reaping.
 	ExtBuilder::default().existential_deposit(2).build().execute_with(|| {
 		assert_eq!(Balances::free_balance(11), 256_000);
 
@@ -2333,26 +2345,27 @@ fn garbage_collection_after_slashing() {
 
 #[test]
 fn garbage_collection_on_window_pruning() {
+	// ensures that `ValidatorSlashInEra` and `NominatorSlashInEra` are cleared after
+	// `BondingDuration`.
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
 
 		assert_eq!(Balances::free_balance(11), 1000);
+		let now = Staking::active_era().unwrap().index;
 
-		let exposure = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
+		let exposure = Staking::eras_stakers(now, 11);
 		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+					offender: (11, Staking::eras_stakers(now, 11)),
 					reporters: vec![],
 				},
 			],
 			&[Perbill::from_percent(10)],
 		);
-
-		let now = Staking::active_era().unwrap().index;
 
 		assert_eq!(Balances::free_balance(11), 900);
 		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
@@ -2385,10 +2398,8 @@ fn slashing_nominators_by_span_max() {
 		assert_eq!(Balances::free_balance(101), 2000);
 		assert_eq!(Staking::slashable_balance_of(&21), 1000);
 
-
 		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
 		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, 21);
-		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value_11 = exposure_11.others.iter().find(|o| o.who == 101).unwrap().value;
 		let nominated_value_21 = exposure_21.others.iter().find(|o| o.who == 101).unwrap().value;
 
@@ -3577,6 +3588,16 @@ mod offchain_phragmen {
 				// finish the round.
 				run_to_block(30);
 			})
+	}
+
+	#[test]
+	fn slashing_while_election_window() {
+		unimplemented!();
+	}
+
+	#[test]
+	fn era_forcing() {
+		unimplemented!();
 	}
 
 	#[test]

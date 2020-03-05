@@ -16,11 +16,11 @@
 
 //! A slashing implementation for NPoS systems.
 //!
-//! For the purposes of the economic model, it is easiest to think of each validator
-//! of a nominator which nominates only its own identity.
+//! For the purposes of the economic model, it is easiest to think of each validator of a nominator
+//! which nominates only its own identity.
 //!
-//! The act of nomination signals intent to unify economic identity with the validator - to take part in the
-//! rewards of a job well done, and to take part in the punishment of a job done badly.
+//! The act of nomination signals intent to unify economic identity with the validator - to take
+//! part in the rewards of a job well done, and to take part in the punishment of a job done badly.
 //!
 //! There are 3 main difficulties to account for with slashing in NPoS:
 //!   - A nominator can nominate multiple validators and be slashed via any of them.

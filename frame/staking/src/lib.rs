@@ -2875,7 +2875,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 			if active_era.is_none() {
 				return
 			}
-			active_era.unwrap().index
+			active_era.expect("value checked not to be `None`; qed").index
 		};
 		let active_era_start_session_index = Self::eras_start_session_index(active_era)
 			.unwrap_or_else(|| {
@@ -2908,8 +2908,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 		let slash_defer_duration = T::SlashDeferDuration::get();
 
 		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
-			let stash = &details.offender.0;
-			let exposure = &details.offender.1;
+			let (stash, exposure) = &details.offender;
 
 			// Skip if the validator is invulnerable.
 			if Self::invulnerables().contains(stash) {
