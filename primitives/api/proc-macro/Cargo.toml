@@ -14,7 +14,7 @@ documentation = "https://docs.rs/sp-api-proc-macro"
 proc-macro = true
 
 [dependencies]
-quote = "1.0.2"
+quote = "=1.0.2"
 syn = { version = "1.0.8", features = ["full", "fold", "extra-traits", "visit"] }
 proc-macro2 = "1.0.6"
 blake2-rfc = { version = "0.2.18", default-features = false }
