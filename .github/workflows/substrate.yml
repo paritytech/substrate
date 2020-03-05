@@ -357,7 +357,8 @@ jobs:
   build-subkey:
     name:                      Build linux Subkey
     needs:                     [test-stable]
-    runs-on:                   [self-hosted]
+    runs-on:                   self-hosted
+    container:                 generalbeck/rust-builder:latest
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
@@ -397,6 +398,7 @@ jobs:
     name:                      Build Rust doc release
     needs:                     [test-stable]
     runs-on:                   self-hosted
+    container:                 generalbeck/rust-builder:latest
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
