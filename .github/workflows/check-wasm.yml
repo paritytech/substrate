@@ -4,7 +4,7 @@ on:                                  [push]
 jobs:
   check-web-wasm:
     name:                            Check web wasm
-    runs-on:                         ubuntu-latest
+    runs-on:                         self-hosted
     container:                       parity/rust-builder:latest
     env:
       CARGO_INCREMENTAL:               0
