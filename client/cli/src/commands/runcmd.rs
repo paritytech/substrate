@@ -140,9 +140,8 @@ pub struct RunCmd {
 	///
 	/// A comma-separated list of origins (protocol://domain or special `null`
 	/// value). Value of `all` will disable origin validation. Default is to
-	/// allow localhost, https://polkadot.js.org and
-	/// https://substrate-ui.parity.io origins. When running in --dev mode the
-	/// default is to allow all origins.
+	/// allow localhost and https://polkadot.js.org origins. When running in 
+	/// --dev mode the default is to allow all origins.
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
@@ -408,7 +407,6 @@ impl RunCmd {
 				"https://localhost:*".into(),
 				"https://127.0.0.1:*".into(),
 				"https://polkadot.js.org".into(),
-				"https://substrate-ui.parity.io".into(),
 			])
 		}).into();
 
