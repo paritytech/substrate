@@ -52,7 +52,6 @@ impl WasmModule for WasmtimeRuntime {
 			self.allow_missing_func_imports,
 		)?;
 
-
 		Ok(Box::new(WasmtimeInstance {
 			module: self.module.clone(),
 			imports,
