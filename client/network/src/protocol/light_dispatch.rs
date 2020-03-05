@@ -750,11 +750,7 @@ pub mod tests {
 			}
 		}
 
-		fn check_execution_proof(
-			&self,
-			_: &RemoteCallRequest<B::Header>,
-			_: StorageProof,
-		) -> ClientResult<Vec<u8>> {
+		fn check_execution_proof(&self, _: &RemoteCallRequest<B::Header>, _: StorageProof) -> ClientResult<Vec<u8>> {
 			match self.ok {
 				true => Ok(vec![42]),
 				false => Err(ClientError::Backend("Test error".into())),
