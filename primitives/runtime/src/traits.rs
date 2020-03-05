@@ -345,6 +345,14 @@ pub trait OnInitialize<BlockNumber> {
 	fn on_initialize(_n: BlockNumber) {}
 }
 
+/// The runtime upgrade trait. Implementing this lets you express what should happen
+/// when the runtime upgrades, and changes may need to occur to your module.
+#[impl_for_tuples(30)]
+pub trait OnRuntimeUpgrade {
+	/// Perform a module upgrade.
+	fn on_runtime_upgrade() {}
+}
+
 /// Off-chain computation trait.
 ///
 /// Implementing this trait on a module allows you to perform long-running tasks
