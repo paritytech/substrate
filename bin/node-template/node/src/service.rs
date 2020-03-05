@@ -158,9 +158,9 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 			link: grandpa_link,
 			network: service.network(),
 			inherent_data_providers: inherent_data_providers.clone(),
-			on_exit: service.on_exit(),
 			telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
+			prometheus_registry: service.prometheus_registry()
 		};
 
 		// the GRANDPA voter task is considered infallible, i.e.

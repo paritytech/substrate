@@ -34,7 +34,7 @@ use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
-		Block as BlockT, Header as HeaderT, Zero, NumberFor, HasherFor, SaturatedConversion, One,
+		Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor, SaturatedConversion, One,
 		DigestFor,
 	},
 };
@@ -79,6 +79,7 @@ pub use sc_client_api::{
 	CallExecutor, ExecutorProvider, ProofProvider,
 };
 use sp_blockchain::Error;
+use prometheus_endpoint::Registry;
 
 use crate::{
 	call_executor::LocalCallExecutor,
@@ -99,6 +100,46 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	_phantom: PhantomData<RA>,
+}
+
+/// An `Iterator` that iterates keys in a given block under a prefix.
+pub struct KeyIterator<'a, State, Block> {
+	state: State,
+	prefix: Option<&'a StorageKey>,
+	current_key: Vec<u8>,
+	_phantom: PhantomData<Block>,
+}
+
+impl <'a, State, Block> KeyIterator<'a, State, Block> {
+	fn new(state: State, prefix: Option<&'a StorageKey>, current_key: Vec<u8>) -> Self {
+		Self {
+			state,
+			prefix,
+			current_key,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
+	Block: BlockT,
+	State: StateBackend<HashFor<Block>>,
+{
+	type Item = StorageKey;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let next_key = self.state
+			.next_storage_key(&self.current_key)
+			.ok()
+			.flatten()?;
+		if let Some(prefix) = self.prefix {
+			if !next_key.starts_with(&prefix.0[..]) {
+				return None;
+			}
+		}
+		self.current_key = next_key.clone();
+		Some(StorageKey(next_key))
+	}
 }
 
 // used in importing a block, where additional changes are made after the runtime
@@ -133,6 +174,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	prometheus_registry: Option<Registry>,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
 	LocalCallExecutor<in_mem::Backend<Block>, E>,
@@ -143,7 +185,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	S: BuildStorage,
 	Block: BlockT,
 {
-	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore)
+	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore, prometheus_registry)
 }
 
 /// Create a client with the explicitly provided backend.
@@ -153,6 +195,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	executor: E,
 	build_genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	prometheus_registry: Option<Registry>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor + RuntimeInfo,
@@ -169,6 +212,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Default::default(),
 		Default::default(),
 		extensions,
+		prometheus_registry,
 	)
 }
 
@@ -248,6 +292,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
+		_prometheus_registry: Option<Registry>,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()?;
@@ -323,7 +368,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Some(old_current_num)
 		});
 		let headers = cht_range.map(|num| self.block_hash(num));
-		let proof = cht::build_proof::<Block::Header, HasherFor<Block>, _, _>(
+		let proof = cht::build_proof::<Block::Header, HashFor<Block>, _, _>(
 			cht_size,
 			cht_num,
 			std::iter::once(block_num),
@@ -344,12 +389,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		cht_size: NumberFor<Block>,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
 		struct AccessedRootsRecorder<'a, Block: BlockT> {
-			storage: &'a dyn ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>,
+			storage: &'a dyn ChangesTrieStorage<HashFor<Block>, NumberFor<Block>>,
 			min: NumberFor<Block>,
 			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, Block::Hash>>,
 		};
 
-		impl<'a, Block: BlockT> ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>> for
+		impl<'a, Block: BlockT> ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>> for
 			AccessedRootsRecorder<'a, Block>
 		{
 			fn build_anchor(&self, hash: Block::Hash)
@@ -376,11 +421,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		}
 
-		impl<'a, Block: BlockT> ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>> for
+		impl<'a, Block: BlockT> ChangesTrieStorage<HashFor<Block>, NumberFor<Block>> for
 			AccessedRootsRecorder<'a, Block>
 		{
 			fn as_roots_storage(&self)
-				-> &dyn sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>>
+				-> &dyn sp_state_machine::ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>>
 			{
 				self
 			}
@@ -424,7 +469,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				zero: config_zero,
 				end: config_end.map(|(config_end_number, _)| config_end_number),
 			};
-			let proof_range = key_changes_proof::<HasherFor<Block>, _>(
+			let proof_range = key_changes_proof::<HashFor<Block>, _>(
 				config_range,
 				&recording_storage,
 				first_number,
@@ -491,7 +536,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.map(|block|
 				block.and_then(|block| block.digest().log(DigestItem::as_changes_trie_root).cloned()))
 			);
-		let proof = cht::build_proof::<Block::Header, HasherFor<Block>, _, _>(
+		let proof = cht::build_proof::<Block::Header, HashFor<Block>, _, _>(
 			cht_size,
 			cht_num,
 			blocks,
