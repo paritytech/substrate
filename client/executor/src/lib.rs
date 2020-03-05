@@ -40,7 +40,7 @@ pub use native_executor::{with_externalities_safe, NativeExecutor, WasmExecutor,
 pub use sp_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]
-pub use sp_core::traits::Externalities;
+pub use sp_core::traits::{Externalities, CallInWasm};
 #[doc(hidden)]
 pub use sp_wasm_interface;
 pub use wasm_runtime::WasmExecutionMethod;

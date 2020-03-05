@@ -22,7 +22,7 @@
 use sp_runtime_interface::*;
 use sp_runtime_interface_test_wasm::{WASM_BINARY, test_api::HostFunctions};
 use sp_wasm_interface::HostFunctions as HostFunctionsT;
-use sp_core::traits::CallInWasm;
+use sc_executor::CallInWasm;
 
 type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits::BlakeTwo256, u64>;
 
