@@ -201,7 +201,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			fallback_method,
 			default_heap_pages,
 			host_functions,
-			false
+			false,
 		);
 
 		NativeExecutor {
