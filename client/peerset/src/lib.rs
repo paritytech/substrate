@@ -518,6 +518,11 @@ impl Peerset {
 		})
 	}
 
+	/// Returns the number of peers that we have discovered.
+	pub fn num_discovered_peers(&self) -> usize {
+		self.data.peers().len()
+	}
+
 	/// Returns priority group by id.
 	pub fn get_priority_group(&self, group_id: &str) -> Option<HashSet<PeerId>> {
 		self.data.get_priority_group(group_id)
