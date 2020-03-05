@@ -16,15 +16,15 @@ jobs:
       - name:              Checkout submodules
         shell:             bash
         run:               git submodule update --init --recursive
-      - name:                  Restore $CARGO_HOME/.cargo/git
+      - name:                  Restore /usr/local/cargo/.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                $CARGO_HOME/.cargo/git
+          path:                /usr/local/cargo/.cargo/git
           key:                 ${{ runner.OS }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore $CARGO_HOME/.cargo/registry
+      - name:                  Restore /usr/local/cargo/.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                $CARGO_HOME/.cargo/registry
+          path:                /usr/local/cargo/.cargo/registry
           key:                 ${{ runner.OS }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
@@ -52,11 +52,6 @@ jobs:
            # Note:         the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
            time cargo build --target=wasm32-unknown-unknown --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser"
            echo "-----------"
-           ls -a target
-           ls -a $HOME
-           ls -a /usr/local/cargo/
-           ls -a /usr/local/cargo/git
-           ls -a $PWD
       - name:              Stop sccache
         if:                always()
         run:               sccache --stop-server
