@@ -18,7 +18,20 @@
 //! through dispatched calls from one of two specialized origins.
 //!
 //! The membership can be provided in one of two ways: either directly, using the Root-dispatchable
-//! function `set_members`, or indirectly, through implementing the `ChangeMembers`
+//! function `set_members`, or indirectly, through implementing the `ChangeMembers`.
+//!
+//! A "prime" member may be set allowing their vote to act as the default vote in case of any
+//! abstentions after the voting period.
+//!
+//! Voting happens through motions comprising a proposal (i.e. a curried dispatchable) plus a
+//! number of approvals required for it to pass and be called. Motions are open for members to
+//! vote on for a minimum period given by `MotionDuration`. As soon as the needed number of
+//! approvals is given, the motion is closed and executed. If the number of approvals is not reached
+//! during the voting period, then `close` may be called by any account in order to force the end
+//! the motion explicitly. If a prime member is defined then their vote is used in place of any
+//! abstentions and the proposal is executed if there are enough approvals counting the new votes.
+//!
+//! If there are not, or if no prime is set, then the motion is dropped without being executed.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit="128"]
@@ -347,8 +360,19 @@ decl_module! {
 			}
 		}
 
-		/// May be called after the voting duration has ended in order to finish voting and close
-		/// the proposal.
+		/// May be called by any signed account after the voting duration has ended in order to
+		/// finish voting and close the proposal.
+		///
+		/// Abstentions are counted as rejections unless there is a prime member set and the prime
+		/// member cast an approval.
+		///
+		/// - the weight of `proposal` preimage.
+		/// - up to three events deposited.
+		/// - one read, two removals, one mutation. (plus three static reads.)
+		/// - computation and i/o `O(P + L + M)` where:
+		///   - `M` is number of members,
+		///   - `P` is number of active proposals,
+		///   - `L` is the encoded length of `proposal` preimage.
 		fn close(origin, proposal: T::Hash, #[compact] index: ProposalIndex) {
 			let _ = ensure_signed(origin)?;
 
@@ -365,10 +389,10 @@ decl_module! {
 			let mut no_votes = voting.nays.len() as MemberCount;
 			let mut yes_votes = voting.ayes.len() as MemberCount;
 			let seats = Self::members().len() as MemberCount;
-			let abstains = seats - (yes_votes + no_votes);
+			let abstentions = seats - (yes_votes + no_votes);
 			match default {
-				true => yes_votes += abstains,
-				false => no_votes += abstains,
+				true => yes_votes += abstentions,
+				false => no_votes += abstentions,
 			}
 
 			Self::deposit_event(RawEvent::Closed(proposal, yes_votes, no_votes));
@@ -382,6 +406,20 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		Self::members().contains(who)
 	}
 
+	/// Weight:
+	/// If `approved`:
+	/// - the weight of `proposal` preimage.
+	/// - two events deposited.
+	/// - two removals, one mutation.
+	/// - computation and i/o `O(P + L)` where:
+	///   - `P` is number of active proposals,
+	///   - `L` is the encoded length of `proposal` preimage.
+	///
+	/// If not `approved`:
+	/// - one event deposited.
+	/// Two removals, one mutation.
+	/// Computation and i/o `O(P)` where:
+	/// - `P` is number of active proposals
 	fn finalize_proposal(
 		approved: bool,
 		seats: MemberCount,
