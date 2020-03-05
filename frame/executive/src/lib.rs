@@ -75,13 +75,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, marker::PhantomData};
-use frame_support::weights::{GetDispatchInfo, WeighBlock, DispatchInfo};
+use frame_support::{
+	storage::StorageValue,
+	weights::{GetDispatchInfo, WeighBlock, DispatchInfo}
+};
 use sp_runtime::{
 	generic::Digest,
 	ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating,
+		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating, OnRuntimeUpgrade,
 	},
 	transaction_validity::TransactionValidity,
 };
@@ -110,6 +113,7 @@ impl<
 	Context: Default,
 	UnsignedValidator,
 	AllModules:
+		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber> +
@@ -135,6 +139,7 @@ impl<
 	Context: Default,
 	UnsignedValidator,
 	AllModules:
+		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber> +
@@ -176,6 +181,12 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
+		if frame_system::RuntimeUpgraded::take() {
+			<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
+			<frame_system::Module<System>>::register_extra_weight_unchecked(
+				<AllModules as WeighBlock<System::BlockNumber>>::on_runtime_upgrade()
+			);
+		}
 		<frame_system::Module<System>>::initialize(
 			block_number,
 			parent_hash,
@@ -573,7 +584,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("17caebd966d10cc6dc9659edf7fa3196511593f6c39f80f9b97cdbc3b0855cf3").into(),
+					state_root: hex!("8a22606e925c39bb0c8e8f6f5871c0aceab88a2fcff6b2d92660af8f6daff0b1").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
