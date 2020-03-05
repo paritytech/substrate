@@ -48,6 +48,8 @@ use sp_runtime::{
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
+mod migration;
+
 type Multiplier = Fixed64;
 type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -77,11 +79,6 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as TransactionPayment {
 		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
-
-		/// True if network has been upgraded to this version.
-		///
-		/// True for new networks.
-		IsUpgraded build(|_| true): bool;
 	}
 }
 
@@ -99,23 +96,9 @@ decl_module! {
 			});
 		}
 
-		fn on_initialize() {
-			if !IsUpgraded::get() {
-				IsUpgraded::put(true);
-				Self::do_upgrade();
-			}
+		fn on_runtime_upgrade() {
+			migration::on_runtime_upgrade()
 		}
-	}
-}
-
-// Migration code to update storage name
-use frame_support::storage::migration::{put_storage_value, take_storage_value};
-impl<T: Trait> Module<T> {
-	pub fn do_upgrade() {
-		sp_runtime::print("Migrating Transaction Payment.");
-
-		let next_fee_multiplier = take_storage_value::<Multiplier>(b"Balances", b"NextFeeMultiplier", &[]).unwrap_or_default();
-		put_storage_value(b"TransactionPayment", b"NextFeeMultiplier", &[], next_fee_multiplier);
 	}
 }
 

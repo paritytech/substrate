@@ -80,6 +80,7 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
+mod migration;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
@@ -403,11 +404,6 @@ decl_storage! {
 		///
 		/// The index into this can be cast to `RegistrarIndex` to get a valid value.
 		pub Registrars get(fn registrars): Vec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>>;
-
-		/// True if network has been upgraded to this version.
-		///
-		/// True for new networks.
-		IsUpgraded build(|_| true): bool;
 	}
 }
 
@@ -879,35 +875,9 @@ decl_module! {
 			Self::deposit_event(RawEvent::IdentityKilled(target, deposit));
 		}
 
-		fn on_initialize() {
-			if !IsUpgraded::get() {
-				IsUpgraded::put(true);
-				Self::do_upgrade();
-			}
+		fn on_runtime_upgrade() {
+			migration::on_runtime_upgrade::<T>()
 		}
-	}
-}
-
-// Migration code to update storage name
-use frame_support::storage::migration::{put_storage_value, take_storage_value, StorageIterator};
-impl<T: Trait> Module<T> {
-	pub fn do_upgrade() {
-		sp_runtime::print("Migrating Identity.");
-
-		for (hash, identity_of) in StorageIterator::<Option<Registration<BalanceOf<T>>>>::new(b"Sudo", b"IdentityOf").drain() {
-			put_storage_value(b"Identity", b"IdentityOf", &hash, identity_of);
-		}
-
-		for (hash, super_of) in StorageIterator::<Option<(T::AccountId, Data)>>::new(b"Sudo", b"SuperOf").drain() {
-			put_storage_value(b"Identity", b"SuperOf", &hash, super_of);
-		}
-
-		for (hash, subs_of) in StorageIterator::<Option<(T::AccountId, Data)>>::new(b"Sudo", b"SubsOf").drain() {
-			put_storage_value(b"Identity", b"SubsOf", &hash, subs_of);
-		}
-
-		let recent_hints = take_storage_value::<Vec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>>>(b"Sudo", b"Registrars", &[]).unwrap_or_default();
-		put_storage_value(b"Identity", b"Registrars", &[], recent_hints);
 	}
 }
 
