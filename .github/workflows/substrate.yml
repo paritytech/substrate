@@ -39,16 +39,13 @@ jobs:
           command:             check
           toolchain:           nightly
           args:                --benches --all
-      - name:                  Stop sccache
-        if:                    always()
-        run:                   sccache --stop-server
       - name:                  Prepare build directory for cache
         shell:                 bash
         run:                   bash .github/workflows/clean-target.sh
 
   cargo-check-subkey:
     name:                      Cargo check subkey
-    runs-on:                   [self-hosted, macos-latest, windows-latest]
+    runs-on:                   [self-hosted]
     container:                 generalbeck/rust-builder:latest
     env:
       BUILD_DUMMY_WASM_BINARY: 1
@@ -82,9 +79,6 @@ jobs:
         with:
           command:             check
           args:                --manifest-path "bin/utils/subkey/Cargo.toml" --release
-      - name:                  Stop sccache
-        if:                    always()
-        run:                   sccache --stop-server
       - name:                  Prepare build directory for cache
         shell:                 bash
         run:                   bash .github/workflows/clean-target.sh
@@ -126,9 +120,6 @@ jobs:
         with:
           command:             test
           args:                --all --release --verbose --locked
-      - name:                  Stop sccache
-        if:                    always()
-        run:                   sccache --stop-server
       - name:                  Prepare build directory for cache
         shell:                 bash
         run:                   bash .github/workflows/clean-target.sh
@@ -170,9 +161,6 @@ jobs:
         with:
           command:             test
           args:                --manifest-path "./frame/staking/Cargo.toml" --release --verbose --no-default-features --features std
-      - name:                  Stop sccache
-        if:                    always()
-        run:                   sccache --stop-server
       - name:                  Prepare build directory for cache
         shell:                 bash
         run:                   bash .github/workflows/clean-target.sh
@@ -214,9 +202,6 @@ jobs:
         with:
           command:             test
           args:                --manifest-path "./client/executor/Cargo.toml" --release --verbose --features wasmtime
-      - name:                  Stop sccache
-        if:                    always()
-        run:                   sccache --stop-server
       - name:                  Prepare build directory for cache
         shell:                 bash
         run:                   bash .github/workflows/clean-target.sh
@@ -260,9 +245,6 @@ jobs:
           args:                -p node-cli --release --verbose --locked -- --ignored
         env:
           RUST_LOG:            "sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace"
-      - name:                  Stop sccache
-        if:                    always()
-        run:                   sccache --stop-server
       - name:                  Prepare build directory for cache
         shell:                 bash
         run:                   bash .github/workflows/clean-target.sh
@@ -312,9 +294,6 @@ jobs:
           command:             build
           toolchain:           nightly
           args:                --manifest-path "./primitives/application-crypto/Cargo.toml"--verbose --no-default-features --features full_crypto
-      - name:                  Stop sccache
-        if:                    always()
-        run:                   sccache --stop-server
       - name:                  Prepare build directory for cache
         shell:                 bash
         run:                   bash .github/workflows/clean-target.sh
@@ -378,7 +357,7 @@ jobs:
   build-subkey:
     name:                      Build linux Subkey
     needs:                     [test-stable]
-    runs-on:                   [self-hosted, macos-latest, windows-latest]
+    runs-on:                   [self-hosted]
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
@@ -441,8 +420,6 @@ jobs:
         with:
           path:                target
           key:                 ${{ runner.OS }}-cargo-build-[build-rust-doc-release]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Sccache statistics
-        run:                   sccache --show-stats
       - name:                  Run cargo doc release
         uses:                  actions-rs/cargo@v1
         with:
