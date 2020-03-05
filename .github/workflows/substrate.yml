@@ -1,6 +1,9 @@
 name:                                Substrate
 
-on:                                  [push]
+on:
+  push:
+    branches:
+      - stable
 jobs:
   linux-cargo-check-benches:
     name:                            Cargo check benches

@@ -30,8 +30,10 @@ jobs:
            rustup show
            echo "CARGO_HOME: "$CARGO_HOME
            printenv
-
-           # rustup target add wasm32-unknown-unknown
+           ls -a $HOME
+           ls -a /usr/local/cargo/bin
+           ls -a /usr/local/cargo/
+           #rustup target add wasm32-unknown-unknown
            # WASM support is in progress. As more and more crates support WASM, we
            # should add entries here. See https://github.com/paritytech/substrate/issues/2416
            time cargo build --target=wasm32-unknown-unknown -p sp-io
