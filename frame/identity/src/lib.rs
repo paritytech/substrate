@@ -78,6 +78,7 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
+#[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
