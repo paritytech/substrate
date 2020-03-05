@@ -12,7 +12,7 @@ documentation = "https://docs.rs/sp-application-crypto"
 
 [dependencies]
 sp-core = { version = "2.0.0-alpha.2", default-features = false, path = "../core" }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../std" }
 sp-io = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/io" }
@@ -25,7 +25,7 @@ std = [ "full_crypto", "sp-core/std", "codec/std", "serde", "sp-std/std", "sp-io
 # or Intel SGX.
 # For the regular wasm runtime builds this should not be used.
 full_crypto = [
-    "sp-core/full_crypto",
+	"sp-core/full_crypto",
 	# Don't add `panic_handler` and `alloc_error_handler` since they are expected to be provided
 	# by the user anyway.
 	"sp-io/disable_panic_handler",

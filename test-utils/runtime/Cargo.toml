@@ -15,7 +15,7 @@ sp-consensus-aura = { version = "0.8.0-alpha.2", default-features = false, path 
 sp-consensus-babe = { version = "0.8.0-alpha.2", default-features = false, path = "../../primitives/consensus/babe" }
 sp-block-builder = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/block-builder" }
 cfg-if = "0.1.10"
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 frame-executive = { version = "2.0.0-alpha.2", default-features = false, path = "../../frame/executive" }
 sp-inherents = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/inherents" }
 sp-keyring = { version = "2.0.0-alpha.2", optional = true, path = "../../primitives/keyring" }

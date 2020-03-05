@@ -34,13 +34,12 @@ use sp_core::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,
 	},
-	Blake2Hasher,
 };
 use codec::Encode;
 use sp_externalities::{Extensions, Extension};
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher = Blake2Hasher, N: ChangesTrieBlockNumber = u64>
+pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber = u64>
 where
 	H::Out: codec::Codec,
 {
@@ -198,11 +197,12 @@ impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
 mod tests {
 	use super::*;
 	use sp_core::traits::Externalities;
+	use sp_runtime::traits::BlakeTwo256;
 	use hex_literal::hex;
 
 	#[test]
 	fn commit_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
+		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
 		let mut ext = ext.ext();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
@@ -213,7 +213,7 @@ mod tests {
 
 	#[test]
 	fn set_and_retrieve_code() {
-		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
+		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
 		let mut ext = ext.ext();
 
 		let code = vec![1, 2, 3];
@@ -225,6 +225,6 @@ mod tests {
 	#[test]
 	fn check_send() {
 		fn assert_send<T: Send>() {}
-		assert_send::<TestExternalities::<Blake2Hasher, u64>>();
+		assert_send::<TestExternalities::<BlakeTwo256, u64>>();
 	}
 }

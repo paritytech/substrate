@@ -24,14 +24,14 @@ use rand::Rng;
 use hash_db::{Prefix, Hasher};
 use sp_trie::{MemoryDB, prefixed_key};
 use sp_core::storage::ChildInfo;
-use sp_runtime::traits::{Block as BlockT, HasherFor};
+use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend};
 use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 
 type DbState<B> = sp_state_machine::TrieBackend<
-	Arc<dyn sp_state_machine::Storage<HasherFor<B>>>, HasherFor<B>
+	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
 >;
 
 struct StorageDb<Block: BlockT> {
@@ -39,9 +39,9 @@ struct StorageDb<Block: BlockT> {
 	_block: std::marker::PhantomData<Block>,
 }
 
-impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for StorageDb<Block> {
+impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		let key = prefixed_key::<HasherFor<Block>>(key, prefix);
+		let key = prefixed_key::<HashFor<Block>>(key, prefix);
 		self.db.get(0, &key)
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
@@ -53,7 +53,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,
 	state: RefCell<Option<DbState<B>>>,
 	db: Cell<Option<Arc<dyn KeyValueDB>>>,
-	genesis: <DbState<B> as StateBackend<HasherFor<B>>>::Transaction,
+	genesis: <DbState<B> as StateBackend<HashFor<B>>>::Transaction,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -64,8 +64,8 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let path = temp_dir.join(&name);
 
 		let mut root = B::Hash::default();
-		let mut mdb = MemoryDB::<HasherFor<B>>::default();
-		sp_state_machine::TrieDBMut::<HasherFor<B>>::new(&mut mdb, &mut root);
+		let mut mdb = MemoryDB::<HashFor<B>>::default();
+		sp_state_machine::TrieDBMut::<HashFor<B>>::new(&mut mdb, &mut root);
 
 		std::fs::create_dir(&path).map_err(|_| String::from("Error creating temp dir"))?;
 		let mut state = BenchmarkingState {
@@ -108,8 +108,8 @@ impl<B: BlockT> BenchmarkingState<B> {
 		self.db.set(None);
 		*self.state.borrow_mut() = None;
 		let mut root = B::Hash::default();
-		let mut mdb = MemoryDB::<HasherFor<B>>::default();
-		sp_state_machine::TrieDBMut::<HasherFor<B>>::new(&mut mdb, &mut root);
+		let mut mdb = MemoryDB::<HashFor<B>>::default();
+		sp_state_machine::TrieDBMut::<HashFor<B>>::new(&mut mdb, &mut root);
 		self.root.set(root);
 
 		std::fs::remove_dir_all(&self.path).map_err(|_| "Error removing database dir".into())
@@ -126,10 +126,10 @@ fn state_err() -> String {
 	"State is not open".into()
 }
 
-impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
-	type Error =  <DbState<B> as StateBackend<HasherFor<B>>>::Error;
-	type Transaction = <DbState<B> as StateBackend<HasherFor<B>>>::Transaction;
-	type TrieBackendStorage = <DbState<B> as StateBackend<HasherFor<B>>>::TrieBackendStorage;
+impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
+	type Error =  <DbState<B> as StateBackend<HashFor<B>>>::Error;
+	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
+	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.borrow().as_ref().ok_or_else(state_err)?.storage(key)
@@ -244,12 +244,12 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn as_trie_backend(&mut self)
-		-> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HasherFor<B>>>
+		-> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>>>
 	{
 		None
 	}
 
-	fn commit(&self, storage_root: <HasherFor<B> as Hasher>::Out, mut transaction: Self::Transaction)
+	fn commit(&self, storage_root: <HashFor<B> as Hasher>::Out, mut transaction: Self::Transaction)
 		-> Result<(), Self::Error>
 	{
 		if let Some(db) = self.db.take() {
