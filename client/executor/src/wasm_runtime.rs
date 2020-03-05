@@ -330,7 +330,7 @@ fn create_versioned_wasm_runtime(
 		target: "wasm-runtime",
 		"Prepared new runtime version {:?} in {} ms.",
 		version,
-		time.elapsed().as_millis()
+		time.elapsed().as_millis(),
 	);
 
 	Ok(VersionedRuntime {
