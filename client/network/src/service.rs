@@ -210,7 +210,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.finality_proof_request_builder,
 			params.protocol_id.clone(),
 			peerset_config,
-			params.block_announce_validator
+			params.block_announce_validator,
+			params.metrics_registry.as_ref()
 		)?;
 
 		// Build the swarm.
@@ -858,7 +859,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		};
 
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
-		
+
 		if let Some(metrics) = this.metrics.as_ref() {
 			metrics.is_major_syncing.set(is_major_syncing as u64);
 			metrics.peers_count.set(num_connected_peers as u64);
