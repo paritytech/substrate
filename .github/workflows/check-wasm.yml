@@ -16,6 +16,9 @@ jobs:
       - name:              Checkout submodules
         shell:             bash
         run:               git submodule update --init --recursive
+      - name:              Prepare for cache
+        shell:             bash
+        run:               rm -rf /usr/local/cargo/.cargo/{git,registry}&&mkdir -p /usr/local/cargo/.cargo/{git,registry}
       - name:                  Restore /usr/local/cargo/.cargo/git
         uses:                  actions/cache@v1.1.2
         with:

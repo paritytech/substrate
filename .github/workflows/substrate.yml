@@ -77,13 +77,13 @@ jobs:
       - name:                  Run cargo check subkey
         shell:                 bash
         continue-on-error:     true
-        run:                   time cargo check --release --manifest-path "bin/utils/subkey/Cargo.toml" --release
+        run:                   time cargo check --release --manifest-path "bin/utils/subkey/Cargo.toml"
       - name:                  Prepare build directory for cache
         shell:                 bash
         run:                   |
           echo "Prepare build directory for cache"
-          find ./target/debug -maxdepth 1 -type f -delete;
-          rm -fr ./target/debug/{deps,.fingerprint}/*;
+          find ./target/release -maxdepth 1 -type f -delete;
+          rm -fr ./target/release/{deps,.fingerprint}/*;
           rm -f  ./target/.rustc_info.json;
 
 
@@ -126,8 +126,8 @@ jobs:
         shell:                 bash
         run:                   |
           echo "Prepare build directory for cache"
-          find ./target/debug -maxdepth 1 -type f -delete;
-          rm -fr ./target/debug/{deps,.fingerprint}/*{substrate}*;
+          find ./target/release -maxdepth 1 -type f -delete;
+          rm -fr ./target/release/{deps,.fingerprint}/*{substrate}*;
           rm -f  ./target/.rustc_info.json;
 
 
@@ -170,8 +170,8 @@ jobs:
         shell:                 bash
         run:                   |
           echo "Prepare build directory for cache"
-          find ./target/debug -maxdepth 1 -type f -delete;
-          rm -fr ./target/debug/{deps,.fingerprint}/*;
+          find ./target/release -maxdepth 1 -type f -delete;
+          rm -fr ./target/release/{deps,.fingerprint}/*;
           rm -f  ./target/.rustc_info.json;
 
   test-wasmtime:
@@ -213,8 +213,8 @@ jobs:
         shell:                 bash
         run:                   |
           echo "Prepare build directory for cache"
-          find ./target/debug -maxdepth 1 -type f -delete;
-          rm -fr ./target/debug/{deps,.fingerprint}/*;
+          find ./target/release -maxdepth 1 -type f -delete;
+          rm -fr ./target/release/{deps,.fingerprint}/*;
           rm -f  ./target/.rustc_info.json;
 
   test-stable-int:
@@ -258,8 +258,8 @@ jobs:
         shell:                 bash
         run:                   |
           echo "Prepare build directory for cache"
-          find ./target/debug -maxdepth 1 -type f -delete;
-          rm -fr ./target/debug/{deps,.fingerprint}/*;
+          find ./target/release -maxdepth 1 -type f -delete;
+          rm -fr ./target/release/{deps,.fingerprint}/*;
           rm -f  ./target/.rustc_info.json;
 
   test-full-crypto-feature:
@@ -300,7 +300,7 @@ jobs:
       - name:                  Run cargo build crypto apps
         shell:                 bash
         continue-on-error:     true
-        run:                   cargo +nightly build --manifest-path "./primitives/application-crypto/Cargo.toml"--verbose --no-default-features --features full_crypto
+        run:                   cargo +nightly build --manifest-path "./primitives/application-crypto/Cargo.toml" --verbose --no-default-features --features full_crypto
       - name:                  Prepare build directory for cache
         shell:                 bash
         run:                   |
