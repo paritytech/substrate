@@ -5,7 +5,7 @@ jobs:
   cargo-check-benches:
     name:                      Cargo check benches
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:latest
+    container:                 generalbeck/rust-builder:1.41.1
     env:
       BUILD_DUMMY_WASM_BINARY: 1
       CARGO_INCREMENTAL:       0
@@ -47,7 +47,7 @@ jobs:
   cargo-check-subkey:
     name:                      Cargo check subkey
     runs-on:                   [self-hosted]
-    container:                 generalbeck/rust-builder:latest
+    container:                 generalbeck/rust-builder:1.41.1
     env:
       BUILD_DUMMY_WASM_BINARY: 1
       CARGO_INCREMENTAL:       0
@@ -90,7 +90,7 @@ jobs:
   test-stable:
     name:                      Test linux stable
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:latest
+    container:                 generalbeck/rust-builder:1.41.1
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -134,7 +134,7 @@ jobs:
   test-frame-staking:
     name:                      Test frame staking
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:latest
+    container:                 generalbeck/rust-builder:1.41.1
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -177,7 +177,7 @@ jobs:
   test-wasmtime:
     name:                      Test wasmtime
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:latest
+    container:                 generalbeck/rust-builder:1.41.1
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -220,7 +220,7 @@ jobs:
   test-stable-int:
     name:                      Test linux stable int
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:latest
+    container:                 generalbeck/rust-builder:1.41.1
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -265,7 +265,7 @@ jobs:
   test-full-crypto-feature:
     name:                      Test full crypto feature
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:latest
+    container:                 generalbeck/rust-builder:1.41.1
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -312,7 +312,7 @@ jobs:
   linux-dependency-rules:
     name:                      Test dependency rules
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:latest
+    container:                 generalbeck/rust-builder:1.41.1
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
@@ -329,7 +329,7 @@ jobs:
     name:                      Build linux Substrate
     needs:                     [test-stable]
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:latest
+    container:                 generalbeck/rust-builder:1.41.1
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
@@ -367,7 +367,7 @@ jobs:
     name:                      Build linux Subkey
     needs:                     [test-stable]
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:latest
+    container:                 generalbeck/rust-builder:1.41.1
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
@@ -405,7 +405,7 @@ jobs:
     name:                      Build Rust doc release
     needs:                     [test-stable]
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:latest
+    container:                 generalbeck/rust-builder:1.41.1
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
