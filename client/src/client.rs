@@ -1105,6 +1105,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Default::default(),
 		))
 	}
+
+	#[cfg(test)]
+	pub fn import_notification_sinks(
+		&self,
+	) -> &Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>> {
+		&self.import_notification_sinks
+	}
+
+	#[cfg(test)]
+	pub fn finality_notification_sinks(
+		&self,
+	) -> &Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>> {
+		&self.finality_notification_sinks
+	}
 }
 
 impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
@@ -3436,5 +3450,45 @@ pub(crate) mod tests {
 			.map(|x| x.0)
 			.collect();
 		assert_eq!(res, [hex!("cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f").to_vec()]);
+	}
+
+	#[test]
+	fn cleans_up_closed_notification_sinks_on_import() {
+		use substrate_test_client::client_ext::ClientBlockImportExt;
+		use substrate_test_runtime_client::GenesisInit;
+
+		// NOTE: we need to build the client here instead of using the client provided by
+		// test_runtime_client which won't have the `import_notification_sinks` and
+		// `finality_notification_sinks` methods since it won't be built under `test` config.
+		let mut client =
+			new_in_mem::<_, substrate_test_runtime::Block, _, substrate_test_runtime::RuntimeApi>(
+				substrate_test_runtime_client::new_native_executor(),
+				&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+				None,
+				None,
+			)
+			.unwrap();
+
+		let import_notif1 = client.import_notification_stream();
+		drop(import_notif1);
+
+		let import_notif2 = client.import_notification_stream();
+
+		let a1 = client
+			.new_block(Default::default())
+			.unwrap()
+			.build()
+			.unwrap()
+			.block;
+
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+		// let (header, extrinsics) = a1.deconstruct();
+		// let mut import = BlockImportParams::new(BlockOrigin::Own, header);
+		// import.body = Some(extrinsics);
+		// import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+
+		// BlockImport::import_block(&mut client, import, HashMap::new()).map(|_| ());
+
+		assert_eq!(client.import_notification_sinks().lock().len(), 1);
 	}
 }
