@@ -22,37 +22,10 @@ use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult};
 
 use sp_inherents::{InherentData, CheckInherentsResult};
 
-/// Definitions for supporting the older version of API: v3
-///
-/// These definitions are taken from the 2c58e30246a029b53d51e5b24c31974ac539ee8b git revision.
-#[deprecated(note = "These definitions here are only for compatibility reasons")]
-pub mod compatibility_v3 {
-	use sp_runtime::{DispatchOutcome, transaction_validity};
-	use codec::{Encode, Decode};
-
-	#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, Debug)]
-	pub enum ApplyError {
-		NoPermission,
-		BadState,
-		Validity(transaction_validity::TransactionValidityError),
-	}
-
-	// `ApplyOutcome` was renamed to `DispatchOutcome` with the layout preserved.
-	pub type ApplyResult = Result<DispatchOutcome, ApplyError>;
-}
-
 sp_api::decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides the required functionality for building a block.
 	#[api_version(5)]
 	pub trait BlockBuilder {
-		/// Compatibility version of `apply_extrinsic` for v3.
-		///
-		/// Only the return type is changed.
-		#[changed_in(4)]
-		#[allow(deprecated)]
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic)
-			-> self::compatibility_v3::ApplyResult;
-
 		/// Apply the given extrinsic.
 		///
 		/// Returns an inclusion outcome which specifies if this extrinsic is included in

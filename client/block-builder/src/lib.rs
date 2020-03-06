@@ -28,9 +28,7 @@ use codec::Encode;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{
-		Header as HeaderT, Hash, Block as BlockT, HashFor, DigestFor, NumberFor, One, HasherFor,
-	},
+	traits::{Header as HeaderT, Hash, Block as BlockT, HashFor, DigestFor, NumberFor, One},
 };
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
@@ -47,7 +45,7 @@ use sc_client_api::backend;
 /// backend to get the state of the block. Furthermore an optional `proof` is included which
 /// can be used to proof that the build block contains the expected data. The `proof` will
 /// only be set when proof recording was activated.
-pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HasherFor<Block>>> {
+pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> {
 	/// The actual block that was build.
 	pub block: Block,
 	/// The changes that need to be applied to the backend to get the state of the build block.
@@ -56,11 +54,32 @@ pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HasherF
 	pub proof: Option<StorageProof>,
 }
 
-impl<Block: BlockT, StateBackend: backend::StateBackend<HasherFor<Block>>> BuiltBlock<Block, StateBackend> {
+impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> BuiltBlock<Block, StateBackend> {
 	/// Convert into the inner values.
 	pub fn into_inner(self) -> (Block, StorageChanges<StateBackend, Block>, Option<StorageProof>) {
 		(self.block, self.storage_changes, self.proof)
 	}
+}
+
+/// Block builder provider
+pub trait BlockBuilderProvider<B, Block, RA>
+	where
+		Block: BlockT,
+		B: backend::Backend<Block>,
+		Self: Sized,
+		RA: ProvideRuntimeApi<Block>,
+{
+	/// Create a new block, built on top of `parent`.
+	///
+	/// When proof recording is enabled, all accessed trie nodes are saved.
+	/// These recorded trie nodes can be used by a third party to proof the
+	/// output of this block builder without having access to the full storage.
+	fn new_block_at<R: Into<RecordProof>>(
+		&self,
+		parent: &BlockId<Block>,
+		inherent_digests: DigestFor<Block>,
+		record_proof: R,
+	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
 }
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
@@ -121,7 +140,7 @@ where
 			backend,
 		})
 	}
-	
+
 	/// Push onto the block's list of extrinsics.
 	///
 	/// This will ensure the extrinsic can be validly executed (by executing it).
@@ -131,8 +150,7 @@ where
 
 	/// Push onto the block's list of extrinsics.
 	///
-	/// This will treat incoming extrinsic `xt` as untrusted and perform additional checks
-	/// (currenty checking signature).
+	/// This will treat incoming extrinsic `xt` as trusted and skip signature check (for signed transactions).
 	pub fn push_trusted(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
 		self.push_internal(xt, true)
 	}
@@ -141,60 +159,36 @@ where
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
-		if self
+		let use_trusted = skip_signature && self
 			.api
 			.has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
 				block_id,
-				|version| version < 4,
-			)?
-		{
-			// Run compatibility fallback for v3.
-			self.api.map_api_result(|api| {
-				#[allow(deprecated)]
-				match api.apply_extrinsic_before_version_4_with_context(
+				|version| version >= 5,
+			)?;
+
+		self.api.map_api_result(|api| {
+			let apply_result = if use_trusted {
+				api.apply_trusted_extrinsic_with_context(
 					block_id,
 					ExecutionContext::BlockConstruction,
 					xt.clone(),
-				)? {
-					Ok(_) => {
-						extrinsics.push(xt);
-						Ok(())
-					}
-					Err(e) => Err(ApplyExtrinsicFailed::from(e).into()),
-				}
-			})
-		} else {
-			let use_trusted = skip_signature && self
-				.api
-				.has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
+				)?
+			} else  {
+				api.apply_extrinsic_with_context(
 					block_id,
-					|version| version >= 5,
-				)?;
+					ExecutionContext::BlockConstruction,
+					xt.clone(),
+				)?
+			};
 
-			self.api.map_api_result(|api| {
-				let apply_result = if use_trusted {
-					api.apply_trusted_extrinsic_with_context(
-						block_id,
-						ExecutionContext::BlockConstruction,
-						xt.clone(),
-					)?
-				} else  { 
-					api.apply_extrinsic_with_context(
-						block_id,
-						ExecutionContext::BlockConstruction,
-						xt.clone(),
-					)?
-				};
-
-				match apply_result {
-					Ok(_) => {
-						extrinsics.push(xt);
-						Ok(())
-					}
-					Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
+			match apply_result {
+				Ok(_) => {
+					extrinsics.push(xt);
+					Ok(())
 				}
-			})
-		}
+				Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
+			}
+		})
 	}
 
 	/// Consume the builder to build a valid `Block` containing all pushed extrinsics.
@@ -230,17 +224,11 @@ where
 			&state,
 			changes_trie_state.as_ref(),
 			parent_hash,
-		);
-
-		// We need to destroy the state, before we check if `storage_changes` is `Ok(_)`
-		{
-			let _lock = self.backend.get_import_lock().read();
-			self.backend.destroy_state(state)?;
-		}
+		)?;
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, self.extrinsics),
-			storage_changes: storage_changes?,
+			storage_changes,
 			proof,
 		})
 	}

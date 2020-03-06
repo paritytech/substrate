@@ -128,19 +128,20 @@ pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 	fn sign_and_submit(call: impl Into<Call>, public: PublicOf<T, Call, Self>) -> Result<(), ()> {
 		let call = call.into();
 		let id = public.clone().into_account();
-		let (expected_nonce, extra) = super::Account::<T>::get(&id);
+		let mut account = super::Account::<T>::get(&id);
 		debug::native::debug!(
 			target: "offchain",
 			"Creating signed transaction from account: {:?} (nonce: {:?})",
 			id,
-			expected_nonce,
+			account.nonce,
 		);
 		let (call, signature_data) = Self::CreateTransaction
-			::create_transaction::<Self::Signer>(call, public, id.clone(), expected_nonce)
+			::create_transaction::<Self::Signer>(call, public, id.clone(), account.nonce)
 			.ok_or(())?;
 		// increment the nonce. This is fine, since the code should always
 		// be running in off-chain context, so we NEVER persists data.
-		super::Account::<T>::insert(&id, (expected_nonce + One::one(), extra));
+		account.nonce += One::one();
+		super::Account::<T>::insert(&id, account);
 
 		let xt = Self::Extrinsic::new(call, Some(signature_data)).ok_or(())?;
 		sp_io::offchain::submit_transaction(xt.encode())

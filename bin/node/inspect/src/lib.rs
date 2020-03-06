@@ -23,6 +23,7 @@
 #![warn(missing_docs)]
 
 pub mod cli;
+pub mod command;
 
 use std::{
 	fmt,
@@ -37,8 +38,10 @@ use sp_runtime::{
 	traits::{Block, HashFor, NumberFor, Hash}
 };
 
+use command::{BlockAddress, ExtrinsicAddress};
+
 /// A helper type for a generic block input.
-pub type BlockAddressFor<TBlock> = cli::BlockAddress<
+pub type BlockAddressFor<TBlock> = BlockAddress<
 	<HashFor<TBlock> as Hash>::Output,
 	NumberFor<TBlock>
 >;
@@ -148,10 +151,10 @@ impl<TBlock: Block, TPrinter: PrettyPrinter<TBlock>> Inspector<TBlock, TPrinter>
 
 	fn get_block(&self, input: BlockAddressFor<TBlock>) -> Result<TBlock, Error> {
 		Ok(match input {
-			cli::BlockAddress::Bytes(bytes) => {
+			BlockAddress::Bytes(bytes) => {
 				TBlock::decode(&mut &*bytes)?
 			},
-			cli::BlockAddress::Number(number) => {
+			BlockAddress::Number(number) => {
 				let id = BlockId::number(number);
 				let not_found = format!("Could not find block {:?}", id);
 				let body = self.chain.block_body(&id)?
@@ -160,7 +163,7 @@ impl<TBlock: Block, TPrinter: PrettyPrinter<TBlock>> Inspector<TBlock, TPrinter>
 					.ok_or_else(|| Error::NotFound(not_found.clone()))?;
 				TBlock::new(header, body)
 			},
-			cli::BlockAddress::Hash(hash) => {
+			BlockAddress::Hash(hash) => {
 				let id = BlockId::hash(hash);
 				let not_found = format!("Could not find block {:?}", id);
 				let body = self.chain.block_body(&id)?
@@ -175,7 +178,7 @@ impl<TBlock: Block, TPrinter: PrettyPrinter<TBlock>> Inspector<TBlock, TPrinter>
 	/// Get a pretty-printed extrinsic.
 	pub fn extrinsic(
 		&self,
-		input: cli::ExtrinsicAddress<<HashFor<TBlock> as Hash>::Output, NumberFor<TBlock>>,
+		input: ExtrinsicAddress<<HashFor<TBlock> as Hash>::Output, NumberFor<TBlock>>,
 	) -> Result<String, Error> {
 		struct ExtrinsicPrinter<'a, A: Block, B>(A::Extrinsic, &'a B);
 		impl<'a, A: Block, B: PrettyPrinter<A>> fmt::Display for ExtrinsicPrinter<'a, A, B> {
@@ -185,7 +188,7 @@ impl<TBlock: Block, TPrinter: PrettyPrinter<TBlock>> Inspector<TBlock, TPrinter>
 		}
 
 		let ext = match input {
-			cli::ExtrinsicAddress::Block(block, index) => {
+			ExtrinsicAddress::Block(block, index) => {
 				let block = self.get_block(block)?;
 				block.extrinsics()
 					.get(index)
@@ -194,7 +197,7 @@ impl<TBlock: Block, TPrinter: PrettyPrinter<TBlock>> Inspector<TBlock, TPrinter>
 						"Could not find extrinsic {} in block {:?}", index, block
 					)))?
 			},
-			cli::ExtrinsicAddress::Bytes(bytes) => {
+			ExtrinsicAddress::Bytes(bytes) => {
 				TBlock::Extrinsic::decode(&mut &*bytes)?
 			}
 		};

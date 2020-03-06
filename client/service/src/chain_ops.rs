@@ -35,8 +35,7 @@ use sp_consensus::{
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
-
-use sc_network::message;
+use sc_client_api::BlockBody;
 
 /// Build a chain spec json
 pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<String> where
@@ -48,12 +47,12 @@ pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<Strin
 
 impl<
 	TBl, TRtApi, TGen, TCSExt, TBackend,
-	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP,
+	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp,
 	TExPool, TRpc, Backend
 > ServiceBuilderCommand for ServiceBuilder<
 	TBl, TRtApi, TGen, TCSExt,
 	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
-	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
+	TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend
 > where
 	TBl: BlockT,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
@@ -141,21 +140,13 @@ impl<
 					Ok(signed) => {
 						let (header, extrinsics) = signed.block.deconstruct();
 						let hash = header.hash();
-						let block  = message::BlockData::<Self::Block> {
-							hash,
-							justification: signed.justification,
-							header: Some(header),
-							body: Some(extrinsics),
-							receipt: None,
-							message_queue: None
-						};
 						// import queue handles verification and importing it into the client
 						queue.import_blocks(BlockOrigin::File, vec![
 							IncomingBlock::<Self::Block> {
-								hash: block.hash,
-								header: block.header,
-								body: block.body,
-								justification: block.justification,
+								hash,
+								header: Some(header),
+								body: Some(extrinsics),
+								justification: signed.justification,
 								origin: None,
 								allow_missing_state: false,
 								import_existing: force,
@@ -213,7 +204,7 @@ impl<
 		mut output: impl Write + 'static,
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
-		json: bool
+		binary: bool
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
 		let client = self.client;
 		let mut block = from;
@@ -240,7 +231,7 @@ impl<
 
 			if !wrote_header {
 				info!("Exporting blocks from #{} to #{}", block, last);
-				if !json {
+				if binary {
 					let last_: u64 = last.saturated_into::<u64>();
 					let block_: u64 = block.saturated_into::<u64>();
 					let len: u64 = last_ - block_ + 1;
@@ -251,13 +242,13 @@ impl<
 
 			match client.block(&BlockId::number(block))? {
 				Some(block) => {
-					if json {
+					if binary {
+						output.write_all(&block.encode())?;
+					} else {
 						serde_json::to_writer(&mut output, &block)
 							.map_err(|e| format!("Error writing JSON: {}", e))?;
-						} else {
-							output.write_all(&block.encode())?;
 					}
-				},
+			},
 				// Reached end of the chain.
 				None => return std::task::Poll::Ready(Ok(())),
 			}

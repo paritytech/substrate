@@ -16,9 +16,8 @@
 
 use crate::{
 	debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut, DiscoveryNetBehaviour,
-	Event, protocol::event::DhtEvent
+	Event, protocol::event::DhtEvent, ExHashT,
 };
-use crate::{ExHashT, specialization::NetworkSpecialization};
 use crate::protocol::{self, light_client_handler, CustomMessageOutcome, Protocol};
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
@@ -33,9 +32,9 @@ use void;
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "BehaviourOut<B>", poll_method = "poll")]
-pub struct Behaviour<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
+pub struct Behaviour<B: BlockT, H: ExHashT> {
 	/// All the substrate-specific protocols.
-	substrate: Protocol<B, S, H>,
+	substrate: Protocol<B, H>,
 	/// Periodically pings and identifies the nodes we are connected to, and store information in a
 	/// cache.
 	debug_info: debug_info::DebugInfoBehaviour,
@@ -55,13 +54,15 @@ pub enum BehaviourOut<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
+	/// Started a random Kademlia discovery query.
+	RandomKademliaStarted,
 	Event(Event),
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
+impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	/// Builds a new `Behaviour`.
 	pub async fn new(
-		substrate: Protocol<B, S, H>,
+		substrate: Protocol<B, H>,
 		user_agent: String,
 		local_public_key: PublicKey,
 		known_addresses: Vec<(PeerId, Multiaddr)>,
@@ -97,6 +98,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 		self.discovery.add_known_address(peer_id, addr)
 	}
 
+	/// Returns the number of nodes that are in the Kademlia k-buckets.
+	pub fn num_kbuckets_entries(&mut self) -> usize {
+		self.discovery.num_kbuckets_entries()
+	}
+
 	/// Borrows `self` and returns a struct giving access to the information about a node.
 	///
 	/// Returns `None` if we don't know anything about this node. Always returns `Some` for nodes
@@ -107,12 +113,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 	}
 
 	/// Returns a shared reference to the user protocol.
-	pub fn user_protocol(&self) -> &Protocol<B, S, H> {
+	pub fn user_protocol(&self) -> &Protocol<B, H> {
 		&self.substrate
 	}
 
 	/// Returns a mutable reference to the user protocol.
-	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B, S, H> {
+	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B, H> {
 		&mut self.substrate
 	}
 
@@ -133,15 +139,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<void::Void> for
-Behaviour<B, S, H> {
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<void::Void> for
+Behaviour<B, H> {
 	fn inject_event(&mut self, event: void::Void) {
 		void::unreachable(event)
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for
-Behaviour<B, S, H> {
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for
+Behaviour<B, H> {
 	fn inject_event(&mut self, event: CustomMessageOutcome<B>) {
 		match event {
 			CustomMessageOutcome::BlockImport(origin, blocks) =>
@@ -174,8 +180,8 @@ Behaviour<B, S, H> {
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<debug_info::DebugInfoEvent>
-	for Behaviour<B, S, H> {
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<debug_info::DebugInfoEvent>
+	for Behaviour<B, H> {
 	fn inject_event(&mut self, event: debug_info::DebugInfoEvent) {
 		let debug_info::DebugInfoEvent::Identified { peer_id, mut info } = event;
 		if info.listen_addrs.len() > 30 {
@@ -192,8 +198,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
-	for Behaviour<B, S, H> {
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
+	for Behaviour<B, H> {
 	fn inject_event(&mut self, out: DiscoveryOut) {
 		match out {
 			DiscoveryOut::UnroutablePeer(_peer_id) => {
@@ -217,11 +223,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 			DiscoveryOut::ValuePutFailed(key) => {
 				self.events.push(BehaviourOut::Event(Event::Dht(DhtEvent::ValuePutFailed(key))));
 			}
+			DiscoveryOut::RandomKademliaStarted => {
+				self.events.push(BehaviourOut::RandomKademliaStarted);
+			}
 		}
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
+impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	fn poll<TEv>(&mut self, _: &mut Context, _: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
 		if !self.events.is_empty() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(self.events.remove(0)))

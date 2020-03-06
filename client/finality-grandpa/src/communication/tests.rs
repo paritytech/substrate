@@ -25,7 +25,7 @@ use std::sync::Arc;
 use sp_keyring::Ed25519Keyring;
 use parity_scale_codec::Encode;
 use sp_runtime::{ConsensusEngineId, traits::NumberFor};
-use std::{pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, pin::Pin, task::{Context, Poll}};
 use crate::environment::SharedVoterSetState;
 use sp_finality_grandpa::{AuthorityList, GRANDPA_ENGINE_ID};
 use super::gossip::{self, GossipValidator};
@@ -44,19 +44,11 @@ pub(crate) struct TestNetwork {
 	sender: mpsc::UnboundedSender<Event>,
 }
 
-impl TestNetwork {
-	fn event_stream_03(&self) -> Pin<Box<dyn futures::Stream<Item = NetworkEvent> + Send>> {
+impl sc_network_gossip::Network<Block> for TestNetwork {
+	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
 		let (tx, rx) = mpsc::unbounded();
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::pin(rx)
-	}
-}
-
-impl sc_network_gossip::Network<Block> for TestNetwork {
-	fn event_stream(&self) -> Box<dyn futures01::Stream<Item = NetworkEvent, Error = ()> + Send> {
-		Box::new(
-			self.event_stream_03().map(Ok::<_, ()>).compat()
-		)
 	}
 
 	fn report_peer(&self, who: sc_network::PeerId, cost_benefit: sc_network::ReputationChange) {
@@ -69,7 +61,7 @@ impl sc_network_gossip::Network<Block> for TestNetwork {
 		let _ = self.sender.unbounded_send(Event::WriteNotification(who, message));
 	}
 
-	fn register_notifications_protocol(&self, _: ConsensusEngineId) {}
+	fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, [u8]>) {}
 
 	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));

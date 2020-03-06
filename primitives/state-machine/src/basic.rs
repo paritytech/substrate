@@ -298,6 +298,10 @@ impl Externalities for BasicExternalities {
 	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		Ok(None)
 	}
+
+	fn wipe(&mut self) {}
+
+	fn commit(&mut self) {}
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {
@@ -346,7 +350,7 @@ mod tests {
 			top: Default::default(),
 			children: map![
 				child_storage.clone() => StorageChild {
-					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
+					data: map![ b"doe".to_vec() => b"reindeer".to_vec() ],
 					child_info: CHILD_INFO_1.to_owned(),
 				}
 			]

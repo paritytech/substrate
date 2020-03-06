@@ -20,12 +20,11 @@ use crate::state_machine::{ConsensusGossip, TopicNotification, PERIODIC_MAINTENA
 use sc_network::message::generic::ConsensusMessage;
 use sc_network::{Event, ReputationChange};
 
-use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
-use futures01::stream::Stream as Stream01;
+use futures::{prelude::*, channel::mpsc};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
-use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
+use std::{borrow::Cow, pin::Pin, sync::Arc, task::{Context, Poll}};
 
 /// Wraps around an implementation of the `Network` crate and provides gossiping capabilities on
 /// top of it.
@@ -38,7 +37,7 @@ struct GossipEngineInner<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
 	network: Box<dyn Network<B> + Send>,
 	periodic_maintenance_interval: futures_timer::Delay,
-	network_event_stream: Compat01As03<Box<dyn Stream01<Error = (), Item = Event> + Send>>,
+	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
 	engine_id: ConsensusEngineId,
 }
 
@@ -49,6 +48,7 @@ impl<B: BlockT> GossipEngine<B> {
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
 		mut network: N,
 		engine_id: ConsensusEngineId,
+		protocol_name: impl Into<Cow<'static, [u8]>>,
 		validator: Arc<dyn Validator<B>>,
 	) -> Self where B: 'static {
 		let mut state_machine = ConsensusGossip::new();
@@ -57,14 +57,14 @@ impl<B: BlockT> GossipEngine<B> {
 		// might miss events.
 		let network_event_stream = network.event_stream();
 
-		network.register_notifications_protocol(engine_id);
+		network.register_notifications_protocol(engine_id, protocol_name.into());
 		state_machine.register_validator(&mut network, engine_id, validator);
 
 		let inner = Arc::new(Mutex::new(GossipEngineInner {
 			state_machine,
 			network: Box::new(network),
 			periodic_maintenance_interval: futures_timer::Delay::new(PERIODIC_MAINTENANCE_INTERVAL),
-			network_event_stream: Compat01As03::new(network_event_stream),
+			network_event_stream,
 			engine_id,
 		}));
 
@@ -178,7 +178,7 @@ impl<B: BlockT> Future for GossipEngineInner<B> {
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = &mut *self;
 
-		while let Poll::Ready(Some(Ok(event))) = this.network_event_stream.poll_next_unpin(cx) {
+		while let Poll::Ready(Some(event)) = this.network_event_stream.poll_next_unpin(cx) {
 			match event {
 				Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
 					if msg_engine_id != this.engine_id {

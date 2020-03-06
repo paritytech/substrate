@@ -248,7 +248,6 @@ impl<T: Trait> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
 /// A BABE equivocation offence report.
 ///
 /// When a validator released two or more blocks at the same slot.
-#[allow(dead_code)]
 struct BabeEquivocationOffence<FullIdentification> {
 	/// A babe slot number in which this incident happened.
 	slot: u64,
