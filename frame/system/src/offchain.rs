@@ -139,7 +139,7 @@ pub mod new {
 		type Result = Vec<(Account<T>, T::Signature)>;
 
 		fn sign_message(&self, message: &[u8]) -> Self::Result {
-			self.for_all(|account| sign::<T, C>(message, account.public.clone()))
+			self.for_all(|account| C::sign(message, account.public.clone()))
 		}
 
 		fn sign<TPayload, F>(&self, f: F) -> Self::Result where
@@ -154,7 +154,7 @@ pub mod new {
 		type Result = Option<(Account<T>, T::Signature)>;
 
 		fn sign_message(&self, message: &[u8]) -> Self::Result {
-			self.for_any(|account| sign::<T, C>(message, account.public.clone()))
+			self.for_any(|account| C::sign(message, account.public.clone()))
 		}
 
 		fn sign<TPayload, F>(&self, f: F) -> Self::Result where
@@ -304,6 +304,35 @@ pub mod new {
 			+ Into<<Self::RuntimeAppPublic as RuntimeAppPublic>::Signature>
 			+ TryFrom<Signature>
 			+ Into<Signature>;
+
+		fn sign(payload: &[u8], public: Public) -> Option<Signature> {
+			let p: Self::GenericPublic = public.try_into().ok()?;
+			let x = Into::<Self::RuntimeAppPublic>::into(p);
+			x.sign(&payload)
+				.map(|x| {
+					let sig: Self::GenericSignature = x.into();
+					sig
+				})
+				.map(Into::into)
+		}
+
+		fn verify(payload: &[u8], public: Public, signature: Signature) -> bool {
+			let p: Self::GenericPublic = match public.try_into() {
+				Ok(a) => a,
+				_ => return false
+			};
+			let x = Into::<Self::RuntimeAppPublic>::into(p);
+			let signature: Self::GenericSignature = match signature.try_into() {
+				Ok(a) => a,
+				_ => return false
+			};
+			let signature = Into::<<
+				Self::RuntimeAppPublic as RuntimeAppPublic
+			>::Signature>::into(signature);
+
+			x.verify(&payload, &signature)
+		}
+
 	}
 
 	pub trait SigningTypes: crate::Trait {
@@ -338,6 +367,7 @@ pub mod new {
 			// TODO [ToDr] This probably should be replaced with `SignedPayload` somehow.
 			// i.e. split `create_transaction` into two parts and let it create some
 			// `SignedPayload`.
+			// Perhaps not really needed?
 			crypto: C::RuntimeAppPublic,
 			public: Self::Public,
 			account: Self::AccountId,
@@ -436,37 +466,14 @@ pub mod new {
 
 		fn sign<C: AppCrypto<T::Public, T::Signature>>(&self) -> Option<T::Signature> {
 			// TODO [ToDr] use `using_encoded` instead
-			sign::<T, C>(&self.encode(), self.public())
+			C::sign(&self.encode(), self.public())
 		}
 
 		// TODO [ToDr] Clean up variable names, code and conversions here and in sign.
 		fn verify<C: AppCrypto<T::Public, T::Signature>>(&self, signature: T::Signature) -> bool {
-			let p: C::GenericPublic = match self.public().try_into() {
-				Ok(a) => a,
-				_ => return false
-			};
-			let x = Into::<C::RuntimeAppPublic>::into(p);
-			let signature: C::GenericSignature = match signature.try_into() {
-				Ok(a) => a,
-				_ => return false
-			};
-			let signature = Into::<<
-				C::RuntimeAppPublic as RuntimeAppPublic
-			>::Signature>::into(signature);
 			// TODO [ToDr] use `using_encoded` instead
-			x.verify(&self.encode(), &signature)
+			C::verify(&self.encode(), self.public(), signature)
 		}
-	}
-
-	fn sign<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>>(payload: &[u8], public: T::Public) -> Option<T::Signature> {
-		let p: C::GenericPublic = public.try_into().ok()?;
-		let x = Into::<C::RuntimeAppPublic>::into(p);
-		x.sign(&payload)
-			.map(|x| {
-				let sig: C::GenericSignature = x.into();
-				sig
-			})
-			.map(Into::into)
 	}
 }
 
