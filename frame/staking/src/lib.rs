@@ -2865,10 +2865,10 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 		offenders: &[OffenceDetails<T::AccountId, pallet_session::historical::IdentificationTuple<T>>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
-	) {
+	) -> Result<(), ()> {
 		<Module<T>>::ensure_storage_upgraded();
 
-		if Self::era_election_status().is_open() {
+		if !Self::can_report() {
 			return Err(())
 		}
 
@@ -2877,7 +2877,8 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 		let active_era = {
 			let active_era = Self::active_era();
 			if active_era.is_none() {
-				return
+				// this offence need not be re-submitted.
+				return Ok(())
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
@@ -2898,7 +2899,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 
 			// reverse because it's more likely to find reports from recent eras.
 			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
-				None => return, // before bonding period. defensive - should be filtered out.
+				None => return Ok(()), // before bonding period. defensive - should be filtered out.
 				Some(&(ref slash_era, _)) => *slash_era,
 			}
 		};
