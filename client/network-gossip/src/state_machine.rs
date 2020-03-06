@@ -356,7 +356,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 		who: PeerId,
 		messages: Vec<ConsensusMessage>,
 	) {
-		trace!(target:"gossip", "Received {} messages from peer {}", messages.len(), who);
+		if !messages.is_empty() {
+			trace!(target: "gossip", "Received {} messages from peer {}", messages.len(), who);
+		}
+
 		for message in messages {
 			let message_hash = HashFor::<B>::hash(&message.data[..]);
 
