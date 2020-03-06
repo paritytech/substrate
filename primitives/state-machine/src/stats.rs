@@ -103,7 +103,7 @@ impl UsageInfo {
 		}
 	}
 	/// Add collected state machine to this state.
-	pub fn include_state_machine_states(&mut self, count: StateMachineStats) {
+	pub fn include_state_machine_states(&mut self, count: &StateMachineStats) {
 		self.modified_reads.ops += *count.reads_modified.borrow();
 		self.modified_reads.bytes += *count.bytes_read_modified.borrow();
 		self.overlay_writes.ops += *count.writes_overlay.borrow();
