@@ -803,7 +803,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				remote: peer,
 				protocols: self.protocol_name_by_engine.keys().cloned().collect(),
 			}
-
 		} else {
 			CustomMessageOutcome::None
 		}
