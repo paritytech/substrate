@@ -29,7 +29,6 @@ use sp_runtime::{
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionValidityError,
 	},
-	generic::CheckSignature,
 };
 use codec::{KeyedVec, Encode, Decode};
 use frame_system::Trait;
@@ -244,7 +243,7 @@ pub fn finalize_block() -> Header {
 #[inline(always)]
 fn check_signature(utx: &Extrinsic) -> Result<(), TransactionValidityError> {
 	use sp_runtime::traits::BlindCheckable;
-	utx.clone().check(CheckSignature::Yes).map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
+	utx.clone().check().map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
 }
 
 fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyExtrinsicResult {
