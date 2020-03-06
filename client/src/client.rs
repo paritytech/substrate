@@ -3454,7 +3454,6 @@ pub(crate) mod tests {
 
 	#[test]
 	fn cleans_up_closed_notification_sinks_on_import() {
-		use substrate_test_client::client_ext::ClientBlockImportExt;
 		use substrate_test_runtime_client::GenesisInit;
 
 		// NOTE: we need to build the client here instead of using the client provided by
@@ -3481,7 +3480,11 @@ pub(crate) mod tests {
 			.unwrap()
 			.block;
 
-		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+		let (header, extrinsics) = a1.deconstruct();
+		let mut import = BlockImportParams::new(BlockOrigin::Own, header);
+		import.body = Some(extrinsics);
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+		client.import_block(import, Default::default()).unwrap();
 		// let (header, extrinsics) = a1.deconstruct();
 		// let mut import = BlockImportParams::new(BlockOrigin::Own, header);
 		// import.body = Some(extrinsics);
