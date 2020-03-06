@@ -33,7 +33,7 @@ pub(crate) type NodeRef<A> = RefCellOf<Node<A>>;
 
 /// Identifier of a node. This is particularly handy to have a proper `PartialEq` implementation.
 /// Otherwise, self votes wouldn't have been indistinguishable.
-#[derive(PartialOrd, Ord, Clone)]
+#[derive(PartialOrd, Ord, Clone, PartialEq, Eq)]
 pub(crate) struct NodeId<A> {
 	/// An account-like identifier representing the node.
 	pub who: A,
@@ -47,14 +47,6 @@ impl<A> NodeId<A> {
 		Self { who, role }
 	}
 }
-
-impl<A: PartialEq> PartialEq for NodeId<A> {
-	fn eq(&self, other: &NodeId<A>) -> bool {
-		self.who == other.who && self.role == other.role
-	}
-}
-
-impl<A: PartialEq> Eq for NodeId<A> {}
 
 #[cfg(feature = "std")]
 impl<A: fmt::Debug> sp_std::fmt::Debug for NodeId<A> {

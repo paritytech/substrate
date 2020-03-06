@@ -25,6 +25,7 @@ sp-externalities = { version = "0.8.0-alpha.2", path = "../externalities" }
 
 [dev-dependencies]
 hex-literal = "0.2.1"
+sp-runtime = { version = "2.0.0-alpha.2", path = "../runtime" }
 
 [features]
 default = []
