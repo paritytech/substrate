@@ -346,11 +346,10 @@ where
 		value: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>
 	) -> Result<(), DispatchError> {
-		let sender = self.self_account.clone();
 		transfer(
 			gas_meter,
 			TransferCause::Call,
-			&sender,
+			&self.self_account.clone(),
 			&dest,
 			value,
 			self,
