@@ -228,7 +228,7 @@ impl transaction_payment::Trait for Runtime {
 	type Currency = balances::Module<Runtime>;
 	type OnTransactionTipPayment = ();
 	type OnTransactionFeePayment = ();
-	type Author = ();
+	type Author = Aura;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = ConvertInto;

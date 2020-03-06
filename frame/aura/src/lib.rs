@@ -76,10 +76,10 @@ decl_storage! {
 		LastTimestamp get(fn last) build(|_| 0.into()): T::Moment;
 
 		/// The current authorities
-		pub Authorities get(fn authorities): Vec<T::AuthorityId>;
+		pub Authorities get(fn authorities): Vec<(T::AccountId, T::AuthorityId)>;
 	}
 	add_extra_genesis {
-		config(authorities): Vec<T::AuthorityId>;
+		config(authorities): Vec<(T::AccountId, T::AuthorityId)>;
 		build(|config| Module::<T>::initialize_authorities(&config.authorities))
 	}
 }
@@ -89,7 +89,7 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	fn change_authorities(new: Vec<T::AuthorityId>) {
+	fn change_authorities(new: Vec<(T::AccountId, T::AuthorityId)>) {
 		<Authorities<T>>::put(&new);
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
@@ -99,7 +99,7 @@ impl<T: Trait> Module<T> {
 		<frame_system::Module<T>>::deposit_log(log.into());
 	}
 
-	fn initialize_authorities(authorities: &[T::AuthorityId]) {
+	fn initialize_authorities(authorities: &[(T::AccountId, T::AuthorityId)]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
 			<Authorities<T>>::put(authorities);
@@ -117,8 +117,8 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_genesis_session<'a, I: 'a>(validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
-		let authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-		Self::initialize_authorities(&authorities);
+		let authorities = validators.map(|(a, k)| (a.clone(), k)).collect::<Vec<_>>();
+		Self::initialize_authorities(&authorities[..]);
 	}
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
@@ -126,7 +126,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	{
 		// instant changes
 		if changed {
-			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
+			let next_authorities = validators.map(|(a, k)| (a.clone(), k)).collect::<Vec<_>>();
 			let last_authorities = <Module<T>>::authorities();
 			if next_authorities != last_authorities {
 				Self::change_authorities(next_authorities);
@@ -161,11 +161,31 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	}
 }
 
+impl<T: Trait> frame_support::traits::Author<T::AccountId> for Module<T> {
+	/// Fetch the author of the block.
+	///
+	/// This is safe to invoke from `System::on_initialize` until end of the block.
+	/// Returns default account id in between blocks.
+	fn author() -> T::AccountId {
+		let digest = <frame_system::Module<T>>::digest();
+		for (id, mut data) in digest.logs.iter().filter_map(|d| d.as_pre_runtime()) {
+			if id == AURA_ENGINE_ID {
+				if let Ok(slot_num) = u64::decode(&mut data) {
+					let authorities = Self::authorities();
+					return authorities[(slot_num % authorities.len() as u64) as usize].0.clone()
+				}
+			}
+		}
+
+		Default::default()
+	}
+}
+
 impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
 		Self::authorities()
 			.iter()
-			.any(|id| id == authority_id)
+			.any(|(_, id)| id == authority_id)
 	}
 }
 
