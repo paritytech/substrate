@@ -18,7 +18,7 @@
 
 #![warn(missing_docs)]
 
-use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomData};
+use std::{fmt, result, collections::HashMap, panic::UnwindSafe};
 use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
@@ -74,7 +74,7 @@ pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
 pub use in_memory_backend::InMemory as InMemoryBackend;
-pub use stats::{UsageInfo, UsageUnit};
+pub use stats::{UsageInfo, UsageUnit, StateMachineStats};
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
@@ -189,8 +189,18 @@ pub struct StateMachine<'a, B, H, N, Exec>
 	overlay: &'a mut OverlayedChanges,
 	extensions: Extensions,
 	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
-	_marker: PhantomData<(H, N)>,
 	storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
+	stats: StateMachineStats,
+}
+
+impl<'a, B, H, N, Exec> Drop for StateMachine<'a, B, H, N, Exec> where
+	H: Hasher,
+	B: Backend<H>,
+	N: ChangesTrieBlockNumber,
+{
+	fn drop(&mut self) {
+		self.backend.register_overlay_stats(&self.stats);
+	}
 }
 
 impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
@@ -220,8 +230,8 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			extensions,
 			overlay,
 			changes_trie_state,
-			_marker: PhantomData,
 			storage_transaction_cache: None,
+			stats: StateMachineStats::default(),
 		}
 	}
 
