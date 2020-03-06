@@ -54,6 +54,9 @@ fi
 # consensus-critical logic that has changed. the runtime wasm blobs must be
 # rebuilt.
 
+boldprint "make sure the release branch is available in shallow clones"
+git fetch --depth=${GIT_DEPTH:-100} origin release
+
 add_spec_version="$(git diff origin/release...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 	| sed -n -r "s/^\+[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
 sub_spec_version="$(git diff origin/release...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
