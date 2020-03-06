@@ -91,7 +91,7 @@ pub mod crypto {
 /// This pallet's configuration trait
 pub trait Trait: new::SendTransactionTypes<Call<Self>> {
 	/// The identifier type for an offchain worker.
-    type AuthorityId: new::AppCrypto<Self::Public, Self::Signature>;
+	type AuthorityId: new::AppCrypto<Self::Public, Self::Signature>;
 
 	/// The type to sign and submit transactions.
 	type SubmitSignedTransaction:
@@ -122,15 +122,15 @@ pub trait Trait: new::SendTransactionTypes<Call<Self>> {
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PricePayload<Public, BlockNumber> {
-    block_number: BlockNumber,
-    price: u32,
-    public: Public
+	block_number: BlockNumber,
+	price: u32,
+	public: Public
 }
 
 impl<T: new::SigningTypes> new::SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
-    fn public(&self) -> T::Public {
-        self.public.clone()
-    }
+	fn public(&self) -> T::Public {
+		self.public.clone()
+	}
 }
 
 decl_storage! {
@@ -214,12 +214,12 @@ decl_module! {
 			Ok(())
 		}
 
-        pub fn submit_price_unsigned_with_signed_payload(
-            origin,
-            price_payload: PricePayload<T::Public, T::BlockNumber>,
-            _signature: T::Signature
-        ) -> DispatchResult
-        {
+		pub fn submit_price_unsigned_with_signed_payload(
+			origin,
+			price_payload: PricePayload<T::Public, T::BlockNumber>,
+			_signature: T::Signature
+		) -> DispatchResult
+		{
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
@@ -228,7 +228,7 @@ decl_module! {
 			let current_block = <system::Module<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
 			Ok(())
-        }
+		}
 
 		/// Offchain Worker entry point.
 		///
@@ -435,24 +435,24 @@ impl<T: Trait> Module<T> {
 		let _result_raw: Result<(), String> = new::Signer::<T, T::AuthorityId>::send_raw_unsigned_transaction(call)
     		.map_err(|()| "Unable to submit unsigned transaction.".into());
 
-        // Method 2
-        let _result_signed_payload = new::Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
-            |account| PricePayload {
-                price,
-                block_number,
-                public: account.public.clone()
-            },
-            |payload, signature| {
-                Call::submit_price_unsigned_with_signed_payload(payload, signature)
-            }
-        );
+		// Method 2
+		let _result_signed_payload = new::Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
+			|account| PricePayload {
+				price,
+				block_number,
+				public: account.public.clone()
+			},
+			|payload, signature| {
+				Call::submit_price_unsigned_with_signed_payload(payload, signature)
+			}
+		);
 
-        // Method 3
-        let _result_signed_transaction = new::Signer::<T, T::AuthorityId>::all_accounts().send_signed_transaction(
-             |_account| Call::submit_price(price)
-        );
+		// Method 3
+		let _result_signed_transaction = new::Signer::<T, T::AuthorityId>::all_accounts().send_signed_transaction(
+			 |_account| Call::submit_price(price)
+		);
 
-        Ok(())
+		Ok(())
 		// T::SubmitUnsignedTransaction::submit_unsigned(call)
 		// 	.map_err(|()| "Unable to submit unsigned transaction.".into())
 
