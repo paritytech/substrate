@@ -499,7 +499,7 @@ mod tests {
 	}
 	impl pallet_transaction_payment::Trait for Runtime {
 		type Currency = Balances;
-		type Author = ();
+		type Author = frame_support::traits::TestAuthor;
 		type OnTransactionFeePayment = ();
 		type OnTransactionTipPayment = ();
 		type TransactionBaseFee = TransactionBaseFee;

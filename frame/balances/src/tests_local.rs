@@ -75,7 +75,7 @@ parameter_types! {
 }
 impl pallet_transaction_payment::Trait for Test {
 	type Currency = Module<Test>;
-	type Author = ();
+	type Author = frame_support::traits::TestAuthor;
 	type OnTransactionTipPayment = ();
 	type OnTransactionFeePayment = ();
 	type TransactionBaseFee = TransactionBaseFee;

@@ -222,10 +222,13 @@ pub trait Author<AccountId> {
 	fn author() -> AccountId;
 }
 
+/// Implement `Author` trait by using default accound id.
+pub struct TestAuthor;
+
 /// Return the default account id as author.
-impl<A: Default> Author<A> for () {
-	fn author() -> A {
-		A::default()
+impl<AccountId: Default> Author<AccountId> for TestAuthor {
+	fn author() -> AccountId {
+		AccountId::default()
 	}
 }
 
