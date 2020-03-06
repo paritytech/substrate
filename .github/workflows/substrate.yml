@@ -1,6 +1,9 @@
 name:                          Substrate
 
-on:                            [push]
+on:                            #[push]
+  push:
+    branches:
+      - master
 jobs:
   cargo-check-benches:
     name:                      Cargo check benches
