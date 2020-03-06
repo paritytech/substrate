@@ -3439,12 +3439,12 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn cleans_up_closed_notification_sinks_on_import() {
+	fn cleans_up_closed_notification_sinks_on_block_import() {
 		use substrate_test_runtime_client::GenesisInit;
 
-		// NOTE: we need to build the client here instead of using the client provided by
-		// test_runtime_client which won't have the `import_notification_sinks` and
-		// `finality_notification_sinks` methods since it won't be built under `test` config.
+		// NOTE: we need to build the client here instead of using the client
+		// provided by test_runtime_client otherwise we can't access the private
+		// `import_notification_sinks` and `finality_notification_sinks` fields.
 		let mut client =
 			new_in_mem::<
 				_,
@@ -3459,25 +3459,57 @@ pub(crate) mod tests {
 			)
 			.unwrap();
 
-		// Here we drop the notification channel directly
-		client.import_notification_stream();
-		// We keep this on "alive"
-		let _import_notif2 = client.import_notification_stream();
+		type TestClient = Client<
+			in_mem::Backend<Block>,
+			LocalCallExecutor<in_mem::Backend<Block>, sc_executor::NativeExecutor<LocalExecutor>>,
+			substrate_test_runtime_client::runtime::Block,
+			substrate_test_runtime_client::runtime::RuntimeApi,
+		>;
 
-		// Build & import a block that doesn't send a notification
-		let a1 = client
-			.new_block(Default::default())
-			.unwrap()
-			.build()
-			.unwrap()
-			.block;
+		let import_notif1 = client.import_notification_stream();
+		let import_notif2 = client.import_notification_stream();
+		let finality_notif1 = client.finality_notification_stream();
+		let finality_notif2 = client.finality_notification_stream();
 
-		let (header, extrinsics) = a1.deconstruct();
-		let mut import = BlockImportParams::new(BlockOrigin::Own, header);
-		import.body = Some(extrinsics);
-		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-		client.import_block(import, Default::default()).unwrap();
+		// for some reason I can't seem to use `ClientBlockImportExt`
+		let bake_and_import_block = |client: &mut TestClient, origin| {
+			let block = client
+				.new_block(Default::default())
+				.unwrap()
+				.build()
+				.unwrap()
+				.block;
 
+			let (header, extrinsics) = block.deconstruct();
+			let mut import = BlockImportParams::new(origin, header);
+			import.body = Some(extrinsics);
+			import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+			client.import_block(import, Default::default()).unwrap();
+		};
+
+		// after importing a block we should still have 4 notification sinks
+		// (2 import + 2 finality)
+		bake_and_import_block(&mut client, BlockOrigin::Own);
+		assert_eq!(client.import_notification_sinks.lock().len(), 2);
+		assert_eq!(client.finality_notification_sinks.lock().len(), 2);
+
+		// if we drop one import notification receiver and one finality
+		// notification receiver
+		drop(import_notif2);
+		drop(finality_notif2);
+
+		// the sinks should be cleaned up after block import
+		bake_and_import_block(&mut client, BlockOrigin::Own);
 		assert_eq!(client.import_notification_sinks.lock().len(), 1);
+		assert_eq!(client.finality_notification_sinks.lock().len(), 1);
+
+		// the same thing should happen if block import happens during initial
+		// sync
+		drop(import_notif1);
+		drop(finality_notif1);
+
+		bake_and_import_block(&mut client, BlockOrigin::NetworkInitialSync);
+		assert_eq!(client.import_notification_sinks.lock().len(), 0);
+		assert_eq!(client.finality_notification_sinks.lock().len(), 0);
 	}
 }
