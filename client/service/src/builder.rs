@@ -62,6 +62,8 @@ struct ServiceMetrics {
 	cpu_usage_percentage: Gauge<F64>,
 	network_per_sec_bytes: GaugeVec<U64>,
 	node_roles: Gauge<U64>,
+	database_cache: Gauge<U64>,
+	state_cache: Gauge<U64>,
 }
 
 impl ServiceMetrics {
@@ -87,7 +89,12 @@ impl ServiceMetrics {
 			node_roles: register(Gauge::new(
 				"node_roles", "The roles the node is running as",
 			)?, registry)?,
-
+			database_cache: register(Gauge::new(
+				"database_cache", "Database cache size",
+			)?, registry)?,
+			state_cache: register(Gauge::new(
+				"state_cache", "State cache size",
+			)?, registry)?,
 		})
 	}
 }
@@ -1078,6 +1085,11 @@ ServiceBuilder<
 
 				if let Some(best_seen_block) = best_seen_block {
 					metrics.block_height_number.with_label_values(&["sync_target"]).set(best_seen_block);
+				}
+
+				if let Some(info) = info.usage.as_ref() {
+					metrics.database_cache.set(info.memory.database_cache.as_bytes() as u64);
+					metrics.state_cache.set(info.memory.state_cache.as_bytes() as u64);
 				}
 			}
 
