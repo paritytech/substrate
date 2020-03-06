@@ -5,7 +5,7 @@ jobs:
   check-web-wasm:
     name:                  Check web wasm
     runs-on:               self-hosted
-    container:             generalbeck/rust-builder:1.41.0
+    container:             parity/rust-builder:latest
     env:
       CARGO_INCREMENTAL:   0
     steps:
@@ -16,21 +16,21 @@ jobs:
 #      - name:              Prepare for cache
 #        shell:             bash
 #        run:               rm -rf ${CARGO_HOME}.cargo/{git,registry}&&mkdir -p ${CARGO_HOME}.cargo/{git,registry}
-#      - name:                  Restore ${CARGO_HOME}.cargo/git
-#        uses:                  actions/cache@v1.1.2
-#        with:
-#          path:                ${CARGO_HOME}.cargo/git
-#          key:                 ${{ runner.OS }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-#      - name:                  Restore ${CARGO_HOME}.cargo/registry
-#        uses:                  actions/cache@v1.1.2
-#        with:
-#          path:                ${CARGO_HOME}.cargo/registry
-#          key:                 ${{ runner.OS }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-#      - name:                  Restore ./target
-#        uses:                  actions/cache@v1.1.2
-#        with:
-#          path:                target
-#          key:                 ${{ runner.OS }}-cargo-build-[check-web-wasm]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ${CARGO_HOME}.cargo/git
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ${CARGO_HOME}.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ${CARGO_HOME}.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[check-web-wasm]-${{ hashFiles('**/Cargo.lock') }}
       - name:              Environment
         run:               printenv
       - name:              Run cargo build wasm
