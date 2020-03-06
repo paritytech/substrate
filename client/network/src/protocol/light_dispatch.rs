@@ -860,7 +860,7 @@ pub mod tests {
 		assert_eq!(1, total_peers(&light_dispatch));
 		assert!(!light_dispatch.best_blocks.is_empty());
 
-		light_dispatch.on_disconnect(&mut network_interface, peer0);
+		light_dispatch.on_disconnect(&mut network_interface, &peer0);
 		assert_eq!(0, total_peers(&light_dispatch));
 		assert!(light_dispatch.best_blocks.is_empty());
 	}
