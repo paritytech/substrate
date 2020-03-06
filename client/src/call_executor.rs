@@ -151,19 +151,21 @@ where
 						trie_state,
 						recorder.clone(),
 					);
-
-					StateMachine::new(
-						&backend,
-						changes_trie_state,
-						&mut *changes.borrow_mut(),
-						&self.executor,
-						method,
-						call_data,
-						extensions.unwrap_or_default(),
-					)
-					// TODO: https://github.com/paritytech/substrate/issues/4455
-					// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-					.execute_using_consensus_failure_handler(execution_manager, native_call)
+					{
+						let changes = &mut *changes.borrow_mut();
+						let mut state_machine = StateMachine::new(
+							&backend,
+							changes_trie_state,
+							changes,
+							&self.executor,
+							method,
+							call_data,
+							extensions.unwrap_or_default(),
+						);
+						// TODO: https://github.com/paritytech/substrate/issues/4455
+						// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
+						state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
+					}
 				}),
 			None => StateMachine::new(
 				&state,
