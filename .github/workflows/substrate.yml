@@ -5,7 +5,7 @@ jobs:
   cargo-check-benches:
     name:                      Cargo check benches
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:1.41.1
+    container:                 generalbeck/rust-builder:1.41.0
     env:
       BUILD_DUMMY_WASM_BINARY: 1
       CARGO_INCREMENTAL:       0
@@ -13,19 +13,16 @@ jobs:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
-          fetch-depth:         100
-      - name:                  Checkout submodules
-        shell:                 bash
-        run:                   git submodule update --init --recursive
-      - name:                  Restore /usr/local/cargo/.cargo/git
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/git
+          path:                ${CARGO_HOME}.cargo/git
           key:                 ${{ runner.OS }}-cargo-git-[cargo-check-benches]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore /usr/local/cargo/.cargo/registry
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/registry
+          path:                ${CARGO_HOME}.cargo/registry
           key:                 ${{ runner.OS }}-cargo-registry-[cargo-check-benches]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
@@ -47,7 +44,7 @@ jobs:
   cargo-check-subkey:
     name:                      Cargo check subkey
     runs-on:                   [self-hosted]
-    container:                 generalbeck/rust-builder:1.41.1
+    container:                 generalbeck/rust-builder:1.41.0
     env:
       BUILD_DUMMY_WASM_BINARY: 1
       CARGO_INCREMENTAL:       0
@@ -55,19 +52,16 @@ jobs:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
-          fetch-depth:         100
-      - name:                  Checkout submodules
-        shell:                 bash
-        run:                   git submodule update --init --recursive
-      - name:                  Restore /usr/local/cargo/.cargo/git
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/git
+          path:                ${CARGO_HOME}.cargo/git
           key:                 ${{ runner.OS }}-cargo-git-[cargo-check-subkey]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore /usr/local/cargo/.cargo/registry
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/registry
+          path:                ${CARGO_HOME}.cargo/registry
           key:                 ${{ runner.OS }}-cargo-registry-[cargo-check-subkey]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
@@ -90,7 +84,7 @@ jobs:
   test-stable:
     name:                      Test linux stable
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:1.41.1
+    container:                 generalbeck/rust-builder:1.41.0
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -99,19 +93,16 @@ jobs:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
-          fetch-depth:         100
-      - name:                  Checkout submodules
-        shell:                 bash
-        run:                   git submodule update --init --recursive
-      - name:                  Restore /usr/local/cargo/.cargo/git
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/git
+          path:                ${CARGO_HOME}.cargo/git
           key:                 ${{ runner.OS }}-cargo-git-[test-stable]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore /usr/local/cargo/.cargo/registry
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/registry
+          path:                ${CARGO_HOME}.cargo/registry
           key:                 ${{ runner.OS }}-cargo-registry-[test-stable]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
@@ -134,7 +125,7 @@ jobs:
   test-frame-staking:
     name:                      Test frame staking
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:1.41.1
+    container:                 generalbeck/rust-builder:1.41.0
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -143,19 +134,16 @@ jobs:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
-          fetch-depth:         100
-      - name:                  Checkout submodules
-        shell:                 bash
-        run:                   git submodule update --init --recursive
-      - name:                  Restore /usr/local/cargo/.cargo/git
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/git
+          path:                ${CARGO_HOME}.cargo/git
           key:                 ${{ runner.OS }}-cargo-git-[test-frame-staking]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore /usr/local/cargo/.cargo/registry
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/registry
+          path:                ${CARGO_HOME}.cargo/registry
           key:                 ${{ runner.OS }}-cargo-registry-[test-frame-staking]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
@@ -177,7 +165,7 @@ jobs:
   test-wasmtime:
     name:                      Test wasmtime
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:1.41.1
+    container:                 generalbeck/rust-builder:1.41.0
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -186,19 +174,16 @@ jobs:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
-          fetch-depth:         100
-      - name:                  Checkout submodules
-        shell:                 bash
-        run:                   git submodule update --init --recursive
-      - name:                  Restore /usr/local/cargo/.cargo/git
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/git
+          path:                ${CARGO_HOME}.cargo/git
           key:                 ${{ runner.OS }}-cargo-git-[test-wasmtime]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore /usr/local/cargo/.cargo/registry
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/registry
+          path:                ${CARGO_HOME}.cargo/registry
           key:                 ${{ runner.OS }}-cargo-registry-[test-wasmtime]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
@@ -220,7 +205,7 @@ jobs:
   test-stable-int:
     name:                      Test linux stable int
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:1.41.1
+    container:                 generalbeck/rust-builder:1.41.0
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -229,19 +214,16 @@ jobs:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
-          fetch-depth:         100
-      - name:                  Checkout submodules
-        shell:                 bash
-        run:                   git submodule update --init --recursive
-      - name:                  Restore /usr/local/cargo/.cargo/git
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/git
+          path:                ${CARGO_HOME}.cargo/git
           key:                 ${{ runner.OS }}-cargo-git-[test-stable-int]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore /usr/local/cargo/.cargo/registry
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/registry
+          path:                ${CARGO_HOME}.cargo/registry
           key:                 ${{ runner.OS }}-cargo-registry-[test-stable-int]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
@@ -265,7 +247,7 @@ jobs:
   test-full-crypto-feature:
     name:                      Test full crypto feature
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:1.41.1
+    container:                 generalbeck/rust-builder:1.41.0
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -274,19 +256,16 @@ jobs:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
-          fetch-depth:         100
-      - name:                  Checkout submodules
-        shell:                 bash
-        run:                   git submodule update --init --recursive
-      - name:                  Restore /usr/local/cargo/.cargo/git
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/git
+          path:                ${CARGO_HOME}.cargo/git
           key:                 ${{ runner.OS }}-cargo-git-[test-full-crypto-feature]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore /usr/local/cargo/.cargo/registry
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/registry
+          path:                ${CARGO_HOME}.cargo/registry
           key:                 ${{ runner.OS }}-cargo-registry-[test-full-crypto-feature]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
@@ -312,15 +291,12 @@ jobs:
   linux-dependency-rules:
     name:                      Test dependency rules
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:1.41.1
+    container:                 generalbeck/rust-builder:1.41.0
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
-          fetch-depth:         100
-      - name:                  Checkout submodules
-        shell:                 bash
-        run:                   git submodule update --init --recursive
+          submodules:      recursive
       - name:                  Test dependency rules
         shell:                 bash
         run:                   .maintain/ensure-deps.sh
@@ -329,24 +305,21 @@ jobs:
     name:                      Build linux Substrate
     needs:                     [test-stable]
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:1.41.1
+    container:                 generalbeck/rust-builder:1.41.0
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
-          fetch-depth:         100
-      - name:                  Checkout submodules
-        shell:                 bash
-        run:                   git submodule update --init --recursive
-      - name:                  Restore /usr/local/cargo/.cargo/git
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/git
+          path:                ${CARGO_HOME}.cargo/git
           key:                 ${{ runner.OS }}-cargo-git-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore /usr/local/cargo/.cargo/registry
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/registry
+          path:                ${CARGO_HOME}.cargo/registry
           key:                 ${{ runner.OS }}-cargo-registry-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
@@ -367,24 +340,21 @@ jobs:
     name:                      Build linux Subkey
     needs:                     [test-stable]
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:1.41.1
+    container:                 generalbeck/rust-builder:1.41.0
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
-          fetch-depth:         100
-      - name:                  Checkout submodules
-        shell:                 bash
-        run:                   git submodule update --init --recursive
-      - name:                  Restore /usr/local/cargo/.cargo/git
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/git
+          path:                ${CARGO_HOME}.cargo/git
           key:                 ${{ runner.OS }}-cargo-git-[build-subkey]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore /usr/local/cargo/.cargo/registry
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/registry
+          path:                ${CARGO_HOME}.cargo/registry
           key:                 ${{ runner.OS }}-cargo-registry-[build-subkey]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
@@ -405,24 +375,21 @@ jobs:
     name:                      Build Rust doc release
     needs:                     [test-stable]
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:1.41.1
+    container:                 generalbeck/rust-builder:1.41.0
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@v2
         with:
-          fetch-depth:         100
-      - name:                  Checkout submodules
-        shell:                 bash
-        run:                   git submodule update --init --recursive
-      - name:                  Restore /usr/local/cargo/.cargo/git
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/git
+          path:                ${CARGO_HOME}.cargo/git
           key:                 ${{ runner.OS }}-cargo-git-[build-rust-doc-release]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore /usr/local/cargo/.cargo/registry
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
         uses:                  actions/cache@v1.1.2
         with:
-          path:                /usr/local/cargo/.cargo/registry
+          path:                ${CARGO_HOME}.cargo/registry
           key:                 ${{ runner.OS }}-cargo-registry-[build-rust-doc-release]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
