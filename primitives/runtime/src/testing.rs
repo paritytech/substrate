@@ -24,10 +24,11 @@ use crate::traits::{
 	SignedExtension, Dispatchable,
 };
 use crate::traits::ValidateUnsigned;
-use crate::{generic::{self, CheckSignature}, KeyTypeId, ApplyExtrinsicResult};
+use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
-use crate::transaction_validity::{TransactionValidity, TransactionValidityError, InvalidTransaction};
+use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
+
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct UintAuthorityId(pub u64);
@@ -293,69 +294,12 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	}
 }
 
-/// Test validity.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-pub enum TestValidity {
-	/// Valid variant that will pass all checks.
-	Valid,
-	/// Variant with invalid signature.
-	///
-	/// Will fail signature check.
-	SignatureInvalid(TransactionValidityError),
-	/// Variant with invalid logic.
-	///
-	/// Will fail all checks.
-	OtherInvalid(TransactionValidityError),
-}
-
-/// Test transaction.
+/// Test transaction, tuple of (sender, call, signed_extra)
+/// with index only used if sender is some.
 ///
-/// Used to mock actual transaction.
+/// If sender is some then the transaction is signed otherwise it is unsigned.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-pub struct TestXt<Call, Extra> {
-	/// Signature with extra.
-	///
-	/// if some, then the transaction is signed. Transaction is unsigned otherwise.
-	pub signature: Option<(u64, Extra)>,
-	/// Validity.
-	///
-	/// Instantiate invalid variant and transaction will fail correpsonding checks.
-	pub validity: TestValidity,
-	/// Call.
-	pub call: Call,
-}
-
-impl<Call, Extra> TestXt<Call, Extra> {
-	/// New signed test `TextXt`.
-	pub fn new_signed(signature: (u64, Extra), call: Call) -> Self {
-		TestXt {
-			signature: Some(signature),
-			validity: TestValidity::Valid,
-			call,
-		}
-	}
-
-	/// New unsigned test `TextXt`.
-	pub fn new_unsigned(call: Call) -> Self {
-		TestXt {
-			signature: None,
-			validity: TestValidity::Valid,
-			call,
-		}
-	}
-
-	/// Build invalid variant of `TestXt`.
-	pub fn invalid(mut self, err: TransactionValidityError) -> Self {
-		self.validity = TestValidity::OtherInvalid(err);
-		self
-	}
-
-	/// Build badly signed variant of `TestXt`.
-	pub fn badly_signed(mut self) -> Self {
-		self.validity = TestValidity::SignatureInvalid(TransactionValidityError::Invalid(InvalidTransaction::BadProof));
-		self
-	}
- }
+pub struct TestXt<Call, Extra>(pub Option<(u64, Extra)>, pub Call);
 
 // Non-opaque extrinsics always 0.
 parity_util_mem::malloc_size_of_is_0!(any: TestXt<Call, Extra>);
@@ -368,39 +312,24 @@ impl<Call, Extra> Serialize for TestXt<Call, Extra> where TestXt<Call, Extra>: E
 
 impl<Call, Extra> Debug for TestXt<Call, Extra> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "TestXt({:?}, {}, ...)",
-			self.signature.as_ref().map(|x| &x.0),
-			if let TestValidity::Valid = self.validity { "valid" } else { "invalid" }
-		)
+		write!(f, "TestXt({:?}, ...)", self.0.as_ref().map(|x| &x.0))
 	}
 }
 
 impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Call, Extra> {
 	type Checked = Self;
-	fn check(self, signature: CheckSignature, _: &Context) -> Result<Self::Checked, TransactionValidityError> {
-		match self.validity {
-			TestValidity::Valid => Ok(self),
-			TestValidity::SignatureInvalid(e) =>
-				if let CheckSignature::No = signature {
-					Ok(self)
-				} else {
-					Err(e)
-				},
-			TestValidity::OtherInvalid(e)  => Err(e),
-		}
-	 }
+	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> { Ok(self) }
 }
-
 impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
 	type Call = Call;
 	type SignaturePayload = (u64, Extra);
 
 	fn is_signed(&self) -> Option<bool> {
-		Some(self.signature.is_some())
+		Some(self.0.is_some())
 	}
 
-	fn new(call: Call, signature: Option<Self::SignaturePayload>) -> Option<Self> {
-		Some(TestXt { signature, call, validity: TestValidity::Valid })
+	fn new(c: Call, sig: Option<Self::SignaturePayload>) -> Option<Self> {
+		Some(TestXt(sig, c))
 	}
 }
 
@@ -429,14 +358,14 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> ApplyExtrinsicResult {
-		let maybe_who = if let Some((who, extra)) = self.signature {
-			Extra::pre_dispatch(extra, &who, &self.call, info, len)?;
+		let maybe_who = if let Some((who, extra)) = self.0 {
+			Extra::pre_dispatch(extra, &who, &self.1, info, len)?;
 			Some(who)
 		} else {
-			Extra::pre_dispatch_unsigned(&self.call, info, len)?;
+			Extra::pre_dispatch_unsigned(&self.1, info, len)?;
 			None
 		};
 
-		Ok(self.call.dispatch(maybe_who.into()).map_err(Into::into))
+		Ok(self.1.dispatch(maybe_who.into()).map_err(Into::into))
 	}
 }
