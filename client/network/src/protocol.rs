@@ -779,7 +779,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	/// Called by peer when it is disconnecting
-	pub fn on_peer_disconnected(&mut self, peer: PeerId) {
+	pub fn on_peer_disconnected(&mut self, peer: PeerId) -> CustomMessageOutcome<B> {
 		if self.important_peers.contains(&peer) {
 			warn!(target: "sync", "Reserved peer {} disconnected", peer);
 		} else {
@@ -796,7 +796,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			self.light_dispatch.on_disconnect(LightDispatchIn {
 				behaviour: &mut self.behaviour,
 				peerset: self.peerset_handle.clone(),
-			}, peer);
+			}, &peer);
+
+			// Notify all the notification protocols as closed.
+			CustomMessageOutcome::NotificationStreamClosed {
+				remote: peer,
+				protocols: self.protocol_name_by_engine.keys().cloned().collect(),
+			}
+
+		} else {
+			CustomMessageOutcome::None
 		}
 	}
 
@@ -2063,12 +2072,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				CustomMessageOutcome::None
 			}
 			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
-				self.on_peer_disconnected(peer_id.clone());
-				// Notify all the notification protocols as closed.
-				CustomMessageOutcome::NotificationStreamClosed {
-					remote: peer_id,
-					protocols: self.protocol_name_by_engine.keys().cloned().collect(),
-				}
+				self.on_peer_disconnected(peer_id.clone())
 			},
 			GenericProtoOut::CustomMessage { peer_id, message } =>
 				self.on_custom_message(peer_id, message),
