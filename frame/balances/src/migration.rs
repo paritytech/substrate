@@ -74,8 +74,9 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() {
 		// The items in Kusama that would result in a ref count being incremented.
 		if have_storage_value(b"Democracy", b"Proxy", &hash) { refs += 1 }
 		// We skip Recovered since it's being replaced anyway.
-		let mut prefixed_hash = twox_64(&b":session:keys"[..]).to_vec();
-		prefixed_hash.extend(&b":session:keys"[..]);
+		let k = b":session:keys".encode();
+		let mut prefixed_hash = twox_64(&k[..]).to_vec();
+		prefixed_hash.extend(&k[..]);
 		prefixed_hash.extend(&hash[..]);
 		if have_storage_value(b"Session", b"NextKeys", &prefixed_hash) { refs += 1 }
 		if have_storage_value(b"Staking", b"Bonded", &hash) { refs += 1 }
