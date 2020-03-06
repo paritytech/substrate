@@ -437,7 +437,11 @@ mod tests {
 
 	#[test]
 	fn native_executor_registers_custom_interface() {
-		let executor = NativeExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None);
+		let executor = NativeExecutor::<MyExecutor>::new(
+			WasmExecutionMethod::Interpreted,
+			None,
+			None,
+		);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
 			assert_eq!(
 				executor.wasm.host_functions.iter().filter(|f| f == &function).count(),
