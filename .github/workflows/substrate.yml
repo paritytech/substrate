@@ -1,6 +1,6 @@
 name:                          Substrate
 
-on:                            #[push]
+on:                            [push]
 #  push:
 #    branches:
 #      - master
