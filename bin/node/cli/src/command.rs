@@ -94,7 +94,7 @@ where
 			);
 
 			let service_builder = new_full_start!(config).0;
-			node_transaction_factory::factory::<FactoryState<_>, _, _, _, _, _>(
+			node_transaction_factory::factory(
 				factory_state,
 				service_builder.client(),
 				service_builder.select_chain()
