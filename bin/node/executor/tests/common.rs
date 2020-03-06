@@ -71,8 +71,13 @@ pub fn executor_call<
 	native_call: Option<NC>,
 ) -> (Result<NativeOrEncoded<R>>, bool) {
 	let mut t = t.ext();
-	let runtime_code = RuntimeCode::from_externalities(&t)
-		.expect("Code should be part of the externalities");
+
+	let runtime_code = RuntimeCode {
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(COMPACT_CODE.into()),
+		hash: vec![1, 2, 3],
+		heap_pages: None,
+	};
+
 	executor().call::<R, NC>(
 		&mut t,
 		&runtime_code,

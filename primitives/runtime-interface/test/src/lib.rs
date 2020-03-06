@@ -40,6 +40,7 @@ fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 	);
 	executor.call_in_wasm(
 		&WASM_BINARY[..],
+		None,
 		method,
 		&[],
 		&mut ext_ext,

@@ -260,7 +260,8 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 	let next_header = make_next_header(&request.header);
 
 	// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
-	let runtime_code = sp_state_machine::backend::get_runtime_code(&trie_backend)?;
+	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_backend);
+	let runtime_code = backend_runtime_code.runtime_code()?;
 
 	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
 		&trie_backend,

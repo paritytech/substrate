@@ -190,7 +190,7 @@ pub struct StateMachine<'a, B, H, N, Exec>
 	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 	_marker: PhantomData<(H, N)>,
 	storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
-	runtime_code: &'a RuntimeCode,
+	runtime_code: &'a RuntimeCode<'a>,
 }
 
 impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
@@ -791,6 +791,7 @@ mod tests {
 		fn call_in_wasm(
 			&self,
 			_: &[u8],
+			_: Option<Vec<u8>>,
 			_: &str,
 			_: &[u8],
 			_: &mut dyn Externalities,

@@ -90,7 +90,11 @@ fn construct_block<E: Externalities>(
 		digest: Default::default(),
 	};
 
-	let runtime_code = RuntimeCode::from_externalities(ext).expect("`ext` provides `:code`");
+	let runtime_code = RuntimeCode {
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(COMPACT_CODE.into()),
+		hash: vec![1, 2, 3],
+		heap_pages: None,
+	};
 
 	// execute the block to get the real header.
 	executor.call::<NeverNativeValue, fn() -> _>(
@@ -167,12 +171,15 @@ fn bench_execute_block(c: &mut Criterion) {
 				ExecutionMethod::Wasm(wasm_method) => (false, *wasm_method),
 			};
 			let executor = NativeExecutor::new(wasm_method, None);
+			let runtime_code = RuntimeCode {
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(COMPACT_CODE.into()),
+				hash: vec![1, 2, 3],
+				heap_pages: None,
+			};
 
 			// Get the runtime version to initialize the runtimes cache.
 			{
 				let mut test_ext = new_test_ext(&genesis_config);
-				let runtime_code = RuntimeCode::from_externalities(&test_ext.ext())
-					.expect("`test_ext` provides `:code`");
 				executor.runtime_version(&mut test_ext.ext(), &runtime_code).unwrap();
 			}
 
@@ -181,8 +188,6 @@ fn bench_execute_block(c: &mut Criterion) {
 			b.iter_batched_ref(
 				|| new_test_ext(&genesis_config),
 				|test_ext| {
-					let runtime_code = RuntimeCode::from_externalities(&test_ext.ext())
-						.expect("`test_ext` provides `:code`");
 					for block in blocks.iter() {
 						executor.call::<NeverNativeValue, fn() -> _>(
 							&mut test_ext.ext(),

@@ -105,12 +105,37 @@ pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	) -> (Result<crate::NativeOrEncoded<R>, Self::Error>, bool);
 }
 
+/// Something that can fetch the runtime `:code`.
+pub trait FetchRuntimeCode {
+	/// Fetch the runtime `:code`.
+	///
+	/// If the `:code` could not be found/not available, `None` should be returned.
+	fn fetch_runtime_code(&self) -> Option<Vec<u8>>;
+}
+
+/// Wrapper to use a `u8` slice or `Vec` as [`FetchRuntimeCode`].
+pub struct WrappedRuntimeCode<'a>(pub std::borrow::Cow<'a, [u8]>);
+
+impl<'a> FetchRuntimeCode for WrappedRuntimeCode<'a> {
+	fn fetch_runtime_code(&self) -> Option<Vec<u8>> {
+		Some(self.0.to_vec())
+	}
+}
+
+/// Type that implements [`FetchRuntimeCode`] and always returns `None`.
+pub struct NoneFetchRuntimeCode;
+
+impl FetchRuntimeCode for NoneFetchRuntimeCode {
+	fn fetch_runtime_code(&self) -> Option<Vec<u8>> {
+		None
+	}
+}
 
 /// The Wasm code of a Substrate runtime.
-#[derive(Debug, Clone, codec::Encode, codec::Decode)]
-pub struct RuntimeCode {
-	/// The actual Wasm code as binary blob.
-	pub code: Vec<u8>,
+#[derive(Clone)]
+pub struct RuntimeCode<'a> {
+	/// The code fetcher that can be used to lazily fetch the code.
+	pub code_fetcher: &'a dyn FetchRuntimeCode,
 	/// The optional heap pages this `code` should be executed with.
 	///
 	/// If `None` are given, the default value of the executor will be used.
@@ -122,40 +147,28 @@ pub struct RuntimeCode {
 	pub hash: Vec<u8>,
 }
 
-impl PartialEq for RuntimeCode {
+impl<'a> PartialEq for RuntimeCode<'a> {
 	fn eq(&self, other: &Self) -> bool {
 		self.hash == other.hash
 	}
 }
 
-impl RuntimeCode {
-	/// Create an `RuntimeCode` instance from the given `Externalities`.
-	///
-	/// Extracts the code and the heap pages using the well known keys.
-	///
-	/// Returns an error if the code could not be found.
-	pub fn from_externalities(ext: &dyn Externalities) -> Result<Self, CodeNotFound> {
-		let code = ext.storage(sp_storage::well_known_keys::CODE).ok_or(CodeNotFound)?;
-		let hash = ext.storage_hash(sp_storage::well_known_keys::CODE).ok_or(CodeNotFound)?;
-		let heap_pages = ext.storage(sp_storage::well_known_keys::HEAP_PAGES)
-			.and_then(|hp| codec::Decode::decode(&mut &hp[..]).ok());
-
-		Ok(Self {
-			code,
-			hash,
-			heap_pages,
-		})
-	}
-
+impl<'a> RuntimeCode<'a> {
 	/// Create an empty instance.
 	///
 	/// This is only useful for tests that don't want to execute any code.
 	pub fn empty() -> Self {
 		Self {
-			code: Vec::new(),
+			code_fetcher: &NoneFetchRuntimeCode,
 			hash: Vec::new(),
 			heap_pages: None,
 		}
+	}
+}
+
+impl<'a> FetchRuntimeCode for RuntimeCode<'a> {
+	fn fetch_runtime_code(&self) -> Option<Vec<u8>> {
+		self.code_fetcher.fetch_runtime_code()
 	}
 }
 
@@ -175,9 +188,15 @@ pub trait CallInWasm: Send + Sync {
 	/// to decode the arguments for the method.
 	///
 	/// Returns the SCALE encoded return value of the method.
+	///
+	/// # Note
+	///
+	/// If `code_hash` is `Some(_)` the `wasm_code` module and instance will be cached internally,
+	/// otherwise it is thrown away after the call.
 	fn call_in_wasm(
 		&self,
-		wasm_blob: &[u8],
+		wasm_code: &[u8],
+		code_hash: Option<Vec<u8>>,
 		method: &str,
 		call_data: &[u8],
 		ext: &mut dyn Externalities,

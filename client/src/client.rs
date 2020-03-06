@@ -1113,18 +1113,20 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		method: &str,
 		call_data: &[u8]
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-        // Make sure we include the `:code` and `:heap_pages` in the execution proof to be
+		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
 		// backwards compatible.
 		//
 		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
 		let code_proof = self.read_proof(
 			id,
-			&[well_known_keys::CODE.to_vec(), well_known_keys::HEAP_PAGES.to_vec()],
+			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
 		)?;
 
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
-		prove_execution(state, header, &self.executor, method, call_data)
+		prove_execution(state, header, &self.executor, method, call_data).map(|(r, p)| {
+			(r, StorageProof::merge(vec![p, code_proof]))
+		})
 	}
 
 	fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, StorageProof)> {

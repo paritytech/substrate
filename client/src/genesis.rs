@@ -89,8 +89,8 @@ mod tests {
 		};
 		let hash = header.hash();
 		let mut overlay = OverlayedChanges::default();
-		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
-			.expect("Code is part of the backend");
+		let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
+		let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
 		StateMachine::new(
 			backend,
@@ -166,8 +166,8 @@ mod tests {
 
 		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
-		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
-			.expect("Code is part of the backend");
+		let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
+		let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
@@ -197,8 +197,8 @@ mod tests {
 
 		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
-		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
-			.expect("Code is part of the backend");
+		let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
+		let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
@@ -228,8 +228,8 @@ mod tests {
 
 		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
-		let runtime_code = sp_state_machine::backend::get_runtime_code(&backend)
-			.expect("Code is part of the backend");
+		let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
+		let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
 		let r = StateMachine::new(

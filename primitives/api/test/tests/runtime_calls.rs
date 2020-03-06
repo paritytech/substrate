@@ -165,7 +165,7 @@ fn record_proof_works() {
 	let storage_root = longest_chain.best_chain().unwrap().state_root().clone();
 
 	let runtime_code = sp_core::traits::RuntimeCode {
-		code: client.code_at(&block_id).unwrap(),
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(client.code_at(&block_id).unwrap().into()),
 		hash: vec![1],
 		heap_pages: None,
 	};

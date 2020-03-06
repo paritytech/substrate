@@ -53,9 +53,9 @@ pub trait RuntimeInfo {
 	fn native_version(&self) -> &NativeVersion;
 
 	/// Extract [`RuntimeVersion`](sp_version::RuntimeVersion) of the given `runtime_code`.
-	fn runtime_version<E: Externalities>(
+	fn runtime_version(
 		&self,
-		ext: &mut E,
+		ext: &mut dyn Externalities,
 		runtime_code: &sp_core::traits::RuntimeCode,
 	) -> error::Result<RuntimeVersion>;
 }
@@ -81,6 +81,7 @@ mod tests {
 		);
 		let res = executor.call_in_wasm(
 			&WASM_BINARY[..],
+			None,
 			"test_empty_return",
 			&[],
 			&mut ext,

@@ -406,8 +406,12 @@ mod tests {
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
 			let mut ext = ext.ext();
-			let runtime_code = RuntimeCode::from_externalities(&ext)
-				.expect("Code is part of the externalities");
+			let runtime_code = RuntimeCode {
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				hash: Vec::new(),
+				heap_pages: None,
+			};
+
 			executor().call::<NeverNativeValue, fn() -> _>(
 				&mut ext,
 				&runtime_code,
@@ -502,8 +506,12 @@ mod tests {
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
 			let mut ext = ext.ext();
-			let runtime_code = RuntimeCode::from_externalities(&ext)
-				.expect("Code is part of the externalities");
+			let runtime_code = RuntimeCode {
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				hash: Vec::new(),
+				heap_pages: None,
+			};
+
 			executor().call::<NeverNativeValue, fn() -> _>(
 				&mut ext,
 				&runtime_code,

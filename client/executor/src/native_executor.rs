@@ -16,7 +16,7 @@
 
 use crate::{
 	RuntimeInfo, error::{Error, Result},
-	wasm_runtime::{RuntimeCache, WasmExecutionMethod, CodeSource},
+	wasm_runtime::{RuntimeCache, WasmExecutionMethod},
 };
 use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
@@ -111,7 +111,7 @@ impl WasmExecutor {
 		}
 	}
 
-	/// Execute the given closure `f` with the latest runtime (based on the `CODE` key in `ext`).
+	/// Execute the given closure `f` with the latest runtime (based on `runtime_code`).
 	///
 	/// The closure `f` is expected to return `Err(_)` when there happened a `panic!` in native code
 	/// while executing the runtime in Wasm. If a `panic!` occurred, the runtime is invalidated to
@@ -124,9 +124,9 @@ impl WasmExecutor {
 	/// runtime is invalidated on any `panic!` to prevent a poisoned state. `ext` is already
 	/// implicitly handled as unwind safe, as we store it in a global variable while executing the
 	/// native runtime.
-	fn with_instance<'c, R, F>(
+	fn with_instance<R, F>(
 		&self,
-		code: CodeSource<'c>,
+		runtime_code: &RuntimeCode,
 		ext: &mut dyn Externalities,
 		f: F,
 	) -> Result<R>
@@ -137,7 +137,7 @@ impl WasmExecutor {
 		) -> Result<Result<R>>,
 	{
 		match self.cache.with_instance(
-			code,
+			runtime_code,
 			ext,
 			self.method,
 			self.default_heap_pages,
@@ -158,17 +158,40 @@ impl WasmExecutor {
 impl sp_core::traits::CallInWasm for WasmExecutor {
 	fn call_in_wasm(
 		&self,
-		wasm_blob: &[u8],
+		wasm_code: &[u8],
+		code_hash: Option<Vec<u8>>,
 		method: &str,
 		call_data: &[u8],
 		ext: &mut dyn Externalities,
 	) -> std::result::Result<Vec<u8>, String> {
-		self.with_instance(CodeSource::Custom(wasm_blob), ext, |instance, _, mut ext| {
-			with_externalities_safe(
-				&mut **ext,
-				move || instance.call(method, call_data),
+		if let Some(hash) = code_hash {
+			let code = RuntimeCode {
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(wasm_code.into()),
+				hash: hash,
+				heap_pages: None,
+			};
+
+			self.with_instance(&code, ext, |instance, _, mut ext| {
+				with_externalities_safe(
+					&mut **ext,
+					move || instance.call(method, call_data),
+				)
+			}).map_err(|e| e.to_string())
+		} else {
+			let module = crate::wasm_runtime::create_wasm_runtime_with_code(
+				self.method,
+				self.default_heap_pages,
+				&wasm_code,
+				self.host_functions.to_vec(),
+				self.allow_missing_func_imports,
 			)
-		}).map_err(|e| e.to_string())
+				.map_err(|e| format!("Failed to create module: {:?}", e))?;
+
+			module.new_instance()
+				  .map_err(|e| format!("Failed to create instance: {:?}", e))?
+			.call(method, call_data)
+			.map_err(|e| format!("Error calling method: {:?}", e))
+		}
 	}
 }
 
@@ -219,10 +242,12 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 
 	fn runtime_version(
 		&self,
-		ext: &mut E,
+		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.wasm.with_instance(CodeSource::Externalities, ext,
+		self.wasm.with_instance(
+			runtime_code,
+			ext,
 			|_instance, version, _ext|
 				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
 		)
@@ -237,7 +262,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(
 		&self,
-		ext: &mut E,
+		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
@@ -246,7 +271,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	) -> (Result<NativeOrEncoded<R>>, bool) {
 		let mut used_native = false;
 		let result = self.wasm.with_instance(
-			CodeSource::Externalities,
+			runtime_code,
 			ext,
 			|instance, onchain_version, mut ext| {
 				let onchain_version = onchain_version.ok_or_else(
@@ -326,11 +351,12 @@ impl<D: NativeExecutionDispatch> sp_core::traits::CallInWasm for NativeExecutor<
 	fn call_in_wasm(
 		&self,
 		wasm_blob: &[u8],
+		code_hash: Option<Vec<u8>>,
 		method: &str,
 		call_data: &[u8],
 		ext: &mut dyn Externalities,
 	) -> std::result::Result<Vec<u8>, String> {
-		sp_core::traits::CallInWasm::call_in_wasm(&self.wasm, wasm_blob, method, call_data, ext)
+		self.wasm.call_in_wasm(wasm_blob, code_hash, method, call_data, ext)
 	}
 }
 

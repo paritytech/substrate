@@ -360,21 +360,41 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Op
 	Some(root)
 }
 
-/// Get the runtime code from the given `backend`.
-///
-/// Returns an error if the `:code` could not be found.
-pub fn get_runtime_code<H: Hasher, B: Backend<H>>(backend: &B) -> Result<RuntimeCode, &'static str>
-	where H::Out: Encode,
-{
-	let code = backend.storage(well_known_keys::CODE)
-		.ok()
-		.flatten()
-		.ok_or("`:code` not found")?;
-	let hash = H::hash(&code).encode();
-	let heap_pages = backend.storage(well_known_keys::HEAP_PAGES)
-		.ok()
-		.flatten()
-		.and_then(|d| Decode::decode(&mut &d[..]).ok());
+/// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].
+pub struct BackendRuntimeCode<'a, B, H> {
+	backend: &'a B,
+	_marker: std::marker::PhantomData<H>,
+}
 
-	Ok(RuntimeCode { code, hash, heap_pages })
+impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode for
+	BackendRuntimeCode<'a, B, H>
+{
+	fn fetch_runtime_code(&self) -> Option<Vec<u8>> {
+		self.backend.storage(well_known_keys::CODE).ok().flatten()
+	}
+}
+
+impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H> where H::Out: Encode {
+	/// Create a new instance.
+	pub fn new(backend: &'a B) -> Self {
+		Self {
+			backend,
+			_marker: std::marker::PhantomData,
+		}
+	}
+
+	/// Return the [`RuntimeCode`] build from the wrapped `backend`.
+	pub fn runtime_code(&self) -> Result<RuntimeCode, &'static str> {
+		let hash = self.backend.storage_hash(well_known_keys::CODE)
+			.ok()
+			.flatten()
+			.ok_or("`:code` hash not found")?
+			.encode();
+		let heap_pages = self.backend.storage(well_known_keys::HEAP_PAGES)
+			.ok()
+			.flatten()
+			.and_then(|d| Decode::decode(&mut &d[..]).ok());
+
+		Ok(RuntimeCode { code_fetcher: self, hash, heap_pages })
+	}
 }
