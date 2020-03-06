@@ -79,7 +79,7 @@ impl Trait for Test {
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig::<Test>{
-		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),
+		authorities: authorities.into_iter().map(|a| (a, UintAuthorityId(a).to_public_key())).collect(),
 	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
