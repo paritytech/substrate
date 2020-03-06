@@ -20,7 +20,7 @@ use super::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::{Bounded, Dispatchable};
+use sp_runtime::traits::Bounded;
 
 use crate::Module as Balances;
 

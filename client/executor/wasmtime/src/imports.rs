@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::state_holder::StateHolder;
+use crate::state_holder;
 use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{Function, Value, ValueType};
 use std::any::Any;
@@ -34,7 +34,6 @@ pub struct Imports {
 /// Goes over all imports of a module and prepares a vector of `Extern`s that can be used for
 /// instantiation of the module. Returns an error if there are imports that cannot be satisfied.
 pub fn resolve_imports(
-	state_holder: &StateHolder,
 	module: &Module,
 	host_functions: &[&'static dyn Function],
 	heap_pages: u32,
@@ -58,7 +57,6 @@ pub fn resolve_imports(
 			}
 			_ => resolve_func_import(
 				module,
-				state_holder,
 				import_ty,
 				host_functions,
 				allow_missing_func_imports,
@@ -112,7 +110,6 @@ fn resolve_memory_import(
 
 fn resolve_func_import(
 	module: &Module,
-	state_holder: &StateHolder,
 	import_ty: &ImportType,
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
@@ -152,7 +149,7 @@ fn resolve_func_import(
 		)));
 	}
 
-	Ok(HostFuncHandler::new(&state_holder, *host_func).into_extern(module))
+	Ok(HostFuncHandler::new(*host_func).into_extern(module))
 }
 
 /// Returns `true` if `lhs` and `rhs` represent the same signature.
@@ -163,14 +160,12 @@ fn signature_matches(lhs: &wasmtime::FuncType, rhs: &wasmtime::FuncType) -> bool
 /// This structure implements `Callable` and acts as a bridge between wasmtime and
 /// substrate host functions.
 struct HostFuncHandler {
-	state_holder: StateHolder,
 	host_func: &'static dyn Function,
 }
 
 impl HostFuncHandler {
-	fn new(state_holder: &StateHolder, host_func: &'static dyn Function) -> Self {
+	fn new(host_func: &'static dyn Function) -> Self {
 		Self {
-			state_holder: state_holder.clone(),
 			host_func,
 		}
 	}
@@ -188,7 +183,7 @@ impl Callable for HostFuncHandler {
 		wasmtime_params: &[Val],
 		wasmtime_results: &mut [Val],
 	) -> Result<(), wasmtime::Trap> {
-		let unwind_result = self.state_holder.with_context(|host_ctx| {
+		let unwind_result = state_holder::with_context(|host_ctx| {
 			let mut host_ctx = host_ctx.expect(
 				"host functions can be called only from wasm instance;
 				wasm instance is always called initializing context;

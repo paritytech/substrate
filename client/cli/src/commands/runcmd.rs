@@ -24,7 +24,7 @@ use regex::Regex;
 use chrono::prelude::*;
 use sc_service::{
 	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec, Roles,
-	config::KeystoreConfig,
+	config::{KeystoreConfig, PrometheusConfig},
 };
 use sc_telemetry::TelemetryEndpoints;
 
@@ -140,9 +140,8 @@ pub struct RunCmd {
 	///
 	/// A comma-separated list of origins (protocol://domain or special `null`
 	/// value). Value of `all` will disable origin validation. Default is to
-	/// allow localhost, https://polkadot.js.org and
-	/// https://substrate-ui.parity.io origins. When running in --dev mode the
-	/// default is to allow all origins.
+	/// allow localhost and https://polkadot.js.org origins. When running in 
+	/// --dev mode the default is to allow all origins.
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
@@ -408,7 +407,6 @@ impl RunCmd {
 				"https://localhost:*".into(),
 				"https://127.0.0.1:*".into(),
 				"https://polkadot.js.org".into(),
-				"https://substrate-ui.parity.io".into(),
 			])
 		}).into();
 
@@ -423,11 +421,12 @@ impl RunCmd {
 
 		// Override prometheus
 		if self.no_prometheus {
-			config.prometheus_port = None;
-		} else if config.prometheus_port.is_none() {
+			config.prometheus_config = None;
+		} else if config.prometheus_config.is_none() {
 			let prometheus_interface: &str = if self.prometheus_external { "0.0.0.0" } else { "127.0.0.1" };
-			config.prometheus_port = Some(
-			parse_address(&format!("{}:{}", prometheus_interface, 9615), self.prometheus_port)?);
+			config.prometheus_config = Some(PrometheusConfig::new_with_default_registry(
+				parse_address(&format!("{}:{}", prometheus_interface, 9615), self.prometheus_port)?,
+			));
 		}
 
 		config.tracing_targets = self.import_params.tracing_targets.clone().into();

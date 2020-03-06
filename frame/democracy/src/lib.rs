@@ -1555,7 +1555,7 @@ mod tests {
 	};
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup, Bounded, BadOrigin, OnInitialize},
+		traits::{BlakeTwo256, IdentityLookup, Bounded, BadOrigin, OnRuntimeUpgrade},
 		testing::Header, Perbill,
 	};
 	use pallet_balances::{BalanceLock, Error as BalancesError};
@@ -1713,7 +1713,7 @@ mod tests {
 		];
 		s.top = data.into_iter().collect();
 		sp_io::TestExternalities::new(s).execute_with(|| {
-			Balances::on_initialize(1);
+			Balances::on_runtime_upgrade();
 			assert_eq!(Balances::free_balance(1), 5);
 			assert_eq!(Balances::reserved_balance(1), 5);
 			assert_eq!(Balances::usable_balance(&1), 2);
