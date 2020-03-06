@@ -265,7 +265,11 @@ pub struct RunCmd {
 		parse(from_os_str),
 		conflicts_with_all = &[ "password-interactive", "password" ]
 	)]
-	pub password_filename: Option<PathBuf>
+	pub password_filename: Option<PathBuf>,
+
+	/// The size of the instances cache.
+	#[structopt(long = "max-runtime-instances")]
+	pub max_runtime_instances: Option<usize>,
 }
 
 impl RunCmd {
@@ -434,6 +438,8 @@ impl RunCmd {
 
 		// Imply forced authoring on --dev
 		config.force_authoring = self.shared_params.dev || self.force_authoring;
+
+		config.max_runtime_instances = self.max_runtime_instances;
 
 		Ok(())
 	}

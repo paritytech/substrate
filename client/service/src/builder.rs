@@ -230,6 +230,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
 		config.default_heap_pages,
+		config.max_runtime_instances,
 	);
 
 	let chain_spec = config.expect_chain_spec();
@@ -356,6 +357,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
 			config.default_heap_pages,
+			config.max_runtime_instances,
 		);
 
 		let db_storage = {

@@ -123,6 +123,8 @@ pub struct Configuration<G, E = NoExtension> {
 	pub tracing_targets: Option<String>,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
+	/// The size of the instances cache.
+	pub max_runtime_instances: Option<usize>,
 }
 
 /// Configuration of the client keystore.
@@ -224,6 +226,7 @@ impl<G, E> Default for Configuration<G, E> {
 			dev_key_seed: None,
 			tracing_targets: Default::default(),
 			tracing_receiver: Default::default(),
+			max_runtime_instances: Default::default(),
 		}
 	}
 }
