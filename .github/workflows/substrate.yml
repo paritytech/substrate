@@ -11,7 +11,7 @@ jobs:
       CARGO_INCREMENTAL:       0
     steps:
       - name:                  Checkout sources
-        uses:                  actions/checkout@v2
+        uses:                  actions/checkout@master
         with:
           submodules:      recursive
       - name:                  Restore ${CARGO_HOME}.cargo/git
@@ -50,7 +50,7 @@ jobs:
       CARGO_INCREMENTAL:       0
     steps:
       - name:                  Checkout sources
-        uses:                  actions/checkout@v2
+        uses:                  actions/checkout@master
         with:
           submodules:      recursive
       - name:                  Restore ${CARGO_HOME}.cargo/git
@@ -91,7 +91,7 @@ jobs:
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
       - name:                  Checkout sources
-        uses:                  actions/checkout@v2
+        uses:                  actions/checkout@master
         with:
           submodules:      recursive
       - name:                  Restore ${CARGO_HOME}.cargo/git
@@ -132,7 +132,7 @@ jobs:
       RUST_BACKTRACE:          1
     steps:
       - name:                  Checkout sources
-        uses:                  actions/checkout@v2
+        uses:                  actions/checkout@master
         with:
           submodules:      recursive
       - name:                  Restore ${CARGO_HOME}.cargo/git
@@ -172,7 +172,7 @@ jobs:
       RUST_BACKTRACE:          1
     steps:
       - name:                  Checkout sources
-        uses:                  actions/checkout@v2
+        uses:                  actions/checkout@master
         with:
           submodules:      recursive
       - name:                  Restore ${CARGO_HOME}.cargo/git
@@ -212,7 +212,7 @@ jobs:
       BUILD_DUMMY_WASM_BINARY: 1
     steps:
       - name:                  Checkout sources
-        uses:                  actions/checkout@v2
+        uses:                  actions/checkout@master
         with:
           submodules:      recursive
       - name:                  Restore ${CARGO_HOME}.cargo/git
@@ -254,7 +254,7 @@ jobs:
       RUST_BACKTRACE:          1
     steps:
       - name:                  Checkout sources
-        uses:                  actions/checkout@v2
+        uses:                  actions/checkout@master
         with:
           submodules:      recursive
       - name:                  Restore ${CARGO_HOME}.cargo/git
@@ -294,7 +294,7 @@ jobs:
     container:                 generalbeck/rust-builder:1.41.0
     steps:
       - name:                  Checkout sources
-        uses:                  actions/checkout@v2
+        uses:                  actions/checkout@master
         with:
           submodules:      recursive
       - name:                  Test dependency rules
@@ -308,7 +308,7 @@ jobs:
     container:                 generalbeck/rust-builder:1.41.0
     steps:
       - name:                  Checkout sources
-        uses:                  actions/checkout@v2
+        uses:                  actions/checkout@master
         with:
           submodules:      recursive
       - name:                  Restore ${CARGO_HOME}.cargo/git
@@ -343,7 +343,7 @@ jobs:
     container:                 generalbeck/rust-builder:1.41.0
     steps:
       - name:                  Checkout sources
-        uses:                  actions/checkout@v2
+        uses:                  actions/checkout@master
         with:
           submodules:      recursive
       - name:                  Restore ${CARGO_HOME}.cargo/git
@@ -378,7 +378,7 @@ jobs:
     container:                 generalbeck/rust-builder:1.41.0
     steps:
       - name:                  Checkout sources
-        uses:                  actions/checkout@v2
+        uses:                  actions/checkout@master
         with:
           submodules:      recursive
       - name:                  Restore ${CARGO_HOME}.cargo/git

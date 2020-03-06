@@ -10,7 +10,7 @@ jobs:
       CARGO_INCREMENTAL:   0
     steps:
       - name:              Checkout sources
-        uses:              actions/checkout@v2
+        uses:              actions/checkout@master
         with:
           submodules:      recursive
       - name:              Prepare for cache
