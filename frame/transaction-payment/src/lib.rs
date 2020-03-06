@@ -39,11 +39,11 @@ use frame_support::{
 	weights::{Weight, DispatchInfo, GetDispatchInfo},
 };
 use sp_runtime::{
-	Fixed64,
+	Perbill, PerThing, Fixed64,
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidityError, TransactionValidity,
 	},
-	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert},
+	traits::{Zero, Saturating, SignedExtension, Convert},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
@@ -256,18 +256,15 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 		let author_balance_diff = T::Currency::total_balance(&author)
 			.saturating_sub(author_initial_balance);
 
-		let balance_to_u32_divisor = (T::Currency::total_issuance() / u32::max_value().into())
-			.max(1.into());
+		// Reduced to `Diff/TotalIssuance`.
+		let author_balance_diff_reduced =
+			Perbill::from_rational_approximation(author_balance_diff, T::Currency::total_issuance());
 
-		// Balance expressed as fraction of total issuance in u32:
-		// i.e. `author_balance_diff / total_issuance == author_balance_diff_u32 / max_u32`
-		let author_balance_diff_u32 = (author_balance_diff / balance_to_u32_divisor)
-			.saturated_into::<u32>();
+		let weight_fraction =
+			Perbill::from_rational_approximation(info.weight, T::MaximumBlockWeight::get());
 
-		let priority = <u32 as Into<u64>>::into(author_balance_diff_u32)
-			// Multiplication cannot overflow as u32 * u32 never overflow in u64
-			.saturating_mul(<u32 as Into<u64>>::into(T::MaximumBlockWeight::get()))
-			/ <u32 as Into<u64>>::into(info.weight.max(1));
+		// Priority is `author_balance_diff_reduced / weight_fraction` expressed as per-billion
+		let priority = (author_balance_diff_reduced / weight_fraction).deconstruct().into();
 
 		Ok(ValidTransaction {
 			priority,
@@ -288,9 +285,9 @@ mod tests {
 	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 	use sp_core::H256;
 	use sp_runtime::{
+		assert_eq_error_rate,
 		testing::{Header, TestXt},
 		traits::{BlakeTwo256, Extrinsic, IdentityLookup},
-		Perbill,
 	};
 	use std::cell::RefCell;
 	use sp_core::u32_trait::{_1, _4};
@@ -731,7 +728,7 @@ mod tests {
 			let fee_divisor = 5;
 			let tip = 200u32;
 			let len = 24u32;
-			let weight = 130u32;
+			let weight = 230u32;
 			let charge_transaction = ChargeTransactionPayment::<Runtime>(tip as u64);
 			let dispatch_info = DispatchInfo {
 				weight,
@@ -744,15 +741,15 @@ mod tests {
 				.unwrap().priority;
 
 			let author_balance_diff = tip/tip_divisor + (100 + (weight + 10 * len))/fee_divisor;
-			let author_balance_diff_u32 =
-				(
-					author_balance_diff as u64
-					/ (Balances::total_issuance() / u32::max_value() as u64).max(1u64)
-				).saturated_into::<u32>();
+			let author_balance_diff_reduced =
+				author_balance_diff as f64 / Balances::total_issuance() as f64;
 
-			let priority_res = author_balance_diff_u32 * MaximumBlockWeight::get() / weight;
+			let weight_fraction = weight as f64 / MaximumBlockWeight::get() as f64;
 
-			assert_eq!(priority, priority_res as u64);
+			let billion = 1_000_000_000u32;
+			let priority_res = author_balance_diff_reduced / weight_fraction * billion as f64;
+
+			assert_eq_error_rate!(priority, priority_res as u64, 5);
 		});
 	}
 }
