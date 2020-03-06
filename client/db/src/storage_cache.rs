@@ -672,7 +672,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		let mut info = self.usage.take();
-		info.include_state_machine_states(self.overlay_stats);
+		info.include_state_machine_states(&self.overlay_stats);
 		info
 	}
 }
