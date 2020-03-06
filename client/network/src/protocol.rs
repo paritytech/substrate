@@ -2143,3 +2143,50 @@ impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
 		debug!(target: "sync", "Network stats:\n{}", self.format_stats());
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use crate::PeerId;
+	use crate::protocol::light_dispatch::AlwaysBadChecker;
+	use crate::config::{EmptyTransactionPool, Roles};
+	use super::{CustomMessageOutcome, Protocol, ProtocolConfig};
+
+	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
+	use std::sync::Arc;
+	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
+	use substrate_test_runtime_client::runtime::{Block, Hash};
+
+	#[test]
+	fn no_handshake_no_notif_closed() {
+		let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
+
+		let (mut protocol, _) = Protocol::<Block, Hash>::new(
+			ProtocolConfig {
+				roles: Roles::FULL,
+				max_parallel_downloads: 10,
+			},
+			client.clone(),
+			Arc::new(AlwaysBadChecker),
+			Arc::new(EmptyTransactionPool),
+			None,
+			None,
+			From::from(&b"test"[..]),
+			sc_peerset::PeersetConfig {
+				in_peers: 10,
+				out_peers: 10,
+				bootnodes: Vec::new(),
+				reserved_only: false,
+				reserved_nodes: Vec::new(),
+			},
+			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
+			None
+		).unwrap();
+
+		let dummy_peer_id = PeerId::random();
+		let _ = protocol.on_peer_connected(dummy_peer_id.clone());
+		match protocol.on_peer_disconnected(dummy_peer_id) {
+			CustomMessageOutcome::None => {},
+			_ => panic!()
+		};
+	}
+}
