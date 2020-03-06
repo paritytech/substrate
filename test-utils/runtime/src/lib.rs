@@ -101,7 +101,25 @@ impl Transfer {
 	pub fn into_signed_tx(self) -> Extrinsic {
 		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
 			.expect("Creates keyring from public key.").sign(&self.encode()).into();
-		Extrinsic::Transfer(self, signature)
+		Extrinsic::Transfer {
+			transfer: self,
+			signature,
+			exhaust_resources_when_not_first: false,
+		}
+	}
+
+	/// Convert into a signed extrinsic, which will only end up included in the block
+	/// if it's the first transaction. Otherwise it will cause `ResourceExhaustion` error
+	/// which should be considered as block being full.
+	#[cfg(feature = "std")]
+	pub fn into_resources_exhausting_tx(self) -> Extrinsic {
+		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
+			.expect("Creates keyring from public key.").sign(&self.encode()).into();
+		Extrinsic::Transfer {
+			transfer: self,
+			signature,
+			exhaust_resources_when_not_first: true,
+		}
 	}
 }
 
@@ -109,7 +127,11 @@ impl Transfer {
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
-	Transfer(Transfer, AccountSignature),
+	Transfer {
+		transfer: Transfer,
+		signature: AccountSignature,
+		exhaust_resources_when_not_first: bool,
+	},
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
@@ -130,9 +152,9 @@ impl BlindCheckable for Extrinsic {
 	fn check(self, _signature: CheckSignature) -> Result<Self, TransactionValidityError> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
-			Extrinsic::Transfer(transfer, signature) => {
+			Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first } => {
 				if sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
-					Ok(Extrinsic::Transfer(transfer, signature))
+					Ok(Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first })
 				} else {
 					Err(InvalidTransaction::BadProof.into())
 				}
@@ -165,7 +187,7 @@ impl ExtrinsicT for Extrinsic {
 impl Extrinsic {
 	pub fn transfer(&self) -> &Transfer {
 		match self {
-			Extrinsic::Transfer(ref transfer, _) => transfer,
+			Extrinsic::Transfer { ref transfer, .. } => transfer,
 			_ => panic!("cannot convert to transfer ref"),
 		}
 	}

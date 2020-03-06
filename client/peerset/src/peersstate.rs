@@ -144,7 +144,7 @@ impl PeersState {
 	/// Returns the list of all the peers we know of.
 	// Note: this method could theoretically return a `Peer`, but implementing that
 	// isn't simple.
-	pub fn peers(&self) -> impl Iterator<Item = &PeerId> {
+	pub fn peers(&self) -> impl ExactSizeIterator<Item = &PeerId> {
 		self.nodes.keys()
 	}
 
