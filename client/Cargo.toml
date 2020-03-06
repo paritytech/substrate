@@ -40,8 +40,6 @@ tracing = "0.1.10"
 [dev-dependencies]
 env_logger = "0.7.0"
 tempfile = "3.1.0"
-substrate-test-client = { version = "2.0.0-dev", path = "../test-utils/client" }
-substrate-test-runtime = { version = "2.0.0-dev", path = "../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../test-utils/runtime/client" }
 kvdb-memorydb = "0.4.0"
 sp-panic-handler = { version = "2.0.0-alpha.2", path = "../primitives/panic-handler" }

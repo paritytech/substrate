@@ -1105,20 +1105,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Default::default(),
 		))
 	}
-
-	#[cfg(test)]
-	pub fn import_notification_sinks(
-		&self,
-	) -> &Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>> {
-		&self.import_notification_sinks
-	}
-
-	#[cfg(test)]
-	pub fn finality_notification_sinks(
-		&self,
-	) -> &Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>> {
-		&self.finality_notification_sinks
-	}
 }
 
 impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
@@ -3460,7 +3446,12 @@ pub(crate) mod tests {
 		// test_runtime_client which won't have the `import_notification_sinks` and
 		// `finality_notification_sinks` methods since it won't be built under `test` config.
 		let mut client =
-			new_in_mem::<_, substrate_test_runtime::Block, _, substrate_test_runtime::RuntimeApi>(
+			new_in_mem::<
+				_,
+				substrate_test_runtime_client::runtime::Block,
+				_,
+				substrate_test_runtime_client::runtime::RuntimeApi
+			>(
 				substrate_test_runtime_client::new_native_executor(),
 				&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
 				None,
@@ -3468,11 +3459,12 @@ pub(crate) mod tests {
 			)
 			.unwrap();
 
-		let import_notif1 = client.import_notification_stream();
-		drop(import_notif1);
+		// Here we drop the notification channel directly
+		client.import_notification_stream();
+		// We keep this on "alive"
+		let _import_notif2 = client.import_notification_stream();
 
-		let import_notif2 = client.import_notification_stream();
-
+		// Build & import a block that doesn't send a notification
 		let a1 = client
 			.new_block(Default::default())
 			.unwrap()
@@ -3485,13 +3477,7 @@ pub(crate) mod tests {
 		import.body = Some(extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 		client.import_block(import, Default::default()).unwrap();
-		// let (header, extrinsics) = a1.deconstruct();
-		// let mut import = BlockImportParams::new(BlockOrigin::Own, header);
-		// import.body = Some(extrinsics);
-		// import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		// BlockImport::import_block(&mut client, import, HashMap::new()).map(|_| ());
-
-		assert_eq!(client.import_notification_sinks().lock().len(), 1);
+		assert_eq!(client.import_notification_sinks.lock().len(), 1);
 	}
 }
