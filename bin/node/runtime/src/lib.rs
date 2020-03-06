@@ -31,7 +31,7 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, ApplyExtrinsicResult, RuntimeString, RuntimeAppPublic,
+	Permill, Perbill, Percent, ApplyExtrinsicResult, RuntimeString,
 	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
@@ -464,7 +464,6 @@ impl<LocalCall> frame_system::offchain::new::CreateSignedTransaction<LocalCall> 
 {
 	fn create_transaction<C: frame_system::offchain::new::AppCrypto<Self::Public, Self::Signature>>(
 		call: Call,
-		crypto: C::RuntimeAppPublic,
 		public: <Signature as traits::Verify>::Signer,
 		account: AccountId,
 		nonce: Index,
@@ -492,7 +491,7 @@ impl<LocalCall> frame_system::offchain::new::CreateSignedTransaction<LocalCall> 
 		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
 			debug::warn!("Unable to create signed payload: {:?}", e);
 		}).ok()?;
-		let signature = crypto.sign(&raw_payload.encode())?;
+		let signature = C::sign(&raw_payload.encode(), public)?;
 		let address = Indices::unlookup(account);
 		let (call, extra, _) = raw_payload.deconstruct();
 		Some((call, (address, signature.into(), extra)))

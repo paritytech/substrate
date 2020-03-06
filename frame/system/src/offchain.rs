@@ -364,11 +364,6 @@ pub mod new {
 		/// or because of any other runtime-specific reason).
 		fn create_transaction<C: AppCrypto<Self::Public, Self::Signature>>(
 			call: Self::OverarchingCall,
-			// TODO [ToDr] This probably should be replaced with `SignedPayload` somehow.
-			// i.e. split `create_transaction` into two parts and let it create some
-			// `SignedPayload`.
-			// Perhaps not really needed?
-			crypto: C::RuntimeAppPublic,
 			public: Self::Public,
 			account: Self::AccountId,
 			nonce: Self::Index,
@@ -410,11 +405,8 @@ pub mod new {
 				account.id,
 				account_data.nonce,
 			);
-			let p: C::GenericPublic = account.public.clone().try_into().ok()?;
-			let x = Into::<C::RuntimeAppPublic>::into(p);
 			let (call, signature) = T::create_transaction::<C>(
 				call.into(),
-				x,
 				account.public.clone(),
 				account.id.clone(),
 				account_data.nonce
