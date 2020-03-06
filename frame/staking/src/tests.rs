@@ -3587,16 +3587,6 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn slashing_while_election_window() {
-		unimplemented!();
-	}
-
-	#[test]
-	fn era_forcing() {
-		unimplemented!();
-	}
-
-	#[test]
 	fn invalid_phragmen_result_wrong_score() {
 		// A valid voter who's total distributed stake is more than what they bond
 		ExtBuilder::default()
