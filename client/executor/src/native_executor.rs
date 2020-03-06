@@ -86,7 +86,7 @@ pub struct WasmExecutor {
 	/// Allow missing function imports.
 	allow_missing_func_imports: bool,
 	/// The size of the instances cache.
-	max_runtime_instances: Option<usize>,
+	max_runtime_instances: usize,
 }
 
 impl WasmExecutor {
@@ -103,7 +103,7 @@ impl WasmExecutor {
 		default_heap_pages: Option<u64>,
 		host_functions: Vec<&'static dyn Function>,
 		allow_missing_func_imports: bool,
-		max_runtime_instances: Option<usize>,
+		max_runtime_instances: usize,
 	) -> Self {
 		WasmExecutor {
 			method,
@@ -200,7 +200,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	pub fn new(
 		fallback_method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
-		max_runtime_instances: Option<usize>,
+		max_runtime_instances: usize,
 	) -> Self {
 		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions();
 
@@ -440,7 +440,7 @@ mod tests {
 		let executor = NativeExecutor::<MyExecutor>::new(
 			WasmExecutionMethod::Interpreted,
 			None,
-			None,
+			2,
 		);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
 			assert_eq!(

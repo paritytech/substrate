@@ -74,7 +74,7 @@ mod tests {
 			Some(8),
 			sp_io::SubstrateHostFunctions::host_functions(),
 			true,
-			None,
+			2,
 		);
 		let res = executor.call_in_wasm(
 			&WASM_BINARY[..],

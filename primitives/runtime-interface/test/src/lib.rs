@@ -37,7 +37,7 @@ fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 		Some(8),
 		host_functions,
 		false,
-		None,
+		2,
 	);
 	executor.call_in_wasm(
 		&WASM_BINARY[..],

@@ -150,7 +150,7 @@ impl BenchDb {
 
 		let (client, backend) = sc_client_db::new_client(
 			db_config,
-			NativeExecutor::new(WasmExecutionMethod::Compiled, None, None),
+			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 2),
 			&keyring.generate_genesis(),
 			None,
 			None,

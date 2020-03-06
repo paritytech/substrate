@@ -124,7 +124,9 @@ pub struct Configuration<G, E = NoExtension> {
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
 	/// The size of the instances cache.
-	pub max_runtime_instances: Option<usize>,
+	///
+	/// The default value is 2.
+	pub max_runtime_instances: usize,
 }
 
 /// Configuration of the client keystore.

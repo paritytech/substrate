@@ -62,11 +62,12 @@ struct VersionedRuntime {
 	/// Runtime version according to `Core_version` if any.
 	version: Option<RuntimeVersion>,
 	/// Cached instance pool.
-	instances: RwLock<Vec<Option<Arc<Mutex<Box<dyn WasmInstance>>>>>>,
+	instances: RwLock<Vec<Arc<Mutex<Box<dyn WasmInstance>>>>>,
+	/// The size of the instances cache.
+	max_instances: usize,
 }
 
 const MAX_RUNTIMES: usize = 2;
-const MAX_INSTANCES: usize = 8;
 
 /// Cache for the runtimes.
 ///
@@ -131,7 +132,7 @@ impl RuntimeCache {
 		default_heap_pages: u64,
 		host_functions: &[&'static dyn Function],
 		allow_missing_func_imports: bool,
-		max_runtime_instances: Option<usize>,
+		max_runtime_instances: usize,
 		f: F,
 	) -> Result<Result<R, Error>, Error>
 		where F: FnOnce(
@@ -219,7 +220,7 @@ impl RuntimeCache {
 			let instance_pool = runtime.instances.read().clone();
 			let instance = instance_pool
 				.iter()
-				.find_map(|i| i.as_ref().and_then(|i| i.try_lock()));
+				.find_map(|i| i.try_lock());
 			if let Some(mut locked) = instance {
 				let result = f(&**locked, runtime.version.as_ref(), ext);
 				if let Err(e) = &result {
@@ -235,13 +236,13 @@ impl RuntimeCache {
 				match &result {
 					Ok(_) => {
 						let mut instance_pool = runtime.instances.write();
-						if let Some((i, ref mut s)) = instance_pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
-							**s = Some(Arc::new(Mutex::new(instance)));
+						if instance_pool.len() < runtime.max_instances {
+							instance_pool.push(Arc::new(Mutex::new(instance)));
 							log::debug!(
 								target: "wasm-runtime",
 								"Allocated WASM instance {}/{}",
-								i,
 								instance_pool.len(),
+								runtime.max_instances
 							);
 						} else {
 							log::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
@@ -299,7 +300,7 @@ fn create_versioned_wasm_runtime(
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
-	max_runtime_instances: Option<usize>,
+	max_instances: usize,
 ) -> Result<VersionedRuntime, WasmError> {
 	#[cfg(not(target_os = "unknown"))]
 	let time = std::time::Instant::now();
@@ -345,7 +346,8 @@ fn create_versioned_wasm_runtime(
 		version,
 		heap_pages,
 		wasm_method,
-		instances: RwLock::new(vec![None; max_runtime_instances.unwrap_or(MAX_INSTANCES)]),
+		instances: Default::default(),
+		max_instances,
 	})
 }
 

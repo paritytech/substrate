@@ -267,9 +267,11 @@ pub struct RunCmd {
 	)]
 	pub password_filename: Option<PathBuf>,
 
-	/// The size of the instances cache.
-	#[structopt(long = "max-runtime-instances")]
-	pub max_runtime_instances: Option<usize>,
+	/// The size of the instances cache for each runtime.
+	///
+	/// The default value is 2 and the values higher than 256 are ignored.
+	#[structopt(long = "max-runtime-instances", default_value = "2")]
+	pub max_runtime_instances: usize,
 }
 
 impl RunCmd {
@@ -439,7 +441,7 @@ impl RunCmd {
 		// Imply forced authoring on --dev
 		config.force_authoring = self.shared_params.dev || self.force_authoring;
 
-		config.max_runtime_instances = self.max_runtime_instances;
+		config.max_runtime_instances = self.max_runtime_instances.min(256);
 
 		Ok(())
 	}
