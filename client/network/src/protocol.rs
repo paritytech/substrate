@@ -38,6 +38,7 @@ use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::Message as GenericMessage;
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
+use prometheus_endpoint::{Registry, Gauge, register, PrometheusError, U64};
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{BoxFinalityProofRequestBuilder, Roles};
@@ -131,6 +132,107 @@ mod rep {
 	pub const BAD_PROTOCOL: Rep = Rep::new_fatal("Unsupported protocol");
 	/// Peer role does not match (e.g. light peer connecting to another light peer).
 	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
+	/// Peer response data does not have requested bits.
+	pub const BAD_RESPONSE: Rep = Rep::new(-(1 << 12), "Incomplete response");
+}
+
+struct Metrics {
+	handshaking_peers: Gauge<U64>,
+	obsolete_requests: Gauge<U64>,
+	peers: Gauge<U64>,
+	queued_blocks: Gauge<U64>,
+	fork_targets: Gauge<U64>,
+	finality_proofs_pending: Gauge<U64>,
+	finality_proofs_active: Gauge<U64>,
+	finality_proofs_failed: Gauge<U64>,
+	finality_proofs_importing: Gauge<U64>,
+	justifications_pending: Gauge<U64>,
+	justifications_active: Gauge<U64>,
+	justifications_failed: Gauge<U64>,
+	justifications_importing: Gauge<U64>
+}
+
+impl Metrics {
+	fn register(r: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Metrics {
+			handshaking_peers: {
+				let g = Gauge::new("sync_handshaking_peers", "number of newly connected peers")?;
+				register(g, r)?
+			},
+			obsolete_requests: {
+				let g = Gauge::new("sync_obsolete_requests", "total number of obsolete requests")?;
+				register(g, r)?
+			},
+			peers: {
+				let g = Gauge::new("sync_peers", "number of peers we sync with")?;
+				register(g, r)?
+			},
+			queued_blocks: {
+				let g = Gauge::new("sync_queued_blocks", "number of blocks in import queue")?;
+				register(g, r)?
+			},
+			fork_targets: {
+				let g = Gauge::new("sync_fork_targets", "fork sync targets")?;
+				register(g, r)?
+			},
+			justifications_pending: {
+				let g = Gauge::new(
+					"sync_extra_justifications_pending",
+					"number of pending extra justifications requests"
+				)?;
+				register(g, r)?
+			},
+			justifications_active: {
+				let g = Gauge::new(
+					"sync_extra_justifications_active",
+					"number of active extra justifications requests"
+				)?;
+				register(g, r)?
+			},
+			justifications_failed: {
+				let g = Gauge::new(
+					"sync_extra_justifications_failed",
+					"number of failed extra justifications requests"
+				)?;
+				register(g, r)?
+			},
+			justifications_importing: {
+				let g = Gauge::new(
+					"sync_extra_justifications_importing",
+					"number of importing extra justifications requests"
+				)?;
+				register(g, r)?
+			},
+			finality_proofs_pending: {
+				let g = Gauge::new(
+					"sync_extra_finality_proofs_pending",
+					"number of pending extra finality proof requests"
+				)?;
+				register(g, r)?
+			},
+			finality_proofs_active: {
+				let g = Gauge::new(
+					"sync_extra_finality_proofs_active",
+					"number of active extra finality proof requests"
+				)?;
+				register(g, r)?
+			},
+			finality_proofs_failed: {
+				let g = Gauge::new(
+					"sync_extra_finality_proofs_failed",
+					"number of failed extra finality proof requests"
+				)?;
+				register(g, r)?
+			},
+			finality_proofs_importing: {
+				let g = Gauge::new(
+					"sync_extra_finality_proofs_importing",
+					"number of importing extra finality proof requests"
+				)?;
+				register(g, r)?
+			},
+		})
+	}
 }
 
 // Lock must always be taken in order declared here.
@@ -161,6 +263,8 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	protocol_name_by_engine: HashMap<ConsensusEngineId, Cow<'static, [u8]>>,
 	/// For each protocol name, the legacy gossiping engine ID.
 	protocol_engine_by_name: HashMap<Cow<'static, [u8]>, ConsensusEngineId>,
+	/// Prometheus metrics.
+	metrics: Option<Metrics>,
 }
 
 #[derive(Default)]
@@ -369,7 +473,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		protocol_id: ProtocolId,
 		peerset_config: sc_peerset::PeersetConfig,
-		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
+		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
+		metrics_registry: Option<&Registry>
 	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
@@ -414,6 +519,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			behaviour,
 			protocol_name_by_engine: HashMap::new(),
 			protocol_engine_by_name: HashMap::new(),
+			metrics: if let Some(r) = metrics_registry {
+				Some(Metrics::register(r)?)
+			} else {
+				None
+			}
 		};
 
 		Ok((protocol, peerset_handle))
@@ -427,6 +537,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Returns true if we have a channel open with this node.
 	pub fn is_open(&self, peer_id: &PeerId) -> bool {
 		self.behaviour.is_open(peer_id)
+	}
+
+	/// Returns the list of all the peers that the peerset currently requests us to be connected to.
+	pub fn requested_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.behaviour.requested_peers()
+	}
+
+	/// Returns the number of discovered nodes that we keep in memory.
+	pub fn num_discovered_peers(&self) -> usize {
+		self.behaviour.num_discovered_peers()
 	}
 
 	/// Disconnects the given peer if we are connected to it.
@@ -701,12 +821,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		peer: PeerId,
 		request: message::BlockRequest<B>
 	) {
-		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}",
+		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?} for {:?}",
 			request.id,
 			peer,
 			request.from,
 			request.to,
-			request.max);
+			request.max,
+			request.fields,
+		);
 
 		// sending block requests to the node that is unable to serve it is considered a bad behavior
 		if !self.config.roles.is_full() {
@@ -754,6 +876,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				message_queue: None,
 				justification,
 			};
+			// Stop if we don't have requested block body
+			if get_body && block_data.body.is_none() {
+				trace!(target: "sync", "Missing data for block request.");
+				break;
+			}
 			blocks.push(block_data);
 			match request.direction {
 				message::Direction::Ascending => id = BlockId::Number(number + One::one()),
@@ -784,7 +911,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>,
 	) -> CustomMessageOutcome<B> {
-		let blocks_range = match (
+		let blocks_range = || match (
 			response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
 			response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
 		) {
@@ -796,7 +923,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			response.id,
 			peer,
 			response.blocks.len(),
-			blocks_range
+			blocks_range(),
 		);
 
 		if request.fields == message::BlockAttributes::JUSTIFICATION {
@@ -811,6 +938,20 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				}
 			}
 		} else {
+			// Validate fields against the request.
+			if request.fields.contains(message::BlockAttributes::HEADER) && response.blocks.iter().any(|b| b.header.is_none()) {
+				self.behaviour.disconnect_peer(&peer);
+				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
+				trace!(target: "sync", "Missing header for a block");
+				return CustomMessageOutcome::None
+			}
+			if request.fields.contains(message::BlockAttributes::BODY) && response.blocks.iter().any(|b| b.body.is_none()) {
+				self.behaviour.disconnect_peer(&peer);
+				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
+				trace!(target: "sync", "Missing body for a block");
+				return CustomMessageOutcome::None
+			}
+
 			match self.sync.on_block_data(peer, Some(request), response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
@@ -836,6 +977,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		});
+		self.report_metrics()
 	}
 
 	fn maintain_peers(&mut self) {
@@ -1450,7 +1592,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
 			request.id, who, keys_str(), request.block);
-		let proof = match self.context_data.chain.read_proof(&request.block, &request.keys) {
+		let proof = match self.context_data.chain.read_proof(
+			&request.block,
+			&mut request.keys.iter().map(AsRef::as_ref)
+		) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote read request {} from {} ({} at {}) failed with: {}",
@@ -1500,7 +1645,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				&request.block,
 				&request.storage_key,
 				child_info,
-				&request.keys,
+				&mut request.keys.iter().map(AsRef::as_ref),
 			) {
 				Ok(proof) => proof,
 				Err(error) => {
@@ -1740,6 +1885,40 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			);
 		}
 		out
+	}
+
+	fn report_metrics(&self) {
+		use std::convert::TryInto;
+
+		if let Some(metrics) = &self.metrics {
+			let mut obsolete_requests: u64 = 0;
+			for peer in self.context_data.peers.values() {
+				let n = peer.obsolete_requests.len().try_into().unwrap_or(std::u64::MAX);
+				obsolete_requests = obsolete_requests.saturating_add(n);
+			}
+			metrics.obsolete_requests.set(obsolete_requests);
+
+			let n = self.handshaking_peers.len().try_into().unwrap_or(std::u64::MAX);
+			metrics.handshaking_peers.set(n);
+
+			let n = self.context_data.peers.len().try_into().unwrap_or(std::u64::MAX);
+			metrics.peers.set(n);
+
+			let m = self.sync.metrics();
+
+			metrics.fork_targets.set(m.fork_targets.into());
+			metrics.queued_blocks.set(m.queued_blocks.into());
+
+			metrics.justifications_pending.set(m.justifications.pending_requests.into());
+			metrics.justifications_active.set(m.justifications.active_requests.into());
+			metrics.justifications_failed.set(m.justifications.failed_requests.into());
+			metrics.justifications_importing.set(m.justifications.importing_requests.into());
+
+			metrics.finality_proofs_pending.set(m.finality_proofs.pending_requests.into());
+			metrics.finality_proofs_active.set(m.finality_proofs.active_requests.into());
+			metrics.finality_proofs_failed.set(m.finality_proofs.failed_requests.into());
+			metrics.finality_proofs_importing.set(m.finality_proofs.importing_requests.into());
+		}
 	}
 }
 
