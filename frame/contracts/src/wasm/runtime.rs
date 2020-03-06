@@ -421,7 +421,7 @@ define_env!(Env, <E: Ext>,
 		account_ptr: u32,
 		account_len: u32,
 		value_ptr: u32,
-		value_len: u32,
+		value_len: u32
 	) -> u32 => {
 		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
 			read_sandbox_memory_as(ctx, account_ptr, account_len)?;
