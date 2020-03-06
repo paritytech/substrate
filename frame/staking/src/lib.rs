@@ -254,7 +254,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod slashing;
-mod migration;
+// mod migration;
 
 pub mod inflation;
 
@@ -266,7 +266,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 	traits::{
 		Currency, LockIdentifier, LockableCurrency,
-		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
+		WithdrawReasons, OnUnbalanced, Imbalance, Get, UnixTime
 	}
 };
 use pallet_session::historical::SessionManager;
@@ -301,14 +301,14 @@ pub type RewardPoint = u32;
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug)]
-pub struct ActiveEraInfo<Moment> {
+pub struct ActiveEraInfo {
 	/// Index of era.
 	index: EraIndex,
-	/// Moment of start
+	/// Moment of start expresed as millisecond from `$UNIX_EPOCH`.
 	///
 	/// Start can be none if start hasn't been set for the era yet,
 	/// Start is set on the first on_finalize of the era to guarantee usage of `Time`.
-	start: Option<Moment>,
+	start: Option<u64>,
 }
 
 /// Reward points of an era. Used to split era total payout between validators.
@@ -565,7 +565,6 @@ type PositiveImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
-type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
 
 /// Means for interacting with a specialized version of the `session` trait.
 ///
@@ -614,7 +613,7 @@ pub trait Trait: frame_system::Trait {
 	///
 	/// It is guaranteed to start being called from the first `on_finalize`. Thus value at genesis
 	/// is not used.
-	type Time: Time;
+	type UnixTime: UnixTime;
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
@@ -747,7 +746,7 @@ decl_storage! {
 		///
 		/// The active era is the era currently rewarded.
 		/// Validator set of this era must be equal to `SessionInterface::validators`.
-		pub ActiveEra get(fn active_era): Option<ActiveEraInfo<MomentOf<T>>>;
+		pub ActiveEra get(fn active_era): Option<ActiveEraInfo>;
 
 		/// The session index at which the era start for the last `HISTORY_DEPTH` eras
 		pub ErasStartSessionIndex get(fn eras_start_session_index):
@@ -944,15 +943,16 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() {
-			migration::on_runtime_upgrade::<T>();
+			// migration::on_runtime_upgrade::<T>();
 		}
 
 		fn on_finalize() {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {
 				if active_era.start.is_none() {
-					active_era.start = Some(T::Time::now());
-					<ActiveEra<T>>::put(active_era);
+					let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
+					active_era.start = Some(now_as_millis_u64);
+					ActiveEra::put(active_era);
 				}
 			}
 		}
@@ -1678,7 +1678,7 @@ impl<T: Trait> Module<T> {
 	/// * reset `active_era.start`,
 	/// * update `BondedEras` and apply slashes.
 	fn start_era(start_session: SessionIndex) {
-		let active_era = <ActiveEra<T>>::mutate(|active_era| {
+		let active_era = ActiveEra::mutate(|active_era| {
 			let new_index = active_era.as_ref().map(|info| info.index + 1).unwrap_or(0);
 			*active_era = Some(ActiveEraInfo {
 				index: new_index,
@@ -1716,12 +1716,12 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Compute payout for era.
-	fn end_era(active_era: ActiveEraInfo<MomentOf<T>>, _session_index: SessionIndex) {
+	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = active_era.start {
-			let now = T::Time::now();
+			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
 
-			let era_duration = now - active_era_start;
+			let era_duration = now_as_millis_u64 - active_era_start;
 			let (total_payout, _max_payout) = inflation::compute_total_payout(
 				&T::RewardCurve::get(),
 				Self::eras_total_stake(&active_era.index),
