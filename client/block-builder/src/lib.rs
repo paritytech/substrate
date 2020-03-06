@@ -224,17 +224,11 @@ where
 			&state,
 			changes_trie_state.as_ref(),
 			parent_hash,
-		);
-
-		// We need to destroy the state, before we check if `storage_changes` is `Ok(_)`
-		{
-			let _lock = self.backend.get_import_lock().read();
-			self.backend.destroy_state(state)?;
-		}
+		)?;
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, self.extrinsics),
-			storage_changes: storage_changes?,
+			storage_changes,
 			proof,
 		})
 	}
