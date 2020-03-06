@@ -46,18 +46,18 @@ use sp_consensus::block_import::{BlockImport, ImportResult};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
-use sc_network::{NetworkWorker, NetworkStateInfo, NetworkService, ReportHandle, config::ProtocolId};
+use sc_network::{NetworkWorker, NetworkStateInfo, NetworkService, config::ProtocolId};
 use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
-use sc_network::config::{ProtocolConfig, TransactionPool};
+use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
 use substrate_test_runtime_client::{self, AccountKeyring};
 
-pub use sc_network::EmptyTransactionPool;
+pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
 
