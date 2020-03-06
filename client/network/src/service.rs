@@ -80,6 +80,37 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 	fn transaction(&self, hash: &H) -> Option<B::Extrinsic>;
 }
 
+/// Dummy implementation of the [`TransactionPool`] trait for a transaction pool that is always
+/// empty and discards all incoming transactions.
+///
+/// Requires the "hash" type to implement the `Default` trait.
+///
+/// Useful for testing purposes.
+pub struct EmptyTransactionPool;
+
+impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransactionPool {
+	fn transactions(&self) -> Vec<(H, B::Extrinsic)> {
+		Vec::new()
+	}
+
+	fn hash_of(&self, _transaction: &B::Extrinsic) -> H {
+		Default::default()
+	}
+
+	fn import(
+		&self,
+		_report_handle: ReportHandle,
+		_who: PeerId,
+		_rep_change_good: ReputationChange,
+		_rep_change_bad: ReputationChange,
+		_transaction: B::Extrinsic
+	) {}
+
+	fn on_broadcasted(&self, _: HashMap<H, Vec<String>>) {}
+
+	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
+}
+
 /// A cloneable handle for reporting cost/benefits of peers.
 #[derive(Clone)]
 pub struct ReportHandle {
