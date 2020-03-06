@@ -148,39 +148,15 @@ where
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
-		let use_trusted = skip_signature && self
-			.api
-			.has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
-				block_id,
-				|version| version >= 5,
-			)?;
-
 		self.api.map_api_result(|api| {
-			let apply_result = if use_trusted {
-				api.apply_trusted_extrinsic_with_context(
-					block_id,
-					ExecutionContext::BlockConstruction,
-					xt.clone(),
-				)? {
-					Ok(_) => {
-						extrinsics.push(xt);
-						Ok(())
-					}
-					Err(e) => Err(ApplyExtrinsicFailed::from(e).into()),
-				}
-			})
-		} else {
-			self.api.map_api_result(|api| {
-				match api.apply_extrinsic_with_context(
-					block_id,
-					ExecutionContext::BlockConstruction,
-					xt.clone(),
-				)? {
-					Ok(_) => {
-						extrinsics.push(xt);
-						Ok(())
-					}
-					Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
+			match api.apply_extrinsic_with_context(
+				block_id,
+				ExecutionContext::BlockConstruction,
+				xt.clone(),
+			)? {
+				Ok(_) => {
+					extrinsics.push(xt);
+					Ok(())
 				}
 				Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
 			}

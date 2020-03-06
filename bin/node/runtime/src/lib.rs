@@ -31,7 +31,7 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, ApplyExtrinsicResult, RuntimeString,
+	Permill, Perbill, Percent, ApplyExtrinsicResult,
 	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
@@ -68,7 +68,6 @@ use impls::{CurrencyToVoteHandler, Author, LinearWeightToFee, TargetedFeeAdjustm
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
-use frame_system::Trait;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -840,7 +839,7 @@ impl_runtime_apis! {
 			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
-		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, RuntimeString> {
+		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::Benchmarking;
 
 			let result = match module.as_slice() {
