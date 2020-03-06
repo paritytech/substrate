@@ -457,14 +457,11 @@ pub mod new {
 		fn public(&self) -> T::Public;
 
 		fn sign<C: AppCrypto<T::Public, T::Signature>>(&self) -> Option<T::Signature> {
-			// TODO [ToDr] use `using_encoded` instead
-			C::sign(&self.encode(), self.public())
+			self.using_encoded(|payload| C::sign(payload, self.public()))
 		}
 
-		// TODO [ToDr] Clean up variable names, code and conversions here and in sign.
 		fn verify<C: AppCrypto<T::Public, T::Signature>>(&self, signature: T::Signature) -> bool {
-			// TODO [ToDr] use `using_encoded` instead
-			C::verify(&self.encode(), self.public(), signature)
+			self.using_encoded(|payload| C::verify(payload, self.public(), signature))
 		}
 	}
 }
