@@ -18,6 +18,7 @@
 
 use std::collections::{VecDeque, HashSet, HashMap};
 use std::sync::Arc;
+use std::hash::Hash as StdHash;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
@@ -29,8 +30,7 @@ use sp_state_machine::{
 	StorageCollection, ChildStorageCollection,
 };
 use log::trace;
-use std::hash::Hash as StdHash;
-use crate::stats::StateUsageStats;
+use crate::{utils::Meta, stats::StateUsageStats};
 
 const STATE_CACHE_BLOCKS: usize = 12;
 
@@ -296,16 +296,16 @@ pub struct CacheChanges<B: BlockT> {
 /// For canonical instances local cache is accumulated and applied
 /// in `sync_cache` along with the change overlay.
 /// For non-canonical clones local cache and changes are dropped.
-pub struct CachingState<S: StateBackend<HashFor<B>>, B: BlockT> {
+pub struct CachingState<S, B: BlockT> {
 	/// Usage statistics
 	usage: StateUsageStats,
 	/// Backing state.
 	state: S,
 	/// Cache data.
-	pub cache: CacheChanges<B>,
+	cache: CacheChanges<B>,
 }
 
-impl<S: StateBackend<HashFor<B>>, B: BlockT> std::fmt::Debug for CachingState<S, B> {
+impl<S, B: BlockT> std::fmt::Debug for CachingState<S, B> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "Block {:?}", self.cache.parent_hash)
 	}
@@ -417,12 +417,15 @@ impl<B: BlockT> CacheChanges<B> {
 			}
 		}
 	}
-
 }
 
 impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 	/// Create a new instance wrapping generic State and shared cache.
-	pub fn new(state: S, shared_cache: SharedCache<B>, parent_hash: Option<B::Hash>) -> Self {
+	pub(crate) fn new(
+		state: S,
+		shared_cache: SharedCache<B>,
+		parent_hash: Option<B::Hash>,
+	) -> Self {
 		CachingState {
 			usage: StateUsageStats::new(),
 			state,
@@ -433,7 +436,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 					hashes: Default::default(),
 					child_storage: Default::default(),
 				}),
-				parent_hash: parent_hash,
+				parent_hash,
 			},
 		}
 	}
@@ -445,8 +448,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 		child_key: Option<&ChildStorageKey>,
 		parent_hash: &Option<B::Hash>,
 		modifications: &VecDeque<BlockChanges<B::Header>>
-	) -> bool
-	{
+	) -> bool {
 		let mut parent = match *parent_hash {
 			None => {
 				trace!("Cache lookup skipped for {:?}: no parent hash", key.as_ref().map(HexDisplay::from));
@@ -479,13 +481,11 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 				}
 			}
 		}
-		trace!("Cache lookup skipped for {:?}: parent hash is unknown", key.as_ref().map(HexDisplay::from));
+		trace!(
+			"Cache lookup skipped for {:?}: parent hash is unknown",
+			key.as_ref().map(HexDisplay::from),
+		);
 		false
-	}
-
-	/// Dispose state and return cache data.
-	pub fn release(self) -> CacheChanges<B> {
-		self.cache
 	}
 }
 
@@ -665,6 +665,213 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.usage.take()
+	}
+}
+
+/// Extended [`CachingState`] that will sync the caches on drop.
+pub struct SyncingCachingState<S, Block: BlockT> {
+	/// The usage statistics of the backend. These will be updated on drop.
+	state_usage: Arc<StateUsageStats>,
+	/// Reference to the meta db.
+	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
+	/// Mutex to lock get exlusive access to the backend.
+	lock: Arc<RwLock<()>>,
+	/// The wrapped caching state.
+	///
+	/// This is required to be a `Option`, because sometimes we want to extract
+	/// the cache changes and Rust does not allow to move fields from types that
+	/// implement `Drop`.
+	caching_state: Option<CachingState<S, Block>>,
+	/// Disable syncing of the cache. This is by default always `false`. However,
+	/// we need to disable syncing when this is a state in a
+	/// [`BlockImportOperation`](crate::BlockImportOperation). The import operation
+	/// takes care to sync the cache and more importantly we want to prevent a dead
+	/// lock.
+	disable_syncing: bool,
+}
+
+impl<S, B: BlockT> SyncingCachingState<S, B> {
+	/// Create new automatic syncing state.
+	pub fn new(
+		caching_state: CachingState<S, B>,
+		state_usage: Arc<StateUsageStats>,
+		meta: Arc<RwLock<Meta<NumberFor<B>, B::Hash>>>,
+		lock: Arc<RwLock<()>>,
+	) -> Self {
+		Self {
+			caching_state: Some(caching_state),
+			state_usage,
+			meta,
+			lock,
+			disable_syncing: false,
+		}
+	}
+
+	/// Returns the reference to the internal [`CachingState`].
+	fn caching_state(&self) -> &CachingState<S, B> {
+		self.caching_state
+			.as_ref()
+			.expect("`caching_state` is always valid for the lifetime of the object; qed")
+	}
+
+	/// Convert `Self` into the cache changes.
+	pub fn into_cache_changes(mut self) -> CacheChanges<B> {
+		self.caching_state
+			.take()
+			.expect("`caching_state` is always valid for the lifetime of the object; qed")
+			.cache
+	}
+
+	/// Disable syncing the cache on drop.
+	pub fn disable_syncing(&mut self) {
+		self.disable_syncing = true;
+	}
+}
+
+impl<S, B: BlockT> std::fmt::Debug for SyncingCachingState<S, B> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		self.caching_state().fmt(f)
+	}
+}
+
+impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for SyncingCachingState<S, B> {
+	type Error = S::Error;
+	type Transaction = S::Transaction;
+	type TrieBackendStorage = S::TrieBackendStorage;
+
+	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.caching_state().storage(key)
+	}
+
+	fn storage_hash(&self, key: &[u8]) -> Result<Option<B::Hash>, Self::Error> {
+		self.caching_state().storage_hash(key)
+	}
+
+	fn child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.caching_state().child_storage(storage_key, child_info, key)
+	}
+
+	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
+		self.caching_state().exists_storage(key)
+	}
+
+	fn exists_child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<bool, Self::Error> {
+		self.caching_state().exists_child_storage(storage_key, child_info, key)
+	}
+
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		f: F,
+	) {
+		self.caching_state().for_keys_in_child_storage(storage_key, child_info, f)
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.caching_state().next_storage_key(key)
+	}
+
+	fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.caching_state().next_child_storage_key(storage_key, child_info, key)
+	}
+
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+		self.caching_state().for_keys_with_prefix(prefix, f)
+	}
+
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+		self.caching_state().for_key_values_with_prefix(prefix, f)
+	}
+
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+		f: F,
+	) {
+		self.caching_state().for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+	}
+
+	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
+		where
+			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+	{
+		self.caching_state().storage_root(delta)
+	}
+
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		delta: I,
+	) -> (B::Hash, bool, Self::Transaction)
+		where
+			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+	{
+		self.caching_state().child_storage_root(storage_key, child_info, delta)
+	}
+
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.caching_state().pairs()
+	}
+
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
+		self.caching_state().keys(prefix)
+	}
+
+	fn child_keys(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+	) -> Vec<Vec<u8>> {
+		self.caching_state().child_keys(storage_key, child_info, prefix)
+	}
+
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
+		self.caching_state
+			.as_mut()
+			.expect("`caching_state` is valid for the lifetime of the object; qed")
+			.as_trie_backend()
+	}
+
+	fn usage_info(&self) -> sp_state_machine::UsageInfo {
+		self.caching_state().usage_info()
+	}
+}
+
+impl<S, B: BlockT> Drop for SyncingCachingState<S, B> {
+	fn drop(&mut self) {
+		if self.disable_syncing {
+			return;
+		}
+
+		if let Some(mut caching_state) = self.caching_state.take() {
+			let _lock = self.lock.read();
+
+			self.state_usage.merge_sm(caching_state.usage.take());
+			if let Some(hash) = caching_state.cache.parent_hash.clone() {
+				let is_best = self.meta.read().best_hash == hash;
+				caching_state.cache.sync_cache(&[], &[], vec![], vec![], None, None, is_best);
+			}
+		}
 	}
 }
 
@@ -1258,7 +1465,7 @@ mod qc {
 			CachingState::new(
 				InMemoryBackend::<BlakeTwo256>::default(),
 				self.shared.clone(),
-				Some(hash)
+				Some(hash),
 			)
 		}
 
@@ -1327,7 +1534,7 @@ mod qc {
 					let mut state = CachingState::new(
 						InMemoryBackend::<BlakeTwo256>::default(),
 						self.shared.clone(),
-						Some(parent)
+						Some(parent),
 					);
 
 					state.cache.sync_cache(
@@ -1366,7 +1573,7 @@ mod qc {
 					let mut state = CachingState::new(
 						InMemoryBackend::<BlakeTwo256>::default(),
 						self.shared.clone(),
-						Some(parent_hash)
+						Some(parent_hash),
 					);
 
 					state.cache.sync_cache(
@@ -1413,7 +1620,7 @@ mod qc {
 							let mut state = CachingState::new(
 								InMemoryBackend::<BlakeTwo256>::default(),
 								self.shared.clone(),
-								Some(fork_at)
+								Some(fork_at),
 							);
 
 							let height = pos as u64 + enacted.len() as u64 + 2;

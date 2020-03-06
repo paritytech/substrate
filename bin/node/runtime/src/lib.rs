@@ -31,7 +31,7 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, ApplyExtrinsicResult, RuntimeString,
+	Permill, Perbill, Percent, ApplyExtrinsicResult,
 	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
@@ -82,7 +82,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 230,
+	spec_version: 231,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -330,11 +330,16 @@ impl pallet_democracy::Trait for Runtime {
 	type Slash = Treasury;
 }
 
+parameter_types! {
+	pub const CouncilMotionDuration: BlockNumber = 5 * DAYS;
+}
+
 type CouncilCollective = pallet_collective::Instance1;
 impl pallet_collective::Trait<CouncilCollective> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
+	type MotionDuration = CouncilMotionDuration;
 }
 
 parameter_types! {
@@ -360,11 +365,16 @@ impl pallet_elections_phragmen::Trait for Runtime {
 	type TermDuration = TermDuration;
 }
 
+parameter_types! {
+	pub const TechnicalMotionDuration: BlockNumber = 5 * DAYS;
+}
+
 type TechnicalCollective = pallet_collective::Instance2;
 impl pallet_collective::Trait<TechnicalCollective> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
+	type MotionDuration = TechnicalMotionDuration;
 }
 
 impl pallet_membership::Trait<pallet_membership::Instance1> for Runtime {
@@ -373,6 +383,7 @@ impl pallet_membership::Trait<pallet_membership::Instance1> for Runtime {
 	type RemoveOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type SwapOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type ResetOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type PrimeOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type MembershipInitialized = TechnicalCommittee;
 	type MembershipChanged = TechnicalCommittee;
 }
@@ -699,10 +710,6 @@ impl_runtime_apis! {
 			Executive::apply_extrinsic(extrinsic)
 		}
 
-		fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-			Executive::apply_trusted_extrinsic(extrinsic)
-		}
-
 		fn finalize_block() -> <Block as BlockT>::Header {
 			Executive::finalize_block()
 		}
@@ -838,7 +845,7 @@ impl_runtime_apis! {
 			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
-		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, RuntimeString> {
+		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::Benchmarking;
 
 			let result = match module.as_slice() {
