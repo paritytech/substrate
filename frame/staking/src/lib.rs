@@ -1106,6 +1106,9 @@ decl_error! {
 		PhragmenBogusNominator,
 		/// One of the submitted nominators has an edge to which they have not voted on chain.
 		PhragmenBogusNomination,
+		/// One of the submitted nominators has an edge which is submitted before the last non-zero
+		/// slash of the target.
+		PhragmenSlashedNomination,
 		/// A self vote must only be originated from a validator to ONLY themselves.
 		PhragmenBogusSelfVote,
 		/// The submitted result has unknown edges that are not among the presented winners.
@@ -2142,19 +2145,21 @@ impl<T: Trait> Module<T> {
 				);
 				// NOTE: we don't really have to check here if the sum of all edges are the
 				// nominator correct. Un-compacting assures this by definition.
-				ensure!(
+
+				for (t, _) in distribution {
 					// each target in the provided distribution must be actually nominated by the
 					// nominator after the last non-zero slash.
-					distribution.into_iter().all(|(t, _)| {
-						nomination.targets.iter().find(|&tt| tt == t).is_some()
-						&&
-						<Self as Store>::SlashingSpans::get(&t).map_or(
-							true,
-							|spans| nomination.submitted_in >= spans.last_nonzero_slash(),
-						)
-					}),
-					Error::<T>::PhragmenBogusNomination,
-				);
+					if nomination.targets.iter().find(|&tt| tt == t).is_none() {
+						return Err(Error::<T>::PhragmenBogusNomination);
+					}
+
+					if <Self as Store>::SlashingSpans::get(&t).map_or(
+						false,
+						|spans| nomination.submitted_in < spans.last_nonzero_slash(),
+					) {
+						return Err(Error::<T>::PhragmenSlashedNomination);
+					}
+				}
 			} else {
 				// a self vote
 				ensure!(distribution.len() == 1, Error::<T>::PhragmenBogusSelfVote);
@@ -2730,7 +2735,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 		offenders: &[OffenceDetails<T::AccountId, pallet_session::historical::IdentificationTuple<T>>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
-	) {
+	) -> Result<(), ()> {
 		if !Self::can_report() {
 			return Err(())
 		}

@@ -2727,19 +2727,22 @@ mod offchain_phragmen {
 	/// file. This produces a edge graph that can be reduced.
 	fn build_offchain_phragmen_test_ext() {
 		for i in (10..=40).step_by(10) {
-			bond_validator(i, i + 1000, 100);
+			// Note: we respect the convention of the mock (10, 11 pairs etc.) since these accounts
+			// have corresponding keys in session which makes everything more ergonomic and
+			// realistic.
+			bond_validator(i + 1, i, 100);
 		}
 
 		let mut voter = 1;
-		bond_nominator(voter, 1000 + voter, 100, vec![10]);
+		bond_nominator(voter, 1000 + voter, 100, vec![11]);
 		voter = 2;
-		bond_nominator(voter, 1000 + voter, 100, vec![10, 20]);
+		bond_nominator(voter, 1000 + voter, 100, vec![11, 11]);
 		voter = 3;
-		bond_nominator(voter, 1000 + voter, 100, vec![20, 40]);
+		bond_nominator(voter, 1000 + voter, 100, vec![21, 41]);
 		voter = 4;
-		bond_nominator(voter, 1000 + voter, 100, vec![20, 30, 40]);
+		bond_nominator(voter, 1000 + voter, 100, vec![21, 31, 41]);
 		voter = 5;
-		bond_nominator(voter, 1000 + voter, 100, vec![20, 30, 40]);
+		bond_nominator(voter, 1000 + voter, 100, vec![21, 31, 41]);
 	}
 
 	fn offchainify(ext: &mut TestExternalities) -> Arc<RwLock<PoolState>> {
@@ -3378,7 +3381,7 @@ mod offchain_phragmen {
 				let (compact, winners, score) = prepare_submission_with(true, |a| {
 					a.iter_mut()
 						.find(|x| x.who == 5)
-						.map(|x| x.distribution = vec![(20, 50), (40, 30), (30, 20)]);
+						.map(|x| x.distribution = vec![(21, 50), (41, 30), (31, 20)]);
 				});
 
 				assert_noop!(
@@ -3403,11 +3406,11 @@ mod offchain_phragmen {
 				let (compact, winners, score) = prepare_submission_with(true, |a| {
 					// mutate a self vote to target someone else. That someone else is still among the
 					// winners
-					a.iter_mut().find(|x| x.who == 10).map(|x| {
+					a.iter_mut().find(|x| x.who == 11).map(|x| {
 						x.distribution
 							.iter_mut()
-							.find(|y| y.0 == 10)
-							.map(|y| y.0 = 20)
+							.find(|y| y.0 == 11)
+							.map(|y| y.0 = 21)
 					});
 				});
 
@@ -3432,11 +3435,11 @@ mod offchain_phragmen {
 
 				let (compact, winners, score) = prepare_submission_with(true, |a| {
 					// Remove the self vote.
-					a.retain(|x| x.who != 10);
+					a.retain(|x| x.who != 11);
 					// add is as a new double vote
 					a.push(StakedAssignment {
-						who: 10,
-						distribution: vec![(10, 50), (20, 50)],
+						who: 11,
+						distribution: vec![(11, 50), (21, 50)],
 					});
 				});
 
@@ -3503,7 +3506,7 @@ mod offchain_phragmen {
 					// correctly 100.
 					a.iter_mut()
 						.find(|x| x.who == 3)
-						.map(|x| x.distribution = vec![(20, 50), (40, 30), (30, 20)]);
+						.map(|x| x.distribution = vec![(21, 50), (41, 30), (31, 20)]);
 				});
 
 				assert_noop!(
@@ -3525,64 +3528,65 @@ mod offchain_phragmen {
 			.build()
 			.execute_with(|| {
 				build_offchain_phragmen_test_ext();
+
 				// finalize the round with fallback. This is needed since all nominator submission
 				// are in era zero and we want this one to pass with no problems.
 				run_to_block(15);
 
-				// open the election window and create snapshots.
-				run_to_block(32);
+				// go to the next session to trigger start_era and bump the active era
+				run_to_block(20);
 
-				// a solution that has been prepared before the slash.
-				let (pre_compact, pre_winners, pre_score) = prepare_submission_with(false, |_| {});
-
-				// slash 10
-				let offender_expo = Staking::eras_stakers(active_era(), 10);
+				// slash 10. This must happen outside of the election window.
+				let offender_expo = Staking::eras_stakers(active_era(), 11);
 				on_offence_now(
 					&[OffenceDetails {
-						offender: (10, offender_expo.clone()),
+						offender: (11, offender_expo.clone()),
 						reporters: vec![],
 					}],
-					&[Perbill::from_percent(10)],
+					&[Perbill::from_percent(50)],
 				);
 
-				// validate 10 again for the next round.
+				// validate 10 again for the next round. But this guy will not have the votes that
+				// it should have had from 1 and 2.
 				assert_ok!(Staking::validate(
-					Origin::signed(10 + 1000),
+					Origin::signed(10),
 					Default::default()
 				));
 
+				// open the election window and create snapshots.
+				run_to_block(32);
+
 				// a solution that has been prepared after the slash.
-				let (compact, winners, score) = prepare_submission_with(false, |_| {});
+				let (compact, winners, score) = prepare_submission_with(false, |a| {
+					// no one is allowed to vote for 10, except for itself.
+					a.into_iter()
+						.filter(|s| s.who != 11)
+						.for_each(|s|
+							assert!(s.distribution.iter().find(|(t, _)| *t == 11).is_none())
+						);
+				});
 
-				// The edges are different.
-				assert_ne!(compact, pre_compact);
-				// But the winners are the same.
-				assert_eq_uvec!(winners, pre_winners);
-				// 2 votes for 10 and 20, but the edge for 20 is gone, so there must be one less
-				// entry in votes2.
-				assert_eq!(compact.votes2.len(), pre_compact.votes2.len() - 1);
-
-				// old results are invalid.
-				assert_noop!(
-					Staking::submit_election_solution(
-						Origin::signed(10),
-						pre_winners,
-						pre_compact,
-						pre_score,
-					),
-					Error::<Test>::PhragmenBogusNomination,
-				);
-
-				// new results are okay.
+				// can also be submitted.
 				assert_ok!(Staking::submit_election_solution(
 					Origin::signed(10),
 					winners,
 					compact,
 					score
-				),);
+				));
 
-				// finish the round.
-				run_to_block(30);
+				// a wrong solution.
+				let (compact, winners, score) = prepare_submission_with(false, |a| {
+					// add back the vote that has been filtered out.
+					a.push(StakedAssignment {
+						who: 1,
+						distribution: vec![(11, 100)]
+					});
+				});
+
+				assert_noop!(
+					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Error::<Test>::PhragmenSlashedNomination,
+				);
 			})
 	}
 
@@ -3682,6 +3686,31 @@ mod offchain_phragmen {
 				Err("fork."),
 			);
 		})
+	}
+
+	#[test]
+	#[should_panic]
+	fn offence_is_blocked_when_window_open() {
+		ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(4)
+			.has_stakers(false)
+			.build()
+			.execute_with(|| {
+				run_to_block(12);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
+
+				let offender_expo = Staking::eras_stakers(active_era(), 10);
+
+				// panic from the impl in mock
+				on_offence_now(
+					&[OffenceDetails {
+						offender: (10, offender_expo.clone()),
+						reporters: vec![],
+					}],
+					&[Perbill::from_percent(10)],
+				);
+			})
 	}
 }
 
@@ -3857,7 +3886,7 @@ fn zero_slash_keeps_nominators() {
 
 		assert_eq!(Balances::free_balance(11), 1000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
+		let exposure = Staking::eras_stakers(active_era(), 11);
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		on_offence_now(
