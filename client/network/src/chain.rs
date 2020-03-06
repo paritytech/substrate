@@ -18,7 +18,7 @@
 
 use sc_client::Client as SubstrateClient;
 use sp_blockchain::{Error, Info as BlockchainInfo};
-use sc_client_api::{ChangesProof, StorageProof, CallExecutor};
+use sc_client_api::{ChangesProof, StorageProof, CallExecutor, ProofProvider};
 use sp_consensus::{BlockImport, BlockStatus, Error as ConsensusError};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::generic::{BlockId};
@@ -50,7 +50,11 @@ pub trait Client<Block: BlockT>: Send + Sync {
 		-> Result<(Block::Header, StorageProof), Error>;
 
 	/// Get storage read execution proof.
-	fn read_proof(&self, block: &Block::Hash, keys: &[Vec<u8>]) -> Result<StorageProof, Error>;
+	fn read_proof(
+		&self,
+		block: &Block::Hash,
+		keys: &mut dyn Iterator<Item=&[u8]>,
+	) -> Result<StorageProof, Error>;
 
 	/// Get child storage read execution proof.
 	fn read_child_proof(
@@ -58,7 +62,7 @@ pub trait Client<Block: BlockT>: Send + Sync {
 		block: &Block::Hash,
 		storage_key: &[u8],
 		child_info: ChildInfo,
-		keys: &[Vec<u8>],
+		keys: &mut dyn Iterator<Item=&[u8]>,
 	) -> Result<StorageProof, Error>;
 
 	/// Get method execution proof.
@@ -125,14 +129,19 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		(self as &SubstrateClient<B, E, Block, RA>).justification(id)
 	}
 
-	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number)
-		-> Result<(Block::Header, StorageProof), Error>
-	{
-		(self as &SubstrateClient<B, E, Block, RA>).header_proof(&BlockId::Number(block_number))
+	fn header_proof(
+		&self,
+		block_number: <Block::Header as HeaderT>::Number,
+	)-> Result<(Block::Header, StorageProof), Error> {
+		ProofProvider::<Block>::header_proof(self, &BlockId::Number(block_number))
 	}
 
-	fn read_proof(&self, block: &Block::Hash, keys: &[Vec<u8>]) -> Result<StorageProof, Error> {
-		(self as &SubstrateClient<B, E, Block, RA>).read_proof(&BlockId::Hash(block.clone()), keys)
+	fn read_proof(
+		&self,
+		block: &Block::Hash,
+		keys: &mut dyn Iterator<Item=&[u8]>,
+	) -> Result<StorageProof, Error> {
+		ProofProvider::<Block>::read_proof(self, &BlockId::Hash(block.clone()), keys)
 	}
 
 	fn read_child_proof(
@@ -140,10 +149,9 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		block: &Block::Hash,
 		storage_key: &[u8],
 		child_info: ChildInfo,
-		keys: &[Vec<u8>],
+		keys: &mut dyn Iterator<Item=&[u8]>,
 	) -> Result<StorageProof, Error> {
-		(self as &SubstrateClient<B, E, Block, RA>)
-			.read_child_proof(&BlockId::Hash(block.clone()), storage_key, child_info, keys)
+		ProofProvider::<Block>::read_child_proof(self, &BlockId::Hash(block.clone()), storage_key, child_info, keys)
 	}
 
 	fn execution_proof(
@@ -152,7 +160,8 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		method: &str,
 		data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), Error> {
-		(self as &SubstrateClient<B, E, Block, RA>).execution_proof(
+		ProofProvider::<Block>::execution_proof(
+			self,
 			&BlockId::Hash(block.clone()),
 			method,
 			data,
@@ -168,7 +177,7 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		storage_key: Option<&StorageKey>,
 		key: &StorageKey,
 	) -> Result<ChangesProof<Block::Header>, Error> {
-		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(first, last, min, max, storage_key, key)
+		ProofProvider::<Block>::key_changes_proof(self, first, last, min, max, storage_key, key)
 	}
 
 	fn is_descendent_of(&self, base: &Block::Hash, block: &Block::Hash) -> Result<bool, Error> {

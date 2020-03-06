@@ -230,7 +230,6 @@ mod tests {
 			config.clone(),
 			client.clone(),
 			client.clone(),
-			client.clone(),
 		).expect("can initialize block-import");
 
 		let epoch_changes = link.epoch_changes().clone();

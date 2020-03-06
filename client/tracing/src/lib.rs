@@ -34,7 +34,7 @@
 //! let span = tracing::span!(tracing::Level::INFO, "my_span_name", my_number = 10, a_key = "a value");
 //! let _guard = span.enter();
 //! ```
-//! Currently we provide `Log` (default), `Telemetry` and `Grafana` variants for `Receiver`
+//! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
 
 use std::collections::HashMap;
 use std::fmt;
@@ -53,7 +53,6 @@ use tracing_core::{
 	subscriber::Subscriber
 };
 
-use grafana_data_source::{self, record_metrics};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 
 /// Used to configure how to receive the metrics
@@ -63,8 +62,6 @@ pub enum TracingReceiver {
 	Log,
 	/// Output to telemetry
 	Telemetry,
-	/// Output to Grafana
-	Grafana,
 }
 
 impl Default for TracingReceiver {
@@ -255,7 +252,6 @@ impl ProfilingSubscriber {
 		match self.receiver {
 			TracingReceiver::Log => print_log(span_datum),
 			TracingReceiver::Telemetry => send_telemetry(span_datum),
-			TracingReceiver::Grafana => send_grafana(span_datum),
 		}
 	}
 }
@@ -291,9 +287,3 @@ fn send_telemetry(span_datum: SpanDatum) {
 	);
 }
 
-fn send_grafana(span_datum: SpanDatum) {
-	let name = format!("{}::{}", span_datum.target, span_datum.name);
-	if let Err(e) = record_metrics!(&name => span_datum.overall_time.as_nanos(),) {
-		log::warn!("Unable to send metrics to grafana: {:?}", e);
-	}
-}

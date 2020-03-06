@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust implementation of the Phragmén election algorithm. This is used in several SRML modules to
+//! Rust implementation of the Phragmén election algorithm. This is used in several pallets to
 //! optimally distribute the weight of a set of voters among an elected set of candidates. In the
 //! context of staking this is mapped to validators and nominators.
 //!
@@ -119,7 +119,7 @@ pub struct PhragmenResult<AccountId, T: PerThing> {
 ///
 /// This complements the [`PhragmenResult`] and is needed to run the equalize post-processing.
 ///
-/// This, at the current version, resembles the `Exposure` defined in the staking SRML module, yet
+/// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet
 /// they do not necessarily have to be the same.
 #[derive(Default, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Eq, PartialEq))]

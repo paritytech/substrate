@@ -24,8 +24,10 @@ macro_rules! decl_tests {
 		use sp_runtime::{Fixed64, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
 			assert_noop, assert_ok, assert_err,
-			traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
-				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath}
+			traits::{
+				LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
+				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath, StoredMap
+			}
 		};
 		use pallet_transaction_payment::ChargeTransactionPayment;
 		use frame_system::RawOrigin;
@@ -52,6 +54,15 @@ macro_rules! decl_tests {
 					<Balances as Currency<_>>::transfer(&1, &2, 5, AllowDeath),
 					Error::<$test, _>::LiquidityRestrictions
 				);
+			});
+		}
+
+		#[test]
+		fn account_should_be_reaped() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_eq!(Balances::free_balance(1), 10);
+				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
+				assert!(!<<Test as Trait>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
 			});
 		}
 

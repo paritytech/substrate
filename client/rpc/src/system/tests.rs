@@ -69,7 +69,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 					let _ = sender.send(peers);
 				}
 				Request::NetworkState(sender) => {
-					let _ = sender.send(serde_json::to_value(&sc_network::NetworkState {
+					let _ = sender.send(serde_json::to_value(&sc_network::network_state::NetworkState {
 						peer_id: String::new(),
 						listened_addresses: Default::default(),
 						external_addresses: Default::default(),
@@ -223,8 +223,8 @@ fn system_peers() {
 fn system_network_state() {
 	let res = wait_receiver(api(None).system_network_state());
 	assert_eq!(
-		serde_json::from_value::<sc_network::NetworkState>(res).unwrap(),
-		sc_network::NetworkState {
+		serde_json::from_value::<sc_network::network_state::NetworkState>(res).unwrap(),
+		sc_network::network_state::NetworkState {
 			peer_id: String::new(),
 			listened_addresses: Default::default(),
 			external_addresses: Default::default(),

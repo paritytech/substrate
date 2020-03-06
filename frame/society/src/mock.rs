@@ -33,9 +33,9 @@ impl_outer_origin! {
 	pub enum Origin for Test {}
 }
 
-// For testing the module, we construct most of a mock runtime. This means
+// For testing the pallet, we construct most of a mock runtime. This means
 // first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of modules we want to use.
+// configuration traits of pallets we want to use.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 parameter_types! {
@@ -78,7 +78,7 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type OnNewAccount = ();
-	type OnReapAccount = Balances;
+	type OnKilledAccount = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 }
 

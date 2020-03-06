@@ -25,8 +25,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
-use crate::BenchmarkParameter;
+use sp_core::{self, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -346,6 +345,14 @@ pub trait OnInitialize<BlockNumber> {
 	fn on_initialize(_n: BlockNumber) {}
 }
 
+/// The runtime upgrade trait. Implementing this lets you express what should happen
+/// when the runtime upgrades, and changes may need to occur to your module.
+#[impl_for_tuples(30)]
+pub trait OnRuntimeUpgrade {
+	/// Perform a module upgrade.
+	fn on_runtime_upgrade() {}
+}
+
 /// Off-chain computation trait.
 ///
 /// Implementing this trait on a module allows you to perform long-running tasks
@@ -370,20 +377,19 @@ pub trait OffchainWorker<BlockNumber> {
 /// Abstraction around hashing
 // Stupid bug in the Rust compiler believes derived
 // traits must be fulfilled by all type parameters.
-pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq {
+pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq + Hasher<Out = <Self as Hash>::Output> {
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
 
-	/// The associated hash_db Hasher type.
-	type Hasher: Hasher<Out=Self::Output>;
-
 	/// Produce the hash of some byte-slice.
-	fn hash(s: &[u8]) -> Self::Output;
+	fn hash(s: &[u8]) -> Self::Output {
+		<Self as Hasher>::hash(s)
+	}
 
 	/// Produce the hash of some codec-encodable value.
 	fn hash_of<S: Encode>(s: &S) -> Self::Output {
-		Encode::using_encoded(s, Self::hash)
+		Encode::using_encoded(s, <Self as Hasher>::hash)
 	}
 
 	/// The ordered Patricia tree root of the given `input`.
@@ -398,12 +404,18 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
-impl Hash for BlakeTwo256 {
-	type Output = sp_core::H256;
-	type Hasher = Blake2Hasher;
-	fn hash(s: &[u8]) -> Self::Output {
+impl Hasher for BlakeTwo256 {
+	type Out = sp_core::H256;
+	type StdHasher = hash256_std_hasher::Hash256StdHasher;
+	const LENGTH: usize = 32;
+
+	fn hash(s: &[u8]) -> Self::Out {
 		sp_io::hashing::blake2_256(s).into()
 	}
+}
+
+impl Hash for BlakeTwo256 {
+	type Output = sp_core::H256;
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
 		sp_io::trie::blake2_256_root(input)
@@ -617,8 +629,6 @@ pub trait ExtrinsicMetadata {
 	type SignedExtensions: SignedExtension;
 }
 
-/// Extract the hasher type for a block.
-pub type HasherFor<B> = <HashFor<B> as Hash>::Hasher;
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
@@ -877,20 +887,13 @@ impl SignedExtension for () {
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable: Sized + Send + Sync {
-	/// ID of the account that is responsible for this piece of information (sender).
-	type AccountId: Member + MaybeDisplay;
-
 	/// Type by which we can dispatch. Restricts the `UnsignedValidator` type.
 	type Call;
 
 	/// An opaque set of information attached to the transaction.
 	type DispatchInfo: Clone;
 
-	/// Returns a reference to the sender if any.
-	fn sender(&self) -> Option<&Self::AccountId>;
-
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		info: Self::DispatchInfo,
@@ -899,7 +902,6 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: Self::DispatchInfo,
@@ -925,7 +927,6 @@ pub trait GetNodeBlockType {
 /// the transaction for the transaction pool.
 /// During block execution phase one need to perform the same checks anyway,
 /// since this function is not being called.
-#[deprecated(note = "Use SignedExtensions instead.")]
 pub trait ValidateUnsigned {
 	/// The call to validate
 	type Call;
@@ -1316,75 +1317,6 @@ pub trait BlockIdTo<Block: self::Block> {
 		&self,
 		block_id: &crate::generic::BlockId<Block>,
 	) -> Result<Option<NumberFor<Block>>, Self::Error>;
-}
-
-/// The pallet benchmarking trait.
-pub trait Benchmarking<T> {
-	/// Run the benchmarks for this pallet.
-	///
-	/// Parameters
-	/// - `extrinsic`: The name of extrinsic function you want to benchmark encoded as bytes.
-	/// - `steps`: The number of sample points you want to take across the range of parameters.
-	/// - `repeat`: The number of times you want to repeat a benchmark.
-	fn run_benchmark(extrinsic: Vec<u8>, steps: u32, repeat: u32) -> Result<Vec<T>, &'static str>;
-}
-
-/// The required setup for creating a benchmark.
-pub trait BenchmarkingSetup<T, Call, RawOrigin> {
-	/// Return the components and their ranges which should be tested in this benchmark.
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
-
-	/// Set up the storage, and prepare a call and caller to test in a single run of the benchmark.
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(Call, RawOrigin), &'static str>;
-}
-
-/// Creates a `SelectedBenchmark` enum implementing `BenchmarkingSetup`.
-///
-/// Every variant must implement [`BenchmarkingSetup`](crate::traits::BenchmarkingSetup).
-///
-/// ```nocompile
-///
-/// struct Transfer;
-/// impl BenchmarkingSetup for Transfer { ... }
-///
-/// struct SetBalance;
-/// impl BenchmarkingSetup for SetBalance { ... }
-///
-/// selected_benchmark!(Transfer, SetBalance);
-/// ```
-#[macro_export]
-macro_rules! selected_benchmark {
-	($($bench:ident),*) => {
-		// The list of available benchmarks for this pallet.
-		enum SelectedBenchmark {
-			$( $bench, )*
-		}
-
-		// Allow us to select a benchmark from the list of available benchmarks.
-		impl<T: Trait> $crate::traits::BenchmarkingSetup<T, Call<T>, RawOrigin<T::AccountId>> for SelectedBenchmark {
-			fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)> {
-				match self {
-					$( Self::$bench => <$bench as $crate::traits::BenchmarkingSetup<
-						T,
-						Call<T>,
-						RawOrigin<T::AccountId>,
-					>>::components(&$bench), )*
-				}
-			}
-
-			fn instance(&self, components: &[(BenchmarkParameter, u32)])
-				-> Result<(Call<T>, RawOrigin<T::AccountId>), &'static str>
-			{
-				match self {
-					$( Self::$bench => <$bench as $crate::traits::BenchmarkingSetup<
-						T,
-						Call<T>,
-						RawOrigin<T::AccountId>,
-					>>::instance(&$bench, components), )*
-				}
-			}
-		}
-	};
 }
 
 #[cfg(test)]
