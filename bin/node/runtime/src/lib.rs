@@ -31,7 +31,7 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, ApplyExtrinsicResult, RuntimeString,
+	Permill, Perbill, Percent, ApplyExtrinsicResult,
 	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
@@ -68,7 +68,6 @@ use impls::{CurrencyToVoteHandler, Author, LinearWeightToFee, TargetedFeeAdjustm
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
-use frame_system::Trait;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -83,7 +82,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 230,
+	spec_version: 231,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -705,10 +704,6 @@ impl_runtime_apis! {
 			Executive::apply_extrinsic(extrinsic)
 		}
 
-		fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-			Executive::apply_trusted_extrinsic(extrinsic)
-		}
-
 		fn finalize_block() -> <Block as BlockT>::Header {
 			Executive::finalize_block()
 		}
@@ -844,7 +839,7 @@ impl_runtime_apis! {
 			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
-		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, RuntimeString> {
+		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::Benchmarking;
 
 			let result = match module.as_slice() {
