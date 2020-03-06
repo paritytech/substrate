@@ -28,6 +28,7 @@ use sp_core::{storage::well_known_keys, traits::Externalities};
 use sp_version::RuntimeVersion;
 use std::panic::AssertUnwindSafe;
 use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance};
+use smallvec::SmallVec;
 
 use sp_wasm_interface::Function;
 
@@ -62,7 +63,7 @@ struct VersionedRuntime {
 	/// Runtime version according to `Core_version` if any.
 	version: Option<RuntimeVersion>,
 	/// Cached instance pool.
-	instances: RwLock<Vec<Arc<Mutex<Box<dyn WasmInstance>>>>>,
+	instances: RwLock<SmallVec<[Arc<Mutex<Box<dyn WasmInstance>>>; 2]>>,
 	/// The size of the instances cache.
 	max_instances: usize,
 }
