@@ -50,7 +50,6 @@ use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use pallet_contracts_rpc_runtime_api::ContractExecResult;
-use frame_system::offchain::TransactionSubmitter;
 use sp_inherents::{InherentData, CheckInherentsResult};
 
 #[cfg(any(feature = "std", test))]
@@ -447,22 +446,19 @@ impl pallet_sudo::Trait for Runtime {
 	type Call = Call;
 }
 
-/// A runtime transaction submitter.
-pub type SubmitTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
-
 parameter_types! {
 	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
 }
 
-impl frame_system::offchain::new::SigningTypes for Runtime {
+impl frame_system::offchain::SigningTypes for Runtime {
 	type Public = <Signature as traits::Verify>::Signer;
 	type Signature = Signature;
 }
 
-impl<LocalCall> frame_system::offchain::new::CreateSignedTransaction<LocalCall> for Runtime where
+impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime where
 	Call: From<LocalCall>,
 {
-	fn create_transaction<C: frame_system::offchain::new::AppCrypto<Self::Public, Self::Signature>>(
+	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
 		call: Call,
 		public: <Signature as traits::Verify>::Signer,
 		account: AccountId,
@@ -491,62 +487,25 @@ impl<LocalCall> frame_system::offchain::new::CreateSignedTransaction<LocalCall> 
 		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
 			debug::warn!("Unable to create signed payload: {:?}", e);
 		}).ok()?;
-		let signature = C::sign(&raw_payload.encode(), public)?;
+		let signature = raw_payload.using_encoded(|payload| {
+			C::sign(payload, public)
+		})?;
 		let address = Indices::unlookup(account);
 		let (call, extra, _) = raw_payload.deconstruct();
 		Some((call, (address, signature.into(), extra)))
 	}
 }
 
-impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtime {
-	type Public = <Signature as traits::Verify>::Signer;
-	type Signature = Signature;
-
-	fn create_transaction<TSigner: frame_system::offchain::Signer<Self::Public, Self::Signature>>(
-		call: Call,
-		public: Self::Public,
-		account: AccountId,
-		index: Index,
-	) -> Option<(Call, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
-		// take the biggest period possible.
-		let period = BlockHashCount::get()
-			.checked_next_power_of_two()
-			.map(|c| c / 2)
-			.unwrap_or(2) as u64;
-		let current_block = System::block_number()
-			.saturated_into::<u64>()
-			// The `System::block_number` is initialized with `n+1`,
-			// so the actual block number is `n`.
-			.saturating_sub(1);
-		let tip = 0;
-		let extra: SignedExtra = (
-			frame_system::CheckVersion::<Runtime>::new(),
-			frame_system::CheckGenesis::<Runtime>::new(),
-			frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
-			frame_system::CheckNonce::<Runtime>::from(index),
-			frame_system::CheckWeight::<Runtime>::new(),
-			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
-			Default::default(),
-		);
-		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
-			debug::warn!("Unable to create signed payload: {:?}", e);
-		}).ok()?;
-		let signature = TSigner::sign(public, &raw_payload)?;
-		let address = Indices::unlookup(account);
-		let (call, extra, _) = raw_payload.deconstruct();
-		Some((call, (address, signature, extra)))
-	}
-}
-
-impl<C> frame_system::offchain::new::SendTransactionTypes<C> for Runtime where
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime where
 	Call: From<C>,
 {
+
 	type OverarchingCall = Call;
 	type Extrinsic = UncheckedExtrinsic;
 }
 
 pub struct ImOnlineAuthId;
-impl frame_system::offchain::new::AppCrypto<<Signature as traits::Verify>::Signer, Signature> for ImOnlineAuthId {
+impl frame_system::offchain::AppCrypto<<Signature as traits::Verify>::Signer, Signature> for ImOnlineAuthId {
 	// TODO [ToDr] Get rid of this trait and instead
 	// have `RuntimeAppPublic` be able to give you `GenericSignature/GenericPublic`
 	// or see the proposal at `system/src/offchain.rs`.
