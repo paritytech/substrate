@@ -25,7 +25,7 @@ use sc_client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
 use node_executor;
 use node_primitives::Block;
-use node_runtime::{GenesisConfig, RuntimeApi};
+use node_runtime::RuntimeApi;
 use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
@@ -269,11 +269,8 @@ type ConcreteTransactionPool = sc_transaction_pool::BasicPool<
 	ConcreteBlock
 >;
 
-/// A specialized configuration object for setting up the node..
-pub type NodeConfiguration = Configuration<GenesisConfig, crate::chain_spec::Extensions>;
-
 /// Builds a new service for a full client.
-pub fn new_full(config: NodeConfiguration)
+pub fn new_full(config: Configuration)
 -> Result<
 	Service<
 		ConcreteBlock,
@@ -295,7 +292,7 @@ pub fn new_full(config: NodeConfiguration)
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: NodeConfiguration)
+pub fn new_light(config: Configuration)
 -> Result<impl AbstractService, ServiceError> {
 	type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();

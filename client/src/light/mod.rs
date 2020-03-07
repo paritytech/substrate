@@ -55,9 +55,9 @@ pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S,
 }
 
 /// Create an instance of light client.
-pub fn new_light<B, S, GS, RA, E>(
+pub fn new_light<B, S, RA, E>(
 	backend: Arc<Backend<S, HashFor<B>>>,
-	genesis_storage: &GS,
+	genesis_storage: &dyn BuildStorage,
 	code_executor: E,
 	prometheus_registry: Option<Registry>,
 ) -> ClientResult<
@@ -74,7 +74,6 @@ pub fn new_light<B, S, GS, RA, E>(
 	where
 		B: BlockT,
 		S: BlockchainStorage<B> + 'static,
-		GS: BuildStorage,
 		E: CodeExecutor + RuntimeInfo + Clone + 'static,
 {
 	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor);

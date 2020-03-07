@@ -31,9 +31,9 @@ pub struct TransactionPoolParams {
 
 impl TransactionPoolParams {
 	/// Fill the given `PoolConfiguration` by looking at the cli parameters.
-	pub fn update_config<G, E>(
+	pub fn update_config(
 		&self,
-		config: &mut Configuration<G, E>,
+		config: &mut Configuration,
 	) -> error::Result<()> {
 		// ready queue
 		config.transaction_pool.ready.count = self.pool_limit;
