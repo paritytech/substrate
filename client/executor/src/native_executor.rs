@@ -167,7 +167,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 		if let Some(hash) = code_hash {
 			let code = RuntimeCode {
 				code_fetcher: &sp_core::traits::WrappedRuntimeCode(wasm_code.into()),
-				hash: hash,
+				hash,
 				heap_pages: None,
 			};
 
@@ -187,10 +187,18 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 			)
 				.map_err(|e| format!("Failed to create module: {:?}", e))?;
 
-			module.new_instance()
-				  .map_err(|e| format!("Failed to create instance: {:?}", e))?
-			.call(method, call_data)
-			.map_err(|e| format!("Error calling method: {:?}", e))
+			let instance = module.new_instance()
+				.map_err(|e| format!("Failed to create instance: {:?}", e))?;
+
+			let instance = AssertUnwindSafe(instance);
+			let mut ext = AssertUnwindSafe(ext);
+
+			with_externalities_safe(
+				&mut **ext,
+				move || instance.call(method, call_data),
+			)
+			.and_then(|r| r)
+			.map_err(|e| e.to_string())
 		}
 	}
 }
