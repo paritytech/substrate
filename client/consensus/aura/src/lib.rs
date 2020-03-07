@@ -405,21 +405,17 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, Error<
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
-// FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be
-// used to submit such misbehavior reports.
-fn check_header<C, B: BlockT, P: Pair, T>(
+fn check_header<C, B: BlockT, P: Pair>(
 	client: &C,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
-	_transaction_pool: Option<&T>,
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, Error<B>> where
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P::Signature: Decode,
 	C: sc_client_api::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
-	T: Send + Sync + 'static,
 {
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -469,14 +465,13 @@ fn check_header<C, B: BlockT, P: Pair, T>(
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, P, T> {
+pub struct AuraVerifier<C, P> {
 	client: Arc<C>,
 	phantom: PhantomData<P>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
-	transaction_pool: Option<Arc<T>>,
 }
 
-impl<C, P, T> AuraVerifier<C, P, T>
+impl<C, P> AuraVerifier<C, P>
 	where P: Send + Sync + 'static
 {
 	fn check_inherents<B: BlockT>(
@@ -531,7 +526,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 }
 
 #[forbid(deprecated)]
-impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
+impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
 	C: ProvideRuntimeApi<B> +
 		Send +
 		Sync +
@@ -543,7 +538,6 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
-	T: Send + Sync + 'static,
 {
 	fn verify(
 		&mut self,
@@ -565,13 +559,12 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
 		// headers
-		let checked_header = check_header::<C, B, P, T>(
+		let checked_header = check_header::<C, B, P>(
 			&self.client,
 			slot_now + 1,
 			header,
 			hash,
 			&authorities[..],
-			self.transaction_pool.as_ref().map(|x| &**x),
 		).map_err(|e| e.to_string())?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, (slot_num, seal)) => {
@@ -795,14 +788,13 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, I, C, P, T>(
+pub fn import_queue<B, I, C, P>(
 	slot_duration: SlotDuration,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
-	transaction_pool: Option<Arc<T>>,
 ) -> Result<AuraImportQueue<B, sp_api::TransactionFor<C, B>>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
@@ -812,7 +804,6 @@ pub fn import_queue<B, I, C, P, T>(
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
-	T: Send + Sync + 'static,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;
@@ -821,7 +812,6 @@ pub fn import_queue<B, I, C, P, T>(
 		client: client.clone(),
 		inherent_data_providers,
 		phantom: PhantomData,
-		transaction_pool,
 	};
 	Ok(BasicQueue::new(
 		verifier,
@@ -839,10 +829,10 @@ mod tests {
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
 	use sc_network::config::ProtocolConfig;
 	use parking_lot::Mutex;
-	use tokio::runtime::current_thread;
 	use sp_keyring::sr25519::Keyring;
 	use sc_client::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
+	use std::task::Poll;
 
 	type Error = sp_blockchain::Error;
 
@@ -900,7 +890,7 @@ mod tests {
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair, ()>;
+		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -926,7 +916,6 @@ mod tests {
 					AuraVerifier {
 						client,
 						inherent_data_providers,
-						transaction_pool: Default::default(),
 						phantom: Default::default(),
 					}
 				},
@@ -961,8 +950,8 @@ mod tests {
 
 		let net = Arc::new(Mutex::new(net));
 		let mut import_notifications = Vec::new();
+		let mut aura_futures = Vec::new();
 
-		let mut runtime = current_thread::Runtime::new().unwrap();
 		let mut keystore_paths = Vec::new();
 		for (peer_id, key) in peers {
 			let mut net = net.lock();
@@ -990,7 +979,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, AuthorityPair, _, _, _>(
+			aura_futures.push(start_aura::<_, _, _, _, _, AuthorityPair, _, _, _>(
 				slot_duration,
 				client.clone(),
 				select_chain,
@@ -1001,21 +990,19 @@ mod tests {
 				false,
 				keystore,
 				sp_consensus::AlwaysCanAuthor,
-			)
-				.expect("Starts aura")
-				.unit_error()
-				.compat();
-
-			runtime.spawn(aura);
+			).expect("Starts aura"));
 		}
 
-		runtime.spawn(futures01::future::poll_fn(move || {
-			net.lock().poll();
-			Ok::<_, ()>(futures01::Async::NotReady::<()>)
-		}));
-
-		runtime.block_on(future::join_all(import_notifications)
-			.unit_error().compat()).unwrap();
+		futures::executor::block_on(future::select(
+			future::poll_fn(move |cx| {
+				net.lock().poll(cx);
+				Poll::<()>::Pending
+			}),
+			future::select(
+				future::join_all(aura_futures),
+				future::join_all(import_notifications)
+			)
+		));
 	}
 
 	#[test]

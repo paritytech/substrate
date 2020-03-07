@@ -17,14 +17,13 @@
 use std::fmt::Debug;
 use structopt::StructOpt;
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
+	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec, Roles,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
 use crate::VersionInfo;
-use crate::params::BlockNumber;
-use crate::params::SharedParams;
+use crate::params::{BlockNumber, SharedParams, PruningParams};
 
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
@@ -36,6 +35,10 @@ pub struct RevertCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub pruning_params: PruningParams,
 }
 
 impl RevertCmd {
@@ -72,6 +75,7 @@ impl RevertCmd {
 		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		self.pruning_params.update_config(&mut config, Roles::FULL, true)?;
 		config.use_in_memory_keystore()?;
 
 		Ok(())

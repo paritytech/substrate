@@ -19,7 +19,7 @@
 #   script:
 #     - echo "List of shell commands to run in your job"
 #     - echo "You can also just specify a script here, like so:"
-#     - ./scripts/gitlab/my_amazing_script.sh
+#     - ./.maintain/gitlab/my_amazing_script.sh
 
 stages:
   - test
@@ -37,6 +37,9 @@ variables:
   CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
+  # FIXME set to release
+  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.8"
+  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
 
 
 .collect-artifacts:                &collect-artifacts
@@ -101,6 +104,16 @@ check-runtime:
   interruptible:                   true
   allow_failure:                   true
 
+check-signed-tag:
+  stage:                           test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - tags
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    - ./.maintain/gitlab/check_signed.sh
+  allow_failure:                   false
 
 check-line-width:
   stage:                           test
@@ -174,6 +187,16 @@ test-dependency-rules:
       - $DEPLOY_TAG
   script:
     - .maintain/ensure-deps.sh
+
+unleash-check:
+  stage:                           test
+  <<:                              *docker-env
+  only:
+    - master
+    - tags
+  script:
+    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
+    - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
 
 test-frame-staking:
   stage:                           test
@@ -546,7 +569,19 @@ publish-draft-release:
     - tags
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
-    - ./scripts/gitlab/publish_draft_release.sh
+    - ./.maintain/gitlab/publish_draft_release.sh
+  interruptible:                   true
+  allow_failure:                   true
+
+publish-to-crates-io:
+  stage:                           publish
+  <<:                              *docker-env
+  only:
+    - tags
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
+    - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}
   interruptible:                   true
   allow_failure:                   true
 

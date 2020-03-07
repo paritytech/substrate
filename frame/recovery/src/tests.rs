@@ -31,7 +31,7 @@ use frame_support::{
 fn basic_setup_works() {
 	new_test_ext().execute_with(|| {
 		// Nothing in storage to start
-		assert_eq!(Recovery::recovered_account(&1), None);
+		assert_eq!(Recovery::proxy(&2), None);
 		assert_eq!(Recovery::active_recovery(&1, &2), None);
 		assert_eq!(Recovery::recovery_config(&1), None);
 		// Everyone should have starting balance of 100
@@ -91,10 +91,13 @@ fn recovery_life_cycle_works() {
 		// All funds have been fully recovered!
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(5), 0);
+		// Remove the proxy link.
+		assert_ok!(Recovery::cancel_recovered(Origin::signed(1), 5));
+
 		// All storage items are removed from the module
 		assert!(!<ActiveRecoveries<Test>>::contains_key(&5, &1));
 		assert!(!<Recoverable<Test>>::contains_key(&5));
-		assert!(!<Recovered<Test>>::contains_key(&5));
+		assert!(!<Proxy<Test>>::contains_key(&1));
 	});
 }
 
@@ -335,7 +338,7 @@ fn claim_recovery_works() {
 		// Account can be recovered.
 		assert_ok!(Recovery::claim_recovery(Origin::signed(1), 5));
 		// Recovered storage item is correctly created
-		assert_eq!(<Recovered<Test>>::get(&5), Some(1));
+		assert_eq!(<Proxy<Test>>::get(&1), Some(5));
 		// Account could be re-recovered in the case that the recoverer account also gets lost.
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(4), 5));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 4));
@@ -347,7 +350,7 @@ fn claim_recovery_works() {
 		// Account is re-recovered.
 		assert_ok!(Recovery::claim_recovery(Origin::signed(4), 5));
 		// Recovered storage item is correctly updated
-		assert_eq!(<Recovered<Test>>::get(&5), Some(4));
+		assert_eq!(<Proxy<Test>>::get(&4), Some(5));
 	});
 }
 

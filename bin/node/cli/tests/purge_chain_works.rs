@@ -25,7 +25,7 @@ mod common;
 fn purge_chain_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
-	common::run_command_for_a_while(base_path.path(), true);
+	common::run_dev_node_for_a_while(base_path.path());
 
 	let status = Command::new(cargo_bin("substrate"))
 		.args(&["purge-chain", "--dev", "-d"])

@@ -26,10 +26,10 @@ mod common;
 fn inspect_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
-	common::run_command_for_a_while(base_path.path(), false);
+	common::run_dev_node_for_a_while(base_path.path());
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["inspect", "-d"])
+		.args(&["inspect", "--dev", "--pruning", "archive", "-d"])
 		.arg(base_path.path())
 		.args(&["block", "1"])
 		.status()

@@ -1,10 +1,11 @@
 [package]
 name = "substrate-build-script-utils"
-version = "2.0.0-dev"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Crate with utility functions for `build.rs` scripts."
 
 [dependencies]

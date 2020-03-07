@@ -20,14 +20,8 @@ use frame_support::{
 	traits::Currency,
 	weights::GetDispatchInfo,
 };
-use sp_core::{
-	Blake2Hasher, NeverNativeValue, map,
-	storage::Storage,
-};
-use sp_runtime::{
-	Fixed64, Perbill,
-	traits::Convert,
-};
+use sp_core::{NeverNativeValue, map, storage::Storage};
+use sp_runtime::{Fixed64, Perbill, traits::{Convert, BlakeTwo256}};
 use node_runtime::{
 	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment, TransactionBaseFee,
 	TransactionByteFee, WeightFeeCoefficient,
@@ -136,13 +130,13 @@ fn transaction_fee_is_correct_ultimate() {
 	//   - 1 MILLICENTS in substrate node.
 	//   - 1 milli-dot based on current polkadot runtime.
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
+	let mut t = TestExternalities::<BlakeTwo256>::new_with_code(COMPACT_CODE, Storage {
 		top: map![
 			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+				(0u32, 0u8, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
 			},
 			<frame_system::Account<Runtime>>::hashed_key_for(bob()) => {
-				(0u32, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+				(0u32, 0u8, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
 			},
 			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				(110 * DOLLARS).encode()

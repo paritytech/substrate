@@ -113,7 +113,9 @@ async fn batch_revalidate<Api: ChainApi>(
 	}
 
 	pool.validated_pool().remove_invalid(&invalid_hashes);
-	pool.resubmit(revalidated);
+	if revalidated.len() > 0 {
+		pool.resubmit(revalidated);
+	}
 }
 
 impl<Api: ChainApi> RevalidationWorker<Api> {
@@ -160,7 +162,15 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			}
 		}
 
+		for hash in queued_exts.iter() {
+			self.members.remove(hash);
+		}
+
 		queued_exts
+	}
+
+	fn len(&self) -> usize {
+		self.block_ordered.iter().map(|b| b.1.len()).sum()
 	}
 
 	fn push(&mut self, worker_payload: WorkerPayload<Api>) {
@@ -170,7 +180,15 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 
 		for ext_hash in transactions {
 			// we don't add something that already scheduled for revalidation
-			if self.members.contains_key(&ext_hash) { continue; }
+			if self.members.contains_key(&ext_hash) {
+				log::debug!(
+					target: "txpool",
+					"[{:?}] Skipped adding for revalidation: Already there.",
+					ext_hash,
+				);
+
+				continue;
+			}
 
 			self.block_ordered.entry(block_number)
 				.and_modify(|value| { value.insert(ext_hash.clone()); })
@@ -198,7 +216,18 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			futures::select! {
 				_ = interval.next() => {
 					let next_batch = this.prepare_batch();
+					let batch_len = next_batch.len();
+
 					batch_revalidate(this.pool.clone(), this.api.clone(), this.best_block, next_batch).await;
+
+					if batch_len > 0 || this.len() > 0 {
+						log::debug!(
+							target: "txpool",
+							"Revalidated {} transactions. Left in the queue for revalidation: {}.",
+							batch_len,
+							this.len(),
+						);
+					}
 				},
 				workload = from_queue.next() => {
 					match workload {
@@ -264,6 +293,10 @@ where
 	/// If queue configured without background worker, this will resolve after
 	/// revalidation is actually done.
 	pub async fn revalidate_later(&self, at: NumberFor<Api>, transactions: Vec<ExHash<Api>>) {
+		if transactions.len() > 0 {
+			log::debug!(target: "txpool", "Added {} transactions to revalidation queue", transactions.len());
+		}
+
 		if let Some(ref to_worker) = self.background {
 			if let Err(e) = to_worker.unbounded_send(WorkerPayload { at, transactions }) {
 				log::warn!(target: "txpool", "Failed to update background worker: {:?}", e);
