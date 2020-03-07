@@ -60,6 +60,7 @@ use frame_support::traits::{
 use frame_support::weights::SimpleDispatchInfo;
 use frame_system::{self as system, ensure_signed};
 
+#[cfg(features = "runtime-benchmarks")]
 pub mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
