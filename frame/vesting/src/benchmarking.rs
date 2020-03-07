@@ -83,11 +83,10 @@ benchmarks! {
 		let b in ...;
 		let l in ...;
 
-		let other: T::AccountId = account("other", 0, SEED);
+		let other: T::AccountId = setup::<T>(b);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
 
-		let caller = setup::<T>(b);
-
+		let caller = account("caller", 0, SEED);
 	}: _(RawOrigin::Signed(caller), other_lookup)
 
 	vested_transfer{
