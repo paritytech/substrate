@@ -63,7 +63,7 @@ struct VersionedRuntime {
 	/// Runtime version according to `Core_version` if any.
 	version: Option<RuntimeVersion>,
 	/// Cached instance pool.
-	instances: RwLock<SmallVec<[Arc<Mutex<Box<dyn WasmInstance>>>; 2]>>,
+	instances: RwLock<SmallVec<[Arc<Mutex<Box<dyn WasmInstance>>>; 8]>>,
 	/// The size of the instances cache.
 	max_instances: usize,
 }
@@ -86,13 +86,16 @@ pub struct RuntimeCache {
 	///
 	/// Runtimes sorted by recent usage. The most recently used is at the front.
 	runtimes: Mutex<[Option<Arc<VersionedRuntime>>; MAX_RUNTIMES]>,
+	/// The size of the instances cache for each runtime.
+	max_runtime_instances: usize,
 }
 
 impl RuntimeCache {
 	/// Creates a new instance of a runtimes cache.
-	pub fn new() -> RuntimeCache {
+	pub fn new(max_runtime_instances: usize) -> RuntimeCache {
 		RuntimeCache {
 			runtimes: Default::default(),
+			max_runtime_instances,
 		}
 	}
 
@@ -133,7 +136,6 @@ impl RuntimeCache {
 		default_heap_pages: u64,
 		host_functions: &[&'static dyn Function],
 		allow_missing_func_imports: bool,
-		max_runtime_instances: usize,
 		f: F,
 	) -> Result<Result<R, Error>, Error>
 		where F: FnOnce(
@@ -190,7 +192,7 @@ impl RuntimeCache {
 					heap_pages,
 					host_functions.into(),
 					allow_missing_func_imports,
-					max_runtime_instances,
+					self.max_runtime_instances,
 				);
 				if let Err(ref err) = result {
 					log::warn!(target: "wasm-runtime", "Cannot create a runtime: {:?}", err);
@@ -347,7 +349,7 @@ fn create_versioned_wasm_runtime(
 		version,
 		heap_pages,
 		wasm_method,
-		instances: Default::default(),
+		instances: RwLock::new(SmallVec::with_capacity(max_instances)),
 		max_instances,
 	})
 }

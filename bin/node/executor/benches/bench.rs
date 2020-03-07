@@ -161,7 +161,7 @@ fn bench_execute_block(c: &mut Criterion) {
 				ExecutionMethod::Native => (true, WasmExecutionMethod::Interpreted),
 				ExecutionMethod::Wasm(wasm_method) => (false, *wasm_method),
 			};
-			let executor = NativeExecutor::new(wasm_method, None, 2);
+			let executor = NativeExecutor::new(wasm_method, None, 8);
 
 			// Get the runtime version to initialize the runtimes cache.
 			{

@@ -125,7 +125,7 @@ pub struct Configuration<G, E = NoExtension> {
 	pub tracing_receiver: sc_tracing::TracingReceiver,
 	/// The size of the instances cache.
 	///
-	/// The default value is 2.
+	/// The default value is 8.
 	pub max_runtime_instances: usize,
 }
 
@@ -228,7 +228,7 @@ impl<G, E> Default for Configuration<G, E> {
 			dev_key_seed: None,
 			tracing_targets: Default::default(),
 			tracing_receiver: Default::default(),
-			max_runtime_instances: Default::default(),
+			max_runtime_instances: 8,
 		}
 	}
 }

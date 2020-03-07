@@ -269,8 +269,8 @@ pub struct RunCmd {
 
 	/// The size of the instances cache for each runtime.
 	///
-	/// The default value is 2 and the values higher than 256 are ignored.
-	#[structopt(long = "max-runtime-instances", default_value = "2")]
+	/// The default value is 8 and the values higher than 256 are ignored.
+	#[structopt(long = "max-runtime-instances", default_value = "8")]
 	pub max_runtime_instances: usize,
 }
 

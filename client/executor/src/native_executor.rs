@@ -109,7 +109,7 @@ impl WasmExecutor {
 			method,
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
 			host_functions: Arc::new(host_functions),
-			cache: Arc::new(RuntimeCache::new()),
+			cache: Arc::new(RuntimeCache::new(max_runtime_instances)),
 			allow_missing_func_imports,
 			max_runtime_instances,
 		}
@@ -147,7 +147,6 @@ impl WasmExecutor {
 			self.default_heap_pages,
 			&*self.host_functions,
 			self.allow_missing_func_imports,
-			self.max_runtime_instances,
 			|instance, version, ext| {
 				let instance = AssertUnwindSafe(instance);
 				let ext = AssertUnwindSafe(ext);
@@ -440,7 +439,7 @@ mod tests {
 		let executor = NativeExecutor::<MyExecutor>::new(
 			WasmExecutionMethod::Interpreted,
 			None,
-			2,
+			8,
 		);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
 			assert_eq!(

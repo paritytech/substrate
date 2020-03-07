@@ -46,7 +46,7 @@ fn call_in_wasm<E: Externalities>(
 		Some(1024),
 		HostFunctions::host_functions(),
 		true,
-		2,
+		8,
 	);
 	executor.call_in_wasm(
 		&WASM_BINARY[..],
@@ -511,7 +511,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		Some(17),  // `17` is the initial number of pages compiled into the binary.
 		HostFunctions::host_functions(),
 		true,
-		2,
+		8,
 	);
 	executor.call_in_wasm(
 		&WASM_BINARY[..],

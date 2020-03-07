@@ -188,7 +188,7 @@ fn record_proof_works() {
 	let executor = NativeExecutor::<LocalExecutor>::new(
 		WasmExecutionMethod::Interpreted,
 		None,
-		2,
+		8,
 	);
 	execution_proof_check_on_trie_backend::<_, u64, _>(
 		&backend,
