@@ -90,10 +90,18 @@ benchmarks! {
 
 	}: _(RawOrigin::Signed(caller), other_lookup)
 
-	// vested_transfer{
-	// 	let u in 0 .. 1000;
-	// 	let caller = account("caller", 0, SEED);
-	// 	let _ = T::Currency::make_free_balance_be(&caller, balance);
-
-	// }: 
+	vested_transfer{
+		let u in 0 .. 1000;
+		let from = account("from", u, SEED);
+		let to = account("to", u, SEED);
+		let to_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(to);
+		let transfer_amt = T::MinVestedTransfer::get();
+		let vesting_schedule = VestingInfo {
+			locked: transfer_amt,
+			per_block: 1.into(),
+			starting_block: 0.into(),
+		};
+		let _ = T::Currency::make_free_balance_be(&from, transfer_amt * 10.into());
+		
+	}: _(RawOrigin::Signed(from), to_lookup, vesting_schedule)
 }
