@@ -44,12 +44,15 @@ use frame_system::{
 	self as system,
 	ensure_signed,
 	ensure_none,
-	offchain::{self, new::{
-		self,
+	offchain::{
+		AppCrypto,
+		CreateSignedTransaction,
 		SendUnsignedTransaction,
-		SendSignedTransaction,
 		SendRawUnsignedTransaction,
-	}}
+		SignedPayload,
+		SigningTypes,
+		Signer,
+	}
 };
 use frame_support::{
 	debug,
@@ -89,16 +92,9 @@ pub mod crypto {
 }
 
 /// This pallet's configuration trait
-pub trait Trait: new::SendTransactionTypes<Call<Self>> {
+pub trait Trait: CreateSignedTransaction<Call<Self>> {
 	/// The identifier type for an offchain worker.
-	type AuthorityId: new::AppCrypto<Self::Public, Self::Signature>;
-
-	/// The type to sign and submit transactions.
-	type SubmitSignedTransaction:
-		offchain::SubmitSignedTransaction<Self, <Self as Trait>::Call>;
-	/// The type to submit unsigned transactions.
-	type SubmitUnsignedTransaction:
-		offchain::SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
+	type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -127,7 +123,7 @@ pub struct PricePayload<Public, BlockNumber> {
 	public: Public
 }
 
-impl<T: new::SigningTypes> new::SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
+impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
 	fn public(&self) -> T::Public {
 		self.public.clone()
 	}
@@ -365,35 +361,28 @@ impl<T: Trait> Module<T> {
 
 	/// A helper function to fetch the price and send signed transaction.
 	fn fetch_price_and_send_signed() -> Result<(), String> {
-		use system::offchain::SubmitSignedTransaction;
-		// Firstly we check if there are any accounts in the local keystore that are capable of
-		// signing the transaction.
-		// If not it doesn't even make sense to make external HTTP requests, since we won't be able
-		// to put the results back on-chain.
-		if !T::SubmitSignedTransaction::can_sign() {
-			return Err(
-				"No local accounts available. Consider adding one via `author_insertKey` RPC."
-			)?
-		}
-
+		use frame_system::offchain::SendSignedTransaction;
 		// Make an external HTTP request to fetch the current price.
 		// Note this call will block until response is received.
 		let price = Self::fetch_price().map_err(|e| format!("{:?}", e))?;
 
-		// Received price is wrapped into a call to `submit_price` public function of this pallet.
-		// This means that the transaction, when executed, will simply call that function passing
-		// `price` as an argument.
-		let call = Call::submit_price(price);
-
-		// Using `SubmitSignedTransaction` associated type we create and submit a transaction
+		// Using `send_signed_transaction` associated type we create and submit a transaction
 		// representing the call, we've just created.
 		// Submit signed will return a vector of results for all accounts that were found in the
 		// local keystore with expected `KEY_TYPE`.
-		let results = T::SubmitSignedTransaction::submit_signed(call);
+		let results = Signer::<T, T::AuthorityId>::all_accounts().send_signed_transaction(
+			|_account| {
+				// Received price is wrapped into a call to `submit_price` public function of this pallet.
+				// This means that the transaction, when executed, will simply call that function passing
+				// `price` as an argument.
+				Call::submit_price(price)
+			}
+		);
+		// let results = T::SubmitSignedTransaction::submit_signed(call);
 		for (acc, res) in &results {
 			match res {
-				Ok(()) => debug::info!("[{:?}] Submitted price of {} cents", acc, price),
-				Err(e) => debug::error!("[{:?}] Failed to submit transaction: {:?}", acc, e),
+				Ok(()) => debug::info!("[{:?}] Submitted price of {} cents", acc.id, price),
+				Err(e) => debug::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
 			}
 		}
 
@@ -421,22 +410,21 @@ impl<T: Trait> Module<T> {
 		let call = Call::submit_price_unsigned(block_number, price);
 
 		// Now let's create a transaction out of this call and submit it to the pool.
-		// Here we showcase multiple ways to send a transaction:
+		// Here we showcase two ways to send a transaction:
 		// 1. An unsigned transaction / unsigned payload (raw)
 		// 2. An unsigned transaction with a signed payload
-		// 3. A signed transaction
 		//
 		// By default unsigned transactions are disallowed, so we need to whitelist this case
 		// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefuly
 		// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
 		// attack vectors. See validation logic docs for more details.
 		//
-		// Method 1
-		let _result_raw: Result<(), String> = new::Signer::<T, T::AuthorityId>::send_raw_unsigned_transaction(call)
+		// Method 1: Unsigned transaction / Unsigned payload
+		let _result_raw: Result<(), String> = Signer::<T, T::AuthorityId>::send_raw_unsigned_transaction(call)
     		.map_err(|()| "Unable to submit unsigned transaction.".into());
 
-		// Method 2
-		let _result_signed_payload = new::Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
+		// Method 2: Unsigned transction / signed payload
+		let _result_signed_payload = Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
 			|account| PricePayload {
 				price,
 				block_number,
@@ -447,10 +435,6 @@ impl<T: Trait> Module<T> {
 			}
 		);
 
-		// Method 3
-		let _result_signed_transaction = new::Signer::<T, T::AuthorityId>::all_accounts().send_signed_transaction(
-			 |_account| Call::submit_price(price)
-		);
 
 		Ok(())
 		// T::SubmitUnsignedTransaction::submit_unsigned(call)
@@ -553,57 +537,57 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-    fn validate_transaction_parameters(
-        block_number: &T::BlockNumber,
-        new_price: &u32
-    ) -> TransactionValidity {
-        // Now let's check if the transaction has any chance to succeed.
-        let next_unsigned_at = <NextUnsignedAt<T>>::get();
-        if &next_unsigned_at > block_number {
-            return InvalidTransaction::Stale.into();
-        }
-        // Let's make sure to reject transactions from the future.
-        let current_block = <system::Module<T>>::block_number();
-        if &current_block < block_number {
-            return InvalidTransaction::Future.into();
-        }
+	fn validate_transaction_parameters(
+		block_number: &T::BlockNumber,
+		new_price: &u32
+	) -> TransactionValidity {
+		// Now let's check if the transaction has any chance to succeed.
+		let next_unsigned_at = <NextUnsignedAt<T>>::get();
+		if &next_unsigned_at > block_number {
+			return InvalidTransaction::Stale.into();
+		}
+		// Let's make sure to reject transactions from the future.
+		let current_block = <system::Module<T>>::block_number();
+		if &current_block < block_number {
+			return InvalidTransaction::Future.into();
+		}
 
-        // We prioritize transactions that are more far away from current average.
-        //
-        // Note this doesn't make much sense when building an actual oracle, but this example
-        // is here mostly to show off offchain workers capabilities, not about building an
-        // oracle.
-        let avg_price = Self::average_price()
-            .map(|price| if &price > new_price { price - new_price } else { new_price - price })
-            .unwrap_or(0);
+		// We prioritize transactions that are more far away from current average.
+		//
+		// Note this doesn't make much sense when building an actual oracle, but this example
+		// is here mostly to show off offchain workers capabilities, not about building an
+		// oracle.
+		let avg_price = Self::average_price()
+			.map(|price| if &price > new_price { price - new_price } else { new_price - price })
+			.unwrap_or(0);
 
-        Ok(ValidTransaction {
-            // We set base priority to 2**20 to make sure it's included before any other
-            // transactions in the pool. Next we tweak the priority depending on how much
-            // it differs from the current average. (the more it differs the more priority it
-            // has).
-            priority: (1 << 20) + avg_price as u64,
-            // This transaction does not require anything else to go before into the pool.
-            // In theory we could require `previous_unsigned_at` transaction to go first,
-            // but it's not necessary in our case.
-            requires: vec![],
-            // We set the `provides` tag to be the same as `next_unsigned_at`. This makes
-            // sure only one transaction produced after `next_unsigned_at` will ever
-            // get to the transaction pool and will end up in the block.
-            // We can still have multiple transactions compete for the same "spot",
-            // and the one with higher priority will replace other one in the pool.
-            provides: vec![codec::Encode::encode(&(KEY_TYPE.0, next_unsigned_at))],
-            // The transaction is only valid for next 5 blocks. After that it's
-            // going to be revalidated by the pool.
-            longevity: 5,
-            // It's fine to propagate that transaction to other peers, which means it can be
-            // created even by nodes that don't produce blocks.
-            // Note that sometimes it's better to keep it for yourself (if you are the block
-            // producer), since for instance in some schemes others may copy your solution and
-            // claim a reward.
-            propagate: true,
-        })
-    }
+		Ok(ValidTransaction {
+			// We set base priority to 2**20 to make sure it's included before any other
+			// transactions in the pool. Next we tweak the priority depending on how much
+			// it differs from the current average. (the more it differs the more priority it
+			// has).
+			priority: (1 << 20) + avg_price as u64,
+			// This transaction does not require anything else to go before into the pool.
+			// In theory we could require `previous_unsigned_at` transaction to go first,
+			// but it's not necessary in our case.
+			requires: vec![],
+			// We set the `provides` tag to be the same as `next_unsigned_at`. This makes
+			// sure only one transaction produced after `next_unsigned_at` will ever
+			// get to the transaction pool and will end up in the block.
+			// We can still have multiple transactions compete for the same "spot",
+			// and the one with higher priority will replace other one in the pool.
+			provides: vec![codec::Encode::encode(&(KEY_TYPE.0, next_unsigned_at))],
+			// The transaction is only valid for next 5 blocks. After that it's
+			// going to be revalidated by the pool.
+			longevity: 5,
+			// It's fine to propagate that transaction to other peers, which means it can be
+			// created even by nodes that don't produce blocks.
+			// Note that sometimes it's better to keep it for yourself (if you are the block
+			// producer), since for instance in some schemes others may copy your solution and
+			// claim a reward.
+			propagate: true,
+		})
+	}
 }
 
 #[allow(deprecated)] // ValidateUnsigned
@@ -616,21 +600,19 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	/// here we make sure that some particular calls (the ones produced by offchain worker)
 	/// are being whitelisted and marked as valid.
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
-		use new::SignedPayload;
-
 		// Firstly let's check that we call the right function.
 		if let Call::submit_price_unsigned_with_signed_payload(
 			ref payload, ref signature
 		) = call {
-            let signature_valid = SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+			let signature_valid = SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
 			if !signature_valid {
 				return InvalidTransaction::BadProof.into();
 			}
-            Self::validate_transaction_parameters(&payload.block_number, &payload.price)
-        } else if let Call::submit_price_unsigned(block_number, new_price) = call {
-            Self::validate_transaction_parameters(block_number, new_price)
-        } else {
-            InvalidTransaction::Call.into()
-        }
-    }
+			Self::validate_transaction_parameters(&payload.block_number, &payload.price)
+		} else if let Call::submit_price_unsigned(block_number, new_price) = call {
+			Self::validate_transaction_parameters(block_number, new_price)
+		} else {
+			InvalidTransaction::Call.into()
+		}
+	}
 }
