@@ -171,3 +171,6 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+schnorrkel = { git = "https://github.com/w3f/schnorrkel" }
