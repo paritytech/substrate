@@ -18,11 +18,11 @@
 use schnorrkel::vrf::{VRFOutput, VRFProof};
 use sp_runtime::{traits::Header, traits::DigestItemFor};
 use sp_core::{Pair, Public};
-use sp_consensus_babe::{Epoch, BabePreDigest, CompatibleDigestItem, AuthorityId};
-use sp_consensus_babe::{AuthoritySignature, SlotNumber, AuthorityIndex, AuthorityPair};
+use sp_consensus_babe::{AuthoritySignature, SlotNumber, AuthorityIndex, AuthorityPair, AuthorityId};
+use sp_consensus_babe::digests::{PreDigest, CompatibleDigestItem};
 use sc_consensus_slots::CheckedHeader;
 use log::{debug, trace};
-use super::{find_pre_digest, babe_err, BlockT, Error};
+use super::{find_pre_digest, babe_err, Epoch, BlockT, Error};
 use super::authorship::{make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
 
 /// BABE verification parameters
@@ -32,7 +32,7 @@ pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 	/// the pre-digest of the header being verified. this is optional - if prior
 	/// verification code had to read it, it can be included here to avoid duplicate
 	/// work.
-	pub(super) pre_digest: Option<BabePreDigest>,
+	pub(super) pre_digest: Option<PreDigest>,
 	/// the slot number of the current time.
 	pub(super) slot_now: SlotNumber,
 	/// epoch descriptor of the epoch this block _should_ be under, if it's valid.
@@ -93,7 +93,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	};
 
 	match &pre_digest {
-		BabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number } => {
+		PreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number } => {
 			debug!(target: "babe", "Verifying Primary block");
 
 			let digest = (vrf_output, vrf_proof, *authority_index, *slot_number);
@@ -106,7 +106,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				config.c,
 			)?;
 		},
-		BabePreDigest::Secondary { authority_index, slot_number } if config.secondary_slots => {
+		PreDigest::Secondary { authority_index, slot_number } if config.secondary_slots => {
 			debug!(target: "babe", "Verifying Secondary block");
 
 			let digest = (*authority_index, *slot_number);

@@ -16,7 +16,7 @@
 
 //! Changes trie related structures and functions.
 //!
-//! Changes trie is a trie built of { storage key => extrinsiscs } pairs
+//! Changes trie is a trie built of { storage key => extrinsics } pairs
 //! at the end of each block. For every changed storage key it contains
 //! a pair, mapping key to the set of extrinsics where it has been changed.
 //!
@@ -130,7 +130,7 @@ pub struct AnchorBlockId<Hash: std::fmt::Debug, Number: BlockNumber> {
 pub struct State<'a, H, Number> {
 	/// Configuration that is active at given block.
 	pub config: Configuration,
-	/// Configuration activation block number. Zero if it is the first coonfiguration on the chain,
+	/// Configuration activation block number. Zero if it is the first configuration on the chain,
 	/// or number of the block that have emit NewConfiguration signal (thus activating configuration
 	/// starting from the **next** block).
 	pub zero: Number,

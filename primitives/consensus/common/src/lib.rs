@@ -32,7 +32,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, DigestFor, NumberFor, HasherFor},
+	generic::BlockId, traits::{Block as BlockT, DigestFor, NumberFor, HashFor},
 };
 use futures::prelude::*;
 pub use sp_inherents::InherentData;
@@ -93,7 +93,7 @@ pub struct Proposal<Block: BlockT, Transaction> {
 	/// Optional proof that was recorded while building the block.
 	pub proof: Option<sp_state_machine::StorageProof>,
 	/// The storage changes while building this block.
-	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>,
+	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>,
 }
 
 /// Used as parameter to [`Proposer`] to tell the requirement on recording a proof.

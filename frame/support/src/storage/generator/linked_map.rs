@@ -326,7 +326,7 @@ where
 
 	type Enumerator = Enumerator<K, V, G::KeyFormat>;
 
-	fn exists<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool {
+	fn contains_key<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool {
 		unhashed::exists(Self::storage_linked_map_final_key(key).as_ref())
 	}
 

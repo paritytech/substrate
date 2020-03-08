@@ -90,7 +90,7 @@ impl ProvideInherentData for InherentDataProvider {
 		&self,
 		inherent_data: &mut InherentData,
 	) -> Result<(), sp_inherents::Error> {
-		use std::time::SystemTime;
+		use wasm_timer::SystemTime;
 
 		let now = SystemTime::now();
 		now.duration_since(SystemTime::UNIX_EPOCH)

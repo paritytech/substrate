@@ -44,6 +44,18 @@ where
 	pub function: Call,
 }
 
+#[cfg(feature = "std")]
+impl<Address, Call, Signature, Extra> parity_util_mem::MallocSizeOf
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Extra: SignedExtension
+{
+	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		// Instantiated only in runtime.
+		0
+	}
+}
+
 impl<Address, Call, Signature, Extra: SignedExtension>
 	UncheckedExtrinsic<Address, Call, Signature, Extra>
 {

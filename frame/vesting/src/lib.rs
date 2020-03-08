@@ -50,12 +50,14 @@ use sp_std::prelude::*;
 use sp_std::fmt::Debug;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
-	StaticLookup, Zero, SimpleArithmetic, MaybeSerializeDeserialize, Saturating, Convert
+	StaticLookup, Zero, AtLeast32Bit, MaybeSerializeDeserialize, Convert
 }};
-use frame_support::{decl_module, decl_event, decl_storage, ensure, decl_error};
+use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
 use frame_support::traits::{
-	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier
+	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier, ExistenceRequirement,
+	Get,
 };
+use frame_support::weights::SimpleDispatchInfo;
 use frame_system::{self as system, ensure_signed};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -69,6 +71,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// Convert the block number into a balance.
 	type BlockNumberToBalance: Convert<Self::BlockNumber, BalanceOf<Self>>;
+
+	/// The minimum amount transferred to call `vested_transfer`.
+	type MinVestedTransfer: Get<BalanceOf<Self>>;
 }
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
@@ -85,8 +90,8 @@ pub struct VestingInfo<Balance, BlockNumber> {
 }
 
 impl<
-	Balance: SimpleArithmetic + Copy,
-	BlockNumber: SimpleArithmetic + Copy,
+	Balance: AtLeast32Bit + Copy,
+	BlockNumber: AtLeast32Bit + Copy,
 > VestingInfo<Balance, BlockNumber> {
 	/// Amount locked at block `n`.
 	pub fn locked_at<
@@ -115,6 +120,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, BalanceOf<T>)>;
 		build(|config: &GenesisConfig<T>| {
+			use sp_runtime::traits::Saturating;
 			// Generate initial vesting configuration
 			// * who - Account which we are generating vesting configuration for
 			// * begin - Block when the account will start to vest
@@ -157,6 +163,8 @@ decl_error! {
 		NotVesting,
 		/// An existing vesting schedule already exists for this account that cannot be clobbered.
 		ExistingVestingSchedule,
+		/// Amount being transferred is too low to create a vesting schedule.
+		AmountLow,
 	}
 }
 
@@ -164,6 +172,9 @@ decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
+
+		/// The minimum amount to be transferred to create a new vesting schedule.
+		const MinVestedTransfer: BalanceOf<T> = T::MinVestedTransfer::get();
 
 		fn deposit_event() = default;
 
@@ -205,6 +216,40 @@ decl_module! {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
 		}
+
+		/// Create a vested transfer. 
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `target`: The account that should be transferred the vested funds.
+		/// - `amount`: The amount of funds to transfer and will be vested.
+		/// - `schedule`: The vesting schedule attached to the transfer.
+		///
+		/// Emits `VestingCreated`.
+		///
+		/// # <weight>
+		/// - Creates a new storage entry, but is protected by a minimum transfer
+		///	   amount needed to succeed.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		pub fn vested_transfer(
+			origin,
+			target: <T::Lookup as StaticLookup>::Source,
+			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
+		) -> DispatchResult {
+			let transactor = ensure_signed(origin)?;
+			ensure!(schedule.locked >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
+
+			let who = T::Lookup::lookup(target)?;
+			ensure!(!Vesting::<T>::contains_key(&who), Error::<T>::ExistingVestingSchedule);
+			
+			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
+
+			Self::add_vesting_schedule(&who, schedule.locked, schedule.per_block, schedule.starting_block)
+				.expect("user does not have an existing vesting schedule; q.e.d.");
+			
+			Ok(())
+		}
 	}
 }
 
@@ -212,16 +257,18 @@ impl<T: Trait> Module<T> {
 	/// (Re)set or remove the module's currency lock on `who`'s account in accordance with their
 	/// current unvested amount.
 	fn update_lock(who: T::AccountId) -> DispatchResult {
-		ensure!(Vesting::<T>::exists(&who), Error::<T>::NotVesting);
-		let unvested = Self::vesting_balance(&who);
-		if unvested.is_zero() {
+		let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
+		let now = <frame_system::Module<T>>::block_number();
+		let locked_now = vesting.locked_at::<T::BlockNumberToBalance>(now);
+
+		if locked_now.is_zero() {
 			T::Currency::remove_lock(VESTING_ID, &who);
 			Vesting::<T>::remove(&who);
 			Self::deposit_event(RawEvent::VestingCompleted(who));
 		} else {
 			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
-			T::Currency::set_lock(VESTING_ID, &who, unvested, reasons);
-			Self::deposit_event(RawEvent::VestingUpdated(who, unvested));
+			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
+			Self::deposit_event(RawEvent::VestingUpdated(who, locked_now));
 		}
 		Ok(())
 	}
@@ -234,13 +281,13 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 	type Currency = T::Currency;
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
-	fn vesting_balance(who: &T::AccountId) -> BalanceOf<T> {
+	fn vesting_balance(who: &T::AccountId) -> Option<BalanceOf<T>> {
 		if let Some(v) = Self::vesting(who) {
 			let now = <frame_system::Module<T>>::block_number();
 			let locked_now = v.locked_at::<T::BlockNumberToBalance>(now);
-			T::Currency::free_balance(who).min(locked_now)
+			Some(T::Currency::free_balance(who).min(locked_now))
 		} else {
-			Zero::zero()
+			None
 		}
 	}
 
@@ -248,6 +295,10 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 	///
 	/// If there already exists a vesting schedule for the given account, an `Err` is returned
 	/// and nothing is updated.
+	///
+	/// On success, a linearly reducing amount of funds will be locked. In order to realise any
+	/// reduction of the lock over time as it diminishes, the account owner must use `vest` or
+	/// `vest_other`.
 	///
 	/// Is a no-op if the amount to be vested is zero.
 	fn add_vesting_schedule(
@@ -257,7 +308,7 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 		starting_block: T::BlockNumber
 	) -> DispatchResult {
 		if locked.is_zero() { return Ok(()) }
-		if Vesting::<T>::exists(who) {
+		if Vesting::<T>::contains_key(who) {
 			Err(Error::<T>::ExistingVestingSchedule)?
 		}
 		let vesting_schedule = VestingInfo {
@@ -292,7 +343,9 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
-		Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup, Identity, OnInitialize},
+		Perbill,
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup, Identity, OnRuntimeUpgrade},
 	};
 	use sp_storage::Storage;
 
@@ -300,9 +353,9 @@ mod tests {
 		pub enum Origin for Test  where system = frame_system {}
 	}
 
-	// For testing the module, we construct most of a mock runtime. This means
+	// For testing the pallet, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of modules we want to use.
+	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -328,24 +381,25 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
-	}
-	parameter_types! {
-		pub const CreationFee: u64 = 0;
+		type AccountData = pallet_balances::AccountData<u64>;
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnReapAccount = System;
-		type OnNewAccount = ();
-		type Event = ();
-		type TransferPayment = ();
 		type DustRemoval = ();
+		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type CreationFee = CreationFee;
+		type AccountStore = System;
+	}
+	parameter_types! {
+		pub const MinVestedTransfer: u64 = 256 * 2;
 	}
 	impl Trait for Test {
 		type Event = ();
 		type Currency = Balances;
 		type BlockNumberToBalance = Identity;
+		type MinVestedTransfer = MinVestedTransfer;
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
@@ -430,7 +484,7 @@ mod tests {
 		];
 		s.top = data.into_iter().collect();
 		sp_io::TestExternalities::new(s).execute_with(|| {
-			Balances::on_initialize(1);
+			Balances::on_runtime_upgrade();
 			assert_eq!(Balances::free_balance(6), 60);
 			assert_eq!(Balances::usable_balance(&6), 30);
 			System::set_block_number(2);
@@ -478,28 +532,28 @@ mod tests {
 				assert_eq!(Vesting::vesting(&12), Some(user12_vesting_schedule)); // Account 12 has a vesting schedule
 
 				// Account 1 has only 128 units vested from their illiquid 256 * 5 units at block 1
-				assert_eq!(Vesting::vesting_balance(&1), 128 * 9);
+				assert_eq!(Vesting::vesting_balance(&1), Some(128 * 9));
 				// Account 2 has their full balance locked
-				assert_eq!(Vesting::vesting_balance(&2), user2_free_balance);
+				assert_eq!(Vesting::vesting_balance(&2), Some(user2_free_balance));
 				// Account 12 has only their illiquid funds locked
-				assert_eq!(Vesting::vesting_balance(&12), user12_free_balance - 256 * 5);
+				assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - 256 * 5));
 
 				System::set_block_number(10);
 				assert_eq!(System::block_number(), 10);
 
 				// Account 1 has fully vested by block 10
-				assert_eq!(Vesting::vesting_balance(&1), 0);
+				assert_eq!(Vesting::vesting_balance(&1), Some(0));
 				// Account 2 has started vesting by block 10
-				assert_eq!(Vesting::vesting_balance(&2), user2_free_balance);
+				assert_eq!(Vesting::vesting_balance(&2), Some(user2_free_balance));
 				// Account 12 has started vesting by block 10
-				assert_eq!(Vesting::vesting_balance(&12), user12_free_balance - 256 * 5);
+				assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - 256 * 5));
 
 				System::set_block_number(30);
 				assert_eq!(System::block_number(), 30);
 
-				assert_eq!(Vesting::vesting_balance(&1), 0); // Account 1 is still fully vested, and not negative
-				assert_eq!(Vesting::vesting_balance(&2), 0); // Account 2 has fully vested by block 30
-				assert_eq!(Vesting::vesting_balance(&12), 0); // Account 2 has fully vested by block 30
+				assert_eq!(Vesting::vesting_balance(&1), Some(0)); // Account 1 is still fully vested, and not negative
+				assert_eq!(Vesting::vesting_balance(&2), Some(0)); // Account 2 has fully vested by block 30
+				assert_eq!(Vesting::vesting_balance(&12), Some(0)); // Account 2 has fully vested by block 30
 
 			});
 	}
@@ -514,7 +568,7 @@ mod tests {
 				let user1_free_balance = Balances::free_balance(&1);
 				assert_eq!(user1_free_balance, 100); // Account 1 has free balance
 				// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
-				assert_eq!(Vesting::vesting_balance(&1), 45);
+				assert_eq!(Vesting::vesting_balance(&1), Some(45));
 				assert_noop!(
 					Balances::transfer(Some(1).into(), 2, 56),
 					pallet_balances::Error::<Test, _>::LiquidityRestrictions,
@@ -532,7 +586,7 @@ mod tests {
 				let user1_free_balance = Balances::free_balance(&1);
 				assert_eq!(user1_free_balance, 100); // Account 1 has free balance
 				// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
-				assert_eq!(Vesting::vesting_balance(&1), 45);
+				assert_eq!(Vesting::vesting_balance(&1), Some(45));
 				assert_ok!(Vesting::vest(Some(1).into()));
 				assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
 			});
@@ -548,7 +602,7 @@ mod tests {
 				let user1_free_balance = Balances::free_balance(&1);
 				assert_eq!(user1_free_balance, 100); // Account 1 has free balance
 				// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
-				assert_eq!(Vesting::vesting_balance(&1), 45);
+				assert_eq!(Vesting::vesting_balance(&1), Some(45));
 				assert_ok!(Vesting::vest_other(Some(2).into(), 1));
 				assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
 			});
@@ -571,12 +625,12 @@ mod tests {
 				assert_eq!(user2_free_balance, 300); // Account 2 has 100 more free balance than normal
 
 				// Account 1 has only 5 units vested at block 1 (plus 150 unvested)
-				assert_eq!(Vesting::vesting_balance(&1), 45);
+				assert_eq!(Vesting::vesting_balance(&1), Some(45));
 				assert_ok!(Vesting::vest(Some(1).into()));
 				assert_ok!(Balances::transfer(Some(1).into(), 3, 155)); // Account 1 can send extra units gained
 
 				// Account 2 has no units vested at block 1, but gained 100
-				assert_eq!(Vesting::vesting_balance(&2), 200);
+				assert_eq!(Vesting::vesting_balance(&2), Some(200));
 				assert_ok!(Vesting::vest(Some(2).into()));
 				assert_ok!(Balances::transfer(Some(2).into(), 3, 100)); // Account 2 can send extra units gained
 			});
@@ -593,7 +647,7 @@ mod tests {
 
 				assert_eq!(user12_free_balance, 2560); // Account 12 has free balance
 				// Account 12 has liquid funds
-				assert_eq!(Vesting::vesting_balance(&12), user12_free_balance - 256 * 5);
+				assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - 256 * 5));
 
 				// Account 12 has delayed vesting
 				let user12_vesting_schedule = VestingInfo {
@@ -605,6 +659,97 @@ mod tests {
 
 				// Account 12 can still send liquid funds
 				assert_ok!(Balances::transfer(Some(12).into(), 3, 256 * 5));
+			});
+	}
+
+	#[test]
+	fn vested_transfer_works() {
+		ExtBuilder::default()
+			.existential_deposit(256)
+			.build()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), 1);
+				let user3_free_balance = Balances::free_balance(&3);
+				let user4_free_balance = Balances::free_balance(&4);
+				assert_eq!(user3_free_balance, 256 * 30);
+				assert_eq!(user4_free_balance, 256 * 40);
+				// Account 4 should not have any vesting yet.
+				assert_eq!(Vesting::vesting(&4), None);
+				// Make the schedule for the new transfer.
+				let new_vesting_schedule = VestingInfo {
+					locked: 256 * 5,
+					per_block: 64, // Vesting over 20 blocks
+					starting_block: 10,
+				};
+				assert_ok!(Vesting::vested_transfer(Some(3).into(), 4, new_vesting_schedule));
+				// Now account 4 should have vesting.
+				assert_eq!(Vesting::vesting(&4), Some(new_vesting_schedule));
+				// Ensure the transfer happened correctly.
+				let user3_free_balance_updated = Balances::free_balance(&3);
+				assert_eq!(user3_free_balance_updated, 256 * 25);
+				let user4_free_balance_updated = Balances::free_balance(&4);
+				assert_eq!(user4_free_balance_updated, 256 * 45);
+				// Account 4 has 5 * 256 locked.
+				assert_eq!(Vesting::vesting_balance(&4), Some(256 * 5));
+
+				System::set_block_number(20);
+				assert_eq!(System::block_number(), 20);
+
+				// Account 4 has 5 * 64 units vested by block 20.
+				assert_eq!(Vesting::vesting_balance(&4), Some(10 * 64));
+
+				System::set_block_number(30);
+				assert_eq!(System::block_number(), 30);
+
+				// Account 4 has fully vested.
+				assert_eq!(Vesting::vesting_balance(&4), Some(0));
+			});
+	}
+
+	#[test]
+	fn vested_transfer_correctly_fails() {
+		ExtBuilder::default()
+			.existential_deposit(256)
+			.build()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), 1);
+				let user2_free_balance = Balances::free_balance(&2);
+				let user4_free_balance = Balances::free_balance(&4);
+				assert_eq!(user2_free_balance, 256 * 20);
+				assert_eq!(user4_free_balance, 256 * 40);
+				// Account 2 should already have a vesting schedule.
+				let user2_vesting_schedule = VestingInfo {
+					locked: 256 * 20,
+					per_block: 256, // Vesting over 20 blocks
+					starting_block: 10,
+				};
+				assert_eq!(Vesting::vesting(&2), Some(user2_vesting_schedule));
+
+				// The vesting schedule we will try to create, fails due to pre-existence of schedule.
+				let new_vesting_schedule = VestingInfo {
+					locked: 256 * 5,
+					per_block: 64, // Vesting over 20 blocks
+					starting_block: 10,
+				};
+				assert_noop!(
+					Vesting::vested_transfer(Some(4).into(), 2, new_vesting_schedule),
+					Error::<Test>::ExistingVestingSchedule,
+				);
+
+				// Fails due to too low transfer amount.
+				let new_vesting_schedule_too_low = VestingInfo {
+					locked: 256 * 1,
+					per_block: 64,
+					starting_block: 10,
+				};
+				assert_noop!(
+					Vesting::vested_transfer(Some(3).into(), 4, new_vesting_schedule_too_low),
+					Error::<Test>::AmountLow,
+				);
+
+				// Verify no currency transfer happened.
+				assert_eq!(user2_free_balance, 256 * 20);
+				assert_eq!(user4_free_balance, 256 * 40);
 			});
 	}
 }

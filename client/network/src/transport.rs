@@ -17,12 +17,10 @@
 use futures::prelude::*;
 use libp2p::{
 	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
-	mplex, identity, secio, yamux, bandwidth, wasm_ext
+	mplex, identity, bandwidth, wasm_ext, noise
 };
 #[cfg(not(target_os = "unknown"))]
-use libp2p::{tcp, dns, websocket, noise};
-#[cfg(not(target_os = "unknown"))]
-use libp2p::core::{either::EitherError, either::EitherOutput};
+use libp2p::{tcp, dns, websocket};
 use libp2p::core::{self, upgrade, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
 use std::{io, sync::Arc, time::Duration, usize};
 
@@ -38,10 +36,10 @@ pub use self::bandwidth::BandwidthSinks;
 pub fn build_transport(
 	keypair: identity::Keypair,
 	memory_only: bool,
-	wasm_external_transport: Option<wasm_ext::ExtTransport>
+	wasm_external_transport: Option<wasm_ext::ExtTransport>,
+	use_yamux_flow_control: bool
 ) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
 	// Build configuration objects for encryption mechanisms.
-	#[cfg(not(target_os = "unknown"))]
 	let noise_config = {
 		let noise_keypair = noise::Keypair::new().into_authentic(&keypair)
 			// For more information about this panic, see in "On the Importance of Checking
@@ -52,13 +50,20 @@ pub fn build_transport(
 				rare panic here is basically zero");
 		noise::NoiseConfig::ix(noise_keypair)
 	};
-	let secio_config = secio::SecioConfig::new(keypair);
 
 	// Build configuration objects for multiplexing mechanisms.
 	let mut mplex_config = mplex::MplexConfig::new();
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
-	let yamux_config = yamux::Config::default();
+
+	let mut yamux_config = libp2p::yamux::Config::default();
+	yamux_config.set_lazy_open(true); // Only set SYN flag on first data frame sent to the remote.
+
+	if use_yamux_flow_control {
+		// Enable proper flow-control: window updates are only sent when
+		// buffered data has been consumed.
+		yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::OnRead);
+	}
 
 	// Build the base layer of the transport.
 	let transport = if let Some(t) = wasm_external_transport {
@@ -89,32 +94,15 @@ pub fn build_transport(
 	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
 
 	// Encryption
-
-	// For non-WASM, we support both secio and noise.
-	#[cfg(not(target_os = "unknown"))]
 	let transport = transport.and_then(move |stream, endpoint| {
-		let upgrade = core::upgrade::SelectUpgrade::new(noise_config, secio_config);
-		core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
-			.map(|out| match out? {
-				// We negotiated noise
-				EitherOutput::First((remote_id, out)) => {
-					let remote_key = match remote_id {
-						noise::RemoteIdentity::IdentityKey(key) => key,
-						_ => return Err(upgrade::UpgradeError::Apply(EitherError::A(noise::NoiseError::InvalidKey)))
-					};
-					Ok((EitherOutput::First(out), remote_key.into_peer_id()))
-				}
-				// We negotiated secio
-				EitherOutput::Second((remote_id, out)) =>
-					Ok((EitherOutput::Second(out), remote_id))
+		core::upgrade::apply(stream, noise_config, endpoint, upgrade::Version::V1)
+			.and_then(|(remote_id, out)| async move {
+				let remote_key = match remote_id {
+					noise::RemoteIdentity::IdentityKey(key) => key,
+					_ => return Err(upgrade::UpgradeError::Apply(noise::NoiseError::InvalidKey))
+				};
+				Ok((out, remote_key.into_peer_id()))
 			})
-	});
-
-	// For WASM, we only support secio for now.
-	#[cfg(target_os = "unknown")]
-	let transport = transport.and_then(move |stream, endpoint| {
-		core::upgrade::apply(stream, secio_config, endpoint, upgrade::Version::V1)
-			.map_ok(|(id, stream)| ((stream, id)))
 	});
 
 	// Multiplexing
@@ -126,11 +114,12 @@ pub fn build_transport(
 
 			core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
 				.map_ok(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
-		})
+		});
 
-		.timeout(Duration::from_secs(20))
-		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-		.boxed();
+	let transport = transport
+			.timeout(Duration::from_secs(20))
+			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+			.boxed();
 
 	(transport, sinks)
 }

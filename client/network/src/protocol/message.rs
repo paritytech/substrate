@@ -209,19 +209,16 @@ pub mod generic {
 		RemoteHeaderResponse(RemoteHeaderResponse<Header>),
 		/// Remote changes request.
 		RemoteChangesRequest(RemoteChangesRequest<Hash>),
-		/// Remote changes reponse.
+		/// Remote changes response.
 		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
 		/// Remote child storage read request.
 		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
 		/// Finality proof request.
 		FinalityProofRequest(FinalityProofRequest<Hash>),
-		/// Finality proof reponse.
+		/// Finality proof response.
 		FinalityProofResponse(FinalityProofResponse<Hash>),
 		/// Batch of consensus protocol messages.
 		ConsensusBatch(Vec<ConsensusMessage>),
-		/// Chain-specific message.
-		#[codec(index = "255")]
-		ChainSpecific(Vec<u8>),
 	}
 
 	impl<Header, Hash, Number, Extrinsic> Message<Header, Hash, Number, Extrinsic> {
@@ -246,7 +243,6 @@ pub mod generic {
 				Message::FinalityProofRequest(_) => "FinalityProofRequest",
 				Message::FinalityProofResponse(_) => "FinalityProofResponse",
 				Message::ConsensusBatch(_) => "ConsensusBatch",
-				Message::ChainSpecific(_) => "ChainSpecific",
 			}
 		}
 	}

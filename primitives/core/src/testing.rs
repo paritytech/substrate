@@ -245,7 +245,7 @@ mod tests {
 
 		let public = store.write()
 			.ed25519_generate_new(ED25519, None)
-			.expect("Genrates key");
+			.expect("Generates key");
 
 		let store_key_pair = store.read()
 			.ed25519_key_pair(ED25519, &public)

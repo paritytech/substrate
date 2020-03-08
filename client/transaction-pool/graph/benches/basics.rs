@@ -113,7 +113,11 @@ impl ChainApi for TestApi {
 }
 
 fn uxt(transfer: Transfer) -> Extrinsic {
-	Extrinsic::Transfer(transfer, Default::default())
+	Extrinsic::Transfer {
+		transfer,
+		signature: Default::default(),
+		exhaust_resources_when_not_first: false,
+	}
 }
 
 fn bench_configured(pool: Pool<TestApi>, number: u64) {
@@ -135,8 +139,8 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 	let res = block_on(futures::future::join_all(futures.into_iter()));
 	assert!(res.iter().all(Result::is_ok));
 
-	assert_eq!(pool.status().future, 0);
-	assert_eq!(pool.status().ready, number as usize);
+	assert_eq!(pool.validated_pool().status().future, 0);
+	assert_eq!(pool.validated_pool().status().ready, number as usize);
 
 	// Prune all transactions.
 	let block_num = 6;
@@ -147,8 +151,8 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 	)).expect("Prune failed");
 
 	// pool is empty
-	assert_eq!(pool.status().ready, 0);
-	assert_eq!(pool.status().future, 0);
+	assert_eq!(pool.validated_pool().status().ready, 0);
+	assert_eq!(pool.validated_pool().status().future, 0);
 }
 
 fn benchmark_main(c: &mut Criterion) {

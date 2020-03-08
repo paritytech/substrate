@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! This crate provides an implementation of `WasmRuntime` that is baked by wasmi.
+//! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
 use sc_executor_common::{error::{Error, WasmError}, sandbox};
-use std::{str, mem, cell::RefCell};
+use std::{str, mem, cell::RefCell, sync::Arc};
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
@@ -30,7 +30,7 @@ use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
 use sp_runtime_interface::unpack_ptr_and_len;
-use sc_executor_common::wasm_runtime::WasmRuntime;
+use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance};
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
@@ -66,31 +66,6 @@ impl<'a> FunctionExecutor<'a> {
 impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 	type SupervisorFuncRef = wasmi::FuncRef;
 
-	fn store(&self) -> &sandbox::Store<Self::SupervisorFuncRef> {
-		&self.sandbox_store
-	}
-	fn store_mut(&mut self) -> &mut sandbox::Store<Self::SupervisorFuncRef> {
-		&mut self.sandbox_store
-	}
-	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>, Error> {
-		let heap = &mut self.heap;
-		self.memory.with_direct_access_mut(|mem| {
-			heap.allocate(mem, len).map_err(Into::into)
-		})
-	}
-	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<(), Error> {
-		let heap = &mut self.heap;
-		self.memory.with_direct_access_mut(|mem| {
-			heap.deallocate(mem, ptr).map_err(Into::into)
-		})
-	}
-	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<(), Error> {
-		self.memory.set(ptr.into(), data).map_err(Into::into)
-	}
-	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>, Error> {
-		self.memory.get(ptr.into(), len as usize).map_err(Into::into)
-	}
-
 	fn invoke(
 		&mut self,
 		dispatch_thunk: &Self::SupervisorFuncRef,
@@ -98,8 +73,7 @@ impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 		invoke_args_len: WordSize,
 		state: u32,
 		func_idx: sandbox::SupervisorFuncIndex,
-	) -> Result<i64, Error>
-	{
+	) -> Result<i64, Error> {
 		let result = wasmi::FuncInstance::invoke(
 			dispatch_thunk,
 			&[
@@ -259,8 +233,15 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 				.clone()
 		};
 
+		let guest_env = match sandbox::GuestEnvironment::decode(&self.sandbox_store, raw_env_def) {
+			Ok(guest_env) => guest_env,
+			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
+		};
+
 		let instance_idx_or_err_code =
-			match sandbox::instantiate(self, dispatch_thunk, wasm, raw_env_def, state) {
+			match sandbox::instantiate(self, dispatch_thunk, wasm, guest_env, state)
+				.map(|i| i.register(&mut self.sandbox_store))
+			{
 				Ok(instance_idx) => instance_idx,
 				Err(sandbox::InstantiationError::StartTrapped) =>
 					sandbox_primitives::ERR_EXECUTION,
@@ -295,7 +276,7 @@ struct Resolver<'a> {
 	/// Will be used as initial and maximum size of the imported memory.
 	heap_pages: usize,
 	/// By default, runtimes should import memory and this is `Some(_)` after
-	/// reolving. However, to be backwards compatible, we also support memory
+	/// resolving. However, to be backwards compatible, we also support memory
 	/// exported by the WASM blob (this will be `None` after resolving).
 	import_memory: RefCell<Option<MemoryRef>>,
 }
@@ -554,7 +535,6 @@ struct StateSnapshot {
 	data_segments: Vec<(u32, Vec<u8>)>,
 	/// The list of all global mutable variables of the module in their sequential order.
 	global_mut_values: Vec<RuntimeValue>,
-	heap_pages: u64,
 }
 
 impl StateSnapshot {
@@ -562,7 +542,6 @@ impl StateSnapshot {
 	fn take(
 		module_instance: &ModuleRef,
 		data_segments: Vec<DataSegment>,
-		heap_pages: u64,
 	) -> Option<Self> {
 		let prepared_segments = data_segments
 			.into_iter()
@@ -608,7 +587,6 @@ impl StateSnapshot {
 		Some(Self {
 			data_segments: prepared_segments,
 			global_mut_values,
-			heap_pages,
 		})
 	}
 
@@ -645,9 +623,77 @@ impl StateSnapshot {
 	}
 }
 
-/// A runtime along with its initial state snapshot.
-#[derive(Clone)]
+/// A runtime along with initial copy of data segments.
 pub struct WasmiRuntime {
+	/// A wasm module.
+	module: Module,
+	/// The host functions registered for this instance.
+	host_functions: Arc<Vec<&'static dyn Function>>,
+	/// Enable stub generation for functions that are not available in `host_functions`.
+	/// These stubs will error when the wasm blob tries to call them.
+	allow_missing_func_imports: bool,
+	/// Numer of heap pages this runtime uses.
+	heap_pages: u64,
+	/// Data segments created for each new instance.
+	data_segments: Vec<DataSegment>,
+}
+
+impl WasmModule for WasmiRuntime {
+	fn new_instance(&self) -> Result<Box<dyn WasmInstance>, Error> {
+		// Instantiate this module.
+		let (instance, missing_functions, memory) = instantiate_module(
+			self.heap_pages as usize,
+			&self.module,
+			&self.host_functions,
+			self.allow_missing_func_imports,
+		).map_err(|e| WasmError::Instantiation(e.to_string()))?;
+
+		// Take state snapshot before executing anything.
+		let state_snapshot = StateSnapshot::take(&instance, self.data_segments.clone())
+			.expect(
+				"`take` returns `Err` if the module is not valid;
+					we already loaded module above, thus the `Module` is proven to be valid at this point;
+					qed
+					",
+			);
+
+		Ok(Box::new(WasmiInstance {
+			instance,
+			memory,
+			state_snapshot,
+			host_functions: self.host_functions.clone(),
+			allow_missing_func_imports: self.allow_missing_func_imports,
+			missing_functions,
+		}))
+	}
+}
+
+/// Create a new `WasmiRuntime` given the code. This function loads the module and
+/// stores it in the instance.
+pub fn create_runtime(
+	code: &[u8],
+	heap_pages: u64,
+	host_functions: Vec<&'static dyn Function>,
+	allow_missing_func_imports: bool,
+) -> Result<WasmiRuntime, WasmError> {
+	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
+
+	// Extract the data segments from the wasm code.
+	//
+	// A return of this error actually indicates that there is a problem in logic, since
+	// we just loaded and validated the `module` above.
+	let data_segments = extract_data_segments(&code)?;
+	Ok(WasmiRuntime {
+		module,
+		data_segments,
+		host_functions: Arc::new(host_functions),
+		allow_missing_func_imports,
+		heap_pages,
+	})
+}
+
+/// Wasmi instance wrapper along with the state snapshot.
+pub struct WasmiInstance {
 	/// A wasm module instance.
 	instance: ModuleRef,
 	/// The memory instance of used by the wasm module.
@@ -655,7 +701,7 @@ pub struct WasmiRuntime {
 	/// The snapshot of the instance's state taken just after the instantiation.
 	state_snapshot: StateSnapshot,
 	/// The host functions registered for this instance.
-	host_functions: Vec<&'static dyn Function>,
+	host_functions: Arc<Vec<&'static dyn Function>>,
 	/// Enable stub generation for functions that are not available in `host_functions`.
 	/// These stubs will error when the wasm blob tries to call them.
 	allow_missing_func_imports: bool,
@@ -663,17 +709,12 @@ pub struct WasmiRuntime {
 	missing_functions: Vec<String>,
 }
 
-impl WasmRuntime for WasmiRuntime {
-	fn update_heap_pages(&mut self, heap_pages: u64) -> bool {
-		self.state_snapshot.heap_pages == heap_pages
-	}
+// This is safe because `WasmiInstance` does not leak any references to `self.memory` and `self.instance`
+unsafe impl Send for WasmiInstance {}
 
-	fn host_functions(&self) -> &[&'static dyn Function] {
-		&self.host_functions
-	}
-
+impl WasmInstance for WasmiInstance {
 	fn call(
-		&mut self,
+		&self,
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>, Error> {
@@ -690,52 +731,24 @@ impl WasmRuntime for WasmiRuntime {
 			&self.memory,
 			method,
 			data,
-			&self.host_functions,
+			self.host_functions.as_ref(),
 			self.allow_missing_func_imports,
-			&self.missing_functions,
+			self.missing_functions.as_ref(),
 		)
 	}
-}
 
-pub fn create_instance(
-	code: &[u8],
-	heap_pages: u64,
-	host_functions: Vec<&'static dyn Function>,
-	allow_missing_func_imports: bool,
-) -> Result<WasmiRuntime, WasmError> {
-	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
-
-	// Extract the data segments from the wasm code.
-	//
-	// A return of this error actually indicates that there is a problem in logic, since
-	// we just loaded and validated the `module` above.
-	let data_segments = extract_data_segments(&code)?;
-
-	// Instantiate this module.
-	let (instance, missing_functions, memory) = instantiate_module(
-		heap_pages as usize,
-		&module,
-		&host_functions,
-		allow_missing_func_imports,
-	).map_err(|e| WasmError::Instantiation(e.to_string()))?;
-
-	// Take state snapshot before executing anything.
-	let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages)
-		.expect(
-			"`take` returns `Err` if the module is not valid;
-				we already loaded module above, thus the `Module` is proven to be valid at this point;
-				qed
-				",
-		);
-
-	Ok(WasmiRuntime {
-		instance,
-		memory,
-		state_snapshot,
-		host_functions,
-		allow_missing_func_imports,
-		missing_functions,
-	})
+	fn get_global_const(&self, name: &str) -> Result<Option<sp_wasm_interface::Value>, Error> {
+		match self.instance.export_by_name(name) {
+			Some(global) => Ok(Some(
+				global
+					.as_global()
+					.ok_or_else(|| format!("`{}` is not a global", name))?
+					.get()
+					.into()
+			)),
+			None => Ok(None),
+		}
+	}
 }
 
 /// Extract the data segments from the given wasm code.

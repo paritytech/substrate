@@ -21,8 +21,9 @@ use std::cell::RefCell;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
-	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
-	testing::{Header, UintAuthorityId}
+	Perbill, impl_opaque_keys,
+	traits::{BlakeTwo256, IdentityLookup, ConvertInto},
+	testing::{Header, UintAuthorityId},
 };
 use sp_staking::SessionIndex;
 
@@ -91,6 +92,7 @@ impl SessionHandler<u64> for TestSessionHandler {
 pub struct TestSessionManager;
 impl SessionManager<u64> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
+	fn start_session(_: SessionIndex) {}
 	fn new_session(_: SessionIndex) -> Option<Vec<u64>> {
 		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
 			VALIDATORS.with(|v| {
@@ -111,6 +113,7 @@ impl SessionManager<u64> for TestSessionManager {
 #[cfg(feature = "historical")]
 impl crate::historical::SessionManager<u64, u64> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
+	fn start_session(_: SessionIndex) {}
 	fn new_session(new_index: SessionIndex)
 		-> Option<Vec<(u64, u64)>>
 	{
@@ -175,6 +178,9 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
 }
 
 impl pallet_timestamp::Trait for Test {

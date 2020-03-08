@@ -28,11 +28,14 @@ use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use sp_runtime::ConsensusEngineId;
 pub use sc_network::message::generic::{Message, ConsensusMessage};
 use sc_network::config::Roles;
+use wasm_timer::Instant;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
 
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
+
+pub(crate) const PERIODIC_MAINTENANCE_INTERVAL: time::Duration = time::Duration::from_millis(1100);
 
 mod rep {
 	use sc_network::ReputationChange as Rep;
@@ -42,7 +45,7 @@ mod rep {
 	pub const DUPLICATE_GOSSIP: Rep = Rep::new(-(1 << 2), "Duplicate gossip");
 	/// Reputation change when a peer sends us a gossip message for an unknown engine, whatever that
 	/// means.
-	pub const UNKNOWN_GOSSIP: Rep = Rep::new(-(1 << 6), "Unknown gossup message engine id");
+	pub const UNKNOWN_GOSSIP: Rep = Rep::new(-(1 << 6), "Unknown gossip message engine id");
 	/// Reputation change when a peer sends a message from a topic it isn't registered on.
 	pub const UNREGISTERED_TOPIC: Rep = Rep::new(-(1 << 10), "Unregistered gossip message topic");
 }
@@ -165,7 +168,7 @@ pub struct ConsensusGossip<B: BlockT> {
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
 	validators: HashMap<ConsensusEngineId, Arc<dyn Validator<B>>>,
-	next_broadcast: time::Instant,
+	next_broadcast: Instant,
 }
 
 impl<B: BlockT> ConsensusGossip<B> {
@@ -177,7 +180,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			messages: Default::default(),
 			known_messages: LruCache::new(KNOWN_MESSAGES_CACHE_SIZE),
 			validators: Default::default(),
-			next_broadcast: time::Instant::now() + REBROADCAST_INTERVAL,
+			next_broadcast: Instant::now() + REBROADCAST_INTERVAL,
 		}
 	}
 
@@ -255,14 +258,15 @@ impl<B: BlockT> ConsensusGossip<B> {
 			let mut context = NetworkContext { gossip: self, network, engine_id: engine_id.clone() };
 			v.peer_disconnected(&mut context, &who);
 		}
+		self.peers.remove(&who);
 	}
 
 	/// Perform periodic maintenance
 	pub fn tick(&mut self, network: &mut dyn Network<B>) {
 		self.collect_garbage();
-		if time::Instant::now() >= self.next_broadcast {
+		if Instant::now() >= self.next_broadcast {
 			self.rebroadcast(network);
-			self.next_broadcast = time::Instant::now() + REBROADCAST_INTERVAL;
+			self.next_broadcast = Instant::now() + REBROADCAST_INTERVAL;
 		}
 	}
 
@@ -352,7 +356,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 		who: PeerId,
 		messages: Vec<ConsensusMessage>,
 	) {
-		trace!(target:"gossip", "Received {} messages from peer {}", messages.len(), who);
+		if !messages.is_empty() {
+			trace!(target: "gossip", "Received {} messages from peer {}", messages.len(), who);
+		}
+
 		for message in messages {
 			let message_hash = HashFor::<B>::hash(&message.data[..]);
 
@@ -640,5 +647,53 @@ mod tests {
 
 		let _ = consensus.live_message_sinks.remove(&([0, 0, 0, 0], topic));
 		assert_eq!(stream.next(), None);
+	}
+
+	#[test]
+	fn peer_is_removed_on_disconnect() {
+		struct TestNetwork;
+		impl Network<Block> for TestNetwork {
+			fn event_stream(
+				&self,
+			) -> std::pin::Pin<Box<dyn futures::Stream<Item = crate::Event> + Send>> {
+				unimplemented!("Not required in tests")
+			}
+
+			fn report_peer(&self, _: PeerId, _: crate::ReputationChange) {
+				unimplemented!("Not required in tests")
+			}
+
+			fn disconnect_peer(&self, _: PeerId) {
+				unimplemented!("Not required in tests")
+			}
+
+			fn write_notification(&self, _: PeerId, _: crate::ConsensusEngineId, _: Vec<u8>) {
+				unimplemented!("Not required in tests")
+			}
+
+			fn register_notifications_protocol(
+				&self,
+				_: ConsensusEngineId,
+				_: std::borrow::Cow<'static, [u8]>,
+			) {
+				unimplemented!("Not required in tests")
+			}
+
+			fn announce(&self, _: H256, _: Vec<u8>) {
+				unimplemented!("Not required in tests")
+			}
+		}
+
+		let mut consensus = ConsensusGossip::<Block>::new();
+		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
+
+		let mut network = TestNetwork;
+
+		let peer_id = PeerId::random();
+		consensus.new_peer(&mut network, peer_id.clone(), Roles::FULL);
+		assert!(consensus.peers.contains_key(&peer_id));
+
+		consensus.peer_disconnected(&mut network, peer_id.clone());
+		assert!(!consensus.peers.contains_key(&peer_id));
 	}
 }

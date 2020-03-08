@@ -436,16 +436,28 @@ ss58_address_format!(
 		(0, "polkadot", "Polkadot Relay-chain, direct checksum, standard account (*25519).")
 	KusamaAccountDirect =>
 		(2, "kusama", "Kusama Relay-chain, direct checksum, standard account (*25519).")
-	DothereumAccountDirect =>
-		(20, "dothereum", "Dothereum Para-chain, direct checksum, standard account (*25519).")
-	KulupuAccountDirect =>
-		(16, "kulupu", "Kulupu mainnet, direct checksum, standard account (*25519).")
+	PlasmAccountDirect =>
+		(5, "plasm", "Plasm Network, direct checksum, standard account (*25519).")
 	EdgewareAccountDirect =>
 		(7, "edgeware", "Edgeware mainnet, direct checksum, standard account (*25519).")
+	KaruraAccountDirect =>
+		(8, "karura", "Acala Karura canary network, direct checksum, standard account (*25519).")
+	ReynoldsAccountDirect =>
+		(9, "reynolds", "Laminar Reynolds canary network, direct checksum, standard account (*25519).")
+	AcalaAccountDirect =>
+		(10, "acala", "Acala mainnet, direct checksum, standard account (*25519).")
+	LaminarAccountDirect =>
+		(11, "laminar", "Laminar mainnet, direct checksum, standard account (*25519).")
+	KulupuAccountDirect =>
+		(16, "kulupu", "Kulupu mainnet, direct checksum, standard account (*25519).")
+	DothereumAccountDirect =>
+		(20, "dothereum", "Dothereum Para-chain, direct checksum, standard account (*25519).")
 	CentrifugeAccountDirect =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, direct checksum, standard account (*25519).")
 	SubstraTeeAccountDirect =>
 		(44, "substratee", "Any SubstraTEE off-chain network private account, direct checksum, standard account (*25519).")
+	DarwiniaAccountDirect =>
+		(18, "darwinia", "Darwinia Chain mainnet, direct checksum, standard account (*25519).")
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
@@ -882,7 +894,7 @@ pub trait CryptoType {
 
 /// An identifier for a type of cryptographic key.
 ///
-/// To avoid clashes with other modules when distributing your module publically, register your
+/// To avoid clashes with other modules when distributing your module publicly, register your
 /// `KeyTypeId` on the list here by making a PR.
 ///
 /// Values whose first character is `_` are reserved for private use and won't conflict with any

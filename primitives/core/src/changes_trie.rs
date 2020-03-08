@@ -22,7 +22,7 @@ use codec::{Encode, Decode};
 use num_traits::Zero;
 
 /// Substrate changes trie configuration.
-#[cfg_attr(any(feature = "std", test), derive(Serialize, Deserialize))]
+#[cfg_attr(any(feature = "std", test), derive(Serialize, Deserialize, parity_util_mem::MallocSizeOf))]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Encode, Decode)]
 pub struct ChangesTrieConfiguration {
 	/// Interval (in blocks) at which level1-digests are created. Digests are not

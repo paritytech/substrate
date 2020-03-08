@@ -327,7 +327,7 @@ pub fn snitch_contract_should_be_evicted<T: Trait>(
 }
 
 /// Returns the projected time a given contract will be able to sustain paying its rent. The
-/// returned projection is relevent for the current block, i.e. it is as if the contract was
+/// returned projection is relevant for the current block, i.e. it is as if the contract was
 /// accessed at the beginning of the current block. Returns `None` in case if the contract was
 /// evicted before or as a result of the rent collection.
 ///

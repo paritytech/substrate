@@ -112,7 +112,6 @@ fn heartbeat(
 	authority_index: u32,
 	id: UintAuthorityId,
 ) -> dispatch::DispatchResult {
-	#[allow(deprecated)]
 	use frame_support::unsigned::ValidateUnsigned;
 
 	let heartbeat = Heartbeat {
@@ -126,7 +125,6 @@ fn heartbeat(
 	};
 	let signature = id.sign(&heartbeat.encode()).unwrap();
 
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))
 		.map_err(|e| <&'static str>::from(e))?;
 	ImOnline::heartbeat(
@@ -192,6 +190,8 @@ fn late_heartbeat_should_fail() {
 
 #[test]
 fn should_generate_heartbeats() {
+	use sp_runtime::traits::OffchainWorker;
+
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
 	let (pool, state) = TestTransactionPoolExt::new();
@@ -202,6 +202,7 @@ fn should_generate_heartbeats() {
 		// given
 		let block = 1;
 		System::set_block_number(block);
+		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
 		// buffer new validators
 		Session::rotate_session();
 		// enact the change and buffer another one
@@ -209,26 +210,22 @@ fn should_generate_heartbeats() {
 		Session::rotate_session();
 
 		// when
-		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
-		ImOnline::send_heartbeats(2)
-			.unwrap()
-			// make sure to consume the iterator and check there are no errors.
-			.collect::<Result<Vec<_>, _>>().unwrap();
-
+		ImOnline::offchain_worker(block);
 
 		// then
 		let transaction = state.write().transactions.pop().unwrap();
-		// All validators have `0` as their session key, so we generate 3 transactions.
+		// All validators have `0` as their session key, so we generate 2 transactions.
 		assert_eq!(state.read().transactions.len(), 2);
+
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
-		let heartbeat = match ex.1 {
+		let heartbeat = match ex.call {
 			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, _)) => h,
 			e => panic!("Unexpected call: {:?}", e),
 		};
 
 		assert_eq!(heartbeat, Heartbeat {
-			block_number: 2,
+			block_number: block,
 			network_state: sp_io::offchain::network_state().unwrap(),
 			session_index: 2,
 			authority_index: 2,
@@ -328,11 +325,11 @@ fn should_not_send_a_report_if_already_online() {
 
 		// then
 		let transaction = pool_state.write().transactions.pop().unwrap();
-		// All validators have `0` as their session key, but we should only produce 1 hearbeat.
+		// All validators have `0` as their session key, but we should only produce 1 heartbeat.
 		assert_eq!(pool_state.read().transactions.len(), 0);
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
-		let heartbeat = match ex.1 {
+		let heartbeat = match ex.call {
 			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, _)) => h,
 			e => panic!("Unexpected call: {:?}", e),
 		};

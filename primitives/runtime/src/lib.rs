@@ -68,7 +68,7 @@ pub use sp_application_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
-pub use sp_arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64};
+pub use sp_arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64, PerThing};
 /// Re-export 128 bit helpers.
 pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
@@ -214,7 +214,7 @@ impl Default for MultiSigner {
 	}
 }
 
-/// NOTE: This implementations is required by `SimpleAddressDeterminator`,
+/// NOTE: This implementations is required by `SimpleAddressDeterminer`,
 /// we convert the hash into some AccountId, it's fine to use any scheme.
 impl<T: Into<H256>> crypto::UncheckedFrom<T> for MultiSigner {
 	fn unchecked_from(x: T) -> Self {
@@ -405,13 +405,13 @@ impl From<&'static str> for DispatchError {
 	}
 }
 
-impl Into<&'static str> for DispatchError {
-	fn into(self) -> &'static str {
-		match self {
-			Self::Other(msg) => msg,
-			Self::CannotLookup => "Can not lookup",
-			Self::BadOrigin => "Bad origin",
-			Self::Module { message, .. } => message.unwrap_or("Unknown module error"),
+impl From<DispatchError> for &'static str {
+	fn from(err: DispatchError) -> &'static str {
+		match err {
+			DispatchError::Other(msg) => msg,
+			DispatchError::CannotLookup => "Can not lookup",
+			DispatchError::BadOrigin => "Bad origin",
+			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
 		}
 	}
 }
@@ -458,7 +458,7 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 ///
 /// Examples of reasons preventing inclusion in a block:
 /// - More block weight is required to process the extrinsic than is left in the block being built.
-///   This doesn't neccessarily mean that the extrinsic is invalid, since it can still be
+///   This doesn't necessarily mean that the extrinsic is invalid, since it can still be
 ///   included in the next block if it has enough spare weight available.
 /// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
 ///   a transaction in the block doesn't make sense.
@@ -638,6 +638,13 @@ macro_rules! assert_eq_error_rate {
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
+
+#[cfg(feature = "std")]
+impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.0.size_of(ops)
+	}
+}
 
 impl sp_std::fmt::Debug for OpaqueExtrinsic {
 	#[cfg(feature = "std")]

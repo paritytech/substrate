@@ -25,8 +25,8 @@ use sp_core::{
 };
 use rpc::futures::Stream as _;
 use substrate_test_runtime_client::{
-	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys, RuntimeApi, Block},
-	DefaultTestClientBuilderExt, TestClientBuilderExt, Backend, Client, Executor,
+	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys, Block},
+	DefaultTestClientBuilderExt, TestClientBuilderExt, Backend, Client,
 };
 use sc_transaction_pool::{BasicPool, FullChainApi};
 use tokio::runtime;
@@ -64,7 +64,7 @@ impl Default for TestSetup {
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
-		));
+		).0);
 		TestSetup {
 			runtime: runtime::Runtime::new().expect("Failed to create runtime in test setup"),
 			client,
@@ -75,7 +75,7 @@ impl Default for TestSetup {
 }
 
 impl TestSetup {
-	fn author(&self) -> Author<Backend, Executor, FullTransactionPool, Block, RuntimeApi> {
+	fn author(&self) -> Author<FullTransactionPool, Client<Backend>> {
 		Author {
 			client: self.client.clone(),
 			pool: self.pool.clone(),

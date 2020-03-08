@@ -59,8 +59,14 @@ impl StateUsageStats {
 	}
 
 	/// Tally one child key read.
-	pub fn tally_child_key_read(&self, key: &(Vec<u8>, Vec<u8>), val: Option<Vec<u8>>, cache: bool) -> Option<Vec<u8>> {
-		self.tally_read(key.0.len() as u64 + key.1.len() as u64 + val.as_ref().map(|x| x.len() as u64).unwrap_or(0), cache);
+	pub fn tally_child_key_read(
+		&self,
+		key: &(Vec<u8>, Vec<u8>),
+		val: Option<Vec<u8>>,
+		cache: bool,
+	) -> Option<Vec<u8>> {
+		let bytes = key.0.len() + key.1.len() + val.as_ref().map(|x| x.len()).unwrap_or(0);
+		self.tally_read(bytes as u64, cache);
 		val
 	}
 
@@ -80,11 +86,15 @@ impl StateUsageStats {
 		self.bytes_read_cache.fetch_add(info.cache_reads.bytes, AtomicOrdering::Relaxed);
 	}
 
+	/// Returns the collected `UsageInfo` and resets the internal state.
 	pub fn take(&self) -> sp_state_machine::UsageInfo {
 		use sp_state_machine::UsageUnit;
 
 		fn unit(ops: &AtomicU64, bytes: &AtomicU64) -> UsageUnit {
-			UsageUnit { ops: ops.swap(0, AtomicOrdering::Relaxed), bytes: bytes.swap(0, AtomicOrdering::Relaxed) }
+			UsageUnit {
+				ops: ops.swap(0, AtomicOrdering::Relaxed),
+				bytes: bytes.swap(0, AtomicOrdering::Relaxed),
+			}
 		}
 
 		sp_state_machine::UsageInfo {

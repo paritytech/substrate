@@ -37,7 +37,7 @@ use futures_timer::Delay;
 use sp_inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header, HasherFor, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
@@ -47,7 +47,7 @@ use parking_lot::Mutex;
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
 pub type StorageChanges<Transaction, Block> =
-	sp_state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>;
+	sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>;
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: BlockT> {
@@ -81,7 +81,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	type Claim: Send + 'static;
 
 	/// Epoch data necessary for authoring.
-	type EpochData;
+	type EpochData: Send + 'static;
 
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
@@ -119,6 +119,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Vec<B::Extrinsic>,
 			StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 			Self::Claim,
+			Self::EpochData,
 		) -> sp_consensus::BlockImportParams<
 			B,
 			<Self::BlockImport as BlockImport<B>>::Transaction
@@ -280,18 +281,19 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				body,
 				proposal.storage_changes,
 				claim,
+				epoch_data,
 			);
 
 			info!(
 				"Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 				header_num,
-				block_import_params.post_header().hash(),
+				block_import_params.post_hash(),
 				header_hash,
 			);
 
 			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";
 				"header_num" => ?header_num,
-				"hash_now" => ?block_import_params.post_header().hash(),
+				"hash_now" => ?block_import_params.post_hash(),
 				"hash_previously" => ?header_hash,
 			);
 

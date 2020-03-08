@@ -209,9 +209,19 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Query backend usage statistics (i/o, memory)
 	///
 	/// Not all implementations are expected to be able to do this. In the
-	/// case when thay don't, empty statistics is returned.
+	/// case when they don't, empty statistics is returned.
 	fn usage_info(&self) -> UsageInfo {
 		UsageInfo::empty()
+	}
+
+	/// Wipe the state database.
+	fn wipe(&self) -> Result<(), Self::Error> {
+		unimplemented!()
+	}
+
+	/// Commit given transaction to storage.
+	fn commit(&self, _storage_root: H::Out, _transaction: Self::Transaction) -> Result<(), Self::Error> {
+		unimplemented!()
 	}
 }
 

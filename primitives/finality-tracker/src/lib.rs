@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! SRML module that tracks the last finalized block, as perceived by block authors.
+//! FRAME module that tracks the last finalized block, as perceived by block authors.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

@@ -157,6 +157,11 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 			}
 		}
 	}
+
+	/// Close the channel.
+	pub fn close(&mut self) {
+		self.rx.close()
+	}
 }
 
 #[cfg(test)]

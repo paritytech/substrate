@@ -29,7 +29,7 @@ use frame_support_procedural_tools::{
 	generate_crate_access, generate_hidden_includes, syn_ext as ext
 };
 
-/// All informations contained in input of decl_storage
+/// All information contained in input of decl_storage
 pub struct DeclStorageDef {
 	/// Name of the module used to import hidden imports.
 	hidden_crate: Option<syn::Ident>,
@@ -219,9 +219,9 @@ pub struct StorageLineDefExt {
 	storage_trait: proc_macro2::TokenStream,
 	/// Full trait, for example: `storage::generator::StorageMap<u32, u32>`.
 	storage_generator_trait: proc_macro2::TokenStream,
-	/// Weither the storage is generic.
+	/// Whether the storage is generic.
 	is_generic: bool,
-	/// Weither the storage value is an option.
+	/// Whether the storage value is an option.
 	is_option: bool,
 }
 
@@ -283,7 +283,7 @@ impl StorageLineDefExt {
 			None
 		};
 
-		let storage_trait_trunkated = match &storage_def.storage_type {
+		let storage_trait_truncated = match &storage_def.storage_type {
 			StorageLineTypeDef::Simple(_) => {
 				quote!( StorageValue<#value_type> )
 			},
@@ -302,8 +302,8 @@ impl StorageLineDefExt {
 			},
 		};
 
-		let storage_trait = quote!( storage::#storage_trait_trunkated );
-		let storage_generator_trait = quote!( storage::generator::#storage_trait_trunkated );
+		let storage_trait = quote!( storage::#storage_trait_truncated );
+		let storage_generator_trait = quote!( storage::generator::#storage_trait_truncated );
 
 		let doc_attrs = storage_def.attrs.iter()
 			.filter_map(|a| a.parse_meta().ok())

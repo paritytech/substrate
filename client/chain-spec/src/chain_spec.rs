@@ -20,7 +20,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 use serde::{Serialize, Deserialize};
 use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
 use sp_runtime::BuildStorage;
@@ -32,7 +32,7 @@ use sc_telemetry::TelemetryEndpoints;
 enum GenesisSource<G> {
 	File(PathBuf),
 	Binary(Cow<'static, [u8]>),
-	Factory(Rc<dyn Fn() -> G>),
+	Factory(Arc<dyn Fn() -> G + Send + Sync>),
 }
 
 impl<G> Clone for GenesisSource<G> {
@@ -117,8 +117,8 @@ struct ChildRawStorage {
 #[serde(deny_unknown_fields)]
 /// Storage content for genesis block.
 struct RawGenesis {
-	pub top: GenesisStorage,
-	pub children: HashMap<StorageKey, ChildRawStorage>,
+	top: GenesisStorage,
+	children: HashMap<StorageKey, ChildRawStorage>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -134,14 +134,14 @@ enum Genesis<G> {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 struct ClientSpec<E> {
-	pub name: String,
-	pub id: String,
-	pub boot_nodes: Vec<String>,
-	pub telemetry_endpoints: Option<TelemetryEndpoints>,
-	pub protocol_id: Option<String>,
-	pub properties: Option<Properties>,
+	name: String,
+	id: String,
+	boot_nodes: Vec<String>,
+	telemetry_endpoints: Option<TelemetryEndpoints>,
+	protocol_id: Option<String>,
+	properties: Option<Properties>,
 	#[serde(flatten)]
-	pub extensions: E,
+	extensions: E,
 	// Never used, left only for backward compatibility.
 	consensus_engine: (),
 	#[serde(skip_serializing)]
@@ -215,7 +215,7 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Create hardcoded spec.
-	pub fn from_genesis<F: Fn() -> G + 'static>(
+	pub fn from_genesis<F: Fn() -> G + 'static + Send + Sync>(
 		name: &str,
 		id: &str,
 		constructor: F,
@@ -239,7 +239,7 @@ impl<G, E> ChainSpec<G, E> {
 
 		ChainSpec {
 			client_spec,
-			genesis: GenesisSource::Factory(Rc::new(constructor)),
+			genesis: GenesisSource::Factory(Arc::new(constructor)),
 		}
 	}
 }
@@ -336,7 +336,7 @@ mod tests {
 	type TestSpec = ChainSpec<Genesis>;
 
 	#[test]
-	fn should_deserailize_example_chain_spec() {
+	fn should_deserialize_example_chain_spec() {
 		let spec1 = TestSpec::from_json_bytes(Cow::Owned(
 			include_bytes!("../res/chain_spec.json").to_vec()
 		)).unwrap();

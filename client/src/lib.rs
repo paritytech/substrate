@@ -47,7 +47,6 @@
 //! ```
 //! use std::sync::Arc;
 //! use sc_client::{Client, in_mem::Backend, LocalCallExecutor};
-//! use sp_core::Blake2Hasher;
 //! use sp_runtime::Storage;
 //! use sc_executor::{NativeExecutor, WasmExecutionMethod};
 //!
@@ -69,6 +68,7 @@
 //! 	Default::default(),
 //! 	Default::default(),
 //! 	Default::default(),
+//!		None,
 //! );
 //! ```
 //!
@@ -98,10 +98,10 @@ pub use crate::{
 	client::{
 		new_with_backend,
 		new_in_mem,
-		BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
+		BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents, LockImportRun,
 		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
 		LongestChain, BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
 	},
 	leaves::LeafSet,
 };
-pub use sp_state_machine::{ExecutionStrategy, StorageProof};
+pub use sp_state_machine::{ExecutionStrategy, StorageProof, StateMachine};

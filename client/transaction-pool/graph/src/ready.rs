@@ -36,7 +36,7 @@ use crate::base_pool::Transaction;
 /// An in-pool transaction reference.
 ///
 /// Should be cheap to clone.
-#[derive(Debug)]
+#[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct TransactionRef<Hash, Ex> {
 	/// The actual transaction data.
 	pub transaction: Arc<Transaction<Hash, Ex>>,
@@ -74,7 +74,7 @@ impl<Hash, Ex> PartialEq for TransactionRef<Hash, Ex> {
 }
 impl<Hash, Ex> Eq for TransactionRef<Hash, Ex> {}
 
-#[derive(Debug)]
+#[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct ReadyTx<Hash, Ex> {
 	/// A reference to a transaction
 	pub transaction: TransactionRef<Hash, Ex>,
@@ -104,7 +104,7 @@ Hence every hash retrieved from `provided_tags` is always present in `ready`;
 qed
 "#;
 
-#[derive(Debug)]
+#[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// Insertion id
 	insertion_id: u64,
@@ -674,6 +674,24 @@ mod tests {
 		assert_eq!(it.next(), Some(4));
 		assert_eq!(it.next(), Some(5));
 		assert_eq!(it.next(), None);
+	}
+
+	#[test]
+	fn can_report_heap_size() {
+		let mut ready = ReadyTransactions::default();
+		let tx = Transaction {
+			data: vec![5],
+			bytes: 1,
+			hash: 5,
+			priority: 1,
+			valid_till: u64::max_value(),	// use the max_value() here for testing.
+			requires: vec![],
+			provides: vec![],
+			propagate: true,
+		};
+		import(&mut ready, tx).unwrap();
+
+		assert!(parity_util_mem::malloc_size(&ready) > 200);
 	}
 
 	#[test]

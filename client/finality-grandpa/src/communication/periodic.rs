@@ -19,7 +19,7 @@
 use futures_timer::Delay;
 use futures::{channel::mpsc, future::{FutureExt as _}, prelude::*, ready, stream::Stream};
 use log::debug;
-use std::{pin::Pin, task::{Context, Poll}, time::{Instant, Duration}};
+use std::{pin::Pin, task::{Context, Poll}, time::Duration};
 
 use sc_network::PeerId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
@@ -27,10 +27,6 @@ use super::gossip::{NeighborPacket, GossipMessage};
 
 // How often to rebroadcast, in cases where no new packets are created.
 const REBROADCAST_AFTER: Duration = Duration::from_secs(2 * 60);
-
-fn rebroadcast_instant() -> Instant {
-	Instant::now() + REBROADCAST_AFTER
-}
 
 /// A sender used to send neighbor packets to a background job.
 #[derive(Clone)]
@@ -85,7 +81,7 @@ impl <B: BlockT> Stream for NeighborPacketWorker<B> {
 		match this.rx.poll_next_unpin(cx) {
 			Poll::Ready(None) => return Poll::Ready(None),
 			Poll::Ready(Some((to, packet))) => {
-				this.delay.reset(rebroadcast_instant());
+				this.delay.reset(REBROADCAST_AFTER);
 				this.last = Some((to.clone(), packet.clone()));
 
 				return Poll::Ready(Some((to, GossipMessage::<B>::from(packet.clone()))));
@@ -98,7 +94,7 @@ impl <B: BlockT> Stream for NeighborPacketWorker<B> {
 
 		// Getting this far here implies that the timer fired.
 
-		this.delay.reset(rebroadcast_instant());
+		this.delay.reset(REBROADCAST_AFTER);
 
 		// Make sure the underlying task is scheduled for wake-up.
 		//

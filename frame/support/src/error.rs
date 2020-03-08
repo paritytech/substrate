@@ -28,7 +28,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 /// implements `From<ErrorType> for DispatchResult` to make the error type usable as error
 /// in the dispatchable functions.
 ///
-/// It is required that the error type is registed in `decl_module!` to make the error
+/// It is required that the error type is registered in `decl_module!` to make the error
 /// exported in the metadata.
 ///
 /// # Usage

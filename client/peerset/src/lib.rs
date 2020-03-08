@@ -19,19 +19,24 @@
 
 mod peersstate;
 
-use std::{collections::{HashSet, HashMap}, collections::VecDeque, time::Instant};
+use std::{collections::{HashSet, HashMap}, collections::VecDeque};
 use futures::{prelude::*, channel::mpsc};
-use libp2p::PeerId;
 use log::{debug, error, trace};
 use serde_json::json;
-use std::{pin::Pin, task::Context, task::Poll};
+use std::{pin::Pin, task::{Context, Poll}, time::Duration};
+use wasm_timer::Instant;
+
+pub use libp2p::PeerId;
 
 /// We don't accept nodes whose reputation is under this value.
 const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
 /// Reputation change for a node when we get disconnected from it.
-const DISCONNECT_REPUTATION_CHANGE: i32 = -10;
+const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// Reserved peers group ID
 const RESERVED_NODES: &'static str = "reserved";
+/// Amount of time between the moment we disconnect from a node and the moment we remove it from
+/// the list.
+const FORGET_AFTER: Duration = Duration::from_secs(3600);
 
 #[derive(Debug)]
 enum Action {
@@ -44,7 +49,7 @@ enum Action {
 	RemoveFromPriorityGroup(String, PeerId),
 }
 
-/// Shared handle to the peer set manager (PSM). Distributed around the code.
+/// Description of a reputation adjustment for a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReputationChange {
 	/// Reputation delta.
@@ -198,14 +203,16 @@ impl Peerset {
 			tx: tx.clone(),
 		};
 
+		let now = Instant::now();
+
 		let mut peerset = Peerset {
 			data: peersstate::PeersState::new(config.in_peers, config.out_peers, config.reserved_only),
 			tx,
 			rx,
 			reserved_only: config.reserved_only,
 			message_queue: VecDeque::new(),
-			created: Instant::now(),
-			latest_time_update: Instant::now(),
+			created: now,
+			latest_time_update: now,
 		};
 
 		peerset.data.set_priority_group(RESERVED_NODES, config.reserved_nodes.into_iter().collect());
@@ -306,10 +313,11 @@ impl Peerset {
 	/// Updates the value of `self.latest_time_update` and performs all the updates that happen
 	/// over time, such as reputation increases for staying connected.
 	fn update_time(&mut self) {
+		let now = Instant::now();
+
 		// We basically do `(now - self.latest_update).as_secs()`, except that by the way we do it
 		// we know that we're not going to miss seconds because of rounding to integers.
 		let secs_diff = {
-			let now = Instant::now();
 			let elapsed_latest = self.latest_time_update - self.created;
 			let elapsed_now = now - self.created;
 			self.latest_time_update = now;
@@ -341,10 +349,16 @@ impl Peerset {
 						peer.set_reputation(after)
 					}
 					peersstate::Peer::NotConnected(mut peer) => {
-						let before = peer.reputation();
-						let after = reput_tick(before);
-						trace!(target: "peerset", "Fleeting {}: {} -> {}", peer_id, before, after);
-						peer.set_reputation(after)
+						if peer.reputation() == 0 &&
+							peer.last_connected_or_discovered() + FORGET_AFTER < now
+						{
+							peer.forget_peer();
+						} else {
+							let before = peer.reputation();
+							let after = reput_tick(before);
+							trace!(target: "peerset", "Fleeting {}: {} -> {}", peer_id, before, after);
+							peer.set_reputation(after)
+						}
 					}
 					peersstate::Peer::Unknown(_) => unreachable!("We iterate over known peers; qed")
 				};
@@ -410,7 +424,10 @@ impl Peerset {
 		let not_connected = match self.data.peer(&peer_id) {
 			// If we're already connected, don't answer, as the docs mention.
 			peersstate::Peer::Connected(_) => return,
-			peersstate::Peer::NotConnected(entry) => entry,
+			peersstate::Peer::NotConnected(mut entry) => {
+				entry.bump_last_connected_or_discovered();
+				entry
+			},
 			peersstate::Peer::Unknown(entry) => entry.discover(),
 		};
 
@@ -499,6 +516,11 @@ impl Peerset {
 			"reserved_only": self.reserved_only,
 			"message_queue": self.message_queue.len(),
 		})
+	}
+
+	/// Returns the number of peers that we have discovered.
+	pub fn num_discovered_peers(&self) -> usize {
+		self.data.peers().len()
 	}
 
 	/// Returns priority group by id.

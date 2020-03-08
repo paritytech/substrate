@@ -75,3 +75,6 @@
 # Authority discovery
 /client/authority-discovery/ @mxinden
 /frame/authority-discovery/ @mxinden
+
+# Prometheus endpoint
+/utils/prometheus/ @mxinden

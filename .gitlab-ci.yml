@@ -5,6 +5,21 @@
 # pipelines can be triggered manually in the web
 # setting DEPLOY_TAG will only deploy the tagged image
 
+# SAMPLE JOB TEMPLATE - This is not a complete example but is enough to build a
+# simple CI job. For full documentation, visit https://docs.gitlab.com/ee/ci/yaml/
+#
+# my-example-job:
+#   stage:                           test # One of the stages listed below this job (required)
+#   image:                           parity/tools:latest # Any docker image (required)
+#   allow_failure:                   true # Allow the pipeline to continue if this job fails (default: false)
+#   dependencies:
+#     - build-rust-doc-release # Any jobs that are required to run before this job (optional)
+#   variables:
+#     MY_ENVIRONMENT_VARIABLE:       "some useful value" # Environment variables passed to the job (optional)
+#   script:
+#     - echo "List of shell commands to run in your job"
+#     - echo "You can also just specify a script here, like so:"
+#     - ./.maintain/gitlab/my_amazing_script.sh
 
 stages:
   - test
@@ -22,6 +37,9 @@ variables:
   CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
+  # FIXME set to release
+  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.8"
+  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
 
 
 .collect-artifacts:                &collect-artifacts
@@ -65,6 +83,7 @@ variables:
   only:
     - master
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+    - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
     - web
 
 
@@ -85,6 +104,16 @@ check-runtime:
   interruptible:                   true
   allow_failure:                   true
 
+check-signed-tag:
+  stage:                           test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - tags
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    - ./.maintain/gitlab/check_signed.sh
+  allow_failure:                   false
 
 check-line-width:
   stage:                           test
@@ -158,6 +187,16 @@ test-dependency-rules:
       - $DEPLOY_TAG
   script:
     - .maintain/ensure-deps.sh
+
+unleash-check:
+  stage:                           test
+  <<:                              *docker-env
+  only:
+    - master
+    - tags
+  script:
+    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
+    - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
 
 test-frame-staking:
   stage:                           test
@@ -234,15 +273,6 @@ check-web-wasm:
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
     - time cargo build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
     - sccache -s
-
-node-exits:
-  stage:                           test
-  <<:                              *docker-env
-  except:
-    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
-  script:
-    - ./.maintain/check_for_exit.sh
-
 
 test-full-crypto-feature:
   stage:                           test
@@ -524,7 +554,7 @@ publish-gh-doc:
       insteadOf = "https://github.com/"
       EOC
     - unset GITHUB_TOKEN
-    - git clone https://github.com/substrate-developer-hub/rustdocs.git
+    - git clone --depth 1 https://github.com/substrate-developer-hub/rustdocs.git
     - rsync -ax --delete ./crate-docs/ ./rustdocs/${CI_COMMIT_REF_NAME}/
     - cd ./rustdocs; git add .
     - git commit -m "update rustdoc ${CI_COMMIT_REF_NAME}"
@@ -532,7 +562,28 @@ publish-gh-doc:
   after_script:
     - rm -vrf ${HOME}/.gitconfig
 
+publish-draft-release:
+  stage:                           publish
+  image:                           parity/tools:latest
+  only:
+    - tags
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    - ./.maintain/gitlab/publish_draft_release.sh
+  interruptible:                   true
+  allow_failure:                   true
 
+publish-to-crates-io:
+  stage:                           publish
+  <<:                              *docker-env
+  only:
+    - tags
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
+    - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}
+  interruptible:                   true
+  allow_failure:                   true
 
 .deploy-template:                  &deploy
   stage:                           kubernetes

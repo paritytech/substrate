@@ -37,7 +37,7 @@ pub enum Error {
 	/// Intermediate is of wrong type.
 	#[display(fmt="Invalid intermediate.")]
 	InvalidIntermediate,
-	/// Unable to schedule wakeup.
+	/// Unable to schedule wake-up.
 	#[display(fmt="Timer error: {}", _0)]
 	FaultyTimer(std::io::Error),
 	/// Error while working with inherent data.

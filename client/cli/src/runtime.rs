@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::sync::Arc;
+
 use futures::{Future, future, future::FutureExt};
 use futures::select;
 use futures::pin_mut;
 use sc_service::{AbstractService, Configuration};
 use crate::error;
-use crate::informant;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> Result<(), Box<dyn std::error::Error>>
@@ -91,7 +92,7 @@ where
 
 	config.task_executor = {
 		let runtime_handle = runtime.handle().clone();
-		Some(Box::new(move |fut| { runtime_handle.spawn(fut); }))
+		Some(Arc::new(move |fut| { runtime_handle.spawn(fut); }))
 	};
 
 	let f = future_builder(config)?;
@@ -117,22 +118,24 @@ where
 
 	config.task_executor = {
 		let runtime_handle = runtime.handle().clone();
-		Some(Box::new(move |fut| { runtime_handle.spawn(fut); }))
+		Some(Arc::new(move |fut| { runtime_handle.spawn(fut); }))
 	};
 
 	let service = service_builder(config)?;
 
-	let informant_future = informant::build(&service);
+	let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
 	let _informant_handle = runtime.spawn(informant_future);
 
 	// we eagerly drop the service so that the internal exit future is fired,
 	// but we need to keep holding a reference to the global telemetry guard
+	// and drop the runtime first.
 	let _telemetry = service.telemetry();
 
 	let f = service.fuse();
 	pin_mut!(f);
 
 	runtime.block_on(main(f)).map_err(|e| e.to_string())?;
+	drop(runtime);
 
 	Ok(())
 }

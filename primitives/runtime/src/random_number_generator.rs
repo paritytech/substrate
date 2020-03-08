@@ -66,7 +66,7 @@ impl<Hashing: Hash> RandomNumberGenerator<Hashing> {
 		loop {
 			if self.offset() + needed > self.current.as_ref().len() {
 				// rehash
-				self.current = Hashing::hash(self.current.as_ref());
+				self.current = <Hashing as Hash>::hash(self.current.as_ref());
 				self.offset = 0;
 			}
 			let data = &self.current.as_ref()[self.offset()..self.offset() + needed];

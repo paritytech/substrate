@@ -41,6 +41,14 @@ pub enum Error {
 		/// Details of the error message.
 		details: String,
 	},
+	/// Provided count exceeds maximum value.
+	#[display(fmt = "count exceeds maximum value. value: {}, max: {}", value, max)]
+	InvalidCount {
+		/// Provided value
+		value: u32,
+		/// Maximum allowed value
+		max: u32,
+	},
 }
 
 impl std::error::Error for Error {
@@ -60,6 +68,11 @@ impl From<Error> for rpc::Error {
 		match e {
 			Error::InvalidBlockRange { .. } => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
+				message: format!("{}", e),
+				data: None,
+			},
+			Error::InvalidCount { .. } => rpc::Error {
+				code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
 				message: format!("{}", e),
 				data: None,
 			},
