@@ -1254,14 +1254,14 @@ decl_module! {
 			}
 		}
 
+		// ----- Root calls.
+
 		/// The ideal number of validators.
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
 		}
-
-		// ----- Root calls.
 
 		/// Force there to be no new eras indefinitely.
 		///
