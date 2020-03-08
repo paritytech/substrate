@@ -1329,7 +1329,7 @@ decl_module! {
 				.map(|_| ())
 				.or_else(ensure_root)?;
 
-			ensure!(slash_indices.len() > 0, Error::<T>::EmptyTargets);
+			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(Self::is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
 
 			let mut unapplied = <Self as Store>::UnappliedSlashes::get(&era);
@@ -1407,7 +1407,7 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(
-				ledger.unlocking.len() > 0,
+				!ledger.unlocking.is_empty(),
 				Error::<T>::NoUnlockChunk,
 			);
 
