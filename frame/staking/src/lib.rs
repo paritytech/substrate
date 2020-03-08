@@ -1659,17 +1659,12 @@ impl<T: Trait> Module<T> {
 	/// End a session potentially ending an era.
 	fn end_session(session_index: SessionIndex) {
 		if let Some(active_era) = Self::active_era() {
-			let next_active_era_start_session_index =
+			if let Some(next_active_era_start_session_index) =
 				Self::eras_start_session_index(active_era.index + 1)
-					.unwrap_or_else(|| {
-						frame_support::print(
-							"Error: start_session_index must be set for active_era + 1"
-						);
-						0
-					});
-
-			if next_active_era_start_session_index == session_index + 1 {
-				Self::end_era(active_era, session_index);
+			{
+				if next_active_era_start_session_index == session_index + 1 {
+					Self::end_era(active_era, session_index);
+				}
 			}
 		}
 	}
