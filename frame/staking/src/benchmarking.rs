@@ -83,6 +83,7 @@ benchmarks! {
         let amount = T::Currency::minimum_balance() * 10.into();
     }: _(RawOrigin::Signed(controller), amount)
 
+    // Worst case scenario, everything is removed after the bonding duration
     withdraw_unbonded {
         let u in ...;
         let (stash, controller) = create_stash_controller::<T>(u)?;
@@ -99,6 +100,7 @@ benchmarks! {
         let prefs = ValidatorPrefs::default();
     }: _(RawOrigin::Signed(controller), prefs)
 
+    // Worst case scenario, MAX_NOMINATIONS
     nominate {
         let n in 1 .. MAX_NOMINATIONS;
         let (_, controller) = create_stash_controller::<T>(n + 1)?;
@@ -128,5 +130,21 @@ benchmarks! {
 
     force_no_eras { }: _(RawOrigin::Root)
 
-    
+    force_new_era { }: _(RawOrigin::Root)
+
+    force_new_era_always { }: _(RawOrigin::Root)
+
+    // Worst case scenario, the list of invulnerables is very long.
+    set_invulnerables {
+        let v in 0 .. 1000;
+        let mut invulnerables = Vec::new();
+        for i in 0 .. v {
+            invulnerables.push(account("invulnerable", i, SEED));
+        }
+    }: _(RawOrigin::Root, invulnerables)
+
+    force_unstake {
+        let u in ...;
+        let (stash, _) = create_stash_controller::<T>(u)?;
+    }: _(RawOrigin::Root, stash)
 }

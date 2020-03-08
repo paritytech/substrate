@@ -1286,6 +1286,17 @@ decl_module! {
 			ForceEra::put(Forcing::ForceNew);
 		}
 
+		/// Force there to be a new era at the end of sessions indefinitely.
+		///
+		/// # <weight>
+		/// - One storage write
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
+		fn force_new_era_always(origin) {
+			ensure_root(origin)?;
+			ForceEra::put(Forcing::ForceAlways);
+		}
+
 		/// Set the validators who cannot be slashed (if any).
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
@@ -1303,17 +1314,6 @@ decl_module! {
 
 			// remove the lock.
 			T::Currency::remove_lock(STAKING_ID, &stash);
-		}
-
-		/// Force there to be a new era at the end of sessions indefinitely.
-		///
-		/// # <weight>
-		/// - One storage write
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
-		fn force_new_era_always(origin) {
-			ensure_root(origin)?;
-			ForceEra::put(Forcing::ForceAlways);
 		}
 
 		/// Cancel enactment of a deferred slash. Can be called by either the root origin or
