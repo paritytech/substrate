@@ -21,6 +21,7 @@ frame-support = { version = "2.0.0-alpha.2", default-features = false, path = ".
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
 pallet-session = { version = "2.0.0-alpha.2", features = ["historical"], path = "../session", default-features = false }
 pallet-authorship = { version = "2.0.0-alpha.2", default-features = false, path = "../authorship" }
+frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../benchmarking" }
 
 [dev-dependencies]
 sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
@@ -46,3 +47,4 @@ std = [
 	"frame-system/std",
 	"pallet-authorship/std",
 ]
+runtime-benchmarks = ["frame-system/runtime-benchmarks"]
