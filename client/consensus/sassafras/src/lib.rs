@@ -589,6 +589,12 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Sassafra
 			viable_epoch.as_mut().generating.append_to_pending(&self.keystore);
 		}
 
+		crate::communication::send_out(
+			&self.local_out_proofs,
+			slot_number,
+			&mut viable_epoch.as_mut().publishing
+		);
+
 		let s = authorship::claim_slot(
 			slot_number,
 			viable_epoch.as_ref(),

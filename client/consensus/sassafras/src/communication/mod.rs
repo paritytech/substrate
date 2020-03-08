@@ -1,63 +1,33 @@
-use std::{marker::PhantomData, sync::Arc, pin::Pin, task::{Poll, Context}};
-use futures::prelude::*;
-use sp_runtime::traits::Block as BlockT;
-use sc_network::PeerId;
-use sc_network_gossip::{
-	Validator as ValidatorT, ValidatorContext, GossipEngine, Network as GossipNetwork,
-	ValidationResult,
+mod network;
+
+use futures::channel::mpsc::UnboundedSender;
+use sp_consensus_sassafras::{SlotNumber, VRFProof};
+use crate::PublishingSet;
+
+pub use self::network::{
+	SASSAFRAS_ENGINE_ID, SASSAFRAS_PROTOCOL_NAME, GossipValidator, NetworkBridge,
 };
 
-pub use sp_consensus_sassafras::SASSAFRAS_ENGINE_ID;
-pub const SASSAFRAS_PROTOCOL_NAME: &[u8] = b"/paritytech/sassafras/1";
+pub fn send_out(
+	sender: &UnboundedSender<VRFProof>,
+	slot_number: SlotNumber,
+	set: &mut PublishingSet
+) {
+	const SEND_OUT_LIMIT: usize = 4;
 
-pub struct GossipValidator<Block: BlockT> {
-	_marker: PhantomData<Block>,
-}
-
-impl<Block: BlockT> ValidatorT<Block> for GossipValidator<Block> {
-	fn validate(
-		&self,
-		context: &mut dyn ValidatorContext<Block>,
-		sender: &PeerId,
-		data: &[u8]
-	) -> ValidationResult<Block::Hash> {
-		unimplemented!()
-	}
-}
-
-pub struct NetworkBridge<Block: BlockT, N> {
-	service: N,
-	gossip_engine: GossipEngine<Block>,
-	validator: Arc<GossipValidator<Block>>,
-}
-
-impl<Block: BlockT, N> NetworkBridge<Block, N> where
-	N: GossipNetwork<Block> + Clone + Send + 'static,
-{
-	pub fn new(service: N) -> Self {
-		let validator = Arc::new(GossipValidator {
-			_marker: PhantomData,
-		});
-
-		let gossip_engine = GossipEngine::new(
-			service.clone(),
-			SASSAFRAS_ENGINE_ID,
-			SASSAFRAS_PROTOCOL_NAME,
-			validator.clone(),
-		);
-
-		Self {
-			service,
-			gossip_engine,
-			validator,
+	let mut sent = 0;
+	for pending in &mut set.pending {
+		if sent >= SEND_OUT_LIMIT {
+			return
 		}
-	}
-}
 
-impl<Block: BlockT, N: Unpin> Future for NetworkBridge<Block, N> {
-	type Output = ();
-
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		self.gossip_engine.poll_unpin(cx)
+		if pending.submit_status.is_none() {
+			match sender.unbounded_send(pending.vrf_proof.clone()) {
+				Ok(()) => {
+					pending.submit_status = Some(slot_number);
+				},
+				Err(_) => return,
+			}
+		}
 	}
 }
