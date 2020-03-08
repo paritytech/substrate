@@ -21,7 +21,6 @@ use super::*;
 use frame_system::{RawOrigin, Module as System};
 use sp_io::hashing::blake2_256;
 use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::Dispatchable;
 
 use crate::Module as Vesting;
 
@@ -84,10 +83,24 @@ benchmarks! {
 		let b in ...;
 		let l in ...;
 
-		let other: T::AccountId = account("other", 0, SEED);
+		let other: T::AccountId = setup::<T>(b);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
 
-		let caller = setup::<T>(b);
-
+		let caller = account("caller", 0, SEED);
 	}: _(RawOrigin::Signed(caller), other_lookup)
+
+	vested_transfer{
+		let u in 0 .. 1000;
+		let from = account("from", u, SEED);
+		let to = account("to", u, SEED);
+		let to_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(to);
+		let transfer_amt = T::MinVestedTransfer::get();
+		let vesting_schedule = VestingInfo {
+			locked: transfer_amt,
+			per_block: 1.into(),
+			starting_block: 0.into(),
+		};
+		let _ = T::Currency::make_free_balance_be(&from, transfer_amt * 10.into());
+		
+	}: _(RawOrigin::Signed(from), to_lookup, vesting_schedule)
 }
