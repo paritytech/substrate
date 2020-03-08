@@ -61,7 +61,7 @@ use sc_client::Client;
 
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
-use futures::prelude::*;
+use futures::{prelude::*, channel::mpsc::{self, UnboundedSender, UnboundedReceiver}};
 use log::{warn, debug, info, trace};
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
@@ -157,6 +157,8 @@ pub struct PublishingSet {
 	pub randomness: Randomness,
 	/// Proofs of all VRFs collected.
 	pub proofs: Vec<VRFProof>,
+	/// Disclosing proofs.
+	pub disclosing: Vec<VRFProof>,
 	/// Local pending proofs collected.
 	pub pending: Vec<PendingProof>,
 }
@@ -239,6 +241,7 @@ impl EpochT for Epoch {
 				randomness: self.generating.randomness,
 				proofs: Vec::new(),
 				pending: self.generating.pending.clone(),
+				disclosing: Vec::new(),
 			},
 			validating: ValidatingSet {
 				start_slot,
@@ -374,6 +377,7 @@ impl Config {
 				authorities: self.genesis_authorities.clone(),
 				randomness: self.randomness.clone(),
 				pending: Vec::new(),
+				disclosing: Vec::new(),
 			},
 			validating: ValidatingSet {
 				start_slot: slot_number,
@@ -466,6 +470,7 @@ pub fn start_sassafras<B, C, SC, E, I, SO, CAW, N, Error>(SassafrasParams {
 	N: sc_network_gossip::Network<B> + Clone + Send + Unpin + 'static,
 {
 	let config = sassafras_link.config;
+	let (local_out_proofs, remote_in_proofs) = mpsc::unbounded();
 	let worker = SassafrasWorker {
 		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
@@ -475,6 +480,7 @@ pub fn start_sassafras<B, C, SC, E, I, SO, CAW, N, Error>(SassafrasParams {
 		keystore,
 		epoch_changes: sassafras_link.epoch_changes.clone(),
 		config: config.clone(),
+		local_out_proofs, remote_in_proofs,
 	};
 
 	register_sassafras_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
@@ -510,8 +516,8 @@ struct SassafrasWorker<B: BlockT, C, E, I, SO> {
 	keystore: KeyStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	config: Config,
-	// local_out_proofs: UnboundedSender<VRFProof>,
-	// remote_in_proofs: UnboundedReceiver<VRFProof>,
+	local_out_proofs: UnboundedSender<VRFProof>,
+	remote_in_proofs: UnboundedReceiver<VRFProof>,
 }
 
 impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for SassafrasWorker<B, C, E, I, SO> where
