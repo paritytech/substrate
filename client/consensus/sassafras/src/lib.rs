@@ -572,7 +572,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Sassafra
 	}
 
 	fn claim_slot(
-		&self,
+		&mut self,
 		_parent_header: &B::Header,
 		slot_number: SlotNumber,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
@@ -592,6 +592,10 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Sassafra
 		crate::communication::send_out(
 			&self.local_out_proofs,
 			slot_number,
+			&mut viable_epoch.as_mut().publishing
+		);
+		crate::communication::receive_in(
+			&mut self.remote_in_proofs,
 			&mut viable_epoch.as_mut().publishing
 		);
 

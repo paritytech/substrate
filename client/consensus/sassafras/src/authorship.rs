@@ -122,11 +122,11 @@ fn claim_primary_slot(
 	let post_vrf_proof = VRFProof(post_vrf_proof);
 
 	let mut commitments = Vec::new();
-	for pending_proof in &epoch.publishing.pending {
+	for disclosing in &epoch.publishing.disclosing {
 		if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS &&
-			epoch.publishing.proofs.iter().position(|p| *p == pending_proof.vrf_proof).is_none()
+			epoch.publishing.proofs.iter().position(|p| p == disclosing).is_none()
 		{
-			commitments.push(pending_proof.vrf_proof.clone());
+			commitments.push(disclosing.clone());
 		}
 	}
 	trace!(target: "sassafras", "Appending commitment length: {}", commitments.len());
@@ -227,12 +227,12 @@ fn claim_secondary_slot(
 	{
 		if pair.public() == *expected_author {
 			let mut commitments = Vec::new();
-			for pending_proof in &epoch.publishing.pending {
+			for disclosing in &epoch.publishing.disclosing {
 				if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS && epoch.publishing.proofs.iter()
-					.position(|p| *p == pending_proof.vrf_proof)
+					.position(|p| p == disclosing)
 					.is_none()
 				{
-					commitments.push(pending_proof.vrf_proof.clone());
+					commitments.push(disclosing.clone());
 				}
 			}
 			trace!(target: "sassafras", "Appending commitment length: {}", commitments.len());

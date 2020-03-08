@@ -1,6 +1,6 @@
 mod network;
 
-use futures::channel::mpsc::UnboundedSender;
+use futures::channel::mpsc::{UnboundedSender, UnboundedReceiver};
 use sp_consensus_sassafras::{SlotNumber, VRFProof};
 use crate::PublishingSet;
 
@@ -29,5 +29,14 @@ pub fn send_out(
 				Err(_) => return,
 			}
 		}
+	}
+}
+
+pub fn receive_in(
+	receiver: &mut UnboundedReceiver<VRFProof>,
+	set: &mut PublishingSet,
+) {
+	while let Ok(Some(proof)) = receiver.try_next() {
+		set.disclosing.push(proof);
 	}
 }
