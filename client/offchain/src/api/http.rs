@@ -699,9 +699,10 @@ mod tests {
 				let _ = tokio::runtime::Runtime::new().unwrap().block_on(future);
 			}
 
-			// We spawn quite a bit threads here due to how async API works for
-			// offchain workers, so be sure to raise the FD limit (particularly
-			// useful for macOS where the default soft limit may not be enough).
+			// We spawn quite a bit of HTTP servers here due to how async API
+			// works for offchain workers, so be sure to raise the FD limit
+			// (particularly useful for macOS where the default soft limit may
+			// not be enough).
 			fdlimit::raise_fd_limit();
 
 			let (api, worker) = http();
