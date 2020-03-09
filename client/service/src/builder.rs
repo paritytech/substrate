@@ -1013,6 +1013,16 @@ ServiceBuilder<
 
 		// Prometheus metrics
 		let metrics = if let Some(PrometheusConfig { port, registry }) = config.prometheus_config.clone() {
+			// Set static metrics.
+			register(Gauge::<U64>::with_opts(
+				Opts::new(
+					"build_info",
+					"A metric with a constant '1' value labeled by name, version, and commit."
+				).const_label("name", config.impl_name)
+					.const_label("version", config.impl_version)
+					.const_label("commit", config.impl_commit)
+			)?, &registry)?.set(1);
+
 			let metrics = ServiceMetrics::register(&registry)?;
 			metrics.node_roles.set(u64::from(config.roles.bits()));
 			spawn_handle.spawn(
@@ -1023,6 +1033,7 @@ ServiceBuilder<
 		} else {
 			None
 		};
+
 		// Periodically notify the telemetry.
 		let transaction_pool_ = transaction_pool.clone();
 		let client_ = client.clone();
