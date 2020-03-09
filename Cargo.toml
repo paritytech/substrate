@@ -66,6 +66,7 @@ members = [
 	"frame/sassafras",
 	"frame/balances",
 	"frame/benchmarking",
+	"frame/benchmark",
 	"frame/collective",
 	"frame/contracts",
 	"frame/contracts/rpc",

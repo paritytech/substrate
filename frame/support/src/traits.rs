@@ -808,6 +808,8 @@ impl WithdrawReasons {
 pub trait ChangeMembers<AccountId: Clone + Ord> {
 	/// A number of members `incoming` just joined the set and replaced some `outgoing` ones. The
 	/// new set is given by `new`, and need not be sorted.
+	///
+	/// This resets any previous value of prime.
 	fn change_members(incoming: &[AccountId], outgoing: &[AccountId], mut new: Vec<AccountId>) {
 		new.sort_unstable();
 		Self::change_members_sorted(incoming, outgoing, &new[..]);
@@ -817,6 +819,8 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	/// new set is thus given by `sorted_new` and **must be sorted**.
 	///
 	/// NOTE: This is the only function that needs to be implemented in `ChangeMembers`.
+	///
+	/// This resets any previous value of prime.
 	fn change_members_sorted(
 		incoming: &[AccountId],
 		outgoing: &[AccountId],
@@ -825,6 +829,8 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 
 	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
 	/// call `change_members_sorted`.
+	///
+	/// This resets any previous value of prime.
 	fn set_members_sorted(new_members: &[AccountId], old_members: &[AccountId]) {
 		let (incoming, outgoing) = Self::compute_members_diff(new_members, old_members);
 		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
@@ -865,13 +871,19 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 		}
 		(incoming, outgoing)
 	}
+
+	/// Set the prime member.
+	fn set_prime(_prime: Option<AccountId>) {}
 }
 
 impl<T: Clone + Ord> ChangeMembers<T> for () {
 	fn change_members(_: &[T], _: &[T], _: Vec<T>) {}
 	fn change_members_sorted(_: &[T], _: &[T], _: &[T]) {}
 	fn set_members_sorted(_: &[T], _: &[T]) {}
+	fn set_prime(_: Option<T>) {}
 }
+
+
 
 /// Trait for type that can handle the initialization of account IDs at genesis.
 pub trait InitializeMembers<AccountId> {

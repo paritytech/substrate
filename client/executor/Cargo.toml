@@ -11,7 +11,7 @@ documentation = "https://docs.rs/sc-executor"
 
 [dependencies]
 derive_more = "0.99.2"
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+codec = { package = "parity-scale-codec", version = "1.2.0" }
 sp-io = { version = "2.0.0-alpha.2", path = "../../primitives/io" }
 sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
 sp-trie = { version = "2.0.0-alpha.2", path = "../../primitives/trie" }
@@ -39,6 +39,7 @@ sc-runtime-test = { version = "2.0.0-dev", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0-dev", path = "../../test-utils/runtime" }
 sp-state-machine = { version = "0.8.0-alpha.2", path = "../../primitives/state-machine" }
 test-case = "0.3.3"
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
 
 [features]
 default = [ "std" ]
