@@ -21,7 +21,7 @@
 
 pub use crate::chain::{Client, FinalityProofProvider};
 pub use crate::on_demand_layer::OnDemand;
-pub use crate::service::TransactionPool;
+pub use crate::service::{TransactionPool, EmptyTransactionPool};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in

@@ -779,7 +779,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	/// Called by peer when it is disconnecting
-	pub fn on_peer_disconnected(&mut self, peer: PeerId) {
+	pub fn on_peer_disconnected(&mut self, peer: PeerId) -> CustomMessageOutcome<B> {
 		if self.important_peers.contains(&peer) {
 			warn!(target: "sync", "Reserved peer {} disconnected", peer);
 		} else {
@@ -796,7 +796,15 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			self.light_dispatch.on_disconnect(LightDispatchIn {
 				behaviour: &mut self.behaviour,
 				peerset: self.peerset_handle.clone(),
-			}, peer);
+			}, &peer);
+
+			// Notify all the notification protocols as closed.
+			CustomMessageOutcome::NotificationStreamClosed {
+				remote: peer,
+				protocols: self.protocol_name_by_engine.keys().cloned().collect(),
+			}
+		} else {
+			CustomMessageOutcome::None
 		}
 	}
 
@@ -2063,12 +2071,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				CustomMessageOutcome::None
 			}
 			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
-				self.on_peer_disconnected(peer_id.clone());
-				// Notify all the notification protocols as closed.
-				CustomMessageOutcome::NotificationStreamClosed {
-					remote: peer_id,
-					protocols: self.protocol_name_by_engine.keys().cloned().collect(),
-				}
+				self.on_peer_disconnected(peer_id.clone())
 			},
 			GenericProtoOut::CustomMessage { peer_id, message } =>
 				self.on_custom_message(peer_id, message),
@@ -2137,5 +2140,52 @@ impl<B: BlockT, H: ExHashT> DiscoveryNetBehaviour for Protocol<B, H> {
 impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
 	fn drop(&mut self) {
 		debug!(target: "sync", "Network stats:\n{}", self.format_stats());
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::PeerId;
+	use crate::protocol::light_dispatch::AlwaysBadChecker;
+	use crate::config::{EmptyTransactionPool, Roles};
+	use super::{CustomMessageOutcome, Protocol, ProtocolConfig};
+
+	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
+	use std::sync::Arc;
+	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
+	use substrate_test_runtime_client::runtime::{Block, Hash};
+
+	#[test]
+	fn no_handshake_no_notif_closed() {
+		let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
+
+		let (mut protocol, _) = Protocol::<Block, Hash>::new(
+			ProtocolConfig {
+				roles: Roles::FULL,
+				max_parallel_downloads: 10,
+			},
+			client.clone(),
+			Arc::new(AlwaysBadChecker),
+			Arc::new(EmptyTransactionPool),
+			None,
+			None,
+			From::from(&b"test"[..]),
+			sc_peerset::PeersetConfig {
+				in_peers: 10,
+				out_peers: 10,
+				bootnodes: Vec::new(),
+				reserved_only: false,
+				reserved_nodes: Vec::new(),
+			},
+			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
+			None
+		).unwrap();
+
+		let dummy_peer_id = PeerId::random();
+		let _ = protocol.on_peer_connected(dummy_peer_id.clone());
+		match protocol.on_peer_disconnected(dummy_peer_id) {
+			CustomMessageOutcome::None => {},
+			_ => panic!()
+		};
 	}
 }
