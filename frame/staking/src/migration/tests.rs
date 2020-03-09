@@ -7,7 +7,7 @@ use sp_runtime::traits::OnRuntimeUpgrade;
 use crate::migration::deprecated;
 
 #[test]
-fn upgrade_works() {
+fn upgrade_from_v1_to_v2_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(3);
 
@@ -99,7 +99,7 @@ fn upgrade_works() {
 
 // Test that an upgrade from previous test environment works.
 #[test]
-fn test_upgrade_from_master_works() {
+fn test_upgrade_from_v1_to_v2_from_master_works() {
 	let data_sets = &[
 		test_upgrade_from_master_dataset::_0,
 		test_upgrade_from_master_dataset::_1,
