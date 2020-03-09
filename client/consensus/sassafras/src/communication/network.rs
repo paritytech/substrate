@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, sync::Arc, pin::Pin, task::{Poll, Context}};
 use futures::{prelude::*, channel::mpsc::{UnboundedSender, UnboundedReceiver}};
-use sp_runtime::traits::Block as BlockT;
+use codec::{Encode, Decode};
+use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use sc_network::PeerId;
 use sc_network_gossip::{
 	Validator as ValidatorT, ValidatorContext, GossipEngine, Network as GossipNetwork,
@@ -22,7 +23,9 @@ impl<Block: BlockT> ValidatorT<Block> for GossipValidator<Block> {
 		sender: &PeerId,
 		data: &[u8]
 	) -> ValidationResult<Block::Hash> {
-		unimplemented!()
+		ValidationResult::ProcessAndKeep(
+			<<Block::Header as HeaderT>::Hashing as HashT>::hash(&b"SASSAFRAS-PROOF-GLOBAL"[..])
+		)
 	}
 }
 
@@ -67,6 +70,37 @@ impl<Block: BlockT, N: Unpin> Future for NetworkBridge<Block, N> {
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let topic = <<Block::Header as HeaderT>::Hashing as HashT>::hash(
+			&b"SASSAFRAS-PROOF-GLOBAL"[..]
+		);
+
+		let mut messages = self.gossip_engine.messages_for(topic);
+
+		while let Poll::Ready(Some(notification)) = messages.poll_next_unpin(cx) {
+			match Decode::decode(&mut &notification.message[..]) {
+				Ok((receiver_id, ephemeral_key, encrypted)) => {
+					match self.remote_in_proofs.unbounded_send(
+						(receiver_id, ephemeral_key, encrypted)
+					) {
+						Ok(()) => (),
+						Err(_) => continue,
+					}
+				},
+				Err(_) => continue,
+			}
+		}
+
+		while let Poll::Ready(
+			Some((receiver_id, ephemeral_key, encrypted))
+		) = self.local_out_proofs.poll_next_unpin(cx) {
+			self.gossip_engine.gossip_message(
+				topic,
+				(receiver_id, ephemeral_key, encrypted).encode(),
+				false,
+			);
+		}
+
+
 		self.gossip_engine.poll_unpin(cx)
 	}
 }
