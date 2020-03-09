@@ -261,7 +261,7 @@ pub mod slashing;
 pub mod offchain_election;
 pub mod inflation;
 
-use sp_std::{prelude::*, result, collections::btree_map::BTreeMap, convert::{TryInto, From}};
+use sp_std::{prelude::*, result, collections::btree_map::BTreeMap, convert::{TryInto, From}, mem::size_of};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug, Parameter,
@@ -312,8 +312,8 @@ pub type NominatorIndex = u32;
 pub type ValidatorIndex = u16;
 
 // Ensure the size of both ValidatorIndex and NominatorIndex
-static_assertions::const_assert!(sp_std::mem::size_of::<ValidatorIndex>() <= sp_std::mem::size_of::<usize>());
-static_assertions::const_assert!(sp_std::mem::size_of::<NominatorIndex>() <= sp_std::mem::size_of::<usize>());
+static_assertions::const_assert!(size_of::<ValidatorIndex>() <= size_of::<usize>());
+static_assertions::const_assert!(size_of::<NominatorIndex>() <= size_of::<usize>());
 
 /// Maximum number of stakers that can be stored in a snapshot.
 pub(crate) const MAX_VALIDATORS: usize = ValidatorIndex::max_value() as usize;

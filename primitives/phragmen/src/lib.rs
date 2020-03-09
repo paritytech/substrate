@@ -490,16 +490,17 @@ pub fn elect<AccountId, Balance, FS, C, R>(
 			}
 		}
 
-		if assignment.distribution.len() > 0 {
+		let len = assignment.distribution.len();
+		if len > 0 {
 			// To ensure an assertion indicating: no stake from the voter going to waste,
 			// we add a minimal post-processing to equally assign all of the leftover stake ratios.
-			let vote_count: R::Inner = assignment.distribution.len().saturated_into();
+			let vote_count: R::Inner = len.saturated_into();
 			let accuracy = R::ACCURACY;
-			let len = assignment.distribution.len();
 			let mut sum: R::Inner = Zero::zero();
 			assignment.distribution.iter().for_each(|a| sum = sum.saturating_add(a.1.deconstruct()));
 
 			let diff = accuracy.saturating_sub(sum);
+			dbg!(diff);
 			let diff_per_vote = (diff / vote_count).min(accuracy);
 
 			if !diff_per_vote.is_zero() {

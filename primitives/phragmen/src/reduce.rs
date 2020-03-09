@@ -972,7 +972,7 @@ mod tests {
 
 	#[test]
 	#[should_panic]
-	fn should_deal_with_duplicates_voter() {
+	fn reduce_panics_on_duplicate_voter() {
 		let mut assignments = vec![
 			StakedAssignment {
 				who: 1,
