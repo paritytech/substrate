@@ -17,18 +17,18 @@
 //! Blockchain access trait
 
 use sp_blockchain::{Error, HeaderBackend, HeaderMetadata};
-use sc_client_api::{BlockProvider, ProofProvider};
+use sc_client_api::{BlockBackend, ProofProvider};
 use sp_runtime::traits::{Block as BlockT, BlockIdTo};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: HeaderBackend<Block> + ProofProvider<Block> + BlockIdTo<Block, Error = Error>
-	+ BlockProvider<Block> + HeaderMetadata<Block, Error = Error> + Send + Sync
+	+ BlockBackend<Block> + HeaderMetadata<Block, Error = Error> + Send + Sync
 {}
 
 impl<Block: BlockT, T> Client<Block> for T
 	where
 		T: HeaderBackend<Block> + ProofProvider<Block> + BlockIdTo<Block, Error = Error>
-		+ BlockProvider<Block> + HeaderMetadata<Block, Error = Error> + Send + Sync
+		+ BlockBackend<Block> + HeaderMetadata<Block, Error = Error> + Send + Sync
 {}
 
 /// Finality proof provider.

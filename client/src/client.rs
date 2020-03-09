@@ -71,7 +71,7 @@ pub use sc_client_api::{
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-		ClientInfo, BlockchainEvents, BlockProvider, ProvideUncles, BadBlocks, ForkBlocks,
+		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
 		BlockOf,
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
@@ -1822,7 +1822,7 @@ where
 	}
 }
 
-impl<B, E, Block, RA> BlockProvider<Block> for Client<B, E, Block, RA>
+impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	where
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,

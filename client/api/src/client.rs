@@ -74,8 +74,8 @@ pub trait BlockchainEvents<Block: BlockT> {
 	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>>;
 }
 
-/// Fetch block body by ID.
-pub trait BlockProvider<Block: BlockT> {
+/// Interface for fetching block data.
+pub trait BlockBackend<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
 	fn block_body(
 		&self,
