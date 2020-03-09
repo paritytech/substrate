@@ -89,7 +89,7 @@ fn test_return_input_public_key() {
 
 #[test]
 #[should_panic(
-	expected = "\"Instantiation: Export ext_test_api_return_input_version_1 not found\""
+	expected = "Instantiation: Export ext_test_api_return_input_version_1 not found"
 )]
 fn host_function_not_found() {
 	call_wasm_method::<()>("test_return_data");
