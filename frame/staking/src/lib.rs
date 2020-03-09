@@ -266,7 +266,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 	traits::{
 		Currency, LockIdentifier, LockableCurrency,
-		WithdrawReasons, OnUnbalanced, Imbalance, Get, UnixTime, Time,
+		WithdrawReasons, OnUnbalanced, Imbalance, Get, UnixTime,
 	}
 };
 use pallet_session::historical::SessionManager;
@@ -659,11 +659,6 @@ pub trait Trait: frame_system::Trait {
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 	/// their reward. This used to limit the i/o cost for the nominator payout.
 	type MaxNominatorRewardedPerValidator: Get<u32>;
-
-	/// Deprecated Time.
-	///
-	/// Deprecated associated type wrongly used to query Time in millisecond.
-	type DeprecatedTime: Time;
 }
 
 /// Mode of era-forcing.
@@ -855,8 +850,8 @@ decl_storage! {
 
 		/// Storage version of the pallet.
 		///
-		/// This is set to v2.0.0 for new networks.
-		StorageVersion build(|_: &GenesisConfig<T>| Releases::V2_0_0): Releases;
+		/// This is set to v3.0.0 for new networks.
+		StorageVersion build(|_: &GenesisConfig<T>| Releases::V3_0_0): Releases;
 	}
 	add_extra_genesis {
 		config(stakers):

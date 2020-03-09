@@ -16,24 +16,10 @@
 
 /// Deprecated storages used for migration from v1.0.0 to v2.0.0 only.
 
-use crate::{Trait, BalanceOf, SessionIndex, Exposure, UnlockChunk, EraIndex};
+use crate::{Trait, BalanceOf, SessionIndex, Exposure, UnlockChunk};
 use codec::{Encode, Decode, HasCompact};
-use frame_support::{decl_module, decl_storage, traits::Time};
+use frame_support::{decl_module, decl_storage};
 use sp_std::prelude::*;
-
-pub type MomentOf<T> = <<T as Trait>::DeprecatedTime as Time>::Moment;
-
-/// Information regarding the active era (era in used in session).
-#[derive(Encode, Decode)]
-pub struct ActiveEraInfo<Moment> {
-	/// Index of era.
-	pub index: EraIndex,
-	/// Moment of start
-	///
-	/// Start can be none if start hasn't been set for the era yet,
-	/// Start is set on the first on_finalize of the era to guarantee usage of `Time`.
-	pub start: Option<Moment>,
-}
 
 /// Reward points of an era. Used to split era total payout between validators.
 #[derive(Encode, Decode, Default)]
@@ -66,8 +52,8 @@ decl_storage! {
 		/// The currently elected validator set keyed by stash account ID.
 		pub CurrentElected: Vec<T::AccountId>;
 
-		/// The start of the current era.
-		pub CurrentEraStart: MomentOf<T>;
+		/// The old CurrentEraStart defined here just to call kill on it.
+		pub CurrentEraStart: ();
 
 		/// The session index at which the current era started.
 		pub CurrentEraStartSessionIndex: SessionIndex;
@@ -83,13 +69,5 @@ decl_storage! {
 
 		/// Old upgrade flag.
 		pub IsUpgraded: bool;
-
-		/// Old active era information.
-		///
-		/// The active era information, it holds index and start.
-		///
-		/// The active era is the era currently rewarded.
-		/// Validator set of this era must be equal to `SessionInterface::validators`.
-		pub ActiveEra get(fn active_era): Option<ActiveEraInfo<MomentOf<T>>>;
 	}
 }

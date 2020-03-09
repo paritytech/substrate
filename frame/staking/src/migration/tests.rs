@@ -4,10 +4,9 @@ use frame_support::storage::migration::*;
 use sp_core::hashing::blake2_256;
 use super::test_upgrade_from_master_dataset;
 use sp_runtime::traits::OnRuntimeUpgrade;
-use crate::migration::deprecated;
 
 #[test]
-fn upgrade_from_v1_to_v2_works() {
+fn upgrade_from_v1_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(3);
 
@@ -16,7 +15,7 @@ fn upgrade_from_v1_to_v2_works() {
 		// Insert fake data to check the migration
 		put_storage_value::<Vec<AccountId>>(b"Staking", b"CurrentElected", b"", vec![21, 31]);
 		put_storage_value::<SessionIndex>(b"Staking", b"CurrentEraStartSessionIndex", b"", 5);
-		put_storage_value::<deprecated::MomentOf<Test>>(b"Staking", b"CurrentEraStart", b"", 777);
+		put_storage_value::<u128>(b"Staking", b"CurrentEraStart", b"", u128::max_value());
 		put_storage_value(
 			b"Staking", b"Stakers", &blake2_256(&11u64.encode()),
 			Exposure::<AccountId, Balance> {
@@ -50,7 +49,7 @@ fn upgrade_from_v1_to_v2_works() {
 		// Perform upgrade
 		Staking::on_runtime_upgrade();
 
-		assert_eq!(<Staking as Store>::StorageVersion::get(), Releases::V2_0_0);
+		assert_eq!(<Staking as Store>::StorageVersion::get(), Releases::V3_0_0);
 
 		// Check migration
 		assert_eq!(<Staking as Store>::ErasStartSessionIndex::get(3).unwrap(), 5);
@@ -58,8 +57,9 @@ fn upgrade_from_v1_to_v2_works() {
 			total: 12,
 			individual: vec![(21, 2), (31, 10)].into_iter().collect(),
 		});
-		assert_eq!(deprecated::ActiveEra::<Test>::get().unwrap().index, 3);
-		assert_eq!(deprecated::ActiveEra::<Test>::get().unwrap().start, Some(777));
+		assert_eq!(<Staking as Store>::ActiveEra::get().unwrap().index, 3);
+		let now_as_millis_u64 = <Timestamp as UnixTime>::now().as_millis().saturated_into::<u64>();
+		assert_eq!(<Staking as Store>::ActiveEra::get().unwrap().start, Some(now_as_millis_u64));
 		assert_eq!(<Staking as Store>::CurrentEra::get().unwrap(), 3);
 		assert_eq!(<Staking as Store>::ErasStakers::get(3, 11), Exposure {
 			total: 0,
@@ -99,7 +99,7 @@ fn upgrade_from_v1_to_v2_works() {
 
 // Test that an upgrade from previous test environment works.
 #[test]
-fn test_upgrade_from_v1_to_v2_from_master_works() {
+fn test_upgrade_from_v1_from_master_works() {
 	let data_sets = &[
 		test_upgrade_from_master_dataset::_0,
 		test_upgrade_from_master_dataset::_1,
@@ -137,10 +137,10 @@ fn test_upgrade_from_v1_to_v2_from_master_works() {
 				.unwrap_or((0, vec![]));
 
 			Staking::on_runtime_upgrade();
-			assert!(<Staking as Store>::StorageVersion::get() == Releases::V2_0_0);
+			assert!(<Staking as Store>::StorageVersion::get() == Releases::V3_0_0);
 
 			// Check ActiveEra and CurrentEra
-			let active_era = deprecated::ActiveEra::<Test>::get().unwrap().index;
+			let active_era = <Staking as Store>::ActiveEra::get().unwrap().index;
 			let current_era = Staking::current_era().unwrap();
 			assert!(current_era == active_era);
 			assert!(current_era == old_current_era);
@@ -221,19 +221,17 @@ fn test_upgrade_from_v1_to_v2_from_master_works() {
 }
 
 #[test]
-fn upgrade_from_v2_to_v3() {
+fn upgrade_from_v2() {
 	ExtBuilder::default().build().execute_with(|| {
 		Timestamp::set_timestamp(51);
 
-		deprecated::ActiveEra::<Test>::put(deprecated::ActiveEraInfo {
-			index: 10,
-			start: Some(100),
-		});
+		put_storage_value::<(EraIndex, u128)>(b"Staking", b"ActiveEra", &[], (10, u128::max_value()));
 		StorageVersion::put(Releases::V2_0_0);
 
 		Staking::on_runtime_upgrade();
 
 		assert_eq!(ActiveEra::get().unwrap().index, 10);
 		assert_eq!(ActiveEra::get().unwrap().start, Some(51));
+		assert!(<Staking as Store>::StorageVersion::get() == Releases::V3_0_0);
 	});
 }

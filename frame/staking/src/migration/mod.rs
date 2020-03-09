@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
+
 mod deprecated;
 #[cfg(test)]
 mod tests;
@@ -25,7 +26,7 @@ pub fn on_runtime_upgrade<T: Trait>() {
 	match StorageVersion::get() {
 		Releases::V3_0_0 => return,
 		Releases::V2_0_0 => upgrade_v2_to_v3::<T>(),
-		Releases::V1_0_0 => upgrade_v1_to_v2::<T>(),
+		Releases::V1_0_0 => upgrade_v1_to_v3::<T>(),
 	}
 }
 
@@ -36,15 +37,21 @@ pub fn on_runtime_upgrade<T: Trait>() {
 /// It reset the start of the active era to now because there is no guarantee that the
 /// DeprecatedTime implementation was time since unix epoch.
 fn upgrade_v2_to_v3<T: Trait>() {
-	if let Some(old_active_era) = deprecated::ActiveEra::<T>::get() {
-		let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
-		<Module<T> as Store>::ActiveEra::put(ActiveEraInfo {
-			index: old_active_era.index,
-			start: Some(now_as_millis_u64),
-		});
-		// Note: we don't kill deprecated storage because both the deprecated one and the current
-		// one are at the same storage value.
+	// Note: OldActiveEraInfo first field was EraIndex so it is correct.
+	let res = <Module<T> as Store>::ActiveEra::translate::<EraIndex, _>(|active_era_index| {
+		active_era_index.map(|active_era_index| {
+			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
+			ActiveEraInfo {
+				index: active_era_index,
+				start: Some(now_as_millis_u64),
+			}
+		})
+	});
+	if let Err(()) = res {
+		frame_support::print("Encountered error in migration of Staking::ActiveEra");
 	}
+
+	StorageVersion::put(Releases::V3_0_0);
 }
 
 /// Update storage from v1.0.0 to v2.0.0
@@ -57,7 +64,7 @@ fn upgrade_v2_to_v3<T: Trait>() {
 // * create:
 //   * ActiveEraStart
 //   * ErasRewardPoints
-//   * ActiveEra
+//   * ActiveEra (as in v3)
 //   * ErasStakers
 //   * ErasStakersClipped
 //   * ErasValidatorPrefs
@@ -71,16 +78,16 @@ fn upgrade_v2_to_v3<T: Trait>() {
 //   * CurrentEraStart
 //   * CurrentEraStartSessionIndex
 //   * CurrentEraPointsEarned
-fn upgrade_v1_to_v2<T: Trait>() {
+fn upgrade_v1_to_v3<T: Trait>() {
 	deprecated::IsUpgraded::kill();
 
 	let current_era_start_index = deprecated::CurrentEraStartSessionIndex::get();
 	let current_era = <Module<T> as Store>::CurrentEra::get().unwrap_or(0);
-	let current_era_start = deprecated::CurrentEraStart::<T>::get();
 	<Module<T> as Store>::ErasStartSessionIndex::insert(current_era, current_era_start_index);
-	deprecated::ActiveEra::<T>::put(deprecated::ActiveEraInfo {
+	let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
+	<Module<T> as Store>::ActiveEra::put(ActiveEraInfo {
 		index: current_era,
-		start: Some(current_era_start),
+		start: Some(now_as_millis_u64),
 	});
 
 	let current_elected = deprecated::CurrentElected::<T>::get();
@@ -129,9 +136,9 @@ fn upgrade_v1_to_v2<T: Trait>() {
 	deprecated::Stakers::<T>::remove_all();
 	deprecated::SlotStake::<T>::kill();
 	deprecated::CurrentElected::<T>::kill();
-	deprecated::CurrentEraStart::<T>::kill();
+	deprecated::CurrentEraStart::kill();
 	deprecated::CurrentEraStartSessionIndex::kill();
 	deprecated::CurrentEraPointsEarned::kill();
 
-	StorageVersion::put(Releases::V2_0_0);
+	StorageVersion::put(Releases::V3_0_0);
 }

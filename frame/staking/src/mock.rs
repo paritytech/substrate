@@ -204,7 +204,6 @@ parameter_types! {
 impl Trait for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
-	type DeprecatedTime = Timestamp;
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type RewardRemainder = ();
 	type Event = ();
