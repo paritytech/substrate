@@ -147,14 +147,6 @@ impl<N> Default for View<N> {
 }
 
 impl<N: Ord> View<N> {
-	/// Update the set ID. implies a reset to round 0.
-	fn update_set(&mut self, set_id: SetId) {
-		if set_id != self.set_id {
-			self.set_id = set_id;
-			self.round = Round(1);
-		}
-	}
-
 	/// Consider a round and set ID combination under a current view.
 	fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
 		// only from current set
@@ -185,6 +177,39 @@ impl<N: Ord> View<N> {
 				Consider::RejectPast
 			}
 		}
+	}
+}
+
+/// A local view of protocol state. Only differs from `View` in that we also
+/// track the round and set id at which the last commit was observed.
+struct LocalView<N> {
+	round: Round,
+	set_id: SetId,
+	last_commit: Option<(N, Round, SetId)>,
+}
+
+impl<N> LocalView<N> {
+	/// Converts the local view to a `View` discarding round and set id
+	/// information about the last commit.
+	fn as_view(&self) -> View<&N> {
+		View {
+			round: self.round,
+			set_id: self.set_id,
+			last_commit: self.last_commit_height(),
+		}
+	}
+
+	/// Update the set ID. implies a reset to round 1.
+	fn update_set(&mut self, set_id: SetId) {
+		if set_id != self.set_id {
+			self.set_id = set_id;
+			self.round = Round(1);
+		}
+	}
+
+	/// Returns the height of the block that the last observed commit finalizes.
+	fn last_commit_height(&self) -> Option<&N> {
+		self.last_commit.as_ref().map(|(number, _, _)| number)
 	}
 }
 
@@ -614,7 +639,7 @@ impl CatchUpConfig {
 }
 
 struct Inner<Block: BlockT> {
-	local_view: Option<View<NumberFor<Block>>>,
+	local_view: Option<LocalView<NumberFor<Block>>>,
 	peers: Peers<NumberFor<Block>>,
 	live_topics: KeepTopics<Block>,
 	round_start: Instant,
@@ -690,7 +715,7 @@ impl<Block: BlockT> Inner<Block> {
 	fn note_set(&mut self, set_id: SetId, authorities: Vec<AuthorityId>) -> MaybeMessage<Block> {
 		{
 			let local_view = match self.local_view {
-				ref mut x @ None => x.get_or_insert(View {
+				ref mut x @ None => x.get_or_insert(LocalView {
 					round: Round(1),
 					set_id,
 					last_commit: None,
@@ -710,12 +735,17 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	fn note_commit_finalized(&mut self, finalized: NumberFor<Block>) -> MaybeMessage<Block> {
+	fn note_commit_finalized(
+		&mut self,
+		round: Round,
+		set_id: SetId,
+		finalized: NumberFor<Block>,
+	) -> MaybeMessage<Block> {
 		{
 			match self.local_view {
 				None => return None,
-				Some(ref mut v) => if v.last_commit.as_ref() < Some(&finalized) {
-					v.last_commit = Some(finalized);
+				Some(ref mut v) => if v.last_commit_height() < Some(&finalized) {
+					v.last_commit = Some((finalized, round, set_id));
 				} else {
 					return None
 				},
@@ -726,12 +756,16 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
-		self.local_view.as_ref().map(|v| v.consider_vote(round, set_id))
+		self.local_view.as_ref()
+			.map(LocalView::as_view)
+			.map(|v| v.consider_vote(round, set_id))
 			.unwrap_or(Consider::RejectOutOfScope)
 	}
 
 	fn consider_global(&self, set_id: SetId, number: NumberFor<Block>) -> Consider {
-		self.local_view.as_ref().map(|v| v.consider_global(set_id, number))
+		self.local_view.as_ref()
+			.map(LocalView::as_view)
+			.map(|v| v.consider_global(set_id, &number))
 			.unwrap_or(Consider::RejectOutOfScope)
 	}
 
@@ -1012,7 +1046,7 @@ impl<Block: BlockT> Inner<Block> {
 			let packet = NeighborPacket {
 				round: local_view.round,
 				set_id: local_view.set_id,
-				commit_finalized_height: local_view.last_commit.unwrap_or(Zero::zero()),
+				commit_finalized_height: *local_view.last_commit_height().unwrap_or(&Zero::zero()),
 			};
 
 			let peers = self.peers.inner.keys().cloned().collect();
@@ -1210,10 +1244,21 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	pub(super) fn note_commit_finalized<F>(&self, finalized: NumberFor<Block>, send_neighbor: F)
+	pub(super) fn note_commit_finalized<F>(
+		&self,
+		round: Round,
+		set_id: SetId,
+		finalized: NumberFor<Block>,
+		send_neighbor: F,
+	)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		let maybe_msg = self.inner.write().note_commit_finalized(finalized);
+		let maybe_msg = self.inner.write().note_commit_finalized(
+			round,
+			set_id,
+			finalized,
+		);
+
 		if let Some((to, msg)) = maybe_msg {
 			send_neighbor(to, msg);
 		}
@@ -1289,7 +1334,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 				NeighborPacket {
 					round: v.round,
 					set_id: v.set_id,
-					commit_finalized_height: v.last_commit.unwrap_or(Zero::zero()),
+					commit_finalized_height: *v.last_commit_height().unwrap_or(&Zero::zero()),
 				}
 			})
 		};
@@ -1396,16 +1441,15 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 				None => return false, // cannot evaluate until we have a local view.
 			};
 
-			let our_best_commit = local_view.last_commit;
-			let peer_best_commit = peer.view.last_commit;
-
 			match GossipMessage::<Block>::decode(&mut data) {
 				Err(_) => false,
 				Ok(GossipMessage::Commit(full)) => {
-					// we only broadcast our best commit and only if it's
-					// better than last received by peer.
-					Some(full.message.target_number) == our_best_commit &&
-						Some(full.message.target_number) > peer_best_commit
+					// we only broadcast commit messages if they're for the same
+					// set the peer is in and if the commit is better than the
+					// last received by peer, additionally we make sure to only
+					// broadcast our best commit.
+					peer.view.consider_global(set_id, full.message.target_number) == Consider::Accept &&
+						Some(&full.message.target_number) == local_view.last_commit_height()
 				}
 				Ok(GossipMessage::Neighbor(_)) => false,
 				Ok(GossipMessage::CatchUpRequest(_)) => false,
@@ -1432,12 +1476,17 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 			};
 
 			// global messages -- only keep the best commit.
-			let best_commit = local_view.last_commit;
-
 			match GossipMessage::<Block>::decode(&mut data) {
 				Err(_) => true,
-				Ok(GossipMessage::Commit(full))
-					=> Some(full.message.target_number) != best_commit,
+				Ok(GossipMessage::Commit(full)) => match local_view.last_commit {
+					Some((number, round, set_id)) =>
+						// we expire any commit message that doesn't target the same block
+						// as our best commit or isn't from the same round and set id
+						!(full.message.target_number == number &&
+							full.round == round &&
+							full.set_id == set_id),
+					None => true,
+				},
 				Ok(_) => true,
 			}
 		})
@@ -2305,5 +2354,134 @@ mod tests {
 				);
 			}
 		}
+	}
+
+	#[test]
+	fn only_gossip_commits_to_peers_on_same_set() {
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
+
+		// the validator start at set id 1
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// add a new peer at set id 1
+		let peer1 = PeerId::random();
+
+		val.inner
+			.write()
+			.peers
+			.new_peer(peer1.clone(), Roles::AUTHORITY);
+
+		val.inner
+			.write()
+			.peers
+			.update_peer_state(
+				&peer1,
+				NeighborPacket {
+					round: Round(1),
+					set_id: SetId(1),
+					commit_finalized_height: 1,
+				},
+			)
+			.unwrap();
+
+		// peer2 will default to set id 0
+		let peer2 = PeerId::random();
+		val.inner
+			.write()
+			.peers
+			.new_peer(peer2.clone(), Roles::AUTHORITY);
+
+		// create a commit for round 1 of set id 1
+		// targeting a block at height 2
+		let commit = {
+			let commit = finality_grandpa::CompactCommit {
+				target_hash: H256::random(),
+				target_number: 2,
+				precommits: Vec::new(),
+				auth_data: Vec::new(),
+			};
+
+			crate::communication::gossip::GossipMessage::<Block>::Commit(
+				crate::communication::gossip::FullCommitMessage {
+					round: Round(1),
+					set_id: SetId(1),
+					message: commit,
+				},
+			)
+			.encode()
+		};
+
+		// note the commit in the validator
+		val.note_commit_finalized(Round(1), SetId(1), 2, |_, _| {});
+
+		let mut message_allowed = val.message_allowed();
+
+		// the commit should be allowed to peer 1
+		assert!(message_allowed(
+			&peer1,
+			MessageIntent::Broadcast,
+			&crate::communication::global_topic::<Block>(1),
+			&commit,
+		));
+
+		// but disallowed to peer 2 since the peer is on set id 0
+		// the commit should be allowed to peer 1
+		assert!(!message_allowed(
+			&peer2,
+			MessageIntent::Broadcast,
+			&crate::communication::global_topic::<Block>(1),
+			&commit,
+		));
+	}
+
+	#[test]
+	fn expire_commits_from_older_rounds() {
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
+
+		let commit = |round, set_id, target_number| {
+			let commit = finality_grandpa::CompactCommit {
+				target_hash: H256::random(),
+				target_number,
+				precommits: Vec::new(),
+				auth_data: Vec::new(),
+			};
+
+			crate::communication::gossip::GossipMessage::<Block>::Commit(
+				crate::communication::gossip::FullCommitMessage {
+					round: Round(round),
+					set_id: SetId(set_id),
+					message: commit,
+				},
+			)
+			.encode()
+		};
+
+		// note the beginning of a new set with id 1
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// note a commit for round 1 in the validator
+		// finalizing a block at height 2
+		val.note_commit_finalized(Round(1), SetId(1), 2, |_, _| {});
+
+		let mut message_expired = val.message_expired();
+
+		// a commit message for round 1 that finalizes the same height as we
+		// have observed previously should not be expired
+		assert!(!message_expired(
+			crate::communication::global_topic::<Block>(1),
+			&commit(1, 1, 2),
+		));
+
+		// it should be expired if it is for a lower block
+		assert!(message_expired(
+			crate::communication::global_topic::<Block>(1),
+			&commit(1, 1, 1),
+		));
+
+		// or the same block height but from the previous round
+		assert!(message_expired(
+			crate::communication::global_topic::<Block>(1),
+			&commit(0, 1, 2),
+		));
 	}
 }
