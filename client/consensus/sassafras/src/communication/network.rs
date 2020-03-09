@@ -100,7 +100,6 @@ impl<Block: BlockT, N: Unpin> Future for NetworkBridge<Block, N> {
 			);
 		}
 
-
 		self.gossip_engine.poll_unpin(cx)
 	}
 }
