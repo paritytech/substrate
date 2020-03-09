@@ -438,6 +438,8 @@ ss58_address_format!(
 		(2, "kusama", "Kusama Relay-chain, direct checksum, standard account (*25519).")
 	PlasmAccountDirect =>
 		(5, "plasm", "Plasm Network, direct checksum, standard account (*25519).")
+	BifrostAccountDirect =>
+		(6, "bifrost", "Bifrost mainnet, direct checksum, standard account (*25519).")
 	EdgewareAccountDirect =>
 		(7, "edgeware", "Edgeware mainnet, direct checksum, standard account (*25519).")
 	KaruraAccountDirect =>
