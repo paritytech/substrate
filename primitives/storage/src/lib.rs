@@ -92,6 +92,9 @@ pub mod well_known_keys {
 	/// Current extrinsic index (u32) is stored under this key.
 	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
 
+	/// Current extrinsic data is stored under this key as a raw byte vector
+	pub const EXTRINSIC_DATA: &'static [u8] = b":extrinsic_data";
+
 	/// Changes trie configuration is stored under this key.
 	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
 

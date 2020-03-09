@@ -194,12 +194,14 @@ pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 	let result = execute_transaction_backend(&utx, extrinsic_index);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
+	storage::unhashed::put(well_known_keys::EXTRINSIC_DATA, &utx.encode());
 	result
 }
 
 /// Finalize the block.
 pub fn finalize_block() -> Header {
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
+	storage::unhashed::kill(well_known_keys::EXTRINSIC_DATA);
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let extrinsics_root = trie::blake2_256_ordered_root(txs).into();
 	let number = <Number>::take().expect("Number is set by `initialize_block`");

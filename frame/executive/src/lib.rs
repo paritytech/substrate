@@ -279,8 +279,11 @@ where
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
+		let encoded = uxt.encode();
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
+
+		<frame_system::Module<System>>::record_current_extrinsic(&encoded);
 
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
 		// executed to prevent it from leaking in storage since at this point, it will either
@@ -367,9 +370,13 @@ mod tests {
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
+		generic::Era,
+		Perbill,
+		DispatchError,
+		testing::{Digest, Header, Block},
 		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
 		transaction_validity::{InvalidTransaction, UnknownTransaction, TransactionValidityError},
+		traits::Hash
 	};
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
@@ -382,13 +389,30 @@ mod tests {
 
 	mod custom {
 		use frame_support::weights::SimpleDispatchInfo;
+		use frame_system::{self as system};
 
-		pub trait Trait: frame_system::Trait {}
+		pub trait Trait: frame_system::Trait {
+			type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+		}
+		frame_support::decl_storage! {
+			trait Store for Module<T: Trait> as Custom {
+			}
+		}
+		frame_support::decl_event!(
+			pub enum Event<T> where OurHash = <T as frame_system::Trait>::Hash {
+				SawExtHash(OurHash),
+			}
+		);
 
 		frame_support::decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+				fn deposit_event() = default;
+
 				#[weight = SimpleDispatchInfo::FixedNormal(100)]
-				fn some_function(origin) {
+				pub fn some_function(origin) {
+					let cur_xt_hash = <frame_system::Module<T>>::fetch_current_extrinsic_hash()
+						.unwrap();
+					Self::deposit_event(RawEvent::SawExtHash(cur_xt_hash));
 					// NOTE: does not make any different.
 					let _ = frame_system::ensure_signed(origin);
 				}
@@ -429,12 +453,14 @@ mod tests {
 		pub enum MetaEvent for Runtime {
 			system<T>,
 			balances<T>,
+			custom<T>,
 		}
 	}
 	impl_outer_dispatch! {
 		pub enum Call for Runtime where origin: Origin {
 			frame_system::System,
 			pallet_balances::Balances,
+			custom::Custom,
 		}
 	}
 
@@ -490,7 +516,9 @@ mod tests {
 		type WeightToFee = ConvertInto;
 		type FeeMultiplierUpdate = ();
 	}
-	impl custom::Trait for Runtime {}
+	impl custom::Trait for Runtime {
+		type Event = MetaEvent;
+	}
 
 	impl ValidateUnsigned for Runtime {
 		type Call = Call;
@@ -560,6 +588,24 @@ mod tests {
 			balances: vec![(1, 111 * balance_factor)],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
+	}
+
+	#[test]
+	fn current_extrinsic_data_is_available() {
+		new_test_ext(1).execute_with(|| {
+			let xt = TestXt::new(Call::Custom(custom::Call::some_function()), sign_extra(1, 0, 0));
+			let xt_hash = <Runtime as frame_system::Trait>::Hashing::hash(&xt.encode());
+			assert!(Executive::apply_extrinsic(xt).is_ok());
+			let eventrecs = System::events();
+            let found_saw_hash_event = eventrecs.iter().any(|rec| {
+                match rec.event {
+                    MetaEvent::custom(custom::Event::<Runtime>::SawExtHash(h)) => h == xt_hash,
+					_ => false
+				}
+			});
+
+			assert!(found_saw_hash_event)
+        });
 	}
 
 	#[test]

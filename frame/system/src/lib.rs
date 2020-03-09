@@ -931,6 +931,22 @@ impl<T: Trait> Module<T> {
 		Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
 	}
 
+	/// Store the data of the currently executing extrinsic. Expected to be called by the executive.
+	pub fn record_current_extrinsic(encoded_xt: &[u8]) {
+		storage::unhashed::put(well_known_keys::EXTRINSIC_DATA, &encoded_xt)
+	}
+
+	/// Retrieve the currently executing extrinsic data (if one is currently executing)
+	pub fn fetch_current_extrinsic() -> Option<Vec<u8>> {
+		storage::unhashed::get(well_known_keys::EXTRINSIC_DATA)
+	}
+
+	/// Retrieve the currently executing extrinsic hash (if one is currently executing)
+	pub fn fetch_current_extrinsic_hash() -> Option<T::Hash> {
+		storage::unhashed::get::<Vec<u8>>(well_known_keys::EXTRINSIC_DATA)
+			.map(|v| T::Hashing::hash(&v))
+	}
+
 	/// Note what the extrinsic data of the current extrinsic index is. If this
 	/// is called, then ensure `derive_extrinsics` is also called before
 	/// block-building is completed.
@@ -963,6 +979,7 @@ impl<T: Trait> Module<T> {
 	pub fn note_finished_extrinsics() {
 		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX)
 			.unwrap_or_default();
+		storage::unhashed::kill(well_known_keys::EXTRINSIC_DATA);
 		ExtrinsicCount::put(extrinsic_index);
 	}
 
