@@ -17,16 +17,6 @@ jobs:
         uses:                  actions/checkout@master
         with:
           submodules:      recursive
-      - name:                  Restore ${CARGO_HOME}.cargo/git
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/git
-          key:                 ${{ runner.OS }}-cargo-git-[cargo-check-benches]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore ${CARGO_HOME}.cargo/registry
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/registry
-          key:                 ${{ runner.OS }}-cargo-registry-[cargo-check-benches]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
         with:
@@ -56,16 +46,6 @@ jobs:
         uses:                  actions/checkout@master
         with:
           submodules:      recursive
-      - name:                  Restore ${CARGO_HOME}.cargo/git
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/git
-          key:                 ${{ runner.OS }}-cargo-git-[cargo-check-subkey]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore ${CARGO_HOME}.cargo/registry
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/registry
-          key:                 ${{ runner.OS }}-cargo-registry-[cargo-check-subkey]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
         with:
@@ -97,16 +77,6 @@ jobs:
         uses:                  actions/checkout@master
         with:
           submodules:      recursive
-      - name:                  Restore ${CARGO_HOME}.cargo/git
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/git
-          key:                 ${{ runner.OS }}-cargo-git-[test-stable]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore ${CARGO_HOME}.cargo/registry
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/registry
-          key:                 ${{ runner.OS }}-cargo-registry-[test-stable]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
         with:
@@ -138,16 +108,6 @@ jobs:
         uses:                  actions/checkout@master
         with:
           submodules:      recursive
-      - name:                  Restore ${CARGO_HOME}.cargo/git
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/git
-          key:                 ${{ runner.OS }}-cargo-git-[test-frame-staking]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore ${CARGO_HOME}.cargo/registry
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/registry
-          key:                 ${{ runner.OS }}-cargo-registry-[test-frame-staking]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
         with:
@@ -178,16 +138,6 @@ jobs:
         uses:                  actions/checkout@master
         with:
           submodules:      recursive
-      - name:                  Restore ${CARGO_HOME}.cargo/git
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/git
-          key:                 ${{ runner.OS }}-cargo-git-[test-wasmtime]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore ${CARGO_HOME}.cargo/registry
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/registry
-          key:                 ${{ runner.OS }}-cargo-registry-[test-wasmtime]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
         with:
@@ -218,16 +168,6 @@ jobs:
         uses:                  actions/checkout@master
         with:
           submodules:      recursive
-      - name:                  Restore ${CARGO_HOME}.cargo/git
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/git
-          key:                 ${{ runner.OS }}-cargo-git-[test-stable-int]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore ${CARGO_HOME}.cargo/registry
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/registry
-          key:                 ${{ runner.OS }}-cargo-registry-[test-stable-int]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
         with:
@@ -260,16 +200,6 @@ jobs:
         uses:                  actions/checkout@master
         with:
           submodules:      recursive
-      - name:                  Restore ${CARGO_HOME}.cargo/git
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/git
-          key:                 ${{ runner.OS }}-cargo-git-[test-full-crypto-feature]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore ${CARGO_HOME}.cargo/registry
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/registry
-          key:                 ${{ runner.OS }}-cargo-registry-[test-full-crypto-feature]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
         with:
