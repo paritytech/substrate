@@ -861,6 +861,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 			.as_trie_backend()
 	}
 
+	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
+		unimplemented!("REGISTER")
+	}
+
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.caching_state().usage_info()
 	}

@@ -18,9 +18,12 @@
 
 use std::time::{Instant, Duration};
 use std::cell::RefCell;
+use codec::{Encode, Decode};
+use sp_runtime_interface::pass_by::{PassBy, Codec};
 
 /// Measured count of operations and total bytes.
-#[derive(Clone, Debug, Default)]
+
+#[derive(Clone, Debug, Default, Encode, Decode)]
 pub struct UsageUnit {
 	/// Number of operations.
 	pub ops: u64,
@@ -28,8 +31,19 @@ pub struct UsageUnit {
 	pub bytes: u64,
 }
 
-/// Usage statistics for state backend.
+/// A wrapper around Instant to add a Default impl in order to skip encoding / decoding.
 #[derive(Clone, Debug)]
+pub struct InstantWithDefault(Instant);
+
+impl std::default::Default for InstantWithDefault {
+	fn default() -> Self {
+		Self(Instant::now())
+	}
+}
+
+
+/// Usage statistics for state backend.
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct UsageInfo {
 	/// Read statistics (total).
 	pub reads: UsageUnit,
@@ -47,12 +61,19 @@ pub struct UsageInfo {
 	/// Modified value read statistics.
 	pub modified_reads: UsageUnit,
 	/// Memory used.
-	pub memory: usize,
+	// Encoded as u32 because wasm's usize is 32.
+	pub memory: u32,
 
 	/// Moment at which current statistics has been started being collected.
-	pub started: Instant,
+	#[codec(skip)]
+	pub started: InstantWithDefault,
 	/// Timespan of the statistics.
+	#[codec(skip)]
 	pub span: Duration,
+}
+
+impl PassBy for UsageInfo {
+    type PassBy = Codec<Self>;
 }
 
 /// Accumulated usage statistics specific to state machine
@@ -98,7 +119,7 @@ impl UsageInfo {
 			cache_reads: UsageUnit::default(),
 			modified_reads: UsageUnit::default(),
 			memory: 0,
-			started: Instant::now(),
+			started: InstantWithDefault(Instant::now()),
 			span: Default::default(),
 		}
 	}

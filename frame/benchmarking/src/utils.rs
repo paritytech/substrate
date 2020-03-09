@@ -67,6 +67,13 @@ pub trait Benchmarking {
 		self.wipe()
 	}
 
+	/// SCOTT
+	fn db_usage_info(&self) {
+		// first call
+		// self.db_usage_info();
+		// UsageInfo::empty();
+	}
+
 	/// Commit pending storage changes to the trie database and clear the database cache.
 	fn commit_db(&mut self) {
 		self.commit()

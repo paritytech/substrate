@@ -281,6 +281,11 @@ impl Externalities for BasicExternalities {
 		Layout::<Blake2Hasher>::trie_root(self.inner.top.clone()).as_ref().into()
 	}
 
+	// SCOTT
+	fn db_usage_info(&self) {
+		unimplemented!()
+	}
+
 	fn child_storage_root(
 		&mut self,
 		storage_key: ChildStorageKey,

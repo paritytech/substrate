@@ -74,7 +74,7 @@ pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
 pub use in_memory_backend::InMemory as InMemoryBackend;
-pub use stats::{UsageInfo, UsageUnit, StateMachineStats};
+pub use stats::{UsageInfo, UsageUnit, StateMachineStats, InstantWithDefault};
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 

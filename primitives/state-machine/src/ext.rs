@@ -473,6 +473,11 @@ where
 		42
 	}
 
+	// SCOTT
+	fn db_usage_info(&self) {
+		unimplemented!("HERE")
+	}
+
 	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {

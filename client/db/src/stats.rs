@@ -17,6 +17,7 @@
 //! Database usage statistics
 
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use sp_state_machine::InstantWithDefault;
 
 /// Accumulated usage statistics for state queries.
 pub struct StateUsageStats {
@@ -131,7 +132,7 @@ impl StateUsageStats {
 			//       imposing `MallocSizeOf` requirement on half of the codebase,
 			//       so it is an open question how to do it better
 			memory: 0,
-			started: self.started,
+			started: InstantWithDefault(self.started),
 			span: self.started.elapsed(),
 		}
 	}

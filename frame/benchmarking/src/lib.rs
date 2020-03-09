@@ -478,6 +478,7 @@ macro_rules! impl_benchmark {
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
 
 							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
+							let usage_info = $crate::benchmarking::db_usage_info();
 
 							// Wipe the DB back to the genesis state.
 							$crate::benchmarking::wipe_db();
