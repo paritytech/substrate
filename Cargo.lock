@@ -4545,6 +4545,7 @@ name = "pallet-vesting"
 version = "2.0.0-alpha.3"
 dependencies = [
  "enumflags2",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex-literal",
