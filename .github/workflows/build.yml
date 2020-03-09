@@ -21,12 +21,19 @@ jobs:
       - name:                  Run cargo build Substrate
         shell:                 bash
         run:                   cargo build --release --verbose
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          echo "_____ Post-processing binaries _____"
+          rm -rf artifacts/*
+          mkdir -p artifacts/
+          cp -v target/release/substrate artifacts/substrate
       - name:                  Upload artifact
         uses:                  actions/upload-artifact@v1
         continue-on-error:     true
         with:
-          name:                substrate
-          path:                target/release
+          name:                ${{ runner.os }}.substrate.zip
+          path:                artifacts/
 
   build-subkey-linux:
     name:                      Build linux Subkey
@@ -35,16 +42,6 @@ jobs:
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@master
-      - name:                  Restore ${CARGO_HOME}.cargo/git
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/git
-          key:                 ${{ runner.OS }}-cargo-git-[build-subkey-linux]-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore ${CARGO_HOME}.cargo/registry
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/registry
-          key:                 ${{ runner.OS }}-cargo-registry-[build-subkey-linux]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
         with:
@@ -59,7 +56,7 @@ jobs:
           echo "_____ Post-processing binaries _____"
           rm -rf artifacts/*
           mkdir -p artifacts/
-          cp -v target/release/subkey artifacts/ubkey
+          cp -v target/release/subkey artifacts/subkey
       - name:                  Upload artifact
         uses:                  actions/upload-artifact@v1
         continue-on-error:     true
@@ -69,7 +66,7 @@ jobs:
 
   build-subkey-macos:
     name:                      Build MacOS Subkey
-    runs-on:                   self-hosted
+    runs-on:                   macos-latest
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@master
@@ -81,7 +78,7 @@ jobs:
       - name:                  Run cargo build Subkey
         shell:                 bash
         run: |
-          rustup target add x86_64-apple-darwin
+          #rustup target add x86_64-apple-darwin
           cargo build --target x86_64-apple-darwin --release --verbose
       - name: Prepare artifacts
         shell: bash
@@ -89,7 +86,7 @@ jobs:
           echo "_____ Post-processing binaries _____"
           rm -rf artifacts/*
           mkdir -p artifacts/
-          target/x86_64-apple-darwin/release/subkey artifacts/ubkey
+          target/x86_64-apple-darwin/release/subkey artifacts/subkey
       - name:                  Upload artifact
         uses:                  actions/upload-artifact@v1
         continue-on-error:     true
