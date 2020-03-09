@@ -22,7 +22,6 @@ use sp_std::prelude::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::benchmarks;
-use sp_runtime::traits::Dispatchable;
 
 const MAX_TIME: u32 = 100;
 

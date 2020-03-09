@@ -46,7 +46,10 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			if let Some(ref usage) = info.usage {
 				trace!(target: "usage", "Usage statistics: {}", usage);
 			} else {
-				trace!(target: "usage", "Usage statistics not displayed as backend does not provide it")
+				trace!(
+					target: "usage",
+					"Usage statistics not displayed as backend does not provide it",
+				)
 			}
 			#[cfg(not(target_os = "unknown"))]
 			trace!(

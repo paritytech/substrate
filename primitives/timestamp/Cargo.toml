@@ -12,7 +12,7 @@ description = "Substrate core types and inherents for timestamps."
 sp-api = { version = "2.0.0-alpha.2", default-features = false, path = "../api" }
 sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../std" }
 sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../runtime" }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 sp-inherents = { version = "2.0.0-alpha.2", default-features = false, path = "../inherents" }
 impl-trait-for-tuples = "0.1.3"
 wasm-timer = "0.2"

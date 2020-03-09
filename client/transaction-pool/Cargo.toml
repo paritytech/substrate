@@ -9,7 +9,7 @@ repository = "https://github.com/paritytech/substrate/"
 description = "Substrate transaction pool implementation."
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+codec = { package = "parity-scale-codec", version = "1.2.0" }
 derive_more = "0.99.2"
 futures = { version = "0.3.1", features = ["compat"] }
 futures-diagnose = "1.0"

@@ -10,7 +10,7 @@ description = "Runtime API definition required by System RPC extensions."
 
 [dependencies]
 sp-api = { version = "2.0.0-alpha.2", default-features = false, path = "../../../../primitives/api" }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false }
 
 [features]
 default = ["std"]
