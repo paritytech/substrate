@@ -16,7 +16,7 @@ fn upgrade_from_v1_to_v2_works() {
 		// Insert fake data to check the migration
 		put_storage_value::<Vec<AccountId>>(b"Staking", b"CurrentElected", b"", vec![21, 31]);
 		put_storage_value::<SessionIndex>(b"Staking", b"CurrentEraStartSessionIndex", b"", 5);
-		put_storage_value::<MomentOf<Test>>(b"Staking", b"CurrentEraStart", b"", 777);
+		put_storage_value::<deprecated::MomentOf<Test>>(b"Staking", b"CurrentEraStart", b"", 777);
 		put_storage_value(
 			b"Staking", b"Stakers", &blake2_256(&11u64.encode()),
 			Exposure::<AccountId, Balance> {
