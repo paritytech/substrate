@@ -125,7 +125,6 @@ jobs:
 
   build-rust-doc-release:
     name:                      Build Rust doc release
-    needs:                     [test-stable]
     runs-on:                   self-hosted
     container:                 parity/rust-builder:latest
     steps:
