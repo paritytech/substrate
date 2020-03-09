@@ -4,9 +4,10 @@ use frame_support::storage::migration::*;
 use sp_core::hashing::blake2_256;
 use super::test_upgrade_from_master_dataset;
 use sp_runtime::traits::OnRuntimeUpgrade;
+use crate::migration::deprecated;
 
 #[test]
-fn upgrade_works() {
+fn upgrade_from_v1_to_v2() {
     ExtBuilder::default().build().execute_with(|| {
         start_era(3);
 
@@ -15,7 +16,7 @@ fn upgrade_works() {
         // Insert fake data to check the migration
         put_storage_value::<Vec<AccountId>>(b"Staking", b"CurrentElected", b"", vec![21, 31]);
         put_storage_value::<SessionIndex>(b"Staking", b"CurrentEraStartSessionIndex", b"", 5);
-        put_storage_value::<MomentOf<Test>>(b"Staking", b"CurrentEraStart", b"", 777);
+        put_storage_value::<deprecated::MomentOf<Test>>(b"Staking", b"CurrentEraStart", b"", 777);
         put_storage_value(
             b"Staking", b"Stakers", &blake2_256(&11u64.encode()),
             Exposure::<AccountId, Balance> {
@@ -57,8 +58,8 @@ fn upgrade_works() {
             total: 12,
             individual: vec![(21, 2), (31, 10)].into_iter().collect(),
         });
-        assert_eq!(<Staking as Store>::ActiveEra::get().unwrap().index, 3);
-        assert_eq!(<Staking as Store>::ActiveEra::get().unwrap().start, Some(777));
+        assert_eq!(deprecated::ActiveEra::<Test>::get().unwrap().index, 3);
+        assert_eq!(deprecated::ActiveEra::<Test>::get().unwrap().start, Some(777));
         assert_eq!(<Staking as Store>::CurrentEra::get().unwrap(), 3);
         assert_eq!(<Staking as Store>::ErasStakers::get(3, 11), Exposure {
             total: 0,
@@ -139,7 +140,7 @@ fn test_upgrade_from_master_works() {
             assert!(<Staking as Store>::StorageVersion::get() == Releases::V2_0_0);
 
             // Check ActiveEra and CurrentEra
-            let active_era = Staking::active_era().unwrap().index;
+            let active_era = deprecated::ActiveEra::<Test>::get().unwrap().index;
             let current_era = Staking::current_era().unwrap();
             assert!(current_era == active_era);
             assert!(current_era == old_current_era);
@@ -217,4 +218,22 @@ fn test_upgrade_from_master_works() {
             assert_eq!(<Staking as Store>::ErasValidatorReward::iter().count(), 0);
         });
     }
+}
+
+#[test]
+fn upgrade_from_v2_to_v3() {
+	ExtBuilder::default().build().execute_with(|| {
+		Timestamp::set_timestamp(51);
+
+		deprecated::ActiveEra::<Test>::put(deprecated::ActiveEraInfo {
+			index: 10,
+			start: Some(100),
+		});
+		StorageVersion::put(Releases::V2_0_0);
+
+		Staking::on_runtime_upgrade();
+
+		assert_eq!(ActiveEra::get().unwrap().index, 10);
+		assert_eq!(ActiveEra::get().unwrap().start, Some(51));
+	});
 }

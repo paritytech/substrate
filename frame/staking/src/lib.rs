@@ -254,7 +254,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod slashing;
-// mod migration;
+mod migration;
 
 pub mod inflation;
 
@@ -266,7 +266,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 	traits::{
 		Currency, LockIdentifier, LockableCurrency,
-		WithdrawReasons, OnUnbalanced, Imbalance, Get, UnixTime
+		WithdrawReasons, OnUnbalanced, Imbalance, Get, UnixTime, Time,
 	}
 };
 use pallet_session::historical::SessionManager;
@@ -659,6 +659,11 @@ pub trait Trait: frame_system::Trait {
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 	/// their reward. This used to limit the i/o cost for the nominator payout.
 	type MaxNominatorRewardedPerValidator: Get<u32>;
+
+	/// Deprecated Time.
+	///
+	/// Deprecated associated type wrongly used to query Time in millisecond.
+	type DeprecatedTime: Time;
 }
 
 /// Mode of era-forcing.
@@ -686,6 +691,7 @@ impl Default for Forcing {
 enum Releases {
 	V1_0_0,
 	V2_0_0,
+	V3_0_0,
 }
 
 impl Default for Releases {
@@ -943,7 +949,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() {
-			// migration::on_runtime_upgrade::<T>();
+			migration::on_runtime_upgrade::<T>();
 		}
 
 		fn on_finalize() {

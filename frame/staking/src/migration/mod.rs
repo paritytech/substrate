@@ -14,13 +14,46 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Update storage from v1.0.0 to v2.0.0
-//!
-//! In old version the staking module has several issue about handling session delay, the
-//! current era was always considered the active one.
-//!
-//! After the migration the current era will still be considered the active one for the era of
-//! the upgrade. And the delay issue will be fixed when planning the next era.
+use super::*;
+mod deprecated;
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+mod test_upgrade_from_master_dataset;
+
+pub fn on_runtime_upgrade<T: Trait>() {
+	match StorageVersion::get() {
+		Releases::V3_0_0 => return,
+		Releases::V2_0_0 => upgrade_v2_to_v3::<T>(),
+		Releases::V1_0_0 => upgrade_v1_to_v2::<T>(),
+	}
+}
+
+/// Update storage from v2.0.0 to v3.0.0
+///
+/// Update ActiveEra storage.
+///
+/// It reset the start of the active era to now because there is no guarantee that the
+/// DeprecatedTime implementation was time since unix epoch.
+fn upgrade_v2_to_v3<T: Trait>() {
+	if let Some(old_active_era) = deprecated::ActiveEra::<T>::get() {
+		let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
+		<Module<T> as Store>::ActiveEra::put(ActiveEraInfo {
+			index: old_active_era.index,
+			start: Some(now_as_millis_u64),
+		});
+		// Note: we don't kill deprecated storage because both the deprecated one and the current
+		// one are at the same storage value.
+	}
+}
+
+/// Update storage from v1.0.0 to v2.0.0
+///
+/// In old version the staking module has several issue about handling session delay, the
+/// current era was always considered the active one.
+///
+/// After the migration the current era will still be considered the active one for the era of
+/// the upgrade. And the delay issue will be fixed when planning the next era.
 // * create:
 //   * ActiveEraStart
 //   * ErasRewardPoints
@@ -38,21 +71,6 @@
 //   * CurrentEraStart
 //   * CurrentEraStartSessionIndex
 //   * CurrentEraPointsEarned
-
-use super::*;
-mod deprecated;
-#[cfg(test)]
-mod tests;
-#[cfg(test)]
-mod test_upgrade_from_master_dataset;
-
-pub fn on_runtime_upgrade<T: Trait>() {
-	match StorageVersion::get() {
-		Releases::V2_0_0 => return,
-		Releases::V1_0_0 => upgrade_v1_to_v2::<T>(),
-	}
-}
-
 fn upgrade_v1_to_v2<T: Trait>() {
 	deprecated::IsUpgraded::kill();
 
@@ -60,7 +78,7 @@ fn upgrade_v1_to_v2<T: Trait>() {
 	let current_era = <Module<T> as Store>::CurrentEra::get().unwrap_or(0);
 	let current_era_start = deprecated::CurrentEraStart::<T>::get();
 	<Module<T> as Store>::ErasStartSessionIndex::insert(current_era, current_era_start_index);
-	<Module<T> as Store>::ActiveEra::put(ActiveEraInfo {
+	deprecated::ActiveEra::<T>::put(deprecated::ActiveEraInfo {
 		index: current_era,
 		start: Some(current_era_start),
 	});
