@@ -358,12 +358,15 @@ pub struct ValidatorPrefs {
 	/// nominators.
 	#[codec(compact)]
 	pub commission: Perbill,
+	/// Max number of nominators they will payout
+	pub max_payout: u16,
 }
 
 impl Default for ValidatorPrefs {
 	fn default() -> Self {
 		ValidatorPrefs {
 			commission: Default::default(),
+			max_payout: 64,
 		}
 	}
 }
@@ -539,6 +542,8 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	/// The validator's own stash that is exposed.
 	#[codec(compact)]
 	pub own: Balance,
+	/// The number of nominators they will pay out to.
+	pub max_payout: u16,
 	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
@@ -1461,6 +1466,51 @@ impl<T: Trait> Module<T> {
 	}
 
 	// MUTABLES (DANGEROUS)
+
+	fn do_payout_validator_and_nominators(validator: T::AccountId, era: EraIndex) -> DispatchResult {
+		// Note: if era has no reward to be claimed, era may be future. better not to update
+		// `ledger.last_reward` in this case.
+		let era_payout = <ErasValidatorReward<T>>::get(&era)
+			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
+
+		let mut ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
+		if ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
+			return Err(Error::<T>::InvalidEraToReward.into());
+		}
+
+		/* Payout to Validator */
+		// Update to the latest era
+		ledger.last_reward = Some(era);
+		<Ledger<T>>::insert(&validator, &ledger);
+
+		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
+		let commission = Self::eras_validator_prefs(&era, &ledger.stash).commission;
+		let exposure = <ErasStakers<T>>::get(&era, &ledger.stash);
+
+		let exposure_part = Perbill::from_rational_approximation(
+			exposure.own,
+			exposure.total,
+		);
+		let validator_point = era_reward_points.individual.get(&ledger.stash)
+			.map(|points| *points)
+			.unwrap_or_else(|| Zero::zero());
+		let validator_point_part = Perbill::from_rational_approximation(
+			validator_point,
+			era_reward_points.total,
+		);
+		let reward = validator_point_part.saturating_mul(
+			commission.saturating_add(
+				Perbill::one().saturating_sub(commission).saturating_mul(exposure_part)
+			)
+		);
+
+		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
+			Self::deposit_event(RawEvent::Reward(validator, imbalance.peek()));
+		}
+
+
+
+	}
 
 	fn do_payout_nominator(who: T::AccountId, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
 		-> DispatchResult
