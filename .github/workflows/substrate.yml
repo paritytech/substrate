@@ -345,20 +345,7 @@ jobs:
     runs-on:                   self-hosted
     container:                 parity/rust-builder:latest
     steps:
-      - name:                  Checkout sourc      - name: Prepare artifacts
-        shell: bash
-        run: |
-          echo "_____ Post-processing binaries _____"
-          rm -rf artifacts/*
-          mkdir -p artifacts/
-          cd artifacts/
-          cp -v ../../target/release/subkey subkey
-      - name:                  Upload artifact
-        uses:                  actions/upload-artifact@v1
-        continue-on-error:     true
-        with:
-          name:                ${{ runner.os }}.subkey.zip
-          path:                artifacts/es
+      - name:                  Checkout sources
         uses:                  actions/checkout@master
         with:
           submodules:      recursive
