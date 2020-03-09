@@ -98,11 +98,6 @@ pub mod well_known_keys {
 	/// Prefix of child storage keys.
 	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
 
-	/// The last time the runtime upgrade happened.
-	///
-	/// Stores the the `impl_version` and the `spec_version` of this runtime.
-	pub const LAST_RUNTIME_UPGRADE: &'static [u8] = b":last_runtime_upgrade:";
-
 	/// Whether a key is a child storage key.
 	///
 	/// This is convenience function which basically checks if the given `key` starts

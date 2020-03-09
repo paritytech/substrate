@@ -98,9 +98,15 @@ pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
+
+/// The last time the runtime upgrade happened.
+///
+/// Stores the the `impl_version` and the `spec_version` of this runtime.
+const LAST_RUNTIME_UPGRADE: &'static [u8] = b":last_runtime_upgrade:";
+
 /// Stores when the latest runtime upgrade happened.
 ///
-/// This is stored under the `well_know_keys::LAST_RUNTIME_UPGRADE` key.
+/// This is stored under the [`LAST_RUNTIME_UPGRADE`] key.
 #[derive(Default, Encode, Decode)]
 struct LastRuntimeUpgrade {
 	spec_version: u32,
@@ -231,16 +237,13 @@ where
 
 	/// Returns if the runtime was upgraded since the last time this function was called.
 	fn runtime_upgraded() -> bool {
-		let last = sp_io::storage::get(sp_core::storage::well_known_keys::LAST_RUNTIME_UPGRADE)
+		let last = sp_io::storage::get(LAST_RUNTIME_UPGRADE)
 			.and_then(|v| LastRuntimeUpgrade::decode(&mut &v[..]).ok())
 			.unwrap_or_default();
 		let current = <System::Version as frame_support::traits::Get<_>>::get();
 
 		if last.was_upgraded(&current) {
-			sp_io::storage::set(
-				sp_core::storage::well_known_keys::LAST_RUNTIME_UPGRADE,
-				&LastRuntimeUpgrade::from(current).encode(),
-			);
+			sp_io::storage::set(LAST_RUNTIME_UPGRADE, &LastRuntimeUpgrade::from(current).encode());
 
 			true
 		} else {
