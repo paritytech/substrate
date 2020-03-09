@@ -133,10 +133,7 @@ impl sp_std::convert::TryFrom<&[u8]> for Public {
 		if data.len() == 33 {
 			Ok(Self::from_slice(data))
 		} else {
-			secp256k1::PublicKey::parse_slice(data, None)
-				.map(|k| k.serialize_compressed())
-				.map(Self)
-				.map_err(|_| ())
+			Err(())
 		}
 	}
 }
