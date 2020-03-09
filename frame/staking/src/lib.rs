@@ -1088,6 +1088,8 @@ decl_error! {
 		InvalidEraToReward,
 		/// Invalid number of nominations.
 		InvalidNumberOfNominations,
+		/// Items are not sorted and unique.
+		NotSortedAndUnique,
 		/// The submitted result is received out of the open window.
 		PhragmenEarlySubmission,
 		/// The submitted result is not as good as the one stored on chain.
@@ -1580,21 +1582,15 @@ decl_module! {
 				.map(|_| ())
 				.or_else(ensure_root)?;
 
-			let mut slash_indices = slash_indices;
-			slash_indices.sort_unstable();
+			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
+			ensure!(Self::is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
+
 			let mut unapplied = <Self as Store>::UnappliedSlashes::get(&era);
+			let last_item = slash_indices[slash_indices.len() - 1];
+			ensure!((last_item as usize) < unapplied.len(), Error::<T>::InvalidSlashIndex);
 
 			for (removed, index) in slash_indices.into_iter().enumerate() {
-				let index = index as usize;
-
-				// if `index` is not duplicate, `removed` must be <= index.
-				ensure!(removed <= index, Error::<T>::DuplicateIndex);
-
-				// all prior removals were from before this index, since the
-				// list is sorted.
-				let index = index - removed;
-				ensure!(index < unapplied.len(), Error::<T>::InvalidSlashIndex);
-
+				let index = (index as usize) - removed;
 				unapplied.remove(index);
 			}
 
@@ -1664,7 +1660,7 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(
-				ledger.unlocking.len() > 0,
+				!ledger.unlocking.is_empty(),
 				Error::<T>::NoUnlockChunk,
 			);
 
@@ -1865,6 +1861,13 @@ impl<T: Trait> Module<T> {
 		<SnapshotValidators<T>>::kill();
 		<SnapshotNominators<T>>::kill();
 	}
+
+	/// Check that list is sorted and has no duplicates.
+	fn is_sorted_and_unique(list: &Vec<u32>) -> bool {
+		list.windows(2).all(|w| w[0] < w[1])
+	}
+
+	// MUTABLES (DANGEROUS)
 
 	fn do_payout_nominator(who: T::AccountId, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
 		-> DispatchResult
