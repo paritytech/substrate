@@ -500,7 +500,6 @@ pub fn elect<AccountId, Balance, FS, C, R>(
 			assignment.distribution.iter().for_each(|a| sum = sum.saturating_add(a.1.deconstruct()));
 
 			let diff = accuracy.saturating_sub(sum);
-			dbg!(diff);
 			let diff_per_vote = (diff / vote_count).min(accuracy);
 
 			if !diff_per_vote.is_zero() {
