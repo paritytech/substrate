@@ -1,0 +1,153 @@
+name:                          Build
+
+on:                            [push]
+#  push:
+#    branches:
+#      - master
+jobs:
+#build
+  build-substrate:
+    name:                      Build linux Substrate
+    runs-on:                   self-hosted
+    container:                 parity/rust-builder:latest
+    steps:
+      - name:                  Checkout sources
+        uses:                  actions/checkout@master
+        with:
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ${CARGO_HOME}.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ${CARGO_HOME}.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Run cargo build Substrate
+        shell:                 bash
+        run:                   cargo build --release --verbose
+      - name:                  Upload artifact
+        uses:                  actions/upload-artifact@v1
+        continue-on-error:     true
+        with:
+          name:                substrate
+          path:                target/release
+
+  build-subkey-linux:
+    name:                      Build linux Subkey
+    runs-on:                   self-hosted
+    container:                 parity/rust-builder:latest
+    steps:
+      - name:                  Checkout sources
+        uses:                  actions/checkout@master
+        with:
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ${CARGO_HOME}.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[build-subkey-linux]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ${CARGO_HOME}.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[build-subkey-linux]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[build-subkey-linux]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Run cargo build Subkey
+        shell:                 bash
+        run:                   cargo build --release --verbose
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          echo "_____ Post-processing binaries _____"
+          rm -rf artifacts/*
+          mkdir -p artifacts/
+          cp -v target/release/subkey artifacts/ubkey
+      - name:                  Upload artifact
+        uses:                  actions/upload-artifact@v1
+        continue-on-error:     true
+        with:
+          name:                ${{ runner.os }}.subkey.zip
+          path:                artifacts/
+
+  build-subkey-macos:
+    name:                      Build MacOS Subkey
+    runs-on:                   self-hosted
+    steps:
+      - name:                  Checkout sources
+        uses:                  actions/checkout@master
+        with:
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ${CARGO_HOME}.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[build-subkey-macos]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ${CARGO_HOME}.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[build-subkey-macos]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[build-subkey-macos]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Run cargo build Subkey
+        shell:                 bash
+        run: |
+          rustup target add x86_64-apple-darwin
+          cargo build --target x86_64-apple-darwin --release --verbose
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          echo "_____ Post-processing binaries _____"
+          rm -rf artifacts/*
+          mkdir -p artifacts/
+          target/x86_64-apple-darwin/release/subkey artifacts/ubkey
+      - name:                  Upload artifact
+        uses:                  actions/upload-artifact@v1
+        continue-on-error:     true
+        with:
+          name:                ${{ runner.os }}.subkey.zip
+          path:                artifacts/
+
+  build-rust-doc-release:
+    name:                      Build Rust doc release
+    needs:                     [test-stable]
+    runs-on:                   self-hosted
+    container:                 parity/rust-builder:latest
+    steps:
+      - name:                  Checkout sources
+        uses:                  actions/checkout@master
+        with:
+          submodules:      recursive
+      - name:                  Restore ${CARGO_HOME}.cargo/git
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ${CARGO_HOME}.cargo/git
+          key:                 ${{ runner.OS }}-cargo-git-[build-rust-doc-release]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ${CARGO_HOME}.cargo/registry
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                ${CARGO_HOME}.cargo/registry
+          key:                 ${{ runner.OS }}-cargo-registry-[build-rust-doc-release]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Restore ./target
+        uses:                  actions/cache@v1.1.2
+        with:
+          path:                target
+          key:                 ${{ runner.OS }}-cargo-build-[build-rust-doc-release]-${{ hashFiles('**/Cargo.lock') }}
+      - name:                  Run cargo doc release
+        shell:                 bash
+        run:                   cargo +nightly doc --release --all --verbose
