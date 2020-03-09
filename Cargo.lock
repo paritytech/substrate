@@ -5611,6 +5611,7 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-runtime",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
 ]
 
