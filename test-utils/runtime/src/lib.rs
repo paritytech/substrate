@@ -41,7 +41,6 @@ use sp_runtime::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
 	},
-	generic::CheckSignature,
 };
 use sp_version::RuntimeVersion;
 pub use sp_core::{hash::H256};
@@ -149,7 +148,7 @@ impl serde::Serialize for Extrinsic {
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
 
-	fn check(self, _signature: CheckSignature) -> Result<Self, TransactionValidityError> {
+	fn check(self) -> Result<Self, TransactionValidityError> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first } => {
@@ -516,10 +515,6 @@ cfg_if! {
 					system::execute_transaction(extrinsic)
 				}
 
-				fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-					system::execute_transaction(extrinsic)
-				}
-
 				fn finalize_block() -> <Block as BlockT>::Header {
 					system::finalize_block()
 				}
@@ -704,10 +699,6 @@ cfg_if! {
 
 			impl sp_block_builder::BlockBuilder<Block> for Runtime {
 				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-					system::execute_transaction(extrinsic)
-				}
-
-				fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 					system::execute_transaction(extrinsic)
 				}
 

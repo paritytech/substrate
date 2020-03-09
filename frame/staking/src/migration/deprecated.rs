@@ -84,9 +84,6 @@ decl_storage! {
 		/// Old upgrade flag.
 		pub IsUpgraded: bool;
 
-		/// Old upgrade flag.
-		pub LastEra: bool;
-		
 		/// Old active era information.
 		///
 		/// The active era information, it holds index and start.
