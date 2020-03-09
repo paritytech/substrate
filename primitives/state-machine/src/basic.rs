@@ -282,7 +282,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	// SCOTT
-	fn db_usage_info(&self) {
+	fn bench_usage_info(&self) {
 		unimplemented!()
 	}
 

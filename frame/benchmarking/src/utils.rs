@@ -20,6 +20,7 @@ use codec::{Encode, Decode};
 use sp_std::{vec::Vec, prelude::Box};
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeString;
+use sp_state_machine::UsageInfo;
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(codec::Encode, codec::Decode, Clone, Copy, PartialEq, Debug)]
@@ -68,10 +69,9 @@ pub trait Benchmarking {
 	}
 
 	/// SCOTT
-	fn db_usage_info(&self) {
-		// first call
-		// self.db_usage_info();
-		// UsageInfo::empty();
+	fn db_usage_info(&self) -> UsageInfo {
+		// self.bench_usage_info()
+		sp_state_machine::UsageInfo::empty()
 	}
 
 	/// Commit pending storage changes to the trie database and clear the database cache.
