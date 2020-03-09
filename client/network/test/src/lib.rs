@@ -46,17 +46,18 @@ use sp_consensus::block_import::{BlockImport, ImportResult};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
-use sc_network::{NetworkWorker, NetworkStateInfo, NetworkService, ReportHandle, config::ProtocolId};
+use sc_network::{NetworkWorker, NetworkStateInfo, NetworkService, config::ProtocolId};
 use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
-use sc_network::config::{ProtocolConfig, TransactionPool};
+use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
 use substrate_test_runtime_client::{self, AccountKeyring};
 
+pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
 
@@ -380,31 +381,6 @@ impl<D> Peer<D> {
 	pub fn failed_verifications(&self) -> HashMap<<Block as BlockT>::Hash, String> {
 		self.verifier.failed_verifications.lock().clone()
 	}
-}
-
-pub struct EmptyTransactionPool;
-
-impl TransactionPool<Hash, Block> for EmptyTransactionPool {
-	fn transactions(&self) -> Vec<(Hash, Extrinsic)> {
-		Vec::new()
-	}
-
-	fn hash_of(&self, _transaction: &Extrinsic) -> Hash {
-		Hash::default()
-	}
-
-	fn import(
-		&self,
-		_report_handle: ReportHandle,
-		_who: PeerId,
-		_rep_change_good: sc_network::ReputationChange,
-		_rep_change_bad: sc_network::ReputationChange,
-		_transaction: Extrinsic
-	) {}
-
-	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
-
-	fn transaction(&self, _h: &Hash) -> Option<Extrinsic> { None }
 }
 
 /// Implements `BlockImport` for any `Transaction`. Internally the transaction is
