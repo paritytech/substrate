@@ -28,7 +28,7 @@ use sc_service::{
 };
 use sc_telemetry::TelemetryEndpoints;
 
-use crate::VersionInfo;
+use crate::SubstrateCLI;
 use crate::error;
 use crate::params::ImportParams;
 use crate::params::SharedParams;
@@ -286,18 +286,15 @@ impl RunCmd {
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`
-	pub fn update_config<G, E, F>(
+	pub fn update_config<C: SubstrateCLI<G, E>, G, E>(
 		&self,
 		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
 	) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		self.shared_params.update_config::<C, G, E>(&mut config)?;
 
 		let password = if self.password_interactive {
 			#[cfg(not(target_os = "unknown"))]
@@ -314,12 +311,12 @@ impl RunCmd {
 			None
 		};
 
-		let path = self.keystore_path.clone().or(
-			config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH)
+		let path = self.keystore_path.clone().unwrap_or(
+			C::base_path(self.shared_params.base_path.as_ref()).join(DEFAULT_KEYSTORE_CONFIG_PATH)
 		);
 
 		config.keystore = KeystoreConfig::Path {
-			path: path.ok_or_else(|| "No `base_path` provided to create keystore path!".to_string())?,
+			path,
 			password,
 		};
 
@@ -366,10 +363,9 @@ impl RunCmd {
 		config.roles = role;
 		config.disable_grandpa = self.no_grandpa;
 
-		let client_id = config.client_id();
-		let network_path = config
-			.in_chain_config_dir(crate::commands::DEFAULT_NETWORK_CONFIG_PATH)
-			.expect("We provided a basepath");
+		let client_id = C::client_id();
+		let network_path = C::base_path(self.shared_params.base_path.as_ref())
+			.join(crate::commands::DEFAULT_NETWORK_CONFIG_PATH);
 		self.network_config.update_config(
 			&mut config,
 			network_path,
@@ -440,12 +436,11 @@ impl RunCmd {
 	}
 
 	/// Run the command that runs the node
-	pub fn run<G, E, FNL, FNF, SL, SF>(
+	pub fn run<C: SubstrateCLI<G, E>, G, E, FNL, FNF, SL, SF>(
 		self,
 		config: Configuration<G, E>,
 		new_light: FNL,
 		new_full: FNF,
-		version: &VersionInfo,
 	) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
@@ -455,9 +450,9 @@ impl RunCmd {
 		SL: AbstractService + Unpin,
 		SF: AbstractService + Unpin,
 	{
-		info!("{}", version.name);
-		info!("  version {}", config.full_version());
-		info!("  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
+		info!("{}", C::get_impl_name());
+		info!("  version {}", C::get_impl_version());
+		//info!("  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
 		info!("Chain specification: {}", config.chain_spec.name());
 		info!("Node name: {}", config.name);
 		info!("Roles: {}", config.display_role());
@@ -481,8 +476,8 @@ impl RunCmd {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init(&self, version: &VersionInfo) -> error::Result<()> {
-		self.shared_params.init(version)
+	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()> {
+		self.shared_params.init::<C, G, E>()
 	}
 }
 

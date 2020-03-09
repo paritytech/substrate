@@ -58,7 +58,7 @@ impl SharedParams {
 			None => if self.dev { "dev".into() } else { "".into() }
 		};
 
-		Ok(match C::spec_factory(&chain_key) {
+		Ok(match C::spec_factory(&chain_key)? {
 			Some(spec) => spec,
 			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
 		})

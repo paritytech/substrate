@@ -222,8 +222,7 @@ impl<G, E> Configuration<G, E> {
 	}
 	*/
 
-	// TODO: move to sc_cli
-	/*
+	// TODO: move to sc_cli?
 	/// Returns a string displaying the node role, special casing the sentry mode
 	/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
 	/// doesn't participate.
@@ -234,7 +233,6 @@ impl<G, E> Configuration<G, E> {
 			self.roles.to_string()
 		}
 	}
-	*/
 
 	// TODO: move to sc_cli
 	/*

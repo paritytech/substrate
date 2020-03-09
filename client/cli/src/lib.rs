@@ -46,23 +46,21 @@ pub use crate::runtime::{run_until_exit, run_service_until_exit};
 /// Substrate client CLI
 pub trait SubstrateCLI<G, E> {
 	/// Implementation name.
-	fn name() -> &'static str;
+	fn get_impl_name() -> &'static str;
 	/// Implementation version.
-	fn version() -> &'static str;
-	/// SCM Commit hash.
-	fn commit() -> &'static str;
+	fn get_impl_version() -> &'static str;
 	/// Executable file name.
-	fn executable_name() -> &'static str;
+	fn get_executable_name() -> &'static str;
 	/// Executable file description.
-	fn description() -> &'static str;
+	fn get_description() -> &'static str;
 	/// Executable file author.
-	fn author() -> &'static str;
+	fn get_author() -> &'static str;
 	/// Support URL.
-	fn support_url() -> &'static str;
+	fn get_support_url() -> &'static str;
 	/// Copyright starting year (x-current year)
-	fn copyright_start_year() -> i32;
+	fn get_copyright_start_year() -> i32;
 	/// Chain spec factory
-	fn spec_factory(id: &str) -> Option<ChainSpec<G, E>>;
+	fn spec_factory(id: &str) -> std::result::Result<Option<ChainSpec<G, E>>, String>;
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
 	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
@@ -97,7 +95,7 @@ pub trait SubstrateCLI<G, E> {
 	{
 		let app = T::clap();
 
-		let mut full_version = Self::get_version().to_string();
+		let mut full_version = Self::get_impl_version().to_string();
 		full_version.push_str("\n");
 
 		let app = app
@@ -138,7 +136,7 @@ pub trait SubstrateCLI<G, E> {
 	{
 		let app = T::clap();
 
-		let mut full_version = Self::get_version().to_string();
+		let mut full_version = Self::get_impl_version().to_string();
 		full_version.push_str("\n");
 
 		let app = app
@@ -163,7 +161,7 @@ pub trait SubstrateCLI<G, E> {
 	/// 3. Initialize the logger
 	fn init(logger_pattern: &str) -> error::Result<()>
 	{
-		sp_panic_handler::set(Self::get_support_url(), Self::get_version());
+		sp_panic_handler::set(Self::get_support_url(), Self::get_impl_version());
 
 		fdlimit::raise_fd_limit();
 		init_logger(logger_pattern);
@@ -171,16 +169,14 @@ pub trait SubstrateCLI<G, E> {
 		Ok(())
 	}
 
-	fn get_support_url() -> &'static str;
+	fn client_id() -> String {
+		format!("{}/v{}", Self::get_impl_name(), Self::get_impl_version())
+	}
 
-	fn get_version() -> &'static str;
-
-	fn get_impl_name() -> &'static str;
-
-	fn base_path(user_defined: Option<&PathBuf>) -> PathBuf;
-	/*
-	fn base_path(&self) -> PathBuf {
-		self.base_path.clone()
+	fn base_path(user_defined: Option<&PathBuf>) -> PathBuf {
+		user_defined.expect("todo").clone()
+		/*
+		user_defined.clone()
 			.unwrap_or_else(||
 				app_dirs::get_app_root(
 					AppDataType::UserData,
@@ -190,8 +186,8 @@ pub trait SubstrateCLI<G, E> {
 					}
 				).expect("app directories exist on all supported platforms; qed")
 			)
+		*/
 	}
-	*/
 }
 
 /// Initialize the logger

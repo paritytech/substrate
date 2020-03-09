@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//mod runcmd;
+mod runcmd;
 //mod export_blocks_cmd;
 mod build_spec_cmd;
 //mod import_blocks_cmd;
@@ -34,12 +34,10 @@ use crate::error;
 use crate::SubstrateCLI;
 use crate::params::SharedParams;
 
-/*
 pub use crate::commands::runcmd::RunCmd;
-pub use crate::commands::export_blocks_cmd::ExportBlocksCmd;
-*/
 pub use crate::commands::build_spec_cmd::BuildSpecCmd;
 /*
+pub use crate::commands::export_blocks_cmd::ExportBlocksCmd;
 pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
 pub use crate::commands::check_block_cmd::CheckBlockCmd;
 pub use crate::commands::revert_cmd::RevertCmd;

@@ -65,7 +65,7 @@ where
 	fn into_configuration(self) -> Configuration<G, E> {
 		Configuration {
 			impl_name: Self::get_impl_name(),
-			impl_version: Self::get_version(),
+			impl_version: Self::get_impl_version(),
 			roles: self.get_roles(),
 			task_executor: self.get_task_executor(),
 			transaction_pool: self.get_transaction_pool(),
