@@ -62,6 +62,9 @@ struct ServiceMetrics {
 	cpu_usage_percentage: Gauge<F64>,
 	network_per_sec_bytes: GaugeVec<U64>,
 	node_roles: Gauge<U64>,
+	database_cache: Gauge<U64>,
+	state_cache: Gauge<U64>,
+	state_db: GaugeVec<U64>,
 }
 
 impl ServiceMetrics {
@@ -87,7 +90,16 @@ impl ServiceMetrics {
 			node_roles: register(Gauge::new(
 				"node_roles", "The roles the node is running as",
 			)?, registry)?,
-
+			database_cache: register(Gauge::new(
+				"database_cache_bytes", "RocksDB cache size in bytes",
+			)?, registry)?,
+			state_cache: register(Gauge::new(
+				"state_cache_bytes", "State cache size in bytes",
+			)?, registry)?,
+			state_db: register(GaugeVec::new(
+				Opts::new("state_db_cache_bytes", "State DB cache in bytes"),
+				&["subtype"]
+			)?, registry)?,
 		})
 	}
 }
@@ -1078,6 +1090,17 @@ ServiceBuilder<
 
 				if let Some(best_seen_block) = best_seen_block {
 					metrics.block_height_number.with_label_values(&["sync_target"]).set(best_seen_block);
+				}
+
+				if let Some(info) = info.usage.as_ref() {
+					metrics.database_cache.set(info.memory.database_cache.as_bytes() as u64);
+					metrics.state_cache.set(info.memory.state_cache.as_bytes() as u64);
+
+					metrics.state_db.with_label_values(&["non_canonical"]).set(info.memory.state_db.non_canonical.as_bytes() as u64);
+					if let Some(pruning) = info.memory.state_db.pruning {
+						metrics.state_db.with_label_values(&["pruning"]).set(pruning.as_bytes() as u64);
+					}
+					metrics.state_db.with_label_values(&["pinned"]).set(info.memory.state_db.pinned.as_bytes() as u64);
 				}
 			}
 

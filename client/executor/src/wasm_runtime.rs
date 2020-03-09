@@ -297,6 +297,7 @@ fn create_versioned_wasm_runtime(
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
 ) -> Result<VersionedRuntime, WasmError> {
+	#[cfg(not(target_os = "unknown"))]
 	let time = std::time::Instant::now();
 	let mut runtime = create_wasm_runtime_with_code(
 		wasm_method,
@@ -326,6 +327,7 @@ fn create_versioned_wasm_runtime(
 			)?),
 		Err(_) => None,
 	};
+	#[cfg(not(target_os = "unknown"))]
 	log::debug!(
 		target: "wasm-runtime",
 		"Prepared new runtime version {:?} in {} ms.",
