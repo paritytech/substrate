@@ -1014,7 +1014,8 @@ ServiceBuilder<
 				Opts::new(
 					"build_info",
 					"A metric with a constant '1' value labeled by name, version, and commit."
-				).const_label("name", config.impl_name)
+				)
+					.const_label("name", config.impl_name)
 					.const_label("version", config.impl_version)
 					.const_label("commit", config.impl_commit),
 			)?, &registry)?.set(1);
