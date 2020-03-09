@@ -75,10 +75,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, marker::PhantomData};
-use frame_support::{
-	storage::StorageValue,
-	weights::{GetDispatchInfo, WeighBlock, DispatchInfo}
-};
+use frame_support::weights::{GetDispatchInfo, WeighBlock, DispatchInfo};
 use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
 	traits::{
@@ -88,7 +85,7 @@ use sp_runtime::{
 	transaction_validity::TransactionValidity,
 };
 use sp_runtime::traits::ValidateUnsigned;
-use codec::{Codec, Encode};
+use codec::{Codec, Encode, Decode};
 use frame_system::{extrinsics_root, DigestOf};
 
 /// Trait that can be used to execute a block.
@@ -100,6 +97,37 @@ pub trait ExecuteBlock<Block: BlockT> {
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
+
+/// Stores when the latest runtime upgrade happened.
+///
+/// This is stored under the `well_know_keys::LAST_RUNTIME_UPGRADE` key.
+#[derive(Default, Encode, Decode)]
+struct LastRuntimeUpgrade {
+	spec_version: u32,
+	impl_version: u32,
+}
+
+impl LastRuntimeUpgrade {
+	/// Checks if in respect to `current` version there was a runtime upgrade.
+	fn was_upgraded(&self, current: &sp_version::RuntimeVersion) -> bool {
+		if current.spec_version > self.spec_version {
+			true
+		} else if current.spec_version == self.spec_version {
+			current.impl_version > self.impl_version
+		} else {
+			false
+		}
+	}
+}
+
+impl From<sp_version::RuntimeVersion> for LastRuntimeUpgrade {
+	fn from(version: sp_version::RuntimeVersion) -> Self {
+		Self {
+			spec_version: version.spec_version,
+			impl_version: version.impl_version,
+		}
+	}
+}
 
 pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
@@ -179,7 +207,7 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
-		if frame_system::RuntimeUpgraded::take() {
+		if Self::runtime_upgraded() {
 			<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
 			<frame_system::Module<System>>::register_extra_weight_unchecked(
 				<AllModules as WeighBlock<System::BlockNumber>>::on_runtime_upgrade()
@@ -199,6 +227,25 @@ where
 		<frame_system::Module<System>>::register_extra_weight_unchecked(
 			<AllModules as WeighBlock<System::BlockNumber>>::on_finalize(*block_number)
 		);
+	}
+
+	/// Returns if the runtime was upgraded since the last time this function was called.
+	fn runtime_upgraded() -> bool {
+		let last = sp_io::storage::get(sp_core::storage::well_known_keys::LAST_RUNTIME_UPGRADE)
+			.and_then(|v| LastRuntimeUpgrade::decode(&mut &v[..]).ok())
+			.unwrap_or_default();
+		let current = <System::Version as frame_support::traits::Get<_>>::get();
+
+		if last.was_upgraded(&current) {
+			sp_io::storage::set(
+				sp_core::storage::well_known_keys::LAST_RUNTIME_UPGRADE,
+				&LastRuntimeUpgrade::from(current).encode(),
+			);
+
+			true
+		} else {
+			false
+		}
 	}
 
 	fn initial_checks(block: &Block) {
@@ -461,7 +508,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
-		type Version = ();
+		type Version = RuntimeVersion;
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
@@ -505,6 +552,18 @@ mod tests {
 				_ => UnknownTransaction::NoUnsignedValidator.into(),
 			}
 		}
+	}
+
+	pub struct RuntimeVersion;
+	impl frame_support::traits::Get<sp_version::RuntimeVersion> for RuntimeVersion {
+		fn get() -> sp_version::RuntimeVersion {
+			RUNTIME_VERSION.with(|v| v.borrow().clone())
+		}
+	}
+
+	thread_local! {
+		pub static RUNTIME_VERSION: std::cell::RefCell<sp_version::RuntimeVersion> =
+			Default::default();
 	}
 
 	type SignedExtra = (
@@ -758,5 +817,40 @@ mod tests {
 			// now only accounts for the custom module.
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 150 + 25);
 		})
+	}
+
+	#[test]
+	fn runtime_upgraded_should_work() {
+		new_test_ext(1).execute_with(|| {
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = Default::default());
+			assert!(!Executive::runtime_upgraded());
+
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				..Default::default()
+			});
+			assert!(Executive::runtime_upgraded());
+		})
+	}
+
+	#[test]
+	fn last_runtime_upgrade_works() {
+		let test_values = vec![
+			(0, 0, 1, 0, true),
+			(1, 0, 1, 0, false),
+			(0, 0, 0, 1, true),
+			(0, 1, 0, 1, false),
+			(2, 1, 0, 1, false),
+		];
+
+		for (spec_version, impl_version, c_spec_version, c_impl_version, result) in test_values {
+			let current = sp_version::RuntimeVersion {
+				spec_version: c_spec_version,
+				impl_version: c_impl_version,
+				..Default::default()
+			};
+			let last = LastRuntimeUpgrade { spec_version, impl_version };
+			assert_eq!(result, last.was_upgraded(&current));
+		}
 	}
 }

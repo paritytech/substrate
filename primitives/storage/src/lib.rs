@@ -98,6 +98,11 @@ pub mod well_known_keys {
 	/// Prefix of child storage keys.
 	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
 
+	/// The last time the runtime upgrade happened.
+	///
+	/// Stores the the `impl_version` and the `spec_version` of this runtime.
+	pub const LAST_RUNTIME_UPGRADE: &'static [u8] = b":last_runtime_upgrade:";
+
 	/// Whether a key is a child storage key.
 	///
 	/// This is convenience function which basically checks if the given `key` starts
@@ -207,7 +212,7 @@ impl<'a> ChildInfo<'a> {
 		}
 	}
 
-	/// Create child info from a linear byte packed value and a given type. 
+	/// Create child info from a linear byte packed value and a given type.
 	pub fn resolve_child_info(child_type: u32, data: &'a[u8]) -> Option<Self> {
 		match child_type {
 			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data)),

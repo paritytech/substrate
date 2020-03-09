@@ -367,9 +367,6 @@ decl_storage! {
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
 		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
-
-		/// A bool to track if the runtime was upgraded last block.
-		pub RuntimeUpgraded: bool;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -489,7 +486,6 @@ decl_module! {
 			}
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
-			RuntimeUpgraded::put(true);
 			Self::deposit_event(RawEvent::CodeUpdated);
 		}
 
@@ -498,7 +494,6 @@ decl_module! {
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
-			RuntimeUpgraded::put(true);
 			Self::deposit_event(RawEvent::CodeUpdated);
 		}
 
@@ -526,9 +521,6 @@ decl_module! {
 			ensure_root(origin)?;
 			for i in &items {
 				storage::unhashed::put_raw(&i.0, &i.1);
-				if i.0 == well_known_keys::CODE {
-					RuntimeUpgraded::put(true);
-				}
 			}
 		}
 
@@ -1979,8 +1971,6 @@ mod tests {
 				System::events(),
 				vec![EventRecord { phase: Phase::ApplyExtrinsic(0), event: 102u16, topics: vec![] }],
 			);
-
-			assert_eq!(RuntimeUpgraded::get(), true);
 		});
 	}
 
@@ -1997,8 +1987,6 @@ mod tests {
 					substrate_test_runtime_client::runtime::WASM_BINARY.to_vec()
 				)],
 			).unwrap();
-
-			assert_eq!(RuntimeUpgraded::get(), true);
 		});
 	}
 }
