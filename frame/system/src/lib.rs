@@ -1257,7 +1257,7 @@ impl<T: Trait> CheckNonce<T> {
 impl<T: Trait> Debug for CheckNonce<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		self.0.fmt(f)
+		write!(f, "CheckNonce({})", self.0)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1336,19 +1336,19 @@ impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
 
 /// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckEra<T: Trait + Send + Sync>((Era, sp_std::marker::PhantomData<T>));
+pub struct CheckEra<T: Trait + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckEra<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(era: Era) -> Self {
-		Self((era, sp_std::marker::PhantomData))
+		Self(era, sp_std::marker::PhantomData)
 	}
 }
 
 impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		self.0.fmt(f)
+		write!(f, "CheckEra({:?})", self.0)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1373,7 +1373,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 		_len: usize,
 	) -> TransactionValidity {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let valid_till = (self.0).0.death(current_u64);
+		let valid_till = self.0.death(current_u64);
 		Ok(ValidTransaction {
 			longevity: valid_till.saturating_sub(current_u64),
 			..Default::default()
@@ -1382,7 +1382,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
+		let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
 		if !<BlockHash<T>>::contains_key(n) {
 			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {
