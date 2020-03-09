@@ -982,28 +982,28 @@ decl_storage! {
 
 		/// Snapshot of validators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
-		SnapshotValidators get(fn snapshot_validators): Option<Vec<T::AccountId>>;
+		pub SnapshotValidators get(fn snapshot_validators): Option<Vec<T::AccountId>>;
 
 		/// Snapshot of nominators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
-		SnapshotNominators get(fn snapshot_nominators): Option<Vec<T::AccountId>>;
+		pub SnapshotNominators get(fn snapshot_nominators): Option<Vec<T::AccountId>>;
 
 		/// The current set of staking keys.
-		Keys get(fn keys): Vec<T::KeyType>;
+		pub Keys get(fn keys): Vec<T::KeyType>;
 
 		/// The next validator set. At the end of an era, if this is available (potentially from the
 		/// result of an offchain worker), it is immediately used. Otherwise, the on-chain election
 		/// is executed.
-		QueuedElected get(fn queued_elected): Option<ElectionResult<T::AccountId, BalanceOf<T>>>;
+		pub QueuedElected get(fn queued_elected): Option<ElectionResult<T::AccountId, BalanceOf<T>>>;
 
 		/// The score of the current [`QueuedElected`].
-		QueuedScore get(fn queued_score): Option<PhragmenScore>;
+		pub QueuedScore get(fn queued_score): Option<PhragmenScore>;
 
 		/// Flag to control the execution of the offchain election.
-		EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
+		pub EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
 
 		/// True of the current planned session is final
-		IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
+		pub IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
 
 		/// True if network has been upgraded to this version.
 		/// Storage version of the pallet.
@@ -2056,7 +2056,7 @@ impl<T: Trait> Module<T> {
 
 	/// Checks a given solution and if correct and improved, writes it on chain as the queued result
 	/// of the next round. This may be called by both a signed and an unsigned transaction.
-	fn check_and_replace_solution(
+	pub fn check_and_replace_solution(
 		winners: Vec<ValidatorIndex>,
 		compact_assignments: CompactAssignments,
 		compute: ElectionCompute,
@@ -2366,21 +2366,9 @@ impl<T: Trait> Module<T> {
 			// Insert current era staking information
 			<ErasTotalStake<T>>::insert(&current_era, total_stake);
 
-			// --------
-			// TODO: this snapshot need to be taken elsewhere... this is super inefficient now.
-			// The current abstraction is such that we do `<Validators<T>>::enumerate()` down to line
-			// in `do_phragmen` and don't really update the values there. There are numerous ways to fix this.
-			// check @guillaume.
-			let mut all_validators_and_prefs = BTreeMap::new();
-			for (validator, preference) in <Validators<T>>::enumerate() {
-				all_validators_and_prefs.insert(validator.clone(), preference);
-			}
-			// ---------
-
-			let default_pref = ValidatorPrefs::default();
+			// collect the pref of all winners
 			for stash in &elected_stashes {
-				let pref = all_validators_and_prefs.get(stash)
-					.unwrap_or(&default_pref); // Must never happen, but better to be safe.
+				let pref = Self::validators(stash);
 				<ErasValidatorPrefs<T>>::insert(&current_era, stash, pref);
 			}
 
