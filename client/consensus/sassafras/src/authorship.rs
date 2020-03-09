@@ -143,7 +143,7 @@ fn claim_primary_slot(
 	Some((claim, pair))
 }
 
-fn get_keypair(q: &AuthorityPair) -> &schnorrkel::Keypair {
+pub(crate) fn get_keypair(q: &AuthorityPair) -> &schnorrkel::Keypair {
 	use sp_core::crypto::IsWrappedBy;
 	sp_core::sr25519::Pair::from_ref(q).as_ref()
 }

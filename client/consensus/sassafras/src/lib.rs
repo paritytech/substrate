@@ -516,8 +516,8 @@ struct SassafrasWorker<B: BlockT, C, E, I, SO> {
 	keystore: KeyStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	config: Config,
-	local_out_proofs: UnboundedSender<VRFProof>,
-	remote_in_proofs: UnboundedReceiver<VRFProof>,
+	local_out_proofs: UnboundedSender<(AuthorityId, [u8; 32], Vec<u8>)>,
+	remote_in_proofs: UnboundedReceiver<(AuthorityId, [u8; 32], Vec<u8>)>,
 }
 
 impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for SassafrasWorker<B, C, E, I, SO> where
@@ -591,12 +591,13 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Sassafra
 
 		crate::communication::send_out(
 			&self.local_out_proofs,
+			&mut viable_epoch.as_mut().publishing,
 			slot_number,
-			&mut viable_epoch.as_mut().publishing
 		);
 		crate::communication::receive_in(
 			&mut self.remote_in_proofs,
-			&mut viable_epoch.as_mut().publishing
+			&mut viable_epoch.as_mut().publishing,
+			&self.keystore,
 		);
 
 		let s = authorship::claim_slot(

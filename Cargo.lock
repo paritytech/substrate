@@ -17,6 +17,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d2e7343e7fc9de883d1b0341e0b13970f764c14101234857d2ddafa1cb1cac2"
 
 [[package]]
+name = "aead"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cf01b9b56e767bb57b94ebf91a58b338002963785cdd7013e21c0d4679471e4"
+dependencies = [
+ "generic-array",
+]
+
+[[package]]
+name = "aes"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54eb1d8fe354e5fc611daf4f2ea97dd45a765f4f1e4512306ec183ae2e8f20c9"
+dependencies = [
+ "aes-soft",
+ "aesni",
+ "block-cipher-trait",
+]
+
+[[package]]
 name = "aes-ctr"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -26,6 +46,20 @@ dependencies = [
  "aesni",
  "ctr",
  "stream-cipher",
+]
+
+[[package]]
+name = "aes-gcm"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5cfe3c2bd0624e9488c8711bd7f3cc5689fac9427622a98694a15b7b58f54fa8"
+dependencies = [
+ "aead",
+ "aes",
+ "block-cipher-trait",
+ "ghash",
+ "subtle 2.2.2",
+ "zeroize",
 ]
 
 [[package]]
@@ -1842,6 +1876,15 @@ dependencies = [
  "libc",
  "wasi",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "ghash"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f0930ed19a7184089ea46d2fedead2f6dc2b674c5db4276b7da336c7cd83252"
+dependencies = [
+ "polyval",
 ]
 
 [[package]]
@@ -4840,6 +4883,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "polyval"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ec3341498978de3bfd12d1b22f1af1de22818f5473a11e8a6ef997989e3a212"
+dependencies = [
+ "cfg-if",
+ "universal-hash",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6011,6 +6064,8 @@ dependencies = [
 name = "sc-consensus-sassafras"
 version = "0.8.0"
 dependencies = [
+ "aead",
+ "aes-gcm",
  "derive_more",
  "env_logger 0.7.1",
  "fork-tree",
@@ -6650,8 +6705,9 @@ dependencies = [
 [[package]]
 name = "schnorrkel"
 version = "0.9.0"
-source = "git+https://github.com/w3f/schnorrkel#5896b38680c2c8344734c263314b54e3e01a47f0"
+source = "git+https://github.com/w3f/schnorrkel#2d004cffa5dc3bf6dafeebee8d4d40b9f696462f"
 dependencies = [
+ "aead",
  "arrayref",
  "arrayvec 0.5.1",
  "curve25519-dalek",
@@ -8625,6 +8681,16 @@ name = "unicode-xid"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "826e7639553986605ec5979c7dd957c7895e93eabed50ab2ffa7f6128a75097c"
+
+[[package]]
+name = "universal-hash"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df0c900f2f9b4116803415878ff48b63da9edb268668e08cf9292d7503114a01"
+dependencies = [
+ "generic-array",
+ "subtle 2.2.2",
+]
 
 [[package]]
 name = "unsigned-varint"
