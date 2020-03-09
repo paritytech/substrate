@@ -20,10 +20,9 @@ use sc_network::config::build_multiaddr;
 use sc_service::{Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec};
 
 use crate::error;
-use crate::VersionInfo;
+use crate::SubstrateCLI;
 use crate::params::SharedParams;
 use crate::params::NodeKeyParams;
-use crate::IntoConfiguration;
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
@@ -46,17 +45,6 @@ pub struct BuildSpecCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
-}
-
-impl<G, E, V> IntoConfiguration<G, E, V> for BuildSpecCmd
-where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-	V: VersionInfo<G, E>,
-{
-	fn get_chain_spec(&self) -> ChainSpec<G, E> {
-		self.shared_params.get_chain_spec(V::spec_factory)
-	}
 }
 
 impl BuildSpecCmd {
@@ -92,20 +80,16 @@ impl BuildSpecCmd {
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
+	pub fn update_config<C: SubstrateCLI<G, E>, G, E>(
 		&self,
 		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
 	) -> error::Result<()> where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	{
-		self.shared_params.update_config(&mut config)?;
+		self.shared_params.update_config::<C, G, E>(&mut config)?;
 
-		let net_config_path = config
-			.in_chain_config_dir(crate::commands::DEFAULT_NETWORK_CONFIG_PATH)
-			.expect("We provided a base_path");
+		let net_config_path = C::base_path(self.shared_params.base_path.as_ref()).join(crate::commands::DEFAULT_NETWORK_CONFIG_PATH);
 
 		self.node_key_params.update_config(&mut config, Some(&net_config_path))?;
 

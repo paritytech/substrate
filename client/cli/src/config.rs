@@ -28,15 +28,11 @@ use sc_service::{ChainSpec, RuntimeGenesis, ChainSpecExtension};
 use sc_telemetry::TelemetryEndpoints;
 use crate::SubstrateCLI;
 
-pub trait IntoConfiguration<G, E, S>: Sized
+pub trait IntoConfiguration<G, E>: Sized + SubstrateCLI<G, E>
 where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
-	S: SubstrateCLI<G, E>,
 {
-	fn get_impl_name(&self) -> &'static str { V::impl_name() }
-	fn get_impl_version(&self) -> &'static str { V::impl_version() }
-	fn get_impl_commit(&self) -> &'static str { V::impl_commit() }
 	fn get_roles(&self) -> Roles { Roles::FULL }
 	fn get_task_executor(&self) -> Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
 	fn get_transaction_pool(&self) -> TransactionPoolOptions { Default::default() }
@@ -68,9 +64,8 @@ where
 
 	fn into_configuration(self) -> Configuration<G, E> {
 		Configuration {
-			impl_name: self.get_impl_name(),
-			impl_version: self.get_impl_version(),
-			impl_commit: self.get_impl_commit(),
+			impl_name: Self::get_impl_name(),
+			impl_version: Self::get_version(),
 			roles: self.get_roles(),
 			task_executor: self.get_task_executor(),
 			transaction_pool: self.get_transaction_pool(),

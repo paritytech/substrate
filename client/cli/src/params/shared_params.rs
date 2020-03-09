@@ -21,8 +21,8 @@ use sc_service::{
 	Configuration, ChainSpecExtension, RuntimeGenesis, config::DatabaseConfig, ChainSpec,
 };
 
-use crate::VersionInfo;
-use crate::error;
+use crate::SubstrateCLI;
+use crate::error::Result;
 
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
@@ -48,10 +48,7 @@ pub struct SharedParams {
 }
 
 impl SharedParams {
-	pub(crate) fn get_chain_spec<G, E>(
-		&self,
-		spec_factory: impl Fn(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	) -> ChainSpec<G, E>
+	pub(crate) fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -61,35 +58,29 @@ impl SharedParams {
 			None => if self.dev { "dev".into() } else { "".into() }
 		};
 
-		match spec_factory(&chain_key).expect("todo") {
+		Ok(match C::spec_factory(&chain_key) {
 			Some(spec) => spec,
 			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
-		}
+		})
 	}
 
 	/// Load spec to `Configuration` from `SharedParams` and spec factory.
-	pub fn update_config<'a, G, E>(
+	pub fn update_config<'a, C: SubstrateCLI<G, E>, G, E>(
 		&self,
 		mut config: &'a mut Configuration<G, E>,
-	) -> error::Result<&'a ChainSpec<G, E>> where
+	) -> Result<&'a ChainSpec<G, E>> where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		let spec = self.get_chain_spec();
+		let spec = self.get_chain_spec::<C, G, E>()?;
 
 		config.network.boot_nodes = spec.boot_nodes().to_vec();
 		config.telemetry_endpoints = spec.telemetry_endpoints().clone();
 
 		config.chain_spec = spec;
 
-		if config.config_dir.is_none() {
-			config.config_dir = Some(self.base_path());
-		}
-
 		config.database = DatabaseConfig::Path {
-			path: config
-				.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
-				.expect("We provided a base_path/config_dir."),
+			path: C::base_path(self.base_path.as_ref()).join(DEFAULT_DB_CONFIG_PATH),
 			cache_size: None,
 		};
 
@@ -103,20 +94,7 @@ impl SharedParams {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init<V>(&self) -> error::Result<()> {
-		V::init(self.log.as_ref().map(|v| v.as_ref()).unwrap_or(""))
-	}
-
-	fn base_path(&self) -> PathBuf {
-		self.base_path.clone()
-			.unwrap_or_else(||
-				app_dirs::get_app_root(
-					AppDataType::UserData,
-					&AppInfo {
-						name: V::executable_name(),
-						author: V::author(),
-					}
-				).expect("app directories exist on all supported platforms; qed")
-			)
+	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()> {
+		C::init(self.log.as_ref().map(|v| v.as_ref()).unwrap_or(""))
 	}
 }

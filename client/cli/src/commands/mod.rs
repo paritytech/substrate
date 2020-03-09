@@ -31,16 +31,20 @@ use sc_service::{
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
-use crate::VersionInfo;
+use crate::SubstrateCLI;
 use crate::params::SharedParams;
 
+/*
 pub use crate::commands::runcmd::RunCmd;
 pub use crate::commands::export_blocks_cmd::ExportBlocksCmd;
+*/
 pub use crate::commands::build_spec_cmd::BuildSpecCmd;
+/*
 pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
 pub use crate::commands::check_block_cmd::CheckBlockCmd;
 pub use crate::commands::revert_cmd::RevertCmd;
 pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
+*/
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -55,6 +59,7 @@ pub enum Subcommand {
 	/// Build a spec.json file, outputing to stdout.
 	BuildSpec(BuildSpecCmd),
 
+	/*
 	/// Export blocks to a file.
 	ExportBlocks(ExportBlocksCmd),
 
@@ -69,6 +74,7 @@ pub enum Subcommand {
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
+	*/
 }
 
 impl Subcommand {
@@ -78,11 +84,13 @@ impl Subcommand {
 
 		match self {
 			BuildSpec(params) => &params.shared_params,
+			/*
 			ExportBlocks(params) => &params.shared_params,
 			ImportBlocks(params) => &params.shared_params,
 			CheckBlock(params) => &params.shared_params,
 			Revert(params) => &params.shared_params,
 			PurgeChain(params) => &params.shared_params,
+			*/
 		}
 	}
 
@@ -103,16 +111,18 @@ impl Subcommand {
 	{
 		match self {
 			Subcommand::BuildSpec(cmd) => cmd.run(config),
+			/*
 			Subcommand::ExportBlocks(cmd) => cmd.run(config, builder),
 			Subcommand::ImportBlocks(cmd) => cmd.run(config, builder),
 			Subcommand::CheckBlock(cmd) => cmd.run(config, builder),
 			Subcommand::PurgeChain(cmd) => cmd.run(config),
 			Subcommand::Revert(cmd) => cmd.run(config, builder),
+			*/
 		}
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E>(
+	pub fn update_config<C: SubstrateCLI<G, E>, G, E>(
 		&self,
 		mut config: &mut Configuration<G, E>,
 	) -> error::Result<()> where
@@ -120,12 +130,14 @@ impl Subcommand {
 		E: ChainSpecExtension,
 	{
 		match self {
-			Subcommand::BuildSpec(cmd) => cmd.update_config(&mut config),
+			Subcommand::BuildSpec(cmd) => cmd.update_config::<C, G, E>(&mut config),
+			/*
 			Subcommand::ExportBlocks(cmd) => cmd.update_config(&mut config),
 			Subcommand::ImportBlocks(cmd) => cmd.update_config(&mut config),
 			Subcommand::CheckBlock(cmd) => cmd.update_config(&mut config),
 			Subcommand::PurgeChain(cmd) => cmd.update_config(&mut config),
 			Subcommand::Revert(cmd) => cmd.update_config(&mut config),
+			*/
 		}
 	}
 
@@ -136,7 +148,7 @@ impl Subcommand {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init(&self) -> error::Result<()> {
-		self.get_shared_params().init()
+	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()> {
+		self.get_shared_params().init::<C, G, E>()
 	}
 }

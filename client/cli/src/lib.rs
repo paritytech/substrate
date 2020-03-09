@@ -16,8 +16,9 @@
 
 //! Substrate CLI library.
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 #![warn(unused_extern_crates)]
+#![allow(unused_imports)] // TO REMOVE
 
 mod params;
 mod arg_enums;
@@ -27,6 +28,7 @@ mod commands;
 mod config;
 
 use std::io::Write;
+use std::path::PathBuf;
 
 use regex::Regex;
 use structopt::{StructOpt, clap::{self, AppSettings}};
@@ -95,16 +97,15 @@ pub trait SubstrateCLI<G, E> {
 	{
 		let app = T::clap();
 
-		let mut full_version = sc_service::config::full_version_from_strs(
-			V::version,
-			V::commit,
-		);
+		let mut full_version = Self::get_version().to_string();
 		full_version.push_str("\n");
 
 		let app = app
+			/*
 			.name(V::executable_name)
 			.author(V::author)
 			.about(V::description)
+			*/
 			.version(full_version.as_str())
 			.settings(&[
 				AppSettings::GlobalVersion,
@@ -137,16 +138,15 @@ pub trait SubstrateCLI<G, E> {
 	{
 		let app = T::clap();
 
-		let mut full_version = sc_service::config::full_version_from_strs(
-			V::version,
-			V::commit,
-		);
+		let mut full_version = Self::get_version().to_string();
 		full_version.push_str("\n");
 
 		let app = app
+			/*
 			.name(V::executable_name())
 			.author(V::author())
 			.about(V::description())
+			*/
 			.version(full_version.as_str());
 
 		let matches = app.get_matches_from_safe(iter)?;
@@ -163,17 +163,35 @@ pub trait SubstrateCLI<G, E> {
 	/// 3. Initialize the logger
 	fn init(logger_pattern: &str) -> error::Result<()>
 	{
-		let full_version = sc_service::config::full_version_from_strs(
-			V::version,
-			V::commit,
-		);
-		sp_panic_handler::set(V::support_url, &full_version);
+		sp_panic_handler::set(Self::get_support_url(), Self::get_version());
 
 		fdlimit::raise_fd_limit();
 		init_logger(logger_pattern);
 
 		Ok(())
 	}
+
+	fn get_support_url() -> &'static str;
+
+	fn get_version() -> &'static str;
+
+	fn get_impl_name() -> &'static str;
+
+	fn base_path(user_defined: Option<&PathBuf>) -> PathBuf;
+	/*
+	fn base_path(&self) -> PathBuf {
+		self.base_path.clone()
+			.unwrap_or_else(||
+				app_dirs::get_app_root(
+					AppDataType::UserData,
+					&AppInfo {
+						name: V::executable_name(),
+						author: V::author(),
+					}
+				).expect("app directories exist on all supported platforms; qed")
+			)
+	}
+	*/
 }
 
 /// Initialize the logger

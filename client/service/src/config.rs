@@ -34,8 +34,6 @@ pub struct Configuration<G, E = NoExtension> {
 	pub impl_name: &'static str,
 	/// Implementation version
 	pub impl_version: &'static str,
-	/// Git commit if any.
-	pub impl_commit: &'static str,
 	/// Node roles.
 	pub roles: Roles,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
@@ -199,7 +197,7 @@ impl<G, E> Configuration<G, E> {
 
 	/// Returns full version string of this configuration.
 	pub fn full_version(&self) -> String {
-		full_version_from_strs(self.impl_version, self.impl_commit)
+		self.impl_version.to_string()
 	}
 
 	// TODO: move to sc_cli
