@@ -470,7 +470,8 @@ pub fn start_sassafras<B, C, SC, E, I, SO, CAW, N, Error>(SassafrasParams {
 	N: sc_network_gossip::Network<B> + Clone + Send + Unpin + 'static,
 {
 	let config = sassafras_link.config;
-	let (local_out_proofs, remote_in_proofs) = mpsc::unbounded();
+	let (local_out_proofs_sender, local_out_proofs_receiver) = mpsc::unbounded();
+	let (remote_in_proofs_sender, remote_in_proofs_receiver) = mpsc::unbounded();
 	let worker = SassafrasWorker {
 		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
@@ -480,7 +481,8 @@ pub fn start_sassafras<B, C, SC, E, I, SO, CAW, N, Error>(SassafrasParams {
 		keystore,
 		epoch_changes: sassafras_link.epoch_changes.clone(),
 		config: config.clone(),
-		local_out_proofs, remote_in_proofs,
+		local_out_proofs: local_out_proofs_sender,
+		remote_in_proofs: remote_in_proofs_receiver,
 	};
 
 	register_sassafras_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
@@ -490,7 +492,11 @@ pub fn start_sassafras<B, C, SC, E, I, SO, CAW, N, Error>(SassafrasParams {
 		&inherent_data_providers,
 	)?;
 
-	let network = communication::NetworkBridge::new(network);
+	let network = communication::NetworkBridge::new(
+		network,
+		local_out_proofs_receiver,
+		remote_in_proofs_sender,
+	);
 
 	info!(target: "sassafras", "Starting Sassafras authorship worker");
 	Ok(future::select(
