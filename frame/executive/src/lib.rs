@@ -236,6 +236,9 @@ where
 	}
 
 	/// Returns if the runtime was upgraded since the last time this function was called.
+	///
+	/// If no value for [`LAST_RUNTIME_UPGRADE`] key exists in storage, `spec_version = 0` and
+	/// `impl_version = 0` is assumed.
 	fn runtime_upgraded() -> bool {
 		let last = sp_io::storage::get(LAST_RUNTIME_UPGRADE)
 			.and_then(|v| LastRuntimeUpgrade::decode(&mut &v[..]).ok())
