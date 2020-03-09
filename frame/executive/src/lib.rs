@@ -260,26 +260,24 @@ where
 	/// hashes.
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
 		let encoded = uxt.encode();
-		let encoded_len = encoded.len();
-		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded))
+		Self::apply_extrinsic_with_len(uxt, &encoded, true)
 	}
 
 	/// Apply an extrinsic inside the block execution function.
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
-		let l = uxt.encode().len();
-		match Self::apply_extrinsic_with_len(uxt, l, None) {
+		let encoded = uxt.encode();
+		match Self::apply_extrinsic_with_len(uxt, &encoded, false) {
 			Ok(_) => (),
 			Err(e) => { let err: &'static str = e.into(); panic!(err) },
 		}
 	}
 
-	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
+	/// Actually apply an extrinsic given its `encoded_len`
 	fn apply_extrinsic_with_len(
 		uxt: Block::Extrinsic,
-		encoded_len: usize,
-		to_note: Option<Vec<u8>>,
+		encoded: &[u8],
+		make_note: bool,
 	) -> ApplyExtrinsicResult {
-		let encoded = uxt.encode();
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
@@ -288,17 +286,18 @@ where
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
 		// executed to prevent it from leaking in storage since at this point, it will either
 		// execute or panic (and revert storage changes).
-		if let Some(encoded) = to_note {
-			<frame_system::Module<System>>::note_extrinsic(encoded);
+		if make_note {
+			<frame_system::Module<System>>::note_extrinsic(encoded.to_vec());
 		}
 
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
-		let r = Applyable::apply::<UnsignedValidator>(xt, dispatch_info, encoded_len)?;
+		let r = Applyable::apply::<UnsignedValidator>(xt, dispatch_info, encoded.len())?;
 
-		<frame_system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32, dispatch_info);
+		<frame_system::Module<System>>::note_applied_extrinsic(&r, encoded.len() as u32,
+															   dispatch_info);
 
 		Ok(r)
 	}
