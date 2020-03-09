@@ -132,7 +132,8 @@ impl StateUsageStats {
 			//       imposing `MallocSizeOf` requirement on half of the codebase,
 			//       so it is an open question how to do it better
 			memory: 0,
-			started: InstantWithDefault(self.started),
+			// SCOTT INVESTIGATE
+			started: InstantWithDefault::new(self.started),
 			span: self.started.elapsed(),
 		}
 	}

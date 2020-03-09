@@ -41,6 +41,13 @@ impl std::default::Default for InstantWithDefault {
 	}
 }
 
+// SCOTT INVESTIGATE
+impl InstantWithDefault {
+	pub fn new(instant: Instant) -> Self {
+		Self(instant)
+	}
+}
+
 
 /// Usage statistics for state backend.
 #[derive(Clone, Debug, Encode, Decode)]
