@@ -13,19 +13,6 @@ jobs:
         uses:              actions/checkout@master
         with:
           submodules:      recursive
-#      - name:              Prepare for cache
-#        shell:             bash
-#        run:               rm -rf ${CARGO_HOME}.cargo/{git,registry}&&mkdir -p ${CARGO_HOME}.cargo/{git,registry}
-      - name:                  Restore ${CARGO_HOME}.cargo/git
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/git
-          key:                 ${{ runner.OS }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-      - name:                  Restore ${CARGO_HOME}.cargo/registry
-        uses:                  actions/cache@v1.1.2
-        with:
-          path:                ${CARGO_HOME}.cargo/registry
-          key:                 ${{ runner.OS }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Restore ./target
         uses:                  actions/cache@v1.1.2
         with:
