@@ -99,7 +99,7 @@ impl Subcommand {
 
 	/// Run any `CoreParams` command
 	pub fn run<G, E, B, BC, BB>(
-		self,
+		&self,
 		config: Configuration<G, E>,
 		builder: B,
 	) -> error::Result<()>

@@ -59,18 +59,16 @@ pub fn run() -> sc_cli::Result<()> {
 	match opt.subcommand {
 		Some(subcommand) => {
 			Cli::init(&subcommand)?;
-			let config = Cli::make_configuration(subcommand)?;
-			/*
-			subcommand.run(
+			let config = Cli::make_configuration(&subcommand)?;
+			Cli::run_subcommand(
+				&subcommand,
 				config,
 				|config: _| Ok(new_full_start!(config).0),
 			)
-			*/
-			Ok(())
 		},
 		None => {
 			Cli::init(&opt.run)?;
-			let config = Cli::make_configuration(opt.run)?;
+			let config = Cli::make_configuration(&opt.run)?;
 			Cli::run_node(
 				config,
 				service::new_light,

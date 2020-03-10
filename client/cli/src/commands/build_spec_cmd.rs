@@ -50,7 +50,7 @@ pub struct BuildSpecCmd {
 impl BuildSpecCmd {
 	/// Run the build-spec command
 	pub fn run<G, E>(
-		self,
+		&self,
 		config: Configuration<G, E>,
 	) -> error::Result<()>
 	where

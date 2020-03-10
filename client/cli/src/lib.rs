@@ -29,7 +29,7 @@ mod config;
 
 use std::io::Write;
 use std::path::PathBuf;
-
+use std::fmt::Debug;
 use regex::Regex;
 use structopt::{StructOpt, clap::{self, AppSettings}};
 pub use structopt;
@@ -40,7 +40,11 @@ pub use error::*;
 pub use config::*;
 use log::info;
 use lazy_static::lazy_static;
-use sc_service::{ChainSpec, Configuration, RuntimeGenesis, ChainSpecExtension, AbstractService};
+use sc_service::{
+	ChainSpec, Configuration, RuntimeGenesis, ChainSpecExtension, AbstractService,
+	ServiceBuilderCommand,
+};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
 
 /// Substrate client CLI
@@ -181,28 +185,29 @@ where
 		*/
 	}
 
-	fn make_configuration<T: IntoConfiguration>(command: T) -> error::Result<Configuration<G, E>> {
+	fn make_configuration<T: IntoConfiguration>(command: &T) -> error::Result<Configuration<G, E>> {
 		command.into_configuration::<Self, G, E>()
 	}
 
 	fn run_node<FNL, FNF, SL, SF>(config: Configuration<G, E>, new_light: FNL, new_full: FNF) -> error::Result<()>
 	where
-		FNL: FnOnce(Configuration<G, E>) -> sc_service::Result<SL, sc_service::error::Error>,
-		FNF: FnOnce(Configuration<G, E>) -> sc_service::Result<SF, sc_service::error::Error>,
+		FNL: FnOnce(Configuration<G, E>) -> sc_service::error::Result<SL>,
+		FNF: FnOnce(Configuration<G, E>) -> sc_service::error::Result<SF>,
 		SL: AbstractService + Unpin,
 		SF: AbstractService + Unpin,
 	{
 		RunCmd::run::<Self, G, E, FNL, FNF, SL, SF>(config, new_light, new_full)
 	}
 
-	fn run_command<FNL, FNF, SL, SF>(config: Configuration<G, E>, new_light: FNL, new_full: FNF) -> error::Result<()>
+	fn run_subcommand<B, BC, BB>(subcommand: &Subcommand, config: Configuration<G, E>, builder: B) -> error::Result<()>
 	where
-		FNL: FnOnce(Configuration<G, E>) -> sc_service::Result<SL, sc_service::error::Error>,
-		FNF: FnOnce(Configuration<G, E>) -> sc_service::Result<SF, sc_service::error::Error>,
-		SL: AbstractService + Unpin,
-		SF: AbstractService + Unpin,
+		B: FnOnce(Configuration<G, E>) -> sc_service::error::Result<BC>,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		RunCmd::run::<Self, G, E, FNL, FNF, SL, SF>(config, new_light, new_full)
+		subcommand.run::<G, E, B, BC, BB>(config, builder)
 	}
 }
 
