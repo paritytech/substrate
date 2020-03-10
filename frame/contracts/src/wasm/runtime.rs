@@ -429,21 +429,7 @@ define_env!(Env, <E: Ext>,
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 
 		let ext = &mut ctx.ext;
-		let result = ctx.gas_meter.with_nested(ctx.gas_meter.gas_left(), |nested_meter| {
-			match nested_meter {
-				Some(nested_meter) => {
-					ext.transfer(
-						&callee,
-						value,
-						nested_meter,
-					)
-				},
-				// there is not enough gas to allocate for the nested call.
-				None => Err(sp_runtime::DispatchError::Other("Out of gas.")),
-			}
-		});
-
-		match result {
+		match ext.transfer(&callee, value, ctx.gas_meter) {
 			Ok(_) => Ok(STATUS_SUCCESS.into()),
 			Err(_) => Ok(TRAP_RETURN_CODE),
 		}
