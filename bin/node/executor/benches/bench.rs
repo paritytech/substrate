@@ -166,7 +166,7 @@ fn bench_execute_block(c: &mut Criterion) {
 			// Get the runtime version to initialize the runtimes cache.
 			{
 				let mut test_ext = new_test_ext(&genesis_config);
-				executor.runtime_version(&mut test_ext.ext());
+				executor.runtime_version(&mut test_ext.ext()).unwrap();
 			}
 
 			let blocks = test_blocks(&genesis_config, &executor);

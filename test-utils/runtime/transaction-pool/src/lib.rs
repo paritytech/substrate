@@ -265,7 +265,7 @@ pub fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
 		nonce,
 		amount: 1,
 	};
-	let signature = transfer.using_encoded(|e| who.sign(e));
-	Extrinsic::Transfer(transfer, signature.into())
+	let signature = transfer.using_encoded(|e| who.sign(e)).into();
+	Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: false }
 }
 
