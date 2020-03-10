@@ -103,7 +103,7 @@ impl Metrics {
 			publish: register(
 				Counter::new(
 					"authority_discovery_times_published_total",
-					"Number of times the authority discovery has published external addresses."
+					"Number of times authority discovery has published external addresses."
 				)?,
 				registry,
 			)?,
