@@ -28,6 +28,8 @@ use walkdir::WalkDir;
 
 use fs2::FileExt;
 
+use itertools::Itertools;
+
 /// Holds the path to the bloaty WASM binary.
 pub struct WasmBinaryBloaty(PathBuf);
 
@@ -87,8 +89,13 @@ pub fn create_and_compile(
 	// Lock the workspace exclusively for us
 	let _lock = WorkspaceLock::new(&wasm_workspace_root);
 
-	let project = create_project(cargo_manifest, &wasm_workspace);
-	create_wasm_workspace_project(&wasm_workspace, cargo_manifest);
+	let crate_metadata = MetadataCommand::new()
+		.manifest_path(cargo_manifest)
+		.exec()
+		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
+
+	let project = create_project(cargo_manifest, &wasm_workspace, &crate_metadata);
+	create_wasm_workspace_project(&wasm_workspace, &crate_metadata.workspace_root);
 
 	build_project(&project, default_rustflags);
 	let (wasm_binary, bloaty) = compact_wasm_file(
@@ -232,14 +239,8 @@ fn find_and_clear_workspace_members(wasm_workspace: &Path) -> Vec<String> {
 	members
 }
 
-fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
+fn create_wasm_workspace_project(wasm_workspace: &Path, workspace_root_path: &Path) {
 	let members = find_and_clear_workspace_members(wasm_workspace);
-
-	let crate_metadata = MetadataCommand::new()
-		.manifest_path(cargo_manifest)
-		.exec()
-		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
-	let workspace_root_path = crate_metadata.workspace_root;
 
 	let mut workspace_toml: Table = toml::from_str(
 		&fs::read_to_string(
@@ -281,8 +282,10 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 				p.iter_mut()
 					.filter(|(k, _)| k == &"path")
 					.for_each(|(_, v)| {
-						if let Some(path) = v.as_str() {
-							*v = workspace_root_path.join(path).display().to_string().into();
+						if let Some(path) = v.as_str().map(PathBuf::from) {
+							if path.is_relative() {
+								*v = workspace_root_path.join(path).display().to_string().into();
+							}
 						}
 					})
 			);
@@ -296,17 +299,53 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 	).expect("WASM workspace `Cargo.toml` writing can not fail; qed");
 }
 
+/// Get a list of enabled features for the project.
+fn project_enabled_features(
+	cargo_manifest: &Path,
+	crate_metadata: &cargo_metadata::Metadata,
+) -> Vec<String> {
+	let package = crate_metadata.packages
+		.iter()
+		.find(|p| p.manifest_path == cargo_manifest)
+		.expect("Wasm project exists in its own metadata; qed");
+
+	let mut enabled_features = package.features.keys()
+		.filter(|f| {
+			let mut feature_env = f.replace("-", "_");
+			feature_env.make_ascii_uppercase();
+
+			// We don't want to enable the `std`/`default` feature for the wasm build and
+			// we need to check if the feature is enabled by checking the env variable.
+			*f != "std"
+				&& *f != "default"
+				&& env::var(format!("CARGO_FEATURE_{}", feature_env))
+					.map(|v| v == "1")
+					.unwrap_or_default()
+		})
+		.cloned()
+		.collect::<Vec<_>>();
+
+	enabled_features.sort();
+	enabled_features
+}
+
 /// Create the project used to build the wasm binary.
 ///
 /// # Returns
 /// The path to the created project.
-fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
+fn create_project(
+	cargo_manifest: &Path,
+	wasm_workspace: &Path,
+	crate_metadata: &cargo_metadata::Metadata,
+) -> PathBuf {
 	let crate_name = get_crate_name(cargo_manifest);
 	let crate_path = cargo_manifest.parent().expect("Parent path exists; qed");
 	let wasm_binary = get_wasm_binary_name(cargo_manifest);
 	let project_folder = wasm_workspace.join(&crate_name);
 
 	fs::create_dir_all(project_folder.join("src")).expect("Wasm project dir create can not fail; qed");
+
+	let enabled_features = project_enabled_features(&cargo_manifest, &crate_metadata);
 
 	write_file_if_changed(
 		project_folder.join("Cargo.toml"),
@@ -322,11 +361,12 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 				crate-type = ["cdylib"]
 
 				[dependencies]
-				wasm_project = {{ package = "{crate_name}", path = "{crate_path}", default-features = false }}
+				wasm_project = {{ package = "{crate_name}", path = "{crate_path}", default-features = false, features = [ {features} ] }}
 			"#,
 			crate_name = crate_name,
 			crate_path = crate_path.display(),
 			wasm_binary = wasm_binary,
+			features = enabled_features.into_iter().map(|f| format!("\"{}\"", f)).join(","),
 		)
 	);
 

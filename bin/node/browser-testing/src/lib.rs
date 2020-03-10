@@ -35,11 +35,6 @@ use futures::FutureExt;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-#[wasm_bindgen(module = "/src/ws.js")]
-extern "C" {
-    fn transport() -> libp2p::wasm_ext::ffi::Transport;
-}
-
 const CHAIN_SPEC: &str = include_str!("../../cli/res/flaming-fir.json");
 
 fn rpc_call(method: &str) -> String {
@@ -61,14 +56,14 @@ fn deserialize_rpc_result<T: DeserializeOwned>(js_value: JsValue) -> T {
 
 #[wasm_bindgen_test]
 async fn runs() {
-    let mut client = node_cli::start_client(CHAIN_SPEC.into(), "info".into(), transport())
+    let mut client = node_cli::start_client(CHAIN_SPEC.into(), "info".into())
             .await
             .unwrap();
 
     let mut test_timeout = Delay::new(Duration::from_secs(45));
     loop {
         // Check that timeout hasn't expired.
-        assert!((&mut test_timeout).now_or_never().is_none());
+        assert!((&mut test_timeout).now_or_never().is_none(), "Test timed out.");
 
         // Let the node do a bit of work.
         Delay::new(Duration::from_secs(5)).await;
