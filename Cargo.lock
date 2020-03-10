@@ -7656,7 +7656,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "js-sys",
  "kvdb-web",
- "libp2p",
+ "libp2p-wasm-ext",
  "log 0.4.8",
  "rand 0.6.5",
  "rand 0.7.3",
