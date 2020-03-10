@@ -16,12 +16,16 @@
 
 //! Implementation of the `sign-transaction` subcommand
 use crate::error;
-use hex_literal::hex;
-use super::{SharedParams, RunCmd, get_password, read_message_from_stdin, read_pair, Crypto};
+use super::{
+	SharedParams, get_password, decode_hex,
+	create_extrinsic_for, Crypto, IndexFor, CallFor,
+};
 use structopt::StructOpt;
-use std::{path::PathBuf, fs};
-use crate::params::{read_uri, as_str};
 
+use parity_scale_codec::{Decode, Encode, WrapperTypeEncode};
+use std::str::FromStr;
+
+type Call = Vec<u8>;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
@@ -31,19 +35,15 @@ use crate::params::{read_uri, as_str};
 pub struct SignTransactionCmd {
 	/// The secret key URI.
 	#[structopt(long)]
-	suri: Option<String>,
+	suri: String,
 
 	/// The nonce.
 	#[structopt(long)]
-	nonce: Option<String>,
+	nonce: String,
 
 	/// The call, hex-encoded.
-	#[structopt(long)]
-	call: String,
-
-	/// The genesis block hash, hex-encoded.
-	#[structopt(long)]
-	genesis: Option<String>,
+	#[structopt(long, parse(try_from_str = decode_hex))]
+	call: Call,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -51,22 +51,21 @@ pub struct SignTransactionCmd {
 }
 
 impl SignTransactionCmd {
-	pub fn run<C: Crypto>(self, run_cmd: RunCmd) -> error::Result<()> {
-		let signer = read_pair::<C>(
-			as_str(&self.suri),
-			as_str(&get_password(&run_cmd)?)
-		)?;
-		let genesis_hash = read_genesis_hash(matches)?;
+	pub fn run<C: Crypto>(self) -> error::Result<()>
+		where
+			<IndexFor<C> as FromStr>::Err: Into<String>,
+			CallFor<C>: Encode + Decode + WrapperTypeEncode,
+	{
+		let signer = C::pair_from_suri(
+			&self.suri,
+			Some(get_password(&self.shared_params)?.as_str()),
+		);
 
-		let call = matches.value_of("call").expect("call is required; qed");
-		let function: Call = hex::decode(&call)
-			.ok()
-			.and_then(|x| Decode::decode(&mut &x[..]).ok())
-			.unwrap();
+		let index = IndexFor::<C>::from_str(&self.nonce).map_err(|e| e.into())?;
+		let function = CallFor::<C>::decode(&mut &self.call[..])?;
+		let extrinsic = create_extrinsic_for::<C>(function, index, signer)?;
 
-		let extrinsic = create_extrinsic::<C>(function, index, signer, genesis_hash);
-
-		print_extrinsic(extrinsic);
+		println!("0x{}", hex::encode(Encode::encode(&extrinsic)));
 
 		Ok(())
 	}

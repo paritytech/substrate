@@ -30,6 +30,7 @@ sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensu
 grandpa = { version = "0.8.0-alpha.2", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
 grandpa-primitives = { version = "2.0.0-alpha.2", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
 sc-client = { version = "0.8.0-alpha.2", path = "../../../client/" }
+sc-client-api = { version = "2.0.0-alpha.2", path = "../../../client/api" }
 sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
 sc-basic-authorship = { path = "../../../client/basic-authorship" , version = "0.8.0-alpha.2"}
 

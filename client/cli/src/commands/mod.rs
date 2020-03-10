@@ -26,6 +26,9 @@ mod generate;
 mod inspect;
 mod sign;
 mod sign_transaction;
+mod utils;
+mod transfer;
+mod verify;
 
 use std::fmt::Debug;
 use structopt::StructOpt;
@@ -39,6 +42,7 @@ use crate::error;
 use crate::VersionInfo;
 use crate::params::SharedParams;
 
+pub use crate::commands::utils::*;
 pub use crate::commands::runcmd::RunCmd;
 pub use crate::commands::export_blocks_cmd::ExportBlocksCmd;
 pub use crate::commands::build_spec_cmd::BuildSpecCmd;
@@ -75,7 +79,7 @@ pub enum Subcommand {
 	/// Remove the whole chain data.
 	PurgeChain(purge_chain_cmd::PurgeChainCmd),
 
-	/// Generate a key for a node
+	// Generate a key for a node
 	// GenerateNodeKey(generate_node_key::GenerateNodeKeyCmd),
 }
 

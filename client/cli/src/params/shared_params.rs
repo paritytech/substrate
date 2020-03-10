@@ -21,9 +21,9 @@ use sc_service::{
 	Configuration, ChainSpecExtension, RuntimeGenesis,
 	config::DatabaseConfig, ChainSpec,
 };
-
-use crate::VersionInfo;
-use crate::error;
+use sp_core::crypto::Ss58AddressFormat;
+use std::convert::TryFrom;
+use crate::{error, VersionInfo, arg_enums::OutputType};
 
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
@@ -60,6 +60,36 @@ pub struct SharedParams {
 		conflicts_with_all = &[ "password-interactive", "password-filename" ]
 	)]
 	pub password: Option<String>,
+
+	/// File that contains the password used by the keystore.
+	#[structopt(
+		long = "password-filename",
+		value_name = "PATH",
+		parse(from_os_str),
+		conflicts_with_all = &[ "password-interactive", "password" ]
+	)]
+	pub password_filename: Option<PathBuf>,
+
+	/// network address format
+	#[structopt(
+		long,
+		value_name = "NETWORK",
+		possible_values = &Ss58AddressFormat::all_names()[..],
+		parse(try_from_str = Ss58AddressFormat::try_from),
+		case_insensitive = true,
+		default_value = "polkadot"
+	)]
+	pub network: Ss58AddressFormat,
+
+	/// output format
+	#[structopt(
+		long,
+		value_name = "FORMAT",
+		possible_values = &OutputType::variants(),
+		case_insensitive = true,
+		default_value = "Text"
+	)]
+	pub output_type: OutputType,
 }
 
 impl SharedParams {

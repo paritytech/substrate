@@ -364,6 +364,12 @@ macro_rules! ss58_address_format {
 		];
 
 		impl Ss58AddressFormat {
+			/// names of all address formats
+			pub fn all_names() -> Vec<&'static str> {
+				vec![
+					$($name),*,
+				]
+			}
 			/// All known address formats.
 			pub fn all() -> &'static [Ss58AddressFormat] {
 				&ALL_SS58_ADDRESS_FORMATS
@@ -399,12 +405,13 @@ macro_rules! ss58_address_format {
 		}
 
 		impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
-			type Error = ();
+			type Error = String;
 
-			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, ()> {
+			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, String> {
 				match x {
 					$($name => Ok(Ss58AddressFormat::$identifier)),*,
-					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
+					a => a.parse::<u8>().map(Ss58AddressFormat::Custom)
+						.map_err(|e| format!("failed to parse network value as u8 {:?}", e)),
 				}
 			}
 		}
@@ -436,16 +443,30 @@ ss58_address_format!(
 		(0, "polkadot", "Polkadot Relay-chain, direct checksum, standard account (*25519).")
 	KusamaAccountDirect =>
 		(2, "kusama", "Kusama Relay-chain, direct checksum, standard account (*25519).")
-	DothereumAccountDirect =>
-		(20, "dothereum", "Dothereum Para-chain, direct checksum, standard account (*25519).")
-	KulupuAccountDirect =>
-		(16, "kulupu", "Kulupu mainnet, direct checksum, standard account (*25519).")
+	PlasmAccountDirect =>
+		(5, "plasm", "Plasm Network, direct checksum, standard account (*25519).")
+	BifrostAccountDirect =>
+		(6, "bifrost", "Bifrost mainnet, direct checksum, standard account (*25519).")
 	EdgewareAccountDirect =>
 		(7, "edgeware", "Edgeware mainnet, direct checksum, standard account (*25519).")
+	KaruraAccountDirect =>
+		(8, "karura", "Acala Karura canary network, direct checksum, standard account (*25519).")
+	ReynoldsAccountDirect =>
+		(9, "reynolds", "Laminar Reynolds canary network, direct checksum, standard account (*25519).")
+	AcalaAccountDirect =>
+		(10, "acala", "Acala mainnet, direct checksum, standard account (*25519).")
+	LaminarAccountDirect =>
+		(11, "laminar", "Laminar mainnet, direct checksum, standard account (*25519).")
+	KulupuAccountDirect =>
+		(16, "kulupu", "Kulupu mainnet, direct checksum, standard account (*25519).")
+	DothereumAccountDirect =>
+		(20, "dothereum", "Dothereum Para-chain, direct checksum, standard account (*25519).")
 	CentrifugeAccountDirect =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, direct checksum, standard account (*25519).")
 	SubstraTeeAccountDirect =>
 		(44, "substratee", "Any SubstraTEE off-chain network private account, direct checksum, standard account (*25519).")
+	DarwiniaAccountDirect =>
+		(18, "darwinia", "Darwinia Chain mainnet, direct checksum, standard account (*25519).")
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is

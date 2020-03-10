@@ -83,6 +83,15 @@ arg_enum! {
 }
 
 arg_enum! {
+	#[allow(missing_docs)]
+	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+	pub enum OutputType {
+		Json,
+		Text,
+	}
+}
+
+arg_enum! {
 	/// How to execute blocks
 	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 	pub enum ExecutionStrategy {

@@ -16,11 +16,11 @@
 
 //! Implementation of the `inspect` subcommand
 
-use crate::error;
+use crate::{error, arg_enums::OutputType};
 use super::{SharedParams, RunCmd, get_password, read_uri, Crypto};
 use structopt::StructOpt;
-use std::{path::PathBuf, fs};
-use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
+
+
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
@@ -34,21 +34,24 @@ pub struct InspectCmd {
 	#[structopt(long)]
 	uri: Option<String>,
 
+	output_type: OutputType,
+
+	network: String,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
 
 impl InspectCmd {
-	pub fn run<C: Crypto>(self, run_cmd: RunCmd) -> error::Result<()> {
+	pub fn run<C: Crypto>(self, _run_cmd: RunCmd) -> error::Result<()> {
 		let uri = read_uri(self.uri)?;
-
-		let pass = get_password(&run_cmd)?;
+		let pass = get_password(&self.shared_params)?;
 
 		C::print_from_uri(
 			&uri,
-			password.as_ref().map(String::as_str),
-			self.shared_params.network,
+			Some(pass.as_str()),
+			Some(self.shared_params.network),
 			self.shared_params.output_type
 		);
 
