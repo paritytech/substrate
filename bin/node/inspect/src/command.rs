@@ -36,7 +36,7 @@ impl InspectCmd {
 		mut config: &mut sc_service::config::Configuration,
 		spec_factory: impl FnOnce(&str) -> Result<Box<dyn sc_service::ChainSpec>, String>,
 		version: &sc_cli::VersionInfo,
-	) -> sc_cli::Result<()> where {
+	) -> sc_cli::Result<()> {
 		self.shared_params.update_config(config, spec_factory, version)?;
 
 		// make sure to configure keystore

@@ -165,7 +165,7 @@ impl BenchmarkCmd {
 		mut config: &mut Configuration,
 		spec_factory: impl FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 		version: &VersionInfo,
-	) -> sc_cli::Result<()> where {
+	) -> sc_cli::Result<()> {
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
 
 		// make sure to configure keystore

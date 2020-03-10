@@ -274,7 +274,6 @@ pub fn get_extension<T: 'static>(e: &dyn GetExtension) -> Option<&T> {
 	Any::downcast_ref(GetExtension::get_any(e, TypeId::of::<T>()))
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;
