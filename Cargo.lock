@@ -424,12 +424,6 @@ dependencies = [
 
 [[package]]
 name = "bs58"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c95ee6bba9d950218b6cc910cf62bc9e0a171d0f4537e3627b0f54d08549b188"
-
-[[package]]
-name = "bs58"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b170cd256a3f9fa6b9edae3e44a7dfdfc77e8124dbc3e2612d75f9c3e2396dae"
@@ -2643,8 +2637,8 @@ dependencies = [
  "libp2p-wasm-ext",
  "libp2p-websocket",
  "libp2p-yamux",
- "parity-multiaddr 0.7.2",
- "parity-multihash 0.2.3",
+ "parity-multiaddr",
+ "parity-multihash",
  "parking_lot 0.10.0",
  "pin-project",
  "smallvec 1.2.0",
@@ -2658,7 +2652,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b874594c4b29de1a29f27871feba8e6cd13aa54a8a1e8f8c7cf3dfac5ca287c"
 dependencies = [
  "asn1_der",
- "bs58 0.3.0",
+ "bs58",
  "ed25519-dalek",
  "fnv",
  "futures 0.3.4",
@@ -2667,8 +2661,8 @@ dependencies = [
  "libsecp256k1",
  "log 0.4.8",
  "multistream-select",
- "parity-multiaddr 0.7.2",
- "parity-multihash 0.2.3",
+ "parity-multiaddr",
+ "parity-multihash",
  "parking_lot 0.10.0",
  "pin-project",
  "prost",
@@ -2679,7 +2673,7 @@ dependencies = [
  "sha2",
  "smallvec 1.2.0",
  "thiserror",
- "unsigned-varint 0.3.1",
+ "unsigned-varint",
  "void",
  "zeroize 1.1.0",
 ]
@@ -2754,7 +2748,7 @@ dependencies = [
  "rand 0.7.3",
  "sha2",
  "smallvec 1.2.0",
- "unsigned-varint 0.3.1",
+ "unsigned-varint",
  "wasm-timer",
 ]
 
@@ -2789,14 +2783,14 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log 0.4.8",
- "parity-multihash 0.2.3",
+ "parity-multihash",
  "prost",
  "prost-build",
  "rand 0.7.3",
  "sha2",
  "smallvec 1.2.0",
  "uint",
- "unsigned-varint 0.3.1",
+ "unsigned-varint",
  "void",
  "wasm-timer",
 ]
@@ -2836,7 +2830,7 @@ dependencies = [
  "libp2p-core",
  "log 0.4.8",
  "parking_lot 0.10.0",
- "unsigned-varint 0.3.1",
+ "unsigned-varint",
 ]
 
 [[package]]
@@ -2889,7 +2883,7 @@ dependencies = [
  "prost",
  "prost-build",
  "rw-stream-sink",
- "unsigned-varint 0.3.1",
+ "unsigned-varint",
  "void",
 ]
 
@@ -3278,7 +3272,7 @@ dependencies = [
  "log 0.4.8",
  "smallvec 1.2.0",
  "tokio-io",
- "unsigned-varint 0.3.1",
+ "unsigned-varint",
 ]
 
 [[package]]
@@ -4568,53 +4562,20 @@ checksum = "0c276d76c5333b8c2579e02d49a06733a55b8282d2d9b13e8d53b6406bd7e30a"
 
 [[package]]
 name = "parity-multiaddr"
-version = "0.5.0"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "045b3c7af871285146300da35b1932bb6e4639b66c7c98e85d06a32cbc4e8fa7"
+checksum = "f77055f9e81921a8cc7bebeb6cded3d128931d51f1e3dd6251f0770a6d431477"
 dependencies = [
  "arrayref",
- "bs58 0.2.5",
- "byteorder 1.3.4",
- "bytes 0.4.12",
- "data-encoding",
- "parity-multihash 0.1.3",
- "percent-encoding 1.0.1",
- "serde",
- "unsigned-varint 0.2.3",
- "url 1.7.2",
-]
-
-[[package]]
-name = "parity-multiaddr"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26df883298bc3f4e92528b4c5cc9f806b791955b136da3e5e939ed9de0fd958b"
-dependencies = [
- "arrayref",
- "bs58 0.3.0",
+ "bs58",
  "byteorder 1.3.4",
  "data-encoding",
- "parity-multihash 0.2.3",
+ "parity-multihash",
  "percent-encoding 2.1.0",
  "serde",
  "static_assertions",
- "unsigned-varint 0.3.1",
+ "unsigned-varint",
  "url 2.1.1",
-]
-
-[[package]]
-name = "parity-multihash"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df3a17dc27848fd99e4f87eb0f8c9baba6ede0a6d555400c850ca45254ef4ce3"
-dependencies = [
- "blake2",
- "bytes 0.4.12",
- "rand 0.6.5",
- "sha-1",
- "sha2",
- "sha3",
- "unsigned-varint 0.2.3",
 ]
 
 [[package]]
@@ -4629,7 +4590,7 @@ dependencies = [
  "sha-1",
  "sha2",
  "sha3",
- "unsigned-varint 0.3.1",
+ "unsigned-varint",
 ]
 
 [[package]]
@@ -6231,7 +6192,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "thiserror",
- "unsigned-varint 0.3.1",
+ "unsigned-varint",
  "void",
  "wasm-timer",
  "zeroize 1.1.0",
@@ -6418,7 +6379,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "lazy_static",
  "log 0.4.8",
- "parity-multiaddr 0.5.0",
+ "parity-multiaddr",
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.10.0",
@@ -8557,12 +8518,6 @@ name = "unicode-xid"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "826e7639553986605ec5979c7dd957c7895e93eabed50ab2ffa7f6128a75097c"
-
-[[package]]
-name = "unsigned-varint"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7f0023a96687fe169081e8adce3f65e3874426b7886e9234d490af2dc077959"
 
 [[package]]
 name = "unsigned-varint"
