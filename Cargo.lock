@@ -1996,6 +1996,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "harberger"
+version = "2.0.0-alpha.3"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "hash-db"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4111,22 +4127,6 @@ dependencies = [
  "rlp",
  "serde",
  "sha3",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "pallet-example"
-version = "2.0.0-alpha.3"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "pallet-balances",
- "parity-scale-codec",
- "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
