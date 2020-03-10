@@ -17,6 +17,9 @@
 use std::path::PathBuf;
 use std::net::SocketAddr;
 use std::fs;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 use log::info;
 use structopt::{StructOpt, clap::arg_enum};
 use names::{Generator, Name};
@@ -24,11 +27,11 @@ use regex::Regex;
 use chrono::prelude::*;
 use sc_service::{
 	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec, Roles,
-	config::KeystoreConfig,
+	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
 };
 use sc_telemetry::TelemetryEndpoints;
 
-use crate::SubstrateCLI;
+use crate::{SubstrateCLI, IntoConfiguration};
 use crate::error;
 use crate::params::ImportParams;
 use crate::params::SharedParams;
@@ -437,7 +440,6 @@ impl RunCmd {
 
 	/// Run the command that runs the node
 	pub fn run<C: SubstrateCLI<G, E>, G, E, FNL, FNF, SL, SF>(
-		self,
 		config: Configuration<G, E>,
 		new_light: FNL,
 		new_full: FNF,
@@ -476,9 +478,33 @@ impl RunCmd {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()> {
+	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
 		self.shared_params.init::<C, G, E>()
 	}
+}
+
+impl IntoConfiguration for RunCmd
+{
+	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<ChainSpec<G, E>>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		self.shared_params.get_chain_spec::<C, G, E>()
+	}
+	fn get_task_executor(&self) -> Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync> { todo!() }
+	fn get_network(&self) -> NetworkConfiguration { todo!() }
+	fn get_keystore(&self) -> KeystoreConfig { todo!() }
+	fn get_database(&self) -> DatabaseConfig { todo!() }
+	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{ self.shared_params.init::<C, G, E>() }
 }
 
 /// Check whether a node name is considered as valid

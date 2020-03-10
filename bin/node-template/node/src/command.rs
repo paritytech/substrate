@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::SubstrateCLI;
+use std::convert::TryInto;
+use sc_cli::{SubstrateCLI, IntoConfiguration};
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use crate::service;
 use crate::chain_spec::Alternative;
@@ -57,17 +58,20 @@ pub fn run() -> sc_cli::Result<()> {
 
 	match opt.subcommand {
 		Some(subcommand) => {
-			subcommand.init()?;
-			subcommand.update_config(&mut config)?;
+			Cli::init(&subcommand)?;
+			let config = Cli::make_configuration(subcommand)?;
+			/*
 			subcommand.run(
 				config,
 				|config: _| Ok(new_full_start!(config).0),
 			)
+			*/
+			Ok(())
 		},
 		None => {
-			opt.run.init()?;
-			opt.run.update_config(&mut config)?;
-			opt.run.run(
+			Cli::init(&opt.run)?;
+			let config = Cli::make_configuration(opt.run)?;
+			Cli::run_node(
 				config,
 				service::new_light,
 				service::new_full,

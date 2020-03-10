@@ -40,11 +40,15 @@ pub use error::*;
 pub use config::*;
 use log::info;
 use lazy_static::lazy_static;
-use sc_service::ChainSpec;
+use sc_service::{ChainSpec, Configuration, RuntimeGenesis, ChainSpecExtension, AbstractService};
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
 
 /// Substrate client CLI
-pub trait SubstrateCLI<G, E> {
+pub trait SubstrateCLI<G, E>: Sized
+where
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+{
 	/// Implementation name.
 	fn get_impl_name() -> &'static str;
 	/// Implementation version.
@@ -152,21 +156,9 @@ pub trait SubstrateCLI<G, E> {
 		Ok(T::from_clap(&matches))
 	}
 
-	/// Initialize substrate. This must be done only once.
-	///
-	/// This method:
-	///
-	/// 1. Set the panic handler
-	/// 2. Raise the FD limit
-	/// 3. Initialize the logger
-	fn init(logger_pattern: &str) -> error::Result<()>
+	fn init<T: IntoConfiguration>(command: &T) -> error::Result<()>
 	{
-		sp_panic_handler::set(Self::get_support_url(), Self::get_impl_version());
-
-		fdlimit::raise_fd_limit();
-		init_logger(logger_pattern);
-
-		Ok(())
+		command.init::<Self, G, E>()
 	}
 
 	fn client_id() -> String {
@@ -187,6 +179,30 @@ pub trait SubstrateCLI<G, E> {
 				).expect("app directories exist on all supported platforms; qed")
 			)
 		*/
+	}
+
+	fn make_configuration<T: IntoConfiguration>(command: T) -> error::Result<Configuration<G, E>> {
+		command.into_configuration::<Self, G, E>()
+	}
+
+	fn run_node<FNL, FNF, SL, SF>(config: Configuration<G, E>, new_light: FNL, new_full: FNF) -> error::Result<()>
+	where
+		FNL: FnOnce(Configuration<G, E>) -> sc_service::Result<SL, sc_service::error::Error>,
+		FNF: FnOnce(Configuration<G, E>) -> sc_service::Result<SF, sc_service::error::Error>,
+		SL: AbstractService + Unpin,
+		SF: AbstractService + Unpin,
+	{
+		RunCmd::run::<Self, G, E, FNL, FNF, SL, SF>(config, new_light, new_full)
+	}
+
+	fn run_command<FNL, FNF, SL, SF>(config: Configuration<G, E>, new_light: FNL, new_full: FNF) -> error::Result<()>
+	where
+		FNL: FnOnce(Configuration<G, E>) -> sc_service::Result<SL, sc_service::error::Error>,
+		FNF: FnOnce(Configuration<G, E>) -> sc_service::Result<SF, sc_service::error::Error>,
+		SL: AbstractService + Unpin,
+		SF: AbstractService + Unpin,
+	{
+		RunCmd::run::<Self, G, E, FNL, FNF, SL, SF>(config, new_light, new_full)
 	}
 }
 

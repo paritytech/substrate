@@ -27,11 +27,9 @@ use sc_service::config::{
 use sc_service::{ChainSpec, RuntimeGenesis, ChainSpecExtension};
 use sc_telemetry::TelemetryEndpoints;
 use crate::SubstrateCLI;
+use crate::error::Result;
 
-pub trait IntoConfiguration<G, E>: Sized + SubstrateCLI<G, E>
-where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
+pub trait IntoConfiguration: Sized
 {
 	fn get_roles(&self) -> Roles { Roles::FULL }
 	fn get_task_executor(&self) -> Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
@@ -42,7 +40,11 @@ where
 	fn get_state_cache_size(&self) -> usize { Default::default() }
 	fn get_state_cache_child_ratio(&self) -> Option<usize> { Default::default() }
 	fn get_pruning(&self) -> PruningMode { Default::default() }
-	fn get_chain_spec(&self) -> ChainSpec<G, E>;
+	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	;
 	fn get_name(&self) -> String { Default::default() }
 	fn get_wasm_method(&self) -> WasmExecutionMethod { WasmExecutionMethod::Interpreted }
 	fn get_execution_strategies(&self) -> ExecutionStrategies { Default::default() }
@@ -62,10 +64,14 @@ where
 	fn get_tracing_targets(&self) -> Option<String> { Default::default() }
 	fn get_tracing_receiver(&self) -> sc_tracing::TracingReceiver { Default::default() }
 
-	fn into_configuration(self) -> Configuration<G, E> {
-		Configuration {
-			impl_name: Self::get_impl_name(),
-			impl_version: Self::get_impl_version(),
+	fn into_configuration<C: SubstrateCLI<G, E>, G, E>(self) -> Result<Configuration<G, E>>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		Ok(Configuration {
+			impl_name: C::get_impl_name(),
+			impl_version: C::get_impl_version(),
 			roles: self.get_roles(),
 			task_executor: self.get_task_executor(),
 			transaction_pool: self.get_transaction_pool(),
@@ -75,7 +81,7 @@ where
 			state_cache_size: self.get_state_cache_size(),
 			state_cache_child_ratio: self.get_state_cache_child_ratio(),
 			pruning: self.get_pruning(),
-			chain_spec: self.get_chain_spec(),
+			chain_spec: self.get_chain_spec::<C, G, E>()?,
 			name: self.get_name(),
 			wasm_method: self.get_wasm_method(),
 			execution_strategies: self.get_execution_strategies(),
@@ -94,6 +100,19 @@ where
 			dev_key_seed: self.get_dev_key_seed(),
 			tracing_targets: self.get_tracing_targets(),
 			tracing_receiver: self.get_tracing_receiver(),
-		}
+		})
 	}
+
+	/// Initialize substrate. This must be done only once.
+	///
+	/// This method:
+	///
+	/// 1. Set the panic handler
+	/// 2. Raise the FD limit
+	/// 3. Initialize the logger
+	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	;
 }

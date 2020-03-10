@@ -23,6 +23,7 @@ use sc_service::{
 
 use crate::SubstrateCLI;
 use crate::error::Result;
+use crate::init_logger;
 
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
@@ -48,7 +49,7 @@ pub struct SharedParams {
 }
 
 impl SharedParams {
-	pub(crate) fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
+	pub fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -94,7 +95,18 @@ impl SharedParams {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()> {
-		C::init(self.log.as_ref().map(|v| v.as_ref()).unwrap_or(""))
+	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		let logger_pattern = self.log.as_ref().map(|v| v.as_ref()).unwrap_or("");
+
+		sp_panic_handler::set(C::get_support_url(), C::get_impl_version());
+
+		fdlimit::raise_fd_limit();
+		init_logger(logger_pattern);
+
+		Ok(())
 	}
 }

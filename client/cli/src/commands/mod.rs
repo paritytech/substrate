@@ -24,14 +24,19 @@ mod build_spec_cmd;
 
 use std::fmt::Debug;
 use structopt::StructOpt;
+use core::future::Future;
+use core::pin::Pin;
+use std::sync::Arc;
 
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
+	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
+	config::KeystoreConfig, config::DatabaseConfig, config::NetworkConfiguration,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
 use crate::SubstrateCLI;
+use crate::IntoConfiguration;
 use crate::params::SharedParams;
 
 pub use crate::commands::runcmd::RunCmd;
@@ -119,26 +124,6 @@ impl Subcommand {
 		}
 	}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<C: SubstrateCLI<G, E>, G, E>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		match self {
-			Subcommand::BuildSpec(cmd) => cmd.update_config::<C, G, E>(&mut config),
-			/*
-			Subcommand::ExportBlocks(cmd) => cmd.update_config(&mut config),
-			Subcommand::ImportBlocks(cmd) => cmd.update_config(&mut config),
-			Subcommand::CheckBlock(cmd) => cmd.update_config(&mut config),
-			Subcommand::PurgeChain(cmd) => cmd.update_config(&mut config),
-			Subcommand::Revert(cmd) => cmd.update_config(&mut config),
-			*/
-		}
-	}
-
 	/// Initialize substrate. This must be done only once.
 	///
 	/// This method:
@@ -146,7 +131,29 @@ impl Subcommand {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()> {
+	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
 		self.get_shared_params().init::<C, G, E>()
 	}
+}
+
+impl IntoConfiguration for Subcommand
+{
+	fn get_task_executor(&self) -> Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync> { todo!() }
+	fn get_network(&self) -> NetworkConfiguration { todo!() }
+	fn get_keystore(&self) -> KeystoreConfig { todo!() }
+	fn get_database(&self) -> DatabaseConfig { todo!() }
+	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<ChainSpec<G, E>>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{ self.get_shared_params().get_chain_spec::<C, G, E>() }
+	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{ self.get_shared_params().init::<C, G, E>() }
 }
