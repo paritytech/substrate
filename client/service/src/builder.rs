@@ -61,7 +61,9 @@ struct ServiceMetrics {
 	memory_usage_bytes: Gauge<U64>,
 	cpu_usage_percentage: Gauge<F64>,
 	network_per_sec_bytes: GaugeVec<U64>,
-	node_roles: Gauge<U64>,
+	database_cache: Gauge<U64>,
+	state_cache: Gauge<U64>,
+	state_db: GaugeVec<U64>,
 }
 
 impl ServiceMetrics {
@@ -84,10 +86,16 @@ impl ServiceMetrics {
 				Opts::new("network_per_sec_bytes", "Networking bytes per second"),
 				&["direction"]
 			)?, registry)?,
-			node_roles: register(Gauge::new(
-				"node_roles", "The roles the node is running as",
+			database_cache: register(Gauge::new(
+				"database_cache_bytes", "RocksDB cache size in bytes",
 			)?, registry)?,
-
+			state_cache: register(Gauge::new(
+				"state_cache_bytes", "State cache size in bytes",
+			)?, registry)?,
+			state_db: register(GaugeVec::new(
+				Opts::new("state_db_cache_bytes", "State DB cache in bytes"),
+				&["subtype"]
+			)?, registry)?,
 		})
 	}
 }
@@ -999,18 +1007,34 @@ ServiceBuilder<
 			);
 		}
 
-		// Prometheus metrics
+		// Prometheus metrics.
 		let metrics = if let Some(PrometheusConfig { port, registry }) = config.prometheus_config.clone() {
+			// Set static metrics.
+			register(Gauge::<U64>::with_opts(
+				Opts::new(
+					"build_info",
+					"A metric with a constant '1' value labeled by name, version, and commit."
+				)
+					.const_label("name", config.impl_name)
+					.const_label("version", config.impl_version)
+					.const_label("commit", config.impl_commit),
+			)?, &registry)?.set(1);
+			register(Gauge::<U64>::new(
+				"node_roles", "The roles the node is running as",
+			)?, &registry)?.set(u64::from(config.roles.bits()));
+
 			let metrics = ServiceMetrics::register(&registry)?;
-			metrics.node_roles.set(u64::from(config.roles.bits()));
+
 			spawn_handle.spawn(
 				"prometheus-endpoint",
 				prometheus_endpoint::init_prometheus(port, registry).map(drop)
 			);
+
 			Some(metrics)
 		} else {
 			None
 		};
+
 		// Periodically notify the telemetry.
 		let transaction_pool_ = transaction_pool.clone();
 		let client_ = client.clone();
@@ -1078,6 +1102,17 @@ ServiceBuilder<
 
 				if let Some(best_seen_block) = best_seen_block {
 					metrics.block_height_number.with_label_values(&["sync_target"]).set(best_seen_block);
+				}
+
+				if let Some(info) = info.usage.as_ref() {
+					metrics.database_cache.set(info.memory.database_cache.as_bytes() as u64);
+					metrics.state_cache.set(info.memory.state_cache.as_bytes() as u64);
+
+					metrics.state_db.with_label_values(&["non_canonical"]).set(info.memory.state_db.non_canonical.as_bytes() as u64);
+					if let Some(pruning) = info.memory.state_db.pruning {
+						metrics.state_db.with_label_values(&["pruning"]).set(pruning.as_bytes() as u64);
+					}
+					metrics.state_db.with_label_values(&["pinned"]).set(info.memory.state_db.pinned.as_bytes() as u64);
 				}
 			}
 
