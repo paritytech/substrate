@@ -98,6 +98,7 @@ mod rent;
 
 #[cfg(test)]
 mod tests;
+mod migration;
 
 use crate::exec::ExecutionContext;
 use crate::account_db::{AccountDb, DirectAccountDb};
@@ -665,6 +666,10 @@ decl_module! {
 
 		fn on_finalize() {
 			GasSpent::kill();
+		}
+
+		fn on_runtime_upgrade() {
+			migration::on_runtime_upgrade::<T>()
 		}
 	}
 }
