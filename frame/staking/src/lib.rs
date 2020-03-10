@@ -1543,7 +1543,7 @@ impl<T: Trait> Module<T> {
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 		let commission = Self::eras_validator_prefs(&era, &ledger.stash).commission;
-		let exposure = <ErasStakers<T>>::get(&era, &ledger.stash);
+		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
 
 		let exposure_part = Perbill::from_rational_approximation(
 			exposure.own,

@@ -3002,13 +3002,12 @@ fn create_validators_with_nominators_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		let v = 5;
 		let n = 10;
-		let current_era = CurrentEra::get().unwrap();
 
 		let validators = crate::benchmarking::create_validators_with_nominators::<Test>(v, n).unwrap();
 		assert_eq!(validators.len(), v as usize);
 
 		let current_era = CurrentEra::get().unwrap();
-		let controller = validators[2];
+		let controller = validators.last().unwrap().clone();
 		let ledger = Staking::ledger(&controller).unwrap();
 		let stash = &ledger.stash;
 
