@@ -103,21 +103,21 @@ impl Metrics {
 			publish: register(
 				Counter::new(
 					"authority_discovery_times_published_total",
-					"Number of time authority discovery published external addresses."
+					"Number of times the authority discovery has published external addresses."
 				)?,
 				registry,
 			)?,
 			amount_last_published: register(
 				Gauge::new(
 					"authority_discovery_amount_external_addresses_last_published",
-					"Amount of external addresses authority discovery published last."
+					"Number of external addresses published when authority discovery last published addresses ."
 				)?,
 				registry,
 			)?,
 			request: register(
 				Counter::new(
 					"authority_discovery_times_requested_total",
-					"Number of time authority discovery requested external addresses."
+					"Number of times authority discovery has requested external addresses."
 				)?,
 				registry,
 			)?,
