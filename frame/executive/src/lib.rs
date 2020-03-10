@@ -98,12 +98,44 @@ pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
-/// The last time the runtime upgrade happened.
-///
-/// Stores the the `spec_version` as [`LastRuntimeUpgrade`] of this runtime.
+/// The key for [`LastRuntimeUpgrade`] in the storage.
 const LAST_RUNTIME_UPGRADE: &'static [u8] = b":last_runtime_upgrade:";
-/// The type used to store the `spec_version` under [`LAST_RUNTIME_UPGRADE`].
-type LastRuntimeUpgrade = Compact<u32>;
+
+/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade
+/// happened.
+#[derive(sp_runtime::RuntimeDebug, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(PartialEq))]
+struct LastRuntimeUpgrade {
+	spec_version: Compact<u32>,
+	spec_name: sp_runtime::RuntimeString,
+}
+
+impl Default for LastRuntimeUpgrade {
+	fn default() -> Self {
+		Self {
+			spec_version: 0.into(),
+			spec_name: "".into(),
+		}
+	}
+}
+
+impl LastRuntimeUpgrade {
+	/// Returns if the runtime was upgraded in comparison of `self` and `current`.
+	///
+	/// Checks if either the `spec_version` increased or the `spec_name` changed.
+	fn was_upgraded(&self, current: &sp_version::RuntimeVersion) -> bool {
+		current.spec_version > self.spec_version.0 || current.spec_name != self.spec_name
+	}
+}
+
+impl From<sp_version::RuntimeVersion> for LastRuntimeUpgrade {
+	fn from(version: sp_version::RuntimeVersion) -> Self {
+		Self {
+			spec_version: version.spec_version.into(),
+			spec_name: version.spec_name,
+		}
+	}
+}
 
 pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
@@ -208,16 +240,16 @@ where
 	/// Returns if the runtime was upgraded since the last time this function was called.
 	///
 	/// If no value for [`LAST_RUNTIME_UPGRADE`] key exists in storage, `spec_version = 0` and
-	/// `impl_version = 0` is assumed.
+	/// `spec_name = ""` is assumed.
 	fn runtime_upgraded() -> bool {
 		let last = sp_io::storage::get(LAST_RUNTIME_UPGRADE)
 			.and_then(|v| LastRuntimeUpgrade::decode(&mut &v[..]).ok())
-			.unwrap_or_else(|| LastRuntimeUpgrade::from(0));
+			.unwrap_or_default();
 		let current = <System::Version as frame_support::traits::Get<_>>::get();
 
-		if current.spec_version > last.0 {
-			let spec_version = LastRuntimeUpgrade::from(current.spec_version);
-			spec_version.using_encoded(|e| sp_io::storage::set(LAST_RUNTIME_UPGRADE, e));
+		if last.was_upgraded(&current) {
+			let new = LastRuntimeUpgrade::from(current);
+			sp_io::storage::set(LAST_RUNTIME_UPGRADE, &new.encode());
 
 			true
 		} else {
@@ -809,11 +841,58 @@ mod tests {
 			});
 			assert!(Executive::runtime_upgraded());
 			assert_eq!(
-				Ok(LastRuntimeUpgrade::from(1)),
+				Ok(LastRuntimeUpgrade { spec_version: 1.into(), spec_name: "".into() }),
 				LastRuntimeUpgrade::decode(
 					&mut &sp_io::storage::get(LAST_RUNTIME_UPGRADE,
 				).unwrap_or_default()[..]),
 			);
+
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				spec_name: "test".into(),
+				..Default::default()
+			});
+			assert!(Executive::runtime_upgraded());
+			assert_eq!(
+				Ok(LastRuntimeUpgrade { spec_version: 1.into(), spec_name: "test".into() }),
+				LastRuntimeUpgrade::decode(
+					&mut &sp_io::storage::get(LAST_RUNTIME_UPGRADE,
+				).unwrap_or_default()[..]),
+			);
+
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				spec_name: "test".into(),
+				impl_version: 2,
+				..Default::default()
+			});
+			assert!(!Executive::runtime_upgraded());
 		})
+	}
+
+	#[test]
+	fn last_runtime_upgrade_was_upgraded_works() {
+		let test_data = vec![
+			(0, "", 1, "", true),
+			(1, "", 1, "", false),
+			(1, "", 1, "test", true),
+			(1, "", 0, "", false),
+			(1, "", 0, "test", true),
+		];
+
+		for (spec_version, spec_name, c_spec_version, c_spec_name, result) in test_data {
+			let current = sp_version::RuntimeVersion {
+				spec_version: c_spec_version,
+				spec_name: c_spec_name.into(),
+				..Default::default()
+			};
+
+			let last = LastRuntimeUpgrade {
+				spec_version: spec_version.into(),
+				spec_name: spec_name.into(),
+			};
+
+			assert_eq!(result, last.was_upgraded(&current));
+		}
 	}
 }
