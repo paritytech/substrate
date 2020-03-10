@@ -105,7 +105,7 @@ decl_module! {
 								target: "pallet-offences",
 								"re-submitting a deferred slash returned Err at {}. This should not happen with pallet-staking",
 								now,
-							)
+							);
 						}
 					});
 			}
