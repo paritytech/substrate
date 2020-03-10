@@ -203,6 +203,23 @@ impl balances::Trait for Runtime {
 }
 
 parameter_types! {
+	/// How much an index costs.
+	pub const IndexDeposit: u128 = 100;
+}
+
+impl indices::Trait for Runtime {
+	/// The type for recording indexing into the account enumeration. If this ever overflows, there
+	/// will be problems!
+	type AccountIndex = AccountIndex;
+	/// The ubiquitous event type.
+	type Event = Event;
+	/// The currency type.
+	type Currency = Balances;
+	/// How much an index costs.
+	type Deposit = IndexDeposit;
+}
+
+parameter_types! {
 	pub const TransactionBaseFee: Balance = 0;
 	pub const TransactionByteFee: Balance = 1;
 }
