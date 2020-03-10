@@ -476,7 +476,7 @@ where
 
 	// SCOTT
 	fn bench_usage_info(&self) -> UsageInfo {
-		unimplemented!("HERE")
+		self.backend.usage_info()
 	}
 
 	fn storage_root(&mut self) -> Vec<u8> {
