@@ -50,13 +50,15 @@ pub struct UsageInfo {
 	/// Modified value read statistics.
 	pub modified_reads: UsageUnit,
 	/// Memory used.
-	// Encoded as u32 because wasm's usize is 32.
+	// Encoded as u32 because wasm's usize is u32.
 	pub memory: u32,
 
 	/// Moment at which current statistics has been started being collected.
 	#[codec(skip)]
 	pub started: InstantWithDefault,
 	/// Timespan of the statistics.
+	// TODO: this can be encoded/decoded once https://github.com/paritytech/parity-scale-codec releases 1.3
+	// with this PR https://github.com/paritytech/parity-scale-codec/pull/188 .
 	#[codec(skip)]
 	pub span: Duration,
 }

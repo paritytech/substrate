@@ -20,6 +20,7 @@ use codec::{Encode, Decode};
 use sp_std::{vec::Vec, prelude::Box};
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeString;
+use sp_stats::UsageInfo;
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(codec::Encode, codec::Decode, Clone, Copy, PartialEq, Debug)]
@@ -68,7 +69,7 @@ pub trait Benchmarking {
 	}
 
 	/// SCOTT
-	fn db_usage_info(&self) -> sp_stats::UsageInfo {
+	fn db_usage_info(&self) -> UsageInfo {
 		// self.bench_usage_info()
 		sp_stats::UsageInfo::empty()
 	}
