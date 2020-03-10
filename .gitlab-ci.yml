@@ -29,17 +29,19 @@ stages:
   - flaming-fir
 
 variables:
-  GIT_STRATEGY:                    fetch
-  GIT_DEPTH:                       100
-  CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
-  SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
-  CARGO_INCREMENTAL:               0
-  CI_SERVER_NAME:                  "GitLab CI"
-  DOCKER_OS:                       "debian:stretch"
-  ARCH:                            "x86_64"
+  GIT_STRATEGY:                               fetch
+  GIT_DEPTH:                                  100
+  CARGO_HOME:                                 "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
+  SCCACHE_DIR:                                "/ci-cache/${CI_PROJECT_NAME}/sccache"
+  CARGO_INCREMENTAL:                          0
+  CI_SERVER_NAME:                             "GitLab CI"
+  DOCKER_OS:                                  "debian:stretch"
+  ARCH:                                       "x86_64"
   # FIXME set to release
-  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.8"
-  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
+  CARGO_UNLEASH_INSTALL_PARAMS:               "--version 1.0.0-alpha.8"
+  CARGO_UNLEASH_PKG_DEF:                      "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
+  CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "wasm-bindgen-test-runner"
+  WASM_BINDGEN_TEST_TIMEOUT: 60
 
 
 .collect-artifacts:                &collect-artifacts
@@ -301,7 +303,7 @@ test-browser-node:
     - job:                         check-web-wasm
       artifacts:                   false
   script:
-    - wasm-pack test --firefox --headless bin/node/browser-testing
+    - cargo test --target wasm32-unknown-unknown -p bin/node/browser-testing
 
 build-linux-substrate:             &build-binary
   stage:                           build

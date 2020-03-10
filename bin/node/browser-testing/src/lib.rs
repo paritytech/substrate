@@ -19,6 +19,10 @@
 //! ```text
 //! wasm-pack test --firefox --release --headless bin/node/browser-testing
 //! ```
+//! or (without `wasm-pack`)
+//! ```text
+//! CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner WASM_BINDGEN_TEST_TIMEOUT=60 cargo test --target wasm32-unknown-unknown
+//! ```
 //! For debug infomation, such as the informant, run without the `--headless`
 //! flag and open a browser to the url that `wasm-pack test` outputs.
 //! For more infomation see https://rustwasm.github.io/docs/wasm-pack/.
