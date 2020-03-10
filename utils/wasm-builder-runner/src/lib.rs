@@ -428,6 +428,10 @@ fn run_project(project_folder: &Path) {
 		cmd.arg("--release");
 	}
 
+	// Make sure we always run the `wasm-builder` project for the `HOST` architecture.
+	let host_triple = env::var("HOST").expect("`HOST` is always set when executing `build.rs`.");
+	cmd.arg(&format!("--target={}", host_triple));
+
 	// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock (cargo locks a target dir exclusive).
 	// The runner project is created in `CARGO_TARGET_DIR` and executing it will create a sub target
 	// directory inside of `CARGO_TARGET_DIR`.

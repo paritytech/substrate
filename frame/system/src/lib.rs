@@ -1905,6 +1905,7 @@ mod tests {
 			fn call_in_wasm(
 				&self,
 				_: &[u8],
+				_: Option<Vec<u8>>,
 				_: &str,
 				_: &[u8],
 				_: &mut dyn sp_externalities::Externalities,
