@@ -8,7 +8,7 @@ jobs:
 #build
   build-substrate:
     name:                      Build linux Substrate
-    runs-on:                   self-hosted
+    runs-on:                   ubuntu-latest
     container:                 parity/rust-builder:latest
     steps:
       - name:                  Checkout sources
@@ -37,7 +37,7 @@ jobs:
 
   build-subkey-linux:
     name:                      Build linux Subkey
-    runs-on:                   self-hosted
+    runs-on:                   ubuntu-latest
     container:                 parity/rust-builder:latest
     steps:
       - name:                  Checkout sources
@@ -78,7 +78,8 @@ jobs:
       - name:                  Run cargo build Subkey
         shell:                 bash
         run: |
-          #rustup target add x86_64-apple-darwin
+          rustup target add --toolchain x86_64-apple-darwin wasm32-unknown-unknown
+          rustup target add x86_64-apple-darwin
           cargo build --target x86_64-apple-darwin --release --verbose
       - name: Prepare artifacts
         shell: bash
@@ -96,7 +97,7 @@ jobs:
 
   build-rust-doc-release:
     name:                      Build Rust doc release
-    runs-on:                   self-hosted
+    runs-on:                   ubuntu-latest
     container:                 parity/rust-builder:latest
     steps:
       - name:                  Checkout sources
