@@ -536,7 +536,11 @@ fn start_rpc_servers<H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
 	Ok(Box::new((
 		maybe_start_server(
 			config.rpc_http,
-			|address| sc_rpc_server::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
+			|address| sc_rpc_server::start_http(
+				address,
+				config.rpc_cors.as_ref(),
+				gen_handler(),
+			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
 			config.rpc_ws,
@@ -546,7 +550,7 @@ fn start_rpc_servers<H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
 				config.rpc_cors.as_ref(),
 				gen_handler(),
 			),
-		)?.map(|s| waiting::WsServer(Some(s))).map(Mutex::new),
+		)?.map(|s| waiting::WsServer(Some(s))),
 	)))
 }
 
