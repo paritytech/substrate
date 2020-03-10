@@ -1108,6 +1108,9 @@ decl_error! {
 		PhragmenBogusNominator,
 		/// One of the submitted nominators has an edge to which they have not voted on chain.
 		PhragmenBogusNomination,
+		/// One of the submitted nominators has an edge which is submitted before the last non-zero
+		/// slash of the target.
+		PhragmenSlashedNomination,
 		/// A self vote must only be originated from a validator to ONLY themselves.
 		PhragmenBogusSelfVote,
 		/// The submitted result has unknown edges that are not among the presented winners.
@@ -2145,19 +2148,21 @@ impl<T: Trait> Module<T> {
 				);
 				// NOTE: we don't really have to check here if the sum of all edges are the
 				// nominator correct. Un-compacting assures this by definition.
-				ensure!(
+
+				for (t, _) in distribution {
 					// each target in the provided distribution must be actually nominated by the
 					// nominator after the last non-zero slash.
-					distribution.into_iter().all(|(t, _)| {
-						nomination.targets.iter().find(|&tt| tt == t).is_some()
-						&&
-						<Self as Store>::SlashingSpans::get(&t).map_or(
-							true,
-							|spans| nomination.submitted_in >= spans.last_nonzero_slash(),
-						)
-					}),
-					Error::<T>::PhragmenBogusNomination,
-				);
+					if nomination.targets.iter().find(|&tt| tt == t).is_none() {
+						return Err(Error::<T>::PhragmenBogusNomination);
+					}
+
+					if <Self as Store>::SlashingSpans::get(&t).map_or(
+						false,
+						|spans| nomination.submitted_in < spans.last_nonzero_slash(),
+					) {
+						return Err(Error::<T>::PhragmenSlashedNomination);
+					}
+				}
 			} else {
 				// a self vote
 				ensure!(distribution.len() == 1, Error::<T>::PhragmenBogusSelfVote);
@@ -2716,13 +2721,18 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 		offenders: &[OffenceDetails<T::AccountId, pallet_session::historical::IdentificationTuple<T>>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
-	) {
+	) -> Result<(), ()> {
+		if !Self::can_report() {
+			return Err(())
+		}
+
 		let reward_proportion = SlashRewardFraction::get();
 
 		let active_era = {
 			let active_era = Self::active_era();
 			if active_era.is_none() {
-				return
+				// this offence need not be re-submitted.
+				return Ok(())
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
@@ -2743,7 +2753,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 
 			// reverse because it's more likely to find reports from recent eras.
 			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
-				None => return, // before bonding period. defensive - should be filtered out.
+				None => return Ok(()), // before bonding period. defensive - should be filtered out.
 				Some(&(ref slash_era, _)) => *slash_era,
 			}
 		};
@@ -2788,6 +2798,12 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 				}
 			}
 		}
+
+		Ok(())
+	}
+
+	fn can_report() -> bool {
+		Self::era_election_status().is_closed()
 	}
 }
 

@@ -26,10 +26,11 @@ mod tests;
 
 use sp_std::vec::Vec;
 use frame_support::{
-	decl_module, decl_event, decl_storage, Parameter,
+	decl_module, decl_event, decl_storage, Parameter, debug,
 };
-use sp_runtime::traits::Hash;
+use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
+	SessionIndex,
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails, OffenceError},
 };
 use codec::{Encode, Decode};
@@ -54,7 +55,16 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
 		/// The primary structure that holds all offence records keyed by report identifiers.
-		Reports get(fn reports): map hasher(blake2_256) ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
+		Reports get(fn reports): map hasher(blake2_256) ReportIdOf<T>
+			=> Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
+
+		/// Deferred reports that have been rejected by the offence handler and need to be submitted
+		/// at a later time.
+		DeferredOffences get(deferred_reports): Vec<(
+			Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>,
+			Vec<Perbill>,
+			SessionIndex,
+		)>;
 
 		/// A vector of reports of the same kind that happened at the same time slot.
 		ConcurrentReportsIndex:
@@ -74,17 +84,35 @@ decl_storage! {
 decl_event!(
 	pub enum Event {
 		/// There is an offence reported of the given `kind` happened at the `session_index` and
-		/// (kind-specific) time slot. This event is not deposited for duplicate slashes.
-		Offence(Kind, OpaqueTimeSlot),
+		/// (kind-specific) time slot. This event is not deposited for duplicate slashes. last
+		/// element indicates of the offence was applied (true) or queued (false).
+		Offence(Kind, OpaqueTimeSlot, bool),
 	}
 );
 
 decl_module! {
-	/// Offences module, currently just responsible for taking offence reports.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
+
+		fn on_initialize(now: T::BlockNumber) {
+			// only decode storage if we can actually submit anything again.
+			if T::OnOffenceHandler::can_report() {
+				<DeferredOffences<T>>::take()
+					.iter()
+					.for_each(|(o, p, s)| {
+						if !Self::report_or_store_offence(o, p, *s) {
+							debug::native::error!(
+								target: "pallet-offences",
+								"re-submitting a deferred slash returned Err at {}. This should not happen with pallet-staking",
+								now,
+							)
+						}
+					});
+			}
+		}
 	}
 }
+
 impl<T: Trait, O: Offence<T::IdentificationTuple>>
 	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Module<T>
 where
@@ -107,9 +135,6 @@ where
 			None => return Err(OffenceError::DuplicateReport),
 		};
 
-		// Deposit the event.
-		Self::deposit_event(Event::Offence(O::ID, time_slot.encode()));
-
 		let offenders_count = concurrent_offenders.len() as u32;
 
 		// The amount new offenders are slashed
@@ -118,17 +143,42 @@ where
 		let slash_perbill: Vec<_> = (0..concurrent_offenders.len())
 			.map(|_| new_fraction.clone()).collect();
 
-		T::OnOffenceHandler::on_offence(
+		let applied = Self::report_or_store_offence(
 			&concurrent_offenders,
 			&slash_perbill,
-			offence.session_index(),
+			offence.session_index()
 		);
+
+		// Deposit the event.
+		Self::deposit_event(Event::Offence(O::ID, time_slot.encode(), applied));
 
 		Ok(())
 	}
 }
 
 impl<T: Trait> Module<T> {
+	/// Tries (without checking) to report an offence. Stores them in [`DeferredOffences`] in case
+	/// it fails. Returns false in case it has to store the offence.
+	fn report_or_store_offence(
+		concurrent_offenders: &[OffenceDetails<T::AccountId, T::IdentificationTuple>],
+		slash_perbill: &[Perbill],
+		session_index: SessionIndex,
+	) -> bool {
+		match T::OnOffenceHandler::on_offence(
+			&concurrent_offenders,
+			&slash_perbill,
+			session_index,
+		) {
+			Ok(_) => true,
+			Err(_) => {
+				<DeferredOffences<T>>::mutate(|d|
+					d.push((concurrent_offenders.to_vec(), slash_perbill.to_vec(), session_index))
+				);
+				false
+			}
+		}
+	}
+
 	/// Compute the ID for the given report properties.
 	///
 	/// The report id depends on the offence kind, time slot and the id of offender.

@@ -721,7 +721,7 @@ pub fn on_offence_in_era(
 	let bonded_eras = crate::BondedEras::get();
 	for &(bonded_era, start_session) in bonded_eras.iter() {
 		if bonded_era == era {
-			Staking::on_offence(offenders, slash_fraction, start_session);
+			let _ = Staking::on_offence(offenders, slash_fraction, start_session).unwrap();
 			return;
 		} else if bonded_era > era {
 			break;
@@ -729,7 +729,12 @@ pub fn on_offence_in_era(
 	}
 
 	if Staking::active_era().unwrap().index == era {
-		Staking::on_offence(offenders, slash_fraction, Staking::eras_start_session_index(era).unwrap());
+		let _ =
+			Staking::on_offence(
+				offenders,
+				slash_fraction,
+				Staking::eras_start_session_index(era).unwrap()
+			).unwrap();
 	} else {
 		panic!("cannot slash in era {}", era);
 	}
@@ -884,10 +889,22 @@ pub fn prepare_submission_with(
 	let snapshot_validators = Staking::snapshot_validators().expect("snapshot not created.");
 	let snapshot_nominators = Staking::snapshot_nominators().expect("snapshot not created.");
 	let nominator_index = |a: &AccountId| -> Option<NominatorIndex> {
-		snapshot_nominators.iter().position(|x| x == a).map(|i| i as NominatorIndex)
+		snapshot_nominators
+			.iter()
+			.position(|x| x == a)
+			.map_or_else(
+				|| { println!("unable to find nominator index for {:?}", a); None },
+				|i| Some(i as NominatorIndex),
+			)
 	};
 	let validator_index = |a: &AccountId| -> Option<ValidatorIndex> {
-		snapshot_validators.iter().position(|x| x == a).map(|i| i as ValidatorIndex)
+		snapshot_validators
+			.iter()
+			.position(|x| x == a)
+			.map_or_else(
+				|| { println!("unable to find validator index for {:?}", a); None },
+				|i| Some(i as ValidatorIndex),
+			)
 	};
 
 	let assignments_reduced = sp_phragmen::assignment_staked_to_ratio(staked);
@@ -908,7 +925,8 @@ pub fn prepare_submission_with(
 
 	let compact =
 		CompactAssignments::from_assignment(assignments_reduced, nominator_index, validator_index)
-			.unwrap();
+			.map_err(|e| { println!("error in compact: {:?}", e); e })
+			.expect("Failed to create compact");
 
 
 	// winner ids to index
@@ -952,7 +970,19 @@ pub fn make_all_reward_payment(era: EraIndex) {
 #[macro_export]
 macro_rules! assert_session_era {
 	($session:expr, $era:expr) => {
-		assert_eq!(Session::current_index(), $session);
-		assert_eq!(Staking::active_era().unwrap().index, $era);
+		assert_eq!(
+			Session::current_index(),
+			$session,
+			"wrong session {} != {}",
+			Session::current_index(),
+			$session,
+		);
+		assert_eq!(
+			Staking::active_era().unwrap().index,
+			$era,
+			"wrong active era {} != {}",
+			Staking::active_era().unwrap().index,
+			$era,
+		);
 	};
 }
