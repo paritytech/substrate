@@ -50,6 +50,7 @@ fn call_in_wasm<E: Externalities>(
 	);
 	executor.call_in_wasm(
 		&WASM_BINARY[..],
+		None,
 		function,
 		call_data,
 		ext,
@@ -515,6 +516,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	);
 	executor.call_in_wasm(
 		&WASM_BINARY[..],
+		None,
 		"test_exhaust_heap",
 		&[0],
 		&mut ext.ext(),
