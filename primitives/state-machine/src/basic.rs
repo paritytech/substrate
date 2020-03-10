@@ -32,6 +32,7 @@ use sp_core::{
 };
 use log::warn;
 use codec::Encode;
+use sp_stats::UsageInfo;
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]

@@ -1,6 +1,5 @@
 use core::time::{Duration};
 use codec::{Encode, Decode};
-use sp_runtime_interface::pass_by::{PassBy, Codec};
 use crate::StateMachineStats;
 
 /// Measured count of operations and total bytes.
@@ -62,10 +61,6 @@ pub struct UsageInfo {
 	// with this PR https://github.com/paritytech/parity-scale-codec/pull/188 .
 	#[codec(skip)]
 	pub span: Duration,
-}
-
-impl PassBy for UsageInfo {
-    type PassBy = Codec<Self>;
 }
 
 impl UsageInfo {
