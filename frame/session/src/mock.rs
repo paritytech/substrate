@@ -92,6 +92,7 @@ impl SessionHandler<u64> for TestSessionHandler {
 pub struct TestSessionManager;
 impl SessionManager<u64> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
+	fn start_session(_: SessionIndex) {}
 	fn new_session(_: SessionIndex) -> Option<Vec<u64>> {
 		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
 			VALIDATORS.with(|v| {
@@ -112,6 +113,7 @@ impl SessionManager<u64> for TestSessionManager {
 #[cfg(feature = "historical")]
 impl crate::historical::SessionManager<u64, u64> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
+	fn start_session(_: SessionIndex) {}
 	fn new_session(new_index: SessionIndex)
 		-> Option<Vec<(u64, u64)>>
 	{

@@ -19,15 +19,16 @@ smallvec = "1.2"
 sp-trie = { version = "2.0.0-alpha.2", path = "../trie" }
 sp-core = { version = "2.0.0-alpha.2", path = "../core" }
 sp-panic-handler = { version = "2.0.0-alpha.2", path = "../panic-handler" }
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+codec = { package = "parity-scale-codec", version = "1.2.0" }
 num-traits = "0.2.8"
 rand = "0.7.2"
 sp-externalities = { version = "0.8.0-alpha.2", path = "../externalities" }
 
 [dev-dependencies]
-hex-literal = "0.2.1"
 criterion = "0.2"
+hex-literal = "0.2.1"
 rand = { version = "0.7.1", features = ["small_rng"] }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../runtime" }
 
 [[bench]]
 name = "bench"

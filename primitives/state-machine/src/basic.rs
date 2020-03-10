@@ -119,14 +119,6 @@ impl Externalities for BasicExternalities {
 		self.storage(key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
-	fn original_storage(&self, key: &[u8]) -> Option<StorageValue> {
-		self.inner.top.get(key).cloned()
-	}
-
-	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.original_storage(key).map(|v| Blake2Hasher::hash(&v).encode())
-	}
-
 	fn child_storage(
 		&mut self,
 		storage_key: ChildStorageKey,
@@ -143,24 +135,6 @@ impl Externalities for BasicExternalities {
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		self.child_storage(storage_key, child_info, key).map(|v| Blake2Hasher::hash(&v).encode())
-	}
-
-	fn original_child_storage_hash(
-		&mut self,
-		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		self.child_storage_hash(storage_key, child_info, key)
-	}
-
-	fn original_child_storage(
-		&self,
-		storage_key: ChildStorageKey,
-		_child_info: ChildInfo,
-		key: &[u8],
-	) -> Option<StorageValue> {
-		self.inner.children.get(storage_key.as_ref()).and_then(|child| child.data.get(key)).cloned()
 	}
 
 	fn next_storage_key(&mut self, key: &[u8]) -> Option<StorageKey> {
@@ -362,7 +336,7 @@ mod tests {
 			top: Default::default(),
 			children: map![
 				child_storage.clone() => StorageChild {
-					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
+					data: map![ b"doe".to_vec() => b"reindeer".to_vec() ],
 					child_info: CHILD_INFO_1.to_owned(),
 				}
 			]
