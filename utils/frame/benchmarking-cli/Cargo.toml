@@ -10,7 +10,7 @@ description = "CLI for benchmarking FRAME"
 
 [dependencies]
 frame-benchmarking = { version = "2.0.0-alpha.2", path = "../../../frame/benchmarking" }
-sc-service = { version = "0.8.0-alpha.2", path = "../../../client/service" }
+sc-service = { version = "0.8.0-alpha.2", default-features = false, path = "../../../client/service" }
 sc-cli = { version = "0.8.0-alpha.2", path = "../../../client/cli" }
 sc-client = { version = "0.8.0-alpha.2", path = "../../../client" }
 sc-client-db = { version = "0.8.0-alpha.2", path = "../../../client/db" }
