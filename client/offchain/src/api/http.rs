@@ -304,7 +304,7 @@ impl HttpApi {
 				let mut output = Vec::with_capacity(ids.len());
 				let mut must_wait_more = false;
 				for id in ids {
-					output.push(match self.requests.get_mut(id) {
+					output.push(match self.requests.get(id) {
 						None => HttpRequestStatus::Invalid,
 						Some(HttpApiRequest::NotDispatched(_, _)) =>
 							unreachable!("we replaced all the NotDispatched with Dispatched earlier; qed"),
@@ -322,10 +322,8 @@ impl HttpApi {
 				// Are we ready to call `return`?
 				let is_done = if let future::MaybeDone::Done(_) = deadline {
 					true
-				} else if !must_wait_more {
-					true
 				} else {
-					false
+					!must_wait_more
 				};
 
 				if is_done {
@@ -700,6 +698,12 @@ mod tests {
 			fn tokio_run<T>(future: impl std::future::Future<Output = T>) {
 				let _ = tokio::runtime::Runtime::new().unwrap().block_on(future);
 			}
+
+			// We spawn quite a bit of HTTP servers here due to how async API
+			// works for offchain workers, so be sure to raise the FD limit
+			// (particularly useful for macOS where the default soft limit may
+			// not be enough).
+			fdlimit::raise_fd_limit();
 
 			let (api, worker) = http();
 			std::thread::spawn(move || tokio_run(worker));

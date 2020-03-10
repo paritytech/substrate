@@ -1470,6 +1470,7 @@ dependencies = [
  "sc-executor",
  "sc-service",
  "sp-runtime",
+ "sp-state-machine",
  "structopt",
 ]
 
@@ -2642,7 +2643,7 @@ dependencies = [
  "libp2p-wasm-ext",
  "libp2p-websocket",
  "libp2p-yamux",
- "parity-multiaddr 0.7.2",
+ "parity-multiaddr 0.7.3",
  "parity-multihash 0.2.3",
  "parking_lot 0.10.0",
  "pin-project",
@@ -2666,7 +2667,7 @@ dependencies = [
  "libsecp256k1",
  "log 0.4.8",
  "multistream-select",
- "parity-multiaddr 0.7.2",
+ "parity-multiaddr 0.7.3",
  "parity-multihash 0.2.3",
  "parking_lot 0.10.0",
  "pin-project",
@@ -3426,6 +3427,7 @@ dependencies = [
  "sc-executor",
  "sp-application-crypto",
  "sp-core",
+ "sp-externalities",
  "sp-io",
  "sp-runtime",
  "sp-state-machine",
@@ -4585,9 +4587,9 @@ dependencies = [
 
 [[package]]
 name = "parity-multiaddr"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26df883298bc3f4e92528b4c5cc9f806b791955b136da3e5e939ed9de0fd958b"
+checksum = "f77055f9e81921a8cc7bebeb6cded3d128931d51f1e3dd6251f0770a6d431477"
 dependencies = [
  "arrayref",
  "bs58 0.3.0",
@@ -5651,6 +5653,8 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-state-machine",
+ "sp-trie",
+ "substrate-test-runtime-client",
 ]
 
 [[package]]
@@ -6245,7 +6249,6 @@ dependencies = [
  "libp2p",
  "log 0.4.8",
  "lru",
- "parking_lot 0.10.0",
  "sc-network",
  "sp-runtime",
  "wasm-timer",
@@ -6282,6 +6285,7 @@ version = "2.0.0-alpha.3"
 dependencies = [
  "bytes 0.5.4",
  "env_logger 0.7.1",
+ "fdlimit",
  "fnv",
  "futures 0.3.4",
  "futures-timer 3.0.2",
@@ -6964,6 +6968,7 @@ dependencies = [
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
+ "sp-core",
  "sp-runtime",
  "sp-state-machine",
  "sp-version",
@@ -7651,7 +7656,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "js-sys",
  "kvdb-web",
- "libp2p",
+ "libp2p-wasm-ext",
  "log 0.4.8",
  "rand 0.6.5",
  "rand 0.7.3",
