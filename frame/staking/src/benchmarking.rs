@@ -121,7 +121,7 @@ pub fn create_validators_with_nominators<T: Trait>(v: u32, n: u32) -> Result<Vec
 }
 
 // This function generates one validator being nominated by n nominators
-pub fn create_validator_with_nominators<T: Trait>(n: u32) -> Result<T::AccountId, &'static str> {
+pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> Result<T::AccountId, &'static str> {
     let mut validators: Vec<T::AccountId> = Vec::new();
     let mut points_total = 0;
     let mut points_individual = Vec::new();
@@ -139,10 +139,12 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32) -> Result<T::AccountId
         points_total += 10;
         points_individual.push((v_stash, 10));
 
-        // Give each validator n nominators
-        for j in 0 .. n {
-            let (_n_stash, n_controller) = create_stash_controller2::<T>(n * i + j)?;
-            Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
+        // Give each validator n nominators, but keep total users in the system the same.
+        for j in 0 .. upper_bound {
+            let (_n_stash, n_controller) = create_stash_controller2::<T>(upper_bound * i + j)?;
+            if j < n {
+                Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
+            }
         }
     }
     
@@ -318,8 +320,8 @@ benchmarks! {
     // }: _()
 
     payout_validator {
-        let n in 1 .. 1000;
-        let validator = create_validator_with_nominators::<T>(n)?;
+        let n in 1 .. MAX_NOMINATIONS;
+        let validator = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS)?;
         let current_era = CurrentEra::get().unwrap();
      }: _(RawOrigin::Signed(validator), current_era)
 
@@ -329,4 +331,28 @@ benchmarks! {
 		let current_era = CurrentEra::get().unwrap();
 		let find_nominator = validators.into_iter().map(|x| (x, 0)).collect();
      }: _(RawOrigin::Signed(nominator), current_era, find_nominator)
+
+     rebond {
+        let l in 1 .. 1000;
+        let (_, controller) = create_stash_controller::<T>(u)?;
+        let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
+        let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
+            value: 1.into(),
+            era: EraIndex::zero(),
+        };
+        for i in 0 .. l {
+            staking_ledger.unlocking.push(unlock_chunk.clone())
+        }
+        Ledger::<T>::insert(controller.clone(), staking_ledger);
+     }: _(RawOrigin::Signed(controller), (l + 100).into())
+
+    //  set_history_depth {
+
+    //  }
+
+    reap_stash {
+        let u in 1 .. 1000;
+        let (stash, controller) = create_stash_controller::<T>(u)?;
+        T::Currency::make_free_balance_be(&stash, 0.into());
+    }: _(RawOrigin::Signed(controller), stash)
 }
