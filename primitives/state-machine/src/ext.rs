@@ -474,7 +474,7 @@ where
 	}
 
 	// SCOTT
-	fn bench_usage_info(&self) {
+	fn bench_usage_info(&self) -> UsageInfo {
 		unimplemented!("HERE")
 	}
 

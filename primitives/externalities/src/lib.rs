@@ -25,6 +25,7 @@
 use std::any::{Any, TypeId};
 
 use sp_storage::{ChildStorageKey, ChildInfo};
+use sp_stats::UsageInfo;
 
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
 pub use extensions::{Extension, Extensions, ExtensionStore};
@@ -197,7 +198,7 @@ pub trait Externalities: ExtensionStore {
 
 
 	/// SCOTT
-	fn bench_usage_info(&self);
+	fn bench_usage_info(&self) -> UsageInfo;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	/// `parent` is expects a SCALE encoded hash.
