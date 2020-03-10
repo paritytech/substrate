@@ -180,13 +180,6 @@ pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId where
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
-/// Helper function to generate an account ID from seed
-pub fn get_account_id_from_num<TPublic: Public>(num: u32) -> AccountId where
-	AccountPublic: From<<TPublic::Pair as Pair>::Public>
-{
-	AccountPublic::from(get_from_seed::<TPublic>(&num.to_string())).into_account()
-}
-
 /// Helper function to generate stash, controller and session key from seed
 pub fn get_authority_keys_from_seed(seed: &str) -> (
 	AccountId,
@@ -213,7 +206,7 @@ pub fn testnet_genesis(
 	endowed_accounts: Option<Vec<AccountId>>,
 	enable_println: bool,
 ) -> GenesisConfig {
-	let mut endowed_accounts: Vec<AccountId> = endowed_accounts.unwrap_or_else(|| {
+	let endowed_accounts: Vec<AccountId> = endowed_accounts.unwrap_or_else(|| {
 		vec![
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
 			get_account_id_from_seed::<sr25519::Public>("Bob"),
@@ -229,9 +222,6 @@ pub fn testnet_genesis(
 			get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
 		]
 	});
-	for i in 0 .. 50_000 {
-		endowed_accounts.push(get_account_id_from_num::<sr25519::Public>(i));
-	}
 	let num_endowed_accounts = endowed_accounts.len();
 
 	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
