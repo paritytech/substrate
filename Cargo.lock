@@ -1480,6 +1480,7 @@ dependencies = [
  "sc-executor",
  "sc-service",
  "sp-runtime",
+ "sp-state-machine",
  "structopt",
 ]
 
@@ -3437,6 +3438,7 @@ dependencies = [
  "sc-executor",
  "sp-application-crypto",
  "sp-core",
+ "sp-externalities",
  "sp-io",
  "sp-runtime",
  "sp-state-machine",
@@ -5642,6 +5644,8 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-state-machine",
+ "sp-trie",
+ "substrate-test-runtime-client",
 ]
 
 [[package]]
@@ -6272,6 +6276,7 @@ version = "2.0.0-alpha.3"
 dependencies = [
  "bytes 0.5.4",
  "env_logger 0.7.1",
+ "fdlimit",
  "fnv",
  "futures 0.3.4",
  "futures-timer 3.0.2",
@@ -6976,6 +6981,7 @@ dependencies = [
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
+ "sp-core",
  "sp-runtime",
  "sp-state-machine",
  "sp-version",
@@ -7663,7 +7669,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "js-sys",
  "kvdb-web",
- "libp2p",
+ "libp2p-wasm-ext",
  "log 0.4.8",
  "rand 0.6.5",
  "rand 0.7.3",
@@ -8488,7 +8494,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.3.23",
+ "rand 0.7.3",
 ]
 
 [[package]]

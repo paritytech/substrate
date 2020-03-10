@@ -16,5 +16,6 @@ sc-client = { version = "0.8.0-alpha.2", path = "../../../client" }
 sc-client-db = { version = "0.8.0-alpha.2", path = "../../../client/db" }
 sc-executor = { version = "0.8.0-alpha.2", path = "../../../client/executor" }
 sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.8.0-alpha.2", path = "../../../primitives/state-machine" }
 structopt = "0.3.8"
 codec = { version = "1.2.0", package = "parity-scale-codec" }

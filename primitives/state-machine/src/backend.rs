@@ -18,9 +18,9 @@
 
 use log::warn;
 use hash_db::Hasher;
-use codec::Encode;
+use codec::{Decode, Encode};
 
-use sp_core::storage::{ChildInfo, OwnedChildInfo};
+use sp_core::{traits::RuntimeCode, storage::{ChildInfo, OwnedChildInfo, well_known_keys}};
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 
 use crate::{
@@ -358,4 +358,43 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Op
 	}
 
 	Some(root)
+}
+
+/// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].
+pub struct BackendRuntimeCode<'a, B, H> {
+	backend: &'a B,
+	_marker: std::marker::PhantomData<H>,
+}
+
+impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode for
+	BackendRuntimeCode<'a, B, H>
+{
+	fn fetch_runtime_code<'b>(&'b self) -> Option<std::borrow::Cow<'b, [u8]>> {
+		self.backend.storage(well_known_keys::CODE).ok().flatten().map(Into::into)
+	}
+}
+
+impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H> where H::Out: Encode {
+	/// Create a new instance.
+	pub fn new(backend: &'a B) -> Self {
+		Self {
+			backend,
+			_marker: std::marker::PhantomData,
+		}
+	}
+
+	/// Return the [`RuntimeCode`] build from the wrapped `backend`.
+	pub fn runtime_code(&self) -> Result<RuntimeCode, &'static str> {
+		let hash = self.backend.storage_hash(well_known_keys::CODE)
+			.ok()
+			.flatten()
+			.ok_or("`:code` hash not found")?
+			.encode();
+		let heap_pages = self.backend.storage(well_known_keys::HEAP_PAGES)
+			.ok()
+			.flatten()
+			.and_then(|d| Decode::decode(&mut &d[..]).ok());
+
+		Ok(RuntimeCode { code_fetcher: self, hash, heap_pages })
+	}
 }
