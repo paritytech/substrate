@@ -26,7 +26,7 @@ use crate::VersionInfo;
 use crate::error;
 
 /// default sub directory to store database
-const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
+pub const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
 
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
