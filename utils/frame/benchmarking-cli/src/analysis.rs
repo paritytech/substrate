@@ -32,7 +32,7 @@ impl Analysis {
 	pub fn median_slopes(r: &Vec<BenchmarkResults>) -> Option<Self> {
 		let results = r[0].0.iter().enumerate().map(|(i, &(p, _))| {
 			let mut counted = BTreeMap::<Vec<u32>, usize>::new();
-			for (params, _) in r.iter() {
+			for (params, _, _) in r.iter() {
 				let mut p = params.iter().map(|x| x.1).collect::<Vec<_>>();
 				p[i] = 0;
 				*counted.entry(p).or_default() += 1;
@@ -45,7 +45,7 @@ impl Analysis {
 						.zip(others.iter())
 						.enumerate()
 						.all(|(j, (v1, v2))| j == i || v1 == *v2)
-				).map(|(ps, v)| (ps[i].1, *v))
+				).map(|(ps, v, _)| (ps[i].1, *v))
 				.collect::<Vec<_>>();
 			(format!("{:?}", p), i, others, values)
 		}).collect::<Vec<_>>();
@@ -98,7 +98,7 @@ impl Analysis {
 
 	pub fn min_squares_iqr(r: &Vec<BenchmarkResults>) -> Option<Self> {
 		let mut results = BTreeMap::<Vec<u32>, Vec<u128>>::new();
-		for &(ref params, t) in r.iter() {
+		for &(ref params, t, _) in r.iter() {
 			let p = params.iter().map(|x| x.1).collect::<Vec<_>>();
 			results.entry(p).or_default().push(t);
 		}
