@@ -20,6 +20,7 @@ use super::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
+use sp_runtime::traits::One;
 
 use crate::Module as Staking;
 use frame_system::Module as System;
@@ -49,11 +50,68 @@ fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLooku
     let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::new();
     for i in 0 .. max {
         let (stash, controller) = create_stash_controller::<T>(i)?;
-        Staking::<T>::validate(RawOrigin::Signed(controller).into(), ValidatorPrefs::default())?;
+        let validator_prefs = ValidatorPrefs {
+            commission: Perbill::from_percent(50),
+        };
+        Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
         let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash);
         validators.push(stash_lookup);
     }
     return Ok(validators)
+}
+
+// This function generates all the storage items for a set of validators, each of whom have
+// nominators, and all of whom have some reward.
+pub fn create_validators_with_nominators<T: Trait>(v: u32, n: u32) -> Result<(Vec<T::AccountId>, Vec<T::AccountId>), &'static str> {
+    let mut validators: Vec<T::AccountId> = Vec::new();
+    let mut validators_stash_lookup: Vec<<T::Lookup as StaticLookup>::Source> = Vec::new();
+    let mut points_total = 0;
+    let mut points_individual = Vec::new();
+    for i in 0 .. v {
+        let (stash, controller) = create_stash_controller::<T>(i)?;
+        let validator_prefs = ValidatorPrefs {
+            commission: Perbill::from_percent(50),
+        };
+        Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), validator_prefs)?;
+        let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash.clone());
+        validators.push(controller.clone());
+        validators_stash_lookup.push(stash_lookup);
+        points_total += i;
+        points_individual.push((stash, i));
+    }
+
+    let mut nominators: Vec<T::AccountId> = Vec::new();
+    for i in 0 .. n {
+        let mut selected_validators = Vec::new();
+        for j in 0 .. v.max(MAX_NOMINATIONS) {
+            selected_validators.push(validators_stash_lookup[((i + j) % v) as usize].clone())
+        }
+        let (stash, controller) = create_stash_controller::<T>(i + v)?;
+        Staking::<T>::nominate(RawOrigin::Signed(controller.clone()).into(), selected_validators)?;
+        nominators.push(controller);
+    }
+    
+    ValidatorCount::put(v);
+    
+    // Start a new Era
+    let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
+
+    assert!(new_validators.len() == v as usize);
+
+    // Give Era Points
+    let reward = EraRewardPoints::<T::AccountId> {
+        total: points_total,
+        individual: points_individual.into_iter().collect(),
+    };
+
+    let current_era = CurrentEra::get().unwrap();
+    ErasRewardPoints::<T>::insert(current_era, reward);
+
+    // Create reward pool
+    let total_payout = T::Currency::minimum_balance() * 1000.into();
+    <ErasValidatorReward<T>>::insert(current_era, total_payout);
+
+    Ok((validators, nominators))
 }
 
 benchmarks! {
@@ -147,4 +205,16 @@ benchmarks! {
         let u in ...;
         let (stash, _) = create_stash_controller::<T>(u)?;
     }: _(RawOrigin::Root, stash)
+
+    // cancel_deferred_slash {
+
+    // }: _()
+
+    payout_validator {
+        let n in 1 .. 1000;
+        let v in DEFAULT_MINIMUM_VALIDATOR_COUNT .. 100;
+        let (validators, nominators) = create_validators_with_nominators::<T>(v, n)?;
+        let current_era = CurrentEra::get().unwrap();
+        let user: T::AccountId = validators[validators.len() - 1].clone();
+     }: _(RawOrigin::Signed(user), current_era)
 }

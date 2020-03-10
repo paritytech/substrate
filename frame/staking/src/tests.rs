@@ -2995,3 +2995,15 @@ fn set_history_depth_works() {
 	});
 }
 
+/* Benchmarking Tests */
+
+#[test]
+fn create_validators_with_nominators_works() {
+	ExtBuilder::default().build().execute_with(|| {
+		let v = 5;
+		let n = 10;
+		let (validators, nominators) = crate::benchmarking::create_validators_with_nominators::<Test>(v, n).unwrap();
+		assert_eq!(validators.len(), v as usize);
+		assert_eq!(nominators.len(), n as usize);
+	});
+}
