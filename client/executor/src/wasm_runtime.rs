@@ -22,13 +22,12 @@
 use std::sync::Arc;
 use std::borrow::Cow;
 use crate::error::{Error, WasmError};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use codec::Decode;
 use sp_core::{storage::well_known_keys, traits::Externalities};
 use sp_version::RuntimeVersion;
 use std::panic::AssertUnwindSafe;
 use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance};
-use smallvec::SmallVec;
 
 use sp_wasm_interface::Function;
 
@@ -63,9 +62,74 @@ struct VersionedRuntime {
 	/// Runtime version according to `Core_version` if any.
 	version: Option<RuntimeVersion>,
 	/// Cached instance pool.
-	instances: RwLock<SmallVec<[Arc<Mutex<Box<dyn WasmInstance>>>; 8]>>,
-	/// The size of the instances cache.
-	max_instances: usize,
+	instances: Vec<Mutex<Option<Box<dyn WasmInstance>>>>,
+}
+
+impl VersionedRuntime {
+	/// Run the given closure `f` with an instance of this runtime.
+	fn with_instance<'c, R, F>(
+		&self,
+		ext: &mut dyn Externalities,
+		f: F,
+	) -> Result<R, Error>
+		where F: FnOnce(
+			&dyn WasmInstance,
+			Option<&RuntimeVersion>,
+			&mut dyn Externalities)
+		-> Result<R, Error>,
+	{
+		// Find a free instance
+		let instance = self.instances
+			.iter()
+			.enumerate()
+			.find_map(|(index, i)| i.try_lock().map(|i| (index, i)));
+
+		match instance {
+			Some((index, mut locked)) => {
+				let (instance, new_inst) = locked.take()
+					.map(|r| Ok((r, false)))
+					.unwrap_or_else(|| self.module.new_instance().map(|i| (i, true)))?;
+
+				let result = f(&*instance, self.version.as_ref(), ext);
+				if let Err(e) = &result {
+					if new_inst {
+						log::warn!(
+							target: "wasm-runtime",
+							"Fresh runtime instance failed with {:?}",
+							e,
+						)
+					} else {
+						log::warn!(
+							target: "wasm-runtime",
+							"Evicting failed runtime instance: {:?}",
+							e,
+						);
+					}
+				} else {
+					*locked = Some(instance);
+
+					if new_inst {
+						log::debug!(
+							target: "wasm-runtime",
+							"Allocated WASM instance {}/{}",
+							index + 1,
+							self.instances.len(),
+						);
+					}
+				}
+
+				result
+			},
+			None => {
+				log::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
+
+				// Allocate a new instance
+				let instance = self.module.new_instance()?;
+
+				f(&*instance, self.version.as_ref(), ext)
+			}
+		}
+	}
 }
 
 const MAX_RUNTIMES: usize = 2;
@@ -218,53 +282,7 @@ impl RuntimeCache {
 		}
 		drop(runtimes);
 
-		let result = {
-			// Find a free instance
-			let instance_pool = runtime.instances.read().clone();
-			let instance = instance_pool
-				.iter()
-				.find_map(|i| i.try_lock());
-			if let Some(mut locked) = instance {
-				let result = f(&**locked, runtime.version.as_ref(), ext);
-				if let Err(e) = &result {
-					log::warn!(target: "wasm-runtime", "Evicting failed runtime instance: {:?}", e);
-					*locked = runtime.module.new_instance()?;
-				}
-				result
-			} else {
-				// Allocate a new instance
-				let instance = runtime.module.new_instance()?;
-
-				let result = f(&*instance, runtime.version.as_ref(), ext);
-				match &result {
-					Ok(_) => {
-						let mut instance_pool = runtime.instances.write();
-						if instance_pool.len() < runtime.max_instances {
-							instance_pool.push(Arc::new(Mutex::new(instance)));
-							log::debug!(
-								target: "wasm-runtime",
-								"Allocated WASM instance {}/{}",
-								instance_pool.len(),
-								runtime.max_instances
-							);
-						} else {
-							log::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
-						}
-					}
-					Err(e) => {
-						log::warn!(
-							target:
-							"wasm-runtime",
-							"Fresh runtime instance failed with {:?}",
-							e,
-						);
-					}
-				}
-				result
-			}
-		};
-
-		Ok(result)
+		Ok(runtime.with_instance(ext, f))
 	}
 }
 
@@ -343,14 +361,16 @@ fn create_versioned_wasm_runtime(
 		time.elapsed().as_millis(),
 	);
 
+	let mut instances = Vec::with_capacity(max_instances);
+	instances.resize_with(max_instances, || Mutex::new(None));
+
 	Ok(VersionedRuntime {
 		code_hash,
 		module: runtime,
 		version,
 		heap_pages,
 		wasm_method,
-		instances: RwLock::new(SmallVec::with_capacity(max_instances)),
-		max_instances,
+		instances,
 	})
 }
 

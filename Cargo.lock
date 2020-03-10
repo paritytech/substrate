@@ -6040,7 +6040,6 @@ dependencies = [
  "sc-executor-wasmi",
  "sc-executor-wasmtime",
  "sc-runtime-test",
- "smallvec 1.2.0",
  "sp-core",
  "sp-externalities",
  "sp-io",
