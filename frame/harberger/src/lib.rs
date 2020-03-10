@@ -33,7 +33,7 @@ use frame_support::{
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
 	traits::{SaturatedConversion, Saturating},
-	Fixed64, PerThing, Perbill,
+	Fixed64,
 };
 
 type BalanceOf<T> =
@@ -42,7 +42,7 @@ type BalanceOf<T> =
 pub trait PixelTrait: Encode + Decode + Default + Clone + PartialEq + core::fmt::Debug {}
 
 /// The module's configuration trait.
-pub trait Trait: frame_system::Trait {
+pub trait Trait: frame_system::Trait + Default {
 	// TODO: Add other types and constants required configure this module.
 
 	/// The overarching event type.
@@ -74,6 +74,7 @@ decl_error! {
 		PixelNotYours,
 		NoPixel,
 		TooSoonToReprice,
+		NoReserveRemaining,
 	}
 }
 
@@ -93,24 +94,34 @@ decl_event!(
 	}
 );
 
-fn inflation_multiplier<T: Trait>(price: BalanceOf<T>, price_paid_at: T::BlockNumber) -> Fixed64{
-	use std::convert::TryInto;
-	T::InflationMultiplier::get()
-}
-
 fn inflation_slash_amount<T: Trait>(
 	price: BalanceOf<T>,
-	price_paid: BalanceOf<T>,
 	price_paid_at: T::BlockNumber,
 ) -> BalanceOf<T> {
-    let multi: Fixed64 = dbg!(inflation_multiplier::<T>(price, price_paid_at));
-	let mut new_price = price;
+	let one = Fixed64::from_natural(1);
+	let orig: Fixed64 = one + T::InflationMultiplier::get();
+	let mut multi = orig;
 	let current_block = <system::Module<T>>::block_number();
 	let blocks_passed = current_block - price_paid_at;
-	for _ in 0..blocks_passed.saturated_into() {
-		new_price = multi.saturated_multiply_accumulate(new_price);
+	if blocks_passed > 0.into() {
+		for _ in 1..blocks_passed.saturated_into() {
+			multi = multi.saturating_mul(orig);
+		}
+        // hacky way of getting the correct amount
+		multi.saturated_multiply_accumulate(price) - price * 2.into()
+	} else {
+		0.into()
 	}
-	dbg!(new_price - price)
+}
+
+fn slash_reserved<T: Trait>(
+	owner: &T::AccountId,
+	price: BalanceOf<T>,
+	price_paid_at: T::BlockNumber,
+) -> BalanceOf<T> {
+	let slash_amount = inflation_slash_amount::<T>(price, price_paid_at);
+	T::Currency::slash_reserved(owner, slash_amount);
+	slash_amount
 }
 
 // The module's dispatchable functions.
@@ -123,7 +134,7 @@ decl_module! {
 		// this is needed only if you are using events in your module
 		fn deposit_event() = default;
 
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(_n: T::BlockNumber) {
 		}
 
 		fn buy_pixel(origin, pixel_id: u32, price: u32) -> DispatchResult {
@@ -153,7 +164,6 @@ decl_module! {
 
 						let slash_amount = inflation_slash_amount::<T>(
 							pixel.price,
-							pixel.price_paid,
 							pixel.price_paid_at,
 						);
 						T::Currency::unreserve(
@@ -187,8 +197,20 @@ decl_module! {
 					if pixel.owner != who {
 						Err(Error::<T>::PixelNotYours)?;
 					}
-					pixel.val = val;
-					Pixels::<T>::insert(pixel_id, pixel);
+					let slash_amount = slash_reserved::<T>(
+						&pixel.owner,
+						pixel.price,
+						pixel.price_paid_at,
+					);
+					let reserve_remaining = pixel.price_paid.saturating_sub(slash_amount);
+					if reserve_remaining == 0.into() {
+						pixel = PixelStruct::default();
+						Pixels::<T>::insert(pixel_id, pixel);
+						Err(Error::<T>::NoReserveRemaining)?;
+					} else {
+						pixel.val = val;
+						Pixels::<T>::insert(pixel_id, pixel);
+					}
 				}
 			}
 			Ok(())
@@ -209,25 +231,23 @@ decl_module! {
 						Err(Error::<T>::TooSoonToReprice)?;
 					}
 
-					let slash_amount = inflation_slash_amount::<T>(
+					let slash_amount = slash_reserved::<T>(
+						&pixel.owner,
 						pixel.price,
-						pixel.price_paid,
 						pixel.price_paid_at,
 					);
-                    T::Currency::slash_reserved(
-                        &pixel.owner,
-                        slash_amount,
-                    );
 
-                    dbg!(&pixel.price_paid);
-                    dbg!(&slash_amount);
-					pixel.price = price.into();
-					let reserve_remaining = pixel.price_paid - slash_amount;
-                    dbg!(&reserve_remaining);
-					pixel.price_paid = reserve_remaining;
-					pixel.price_paid_at = block_num;
-
-					Pixels::<T>::insert(pixel_id, pixel);
+					let reserve_remaining = pixel.price_paid.saturating_sub(slash_amount);
+					if reserve_remaining == 0.into() {
+						pixel = PixelStruct::default();
+						Pixels::<T>::insert(pixel_id, pixel);
+						Err(Error::<T>::NoReserveRemaining)?;
+					} else {
+						pixel.price = price.into();
+						pixel.price_paid = reserve_remaining;
+						pixel.price_paid_at = block_num;
+						Pixels::<T>::insert(pixel_id, pixel);
+					}
 				}
 			}
 			Ok(())
@@ -255,7 +275,7 @@ mod tests {
 	// For testing the module, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
 	// configuration traits of modules we want to use.
-	#[derive(Clone, Eq, PartialEq)]
+	#[derive(Default, Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -305,7 +325,7 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 1;
 		pub const RepriceDelay: u64 = 1;
 		pub const InflationMultiplier: Fixed64 = Fixed64::from_rational(1, 10);
-		pub const PixelType: PixelTestStruct = PixelTestStruct {};
+		pub const PixelType: PixelTestStruct = PixelTestStruct::default();
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
@@ -326,11 +346,22 @@ mod tests {
 			.build_storage::<Test>()
 			.unwrap();
 		pallet_balances::GenesisConfig::<Test> {
-			balances: vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100)],
+			balances: vec![(1, 1000), (2, 1000), (3, 1000), (4, 1000), (5, 1000)],
 		}
 		.assimilate_storage(&mut t)
 		.unwrap();
 		t.into()
+	}
+
+	/// Run until a particular block.
+	pub fn run_to_block(n: u64) {
+		while System::block_number() < n {
+			if System::block_number() > 1 {
+				System::on_finalize(System::block_number());
+			}
+			System::set_block_number(System::block_number() + 1);
+			System::on_initialize(System::block_number());
+		}
 	}
 
 	#[test]
@@ -366,40 +397,41 @@ mod tests {
 			assert!(
 				PixelsModule::set_pixel(Origin::signed(2), 42, PixelTestStruct::default()).is_err()
 			);
+			run_to_block(20);
+			assert!(
+				PixelsModule::set_pixel(Origin::signed(1), 42, PixelTestStruct::default()).is_err()
+			);
 		});
-	}
-
-	/// Run until a particular block.
-	pub fn run_to_block(n: u64) {
-		while System::block_number() < n {
-			if System::block_number() > 1 {
-				System::on_finalize(System::block_number());
-			}
-			System::set_block_number(System::block_number() + 1);
-			System::on_initialize(System::block_number());
-		}
 	}
 
 	#[test]
 	fn test_reprice_pixel() {
 		new_test_ext().execute_with(|| {
-            let origin = Origin::signed(1);
-            let pixel = 42;
-            let price0 = 100;
-            let price1 = 50;
+			let origin = Origin::signed(1);
+			let pixel = 42;
+			let price0 = 100;
+			let price1 = 200;
 
-            // err: pixel unowned
-			assert!(PixelsModule::reprice_pixel(origin.clone(), pixel, price0).is_err()); 			
+			// err: pixel unowned
+			assert!(PixelsModule::reprice_pixel(origin.clone(), pixel, price0).is_err());
 
-            // ok
-            assert_ok!(PixelsModule::buy_pixel(origin.clone(), pixel, price0));
-            assert_eq!(<system::Module<Test>>::block_number(), 1u64.into());
+			// ok
+			assert_ok!(PixelsModule::buy_pixel(origin.clone(), pixel, price0));
+			assert_eq!(<system::Module<Test>>::block_number(), 1u64.into());
 			run_to_block(3);
 
-            // ok
+			// ok
 			assert_ok!(PixelsModule::reprice_pixel(origin.clone(), pixel, price1));
+			run_to_block(5);
 
-            // err: too soon to reprice
+			// ok
+			assert_ok!(PixelsModule::reprice_pixel(origin.clone(), pixel, price0));
+			run_to_block(20);
+
+			// ok
+			assert!(PixelsModule::reprice_pixel(origin.clone(), pixel, price1).is_err());
+
+			// err: too soon to reprice
 			assert!(PixelsModule::reprice_pixel(origin.clone(), pixel, price0).is_err());
 		})
 	}
