@@ -70,30 +70,30 @@ fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLooku
     return Ok(validators)
 }
 
-// This function generates all the storage items for a set of validators, each of whom have
-// nominators, and all of whom have some reward.
-pub fn create_validators_with_nominators<T: Trait>(v: u32, n: u32) -> Result<(Vec<T::AccountId>, Vec<T::AccountId>), &'static str> {
+// This function generates v validators each of whom have n nominators and payouts
+// for the current era.
+pub fn create_validators_with_nominators<T: Trait>(v: u32, n: u32) -> Result<Vec<T::AccountId>, &'static str> {
     let mut validators: Vec<T::AccountId> = Vec::new();
     let mut points_total = 0;
     let mut points_individual = Vec::new();
-    let mut nominators: Vec<T::AccountId> = Vec::new();
 
+    // Create v validators
     for i in 0 .. v {
-        let (stash, controller) = create_stash_controller::<T>(i)?;
+        let (v_stash, v_controller) = create_stash_controller::<T>(i)?;
         let validator_prefs = ValidatorPrefs {
             commission: Perbill::from_percent(50),
         };
-        Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), validator_prefs)?;
-        let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash.clone());
-        validators.push(controller.clone());
-        points_total += i;
-        points_individual.push((stash, i));
+        Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
+        let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
+        validators.push(v_controller.clone());
+
+        points_total += 10;
+        points_individual.push((v_stash, 10));
 
         // Give each validator n nominators
         for j in 0 .. n {
-            let (stash, controller) = create_stash_controller2::<T>(n * i + j)?;
-            Staking::<T>::nominate(RawOrigin::Signed(controller.clone()).into(), vec![stash_lookup.clone()])?;
-            nominators.push(controller);
+            let (n_stash, n_controller) = create_stash_controller2::<T>(n * i + j)?;
+            Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
         }
     }
     
@@ -117,8 +117,9 @@ pub fn create_validators_with_nominators<T: Trait>(v: u32, n: u32) -> Result<(Ve
     let total_payout = T::Currency::minimum_balance() * 1000.into();
     <ErasValidatorReward<T>>::insert(current_era, total_payout);
 
-    Ok((validators, nominators))
+    Ok(validators)
 }
+
 
 benchmarks! {
     _{
@@ -218,8 +219,8 @@ benchmarks! {
 
     payout_validator {
         let n in 1 .. 1000;
-        let v in DEFAULT_MINIMUM_VALIDATOR_COUNT .. 100;
-        let (validators, nominators) = create_validators_with_nominators::<T>(v, n)?;
+        let v in DEFAULT_MINIMUM_VALIDATOR_COUNT .. DEFAULT_MINIMUM_VALIDATOR_COUNT;
+        let validators = create_validators_with_nominators::<T>(v, n)?;
         let current_era = CurrentEra::get().unwrap();
         let user: T::AccountId = validators[validators.len() - 1].clone();
      }: _(RawOrigin::Signed(user), current_era)
