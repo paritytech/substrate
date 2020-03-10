@@ -407,8 +407,9 @@ define_env!(Env, <E: Ext>,
 
 	// Transfer some value to another account.
 	//
-	// If the value transfer was succesful zero is returned. Otherwise a non-zero value is returned.
-	// The scratch buffer is not touched. The receiver can be a plain account or a contract.
+	// If the value transfer was succesful zero is returned. Otherwise one is returned.
+	// The scratch buffer is not touched. The receiver can be a plain account or
+	// a contract.
 	//
 	// - account_ptr: a pointer to the address of the beneficiary account
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
@@ -430,8 +431,8 @@ define_env!(Env, <E: Ext>,
 
 		let ext = &mut ctx.ext;
 		match ext.transfer(&callee, value, ctx.gas_meter) {
-			Ok(_) => Ok(STATUS_SUCCESS.into()),
-			Err(_) => Ok(TRAP_RETURN_CODE),
+			Ok(_) => Ok(0),
+			Err(_) => Ok(1),
 		}
 	},
 
