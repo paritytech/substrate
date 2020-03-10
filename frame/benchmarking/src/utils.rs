@@ -70,8 +70,7 @@ pub trait Benchmarking {
 
 	/// SCOTT
 	fn db_usage_info(&self) -> UsageInfo {
-		// self.bench_usage_info()
-		sp_stats::UsageInfo::empty()
+		self.bench_usage_info()
 	}
 
 	/// Commit pending storage changes to the trie database and clear the database cache.
