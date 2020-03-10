@@ -26,7 +26,7 @@ mod tests;
 
 use sp_std::vec::Vec;
 use frame_support::{
-	decl_module, decl_event, decl_storage, Parameter,
+	decl_module, decl_event, decl_storage, Parameter, debug,
 };
 use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
@@ -84,8 +84,9 @@ decl_storage! {
 decl_event!(
 	pub enum Event {
 		/// There is an offence reported of the given `kind` happened at the `session_index` and
-		/// (kind-specific) time slot. This event is not deposited for duplicate slashes.
-		Offence(Kind, OpaqueTimeSlot),
+		/// (kind-specific) time slot. This event is not deposited for duplicate slashes. last
+		/// element indicates of the offence was applied (true) or queued (false).
+		Offence(Kind, OpaqueTimeSlot, bool),
 	}
 );
 
@@ -93,14 +94,20 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		fn on_initialize(_now: T::BlockNumber) {
+		fn on_initialize(now: T::BlockNumber) {
 			// only decode storage if we can actually submit anything again.
 			if T::OnOffenceHandler::can_report() {
-				// defensive only. Per definition, `OnOffenceHandler` should accept reports when
-				// `can_report` is true.
 				<DeferredOffences<T>>::take()
 					.iter()
-					.for_each(|(o, p, s)| Self::report_or_store_offence(o, p, *s));
+					.for_each(|(o, p, s)| {
+						if !Self::report_or_store_offence(o, p, *s) {
+							debug::native::error!(
+								target: "pallet-offences",
+								"re-submitting a deferred slash returned Err at {}. This should not happen with pallet-staking",
+								now,
+							)
+						}
+					});
 			}
 		}
 	}
@@ -128,9 +135,6 @@ where
 			None => return Err(OffenceError::DuplicateReport),
 		};
 
-		// Deposit the event.
-		Self::deposit_event(Event::Offence(O::ID, time_slot.encode()));
-
 		let offenders_count = concurrent_offenders.len() as u32;
 
 		// The amount new offenders are slashed
@@ -139,29 +143,40 @@ where
 		let slash_perbill: Vec<_> = (0..concurrent_offenders.len())
 			.map(|_| new_fraction.clone()).collect();
 
-		Self::report_or_store_offence(&concurrent_offenders, &slash_perbill, offence.session_index());
+		let applied = Self::report_or_store_offence(
+			&concurrent_offenders,
+			&slash_perbill,
+			offence.session_index()
+		);
+
+		// Deposit the event.
+		Self::deposit_event(Event::Offence(O::ID, time_slot.encode(), applied));
 
 		Ok(())
 	}
 }
 
 impl<T: Trait> Module<T> {
-	/// Tries (without checking) report an offence. Stores them in [`DeferredOffences`] in case it
-	/// fails
+	/// Tries (without checking) to report an offence. Stores them in [`DeferredOffences`] in case
+	/// it fails. Returns false in case it has to store the offence.
 	fn report_or_store_offence(
 		concurrent_offenders: &[OffenceDetails<T::AccountId, T::IdentificationTuple>],
 		slash_perbill: &[Perbill],
 		session_index: SessionIndex,
-	) {
-		let _ = T::OnOffenceHandler::on_offence(
+	) -> bool {
+		match T::OnOffenceHandler::on_offence(
 			&concurrent_offenders,
 			&slash_perbill,
 			session_index,
-		).map_err(|_| {
-			<DeferredOffences<T>>::mutate(|d|
-				d.push((concurrent_offenders.to_vec(), slash_perbill.to_vec(), session_index))
-			)
-		});
+		) {
+			Ok(_) => true,
+			Err(_) => {
+				<DeferredOffences<T>>::mutate(|d|
+					d.push((concurrent_offenders.to_vec(), slash_perbill.to_vec(), session_index))
+				);
+				false
+			}
+		}
 	}
 
 	/// Compute the ID for the given report properties.

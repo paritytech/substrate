@@ -151,8 +151,10 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 		session: SessionIndex,
 	) -> Result<(), ()>;
 
-	/// Can an offence be reported now or not? This should always be false if a direct call to
-	/// [`on_offence`] was to return `Err`.
+	/// Can an offence be reported now or not. This is an method to short-circuit a call into
+	/// `on_offence`. Ideally, a correct implementation should return `false` if `on_offence` will
+	/// return `Err`. Nonetheless, this is up to the implementation and this trait cannot guarantee
+	/// it.
 	fn can_report() -> bool;
 }
 
