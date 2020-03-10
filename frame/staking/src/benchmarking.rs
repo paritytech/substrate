@@ -46,6 +46,16 @@ fn create_stash_controller<T: Trait>(n: u32) -> Result<(T::AccountId, T::Account
     return Ok((stash, controller))
 }
 
+fn create_stash_controller2<T: Trait>(n: u32) -> Result<(T::AccountId, T::AccountId), &'static str> {
+    let stash = create_funded_user::<T>("stash2", n);
+    let controller = create_funded_user::<T>("controller2", n);
+    let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
+    let reward_destination = RewardDestination::Staked;
+    let amount = T::Currency::minimum_balance() * 10.into();
+    Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
+    return Ok((stash, controller))
+}
+
 fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
     let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::new();
     for i in 0 .. max {
@@ -64,9 +74,10 @@ fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLooku
 // nominators, and all of whom have some reward.
 pub fn create_validators_with_nominators<T: Trait>(v: u32, n: u32) -> Result<(Vec<T::AccountId>, Vec<T::AccountId>), &'static str> {
     let mut validators: Vec<T::AccountId> = Vec::new();
-    let mut validators_stash_lookup: Vec<<T::Lookup as StaticLookup>::Source> = Vec::new();
     let mut points_total = 0;
     let mut points_individual = Vec::new();
+    let mut nominators: Vec<T::AccountId> = Vec::new();
+
     for i in 0 .. v {
         let (stash, controller) = create_stash_controller::<T>(i)?;
         let validator_prefs = ValidatorPrefs {
@@ -75,20 +86,15 @@ pub fn create_validators_with_nominators<T: Trait>(v: u32, n: u32) -> Result<(Ve
         Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), validator_prefs)?;
         let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash.clone());
         validators.push(controller.clone());
-        validators_stash_lookup.push(stash_lookup);
         points_total += i;
         points_individual.push((stash, i));
-    }
 
-    let mut nominators: Vec<T::AccountId> = Vec::new();
-    for i in 0 .. n {
-        let mut selected_validators = Vec::new();
-        for j in 0 .. v.max(MAX_NOMINATIONS) {
-            selected_validators.push(validators_stash_lookup[((i + j) % v) as usize].clone())
+        // Give each validator n nominators
+        for j in 0 .. n {
+            let (stash, controller) = create_stash_controller2::<T>(n * i + j)?;
+            Staking::<T>::nominate(RawOrigin::Signed(controller.clone()).into(), vec![stash_lookup.clone()])?;
+            nominators.push(controller);
         }
-        let (stash, controller) = create_stash_controller::<T>(i + v)?;
-        Staking::<T>::nominate(RawOrigin::Signed(controller.clone()).into(), selected_validators)?;
-        nominators.push(controller);
     }
     
     ValidatorCount::put(v);

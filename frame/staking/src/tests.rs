@@ -3004,6 +3004,6 @@ fn create_validators_with_nominators_works() {
 		let n = 10;
 		let (validators, nominators) = crate::benchmarking::create_validators_with_nominators::<Test>(v, n).unwrap();
 		assert_eq!(validators.len(), v as usize);
-		assert_eq!(nominators.len(), n as usize);
+		assert_eq!(nominators.len(), (n * v) as usize);
 	});
 }
