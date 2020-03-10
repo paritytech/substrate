@@ -27,7 +27,6 @@ use sc_client_api::{
 	light::{Fetcher, RemoteCallRequest, RemoteBodyRequest},
 	BlockBody,
 };
-use sp_core::Hasher;
 use sp_runtime::{
 	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
 	transaction_validity::TransactionValidity,
@@ -120,7 +119,7 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 
 	fn hash_and_length(&self, ex: &sc_transaction_graph::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
 		ex.using_encoded(|x| {
-			(traits::HasherFor::<Block>::hash(x), x.len())
+			(<traits::HashFor::<Block> as traits::Hash>::hash(x), x.len())
 		})
 	}
 }

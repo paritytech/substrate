@@ -231,14 +231,4 @@ wasm_export_functions! {
 		}
 		assert_eq!(0, len);
 	}
-
-	fn test_ext_blake2_256() {
-		use sp_core::Hasher;
-
-		let data = "hey, hash me please!";
-		let hash = sp_core::Blake2Hasher::hash(data.as_bytes());
-
-		let expected = sp_io::hashing::blake2_256(data.as_bytes());
-		assert_eq!(&expected, hash.as_ref());
-	}
 }

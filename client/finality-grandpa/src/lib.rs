@@ -57,11 +57,11 @@ use futures::StreamExt;
 use log::{debug, info};
 use futures::channel::mpsc;
 use sc_client_api::{
+	backend::{AuxStore, Backend},
 	LockImportRun, BlockchainEvents, CallExecutor,
-	backend::{AuxStore, Backend}, ExecutionStrategy, Finalizer, TransactionFor,
+	ExecutionStrategy, Finalizer, TransactionFor, ExecutorProvider,
 };
 use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
-use sc_client::Client;
 use parity_scale_codec::{Decode, Encode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
@@ -96,7 +96,7 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
-pub use finality_proof::FinalityProofProvider;
+pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
 pub use voting_rule::{
@@ -104,7 +104,7 @@ pub use voting_rule::{
 };
 
 use aux_schema::PersistentData;
-use environment::{Environment, VoterSetState};
+use environment::{Environment, VoterSetState, Metrics};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::{NetworkBridge, Network as NetworkT};
@@ -266,7 +266,7 @@ impl<Block: BlockT, Client> BlockStatus<Block> for Arc<Client> where
 pub trait ClientForGrandpa<Block, BE>:
 	LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 	+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
-	+ BlockchainEvents<Block> + ProvideRuntimeApi<Block>
+	+ BlockchainEvents<Block> + ProvideRuntimeApi<Block> + ExecutorProvider<Block>
 	+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
 	where
 		BE: Backend<Block>,
@@ -279,7 +279,7 @@ impl<Block, BE, T> ClientForGrandpa<Block, BE> for T
 		Block: BlockT,
 		T: LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
-			+ BlockchainEvents<Block> + ProvideRuntimeApi<Block>
+			+ BlockchainEvents<Block> + ProvideRuntimeApi<Block> + ExecutorProvider<Block>
 			+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>,
 {}
 
@@ -387,11 +387,8 @@ pub trait GenesisAuthoritySetProvider<Block: BlockT> {
 	fn get(&self) -> Result<AuthorityList, ClientError>;
 }
 
-impl<B, E, Block: BlockT, RA> GenesisAuthoritySetProvider<Block> for Client<B, E, Block, RA>
-	where
-		B: Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync,
-		RA: Send + Sync,
+impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block> for Arc<dyn ExecutorProvider<Block, Executor = E>>
+	where E: CallExecutor<Block>,
 {
 	fn get(&self) -> Result<AuthorityList, ClientError> {
 		// This implementation uses the Grandpa runtime API instead of reading directly from the
@@ -536,7 +533,7 @@ fn register_finality_tracker_inherent_data_provider<Block: BlockT, Client>(
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<Block: BlockT, C, N, SC, VR, X> {
+pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A link to the block import worker.
@@ -545,18 +542,18 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR, X> {
 	pub network: N,
 	/// The inherent data providers.
 	pub inherent_data_providers: InherentDataProviders,
-	/// Handle to a future that will resolve on exit.
-	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<futures::channel::mpsc::UnboundedReceiver<()>>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
+	/// The prometheus metrics registry.
+	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR, X>(
-	grandpa_params: GrandpaParams<Block, C, N, SC, VR, X>,
+pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
+	grandpa_params: GrandpaParams<Block, C, N, SC, VR>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	Block::Hash: Ord,
 	BE: Backend<Block> + 'static,
@@ -565,7 +562,6 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR, X>(
 	VR: VotingRule<Block, C> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
-	X: futures::Future<Output=()> + Clone + Send + Unpin + 'static,
 	C: ClientForGrandpa<Block, BE> + 'static,
 {
 	let GrandpaParams {
@@ -573,9 +569,9 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR, X>(
 		link,
 		network,
 		inherent_data_providers,
-		on_exit,
 		telemetry_on_connect,
 		voting_rule,
+		prometheus_registry,
 	} = grandpa_params;
 
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
@@ -634,6 +630,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR, X>(
 		voting_rule,
 		persistent_data,
 		voter_commands_rx,
+		prometheus_registry,
 	);
 
 	let voter_work = voter_work
@@ -643,7 +640,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR, X>(
 	let telemetry_task = telemetry_task
 		.then(|_| future::pending::<()>());
 
-	Ok(future::select(future::select(voter_work, on_exit), telemetry_task).map(drop))
+	Ok(future::select(voter_work, telemetry_task).map(drop))
 }
 
 /// Future that powers the voter.
@@ -673,6 +670,7 @@ where
 		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+		prometheus_registry: Option<prometheus_endpoint::Registry>,
 	) -> Self {
 
 		let voters = persistent_data.authority_set.current_authorities();
@@ -687,6 +685,10 @@ where
 			authority_set: persistent_data.authority_set.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state.clone(),
+			metrics: prometheus_registry.map(|registry| {
+				Metrics::register(&registry)
+					.expect("Other metrics would have failed to register before these; qed")
+			}),
 			_phantom: PhantomData,
 		});
 
@@ -807,6 +809,7 @@ where
 					consensus_changes: self.env.consensus_changes.clone(),
 					network: self.env.network.clone(),
 					voting_rule: self.env.voting_rule.clone(),
+					metrics: self.env.metrics.clone(),
 					_phantom: PhantomData,
 				});
 

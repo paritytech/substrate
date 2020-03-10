@@ -25,7 +25,10 @@ use serde::{Deserialize, Serialize};
 use sp_std::prelude::*;
 use sp_core::RuntimeDebug;
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeMallocSizeOf};
+use crate::traits::{
+	self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeMallocSizeOf,
+	NumberFor,
+};
 use crate::Justification;
 
 /// Something to identify a block.
@@ -35,9 +38,9 @@ use crate::Justification;
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub enum BlockId<Block: BlockT> {
 	/// Identify by block header hash.
-	Hash(<<Block as BlockT>::Header as HeaderT>::Hash),
+	Hash(Block::Hash),
 	/// Identify by block number.
-	Number(<<Block as BlockT>::Header as HeaderT>::Number),
+	Number(NumberFor<Block>),
 }
 
 impl<Block: BlockT> BlockId<Block> {
@@ -47,7 +50,7 @@ impl<Block: BlockT> BlockId<Block> {
 	}
 
 	/// Create a block ID from a number.
-	pub fn number(number: <Block::Header as HeaderT>::Number) -> Self {
+	pub fn number(number: NumberFor<Block>) -> Self {
 		BlockId::Number(number)
 	}
 }

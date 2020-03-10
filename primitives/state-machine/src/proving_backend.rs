@@ -18,19 +18,19 @@
 
 use std::sync::Arc;
 use parking_lot::RwLock;
-use codec::{Decode, Encode, Codec};
+use codec::{Decode, Codec};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
-	record_all_keys
+	record_all_keys, StorageProof,
 };
 pub use sp_trie::Recorder;
 pub use sp_trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use crate::DBValue;
 use sp_core::storage::ChildInfo;
 
@@ -38,82 +38,6 @@ use sp_core::storage::ChildInfo;
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	pub(crate) backend: &'a TrieBackendEssence<S, H>,
 	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
-}
-
-/// A proof that some set of key-value pairs are included in the storage trie. The proof contains
-/// the storage values so that the partial storage backend can be reconstructed by a verifier that
-/// does not already have access to the key-value pairs.
-///
-/// The proof consists of the set of serialized nodes in the storage trie accessed when looking up
-/// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
-/// the serialized nodes and performing the key lookups.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-pub struct StorageProof {
-	trie_nodes: Vec<Vec<u8>>,
-}
-
-impl StorageProof {
-	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
-	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
-		StorageProof { trie_nodes }
-	}
-
-	/// Returns a new empty proof.
-	///
-	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
-	/// key-value pairs exist in storage).
-	pub fn empty() -> Self {
-		StorageProof {
-			trie_nodes: Vec::new(),
-		}
-	}
-
-	/// Returns whether this is an empty proof.
-	pub fn is_empty(&self) -> bool {
-		self.trie_nodes.is_empty()
-	}
-
-	/// Create an iterator over trie nodes constructed from the proof. The nodes are not guaranteed
-	/// to be traversed in any particular order.
-	pub fn iter_nodes(self) -> StorageProofNodeIterator {
-		StorageProofNodeIterator::new(self)
-	}
-}
-
-/// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to
-/// be traversed in any particular order.
-pub struct StorageProofNodeIterator {
-	inner: <Vec<Vec<u8>> as IntoIterator>::IntoIter,
-}
-
-impl StorageProofNodeIterator {
-	fn new(proof: StorageProof) -> Self {
-		StorageProofNodeIterator {
-			inner: proof.trie_nodes.into_iter(),
-		}
-	}
-}
-
-impl Iterator for StorageProofNodeIterator {
-	type Item = Vec<u8>;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		self.inner.next()
-	}
-}
-
-/// Merges multiple storage proofs covering potentially different sets of keys into one proof
-/// covering all keys. The merged proof output may be smaller than the aggregate size of the input
-/// proofs due to deduplication of trie nodes.
-pub fn merge_storage_proofs<I>(proofs: I) -> StorageProof
-	where I: IntoIterator<Item=StorageProof>
-{
-	let trie_nodes = proofs.into_iter()
-		.flat_map(|proof| proof.iter_nodes())
-		.collect::<HashSet<_>>()
-		.into_iter()
-		.collect();
-	StorageProof { trie_nodes }
 }
 
 impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
@@ -221,7 +145,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend {
 			backend: essence.backend_storage(),
-			proof_recorder: proof_recorder,
+			proof_recorder,
 		};
 		ProvingBackend(TrieBackend::new(recorder, root))
 	}
@@ -363,7 +287,7 @@ where
 	H: Hasher,
 	H::Out: Codec,
 {
-	let db = create_proof_check_backend_storage(proof);
+	let db = proof.into_memory_db();
 
 	if db.contains(&root, EMPTY_PREFIX) {
 		Ok(TrieBackend::new(db, root))
@@ -372,32 +296,18 @@ where
 	}
 }
 
-/// Create in-memory storage of proof check backend.
-pub fn create_proof_check_backend_storage<H>(
-	proof: StorageProof,
-) -> MemoryDB<H>
-where
-	H: Hasher,
-{
-	let mut db = MemoryDB::default();
-	for item in proof.iter_nodes() {
-		db.insert(EMPTY_PREFIX, &item);
-	}
-	db
-}
-
 #[cfg(test)]
 mod tests {
 	use crate::InMemoryBackend;
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
-	use sp_core::{Blake2Hasher};
 	use crate::proving_backend::create_proof_check_backend;
 	use sp_trie::PrefixedMemoryDB;
+	use sp_runtime::traits::BlakeTwo256;
 
 	fn test_proving<'a>(
-		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>,Blake2Hasher>,
-	) -> ProvingBackend<'a, PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher> {
+		trie_backend: &'a TrieBackend<PrefixedMemoryDB<BlakeTwo256>,BlakeTwo256>,
+	) -> ProvingBackend<'a, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		ProvingBackend::new(trie_backend)
 	}
 
@@ -418,7 +328,7 @@ mod tests {
 	#[test]
 	fn proof_is_invalid_when_does_not_contains_root() {
 		use sp_core::H256;
-		let result = create_proof_check_backend::<Blake2Hasher>(
+		let result = create_proof_check_backend::<BlakeTwo256>(
 			H256::from_low_u64_be(1),
 			StorageProof::empty()
 		);
@@ -441,7 +351,7 @@ mod tests {
 	#[test]
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
-		let in_memory = InMemoryBackend::<Blake2Hasher>::default();
+		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(vec![(None, contents)]);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -456,7 +366,7 @@ mod tests {
 
 		let proof = proving.extract_proof();
 
-		let proof_check = create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
 		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 	}
 
@@ -473,7 +383,7 @@ mod tests {
 			(Some(child_info_2.clone()),
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let in_memory = InMemoryBackend::<Blake2Hasher>::default();
+		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
 			::std::iter::empty(),
@@ -505,7 +415,7 @@ mod tests {
 
 		let proof = proving.extract_proof();
 
-		let proof_check = create_proof_check_backend::<Blake2Hasher>(
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(
 			in_memory_root.into(),
 			proof
 		).unwrap();
@@ -519,7 +429,7 @@ mod tests {
 		assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
 		let proof = proving.extract_proof();
-		let proof_check = create_proof_check_backend::<Blake2Hasher>(
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(
 			in_memory_root.into(),
 			proof
 		).unwrap();

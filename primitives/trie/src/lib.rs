@@ -21,6 +21,7 @@
 mod error;
 mod node_header;
 mod node_codec;
+mod storage_proof;
 mod trie_stream;
 
 use sp_std::boxed::Box;
@@ -35,6 +36,7 @@ pub use error::Error;
 pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
+pub use storage_proof::StorageProof;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops, TrieDBIterator,

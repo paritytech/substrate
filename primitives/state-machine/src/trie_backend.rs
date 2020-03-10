@@ -242,17 +242,18 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 #[cfg(test)]
 pub mod tests {
 	use std::collections::HashSet;
-	use sp_core::{Blake2Hasher, H256};
+	use sp_core::H256;
 	use codec::Encode;
 	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
+	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
 
-	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256) {
+	fn test_db() -> (PrefixedMemoryDB<BlakeTwo256>, H256) {
 		let child_info = ChildInfo::new_default(CHILD_KEY_1);
 		let mut root = H256::default();
-		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
+		let mut mdb = PrefixedMemoryDB::<BlakeTwo256>::default();
 		{
 			let mut mdb = KeySpacedDBMut::new(&mut mdb, child_info.keyspace());
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
@@ -277,7 +278,7 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher> {
+	pub(crate) fn test_trie() -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		let (mdb, root) = test_db();
 		TrieBackend::new(mdb, root)
 	}
@@ -308,7 +309,7 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		assert!(TrieBackend::<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher>::new(
+		assert!(TrieBackend::<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>::new(
 			PrefixedMemoryDB::default(),
 			Default::default(),
 		).pairs().is_empty());
