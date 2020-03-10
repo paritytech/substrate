@@ -413,13 +413,7 @@ decl_error! {
 		InvalidSpecName,
 		/// The specification version is not allowed to decrease between the current runtime
 		/// and the new runtime.
-		SpecVersionNotAllowedToDecrease,
-		/// The implementation version is not allowed to decrease between the current runtime
-		/// and the new runtime.
-		ImplVersionNotAllowedToDecrease,
-		/// The specification or the implementation version need to increase between the
-		/// current runtime and the new runtime.
-		SpecOrImplVersionNeedToIncrease,
+		SpecVersionNeedsToIncrease,
 		/// Failed to extract the runtime version from the new runtime.
 		///
 		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
@@ -475,14 +469,8 @@ decl_module! {
 				Err(Error::<T>::InvalidSpecName)?
 			}
 
-			if new_version.spec_version < current_version.spec_version {
-				Err(Error::<T>::SpecVersionNotAllowedToDecrease)?
-			} else if new_version.spec_version == current_version.spec_version {
-				if new_version.impl_version < current_version.impl_version {
-					Err(Error::<T>::ImplVersionNotAllowedToDecrease)?
-				} else if new_version.impl_version == current_version.impl_version {
-					Err(Error::<T>::SpecOrImplVersionNeedToIncrease)?
-				}
+			if new_version.spec_version <= current_version.spec_version {
+				Err(Error::<T>::SpecVersionNeedsToIncrease)?
 			}
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
@@ -1926,12 +1914,12 @@ mod tests {
 		}
 
 		let test_data = vec![
-			("test", 1, 2, Ok(())),
-			("test", 1, 1, Err(Error::<Test>::SpecOrImplVersionNeedToIncrease)),
+			("test", 1, 2, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
+			("test", 1, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 			("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
 			("test", 2, 1, Ok(())),
-			("test", 0, 1, Err(Error::<Test>::SpecVersionNotAllowedToDecrease)),
-			("test", 1, 0, Err(Error::<Test>::ImplVersionNotAllowedToDecrease)),
+			("test", 0, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
+			("test", 1, 0, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		];
 
 		for (spec_name, spec_version, impl_version, expected) in test_data.into_iter() {

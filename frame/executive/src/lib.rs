@@ -85,7 +85,7 @@ use sp_runtime::{
 	transaction_validity::TransactionValidity,
 };
 use sp_runtime::traits::ValidateUnsigned;
-use codec::{Codec, Encode, Decode};
+use codec::{Codec, Encode, Decode, Compact};
 use frame_system::{extrinsics_root, DigestOf};
 
 /// Trait that can be used to execute a block.
@@ -98,42 +98,12 @@ pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
-
 /// The last time the runtime upgrade happened.
 ///
-/// Stores the the `impl_version` and the `spec_version` of this runtime.
+/// Stores the the `spec_version` as [`LastRuntimeUpgrade`] of this runtime.
 const LAST_RUNTIME_UPGRADE: &'static [u8] = b":last_runtime_upgrade:";
-
-/// Stores when the latest runtime upgrade happened.
-///
-/// This is stored under the [`LAST_RUNTIME_UPGRADE`] key.
-#[derive(Default, Encode, Decode)]
-struct LastRuntimeUpgrade {
-	spec_version: u32,
-	impl_version: u32,
-}
-
-impl LastRuntimeUpgrade {
-	/// Checks if in respect to `current` version there was a runtime upgrade.
-	fn was_upgraded(&self, current: &sp_version::RuntimeVersion) -> bool {
-		if current.spec_version > self.spec_version {
-			true
-		} else if current.spec_version == self.spec_version {
-			current.impl_version > self.impl_version
-		} else {
-			false
-		}
-	}
-}
-
-impl From<sp_version::RuntimeVersion> for LastRuntimeUpgrade {
-	fn from(version: sp_version::RuntimeVersion) -> Self {
-		Self {
-			spec_version: version.spec_version,
-			impl_version: version.impl_version,
-		}
-	}
-}
+/// The type used to store the `spec_version` under [`LAST_RUNTIME_UPGRADE`].
+type LastRuntimeUpgrade = Compact<u32>;
 
 pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
@@ -242,11 +212,12 @@ where
 	fn runtime_upgraded() -> bool {
 		let last = sp_io::storage::get(LAST_RUNTIME_UPGRADE)
 			.and_then(|v| LastRuntimeUpgrade::decode(&mut &v[..]).ok())
-			.unwrap_or_default();
+			.unwrap_or_else(|| LastRuntimeUpgrade::from(0));
 		let current = <System::Version as frame_support::traits::Get<_>>::get();
 
-		if last.was_upgraded(&current) {
-			sp_io::storage::set(LAST_RUNTIME_UPGRADE, &LastRuntimeUpgrade::from(current).encode());
+		if current.spec_version > last.0 {
+			let spec_version = LastRuntimeUpgrade::from(current.spec_version);
+			spec_version.using_encoded(|e| sp_io::storage::set(LAST_RUNTIME_UPGRADE, e));
 
 			true
 		} else {
@@ -830,33 +801,19 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 			RUNTIME_VERSION.with(|v| *v.borrow_mut() = Default::default());
 			assert!(!Executive::runtime_upgraded());
+			assert!(sp_io::storage::get(LAST_RUNTIME_UPGRADE).is_none());
 
 			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
 				spec_version: 1,
 				..Default::default()
 			});
 			assert!(Executive::runtime_upgraded());
+			assert_eq!(
+				Ok(LastRuntimeUpgrade::from(1)),
+				LastRuntimeUpgrade::decode(
+					&mut &sp_io::storage::get(LAST_RUNTIME_UPGRADE,
+				).unwrap_or_default()[..]),
+			);
 		})
-	}
-
-	#[test]
-	fn last_runtime_upgrade_works() {
-		let test_values = vec![
-			(0, 0, 1, 0, true),
-			(1, 0, 1, 0, false),
-			(0, 0, 0, 1, true),
-			(0, 1, 0, 1, false),
-			(2, 1, 0, 1, false),
-		];
-
-		for (spec_version, impl_version, c_spec_version, c_impl_version, result) in test_values {
-			let current = sp_version::RuntimeVersion {
-				spec_version: c_spec_version,
-				impl_version: c_impl_version,
-				..Default::default()
-			};
-			let last = LastRuntimeUpgrade { spec_version, impl_version };
-			assert_eq!(result, last.was_upgraded(&current));
-		}
 	}
 }
