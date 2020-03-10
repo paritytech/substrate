@@ -120,6 +120,106 @@ pub fn create_validators_with_nominators<T: Trait>(v: u32, n: u32) -> Result<Vec
     Ok(validators)
 }
 
+// This function generates one validator being nominated by n nominators
+pub fn create_validator_with_nominators<T: Trait>(n: u32) -> Result<T::AccountId, &'static str> {
+    let mut validators: Vec<T::AccountId> = Vec::new();
+    let mut points_total = 0;
+    let mut points_individual = Vec::new();
+
+    // Create v validators
+    for i in 0 .. DEFAULT_MINIMUM_VALIDATOR_COUNT {
+        let (v_stash, v_controller) = create_stash_controller::<T>(i)?;
+        let validator_prefs = ValidatorPrefs {
+            commission: Perbill::from_percent(50),
+        };
+        Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
+        let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
+        validators.push(v_controller.clone());
+
+        points_total += 10;
+        points_individual.push((v_stash, 10));
+
+        // Give each validator n nominators
+        for j in 0 .. n {
+            let (_n_stash, n_controller) = create_stash_controller2::<T>(n * i + j)?;
+            Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
+        }
+    }
+    
+    ValidatorCount::put(DEFAULT_MINIMUM_VALIDATOR_COUNT);
+    
+    // Start a new Era
+    let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
+
+    assert!(new_validators.len() == DEFAULT_MINIMUM_VALIDATOR_COUNT as usize);
+
+    // Give Era Points
+    let reward = EraRewardPoints::<T::AccountId> {
+        total: points_total,
+        individual: points_individual.into_iter().collect(),
+    };
+
+    let current_era = CurrentEra::get().unwrap();
+    ErasRewardPoints::<T>::insert(current_era, reward);
+
+    // Create reward pool
+    let total_payout = T::Currency::minimum_balance() * 1000.into();
+    <ErasValidatorReward<T>>::insert(current_era, total_payout);
+
+    Ok(validators[0].clone())
+}
+
+// This function generates one nominator nominating v validators
+pub fn create_nominator_with_validators<T: Trait>(v: u32) -> Result<(T::AccountId, Vec<T::AccountId>), &'static str> {
+    let mut validators = Vec::new();
+    let mut points_total = 0;
+    let mut points_individual = Vec::new();
+
+    // Create v validators
+    let mut validator_lookups = Vec::new();
+    for i in 0 .. v.max(DEFAULT_MINIMUM_VALIDATOR_COUNT) {
+        let (v_stash, v_controller) = create_stash_controller::<T>(i)?;
+        let validator_prefs = ValidatorPrefs {
+            commission: Perbill::from_percent(50),
+        };
+        Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
+        let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
+
+        points_total += 10;
+        points_individual.push((v_stash.clone(), 10));
+        validator_lookups.push(stash_lookup);
+        // Add to the list if it is less than the number we want the nominator to have
+        if validators.len() < v as usize {
+            validators.push(v_stash.clone())
+        }
+    }
+
+    // Create a nominator
+    let (_n_stash, n_controller) = create_stash_controller2::<T>(0)?;
+    Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), validator_lookups)?;
+    
+    ValidatorCount::put(v);
+    
+    // Start a new Era
+    let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
+
+    assert!(new_validators.len() == v as usize);
+
+    // Give Era Points
+    let reward = EraRewardPoints::<T::AccountId> {
+        total: points_total,
+        individual: points_individual.into_iter().collect(),
+    };
+
+    let current_era = CurrentEra::get().unwrap();
+    ErasRewardPoints::<T>::insert(current_era, reward);
+
+    // Create reward pool
+    let total_payout = T::Currency::minimum_balance() * 1000.into();
+    <ErasValidatorReward<T>>::insert(current_era, total_payout);
+
+    Ok((n_controller, validators))
+}
 
 benchmarks! {
     _{
@@ -219,32 +319,14 @@ benchmarks! {
 
     payout_validator {
         let n in 1 .. 1000;
-        let v in DEFAULT_MINIMUM_VALIDATOR_COUNT .. DEFAULT_MINIMUM_VALIDATOR_COUNT;
-        let validators = create_validators_with_nominators::<T>(v, n)?;
+        let validator = create_validator_with_nominators::<T>(n)?;
         let current_era = CurrentEra::get().unwrap();
-        let user: T::AccountId = validators.last().unwrap().clone();
-     }: _(RawOrigin::Signed(user), current_era)
+     }: _(RawOrigin::Signed(validator), current_era)
 
-     check_read {
-        let n in 1 .. 1000;
-        let v in DEFAULT_MINIMUM_VALIDATOR_COUNT .. DEFAULT_MINIMUM_VALIDATOR_COUNT;
-        let validators = create_validators_with_nominators::<T>(v, n)?;
-        let current_era = CurrentEra::get().unwrap();
-        let user: T::AccountId = validators.last().unwrap().clone();
-     }: { 
-        let ledger = <Ledger<T>>::get(&user).ok_or_else(|| Error::<T>::NotController)?;
-        let era_reward_points = <ErasRewardPoints<T>>::get(&current_era);
-		let commission = Staking::<T>::eras_validator_prefs(&current_era, &ledger.stash).commission;
-        let exposure = <ErasStakersClipped<T>>::get(&current_era, &ledger.stash);
-
-        if era_reward_points == EraRewardPoints::default() {
-            panic!("Nothing changed");
-        };
-        if commission == Perbill::default() {
-            panic!("Nothing changed");
-        };
-        if exposure == Exposure::<T::AccountId, BalanceOf<T>>::default() {
-            panic!("Nothing changed");
-        };
-     }
+     payout_nominator {
+        let v in 0 .. MAX_NOMINATIONS;
+        let (nominator, validators) = crate::benchmarking::create_nominator_with_validators::<T>(v)?;
+		let current_era = CurrentEra::get().unwrap();
+		let find_nominator = validators.into_iter().map(|x| (x, 0)).collect();
+     }: _(RawOrigin::Signed(nominator), current_era, find_nominator)
 }
