@@ -21,6 +21,7 @@ use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use sp_core::storage::ChildInfo;
+use sp_stats::{StateMachineStats, UsageInfo};
 use codec::{Codec, Decode};
 use crate::{
 	StorageKey, StorageValue, Backend,
@@ -241,10 +242,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		Some(self)
 	}
 
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+	fn register_overlay_stats(&mut self, _stats: &StateMachineStats) { }
 
-	fn usage_info(&self) -> crate::UsageInfo {
-		crate::UsageInfo::empty()
+	fn usage_info(&self) -> UsageInfo {
+		UsageInfo::empty()
 	}
 }
 

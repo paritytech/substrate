@@ -22,11 +22,12 @@ use codec::Encode;
 
 use sp_core::storage::{ChildInfo, OwnedChildInfo};
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
+use sp_stats::{StateMachineStats, UsageInfo};
 
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
-	UsageInfo, StorageKey, StorageValue, StorageCollection,
+	StorageKey, StorageValue, StorageCollection,
 };
 
 /// A state backend is used to read state data and can have changes committed
@@ -209,7 +210,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Register stats from overlay of state machine.
 	///
 	/// By default nothing is registered.
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats);
+	fn register_overlay_stats(&mut self, _stats: &StateMachineStats);
 
 	/// Query backend usage statistics (i/o, memory)
 	///
@@ -311,7 +312,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).for_key_values_with_prefix(prefix, f);
 	}
 
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) {	}
+	fn register_overlay_stats(&mut self, _stats: &StateMachineStats) {	}
 
 	fn usage_info(&self) -> UsageInfo {
 		(*self).usage_info()

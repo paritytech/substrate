@@ -17,7 +17,7 @@
 //! Database usage statistics
 
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use sp_state_machine::InstantWithDefault;
+use sp_stats::InstantWithDefault;
 
 /// Accumulated usage statistics for state queries.
 pub struct StateUsageStats {
@@ -98,7 +98,7 @@ impl StateUsageStats {
 	}
 
 	/// Merge state machine usage info.
-	pub fn merge_sm(&self, info: sp_state_machine::UsageInfo) {
+	pub fn merge_sm(&self, info: sp_stats::UsageInfo) {
 		self.reads.fetch_add(info.reads.ops, AtomicOrdering::Relaxed);
 		self.bytes_read.fetch_add(info.reads.bytes, AtomicOrdering::Relaxed);
 		self.writes_nodes.fetch_add(info.nodes_writes.ops, AtomicOrdering::Relaxed);
@@ -110,8 +110,8 @@ impl StateUsageStats {
 	}
 
 	/// Returns the collected `UsageInfo` and resets the internal state.
-	pub fn take(&self) -> sp_state_machine::UsageInfo {
-		use sp_state_machine::UsageUnit;
+	pub fn take(&self) -> sp_stats::UsageInfo {
+		use sp_stats::UsageUnit;
 
 		fn unit(ops: &AtomicU64, bytes: &AtomicU64) -> UsageUnit {
 			UsageUnit {
@@ -120,7 +120,7 @@ impl StateUsageStats {
 			}
 		}
 
-		sp_state_machine::UsageInfo {
+		sp_stats::UsageInfo {
 			reads: unit(&self.reads, &self.bytes_read),
 			writes: unit(&self.writes, &self.bytes_written),
 			nodes_writes: unit(&self.writes_nodes, &self.bytes_written_nodes),

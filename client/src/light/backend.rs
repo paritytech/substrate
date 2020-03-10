@@ -505,10 +505,10 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn register_overlay_stats(&mut self, _stats: &sp_state_machine::StateMachineStats) { }
+	fn register_overlay_stats(&mut self, _stats: &sp_stats::StateMachineStats) { }
 
-	fn usage_info(&self) -> sp_state_machine::UsageInfo {
-		sp_state_machine::UsageInfo::empty()
+	fn usage_info(&self) -> sp_stats::UsageInfo {
+		sp_stats::UsageInfo::empty()
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {

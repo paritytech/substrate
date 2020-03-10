@@ -22,8 +22,8 @@ use crate::{
 		NO_EXTRINSIC_INDEX, BlockNumber, build_changes_trie,
 		State as ChangesTrieState,
 	},
-	stats::StateMachineStats,
 };
+use sp_stats::StateMachineStats;
 
 #[cfg(test)]
 use std::iter::FromIterator;

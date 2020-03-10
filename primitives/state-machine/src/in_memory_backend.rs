@@ -20,8 +20,8 @@ use crate::{
 	StorageKey, StorageValue, StorageCollection,
 	trie_backend::TrieBackend,
 	backend::{Backend, insert_into_memory_db},
-	stats::UsageInfo,
 };
+use sp_stats::UsageInfo;
 use std::{error, fmt, collections::{BTreeMap, HashMap}, marker::PhantomData, ops};
 use hash_db::Hasher;
 use sp_trie::{
@@ -359,7 +359,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		self.trie.as_ref()
 	}
 
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+	fn register_overlay_stats(&mut self, _stats: &sp_stats::StateMachineStats) { }
 
 	fn usage_info(&self) -> UsageInfo {
 		UsageInfo::empty()

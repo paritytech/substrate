@@ -71,10 +71,11 @@ use sp_runtime::traits::{
 };
 use sc_executor::RuntimeInfo;
 use sp_state_machine::{
-	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
+	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, 
 	StorageCollection, ChildStorageCollection,
-	backend::Backend as StateBackend, StateMachineStats,
+	backend::Backend as StateBackend,
 };
+use sp_stats::{StateMachineStats, UsageInfo as StateUsageInfo};
 use crate::utils::{DatabaseType, Meta, db_err, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
 use sc_client::leaves::{LeafSet, FinalizationDisplaced};
