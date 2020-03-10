@@ -345,7 +345,7 @@ fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 #[cfg(feature = "std")]
 lazy_static::lazy_static! {
 	static ref DEFAULT_VERSION: Mutex<Ss58AddressFormat>
-		= Mutex::new(Ss58AddressFormat::SubstrateAccountDirect);
+		= Mutex::new(Ss58AddressFormat::SubstrateAccount);
 }
 
 #[cfg(feature = "full_crypto")]
@@ -430,36 +430,45 @@ macro_rules! ss58_address_format {
 
 #[cfg(feature = "full_crypto")]
 ss58_address_format!(
-	SubstrateAccountDirect =>
-		(42, "substrate", "Any Substrate network, direct checksum, standard account (*25519).")
-	PolkadotAccountDirect =>
-		(0, "polkadot", "Polkadot Relay-chain, direct checksum, standard account (*25519).")
-	KusamaAccountDirect =>
-		(2, "kusama", "Kusama Relay-chain, direct checksum, standard account (*25519).")
-	PlasmAccountDirect =>
-		(5, "plasm", "Plasm Network, direct checksum, standard account (*25519).")
-	BifrostAccountDirect =>
+	PolkadotAccount =>
+		(0, "polkadot", "Polkadot Relay-chain, standard account (*25519).")
+	Reserved1 =>
+		(1, "reserved1", "Reserved for future use (1).")
+	KusamaAccount =>
+		(2, "kusama", "Kusama Relay-chain, standard account (*25519).")
+	Reserved3 =>
+		(3, "reserved3", "Reserved for future use (3).")
+	PlasmAccount =>
+		(5, "plasm", "Plasm Network, standard account (*25519).")
+	BifrostAccount =>
 		(6, "bifrost", "Bifrost mainnet, direct checksum, standard account (*25519).")
-	EdgewareAccountDirect =>
-		(7, "edgeware", "Edgeware mainnet, direct checksum, standard account (*25519).")
-	KaruraAccountDirect =>
-		(8, "karura", "Acala Karura canary network, direct checksum, standard account (*25519).")
-	ReynoldsAccountDirect =>
-		(9, "reynolds", "Laminar Reynolds canary network, direct checksum, standard account (*25519).")
-	AcalaAccountDirect =>
-		(10, "acala", "Acala mainnet, direct checksum, standard account (*25519).")
-	LaminarAccountDirect =>
-		(11, "laminar", "Laminar mainnet, direct checksum, standard account (*25519).")
-	KulupuAccountDirect =>
-		(16, "kulupu", "Kulupu mainnet, direct checksum, standard account (*25519).")
-	DothereumAccountDirect =>
-		(20, "dothereum", "Dothereum Para-chain, direct checksum, standard account (*25519).")
-	CentrifugeAccountDirect =>
-		(36, "centrifuge", "Centrifuge Chain mainnet, direct checksum, standard account (*25519).")
-	SubstraTeeAccountDirect =>
-		(44, "substratee", "Any SubstraTEE off-chain network private account, direct checksum, standard account (*25519).")
-	DarwiniaAccountDirect =>
-		(18, "darwinia", "Darwinia Chain mainnet, direct checksum, standard account (*25519).")
+	EdgewareAccount =>
+		(7, "edgeware", "Edgeware mainnet, standard account (*25519).")
+	KaruraAccount =>
+		(8, "karura", "Acala Karura canary network, standard account (*25519).")
+	ReynoldsAccount =>
+		(9, "reynolds", "Laminar Reynolds canary network, standard account (*25519).")
+	AcalaAccount =>
+		(10, "acala", "Acala mainnet, standard account (*25519).")
+	LaminarAccount =>
+		(11, "laminar", "Laminar mainnet, standard account (*25519).")
+	KulupuAccount =>
+		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
+	DarwiniaAccount =>
+		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
+	CentrifugeAccount =>
+		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
+	SubstrateAccount =>
+		(42, "substrate", "Any Substrate network, standard account (*25519).")
+	Reserved43 =>
+		(43, "reserved43", "Reserved for future use (43).")
+	SubstraTeeAccount =>
+		(44, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
+	Reserved46 =>
+		(46, "reserved46", "Reserved for future use (46).")
+	Reserved47 =>
+		(47, "reserved47", "Reserved for future use (47).")
+	// Note: 48 and above are reserved.
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
