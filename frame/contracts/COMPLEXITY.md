@@ -273,8 +273,7 @@ This function receives a `key` as argument. It consists of the following steps:
 2. Clearing the storage at the given `key` (see `set_storage`).
 
 **complexity**: Complexity is constant. This function induces a DB write to clear the storage entry
-(upon being flushed to the storage) and should be priced accordingly. The price should generally be
-low enough to motivate clearing of unused contract storage.
+(upon being flushed to the storage) and should be priced accordingly.
 
 ## ext_get_storage
 
