@@ -470,21 +470,6 @@ impl RunCmd {
 			),
 		}
 	}
-
-	/// Initialize substrate. This must be done only once.
-	///
-	/// This method:
-	///
-	/// 1. Set the panic handler
-	/// 2. Raise the FD limit
-	/// 3. Initialize the logger
-	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		self.shared_params.init::<C, G, E>()
-	}
 }
 
 impl IntoConfiguration for RunCmd
