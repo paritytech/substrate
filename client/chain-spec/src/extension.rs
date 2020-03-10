@@ -270,6 +270,8 @@ impl <E: Extension> GetExtension for E {
 	}
 }
 
+/// Helper function that queries an extension by type from `GetExtension`
+/// trait object.
 pub fn get_extension<T: 'static>(e: &dyn GetExtension) -> Option<&T> {
 	Any::downcast_ref(GetExtension::get_any(e, TypeId::of::<T>()))
 }
