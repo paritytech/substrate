@@ -1,4 +1,4 @@
-use std::time::{Instant, Duration};
+use core::time::{Duration};
 use codec::{Encode, Decode};
 use sp_runtime_interface::pass_by::{PassBy, Codec};
 use crate::StateMachineStats;
@@ -14,22 +14,22 @@ pub struct UsageUnit {
 
 
 /// A wrapper around Instant to add a Default impl in order to skip encoding / decoding.
-#[derive(Clone, Debug)]
-pub struct InstantWithDefault(Instant);
+// #[derive(Clone, Debug)]
+// pub struct InstantWithDefault(Instant);
 
-impl std::default::Default for InstantWithDefault {
-	fn default() -> Self {
-		Self(Instant::now())
-	}
-}
+// impl std::default::Default for InstantWithDefault {
+// 	fn default() -> Self {
+// 		Self(Instant::now())
+// 	}
+// }
 
 /// SCOTT
 // SCOTT INVESTIGATE
-impl InstantWithDefault {
-	pub fn new(instant: Instant) -> Self {
-		Self(instant)
-	}
-}
+// impl InstantWithDefault {
+// 	pub fn new(instant: Instant) -> Self {
+// 		Self(instant)
+// 	}
+// }
 
 /// Usage statistics for state backend.
 #[derive(Clone, Debug, Encode, Decode)]
@@ -54,8 +54,9 @@ pub struct UsageInfo {
 	pub memory: u32,
 
 	/// Moment at which current statistics has been started being collected.
+	// previously was Instant and InstantWithDefault
 	#[codec(skip)]
-	pub started: InstantWithDefault,
+	pub started: Duration,
 	/// Timespan of the statistics.
 	// TODO: this can be encoded/decoded once https://github.com/paritytech/parity-scale-codec releases 1.3
 	// with this PR https://github.com/paritytech/parity-scale-codec/pull/188 .
@@ -81,7 +82,8 @@ impl UsageInfo {
 			cache_reads: UsageUnit::default(),
 			modified_reads: UsageUnit::default(),
 			memory: 0,
-			started: InstantWithDefault(Instant::now()),
+			// breaks Instant...
+			started: Default::default(),
 			span: Default::default(),
 		}
 	}

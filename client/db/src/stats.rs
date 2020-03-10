@@ -17,7 +17,7 @@
 //! Database usage statistics
 
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use sp_stats::InstantWithDefault;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Accumulated usage statistics for state queries.
 pub struct StateUsageStats {
@@ -132,8 +132,8 @@ impl StateUsageStats {
 			//       imposing `MallocSizeOf` requirement on half of the codebase,
 			//       so it is an open question how to do it better
 			memory: 0,
-			// SCOTT INVESTIGATE
-			started: InstantWithDefault::new(self.started),
+			// expect?
+			started: SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards"),
 			span: self.started.elapsed(),
 		}
 	}
