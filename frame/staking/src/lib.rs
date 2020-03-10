@@ -1350,9 +1350,9 @@ decl_module! {
 		/// - `who` is the controller account of the nominator to pay out.
 		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
 		///   then it indicates an instruction to skip the payout of all previous eras.
-		/// - `validators` is the list of all validators that `who` had exposure to during `era`
-		///   alongside the index of the `who` in the clipped exposure of the validator.
-		///   i.e. each element is a tuple of
+		/// - `validators` is the list of all validators that `who` had exposure to during `era`,
+		///   alongside the index of `who` in the clipped exposure of the validator.
+		///   I.e. each element is a tuple of
 		///   `(validator, index of `who` in clipped exposure of validator)`.
 		///   If it is incomplete, then less than the full reward will be paid out.
 		///   It must not exceed `MAX_NOMINATIONS`.
