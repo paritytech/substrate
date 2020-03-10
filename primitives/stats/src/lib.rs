@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 mod usage_info;
 mod state_machine_stats;
 

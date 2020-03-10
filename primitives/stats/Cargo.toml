@@ -11,7 +11,10 @@ documentation = "https://docs.rs/sp-stats"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.2.0" }
-sp-runtime-interface = { version = "2.0.0-alpha.2", path = "../runtime-interface" }
+sp-runtime-interface = { version = "2.0.0-alpha.2", path = "../runtime-interface", default-features = false}
 
 [features]
-default = []
+default = [ "std" ]
+std = [
+	"sp-runtime-interface/std"
+]
