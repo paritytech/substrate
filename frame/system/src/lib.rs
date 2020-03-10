@@ -108,6 +108,7 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, BadOrigin, SaturatedConversion,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
+		MaybeFromStr,
 	},
 };
 
@@ -150,7 +151,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated
 	/// with a sender account.
 	type Index:
-		Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + AtLeast32Bit
+		Parameter + Member + MaybeSerialize + MaybeFromStr + Debug + Default + MaybeDisplay + AtLeast32Bit
 		+ Copy;
 
 	/// The block number type used by the runtime.

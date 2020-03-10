@@ -243,29 +243,6 @@ pub struct RunCmd {
 	/// Specify custom keystore path.
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
-
-	/// Use interactive shell for entering the password used by the keystore.
-	#[structopt(
-		long = "password-interactive",
-		conflicts_with_all = &[ "password", "password-filename" ]
-	)]
-	pub password_interactive: bool,
-
-	/// Password used by the keystore.
-	#[structopt(
-		long = "password",
-		conflicts_with_all = &[ "password-interactive", "password-filename" ]
-	)]
-	pub password: Option<String>,
-
-	/// File that contains the password used by the keystore.
-	#[structopt(
-		long = "password-filename",
-		value_name = "PATH",
-		parse(from_os_str),
-		conflicts_with_all = &[ "password-interactive", "password" ]
-	)]
-	pub password_filename: Option<PathBuf>
 }
 
 impl RunCmd {
@@ -298,16 +275,16 @@ impl RunCmd {
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
 
-		let password = if self.password_interactive {
+		let password = if self.shared_params.password_interactive {
 			#[cfg(not(target_os = "unknown"))]
 			{
 				Some(input_keystore_password()?.into())
 			}
 			#[cfg(target_os = "unknown")]
 			None
-		} else if let Some(ref file) = self.password_filename {
+		} else if let Some(ref file) = self.shared_params.password_filename {
 			Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
-		} else if let Some(ref password) = self.password {
+		} else if let Some(ref password) = self.shared_params.password {
 			Some(password.clone().into())
 		} else {
 			None

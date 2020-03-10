@@ -56,9 +56,9 @@ impl BlockNumber {
 	/// See `https://doc.rust-lang.org/std/primitive.str.html#method.parse` for more elaborate
 	/// documentation.
 	pub fn parse<N>(&self) -> Result<N, String>
-	where
-		N: FromStr,
-		N::Err: std::fmt::Debug,
+		where
+			N: FromStr,
+			N::Err: std::fmt::Debug,
 	{
 		self.0
 			.parse()

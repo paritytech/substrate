@@ -81,7 +81,7 @@ trait Crypto: Sized {
 	{
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
-			
+
 			match output {
 				OutputType::Json => {
 					let json = json!({
@@ -99,11 +99,11 @@ trait Crypto: Sized {
 						Public key (hex): {}\n  \
 						Account ID:       {}\n  \
 						SS58 Address:     {}",
-						uri,
-						format_seed::<Self>(seed),
-						format_public_key::<Self>(public_key.clone()),
-						format_account_id::<Self>(public_key),
-						Self::ss58_from_pair(&pair),
+					         uri,
+					         format_seed::<Self>(seed),
+					         format_public_key::<Self>(public_key.clone()),
+					         format_account_id::<Self>(public_key),
+					         Self::ss58_from_pair(&pair),
 					);
 				},
 			}
@@ -127,17 +127,17 @@ trait Crypto: Sized {
 						Public key (hex): {}\n  \
 						Account ID:       {}\n  \
 						SS58 Address:     {}",
-						uri,
-						if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
-						format_public_key::<Self>(public_key.clone()),
-						format_account_id::<Self>(public_key),
-						Self::ss58_from_pair(&pair),
+					         uri,
+					         if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
+					         format_public_key::<Self>(public_key.clone()),
+					         format_account_id::<Self>(public_key),
+					         Self::ss58_from_pair(&pair),
 					);
 				},
 			}
-			
+
 		} else if let Ok((public_key, v)) =
-			<Self::Pair as Pair>::Public::from_string_with_version(uri)
+		<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{
 			let v = network_override.unwrap_or(v);
 
@@ -158,11 +158,11 @@ trait Crypto: Sized {
 						Public key (hex):   {}\n  \
 						Account ID:         {}\n  \
 						SS58 Address:       {}",
-						uri,
-						String::from(v),
-						format_public_key::<Self>(public_key.clone()),
-						format_account_id::<Self>(public_key.clone()),
-						public_key.to_ss58check_with_version(v),
+					         uri,
+					         String::from(v),
+					         format_public_key::<Self>(public_key.clone()),
+					         format_account_id::<Self>(public_key.clone()),
+					         public_key.to_ss58check_with_version(v),
 					);
 				},
 			}
@@ -369,9 +369,9 @@ fn static_err(msg: &'static str) -> Result<(), Error> {
 }
 
 fn execute<C: Crypto>(matches: ArgMatches) -> Result<(), Error>
-where
-	SignatureOf<C>: SignatureT,
-	PublicOf<C>: PublicT,
+	where
+		SignatureOf<C>: SignatureT,
+		PublicOf<C>: PublicT,
 {
 	let password_interactive = matches.is_present("password-interactive");
 	let password = matches.value_of("password");
@@ -395,7 +395,7 @@ where
 		Some(Err(e)) => return Err(e),
 		Some(Ok(v)) => Some(v),
 		None => None,
-	 };
+	};
 
 	if let Some(network) = maybe_network {
 		set_default_ss58_version(network);
@@ -405,7 +405,7 @@ where
 		Some(Err(_)) => return Err(Error::Static("Invalid output name. See --help for available outputs.")),
 		Some(Ok(v)) => v,
 		None => OutputType::Text,
-	 };
+	};
 
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
@@ -521,9 +521,9 @@ fn generate_mnemonic(matches: &ArgMatches) -> Result<Mnemonic, Error> {
 }
 
 fn do_sign<C: Crypto>(suri: &str, message: Vec<u8>, password: Option<&str>) -> Result<String, Error>
-where
-	SignatureOf<C>: SignatureT,
-	PublicOf<C>: PublicT,
+	where
+		SignatureOf<C>: SignatureT,
+		PublicOf<C>: PublicT,
 {
 	let pair = read_pair::<C>(Some(suri), password)?;
 	let signature = pair.sign(&message);
@@ -531,9 +531,9 @@ where
 }
 
 fn do_verify<C: Crypto>(matches: &ArgMatches, uri: &str, message: Vec<u8>) -> Result<bool, Error>
-where
-	SignatureOf<C>: SignatureT,
-	PublicOf<C>: PublicT,
+	where
+		SignatureOf<C>: SignatureT,
+		PublicOf<C>: PublicT,
 {
 
 	let signature = read_signature::<C>(matches)?;
@@ -582,9 +582,9 @@ fn read_genesis_hash(matches: &ArgMatches) -> Result<H256, Error> {
 }
 
 fn read_signature<C: Crypto>(matches: &ArgMatches) -> Result<SignatureOf<C>, Error>
-where
-	SignatureOf<C>: SignatureT,
-	PublicOf<C>: PublicT,
+	where
+		SignatureOf<C>: SignatureT,
+		PublicOf<C>: PublicT,
 {
 	let sig_data = matches
 		.value_of("sig")
@@ -603,8 +603,8 @@ where
 }
 
 fn read_public_key<C: Crypto>(matched_uri: Option<&str>) -> PublicOf<C>
-where
-	PublicOf<C>: PublicT,
+	where
+		PublicOf<C>: PublicT,
 {
 	let uri = matched_uri.expect("parameter is required; thus it can't be None; qed");
 	let uri = if uri.starts_with("0x") {
@@ -724,9 +724,9 @@ mod tests {
 	use super::*;
 
 	fn test_generate_sign_verify<CryptoType: Crypto>()
-	where
-		SignatureOf<CryptoType>: SignatureT,
-		PublicOf<CryptoType>: PublicT,
+		where
+			SignatureOf<CryptoType>: SignatureT,
+			PublicOf<CryptoType>: PublicT,
 	{
 		let usage = get_usage();
 		let app = get_app(&usage);

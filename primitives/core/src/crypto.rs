@@ -352,7 +352,7 @@ lazy_static::lazy_static! {
 macro_rules! ss58_address_format {
 	( $( $identifier:tt => ($number:expr, $name:expr, $desc:tt) )* ) => (
 		/// A known address (sub)format/network ID for SS58.
-		#[derive(Copy, Clone, PartialEq, Eq)]
+		#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 		pub enum Ss58AddressFormat {
 			$(#[doc = $desc] $identifier),*,
 			/// Use a manually provided numeric value.
@@ -364,6 +364,12 @@ macro_rules! ss58_address_format {
 		];
 
 		impl Ss58AddressFormat {
+			/// names of all address formats
+			pub fn all_names() -> Vec<&'static str> {
+				vec![
+					$($name),*,
+				]
+			}
 			/// All known address formats.
 			pub fn all() -> &'static [Ss58AddressFormat] {
 				&ALL_SS58_ADDRESS_FORMATS
@@ -399,12 +405,13 @@ macro_rules! ss58_address_format {
 		}
 
 		impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
-			type Error = ();
+			type Error = String;
 
-			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, ()> {
+			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, String> {
 				match x {
 					$($name => Ok(Ss58AddressFormat::$identifier)),*,
-					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
+					a => a.parse::<u8>().map(Ss58AddressFormat::Custom)
+						.map_err(|e| format!("failed to parse network value as u8 {:?}", e)),
 				}
 			}
 		}
