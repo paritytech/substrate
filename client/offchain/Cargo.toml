@@ -32,12 +32,13 @@ hyper = "0.13.2"
 hyper-rustls = "0.19"
 
 [dev-dependencies]
-sc-client-db = { version = "0.8.0-alpha.2", default-features = true, path = "../db/" }
 env_logger = "0.7.0"
-substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
-tokio = "0.2"
+fdlimit = "0.1"
+sc-client-db = { version = "0.8.0-alpha.2", default-features = true, path = "../db/" }
 sc-transaction-pool = { version = "2.0.0-alpha.2", path = "../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-alpha.2", path = "../../primitives/transaction-pool" }
+substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
+tokio = "0.2"
 
 [features]
 default = []
