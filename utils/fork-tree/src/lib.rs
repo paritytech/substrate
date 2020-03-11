@@ -286,6 +286,26 @@ impl<H, N, V> ForkTree<H, N, V> where
 		Ok(None)
 	}
 
+	/// Map fork tree into values of new types.
+	pub fn map<VT, F>(
+		self,
+		mut f: F,
+	) -> ForkTree<H, N, VT> where
+		F: FnMut(&H, &N, V) -> VT,
+	{
+		let roots = self.roots
+			.into_iter()
+			.map(|root| {
+				root.map(&mut f)
+			})
+			.collect();
+
+		ForkTree {
+			roots,
+			best_finalized_number: self.best_finalized_number,
+		}
+	}
+
 	/// Same as [`find_node_where`](Self::find_node_where), but returns mutable reference.
 	pub fn find_node_where_mut<F, E, P>(
 		&mut self,
@@ -648,6 +668,29 @@ mod node_implementation {
 			}
 
 			max + 1
+		}
+
+		/// Map node data into values of new types.
+		pub fn map<VT, F>(
+			self,
+			mut f: F,
+		) -> Node<H, N, VT> where
+			F: FnMut(&H, &N, V) -> VT,
+		{
+			let children = self.children
+				.into_iter()
+				.map(|node| {
+					node.map(&mut f)
+				})
+				.collect();
+
+			let vt = f(&self.hash, &self.number, self.data);
+			Node {
+				hash: self.hash,
+				number: self.number,
+				data: vt,
+				children,
+			}
 		}
 
 		pub fn import<F, E: std::error::Error>(
