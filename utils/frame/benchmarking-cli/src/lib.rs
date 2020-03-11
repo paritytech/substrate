@@ -23,6 +23,7 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::fmt::Debug;
 use codec::{Encode, Decode};
 use frame_benchmarking::BenchmarkResults;
+use sp_state_machine::backend::Backend;
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt, Clone)]
@@ -144,13 +145,15 @@ impl BenchmarkCmd {
 				// Print the table header
 				results[0].0.iter().for_each(|param| print!("{:?},", param.0));
 
+				let usage_info = state.usage_info();
+				print!("{:?}", usage_info);
 				print!("extrinsic_time,storage_root_time\n");
 				// Print the values
 				results.iter().for_each(|result| {
 					let parameters = &result.0;
 					parameters.iter().for_each(|param| print!("{:?},", param.1));
 					// Print extrinsic time and storage root time
-					print!("{:?},{:?},{:?},{:?},{:?}\n", result.1, result.2, result.3, result.4, result.5);
+					print!("{:?},{:?},{:?},{:?},{:?}\n", result.1, result.2, 0, 0, 0);
 				});
 
 				eprintln!("Done.");
