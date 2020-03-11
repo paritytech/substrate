@@ -66,7 +66,7 @@ jobs:
 
   build-subkey-macos:
     name:                      Build MacOS Subkey
-    runs-on:                   self-hosted
+    runs-on:                   macos-latest
     container:                 generalbeck/rust-builder:musl
     steps:
       - name:                  Checkout sources
@@ -79,9 +79,9 @@ jobs:
       - name:                  Run cargo build Subkey
         shell:                 bash
         run: |
-          rustup target add x86_64-apple-darwin
+          rustup install stable nightly
           rustup target add wasm32-unknown-unknown
-          cargo build --target x86_64-apple-darwin --release --verbose
+          cargo build --release --verbose
       - name: Prepare artifacts
         shell: bash
         run: |
