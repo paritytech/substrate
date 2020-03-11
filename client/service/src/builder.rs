@@ -1045,7 +1045,7 @@ ServiceBuilder<
 				subscriptions,
 				keystore.clone(),
 			);
-			let system = system::System::new(system_info, system_rpc_tx.clone());
+			let system = system::System::new(system_info, system_rpc_tx.clone(), deny_unsafe);
 
 			let maybe_offchain_rpc = offchain_storage.clone()
 			.map(|storage| {
