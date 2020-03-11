@@ -33,7 +33,7 @@ use frame_support::{
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
 	traits::{SaturatedConversion, Saturating},
-	Fixed64,
+	Perbill,
 };
 
 type BalanceOf<T> =
@@ -43,17 +43,10 @@ pub trait PixelTrait: Encode + Decode + Default + Clone + PartialEq + core::fmt:
 
 /// The module's configuration trait.
 pub trait Trait: frame_system::Trait + Default {
-	// TODO: Add other types and constants required configure this module.
-
-	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-
 	type Currency: ReservableCurrency<Self::AccountId>;
-
-	type InflationMultiplier: Get<Fixed64>;
-
+	type InflationMultiplier: Get<Perbill>;
 	type RepriceDelay: Get<Self::BlockNumber>;
-
 	type PixelType: PixelTrait;
 }
 
@@ -82,6 +75,7 @@ decl_error! {
 decl_storage! {
 	trait Store for Module<T: Trait> as TemplateModule {
 		Pixels: map hasher(blake2_256) u32 => Option<PixelStruct<T>>;
+//        GlobalMultiplier: u64; 
 	}
 }
 
@@ -98,30 +92,10 @@ fn inflation_slash_amount<T: Trait>(
 	price: BalanceOf<T>,
 	price_paid_at: T::BlockNumber,
 ) -> BalanceOf<T> {
-	let one = Fixed64::from_natural(1);
-	let orig: Fixed64 = one + T::InflationMultiplier::get();
-	let mut multi = orig;
 	let current_block = <system::Module<T>>::block_number();
-	let blocks_passed = current_block - price_paid_at;
-	if blocks_passed > 0.into() {
-		for _ in 1..blocks_passed.saturated_into() {
-			multi = multi.saturating_mul(orig);
-		}
-        // hacky way of getting the correct amount
-		multi.saturated_multiply_accumulate(price) - price * 2.into()
-	} else {
-		0.into()
-	}
-}
-
-fn slash_reserved<T: Trait>(
-	owner: &T::AccountId,
-	price: BalanceOf<T>,
-	price_paid_at: T::BlockNumber,
-) -> BalanceOf<T> {
-	let slash_amount = inflation_slash_amount::<T>(price, price_paid_at);
-	T::Currency::slash_reserved(owner, slash_amount);
-	slash_amount
+	let blocks_passed = (current_block - price_paid_at).saturated_into::<u32>();
+	let multi = T::InflationMultiplier::get();
+    multi * (price * blocks_passed.into()) // brackets necessary to avoid 0
 }
 
 // The module's dispatchable functions.
@@ -135,7 +109,8 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_initialize(_n: T::BlockNumber) {
-		}
+//            GlobalMultiplier::mutate(|x| *x += 1);
+        }
 
 		fn buy_pixel(origin, pixel_id: u32, price: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -157,15 +132,18 @@ decl_module! {
 						Err(Error::<T>::SelfBuy)?;
 					}
 
+                    let slash_amount = inflation_slash_amount::<T>(
+                        pixel.price,
+                        pixel.price_paid_at,
+                    );
+                    let reserve_remaining = pixel.price_paid.saturating_sub(slash_amount);
+
 					let price_bal: BalanceOf<T> = price.into();
-					if price_bal > pixel.price {
+                    // if owner has no reserve remaining, purchase succeeds at any price
+					if price_bal > pixel.price || reserve_remaining == 0.into() {
 
 						T::Currency::reserve(&who, price.into())?;
 
-						let slash_amount = inflation_slash_amount::<T>(
-							pixel.price,
-							pixel.price_paid_at,
-						);
 						T::Currency::unreserve(
 							&pixel.owner,
 							pixel.price_paid.saturating_sub(slash_amount),
@@ -197,11 +175,16 @@ decl_module! {
 					if pixel.owner != who {
 						Err(Error::<T>::PixelNotYours)?;
 					}
-					let slash_amount = slash_reserved::<T>(
-						&pixel.owner,
-						pixel.price,
-						pixel.price_paid_at,
-					);
+
+                    let slash_amount = inflation_slash_amount::<T>(
+                        pixel.price,
+                        pixel.price_paid_at,
+                    );
+                    T::Currency::slash_reserved(
+                        &pixel.owner,
+                        slash_amount,
+                    );
+
 					let reserve_remaining = pixel.price_paid.saturating_sub(slash_amount);
 					if reserve_remaining == 0.into() {
 						pixel = PixelStruct::default();
@@ -231,11 +214,14 @@ decl_module! {
 						Err(Error::<T>::TooSoonToReprice)?;
 					}
 
-					let slash_amount = slash_reserved::<T>(
-						&pixel.owner,
-						pixel.price,
-						pixel.price_paid_at,
-					);
+                    let slash_amount = inflation_slash_amount::<T>(
+                        pixel.price,
+                        pixel.price_paid_at,
+                    );
+                    T::Currency::slash_reserved(
+                        &pixel.owner,
+                        slash_amount,
+                    );
 
 					let reserve_remaining = pixel.price_paid.saturating_sub(slash_amount);
 					if reserve_remaining == 0.into() {
@@ -324,7 +310,7 @@ mod tests {
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
 		pub const RepriceDelay: u64 = 1;
-		pub const InflationMultiplier: Fixed64 = Fixed64::from_rational(1, 10);
+		pub const InflationMultiplier: Perbill = Perbill::from_percent(10);
 		pub const PixelType: PixelTestStruct = PixelTestStruct::default();
 	}
 	impl pallet_balances::Trait for Test {
@@ -397,7 +383,7 @@ mod tests {
 			assert!(
 				PixelsModule::set_pixel(Origin::signed(2), 42, PixelTestStruct::default()).is_err()
 			);
-			run_to_block(20);
+			run_to_block(200);
 			assert!(
 				PixelsModule::set_pixel(Origin::signed(1), 42, PixelTestStruct::default()).is_err()
 			);
