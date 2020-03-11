@@ -1289,6 +1289,13 @@ decl_module! {
 			ForceEra::put(Forcing::ForceNew);
 		}
 
+		/// Set the validators who cannot be slashed (if any).
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
+		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
+			ensure_root(origin)?;
+			<Invulnerables<T>>::put(validators);
+		}
+
 		/// Force there to be a new era at the end of sessions indefinitely.
 		///
 		/// # <weight>
@@ -1298,13 +1305,6 @@ decl_module! {
 		fn force_new_era_always(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceAlways);
-		}
-
-		/// Set the validators who cannot be slashed (if any).
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
-		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
-			ensure_root(origin)?;
-			<Invulnerables<T>>::put(validators);
 		}
 
 		/// Force a current staker to become completely unstaked, immediately.
