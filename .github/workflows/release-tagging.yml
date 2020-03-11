@@ -4,7 +4,7 @@ name: Retag release
 
 on:
   release:
-    types: [ published, prereleased ]
+    types: [ published ]
 
 jobs:
   build:
@@ -14,7 +14,6 @@ jobs:
       - name: Set Git tag
         uses: s3krit/walking-tag-action@master
         # Avoid running this step twice when it's a prerelease (once for the prereleased action and once for the published action)
-        if: ( github.event.release.prerelease == true && github.event.action == 'prereleased' ) || github.event.release.prerelease == false
         with:
           TAG_NAME: release
           TAG_MESSAGE: Latest release
