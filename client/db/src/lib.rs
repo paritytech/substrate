@@ -285,10 +285,10 @@ pub enum DatabaseSettingsSrc {
 }
 
 /// Create an instance of db-backed client.
-pub fn new_client<E, S, Block, RA>(
+pub fn new_client<E, Block, RA>(
 	settings: DatabaseSettings,
 	executor: E,
-	genesis_storage: &S,
+	genesis_storage: &dyn BuildStorage,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
@@ -307,7 +307,6 @@ pub fn new_client<E, S, Block, RA>(
 	where
 		Block: BlockT,
 		E: CodeExecutor + RuntimeInfo,
-		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
