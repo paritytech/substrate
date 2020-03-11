@@ -70,12 +70,9 @@ fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLooku
     return Ok(validators)
 }
 
-// This function generates v validators each of whom have n nominators and payouts
-// for the current era.
-pub fn create_validators_with_nominators<T: Trait>(v: u32, n: u32) -> Result<Vec<T::AccountId>, &'static str> {
+// This function generates v validators each of whom have n nominators ready for a new era.
+pub fn create_validators_with_nominators_for_era<T: Trait>(v: u32, n: u32) -> Result<(), &'static str> {
     let mut validators: Vec<T::AccountId> = Vec::new();
-    let mut points_total = 0;
-    let mut points_individual = Vec::new();
 
     // Create v validators
     for i in 0 .. v {
@@ -87,9 +84,6 @@ pub fn create_validators_with_nominators<T: Trait>(v: u32, n: u32) -> Result<Vec
         let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
         validators.push(v_controller.clone());
 
-        points_total += 10;
-        points_individual.push((v_stash, 10));
-
         // Give each validator n nominators
         for j in 0 .. n {
             let (_n_stash, n_controller) = create_stash_controller2::<T>(n * i + j)?;
@@ -98,29 +92,12 @@ pub fn create_validators_with_nominators<T: Trait>(v: u32, n: u32) -> Result<Vec
     }
     
     ValidatorCount::put(v);
-    
-    // Start a new Era
-    let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 
-    assert!(new_validators.len() == v as usize);
-
-    // Give Era Points
-    let reward = EraRewardPoints::<T::AccountId> {
-        total: points_total,
-        individual: points_individual.into_iter().collect(),
-    };
-
-    let current_era = CurrentEra::get().unwrap();
-    ErasRewardPoints::<T>::insert(current_era, reward);
-
-    // Create reward pool
-    let total_payout = T::Currency::minimum_balance() * 1000.into();
-    <ErasValidatorReward<T>>::insert(current_era, total_payout);
-
-    Ok(validators)
+    Ok(())
 }
 
-// This function generates one validator being nominated by n nominators
+// This function generates one validator being nominated by n nominators.
+// It starts an era and creates pending payouts.
 pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> Result<T::AccountId, &'static str> {
     let mut validators: Vec<T::AccountId> = Vec::new();
     let mut points_total = 0;
@@ -171,7 +148,8 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> R
     Ok(validators[0].clone())
 }
 
-// This function generates one nominator nominating v validators
+// This function generates one nominator nominating v validators.
+// It starts an era and creates pending payouts.
 pub fn create_nominator_with_validators<T: Trait>(v: u32) -> Result<(T::AccountId, Vec<T::AccountId>), &'static str> {
     let mut validators = Vec::new();
     let mut points_total = 0;
@@ -374,4 +352,14 @@ benchmarks! {
         let (stash, controller) = create_stash_controller::<T>(u)?;
         T::Currency::make_free_balance_be(&stash, 0.into());
     }: _(RawOrigin::Signed(controller), stash)
+
+    new_era {
+        let v in DEFAULT_MINIMUM_VALIDATOR_COUNT .. 100;
+        let n in 1 .. 1000;
+        create_validators_with_nominators_for_era::<T>(v, n)?;
+        let session_index = SessionIndex::one();
+    }: { 
+        let maybe_validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
+        assert!(maybe_validators.len() == v as usize);
+    }
 }
