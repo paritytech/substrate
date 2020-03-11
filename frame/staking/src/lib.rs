@@ -255,7 +255,7 @@ mod mock;
 mod tests;
 mod slashing;
 mod migration;
-//#[cfg(feature = "runtime-benchmarks")]
+#[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
 
 pub mod inflation;

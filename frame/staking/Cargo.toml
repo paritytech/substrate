@@ -21,7 +21,7 @@ frame-support = { version = "2.0.0-alpha.2", default-features = false, path = ".
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
 pallet-session = { version = "2.0.0-alpha.2", features = ["historical"], path = "../session", default-features = false }
 pallet-authorship = { version = "2.0.0-alpha.2", default-features = false, path = "../authorship" }
-frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../benchmarking" }
+frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../benchmarking", optional = true}
 
 [dev-dependencies]
 sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
@@ -29,6 +29,7 @@ pallet-balances = { version = "2.0.0-alpha.2", path = "../balances" }
 pallet-timestamp = { version = "2.0.0-alpha.2", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "2.0.0-alpha.2",  path = "../staking/reward-curve" }
 substrate-test-utils = { version = "2.0.0-alpha.2", path = "../../test-utils" }
+frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../benchmarking" }
 
 [features]
 migrate = []
@@ -47,4 +48,4 @@ std = [
 	"frame-system/std",
 	"pallet-authorship/std",
 ]
-runtime-benchmarks = ["frame-system/runtime-benchmarks"]
+runtime-benchmarks = ["frame-benchmarking", "frame-system/runtime-benchmarks"]
