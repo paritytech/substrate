@@ -93,6 +93,14 @@ pub struct RunCmd {
 	#[structopt(long = "unsafe-rpc-external")]
 	pub unsafe_rpc_external: bool,
 
+	/// Don't deny potentially unsafe RPCs when listening on external interfaces.
+	///
+	/// Default is false. This allows exposing RPC methods publicly (same as `--unsafe-{rpc,ws}-external` )
+	/// but will allow doing so even on validator nodes, which is prohibited by default.
+	/// Please do this if you know what you're doing.
+	#[structopt(long = "unsafe-rpc-expose")]
+	pub unsafe_rpc_expose: bool,
+
 	/// Listen to all Websocket interfaces.
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
@@ -406,14 +414,29 @@ impl CliConfiguration for RunCmd {
 	}
 
 	fn rpc_http(&self) -> Result<Option<SocketAddr>> {
-		let interface = rpc_interface(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
+		let interface = rpc_interface(
+			self.rpc_external,
+			self.unsafe_rpc_external,
+			self.unsafe_rpc_expose,
+			self.validator
+		)?;
+
 		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(9933))))
 	}
 
 	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
-		let interface = rpc_interface(self.ws_external, self.unsafe_ws_external, self.validator)?;
+		let interface = rpc_interface(
+			self.ws_external,
+			self.unsafe_ws_external,
+			self.unsafe_rpc_expose,
+			self.validator
+		)?;
 
 		Ok(Some(SocketAddr::new(interface, self.ws_port.unwrap_or(9944))))
+	}
+
+	fn unsafe_rpc_expose(&self) -> Result<bool> {
+		Ok(self.unsafe_rpc_expose)
 	}
 
 	fn offchain_worker(&self, role: &Role) -> Result<bool> {
@@ -459,9 +482,10 @@ pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 fn rpc_interface(
 	is_external: bool,
 	is_unsafe_external: bool,
+	is_unsafe_rpc_expose: bool,
 	is_validator: bool,
 ) -> Result<IpAddr> {
-	if is_external && is_validator {
+	if is_external && is_validator && !is_unsafe_rpc_expose {
 		return Err(Error::Input(
 			"--rpc-external and --ws-external options shouldn't be \
 		used if the node is running as a validator. Use `--unsafe-rpc-external` if you understand \

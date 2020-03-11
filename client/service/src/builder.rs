@@ -1002,7 +1002,7 @@ ServiceBuilder<
 
 		// RPC
 		let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
-		let gen_handler = || {
+		let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe| {
 			use sc_rpc::{chain, state, author, system, offchain};
 
 			let system_info = sc_rpc::system::SystemInfo {
@@ -1065,8 +1065,9 @@ ServiceBuilder<
 				rpc_extensions.clone(),
 			))
 		};
-		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers(&config, gen_handler)?;
+		// This is used internally, so don't restrict access to unsafe RPC
+		let rpc_handlers = gen_handler(sc_rpc::DenyUnsafe::No);
 
 		spawn_handle.spawn(
 			"network-worker",
