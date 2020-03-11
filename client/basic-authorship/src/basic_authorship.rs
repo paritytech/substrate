@@ -33,7 +33,7 @@ use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
-use futures::prelude::*;
+use futures::{executor, future, future::Either};
 use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
@@ -210,7 +210,18 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 		let mut is_first = true;
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
-		let pending_iterator = futures::executor::block_on(self.transaction_pool.ready_at(Some(self.parent_number)));
+		let pending_iterator = match executor::block_on(future::select(
+			self.transaction_pool.ready_at(Some(self.parent_number)),
+			futures_timer::Delay::new(deadline - (self.now)()),
+		)) {
+			Either::Left((iterator, _)) => iterator,
+			Either::Right(_) => {
+				debug!(
+					"Consensus deadline reached while waiting transaction pool to reutnr pending set. Returning error!",
+				);
+				return Err(sp_blockchain::Error::TransactionPoolNotReady);
+			}
+		};
 
 		debug!("Attempting to push transactions from the pool.");
 		debug!("Pool status: {:?}", self.transaction_pool.status());
@@ -304,6 +315,7 @@ mod tests {
 		prelude::*,
 		runtime::{Extrinsic, Transfer},
 	};
+	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_api::Core;
 	use backend::Backend;
@@ -330,16 +342,31 @@ mod tests {
 			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)])
 		).unwrap();
 
+		futures::executor::block_on(
+			txpool.maintain(
+				ChainEvent::NewBlock {
+					id: BlockId::Number(0u64),
+					retracted: vec![],
+					is_new_best: true,
+					header: client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header"),
+				},
+			)
+		);
+
 		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
 
-		let cell = Mutex::new(time::Instant::now());
+		let cell = Mutex::new((false, time::Instant::now()));
 		let mut proposer = proposer_factory.init_with_now(
 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
-				let old = *value;
+				if !value.0 {
+					value.0 = true;
+					return value.1;
+				}
+				let old = value.1;
 				let new = old + time::Duration::from_secs(2);
-				*value = new;
+				*value = (true, new);
 				old
 			})
 		);
@@ -370,6 +397,17 @@ mod tests {
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0)]),
 		).unwrap();
+
+		futures::executor::block_on(
+			txpool.maintain(
+				ChainEvent::NewBlock {
+					id: block_id.clone(),
+					retracted: vec![],
+					is_new_best: true,
+					header: client.header(&block_id).expect("header get error").expect("there should be header"),
+				},
+			)
+		);
 
 		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
 
@@ -459,15 +497,34 @@ mod tests {
 			block
 		};
 
+		futures::executor::block_on(
+			txpool.maintain(
+				ChainEvent::NewBlock {
+					id: BlockId::Number(0u64),
+					retracted: vec![],
+					is_new_best: true,
+					header: client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header"),
+				},
+			)
+		);
+
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
 		client.import(BlockOrigin::Own, block).unwrap();
 
-		// now let's make sure that we can still make some progress
+		futures::executor::block_on(
+			txpool.maintain(
+				ChainEvent::NewBlock {
+					id: BlockId::Number(1u64),
+					retracted: vec![],
+					is_new_best: true,
+					header: client.header(&BlockId::Number(1u64)).expect("header get error").expect("there should be header"),
+				},
+			)
+		);
 
-		// This is most likely incorrect, and caused by #5139
-		let tx_remaining = 0;
-		let block = propose_block(&client, 1, 2, tx_remaining);
+		// now let's make sure that we can still make some progress
+		let block = propose_block(&client, 1, 2, 5);
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 }

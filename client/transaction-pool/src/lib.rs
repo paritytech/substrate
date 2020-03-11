@@ -30,7 +30,7 @@ pub mod testing;
 pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
-use std::{collections::{HashMap, VecDeque}, sync::Arc, pin::Pin};
+use std::{collections::HashMap, sync::Arc, pin::Pin};
 use futures::{Future, FutureExt, future::ready};
 use parking_lot::Mutex;
 
