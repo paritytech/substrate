@@ -58,7 +58,9 @@ pub trait Trait: frame_system::Trait {
 	/// The currency type in which fees will be paid.
 	type Currency: Currency<Self::AccountId> + Send + Sync;
 
-	/// Handler for the unbalanced reduction when taking transaction fees.
+	/// Handler for the unbalanced reduction when taking transaction fees. This is either one or
+	/// two separate imbalances, the first is the transaction fee paid, the second is the tip paid,
+	/// if any.
 	type OnTransactionPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// The fee to be paid for making a transaction; the base.
@@ -198,31 +200,6 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 	}
 }
 
-/// Iterates over a pair of values.
-#[derive(Default)]
-pub struct PairIterator<T> {
-	/// The first value, or none if it's already consumed.
-	first: Option<T>,
-	/// The second value, or none if it's already consumed.
-	second: Option<T>,
-}
-impl<T> Iterator for PairIterator<T> {
-	type Item = T;
-	fn next(&mut self) -> Option<T> {
-		self.first.take().or_else(|| self.second.take())
-	}
-}
-impl<T> PairIterator<T> {
-	/// Create an iterator that yields only a single value.
-	pub fn with_one(first: T) -> Self {
-		Self { first: Some(first), second: None }
-	}
-	/// Create an iterator that yields two values.
-	pub fn with_two(first: T, second: T) -> Self {
-		Self { first: Some(first), second: Some(second) }
-	}
-}
-
 impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 	where BalanceOf<T>: Send + Sync
 {
@@ -259,8 +236,9 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 				Ok(imbalance) => imbalance,
 				Err(_) => return InvalidTransaction::Payment.into(),
 			};
-			let (tip_imbalance, fee_imbalance) = imbalance.split(tip);
-			T::OnTransactionPayment::on_unbalanceds(PairIterator::with_two(fee_imbalance, tip_imbalance));
+			let imbalances = imbalance.split(tip);
+			T::OnTransactionPayment::on_unbalanceds(Some(imbalances.0).into_iter()
+				.chain(Some(imbalances.1)));
 		}
 
 		let mut r = ValidTransaction::default();

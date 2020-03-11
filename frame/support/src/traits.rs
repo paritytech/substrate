@@ -339,8 +339,8 @@ pub trait Imbalance<Balance>: Sized + TryDrop {
 	/// Consume `self` and return two independent instances; the amounts returned will be in
 	/// approximately the same ratio as `first`:`second`.
 	///
-	/// NOTE: This requires up to `first + second` room for a multiply. Overflow will safely
-	/// saturate.
+	/// NOTE: This requires up to `first + second` room for a multiply, and `first + second` should
+	/// fit into a `u32`. Overflow will safely saturate in both cases.
 	fn ration(self, first: u32, second: u32) -> (Self, Self)
 		where Balance: From<u32> + Saturating + Div<Output=Balance>
 	{
