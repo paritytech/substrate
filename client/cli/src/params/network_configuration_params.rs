@@ -21,7 +21,7 @@ use structopt::StructOpt;
 use sc_network::{
 	config::{NonReservedPeerMode, TransportConfig}, multiaddr::Protocol,
 };
-use sc_service::{Configuration, RuntimeGenesis};
+use sc_service::Configuration;
 
 use crate::error;
 use crate::params::node_key_params::NodeKeyParams;
@@ -101,16 +101,13 @@ pub struct NetworkConfigurationParams {
 
 impl NetworkConfigurationParams {
 	/// Fill the given `NetworkConfiguration` by looking at the cli parameters.
-	pub fn update_config<G, E>(
+	pub fn update_config(
 		&self,
-		mut config: &mut Configuration<G, E>,
+		mut config: &mut Configuration,
 		config_path: PathBuf,
 		client_id: String,
 		is_dev: bool,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-	{
+	) -> error::Result<()> {
 		config.network.boot_nodes.extend(self.bootnodes.clone());
 		config.network.config_path = Some(config_path.clone());
 		config.network.net_config_path = Some(config_path.clone());

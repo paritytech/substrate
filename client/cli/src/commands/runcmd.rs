@@ -23,7 +23,7 @@ use names::{Generator, Name};
 use regex::Regex;
 use chrono::prelude::*;
 use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec, Roles,
+	AbstractService, Configuration, ChainSpec, Roles,
 	config::{KeystoreConfig, PrometheusConfig},
 };
 use sc_telemetry::TelemetryEndpoints;
@@ -291,16 +291,14 @@ impl RunCmd {
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`
-	pub fn update_config<G, E, F>(
+	pub fn update_config<F>(
 		&self,
-		mut config: &mut Configuration<G, E>,
+		mut config: &mut Configuration,
 		spec_factory: F,
 		version: &VersionInfo,
 	) -> error::Result<()>
 	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
 
@@ -447,18 +445,16 @@ impl RunCmd {
 	}
 
 	/// Run the command that runs the node
-	pub fn run<G, E, FNL, FNF, SL, SF>(
+	pub fn run<FNL, FNF, SL, SF>(
 		self,
-		config: Configuration<G, E>,
+		config: Configuration,
 		new_light: FNL,
 		new_full: FNF,
 		version: &VersionInfo,
 	) -> error::Result<()>
 	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
-		FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
+		FNL: FnOnce(Configuration) -> Result<SL, sc_service::error::Error>,
+		FNF: FnOnce(Configuration) -> Result<SF, sc_service::error::Error>,
 		SL: AbstractService + Unpin,
 		SF: AbstractService + Unpin,
 	{
@@ -625,7 +621,7 @@ fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_service::config::DatabaseConfig;
+	use sc_service::{GenericChainSpec, config::DatabaseConfig};
 
 	const TEST_VERSION_INFO: &'static VersionInfo = &VersionInfo {
 		name: "node-test",
@@ -655,7 +651,7 @@ mod tests {
 
 	#[test]
 	fn keystore_path_is_generated_correctly() {
-		let chain_spec = ChainSpec::from_genesis(
+		let chain_spec = GenericChainSpec::from_genesis(
 			"test",
 			"test-id",
 			|| (),
@@ -673,9 +669,9 @@ mod tests {
 
 			let mut config = Configuration::default();
 			config.config_dir = Some(PathBuf::from("/test/path"));
-			config.chain_spec = Some(chain_spec.clone());
+			config.chain_spec = Some(Box::new(chain_spec.clone()));
 			let chain_spec = chain_spec.clone();
-			cli.update_config(&mut config, move |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+			cli.update_config(&mut config, move |_| Ok(Box::new(chain_spec)), TEST_VERSION_INFO).unwrap();
 
 			let expected_path = match keystore_path {
 				Some(path) => PathBuf::from(path),
@@ -688,7 +684,7 @@ mod tests {
 
 	#[test]
 	fn ensure_load_spec_provide_defaults() {
-		let chain_spec = ChainSpec::from_genesis(
+		let chain_spec = GenericChainSpec::from_genesis(
 			"test",
 			"test-id",
 			|| (),
@@ -703,7 +699,7 @@ mod tests {
 		let cli = RunCmd::from_iter(args);
 
 		let mut config = Configuration::from_version(TEST_VERSION_INFO);
-		cli.update_config(&mut config, |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+		cli.update_config(&mut config, |_| Ok(Box::new(chain_spec)), TEST_VERSION_INFO).unwrap();
 
 		assert!(config.chain_spec.is_some());
 		assert!(!config.network.boot_nodes.is_empty());
@@ -712,7 +708,7 @@ mod tests {
 
 	#[test]
 	fn ensure_update_config_for_running_node_provides_defaults() {
-		let chain_spec = ChainSpec::from_genesis(
+		let chain_spec = GenericChainSpec::from_genesis(
 			"test",
 			"test-id",
 			|| (),
@@ -728,7 +724,7 @@ mod tests {
 
 		let mut config = Configuration::from_version(TEST_VERSION_INFO);
 		cli.init(&TEST_VERSION_INFO).unwrap();
-		cli.update_config(&mut config, |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+		cli.update_config(&mut config, |_| Ok(Box::new(chain_spec)), TEST_VERSION_INFO).unwrap();
 
 		assert!(config.config_dir.is_some());
 		assert!(config.database.is_some());
