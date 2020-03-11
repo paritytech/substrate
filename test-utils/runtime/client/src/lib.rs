@@ -370,5 +370,5 @@ pub fn new_light_fetcher() -> LightFetcher {
 
 /// Create a new native executor.
 pub fn new_native_executor() -> sc_executor::NativeExecutor<LocalExecutor> {
-	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None)
+	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
 }

@@ -55,7 +55,7 @@ sc-rpc-server = { version = "2.0.0-alpha.2", path = "../rpc-servers" }
 sc-rpc = { version = "2.0.0-alpha.2", path = "../rpc" }
 sc-telemetry = { version = "2.0.0-alpha.2", path = "../telemetry" }
 sc-offchain = { version = "2.0.0-alpha.2", path = "../offchain" }
-parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
+parity-multiaddr = { package = "parity-multiaddr", version = "0.7.3" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" , version = "0.8.0-alpha.2"}
 sc-tracing = { version = "2.0.0-alpha.2", path = "../tracing" }
 tracing = "0.1.10"
