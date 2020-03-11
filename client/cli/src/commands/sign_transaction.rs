@@ -18,12 +18,12 @@
 use crate::error;
 use super::{
 	SharedParams, get_password, decode_hex,
-	create_extrinsic_for, Crypto, IndexFor, CallFor,
+	create_extrinsic_for, RuntimeAdapter, IndexFor, CallFor,
 };
 use structopt::StructOpt;
-
 use parity_scale_codec::{Decode, Encode, WrapperTypeEncode};
 use std::str::FromStr;
+use std::fmt::Display;
 
 type Call = Vec<u8>;
 
@@ -51,19 +51,16 @@ pub struct SignTransactionCmd {
 }
 
 impl SignTransactionCmd {
-	pub fn run<C: Crypto>(self) -> error::Result<()>
+	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()>
 		where
-			<IndexFor<C> as FromStr>::Err: Into<String>,
-			CallFor<C>: Encode + Decode + WrapperTypeEncode,
+			<IndexFor<RA> as FromStr>::Err: Display,
+			CallFor<RA>: Encode + Decode + WrapperTypeEncode,
 	{
-		let signer = C::pair_from_suri(
-			&self.suri,
-			Some(get_password(&self.shared_params)?.as_str()),
-		);
+		let signer = RA::pair_from_suri(&self.suri, &get_password(&self.shared_params)?);
 
-		let index = IndexFor::<C>::from_str(&self.nonce).map_err(|e| e.into())?;
-		let function = CallFor::<C>::decode(&mut &self.call[..])?;
-		let extrinsic = create_extrinsic_for::<C>(function, index, signer)?;
+		let nonce = IndexFor::<RA>::from_str(&self.nonce).map_err(|e| format!("{}", e))?;
+		let call = CallFor::<RA>::decode(&mut &self.call[..])?;
+		let extrinsic = create_extrinsic_for::<RA, _>(call, nonce, signer)?;
 
 		println!("0x{}", hex::encode(Encode::encode(&extrinsic)));
 

@@ -44,6 +44,12 @@ substrate-prometheus-endpoint = { path = "../../utils/prometheus" , version = "0
 sp-keyring = { version = "2.0.0-alpha.2", path = "../../primitives/keyring" }
 names = "0.11.0"
 structopt = "0.3.11"
+hyper = "0.12.35"
+rand = "0.7.2"
+serde = "1.0.104"
+futures01 = { package = "futures", version = "0.1.29" }
+sc-rpc = { version = "2.0.0-alpha.3", path = "../../client/rpc" }
+jsonrpc-core-client = { version = "14.0.3", features = ["http"] }
 sc-tracing = { version = "2.0.0-alpha.2", path = "../tracing" }
 chrono = "0.4.10"
 parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }

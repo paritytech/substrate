@@ -16,7 +16,7 @@
 
 //! Implementation of the `sign` subcommand
 use crate::error;
-use super::{SharedParams, RunCmd, get_password, read_message_from_stdin, read_uri, Crypto};
+use super::{SharedParams, get_password, read_message_from_stdin, read_uri, RuntimeAdapter};
 use structopt::StructOpt;
 
 use sp_core::crypto::Pair;
@@ -44,12 +44,12 @@ pub struct SignCmd {
 
 
 impl SignCmd {
-	pub fn run<C: Crypto>(self, _run_cmd: RunCmd) -> error::Result<()> {
+	pub fn run<C: RuntimeAdapter>(self) -> error::Result<()> {
 		let suri = read_uri(self.suri)?;
 
 		let message = read_message_from_stdin(self.hex)?;
 		let password = get_password(&self.shared_params)?;
-		let pair = C::pair_from_suri(&suri, Some(password.as_str()));
+		let pair = C::pair_from_suri(&suri, &password);
 		let signature = format!("{}", hex::encode(pair.sign(&message)));
 		println!("{}", signature);
 		Ok(())

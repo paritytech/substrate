@@ -22,56 +22,57 @@ use sp_runtime::{
 	generic::{UncheckedExtrinsic, SignedPayload},
 	traits::IdentifyAccount,
 };
-use parity_scale_codec::{Encode, WrapperTypeEncode};
+use parity_scale_codec::{Encode, Decode};
 use serde_json::json;
-use sp_runtime::traits::SignedExtension;
-use pallet_indices::address;
+use sp_runtime::traits::{SignedExtension, StaticLookup};
 use crate::{error::{self, Error}, SharedParams, arg_enums::OutputType};
 
-/// Signature type for Crypto
-pub type SignatureFor<C> = <<C as Crypto>::Pair as Pair>::Signature;
-/// Public key type for Crypto
-pub type PublicFor<C> = <<C as Crypto>::Pair as Pair>::Public;
-/// Seed type for Crypto
-pub type SeedFor<C> = <<C as Crypto>::Pair as Pair>::Seed;
-/// AccountIndex type for Crypto
-pub type IndexFor<C> = <<C as Crypto>::Runtime as frame_system::Trait>::Index;
-/// Address type for Crypto
-pub type AddressOf<C> = address::Address<
-	<<C as Crypto>::Runtime as frame_system::Trait>::AccountId,
-	<<C as Crypto>::Runtime as pallet_indices::Trait>::AccountIndex
->;
-/// Call type for Crypto
-pub type CallFor<C> = <<C as Crypto>::Runtime as frame_system::Trait>::Call;
+/// Public key type for Runtime
+pub type PublicFor<R> = <<R as RuntimeAdapter>::Pair as Pair>::Public;
+/// Seed type for Runtime
+pub type SeedFor<R> = <<R as RuntimeAdapter>::Pair as Pair>::Seed;
+/// AccountIndex type for Runtime
+pub type IndexFor<R> = <<R as RuntimeAdapter>::Runtime as frame_system::Trait>::Index;
+/// Balance type
+pub type BalanceFor<R> = <<R as RuntimeAdapter>::Runtime as pallet_balances::Trait>::Balance;
+/// Call type for Runtime
+pub type CallFor<R> = <<R as RuntimeAdapter>::Runtime as frame_system::Trait>::Call;
+/// Address type for runtime.
+pub type AddressFor<R> = <<<R as RuntimeAdapter>::Runtime as frame_system::Trait>::Lookup as StaticLookup>::Source;
+/// Hash for runtime.
+pub type HashFor<R> = <<R as RuntimeAdapter>::Runtime as frame_system::Trait>::Hash;
 
 /// Runtime adapter for signing utilities
-pub trait Crypto: Sized {
+pub trait RuntimeAdapter: Sized {
 	/// Pair type
 	type Pair: Pair<Public = Self::Public, Signature = Self::Signature>;
 	/// public type
 	type Public: Public + Into<MultiSigner> + Ss58Codec + AsRef<[u8]> + std::hash::Hash;
 	/// sugnature type
-	type Signature: Into<MultiSignature> + AsRef<[u8]> + Encode;
+	type Signature: Into<MultiSignature> + AsRef<[u8]> + AsMut<[u8]> + Encode + Default;
 	/// runtime
 	type Runtime: frame_system::Trait + pallet_balances::Trait + pallet_indices::Trait;
 	/// extras
 	type Extra: SignedExtension;
+	/// Address type
+	type Address: Encode + Decode + From<Self::Public>;
 
 	/// generate a pair from suri
-	fn pair_from_suri(suri: &str, password: Option<&str>) -> Self::Pair {
-		Self::Pair::from_string(suri, password).expect("Invalid phrase")
+	fn pair_from_suri(suri: &str, password: &str) -> Self::Pair {
+		Self::Pair::from_string(suri, Some(password)).expect("Invalid phrase")
 	}
 
 	/// generate an ss58 encoded address from pair
 	fn ss58_from_pair(pair: &Self::Pair) -> String {
-		pair.public().into().into_account().to_ss58check()
+		let public: MultiSigner = pair.public().into();
+		public.into_account().to_ss58check()
 	}
 
 	/// print formatted pair from uri
 	fn print_from_uri(
 		uri: &str,
 		password: Option<&str>,
-		network_override: Option<Ss58AddressFormat>,
+		network_override: Ss58AddressFormat,
 		output: OutputType,
 	) {
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
@@ -131,10 +132,10 @@ pub trait Crypto: Sized {
 				},
 			}
 
-		} else if let Ok((public_key, v)) =
+		} else if let Ok((public_key, _v)) =
 			<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{
-			let v = network_override.unwrap_or(v);
+			let v = network_override;
 
 			match output {
 				OutputType::Json => {
@@ -171,8 +172,8 @@ pub trait Crypto: Sized {
 }
 
 /// helper method to fetch password from `SharedParams` or read from stdin
-pub fn get_password(run_cmd: &SharedParams) -> error::Result<String> {
-	let (password_interactive, password) = (run_cmd.password_interactive, run_cmd.password.as_ref());
+pub fn get_password(params: &SharedParams) -> error::Result<String> {
+	let (password_interactive, password) = (params.password_interactive, params.password.as_ref());
 
 	let pass = if password_interactive {
 		rpassword::read_password_from_tty(Some("Key password: "))?
@@ -202,21 +203,21 @@ pub fn read_uri(uri: Option<String>) -> error::Result<String> {
 }
 
 /// formats seed as hex
-fn format_seed<C: Crypto>(seed: SeedFor<C>) -> String {
+pub fn format_seed<C: RuntimeAdapter>(seed: SeedFor<C>) -> String {
 	format!("0x{}", HexDisplay::from(&seed.as_ref()))
 }
 
 /// formats public key as hex
-fn format_public_key<C: Crypto>(public_key: PublicFor<C>) -> String {
+fn format_public_key<C: RuntimeAdapter>(public_key: PublicFor<C>) -> String {
 	format!("0x{}", HexDisplay::from(&public_key.as_ref()))
 }
 
 /// formats public key as accountId as hex
-fn format_account_id<C: Crypto>(public_key: PublicFor<C>) -> String {
+fn format_account_id<C: RuntimeAdapter>(public_key: PublicFor<C>) -> String {
 	format!("0x{}", HexDisplay::from(&public_key.into().into_account().as_ref()))
 }
 
-/// decode hex
+/// helper method for decoding hex
 pub fn decode_hex<T: AsRef<[u8]>>(message: T) -> Result<Vec<u8>, Error> {
 	hex::decode(message)
 		.map_err(|e| Error::Other(format!("Invalid hex ({})", e)))
@@ -233,29 +234,27 @@ pub fn read_message_from_stdin(should_decode: bool) -> Result<Vec<u8>, Error> {
 }
 
 /// create an extrinsic for the runtime.
-pub fn create_extrinsic_for<C: Crypto>(
-	call: CallFor<C>,
-	index:  IndexFor<C>,
-	signer: C::Pair,
-) -> Result<UncheckedExtrinsic<AddressOf<C>, CallFor<C>, C::Signature, C::Extra>, Error>
+pub fn create_extrinsic_for<RA: RuntimeAdapter, Call>(
+	call: Call,
+	nonce:  IndexFor<RA>,
+	signer: RA::Pair,
+) -> Result<UncheckedExtrinsic<RA::Address, Call, RA::Signature, RA::Extra>, Error>
 	where
-		CallFor<C>: Encode + WrapperTypeEncode,
+		Call: Encode,
 {
-	let extra = C::build_extra(index);
-	let additional_signed = extra.additional_signed()
+	let extra = RA::build_extra(nonce);
+	let payload = SignedPayload::new(call, extra)
 		.map_err(|_| Error::Other("Transaction validity error".into()))?;
-	let raw_payload = SignedPayload::from_raw(call, extra, additional_signed);
 
-	let _signature = raw_payload.using_encoded(|payload| signer.sign(payload));
-	let _signer = signer.public().into();
-	let (_function, _extra, _) = raw_payload.deconstruct();
+	let signature = payload.using_encoded(|payload| signer.sign(payload));
+	let signer = RA::Address::from(signer.public());
+	let (function, extra, _) = payload.deconstruct();
 
-	unimplemented!()
-
-	// Ok(UncheckedExtrinsic::new_signed(
-	// 	function,
-	// 	signer.into_account().into(),
-	// 	signature,
-	// 	extra,
-	// ))
+	Ok(UncheckedExtrinsic::new_signed(
+		function,
+		signer,
+		signature,
+		extra,
+	))
 }
+

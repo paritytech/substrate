@@ -29,6 +29,8 @@ mod sign_transaction;
 mod utils;
 mod transfer;
 mod verify;
+mod vanity;
+mod insert;
 
 use std::fmt::Debug;
 use structopt::StructOpt;

@@ -16,11 +16,9 @@
 
 //! Implementation of the `inspect` subcommand
 
-use crate::{error, arg_enums::OutputType};
-use super::{SharedParams, RunCmd, get_password, read_uri, Crypto};
+use crate::error;
+use super::{SharedParams, RunCmd, get_password, read_uri, RuntimeAdapter};
 use structopt::StructOpt;
-
-
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
@@ -34,24 +32,20 @@ pub struct InspectCmd {
 	#[structopt(long)]
 	uri: Option<String>,
 
-	output_type: OutputType,
-
-	network: String,
-
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
 
 impl InspectCmd {
-	pub fn run<C: Crypto>(self, _run_cmd: RunCmd) -> error::Result<()> {
+	pub fn run<C: RuntimeAdapter>(self) -> error::Result<()> {
 		let uri = read_uri(self.uri)?;
 		let pass = get_password(&self.shared_params)?;
 
 		C::print_from_uri(
 			&uri,
 			Some(pass.as_str()),
-			Some(self.shared_params.network),
+			self.shared_params.network,
 			self.shared_params.output_type
 		);
 

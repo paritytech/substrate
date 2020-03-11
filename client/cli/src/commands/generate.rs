@@ -16,7 +16,7 @@
 
 //! Implementation of the `generate` subcommand
 
-use super::{SharedParams, Crypto, get_password};
+use super::{SharedParams, RuntimeAdapter, get_password};
 use crate::error::{self, Error};
 use bip39::{MnemonicType, Mnemonic, Language};
 use structopt::StructOpt;
@@ -36,7 +36,7 @@ pub struct GenerateCmd {
 
 impl GenerateCmd {
 	/// Run the command
-	pub fn run<C: Crypto>(self) -> error::Result<()> {
+	pub fn run<C: RuntimeAdapter>(self) -> error::Result<()> {
 		let words = match self.words {
 			Some(words) => {
 				MnemonicType::for_word_count(words)
@@ -54,7 +54,7 @@ impl GenerateCmd {
 		C::print_from_uri(
 			mnemonic.phrase(),
 			Some(password.as_str()),
-			Some(maybe_network),
+			maybe_network,
 			output
 		);
 
