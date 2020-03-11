@@ -361,8 +361,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		(pid, event): <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
 	) {
 		if let Some(kad) = self.kademlias.get_mut(&pid) {
-			kad.inject_node_event(peer_id, event)
+			return kad.inject_node_event(peer_id, event)
 		}
+		log::error!(target: "sub-libp2p",
+			"inject_node_event: no kademlia instance registered for protocol {:?}",
+			pid)
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
@@ -614,8 +617,11 @@ impl ProtocolsHandler for DiscoveryHandler {
 		)
 	{
 		if let Some((_, kad)) = self.handlers.iter_mut().find(|p| &p.0 == &pid) {
-			kad.inject_fully_negotiated_outbound(protocol, rest)
+			return kad.inject_fully_negotiated_outbound(protocol, rest)
 		}
+		log::error!(target: "sub-libp2p",
+			"inject_fully_negotiated_outbound: no kademlia instance registered for protocol {:?}",
+			pid)
 	}
 
 	fn inject_fully_negotiated_inbound
@@ -624,14 +630,20 @@ impl ProtocolsHandler for DiscoveryHandler {
 		)
 	{
 		if let Some((_, kad)) = self.handlers.iter_mut().find(|p| &p.0 == &pid) {
-			kad.inject_fully_negotiated_inbound(rest)
+			return kad.inject_fully_negotiated_inbound(rest)
 		}
+		log::error!(target: "sub-libp2p",
+			"inject_fully_negotiated_inbound: no kademlia instance registered for protocol {:?}",
+			pid)
 	}
 
 	fn inject_event(&mut self, (pid, event): Self::InEvent) {
 		if let Some((_, kad)) = self.handlers.iter_mut().find(|p| &p.0 == &pid) {
-			kad.inject_event(event)
+			return kad.inject_event(event)
 		}
+		log::error!(target: "sub-libp2p",
+			"inject_event: no kademlia instance registered for protocol {:?}",
+			pid)
 	}
 
 	fn inject_dial_upgrade_error
@@ -641,8 +653,11 @@ impl ProtocolsHandler for DiscoveryHandler {
 		)
 	{
 		if let Some((_, kad)) = self.handlers.iter_mut().find(|p| &p.0 == &pid) {
-			kad.inject_dial_upgrade_error(other, error)
+			return kad.inject_dial_upgrade_error(other, error)
 		}
+		log::error!(target: "sub-libp2p",
+			"inject_dial_upgrade_error: no kademlia instance registered for protocol {:?}",
+			pid)
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
