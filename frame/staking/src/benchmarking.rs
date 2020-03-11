@@ -372,7 +372,7 @@ benchmarks! {
 		let session_index = SessionIndex::one();
 	}: { 
 		let maybe_validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
-		assert!(maybe_validators.len() == m as usize);
+		assert!(maybe_validators.len() == v as usize);
 	}
 
 	do_slash {
