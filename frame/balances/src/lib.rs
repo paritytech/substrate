@@ -157,7 +157,6 @@ mod tests_composite;
 mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod migration;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
@@ -532,10 +531,6 @@ decl_module! {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as Currency<_>>::transfer(&transactor, &dest, value, KeepAlive)?;
-		}
-
-		fn on_runtime_upgrade() {
-			migration::on_runtime_upgrade::<T, I>();
 		}
 	}
 }
