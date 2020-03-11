@@ -366,7 +366,7 @@ decl_storage! {
 		/// The next session keys for a validator.
 		NextKeys: map hasher(blake2_256) T::ValidatorId => Option<T::Keys>;
 
-		/// The owner of a key. The second key is the `KeyTypeId` + the encoded key.
+		/// The owner of a key. The key is the `KeyTypeId` + the encoded key.
 		KeyOwner: map hasher(blake2_256) (KeyTypeId, Vec<u8>) => Option<T::ValidatorId>;
 	}
 	add_extra_genesis {
@@ -510,6 +510,7 @@ impl<T: Trait> Module<T> {
 	/// Move keys from NextKeys and KeyOwner, if any exist.
 	fn migrate() {
 		use frame_support::storage::migration::{put_storage_value, StorageIterator};
+		sp_runtime::print("Migrating session's double-maps...");
 
 		let prefix = {
 			const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
@@ -519,23 +520,11 @@ impl<T: Trait> Module<T> {
 			h
 		};
 
-		for (suffix, value) in StorageIterator::<T::Keys>::new(b"Session", b"NextKeys").drain() {
-			// The first prefix.len() bytes of suffix should be equal to prefix:
-			if &suffix[0..prefix.len()] == &prefix[..] {
-				let hash = &suffix[prefix.len()..];
-				put_storage_value(b"Session", b"NextKeys", hash, value);
-			} else {
-				sp_runtime::print("GAH! Unexpected prefix found. Discarding item.");
-			}
+		for (hash, value) in StorageIterator::<T::Keys>::with_suffix(b"Session", b"NextKeys", &prefix[..]).drain() {
+			put_storage_value(b"Session", b"NextKeys", &hash, value);
 		}
-		for (suffix, value) in StorageIterator::<T::ValidatorId>::new(b"Session", b"KeyOwner").drain() {
-			// The first prefix.len() bytes of suffix should be equal to prefix:
-			if &suffix[0..prefix.len()] == &prefix[..] {
-				let hash = &suffix[prefix.len()..];
-				put_storage_value(b"Session", b"KeyOwner", hash, value);
-			} else {
-				sp_runtime::print("GAH! Unexpected prefix found. Discarding item.");
-			}
+		for (hash, value) in StorageIterator::<T::ValidatorId>::with_suffix(b"Session", b"KeyOwner", &prefix[..]).drain() {
+			put_storage_value(b"Session", b"KeyOwner", &hash, value);
 		}
 	}
 
