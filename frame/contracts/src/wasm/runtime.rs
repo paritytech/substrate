@@ -429,8 +429,7 @@ define_env!(Env, <E: Ext>,
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 
-		let ext = &mut ctx.ext;
-		match ext.transfer(&callee, value, ctx.gas_meter) {
+		match ctx.ext.transfer(&callee, value, ctx.gas_meter) {
 			Ok(_) => Ok(0),
 			Err(_) => Ok(1),
 		}
