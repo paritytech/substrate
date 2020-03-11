@@ -315,9 +315,17 @@ benchmarks! {
         let (stash, _) = create_stash_controller::<T>(u)?;
     }: _(RawOrigin::Root, stash)
 
-    // cancel_deferred_slash {
+    cancel_deferred_slash {
+        let s in 1 .. 1000;
+        let mut unapplied_slashes = Vec::new();
+        let era = EraIndex::one();
+        for i in 0 .. 1000 {
+            unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>>::default());
+        }
+        UnappliedSlashes::<T>::insert(era, &unapplied_slashes);
 
-    // }: _()
+        let slash_indices: Vec<u32> = (0 .. s).collect();
+    }: _(RawOrigin::Root, era, slash_indices)
 
     payout_validator {
         let n in 1 .. MAX_NOMINATIONS;
