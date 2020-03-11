@@ -362,7 +362,7 @@ pub mod tests {
 	>;
 
 	fn local_executor() -> NativeExecutor<substrate_test_runtime_client::LocalExecutor> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 	}
 
 	fn prepare_for_read_proof_check() -> (TestChecker, Header, StorageProof, u32) {

@@ -482,7 +482,7 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 		.map(move |tester| {
 			// register a peer with authority role.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::AUTHORITY);
-			((tester, id))
+			(tester, id)
 		})
 		.then(move |(tester, id)| {
 			// send neighbor message at round 10 and height 50

@@ -367,7 +367,7 @@ mod tests {
 	}
 
 	fn local_executor() -> NativeExecutor<substrate_test_runtime_client::LocalExecutor> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 	}
 
 	#[test]
