@@ -416,7 +416,21 @@ mod tests {
 		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
 		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
 			let block_id = BlockId::number(service.client().chain_info().best_number);
-			let parent_header = service.client().header(&block_id).unwrap().unwrap();
+			let parent_header = service.client().best_header(&block_id)
+				.expect("db error")
+				.expect("best block should exist");
+
+			futures::executor::block_on(
+				service.transaction_pool().maintain(
+					ChainEvent::NewBlock {
+						is_new_best: true,
+						id: block_id.clone(),
+						retracted: vec![],
+						header: parent_header,
+					},
+				)
+			);
+
 			let consensus_net = ConsensusNetwork::new(service.network(), service.client().clone());
 			let proposer_factory = consensus::ProposerFactory {
 				client: service.client().clone(),
