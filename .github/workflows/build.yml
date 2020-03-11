@@ -9,7 +9,7 @@ jobs:
   build-substrate:
     name:                      Build linux Substrate
     runs-on:                   ubuntu-latest
-    container:                 parity/rust-builder:latest
+    container:                 generalbeck/rust-builder:musl
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@master
@@ -38,7 +38,7 @@ jobs:
   build-subkey-linux:
     name:                      Build linux Subkey
     runs-on:                   ubuntu-latest
-    container:                 parity/rust-builder:latest
+    container:                 generalbeck/rust-builder:musl
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@master
@@ -78,7 +78,7 @@ jobs:
       - name:                  Run cargo build Subkey
         shell:                 bash
         run: |
-          rustup target add --toolchain x86_64-apple-darwin wasm32-unknown-unknown
+          rustup target add wasm32-unknown-unknown
           rustup target add x86_64-apple-darwin
           cargo build --target x86_64-apple-darwin --release --verbose
       - name: Prepare artifacts
