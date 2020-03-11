@@ -1296,17 +1296,6 @@ decl_module! {
 			<Invulnerables<T>>::put(validators);
 		}
 
-		/// Force there to be a new era at the end of sessions indefinitely.
-		///
-		/// # <weight>
-		/// - One storage write
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
-		fn force_new_era_always(origin) {
-			ensure_root(origin)?;
-			ForceEra::put(Forcing::ForceAlways);
-		}
-
 		/// Force a current staker to become completely unstaked, immediately.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn force_unstake(origin, stash: T::AccountId) {
@@ -1317,6 +1306,17 @@ decl_module! {
 
 			// remove the lock.
 			T::Currency::remove_lock(STAKING_ID, &stash);
+		}
+
+		/// Force there to be a new era at the end of sessions indefinitely.
+		///
+		/// # <weight>
+		/// - One storage write
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
+		fn force_new_era_always(origin) {
+			ensure_root(origin)?;
+			ForceEra::put(Forcing::ForceAlways);
 		}
 
 		/// Cancel enactment of a deferred slash. Can be called by either the root origin or
