@@ -256,6 +256,13 @@ pub trait KeyOwnerProofSystem<Key> {
 /// - Someone got slashed.
 /// - Someone paid for a transaction to be included.
 pub trait OnUnbalanced<Imbalance: TryDrop> {
+	/// Handler for some imbalances. The different imbalances might have different origins or
+	/// meanings, dependent on the context. Will default to simply calling on_unbalanced for all
+	/// of them. Infallible.
+	fn on_unbalanceds<B>(amounts: impl Iterator<Item=Imbalance>) where Imbalance: crate::traits::Imbalance<B> {
+		Self::on_unbalanced(amounts.fold(Imbalance::zero(), |i, x| x.merge(i)))
+	}
+
 	/// Handler for some imbalance. Infallible.
 	fn on_unbalanced(amount: Imbalance) {
 		amount.try_drop().unwrap_or_else(Self::on_nonzero_unbalanced)
@@ -263,12 +270,10 @@ pub trait OnUnbalanced<Imbalance: TryDrop> {
 
 	/// Actually handle a non-zero imbalance. You probably want to implement this rather than
 	/// `on_unbalanced`.
-	fn on_nonzero_unbalanced(amount: Imbalance);
-}
-
-impl<Imbalance: TryDrop> OnUnbalanced<Imbalance> for () {
 	fn on_nonzero_unbalanced(amount: Imbalance) { drop(amount); }
 }
+
+impl<Imbalance: TryDrop> OnUnbalanced<Imbalance> for () {}
 
 /// Simple boolean for whether an account needs to be kept in existence.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -331,9 +336,70 @@ pub trait Imbalance<Balance>: Sized + TryDrop {
 	/// is guaranteed to be at most `amount` and the second will be the remainder.
 	fn split(self, amount: Balance) -> (Self, Self);
 
+	/// Consume `self` and return two independent instances; the amounts returned will be in
+	/// approximately the same ratio as `first`:`second`.
+	///
+	/// NOTE: This requires up to `first + second` room for a multiply, and `first + second` should
+	/// fit into a `u32`. Overflow will safely saturate in both cases.
+	fn ration(self, first: u32, second: u32) -> (Self, Self)
+		where Balance: From<u32> + Saturating + Div<Output=Balance>
+	{
+		let total: u32 = first.saturating_add(second);
+		let amount1 = self.peek().saturating_mul(first.into()) / total.into();
+		self.split(amount1)
+	}
+
+	/// Consume self and add its two components, defined by the first component's balance,
+	/// element-wise to two pre-existing Imbalances.
+	///
+	/// A convenient replacement for `split` and `merge`.
+	fn split_merge(self, amount: Balance, others: (Self, Self)) -> (Self, Self) {
+		let (a, b) = self.split(amount);
+		(a.merge(others.0), b.merge(others.1))
+	}
+
+	/// Consume self and add its two components, defined by the ratio `first`:`second`,
+	/// element-wise to two pre-existing Imbalances.
+	///
+	/// A convenient replacement for `split` and `merge`.
+	fn ration_merge(self, first: u32, second: u32, others: (Self, Self)) -> (Self, Self)
+		where Balance: From<u32> + Saturating + Div<Output=Balance>
+	{
+		let (a, b) = self.ration(first, second);
+		(a.merge(others.0), b.merge(others.1))
+	}
+
+	/// Consume self and add its two components, defined by the first component's balance,
+	/// element-wise into two pre-existing Imbalance refs.
+	///
+	/// A convenient replacement for `split` and `subsume`.
+	fn split_merge_into(self, amount: Balance, others: &mut (Self, Self)) {
+		let (a, b) = self.split(amount);
+		others.0.subsume(a);
+		others.1.subsume(b);
+	}
+
+	/// Consume self and add its two components, defined by the ratio `first`:`second`,
+	/// element-wise to two pre-existing Imbalances.
+	///
+	/// A convenient replacement for `split` and `merge`.
+	fn ration_merge_into(self, first: u32, second: u32, others: &mut (Self, Self))
+		where Balance: From<u32> + Saturating + Div<Output=Balance>
+	{
+		let (a, b) = self.ration(first, second);
+		others.0.subsume(a);
+		others.1.subsume(b);
+	}
+
 	/// Consume `self` and an `other` to return a new instance that combines
 	/// both.
 	fn merge(self, other: Self) -> Self;
+
+	/// Consume self to mutate `other` so that it combines both. Just like `subsume`, only with
+	/// reversed arguments.
+	fn merge_into(self, other: &mut Self) {
+		other.subsume(self)
+	}
 
 	/// Consume `self` and maybe an `other` to return a new instance that combines
 	/// both.
