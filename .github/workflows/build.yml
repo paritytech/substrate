@@ -67,7 +67,6 @@ jobs:
   build-subkey-macos:
     name:                      Build MacOS Subkey
     runs-on:                   macos-latest
-    container:                 generalbeck/rust-builder:musl
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@master
@@ -98,7 +97,7 @@ jobs:
 
   build-rust-doc-release:
     name:                      Build Rust doc release
-    runs-on:                   self-hosted
+    runs-on:                   ubuntu-latest
     container:                 parity/rust-builder:latest
     steps:
       - name:                  Checkout sources
