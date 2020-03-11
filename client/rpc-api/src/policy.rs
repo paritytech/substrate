@@ -22,7 +22,7 @@
 use jsonrpc_core as rpc;
 
 /// Signifies whether a potentially unsafe RPC should be denied.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum DenyUnsafe {
     /// Denies only potentially unsafe RPCs.
     Yes,

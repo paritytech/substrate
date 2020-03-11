@@ -1049,7 +1049,7 @@ ServiceBuilder<
 
 			let maybe_offchain_rpc = offchain_storage.clone()
 			.map(|storage| {
-				let offchain = sc_rpc::offchain::Offchain::new(storage);
+				let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe);
 				// FIXME: Use plain Option (don't collect into HashMap) when we upgrade to jsonrpc 14.1
 				// https://github.com/paritytech/jsonrpc/commit/20485387ed06a48f1a70bf4d609a7cde6cf0accf
 				let delegate = offchain::OffchainApi::to_delegate(offchain);
