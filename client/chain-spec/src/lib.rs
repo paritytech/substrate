@@ -49,7 +49,7 @@
 //!
 //! ```rust
 //! use serde::{Serialize, Deserialize};
-//! use sc_chain_spec::{Forks, ChainSpecGroup, ChainSpecExtension};
+//! use sc_chain_spec::{Forks, ChainSpecGroup, ChainSpecExtension, GenericChainSpec};
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
