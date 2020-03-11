@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::{fmt::Debug, path::PathBuf};
 use sp_runtime::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sc_client::StateMachine;
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod, VersionInfo};
 use sc_client_db::BenchmarkingState;
 use sc_service::{RuntimeGenesis, ChainSpecExtension, Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
-use std::fmt::Debug;
 use codec::{Encode, Decode};
 use frame_benchmarking::BenchmarkResults;
 
@@ -168,14 +168,20 @@ impl BenchmarkCmd {
 		&self,
 		mut config: &mut Configuration<G, E>,
 		spec_factory: impl FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		version: &VersionInfo,
+		_version: &VersionInfo,
 	) -> sc_cli::Result<()> where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		// Configure chain spec.
+		let chain_key = self.shared_params.chain.clone().unwrap_or("dev".into());
+		let spec = match spec_factory(&chain_key)? {
+			Some(spec) => spec,
+			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
+		};
+		config.chain_spec = Some(spec);
 
-		// make sure to configure keystore
+		// Make sure to configure keystore.
 		config.use_in_memory_keystore()?;
 
 		Ok(())
