@@ -767,6 +767,7 @@ decl_storage! {
 		///
 		/// This is similar to [`ErasStakers`] but number of nominators exposed is reduce to the
 		/// `T::MaxNominatorRewardedPerValidator` biggest stakers.
+		/// (Note: the field `total` and `own` of the exposure remains unchanged).
 		/// This is used to limit the i/o cost for the nominator payout.
 		///
 		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
@@ -1349,7 +1350,10 @@ decl_module! {
 		/// - `who` is the controller account of the nominator to pay out.
 		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
 		///   then it indicates an instruction to skip the payout of all previous eras.
-		/// - `validators` is the list of all validators that `who` had exposure to during `era`.
+		/// - `validators` is the list of all validators that `who` had exposure to during `era`,
+		///   alongside the index of `who` in the clipped exposure of the validator.
+		///   I.e. each element is a tuple of
+		///   `(validator, index of `who` in clipped exposure of validator)`.
 		///   If it is incomplete, then less than the full reward will be paid out.
 		///   It must not exceed `MAX_NOMINATIONS`.
 		///
@@ -1542,7 +1546,7 @@ impl<T: Trait> Module<T> {
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 		let commission = Self::eras_validator_prefs(&era, &ledger.stash).commission;
-		let exposure = <ErasStakers<T>>::get(&era, &ledger.stash);
+		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
 
 		let exposure_part = Perbill::from_rational_approximation(
 			exposure.own,
