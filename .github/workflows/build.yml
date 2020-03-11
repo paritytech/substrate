@@ -80,6 +80,7 @@ jobs:
         run: |
           rustup install stable nightly
           rustup target add wasm32-unknown-unknown
+          rustup target add wasm32-unknown-unknown --toolchain nightly
           cargo build --release --verbose
       - name: Prepare artifacts
         shell: bash
