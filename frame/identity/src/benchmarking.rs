@@ -62,6 +62,12 @@ fn add_sub_accounts<T: Trait>(who: T::AccountId, s: u32) -> Result<Vec<(T::Accou
 		let sub_account = account::<T>("sub", i);
 		subs.push((sub_account, data.clone()));
 	}
+
+	// Set identity so `set_subs` does not fail.
+	let _ = T::Currency::make_free_balance_be(&who, BalanceOf::<T>::max_value());
+	let info = create_identity_info::<T>(1);
+	Identity::<T>::set_identity(who_origin.clone().into(), info)?;
+
 	Identity::<T>::set_subs(who_origin.into(), subs.clone())?;
 
 	return Ok(subs)
@@ -91,7 +97,7 @@ benchmarks! {
 	// These are the common parameters along with their instancing.
 	_ {
 		let r in 1 .. MAX_REGISTRARS => add_registrars::<T>(r)?;
-		let s in 1 .. T::MaxSubAccounts::get() => {
+		let s in 1 .. T::MaxSubAccounts::get() - 1 => {
 			// Give them s many sub accounts
 			let caller = account::<T>("caller", 0);
 			let _ = add_sub_accounts::<T>(caller, s)?;
@@ -147,11 +153,6 @@ benchmarks! {
 
 		let caller = account::<T>("caller", 0);
 		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
-		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-
-		// Create their main identity
-		let info = create_identity_info::<T>(1);
-		Identity::<T>::set_identity(caller_origin, info)?;
 	}: _(RawOrigin::Signed(caller), {
 		let mut subs = Module::<T>::subs(&caller);
 		// Generic data to be used.
