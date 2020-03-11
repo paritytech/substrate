@@ -17,6 +17,7 @@ sp-io = { version = "2.0.0-alpha.2", default-features = false, path = "../../pri
 sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
+frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
 sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
@@ -35,3 +36,4 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 ]
+runtime-benchmarks = ["frame-benchmarking", "frame-system/runtime-benchmarks"]

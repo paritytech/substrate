@@ -52,36 +52,6 @@ pub trait Externalities: ExtensionStore {
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
-	/// Read original runtime storage, ignoring any overlayed changes.
-	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
-
-	/// Read original runtime child storage, ignoring any overlayed changes.
-	///
-	/// Returns an `Option` that holds the SCALE encoded hash.
-	fn original_child_storage(
-		&self,
-		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>>;
-
-	/// Get original storage value hash, ignoring any overlayed changes.
-	/// This may be optimized for large values.
-	///
-	/// Returns an `Option` that holds the SCALE encoded hash.
-	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>>;
-
-	/// Get original child storage value hash, ignoring any overlayed changes.
-	/// This may be optimized for large values.
-	///
-	/// Returns an `Option` that holds the SCALE encoded hash.
-	fn original_child_storage_hash(
-		&self,
-		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>>;
-
 	/// Read child runtime storage.
 	///
 	/// Returns an `Option` that holds the SCALE encoded hash.

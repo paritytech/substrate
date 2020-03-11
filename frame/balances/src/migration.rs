@@ -1,3 +1,21 @@
+// Copyright 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Temporary migrations of the balances module.
+
 use super::*;
 
 pub fn on_runtime_upgrade<T: Trait<I>, I: Instance>() {
@@ -68,14 +86,20 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() {
 		put_storage_value(b"Balances", b"Account", &hash, account);
 	}
 
+	let prefix = {
+		let encoded_prefix_key_hash = b":session:keys".to_vec().encode();
+		let mut h = twox_64(&encoded_prefix_key_hash[..]).to_vec();
+		h.extend(&encoded_prefix_key_hash[..]);
+		h
+	};
+
 	for (hash, balances) in StorageIterator::<AccountData<T::Balance>>::new(b"Balances", b"Account").drain() {
 		let nonce = take_storage_value::<T::Index>(b"System", b"AccountNonce", &hash).unwrap_or_default();
 		let mut refs: system::RefCount = 0;
 		// The items in Kusama that would result in a ref count being incremented.
 		if have_storage_value(b"Democracy", b"Proxy", &hash) { refs += 1 }
 		// We skip Recovered since it's being replaced anyway.
-		let mut prefixed_hash = twox_64(&b":session:keys"[..]).to_vec();
-		prefixed_hash.extend(&b":session:keys"[..]);
+		let mut prefixed_hash = prefix.clone();
 		prefixed_hash.extend(&hash[..]);
 		if have_storage_value(b"Session", b"NextKeys", &prefixed_hash) { refs += 1 }
 		if have_storage_value(b"Staking", b"Bonded", &hash) { refs += 1 }
