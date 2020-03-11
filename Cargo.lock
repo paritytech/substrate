@@ -5941,6 +5941,7 @@ dependencies = [
 name = "sc-consensus-manual-seal"
 version = "0.8.0-alpha.3"
 dependencies = [
+ "assert_matches",
  "derive_more",
  "env_logger 0.7.1",
  "futures 0.3.4",
