@@ -17,7 +17,7 @@
 //! Consensus extension module tests for BABE consensus.
 
 use super::*;
-use mock::{new_test_ext, Babe, Test};
+use mock::{new_test_ext, Babe, System};
 use sp_runtime::{traits::OnFinalize, testing::{Digest, DigestItem}};
 use pallet_session::ShouldEndSession;
 
@@ -65,8 +65,6 @@ fn check_module() {
 			"BABE does not include the block number in epoch calculations");
 	})
 }
-
-type System = frame_system::Module<Test>;
 
 #[test]
 fn first_block_epoch_zero_start() {

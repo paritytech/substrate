@@ -19,11 +19,6 @@ use structopt::StructOpt;
 
 /// An overarching CLI command definition.
 #[derive(Clone, Debug, StructOpt)]
-#[structopt(settings = &[
-	structopt::clap::AppSettings::GlobalVersion,
-	structopt::clap::AppSettings::ArgsNegateSubcommands,
-	structopt::clap::AppSettings::SubcommandsNegateReqs,
-])]
 pub struct Cli {
 	/// Possible subcommand with parameters.
 	#[structopt(subcommand)]

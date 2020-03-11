@@ -92,8 +92,8 @@ pub(super) fn make_transcript(
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.append_message(b"slot number", &slot_number.to_le_bytes());
-	transcript.append_message(b"current epoch", &epoch.to_le_bytes());
+	transcript.append_u64(b"slot number", slot_number);
+	transcript.append_u64(b"current epoch", epoch);
 	transcript.append_message(b"chain randomness", randomness);
 	transcript
 }

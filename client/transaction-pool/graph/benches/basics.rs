@@ -113,7 +113,11 @@ impl ChainApi for TestApi {
 }
 
 fn uxt(transfer: Transfer) -> Extrinsic {
-	Extrinsic::Transfer(transfer, Default::default())
+	Extrinsic::Transfer {
+		transfer,
+		signature: Default::default(),
+		exhaust_resources_when_not_first: false,
+	}
 }
 
 fn bench_configured(pool: Pool<TestApi>, number: u64) {

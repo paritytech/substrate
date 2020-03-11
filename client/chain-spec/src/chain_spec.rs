@@ -117,8 +117,8 @@ struct ChildRawStorage {
 #[serde(deny_unknown_fields)]
 /// Storage content for genesis block.
 struct RawGenesis {
-	pub top: GenesisStorage,
-	pub children: HashMap<StorageKey, ChildRawStorage>,
+	top: GenesisStorage,
+	children: HashMap<StorageKey, ChildRawStorage>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -134,14 +134,14 @@ enum Genesis<G> {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 struct ClientSpec<E> {
-	pub name: String,
-	pub id: String,
-	pub boot_nodes: Vec<String>,
-	pub telemetry_endpoints: Option<TelemetryEndpoints>,
-	pub protocol_id: Option<String>,
-	pub properties: Option<Properties>,
+	name: String,
+	id: String,
+	boot_nodes: Vec<String>,
+	telemetry_endpoints: Option<TelemetryEndpoints>,
+	protocol_id: Option<String>,
+	properties: Option<Properties>,
 	#[serde(flatten)]
-	pub extensions: E,
+	extensions: E,
 	// Never used, left only for backward compatibility.
 	consensus_engine: (),
 	#[serde(skip_serializing)]

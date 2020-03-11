@@ -81,7 +81,7 @@ pub struct BenchDb {
 impl Clone for BenchDb {
 	fn clone(&self) -> Self {
 		let keyring = self.keyring.clone();
-		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
+		let dir = tempfile::tempdir().expect("temp dir creation failed");
 
 		let seed_dir = self.directory_guard.0.path();
 
@@ -120,7 +120,7 @@ impl BenchDb {
 	pub fn new(keyring_length: usize) -> Self {
 		let keyring = BenchKeyring::new(keyring_length);
 
-		let dir = tempdir::TempDir::new("sub-bench").expect("temp dir creation failed");
+		let dir = tempfile::tempdir().expect("temp dir creation failed");
 		log::trace!(
 			target: "bench-logistics",
 			"Created seed db at {}",
@@ -150,11 +150,12 @@ impl BenchDb {
 
 		let (client, backend) = sc_client_db::new_client(
 			db_config,
-			NativeExecutor::new(WasmExecutionMethod::Compiled, None),
+			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 8),
 			&keyring.generate_genesis(),
 			None,
 			None,
 			ExecutionExtensions::new(profile.into_execution_strategies(), None),
+			None,
 		).expect("Should not fail");
 
 		(client, backend)
@@ -357,7 +358,7 @@ impl Profile {
 	}
 }
 
-struct Guard(tempdir::TempDir);
+struct Guard(tempfile::TempDir);
 
 impl Guard {
 	fn path(&self) -> &Path {

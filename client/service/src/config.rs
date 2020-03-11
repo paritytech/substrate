@@ -27,6 +27,7 @@ use sc_chain_spec::{ChainSpec, NoExtension};
 use sp_core::crypto::Protected;
 use target_info::Target;
 use sc_telemetry::TelemetryEndpoints;
+use prometheus_endpoint::Registry;
 
 /// Executable version. Used to pass version information from the root crate.
 #[derive(Clone)]
@@ -93,8 +94,8 @@ pub struct Configuration<G, E = NoExtension> {
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
-	/// Prometheus exporter Port. `None` if disabled.
-	pub prometheus_port: Option<SocketAddr>,
+	/// Prometheus endpoint configuration. `None` if disabled.
+	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
@@ -122,6 +123,10 @@ pub struct Configuration<G, E = NoExtension> {
 	pub tracing_targets: Option<String>,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
+	/// The size of the instances cache.
+	///
+	/// The default value is 8.
+	pub max_runtime_instances: usize,
 }
 
 /// Configuration of the client keystore.
@@ -165,6 +170,28 @@ pub enum DatabaseConfig {
 	Custom(Arc<dyn KeyValueDB>),
 }
 
+/// Configuration of the Prometheus endpoint.
+#[derive(Clone)]
+pub struct PrometheusConfig {
+	/// Port to use.
+	pub port: SocketAddr,
+	/// A metrics registry to use. Useful for setting the metric prefix.
+	pub registry: Registry,
+}
+
+impl PrometheusConfig {
+	/// Create a new config using the default registry.
+	///
+	/// The default registry prefixes metrics with `substrate`.
+	pub fn new_with_default_registry(port: SocketAddr) -> Self {
+		Self {
+			port,
+			registry: Registry::new_custom(Some("substrate".into()), None)
+				.expect("this can only fail if the prefix is empty")
+		}
+	}
+}
+
 impl<G, E> Default for Configuration<G, E> {
 	/// Create a default config
 	fn default() -> Self {
@@ -190,7 +217,7 @@ impl<G, E> Default for Configuration<G, E> {
 			rpc_ws: None,
 			rpc_ws_max_connections: None,
 			rpc_cors: Some(vec![]),
-			prometheus_port: None,
+			prometheus_config: None,
 			telemetry_endpoints: None,
 			telemetry_external_transport: None,
 			default_heap_pages: None,
@@ -201,13 +228,14 @@ impl<G, E> Default for Configuration<G, E> {
 			dev_key_seed: None,
 			tracing_targets: Default::default(),
 			tracing_receiver: Default::default(),
+			max_runtime_instances: 8,
 		}
 	}
 }
 
 impl<G, E> Configuration<G, E> {
 	/// Create a default config using `VersionInfo`
-	pub fn new(version: &VersionInfo) -> Self {
+	pub fn from_version(version: &VersionInfo) -> Self {
 		let mut config = Configuration::default();
 		config.impl_name = version.name;
 		config.impl_version = version.version;
@@ -253,6 +281,28 @@ impl<G, E> Configuration<G, E> {
 	/// This method panic if the `database` is `None`
 	pub fn expect_database(&self) -> &DatabaseConfig {
 		self.database.as_ref().expect("database must be specified")
+	}
+
+	/// Returns a string displaying the node role, special casing the sentry mode
+	/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
+	/// doesn't participate.
+	pub fn display_role(&self) -> String {
+		if self.sentry_mode {
+			"SENTRY".to_string()
+		} else {
+			self.roles.to_string()
+		}
+	}
+
+	/// Use in memory keystore config when it is not required at all.
+	///
+	/// This function returns an error if the keystore is already set to something different than
+	/// `KeystoreConfig::None`.
+	pub fn use_in_memory_keystore(&mut self) -> Result<(), String> {
+		match &mut self.keystore {
+			cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
+			_ => Err("Keystore config specified when it should not be!".into()),
+		}
 	}
 }
 

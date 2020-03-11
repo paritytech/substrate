@@ -119,14 +119,6 @@ impl Externalities for BasicExternalities {
 		self.storage(key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
-	fn original_storage(&self, key: &[u8]) -> Option<StorageValue> {
-		self.storage(key)
-	}
-
-	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.storage_hash(key)
-	}
-
 	fn child_storage(
 		&self,
 		storage_key: ChildStorageKey,
@@ -143,24 +135,6 @@ impl Externalities for BasicExternalities {
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		self.child_storage(storage_key, child_info, key).map(|v| Blake2Hasher::hash(&v).encode())
-	}
-
-	fn original_child_storage_hash(
-		&self,
-		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		self.child_storage_hash(storage_key, child_info, key)
-	}
-
-	fn original_child_storage(
-		&self,
-		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
-		key: &[u8],
-	) -> Option<StorageValue> {
-		Externalities::child_storage(self, storage_key, child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
@@ -298,6 +272,10 @@ impl Externalities for BasicExternalities {
 	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		Ok(None)
 	}
+
+	fn wipe(&mut self) {}
+
+	fn commit(&mut self) {}
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {
@@ -346,7 +324,7 @@ mod tests {
 			top: Default::default(),
 			children: map![
 				child_storage.clone() => StorageChild {
-					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
+					data: map![ b"doe".to_vec() => b"reindeer".to_vec() ],
 					child_info: CHILD_INFO_1.to_owned(),
 				}
 			]

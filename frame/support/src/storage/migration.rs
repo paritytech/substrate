@@ -71,6 +71,11 @@ impl<T: Decode + Sized> Iterator for StorageIterator<T> {
 }
 
 /// Get a particular value in storage by the `module`, the map's `item` name and the key `hash`.
+pub fn have_storage_value(module: &[u8], item: &[u8], hash: &[u8]) -> bool {
+	get_storage_value::<()>(module, item, hash).is_some()
+}
+
+/// Get a particular value in storage by the `module`, the map's `item` name and the key `hash`.
 pub fn get_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &[u8]) -> Option<T> {
 	let mut key = vec![0u8; 32 + hash.len()];
 	key[0..16].copy_from_slice(&Twox128::hash(module));

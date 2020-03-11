@@ -141,7 +141,7 @@ fn node_config<G, E: Clone> (
 {
 	let root = root.path().join(format!("node-{}", index));
 
-	let config_path = Some(String::from(root.join("network").to_str().unwrap()));
+	let config_path = Some(root.join("network"));
 	let net_config_path = config_path.clone();
 
 	let network_config = NetworkConfiguration {
@@ -199,7 +199,7 @@ fn node_config<G, E: Clone> (
 		rpc_ws: None,
 		rpc_ws_max_connections: None,
 		rpc_cors: None,
-		prometheus_port: None,
+		prometheus_config: None,
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
 		default_heap_pages: None,
@@ -210,6 +210,7 @@ fn node_config<G, E: Clone> (
 		dev_key_seed: key_seed,
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
+		max_runtime_instances: 8,
 	}
 }
 
