@@ -128,12 +128,14 @@ where
 
 	// we eagerly drop the service so that the internal exit future is fired,
 	// but we need to keep holding a reference to the global telemetry guard
+	// and drop the runtime first.
 	let _telemetry = service.telemetry();
 
 	let f = service.fuse();
 	pin_mut!(f);
 
 	runtime.block_on(main(f)).map_err(|e| e.to_string())?;
+	drop(runtime);
 
 	Ok(())
 }

@@ -141,7 +141,7 @@ Note that in case of storage modification we need to construct a key in the unde
 - then perform `blake2_256` hashing of the storage key.
 - concatenation of these hashes will constitute the key in the underlying storage.
 
-There is also a special case to think of: if the balance of some account goes below `existential_deposit`, then all storage entries of that account will be erased, which requires time proprotional to the number of storage entries that account has.
+There is also a special case to think of: if the balance of some account goes below `existential_deposit`, then all storage entries of that account will be erased, which requires time proportional to the number of storage entries that account has.
 
 **complexity**: `N` inserts into a `Map` or eventually into the storage (if committed). Every deleted account will induce removal of all its storage which is proportional to the number of storage entries that account has.
 
@@ -236,7 +236,7 @@ This function takes the code of the constructor and input data. Instantiation of
 
 **Note** that the complexity of executing the constructor code should be considered separately.
 
-**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most likely it will use some kind of hashing over the code of the constructor and input data. The default `SimpleAddressDeterminator` does precisely that.
+**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most likely it will use some kind of hashing over the code of the constructor and input data. The default `SimpleAddressDeterminer` does precisely that.
 
 **Note** that the constructor returns code in the owned form and it's obtained via return facilities, which should have take fee for the return value.
 
@@ -261,9 +261,19 @@ Each external function invoked from a contract can involve some overhead.
 This function receives a `key` and `value` as arguments. It consists of the following steps:
 
 1. Reading the sandbox memory for `key` and `value` (see sandboxing memory get).
-2. Setting the storage by the given `key` with the given `value` (see `set_storage`).
+2. Setting the storage at the given `key` to the given `value` (see `set_storage`).
 
 **complexity**: Complexity is proportional to the size of the `value`. This function induces a DB write of size proportional to the `value` size (if flushed to the storage), so should be priced accordingly.
+
+## ext_clear_storage
+
+This function receives a `key` as argument. It consists of the following steps:
+
+1. Reading the sandbox memory for `key` (see sandboxing memory get).
+2. Clearing the storage at the given `key` (see `set_storage`).
+
+**complexity**: Complexity is constant. This function induces a DB write to clear the storage entry
+(upon being flushed to the storage) and should be priced accordingly.
 
 ## ext_get_storage
 

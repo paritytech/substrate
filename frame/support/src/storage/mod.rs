@@ -25,6 +25,7 @@ pub mod hashed;
 pub mod child;
 #[doc(hidden)]
 pub mod generator;
+pub mod migration;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
@@ -43,6 +44,10 @@ pub trait StorageValue<T: FullCodec> {
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query;
 
+	/// Try to get the underlying value from the provided storage instance; `Ok` if it exists,
+	/// `Err` if not.
+	fn try_get() -> Result<T, ()>;
+
 	/// Translate a value from some previous type (`O`) to the current type.
 	///
 	/// `f: F` is the translation function.
@@ -60,13 +65,17 @@ pub trait StorageValue<T: FullCodec> {
 	///
 	/// # Usage
 	///
-	/// This would typically be called inside the module implementation of on_initialize, while
-	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// This would typically be called inside the module implementation of on_runtime_upgrade, while
+	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()>;
 
 	/// Store a value under this key into the provided storage instance.
 	fn put<Arg: EncodeLike<T>>(val: Arg);
+
+	/// Store a value under this key into the provided storage instance; this uses the query
+	/// type rather than the underlying value.
+	fn set(val: Self::Query);
 
 	/// Mutate the value
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R;
@@ -143,14 +152,28 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Mutate the value under a key.
 	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
 
+	/// Mutate the item, only if an `Ok` value is returned.
+	fn try_mutate<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
+		key: KeyArg,
+		f: F,
+	) -> Result<R, E>;
+
+	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
+	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(key: KeyArg, f: F) -> R;
+
+	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	fn try_mutate_exists<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
+		key: KeyArg,
+		f: F,
+	) -> Result<R, E>;
+
 	/// Take the value under a key.
 	fn take<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
 
 	/// Append the given items to the value in the storage.
 	///
 	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str>
-	where
+	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str> where
 		KeyArg: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
@@ -162,8 +185,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
 	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items)
-	where
+	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) where
 		KeyArg: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
@@ -247,8 +269,8 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	///
 	/// # Usage
 	///
-	/// This would typically be called inside the module implementation of on_initialize, while
-	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// This would typically be called inside the module implementation of on_runtime_upgrade, while
+	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), Option<K2>>
 		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> K, TV: Fn(V2) -> V;
@@ -442,8 +464,8 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	///
 	/// # Usage
 	///
-	/// This would typically be called inside the module implementation of on_initialize, while
-	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// This would typically be called inside the module implementation of on_runtime_upgrade, while
+	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate_values<OldValue, TV>(translate_val: TV) -> Result<(), u32>
 		where OldValue: Decode, TV: Fn(OldValue) -> Value

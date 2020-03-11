@@ -19,13 +19,10 @@
 #![warn(missing_docs)]
 
 use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
-
 use sp_core::{
 	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::BareCryptoStore,
 };
-
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
-
 use parking_lot::RwLock;
 
 /// Keystore pointer
@@ -260,7 +257,7 @@ impl Store {
 	/// Get public keys of all stored keys that match the key type.
 	///
 	/// This will just use the type of the public key (a list of which to be returned) in order
-	/// to determine the key type. Unless you use a specialised application-type public key, then
+	/// to determine the key type. Unless you use a specialized application-type public key, then
 	/// this only give you keys registered under generic cryptography, and will not return keys
 	/// registered under the application type.
 	pub fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {

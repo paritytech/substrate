@@ -64,7 +64,7 @@ impl Default for ExecutionStrategies {
 
 /// Generate the starting set of ExternalitiesExtensions based upon the given capabilities
 pub trait ExtensionsFactory: Send + Sync {
-	/// Make `Extensions` for given Capapbilities
+	/// Make `Extensions` for given `Capabilities`.
 	fn extensions_for(&self, capabilities: offchain::Capabilities) -> Extensions;
 }
 
@@ -77,7 +77,7 @@ impl ExtensionsFactory for () {
 /// A producer of execution extensions for offchain calls.
 ///
 /// This crate aggregates extensions available for the offchain calls
-/// and is responsbile to produce a right `Extensions` object
+/// and is responsible for producing a correct `Extensions` object.
 /// for each call, based on required `Capabilities`.
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
@@ -125,7 +125,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	/// To break retain cycle between `Client` and `TransactionPool` we require this
 	/// extension to be a `Weak` reference.
 	/// That's also the reason why it's being registered lazily instead of
-	/// during initialisation.
+	/// during initialization.
 	pub fn register_transaction_pool(&self, pool: Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>) {
 		*self.transaction_pool.write() = Some(pool);
 	}

@@ -25,7 +25,7 @@ pub mod system;
 use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use sp_core::{Blake2Hasher, OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
+use sp_core::{OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
 use sp_application_crypto::{ed25519, sr25519, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::PrefixedMemoryDB;
@@ -52,10 +52,10 @@ use cfg_if::cfg_if;
 use sp_core::storage::ChildType;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use sp_consensus_babe::AuthorityId;
+pub use sp_consensus_babe::{AuthorityId, SlotNumber};
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
-// Inlucde the WASM binary
+// Include the WASM binary
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
@@ -100,7 +100,25 @@ impl Transfer {
 	pub fn into_signed_tx(self) -> Extrinsic {
 		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
 			.expect("Creates keyring from public key.").sign(&self.encode()).into();
-		Extrinsic::Transfer(self, signature)
+		Extrinsic::Transfer {
+			transfer: self,
+			signature,
+			exhaust_resources_when_not_first: false,
+		}
+	}
+
+	/// Convert into a signed extrinsic, which will only end up included in the block
+	/// if it's the first transaction. Otherwise it will cause `ResourceExhaustion` error
+	/// which should be considered as block being full.
+	#[cfg(feature = "std")]
+	pub fn into_resources_exhausting_tx(self) -> Extrinsic {
+		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
+			.expect("Creates keyring from public key.").sign(&self.encode()).into();
+		Extrinsic::Transfer {
+			transfer: self,
+			signature,
+			exhaust_resources_when_not_first: true,
+		}
 	}
 }
 
@@ -108,13 +126,17 @@ impl Transfer {
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
-	Transfer(Transfer, AccountSignature),
+	Transfer {
+		transfer: Transfer,
+		signature: AccountSignature,
+		exhaust_resources_when_not_first: bool,
+	},
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
 }
 
-parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinisic does not need this
+parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
 
 #[cfg(feature = "std")]
 impl serde::Serialize for Extrinsic {
@@ -129,9 +151,9 @@ impl BlindCheckable for Extrinsic {
 	fn check(self) -> Result<Self, TransactionValidityError> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
-			Extrinsic::Transfer(transfer, signature) => {
+			Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first } => {
 				if sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
-					Ok(Extrinsic::Transfer(transfer, signature))
+					Ok(Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first })
 				} else {
 					Err(InvalidTransaction::BadProof.into())
 				}
@@ -164,7 +186,7 @@ impl ExtrinsicT for Extrinsic {
 impl Extrinsic {
 	pub fn transfer(&self) -> &Transfer {
 		match self {
-			Extrinsic::Transfer(ref transfer, _) => transfer,
+			Extrinsic::Transfer { ref transfer, .. } => transfer,
 			_ => panic!("cannot convert to transfer ref"),
 		}
 	}
@@ -340,8 +362,8 @@ impl_outer_origin!{
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Event;
 
-impl From<frame_system::Event> for Event {
-	fn from(_evt: frame_system::Event) -> Self {
+impl From<frame_system::Event<Runtime>> for Event {
+	fn from(_evt: frame_system::Event<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
@@ -371,6 +393,9 @@ impl frame_system::Trait for Runtime {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
 }
 
 impl pallet_timestamp::Trait for Runtime {
@@ -415,7 +440,7 @@ fn code_using_trie() -> u64 {
 	let mut root = sp_std::default::Default::default();
 	let _ = {
 		let v = &pairs;
-		let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
+		let mut t = TrieDBMut::<BlakeTwo256>::new(&mut mdb, &mut root);
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;
@@ -426,7 +451,7 @@ fn code_using_trie() -> u64 {
 		t
 	};
 
-	if let Ok(trie) = TrieDB::<Blake2Hasher>::new(&mdb, &root) {
+	if let Ok(trie) = TrieDB::<BlakeTwo256>::new(&mdb, &root) {
 		if let Ok(iter) = trie.iter() {
 			let mut iter_pairs = Vec::new();
 			for pair in iter {
@@ -602,6 +627,10 @@ cfg_if! {
 						randomness: <pallet_babe::Module<Runtime>>::randomness(),
 						secondary_slots: true,
 					}
+				}
+
+				fn current_epoch_start() -> SlotNumber {
+					<pallet_babe::Module<Runtime>>::current_epoch_start()
 				}
 			}
 
@@ -789,6 +818,10 @@ cfg_if! {
 						randomness: <pallet_babe::Module<Runtime>>::randomness(),
 						secondary_slots: true,
 					}
+				}
+
+				fn current_epoch_start() -> SlotNumber {
+					<pallet_babe::Module<Runtime>>::current_epoch_start()
 				}
 			}
 

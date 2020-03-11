@@ -28,7 +28,7 @@ use codec::Encode;
 use sp_trie;
 
 use sp_core::{H256, convert_hash};
-use sp_runtime::traits::{Header as HeaderT, SimpleArithmetic, Zero, One};
+use sp_runtime::traits::{Header as HeaderT, AtLeast32Bit, Zero, One};
 use sp_state_machine::{
 	MemoryDB, TrieBackend, Backend as StateBackend, StorageProof, InMemoryBackend,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend
@@ -48,7 +48,7 @@ pub fn size<N: From<u32>>() -> N {
 /// Returns Some(cht_number) if CHT is need to be built when the block with given number is canonized.
 pub fn is_build_required<N>(cht_size: N, block_num: N) -> Option<N>
 	where
-		N: Clone + SimpleArithmetic,
+		N: Clone + AtLeast32Bit,
 {
 	let block_cht_num = block_to_cht_number(cht_size.clone(), block_num.clone())?;
 	let two = N::one() + N::one();
@@ -66,7 +66,7 @@ pub fn is_build_required<N>(cht_size: N, block_num: N) -> Option<N>
 /// Returns Some(max_cht_number) if CHT has ever been built given maximal canonical block number.
 pub fn max_cht_number<N>(cht_size: N, max_canonical_block: N) -> Option<N>
 	where
-		N: Clone + SimpleArithmetic,
+		N: Clone + AtLeast32Bit,
 {
 	let max_cht_number = block_to_cht_number(cht_size, max_canonical_block)?;
 	let two = N::one() + N::one();
@@ -291,18 +291,18 @@ fn build_pairs<Header, I>(
 /// More generally: CHT N includes block (1 + N*SIZE)...((N+1)*SIZE).
 /// This is because the genesis hash is assumed to be known
 /// and including it would be redundant.
-pub fn start_number<N: SimpleArithmetic>(cht_size: N, cht_num: N) -> N {
+pub fn start_number<N: AtLeast32Bit>(cht_size: N, cht_num: N) -> N {
 	(cht_num * cht_size) + N::one()
 }
 
 /// Get the ending block of a given CHT.
-pub fn end_number<N: SimpleArithmetic>(cht_size: N, cht_num: N) -> N {
+pub fn end_number<N: AtLeast32Bit>(cht_size: N, cht_num: N) -> N {
 	(cht_num + N::one()) * cht_size
 }
 
 /// Convert a block number to a CHT number.
 /// Returns `None` for `block_num` == 0, `Some` otherwise.
-pub fn block_to_cht_number<N: SimpleArithmetic>(cht_size: N, block_num: N) -> Option<N> {
+pub fn block_to_cht_number<N: AtLeast32Bit>(cht_size: N, block_num: N) -> Option<N> {
 	if block_num == N::zero() {
 		None
 	} else {
@@ -331,8 +331,8 @@ pub fn decode_cht_value(value: &[u8]) -> Option<H256> {
 
 #[cfg(test)]
 mod tests {
-	use sp_core::Blake2Hasher;
 	use substrate_test_runtime_client::runtime::Header;
+	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
 
 	#[test]
@@ -398,7 +398,7 @@ mod tests {
 
 	#[test]
 	fn compute_root_works() {
-		assert!(compute_root::<Header, Blake2Hasher, _>(
+		assert!(compute_root::<Header, BlakeTwo256, _>(
 			SIZE as _,
 			42,
 			::std::iter::repeat_with(|| Ok(Some(H256::from_low_u64_be(1))))
@@ -409,7 +409,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn build_proof_panics_when_querying_wrong_block() {
-		assert!(build_proof::<Header, Blake2Hasher, _, _>(
+		assert!(build_proof::<Header, BlakeTwo256, _, _>(
 			SIZE as _,
 			0,
 			vec![(SIZE * 1000) as u64],
@@ -420,7 +420,7 @@ mod tests {
 
 	#[test]
 	fn build_proof_works() {
-		assert!(build_proof::<Header, Blake2Hasher, _, _>(
+		assert!(build_proof::<Header, BlakeTwo256, _, _>(
 			SIZE as _,
 			0,
 			vec![(SIZE / 2) as u64],

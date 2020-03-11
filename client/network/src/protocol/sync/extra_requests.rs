@@ -53,6 +53,15 @@ pub(crate) struct ExtraRequests<B: BlockT> {
 	request_type_name: &'static str,
 }
 
+#[derive(Debug)]
+pub(crate) struct Metrics {
+	pub(crate) pending_requests: u32,
+	pub(crate) active_requests: u32,
+	pub(crate) importing_requests: u32,
+	pub(crate) failed_requests: u32,
+	_priv: ()
+}
+
 impl<B: BlockT> ExtraRequests<B> {
 	pub(crate) fn new(request_type_name: &'static str) -> Self {
 		ExtraRequests {
@@ -227,6 +236,30 @@ impl<B: BlockT> ExtraRequests<B> {
 		self.best_seen_finalized_number = finalized_number;
 
 		true
+	}
+
+	/// Returns an iterator over all active (in-flight) requests and associated peer id.
+	#[cfg(test)]
+	pub(crate) fn active_requests(&self) -> impl Iterator<Item = (&PeerId, &ExtraRequest<B>)> {
+		self.active_requests.iter()
+	}
+
+	/// Returns an iterator over all scheduled pending requests.
+	#[cfg(test)]
+	pub(crate) fn pending_requests(&self) -> impl Iterator<Item = &ExtraRequest<B>> {
+		self.pending_requests.iter()
+	}
+
+	/// Get some key metrics.
+	pub(crate) fn metrics(&self) -> Metrics {
+		use std::convert::TryInto;
+		Metrics {
+			pending_requests: self.pending_requests.len().try_into().unwrap_or(std::u32::MAX),
+			active_requests: self.active_requests.len().try_into().unwrap_or(std::u32::MAX),
+			failed_requests: self.failed_requests.len().try_into().unwrap_or(std::u32::MAX),
+			importing_requests: self.importing_requests.len().try_into().unwrap_or(std::u32::MAX),
+			_priv: ()
+		}
 	}
 }
 
@@ -469,7 +502,7 @@ mod tests {
 	}
 
 	#[test]
-	fn anecstor_roots_are_finalized_when_finality_notification_is_missed() {
+	fn ancestor_roots_are_finalized_when_finality_notification_is_missed() {
 		let mut finality_proofs = ExtraRequests::<Block>::new("test");
 
 		let hash4 = [4; 32].into();

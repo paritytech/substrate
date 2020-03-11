@@ -39,4 +39,5 @@ pub use self::pool::{
 	Pool,
 	Options, ChainApi, EventStream, ExtrinsicFor,
 	BlockHash, ExHash, NumberFor, TransactionFor,
+	ValidatedTransaction,
 };

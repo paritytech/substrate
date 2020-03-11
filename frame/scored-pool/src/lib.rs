@@ -99,7 +99,7 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::{
-	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDeserialize, Zero, StaticLookup},
+	traits::{EnsureOrigin, AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup},
 };
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -121,7 +121,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 
 	/// The score attributed to a member or candidate.
 	type Score:
-		SimpleArithmetic + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
+		AtLeast32Bit + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;

@@ -55,7 +55,7 @@ pub struct OverlayedChanges {
 	pub(crate) prospective: OverlayedChangeSet,
 	/// Committed changes.
 	pub(crate) committed: OverlayedChangeSet,
-	/// True if extrinsiscs stats must be collected.
+	/// True if extrinsics stats must be collected.
 	pub(crate) collect_extrinsics: bool,
 }
 
@@ -65,7 +65,7 @@ pub struct OverlayedChanges {
 pub struct OverlayedValue {
 	/// Current value. None if value has been deleted.
 	pub value: Option<StorageValue>,
-	/// The set of extinsic indices where the values has been changed.
+	/// The set of extrinsic indices where the values has been changed.
 	/// Is filled only if runtime has announced changes trie support.
 	pub extrinsics: Option<BTreeSet<u32>>,
 }
@@ -371,7 +371,7 @@ impl OverlayedChanges {
 		}
 
 		if let Some((child_committed, _child_info)) = self.committed.children.get(storage_key) {
-			// Then do the same with keys from commited changes.
+			// Then do the same with keys from committed changes.
 			// NOTE that we are making changes in the prospective change set.
 			for key in child_committed.keys() {
 				if key.starts_with(prefix) {

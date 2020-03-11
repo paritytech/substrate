@@ -21,6 +21,7 @@
 mod error;
 mod node_header;
 mod node_codec;
+mod storage_proof;
 mod trie_stream;
 
 use sp_std::boxed::Box;
@@ -35,9 +36,10 @@ pub use error::Error;
 pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
+pub use storage_proof::StorageProof;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
-	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops,
+	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops, TrieDBIterator,
 };
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
@@ -91,7 +93,6 @@ pub type PlainDB<'a, K> = dyn hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// key conflict for non random keys).
 pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
-/// This uses the `KeyFunction` for prefixing keys internally (avoiding
 /// This uses a noops `KeyFunction` (key addressing must be hashed or using
 /// an encoding scheme that avoid key conflict).
 pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;

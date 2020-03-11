@@ -1,5 +1,0 @@
-error: Only the following modules are allowed: `Module`, `Call`, `Storage`, `Event`, `Config`, `Origin`, `Inherent`, `ValidateUnsigned`
-  --> $DIR/default_module_invalid_arg.rs:10:32
-   |
-10 |         Balance: balances::{default, Error},
-   |                                      ^^^^^

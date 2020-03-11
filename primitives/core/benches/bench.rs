@@ -86,9 +86,29 @@ fn bench_ed25519(c: &mut Criterion) {
 	}, vec![32, 1024, 1024 * 1024]);
 }
 
+fn bench_sr25519(c: &mut Criterion) {
+	c.bench_function_over_inputs("signing - sr25519", |b, &msg_size| {
+		let msg = (0..msg_size)
+			.map(|_| rand::random::<u8>())
+			.collect::<Vec<_>>();
+		let key = sp_core::sr25519::Pair::generate().0;
+		b.iter(|| key.sign(&msg))
+	}, vec![32, 1024, 1024 * 1024]);
+
+	c.bench_function_over_inputs("verifying - sr25519", |b, &msg_size| {
+		let msg = (0..msg_size)
+			.map(|_| rand::random::<u8>())
+			.collect::<Vec<_>>();
+		let key = sp_core::sr25519::Pair::generate().0;
+		let sig = key.sign(&msg);
+		let public = key.public();
+		b.iter(|| sp_core::sr25519::Pair::verify(&sig, &msg, &public))
+	}, vec![32, 1024, 1024 * 1024]);
+}
+
 criterion_group!{
 	name = benches;
 	config = Criterion::default().warm_up_time(Duration::from_millis(500)).without_plots();
-	targets = bench_hash_128_fix_size, bench_hash_128_dyn_size, bench_ed25519
+	targets = bench_hash_128_fix_size, bench_hash_128_dyn_size, bench_ed25519, bench_sr25519
 }
 criterion_main!(benches);

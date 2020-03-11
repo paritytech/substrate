@@ -25,9 +25,10 @@ mod app {
 	app_crypto!(sr25519, AUTHORITY_DISCOVERY);
 }
 
-/// An authority discovery authority keypair.
-#[cfg(feature = "std")]
-pub type AuthorityPair = app::Pair;
+sp_application_crypto::with_pair! {
+	/// An authority discovery authority keypair.
+	pub type AuthorityPair = app::Pair;
+}
 
 /// An authority discovery authority identifier.
 pub type AuthorityId = app::Public;

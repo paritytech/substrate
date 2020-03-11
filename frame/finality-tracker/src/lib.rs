@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! SRML module that tracks the last finalized block, as perceived by block authors.
+//! FRAME Pallet that tracks the last finalized block, as perceived by block authors.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -261,6 +261,9 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;

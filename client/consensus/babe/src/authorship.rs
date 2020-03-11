@@ -86,16 +86,15 @@ pub(super) fn secondary_slot_author(
 	Some(&expected_author.0)
 }
 
-#[allow(deprecated)]
 pub(super) fn make_transcript(
 	randomness: &[u8],
 	slot_number: u64,
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
-	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
-	transcript.commit_bytes(b"chain randomness", randomness);
+	transcript.append_u64(b"slot number", slot_number);
+	transcript.append_u64(b"current epoch", epoch);
+	transcript.append_message(b"chain randomness", randomness);
 	transcript
 }
 
@@ -144,7 +143,7 @@ fn claim_secondary_slot(
 /// a primary VRF based slot. If we are not able to claim it, then if we have
 /// secondary slots enabled for the given epoch, we will fallback to trying to
 /// claim a secondary slot.
-pub(super) fn claim_slot(
+pub fn claim_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	config: &BabeConfiguration,

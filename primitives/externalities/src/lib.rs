@@ -52,36 +52,6 @@ pub trait Externalities: ExtensionStore {
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
-	/// Read original runtime storage, ignoring any overlayed changes.
-	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
-
-	/// Read original runtime child storage, ignoring any overlayed changes.
-	///
-	/// Returns an `Option` that holds the SCALE encoded hash.
-	fn original_child_storage(
-		&self,
-		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>>;
-
-	/// Get original storage value hash, ignoring any overlayed changes.
-	/// This may be optimized for large values.
-	///
-	/// Returns an `Option` that holds the SCALE encoded hash.
-	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>>;
-
-	/// Get original child storage value hash, ignoring any overlayed changes.
-	/// This may be optimized for large values.
-	///
-	/// Returns an `Option` that holds the SCALE encoded hash.
-	fn original_child_storage_hash(
-		&self,
-		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>>;
-
 	/// Read child runtime storage.
 	///
 	/// Returns an `Option` that holds the SCALE encoded hash.
@@ -196,20 +166,28 @@ pub trait Externalities: ExtensionStore {
 	) -> Vec<u8>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
-	/// `parent` is expects a SCALE endcoded hash.
+	/// `parent` is expects a SCALE encoded hash.
 	///
 	/// The hash is defined by the `Block`.
 	///
 	/// Returns the SCALE encoded hash.
 	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
 
-	fn wipe(&mut self) {
-		unimplemented!()
-	}
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Wipes all changes from caches and the database.
+	///
+	/// The state will be reset to genesis.
+	fn wipe(&mut self);
 
-	fn commit(&mut self) {
-		unimplemented!()
-	}
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Commits all changes to the database and clears all caches.
+	fn commit(&mut self);
 }
 
 /// Extension for the [`Externalities`] trait.

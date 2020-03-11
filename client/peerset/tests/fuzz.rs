@@ -108,7 +108,7 @@ fn test_once() {
 
 				// If we generate 4, connect to a random node.
 				4 => if let Some(id) = known_nodes.iter()
-					.filter(|n| incoming_nodes.values().all(|m| m != *n) && !connected_nodes.contains(n))
+					.filter(|n| incoming_nodes.values().all(|m| m != *n) && !connected_nodes.contains(*n))
 					.choose(&mut rng) {
 					peerset.incoming(id.clone(), next_incoming_id.clone());
 					incoming_nodes.insert(next_incoming_id.clone(), id.clone());
@@ -120,7 +120,7 @@ fn test_once() {
 				6 => peerset_handle.set_reserved_only(false),
 
 				// 7 and 8 are about switching a random node in or out of reserved mode.
-				7 => if let Some(id) = known_nodes.iter().filter(|n| !reserved_nodes.contains(n)).choose(&mut rng) {
+				7 => if let Some(id) = known_nodes.iter().filter(|n| !reserved_nodes.contains(*n)).choose(&mut rng) {
 					peerset_handle.add_reserved_peer(id.clone());
 					reserved_nodes.insert(id.clone());
 				}

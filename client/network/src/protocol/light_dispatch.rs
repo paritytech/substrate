@@ -30,7 +30,7 @@ use sp_blockchain::Error as ClientError;
 use sc_client_api::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
 	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
-use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
+use crate::protocol::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 use libp2p::PeerId;
 use crate::config::Roles;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
@@ -41,7 +41,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 /// Default request retry count.
 const RETRY_COUNT: usize = 1;
 /// Reputation change for a peer when a request timed out.
-const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
+pub(crate) const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
 
 /// Trait used by the `LightDispatch` service to communicate messages back to the network.
 pub trait LightDispatchNetwork<B: BlockT> {
@@ -227,7 +227,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 impl<B: BlockT> LightDispatch<B> where
 	B::Header: HeaderT,
 {
-	/// Creates new light client requests processer.
+	/// Creates new light client requests processor.
 	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
 		LightDispatch {
 			checker,
@@ -273,7 +273,7 @@ impl<B: BlockT> LightDispatch<B> where
 				info!("Invalid remote {} response from peer {}", rtype, peer);
 				network.report_peer(&peer, ReputationChange::new_fatal("Invalid remote response"));
 				network.disconnect_peer(&peer);
-				self.remove_peer(peer);
+				self.remove_peer(&peer);
 				return;
 			},
 		};
@@ -285,7 +285,7 @@ impl<B: BlockT> LightDispatch<B> where
 				info!("Failed to check remote {} response from peer {}: {}", rtype, peer, error);
 				network.report_peer(&peer, ReputationChange::new_fatal("Failed remote response check"));
 				network.disconnect_peer(&peer);
-				self.remove_peer(peer);
+				self.remove_peer(&peer);
 
 				if retry_count > 0 {
 					(retry_count - 1, Some(retry_request_data))
@@ -299,7 +299,7 @@ impl<B: BlockT> LightDispatch<B> where
 				info!("Unexpected response to remote {} from peer", rtype);
 				network.report_peer(&peer, ReputationChange::new_fatal("Unexpected remote response"));
 				network.disconnect_peer(&peer);
-				self.remove_peer(peer);
+				self.remove_peer(&peer);
 
 				(retry_count, Some(retry_request_data))
 			},
@@ -337,7 +337,7 @@ impl<B: BlockT> LightDispatch<B> where
 	}
 
 	/// Call this when we disconnect from a node.
-	pub fn on_disconnect(&mut self, network: impl LightDispatchNetwork<B>, peer: PeerId) {
+	pub fn on_disconnect(&mut self, network: impl LightDispatchNetwork<B>, peer: &PeerId) {
 		self.remove_peer(peer);
 		self.dispatch(network);
 	}
@@ -504,7 +504,7 @@ impl<B: BlockT> LightDispatch<B> where
 	}
 
 	pub fn is_light_response(&self, peer: &PeerId, request_id: message::RequestId) -> bool {
-		self.active_peers.get(&peer).map_or(false, |r| r.id == request_id)
+		self.active_peers.get(peer).map_or(false, |r| r.id == request_id)
 	}
 
 	fn remove(&mut self, peer: PeerId, id: u64) -> Option<Request<B>> {
@@ -523,15 +523,15 @@ impl<B: BlockT> LightDispatch<B> where
 	/// Removes a peer from the list of known peers.
 	///
 	/// Puts back the active request that this node was performing into `pending_requests`.
-	fn remove_peer(&mut self, peer: PeerId) {
-		self.best_blocks.remove(&peer);
+	fn remove_peer(&mut self, peer: &PeerId) {
+		self.best_blocks.remove(peer);
 
-		if let Some(request) = self.active_peers.remove(&peer) {
+		if let Some(request) = self.active_peers.remove(peer) {
 			self.pending_requests.push_front(request);
 			return;
 		}
 
-		if let Some(idle_index) = self.idle_peers.iter().position(|i| *i == peer) {
+		if let Some(idle_index) = self.idle_peers.iter().position(|i| i == peer) {
 			self.idle_peers.swap_remove_back(idle_index);
 		}
 	}
@@ -567,7 +567,7 @@ impl<B: BlockT> LightDispatch<B> where
 				// return peer to the back of the queue
 				self.idle_peers.push_back(peer.clone());
 
-				// we have enumerated all peers and noone can handle request
+				// we have enumerated all peers and no one can handle request
 				if Some(peer) == last_peer {
 					let request = self.pending_requests.pop_front().expect("checked in loop condition; qed");
 					unhandled_requests.push_back(request);
@@ -692,17 +692,26 @@ pub mod tests {
 	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
-	use sp_test_primitives::{Block, Extrinsic, Header};
+	use sp_test_primitives::{Block, Header};
 
-	struct DummyFetchChecker { ok: bool }
+	pub(crate) struct DummyFetchChecker<B> {
+		pub(crate) ok: bool,
+		_mark: std::marker::PhantomData<B>
+	}
 
-	impl FetchChecker<Block> for DummyFetchChecker {
+	impl<B> DummyFetchChecker<B> {
+		pub(crate) fn new(ok: bool) -> Self {
+			DummyFetchChecker { ok, _mark: std::marker::PhantomData }
+		}
+	}
+
+	impl<B: BlockT> FetchChecker<B> for DummyFetchChecker<B> {
 		fn check_header_proof(
 			&self,
-			_request: &RemoteHeaderRequest<Header>,
-			header: Option<Header>,
+			_request: &RemoteHeaderRequest<B::Header>,
+			header: Option<B::Header>,
 			_remote_proof: StorageProof,
-		) -> ClientResult<Header> {
+		) -> ClientResult<B::Header> {
 			match self.ok {
 				true if header.is_some() => Ok(header.unwrap()),
 				_ => Err(ClientError::Backend("Test error".into())),
@@ -711,7 +720,7 @@ pub mod tests {
 
 		fn check_read_proof(
 			&self,
-			request: &RemoteReadRequest<Header>,
+			request: &RemoteReadRequest<B::Header>,
 			_: StorageProof,
 		) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
 			match self.ok {
@@ -727,7 +736,7 @@ pub mod tests {
 
 		fn check_read_child_proof(
 			&self,
-			request: &RemoteReadChildRequest<Header>,
+			request: &RemoteReadChildRequest<B::Header>,
 			_: StorageProof,
 		) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
 			match self.ok {
@@ -741,7 +750,11 @@ pub mod tests {
 			}
 		}
 
-		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: StorageProof) -> ClientResult<Vec<u8>> {
+		fn check_execution_proof(
+			&self,
+			_: &RemoteCallRequest<B::Header>,
+			_: StorageProof,
+		) -> ClientResult<Vec<u8>> {
 			match self.ok {
 				true => Ok(vec![42]),
 				false => Err(ClientError::Backend("Test error".into())),
@@ -750,20 +763,20 @@ pub mod tests {
 
 		fn check_changes_proof(
 			&self,
-			_: &RemoteChangesRequest<Header>,
-			_: ChangesProof<Header>
-		) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
+			_: &RemoteChangesRequest<B::Header>,
+			_: ChangesProof<B::Header>
+		) -> ClientResult<Vec<(NumberFor<B>, u32)>> {
 			match self.ok {
-				true => Ok(vec![(100, 2)]),
+				true => Ok(vec![(100.into(), 2)]),
 				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 
 		fn check_body_proof(
 			&self,
-			_: &RemoteBodyRequest<Header>,
-			body: Vec<Extrinsic>
-		) -> ClientResult<Vec<Extrinsic>> {
+			_: &RemoteBodyRequest<B::Header>,
+			body: Vec<B::Extrinsic>
+		) -> ClientResult<Vec<B::Extrinsic>> {
 			match self.ok {
 				true => Ok(body),
 				false => Err(ClientError::Backend("Test error".into())),
@@ -772,7 +785,7 @@ pub mod tests {
 	}
 
 	fn dummy(ok: bool) -> LightDispatch<Block> {
-		LightDispatch::new(Arc::new(DummyFetchChecker { ok }))
+		LightDispatch::new(Arc::new(DummyFetchChecker::new(ok)))
 	}
 
 	fn total_peers(light_dispatch: &LightDispatch<Block>) -> usize {
@@ -791,7 +804,7 @@ pub mod tests {
 		});
 	}
 
-	fn dummy_header() -> Header {
+	pub(crate) fn dummy_header() -> Header {
 		Header {
 			parent_hash: Default::default(),
 			number: 0,
@@ -851,7 +864,7 @@ pub mod tests {
 		assert_eq!(1, total_peers(&light_dispatch));
 		assert!(!light_dispatch.best_blocks.is_empty());
 
-		light_dispatch.on_disconnect(&mut network_interface, peer0);
+		light_dispatch.on_disconnect(&mut network_interface, &peer0);
 		assert_eq!(0, total_peers(&light_dispatch));
 		assert!(light_dispatch.best_blocks.is_empty());
 	}

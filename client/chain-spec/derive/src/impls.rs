@@ -108,7 +108,7 @@ pub fn derive(
 	let err = || {
 		let err = Error::new(
 			Span::call_site(),
-			"ChainSpecGroup is only avaible for structs with named fields."
+			"ChainSpecGroup is only available for structs with named fields."
 		).to_compile_error();
 		quote!( #err ).into()
 	};
