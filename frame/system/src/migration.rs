@@ -21,12 +21,21 @@ pub fn migrate<T: Trait>() {
 	}
 
 	sp_runtime::print("Migrating Accounts...");
-	let accounts = include!("accountids.rs");
+//	let accounts = include!("accountids.rs");
+	let accounts = [
+		hex!["86b7409a11700afb027924cb40fa43889d98709ea35319d48fea85dd35004e64"],
+		hex!["bef3f1aa71b32bba775b3886b900a2e3fb4f4163d58c1bce0aaecfe0b55c1b5f"],
+	];
+	let mut count = 0u32;
 	for a in accounts.iter().filter_map(|a| T::AccountId::decode(&mut &a[..]).ok()) {
 		if Account::<T>::migrate_key_from_blake(&a).is_some() {
-			a.using_encoded(|a| sp_runtime::print(a));
 			// Inform other modules about the account.
 			T::MigrateAccount::migrate_account(&a);
+			count += 1;
+			if count % 1000 == 0 {
+				sp_runtime::print(count);
+			}
 		}
 	}
+	sp_runtime::print(count);
 }

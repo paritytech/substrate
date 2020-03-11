@@ -890,7 +890,7 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
 	fn migrate_account(a: &T::AccountId) {
 		if IdentityOf::<T>::migrate_key_from_blake(a).is_some() {
-			if let Some(subs) = SubsOf::<T>::migrate_key_from_blake(a) {
+			if let Some((_, subs)) = SubsOf::<T>::migrate_key_from_blake(a) {
 				for sub in subs.into_iter() {
 					SuperOf::<T>::migrate_key_from_blake(sub);
 				}
