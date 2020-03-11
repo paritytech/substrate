@@ -20,14 +20,14 @@ jobs:
           key:                 ${{ runner.OS }}-cargo-build-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo build Substrate
         shell:                 bash
-        run:                   cargo build --release --verbose
+        run:                   cargo build --target x86_64-unknown-linux-musl --release --verbose
       - name: Prepare artifacts
         shell: bash
         run: |
           echo "_____ Post-processing binaries _____"
           rm -rf artifacts/*
           mkdir -p artifacts/
-          cp -v target/release/substrate artifacts/substrate
+          cp -v target/x86_64-unknown-linux-musl/release/substrate artifacts/substrate
       - name:                  Upload artifact
         uses:                  actions/upload-artifact@v1
         continue-on-error:     true
@@ -49,14 +49,14 @@ jobs:
           key:                 ${{ runner.OS }}-cargo-build-[build-subkey-linux]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo build Subkey
         shell:                 bash
-        run:                   cargo build --release --verbose
+        run:                   cargo build --target x86_64-unknown-linux-musl --release --verbose
       - name: Prepare artifacts
         shell: bash
         run: |
           echo "_____ Post-processing binaries _____"
           rm -rf artifacts/*
           mkdir -p artifacts/
-          cp -v target/release/subkey artifacts/subkey
+          cp -v target/x86_64-unknown-linux-musl/release/subkey artifacts/subkey
       - name:                  Upload artifact
         uses:                  actions/upload-artifact@v1
         continue-on-error:     true
