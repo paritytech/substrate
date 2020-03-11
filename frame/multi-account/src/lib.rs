@@ -813,6 +813,9 @@ mod tests {
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![(1, 20), (2, 20), (3, 20), (4, 20), (5, 20)],
 		}.assimilate_storage(&mut t).unwrap();
+		pallet_multi_account::GenesisConfig::<Test> {
+			multi_accounts: vec![(3, 2, vec![4, 5])],
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 
@@ -829,9 +832,24 @@ mod tests {
 	}
 
 	#[test]
-	fn multisig_deposit_is_taken_and_returned() {
+	fn genesis_multi_accounts_generated() {
 		new_test_ext().execute_with(|| {
 			let multi_id = MultiAccount::multi_account_id(1);
+			System::set_block_number(1);
+			assert_eq!(MultiAccountIndex::get(), 1);
+			assert_eq!(<MultiAccounts<Test>>::get(&multi_id), Some(MultiAccountData {
+				threshold: 2,
+				signatories: vec![3, 4, 5],
+				deposit: 4,
+				depositor: 3,
+			}));
+		});
+	}
+
+	#[test]
+	fn multisig_deposit_is_taken_and_returned() {
+		new_test_ext().execute_with(|| {
+			let multi_id = MultiAccount::multi_account_id(2);
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
@@ -862,7 +880,7 @@ mod tests {
 	#[test]
 	fn multisig_deposit_is_taken_and_returned_when_updated() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
@@ -904,7 +922,7 @@ mod tests {
 	#[test]
 	fn cancel_multisig_returns_deposit() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			let hash = call.using_encoded(blake2_256);
 			assert_ok!(MultiAccount::create(Origin::signed(1), 3, vec![2, 3]));
@@ -924,7 +942,7 @@ mod tests {
 	#[test]
 	fn timepoint_checking_works() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
@@ -972,7 +990,7 @@ mod tests {
 	#[test]
 	fn multisig_2_of_3_works() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
@@ -993,7 +1011,7 @@ mod tests {
 	#[test]
 	fn multisig_3_of_3_works() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
@@ -1015,7 +1033,7 @@ mod tests {
 	#[test]
 	fn cancel_multisig_works() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 
 			assert_ok!(MultiAccount::create(Origin::signed(1), 3, vec![2, 3]));
 
@@ -1040,7 +1058,7 @@ mod tests {
 	#[test]
 	fn multisig_2_of_3_call_works() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
@@ -1060,7 +1078,7 @@ mod tests {
 	#[test]
 	fn multisig_2_of_3_call_with_many_calls_works() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
@@ -1084,7 +1102,7 @@ mod tests {
 	#[test]
 	fn multisig_2_of_3_cannot_reissue_same_call() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
@@ -1109,7 +1127,7 @@ mod tests {
 	#[test]
 	fn multisig_1_of_1_works() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 
@@ -1145,7 +1163,7 @@ mod tests {
 				Error::<Test>::ZeroThreshold,
 			);
 
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 			assert_ok!(MultiAccount::create(Origin::signed(1), 1, vec![2]));
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_noop!(
@@ -1163,7 +1181,7 @@ mod tests {
 				Error::<Test>::TooManySignatories,
 			);
 
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 			assert_ok!(MultiAccount::create(Origin::signed(1), 1, vec![2]));
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_noop!(
@@ -1176,7 +1194,7 @@ mod tests {
 	#[test]
 	fn update_non_existing_fails() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 			assert_ok!(MultiAccount::create(Origin::signed(1), 2, vec![2, 3]));
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_noop!(
@@ -1189,7 +1207,7 @@ mod tests {
 	#[test]
 	fn remove_non_existing_fails() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 			assert_ok!(MultiAccount::create(Origin::signed(1), 2, vec![2, 3]));
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_noop!(
@@ -1202,7 +1220,7 @@ mod tests {
 	#[test]
 	fn duplicate_approvals_are_ignored() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 			assert_ok!(MultiAccount::create(Origin::signed(1), 2, vec![2, 3]));
 
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
@@ -1227,7 +1245,7 @@ mod tests {
 	#[test]
 	fn multisig_1_of_3_works() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
@@ -1250,7 +1268,7 @@ mod tests {
 	#[test]
 	fn multisig_fails_if_not_existing() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
@@ -1272,7 +1290,7 @@ mod tests {
 	#[test]
 	fn multisig_fails_if_not_signatory() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
@@ -1299,7 +1317,7 @@ mod tests {
 	#[test]
 	fn multiaccount_update_fails_if_has_active_multisigs() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
@@ -1342,7 +1360,7 @@ mod tests {
 	#[test]
 	fn multiaccount_remove_fails_if_has_active_multisigs() {
 		new_test_ext().execute_with(|| {
-			let multi_id = MultiAccount::multi_account_id(1);
+			let multi_id = MultiAccount::multi_account_id(2);
 			assert_ok!(Balances::transfer(Origin::signed(1), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi_id, 5));
 			assert_ok!(Balances::transfer(Origin::signed(3), multi_id, 5));
