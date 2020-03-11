@@ -1044,6 +1044,7 @@ ServiceBuilder<
 				transaction_pool.clone(),
 				subscriptions,
 				keystore.clone(),
+				deny_unsafe,
 			);
 			let system = system::System::new(system_info, system_rpc_tx.clone(), deny_unsafe);
 
