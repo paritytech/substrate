@@ -78,8 +78,8 @@ jobs:
       - name:                  Run cargo build Subkey
         shell:                 bash
         run: |
-          rustup target add wasm32-unknown-unknown
           rustup target add x86_64-apple-darwin
+          rustup target add wasm32-unknown-unknown
           cargo build --target x86_64-apple-darwin --release --verbose
       - name: Prepare artifacts
         shell: bash
