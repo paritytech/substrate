@@ -35,6 +35,7 @@ mod keyword {
 	syn::custom_keyword!(twox_256);
 	syn::custom_keyword!(twox_128);
 	syn::custom_keyword!(twox_64_concat);
+	syn::custom_keyword!(identity);
 	syn::custom_keyword!(hasher);
 }
 
@@ -251,6 +252,7 @@ enum Hasher {
 	Twox256(keyword::twox_256),
 	Twox128(keyword::twox_128),
 	Twox64Concat(keyword::twox_64_concat),
+	Identity(keyword::identity),
 }
 
 impl syn::parse::Parse for Hasher {
@@ -268,6 +270,8 @@ impl syn::parse::Parse for Hasher {
 			Ok(Self::Twox128(input.parse()?))
 		} else if lookahead.peek(keyword::twox_64_concat) {
 			Ok(Self::Twox64Concat(input.parse()?))
+		} else if lookahead.peek(keyword::identity) {
+			Ok(Self::Identity(input.parse()?))
 		} else {
 			Err(lookahead.error())
 		}
@@ -313,6 +317,7 @@ impl From<Hasher> for super::HasherKind {
 			Hasher::Twox256(_) => super::HasherKind::Twox256,
 			Hasher::Twox128(_) => super::HasherKind::Twox128,
 			Hasher::Twox64Concat(_) => super::HasherKind::Twox64Concat,
+			Hasher::Identity(_) => super::HasherKind::Identity,
 		}
 	}
 }

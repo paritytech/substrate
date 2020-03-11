@@ -220,7 +220,7 @@ decl_module! {
 			Self::update_lock(T::Lookup::lookup(target)?)
 		}
 
-		/// Create a vested transfer. 
+		/// Create a vested transfer.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -245,12 +245,12 @@ decl_module! {
 
 			let who = T::Lookup::lookup(target)?;
 			ensure!(!Vesting::<T>::contains_key(&who), Error::<T>::ExistingVestingSchedule);
-			
+
 			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
 
 			Self::add_vesting_schedule(&who, schedule.locked, schedule.per_block, schedule.starting_block)
 				.expect("user does not have an existing vesting schedule; q.e.d.");
-			
+
 			Ok(())
 		}
 	}
@@ -385,7 +385,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	impl pallet_balances::Trait for Test {

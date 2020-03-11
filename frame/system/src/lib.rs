@@ -116,7 +116,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
-		StoredMap
+		StoredMap, MigrateAccount,
 	},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
 };
@@ -126,6 +126,7 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
+mod migration;
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -221,6 +222,9 @@ pub trait Trait: 'static + Eq + Clone {
 	///
 	/// All resources should be cleaned up associated with the given account.
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
+
+	/// Migrate an account.
+	type MigrateAccount: MigrateAccount<Self::AccountId>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -310,10 +314,8 @@ pub struct AccountInfo<Index, AccountData> {
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
-		// TODO: should be hasher(twox64_concat) - will need staged migration
-		// https://github.com/paritytech/substrate/issues/4917
 		pub Account get(fn account):
-			map hasher(blake2_256) T::AccountId => AccountInfo<T::Index, T::AccountData>;
+			map hasher(twox_64_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
 
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
@@ -364,7 +366,7 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): map hasher(blake2_128_concat) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
 
 		/// A bool to track if the runtime was upgraded last block.
 		pub RuntimeUpgraded: bool;
@@ -433,41 +435,12 @@ decl_error! {
 	}
 }
 
-mod migration {
-	use super::*;
-	use sp_runtime::traits::SaturatedConversion;
-	use sp_io::hashing::blake2_256;
-	use frame_support::storage::migration::take_storage_value;
-
-	pub fn migrate<T: Trait>() {
-		// Number is current block - we obviously don't know that hash.
-		// Number - 1 is the parent block, who hash we record in this block, but then that's already
-		//  with the new storage so we don't migrate it.
-		// Number - 2 is therefore the most recent block's hash that needs migrating.
-		let mut n = Number::<T>::get() - One::one() - One::one();
-		sp_runtime::print("Migrating BlockHash...");
-		while !n.is_zero() {
-			sp_runtime::print(n.saturated_into::<u32>());
-			let k = n.using_encoded(blake2_256);
-			if let Some(value) = take_storage_value::<T::Hash>(&b"System"[..], &b"BlockHash"[..], &k) {
-				BlockHash::<T>::insert(n, value);
-			} else {
-				break;
-			}
-			n -= One::one();
-		}
-	}
-}
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn on_runtime_upgrade() {
 			migration::migrate::<T>();
-		}
-		fn on_initialize() {
-			sp_runtime::print("Initialising System");
 		}
 
 		/// A dispatch that will fill the block weight up to the given ratio.
@@ -588,6 +561,21 @@ decl_module! {
 			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
 			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
 			Account::<T>::remove(who);
+		}
+
+		#[weight = FunctionOf(
+			|(accounts,): (&Vec<T::AccountId>,)| accounts.len() as u32 * 10_000,
+			DispatchClass::Normal,
+			true,
+		)]
+		fn migrate_accounts(origin, accounts: Vec<T::AccountId>) {
+			let _ = ensure_signed(origin)?;
+			for a in &accounts {
+				if Account::<T>::migrate_key_from_blake(a).is_some() {
+					// Inform other modules about the account.
+					T::MigrateAccount::migrate_account(a);
+				}
+			}
 		}
 	}
 }
@@ -1567,7 +1555,7 @@ mod tests {
 		type Version = Version;
 		type ModuleToIndex = ();
 		type AccountData = u32;
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = RecordKilled;
 	}
 

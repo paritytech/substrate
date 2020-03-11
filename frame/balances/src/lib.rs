@@ -169,7 +169,7 @@ use frame_support::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status
+		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status, MigrateAccount,
 	}
 };
 use sp_runtime::{
@@ -377,11 +377,11 @@ decl_storage! {
 		/// is ever zero, then the entry *MUST* be removed.
 		///
 		/// NOTE: This is only used in the case that this module is used to store balances.
-		pub Account: map hasher(blake2_256) T::AccountId => AccountData<T::Balance>;
+		pub Account: map hasher(blake2_128_concat) T::AccountId => AccountData<T::Balance>;
 
 		/// Any liquidity locks on some account balances.
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
-		pub Locks get(fn locks): map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
+		pub Locks get(fn locks): map hasher(twox_64_concat) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// Storage version of the pallet.
 		///
@@ -555,6 +555,12 @@ impl<Balance, BlockNumber> OldBalanceLock<Balance, BlockNumber> {
 			amount: self.amount,
 			reasons: self.reasons.into(),
 		}, self.until)
+	}
+}
+
+impl<T: Trait<I>, I: Instance> MigrateAccount<T::AccountId> for Module<T, I> {
+	fn migrate_account(account: &T::AccountId) {
+		Locks::<T, I>::migrate_key_from_blake(account);
 	}
 }
 
@@ -877,7 +883,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
 	type ModuleToIndex = T::ModuleToIndex;
-	type OnNewAccount = T::OnNewAccount;
+	type MigrateAccount = (); type OnNewAccount = T::OnNewAccount;
 	type OnKilledAccount = T::OnKilledAccount;
 	type AccountData = T::AccountData;
 }

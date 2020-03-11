@@ -277,6 +277,7 @@ pub enum StorageHasher {
 	Twox128,
 	Twox256,
 	Twox64Concat,
+	Identity,
 }
 
 /// A storage entry type.

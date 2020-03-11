@@ -109,6 +109,7 @@ use frame_support::{ensure, decl_module, decl_event, decl_storage, decl_error, C
 use frame_support::{traits::{Get, FindAuthor, ValidatorRegistration}, Parameter};
 use frame_support::dispatch::{self, DispatchResult, DispatchError};
 use frame_system::{self as system, ensure_signed};
+use frame_support::traits::MigrateAccount;
 
 #[cfg(test)]
 mod mock;
@@ -364,10 +365,10 @@ decl_storage! {
 		DisabledValidators get(fn disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
-		NextKeys: map hasher(blake2_256) T::ValidatorId => Option<T::Keys>;
+		NextKeys: map hasher(twox_64_concat) T::ValidatorId => Option<T::Keys>;
 
 		/// The owner of a key. The key is the `KeyTypeId` + the encoded key.
-		KeyOwner: map hasher(blake2_256) (KeyTypeId, Vec<u8>) => Option<T::ValidatorId>;
+		KeyOwner: map hasher(twox_64_concat) (KeyTypeId, Vec<u8>) => Option<T::ValidatorId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::AccountId, T::ValidatorId, T::Keys)>;
@@ -502,6 +503,16 @@ decl_module! {
 		/// Called when the runtime is upgraded.
 		fn on_runtime_upgrade() {
 			Self::migrate();
+		}
+	}
+}
+
+impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
+	fn migrate_account(a: &T::AccountId) {
+		if let Some(keys) = NextKeys::<T>::migrate_key_from_blake(a) {
+			for id in T::Keys::key_ids() {
+				KeyOwner::<T>::migrate_key_from_blake((*id, keys.get_raw(*id)));
+			}
 		}
 	}
 }

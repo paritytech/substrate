@@ -202,6 +202,28 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// function for this purpose.
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
 		where V: codec::DecodeLength + Len;
+
+	/// Migrate an item with the given `key` from a defunct `OldHasher` to the current hasher.
+	///
+	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
+	fn migrate_key<OldHasher: StorageHasher, KeyArg: EncodeLike<K>>(key: KeyArg) -> Option<V>;
+
+	/// Migrate an item with the given `key` from a `blake2_256` hasher to the current hasher.
+	///
+	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
+	fn migrate_key_from_blake<KeyArg: EncodeLike<K>>(key: KeyArg) -> Option<V> {
+		Self::migrate_key::<crate::hash::Blake2_256, KeyArg>(key)
+	}
+}
+
+/// A strongly-typed map in storage whose keys and values can be iterated over.
+pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
+	/// The type that iterates over all `(key, value)`.
+	type Iterator: Iterator<Item = (K, V)>;
+
+	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
+	/// this, you'll get undefined results.
+	fn iter() -> Self::Iterator;
 }
 
 /// A strongly-typed linked map in storage.
@@ -440,7 +462,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	}
 
 	/// Iter over all value of the storage.
-	fn iter() -> PrefixIterator<Value> {
+	fn iter_values() -> PrefixIterator<Value> {
 		let prefix = Self::final_prefix();
 		PrefixIterator {
 			prefix: prefix.to_vec(),
