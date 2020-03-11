@@ -104,6 +104,7 @@ impl BenchmarkCmd {
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method,
 			None, // heap pages
+			2, // The runtime instances cache size.
 		);
 
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
