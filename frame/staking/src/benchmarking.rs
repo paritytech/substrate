@@ -101,34 +101,33 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> R
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
-	// Create v validators
-	for i in 0 .. DEFAULT_MINIMUM_VALIDATOR_COUNT {
-		let (v_stash, v_controller) = create_stash_controller::<T>(i)?;
-		let validator_prefs = ValidatorPrefs {
-			commission: Perbill::from_percent(50),
-		};
-		Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
-		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
-		validators.push(v_controller.clone());
+	MinimumValidatorCount::put(0);
 
-		points_total += 10;
-		points_individual.push((v_stash, 10));
+	let (v_stash, v_controller) = create_stash_controller::<T>(0)?;
+	let validator_prefs = ValidatorPrefs {
+		commission: Perbill::from_percent(50),
+	};
+	Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
+	let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
+	validators.push(v_controller.clone());
 
-		// Give each validator n nominators, but keep total users in the system the same.
-		for j in 0 .. upper_bound {
-			let (_n_stash, n_controller) = create_stash_controller2::<T>(upper_bound * i + j)?;
-			if j < n {
-				Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
-			}
+	points_total += 10;
+	points_individual.push((v_stash, 10));
+
+	// Give the validator n nominators, but keep total users in the system the same.
+	for i in 0 .. upper_bound {
+		let (_n_stash, n_controller) = create_stash_controller2::<T>(i)?;
+		if i < n {
+			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
 		}
 	}
 	
-	ValidatorCount::put(DEFAULT_MINIMUM_VALIDATOR_COUNT);
+	ValidatorCount::put(1);
 	
 	// Start a new Era
 	let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 
-	assert!(new_validators.len() == DEFAULT_MINIMUM_VALIDATOR_COUNT as usize);
+	assert!(new_validators.len() == 1);
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {
@@ -153,9 +152,11 @@ pub fn create_nominator_with_validators<T: Trait>(v: u32) -> Result<(T::AccountI
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
+	MinimumValidatorCount::put(0);
+
 	// Create v validators
 	let mut validator_lookups = Vec::new();
-	for i in 0 .. v.max(DEFAULT_MINIMUM_VALIDATOR_COUNT) {
+	for i in 0 .. v {
 		let (v_stash, v_controller) = create_stash_controller::<T>(i)?;
 		let validator_prefs = ValidatorPrefs {
 			commission: Perbill::from_percent(50),
@@ -352,13 +353,26 @@ benchmarks! {
 	}: _(RawOrigin::Signed(controller), stash)
 
 	new_era {
-		let v in DEFAULT_MINIMUM_VALIDATOR_COUNT .. 10;
+		let v in 1 .. 10;
 		let n in 1 .. 100;
+		MinimumValidatorCount::put(0);
 		create_validators_with_nominators_for_era::<T>(v, n)?;
 		let session_index = SessionIndex::one();
 	}: { 
 		let maybe_validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
 		assert!(maybe_validators.len() == v as usize);
+	}
+
+	new_era_vary {
+		let v in 1 .. 10;
+		let n in 1 .. 100;
+		let m in 1 .. 10;
+		MinimumValidatorCount::put(m);
+		create_validators_with_nominators_for_era::<T>(v, n)?;
+		let session_index = SessionIndex::one();
+	}: { 
+		let maybe_validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
+		assert!(maybe_validators.len() == m as usize);
 	}
 
 	do_slash {
