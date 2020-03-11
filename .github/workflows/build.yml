@@ -38,7 +38,7 @@ jobs:
   build-subkey-linux:
     name:                      Build linux Subkey
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:musl
+    container:                 generalbeck/rust-builder:alpine
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@master
@@ -88,7 +88,7 @@ jobs:
           echo "_____ Post-processing binaries _____"
           rm -rf artifacts/*
           mkdir -p artifacts/
-          target/x86_64-apple-darwin/release/subkey artifacts/subkey
+          target/release/subkey artifacts/subkey
       - name:                  Upload artifact
         uses:                  actions/upload-artifact@v1
         continue-on-error:     true
@@ -99,7 +99,7 @@ jobs:
   build-rust-doc-release:
     name:                      Build Rust doc release
     runs-on:                   ubuntu-latest
-    container:                 parity/rust-builder:latest
+    container:                 generalbeck/rust-builder:alpine
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@master

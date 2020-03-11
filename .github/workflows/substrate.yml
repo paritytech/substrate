@@ -8,7 +8,7 @@ jobs:
   cargo-check-benches:
     name:                      Cargo check benches
     runs-on:                   ubuntu-latest
-    container:                 parity/rust-builder:latest
+    container:                 generalbeck/rust-builder:alpine
     env:
       BUILD_DUMMY_WASM_BINARY: 1
       CARGO_INCREMENTAL:       0
@@ -37,7 +37,7 @@ jobs:
   cargo-check-subkey:
     name:                      Cargo check subkey
     runs-on:                   [ubuntu-latest]
-    container:                 parity/rust-builder:latest
+    container:                 generalbeck/rust-builder:alpine
     env:
       BUILD_DUMMY_WASM_BINARY: 1
       CARGO_INCREMENTAL:       0
@@ -67,7 +67,7 @@ jobs:
   test-stable:
     name:                      Test linux stable
     runs-on:                   self-hosted
-    container:                 parity/rust-builder:latest
+    container:                 generalbeck/rust-builder:alpine
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -98,7 +98,7 @@ jobs:
   test-frame-staking:
     name:                      Test frame staking
     runs-on:                   ubuntu-latest
-    container:                 parity/rust-builder:latest
+    container:                 generalbeck/rust-builder:alpine
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -128,7 +128,7 @@ jobs:
   test-wasmtime:
     name:                      Test wasmtime
     runs-on:                   ubuntu-latest
-    container:                 parity/rust-builder:latest
+    container:                 generalbeck/rust-builder:alpine
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -158,7 +158,7 @@ jobs:
   test-stable-int:
     name:                      Test linux stable int
     runs-on:                   self-hosted
-    container:                 parity/rust-builder:latest
+    container:                 generalbeck/rust-builder:alpine
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -190,7 +190,7 @@ jobs:
   test-full-crypto-feature:
     name:                      Test full crypto feature
     runs-on:                   ubuntu-latest
-    container:                 parity/rust-builder:latest
+    container:                 generalbeck/rust-builder:alpine
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
       CARGO_INCREMENTAL:       0
@@ -224,7 +224,7 @@ jobs:
   linux-dependency-rules:
     name:                      Test dependency rules
     runs-on:                   ubuntu-latest
-    container:                 parity/rust-builder:latest
+    container:                 generalbeck/rust-builder:alpine
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@master
