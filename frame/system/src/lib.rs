@@ -538,6 +538,13 @@ decl_module! {
 			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
 			Account::<T>::remove(who);
 		}
+
+		fn on_runtime_upgrade() {
+			// Remove the old `RuntimeUpgraded` storage entry.
+			let mut runtime_upgraded_key = sp_io::hashing::twox_128(b"System").to_vec();
+			runtime_upgraded_key.extend(&sp_io::hashing::twox_128(b"RuntimeUpgraded"));
+			sp_io::storage::clear(&runtime_upgraded_key);
+		}
 	}
 }
 

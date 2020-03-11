@@ -216,6 +216,8 @@ where
 		digest: &Digest<System::Hash>,
 	) {
 		if Self::runtime_upgraded() {
+			// System is not part of `AllModules`, so we need to call this manually.
+			<frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
 			<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
 			<frame_system::Module<System>>::register_extra_weight_unchecked(
 				<AllModules as WeighBlock<System::BlockNumber>>::on_runtime_upgrade()
