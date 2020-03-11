@@ -295,11 +295,11 @@ benchmarks! {
         let c in 0 .. 1000;
     }: _(RawOrigin::Root, c)
 
-    force_no_eras { }: _(RawOrigin::Root)
+    force_no_eras { let i in 1 .. 1; }: _(RawOrigin::Root)
 
-    force_new_era { }: _(RawOrigin::Root)
+    force_new_era {let i in 1 .. 1; }: _(RawOrigin::Root)
 
-    force_new_era_always { }: _(RawOrigin::Root)
+    force_new_era_always { let i in 1 .. 1; }: _(RawOrigin::Root)
 
     // Worst case scenario, the list of invulnerables is very long.
     set_invulnerables {
@@ -327,7 +327,7 @@ benchmarks! {
 
      payout_nominator {
         let v in 0 .. MAX_NOMINATIONS;
-        let (nominator, validators) = crate::benchmarking::create_nominator_with_validators::<T>(v)?;
+        let (nominator, validators) = create_nominator_with_validators::<T>(v)?;
 		let current_era = CurrentEra::get().unwrap();
 		let find_nominator = validators.into_iter().map(|x| (x, 0)).collect();
      }: _(RawOrigin::Signed(nominator), current_era, find_nominator)
@@ -346,9 +346,20 @@ benchmarks! {
         Ledger::<T>::insert(controller.clone(), staking_ledger);
      }: _(RawOrigin::Signed(controller), (l + 100).into())
 
-    //  set_history_depth {
-
-    //  }
+    set_history_depth {
+        let e in 1 .. 100;
+        HistoryDepth::put(e);
+        CurrentEra::put(e);
+        for i in 0 .. e {
+            <ErasStakers<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
+            <ErasStakersClipped<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
+            <ErasValidatorPrefs<T>>::insert(i, T::AccountId::default(), ValidatorPrefs::default());
+            <ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
+            <ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T::AccountId>::default());
+            <ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
+            ErasStartSessionIndex::insert(i, i);
+        }
+    }: _(RawOrigin::Root, EraIndex::zero())
 
     reap_stash {
         let u in 1 .. 1000;
