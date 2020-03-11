@@ -46,7 +46,7 @@ where
 			cmd.update_config(&mut config, load_spec, &version)?;
 
 			let client = sc_service::new_full_client::<
-				node_runtime::Block, node_runtime::RuntimeApi, node_executor::Executor, _, _,
+				node_runtime::Block, node_runtime::RuntimeApi, node_executor::Executor,
 			>(&config)?;
 			let inspect = node_inspect::Inspector::<node_runtime::Block>::new(client);
 
@@ -56,7 +56,7 @@ where
 			cmd.init(&version)?;
 			cmd.update_config(&mut config, load_spec, &version)?;
 
-			cmd.run::<_, _, node_runtime::Block, node_executor::Executor>(config)
+			cmd.run::<node_runtime::Block, node_executor::Executor>(config)
 		},
 		Some(Subcommand::Factory(cli_args)) => {
 			cli_args.shared_params.init(&version)?;
@@ -108,7 +108,7 @@ where
 			subcommand.update_config(&mut config, load_spec, &version)?;
 			subcommand.run(
 				config,
-				|config: service::NodeConfiguration| Ok(new_full_start!(config).0),
+				|config: sc_service::Configuration| Ok(new_full_start!(config).0),
 			)
 		},
 	}
