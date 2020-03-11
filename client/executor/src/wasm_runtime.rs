@@ -20,11 +20,10 @@
 //! components of the runtime that are expensive to initialize.
 
 use std::sync::Arc;
-use std::borrow::Cow;
 use crate::error::{Error, WasmError};
 use parking_lot::{Mutex, RwLock};
 use codec::Decode;
-use sp_core::{storage::well_known_keys, traits::Externalities};
+use sp_core::traits::{Externalities, RuntimeCode, FetchRuntimeCode};
 use sp_version::RuntimeVersion;
 use std::panic::AssertUnwindSafe;
 use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance};
@@ -39,14 +38,6 @@ pub enum WasmExecutionMethod {
 	/// Uses the Wasmtime compiled runtime.
 	#[cfg(feature = "wasmtime")]
 	Compiled,
-}
-
-/// Executoed code origin.
-pub enum CodeSource<'a> {
-	/// Take code from storage,
-	Externalities,
-	/// Use provided code,
-	Custom(&'a [u8]),
 }
 
 /// A Wasm runtime object along with its cached runtime version.
@@ -102,8 +93,7 @@ impl RuntimeCache {
 	///
 	/// `code` - Provides external code or tells the executor to fetch it from storage.
 	///
-	/// `ext` - Externalities to use for the runtime. This is used for setting
-	/// up an initial runtime instance.
+	/// `runtime_code` - The runtime wasm code used setup the runtime.
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	///
@@ -124,7 +114,7 @@ impl RuntimeCache {
 	/// identifier `memory` can be found in the runtime.
 	pub fn with_instance<'c, R, F>(
 		&self,
-		code: CodeSource<'c>,
+		runtime_code: &'c RuntimeCode<'c>,
 		ext: &mut dyn Externalities,
 		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
@@ -138,28 +128,14 @@ impl RuntimeCache {
 			&mut dyn Externalities)
 		-> Result<R, Error>,
 	{
-		let (code_hash, heap_pages) = match &code {
-			CodeSource::Externalities => {
-				(
-					ext
-						.original_storage_hash(well_known_keys::CODE)
-						.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?,
-					ext
-						.storage(well_known_keys::HEAP_PAGES)
-						.and_then(|pages| u64::decode(&mut &pages[..]).ok())
-						.unwrap_or(default_heap_pages),
-				)
-			},
-			CodeSource::Custom(code) => {
-				(sp_core::blake2_256(code).to_vec(), default_heap_pages)
-			}
-		};
+		let code_hash = &runtime_code.hash;
+		let heap_pages = runtime_code.heap_pages.unwrap_or(default_heap_pages);
 
 		let mut runtimes = self.runtimes.lock(); // this must be released prior to calling f
 		let pos = runtimes.iter().position(|r| r.as_ref().map_or(
 			false,
 			|r| r.wasm_method == wasm_method &&
-				r.code_hash == code_hash &&
+				r.code_hash == *code_hash &&
 				r.heap_pages == heap_pages
 		));
 
@@ -168,19 +144,11 @@ impl RuntimeCache {
 				.clone()
 				.expect("`position` only returns `Some` for entries that are `Some`"),
 			None =>  {
-				let code = match code {
-					CodeSource::Externalities => {
-						Cow::Owned(ext.original_storage(well_known_keys::CODE)
-							.ok_or(WasmError::CodeNotFound)?)
-					}
-					CodeSource::Custom(code) => {
-						Cow::Borrowed(code)
-					}
-				};
+				let code = runtime_code.fetch_runtime_code().ok_or(WasmError::CodeNotFound)?;
 
 				let result = create_versioned_wasm_runtime(
 					&code,
-					code_hash,
+					code_hash.clone(),
 					ext,
 					wasm_method,
 					heap_pages,
