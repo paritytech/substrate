@@ -535,24 +535,6 @@ decl_module! {
 	}
 }
 
-#[derive(Decode)]
-struct OldBalanceLock<Balance, BlockNumber> {
-	id: LockIdentifier,
-	amount: Balance,
-	until: BlockNumber,
-	reasons: WithdrawReasons,
-}
-
-impl<Balance, BlockNumber> OldBalanceLock<Balance, BlockNumber> {
-	fn upgraded(self) -> (BalanceLock<Balance>, BlockNumber) {
-		(BalanceLock {
-			id: self.id,
-			amount: self.amount,
-			reasons: self.reasons.into(),
-		}, self.until)
-	}
-}
-
 impl<T: Trait<I>, I: Instance> Module<T, I> {
 	// PRIVATE MUTABLES
 
