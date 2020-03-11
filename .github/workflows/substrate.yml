@@ -7,7 +7,7 @@ on:                            [push]
 jobs:
   cargo-check-benches:
     name:                      Cargo check benches
-    runs-on:                   ubuntu-latest
+    runs-on:                   self-hosted
     container:                 parity/rust-builder:latest
     env:
       BUILD_DUMMY_WASM_BINARY: 1
@@ -36,7 +36,7 @@ jobs:
 
   cargo-check-subkey:
     name:                      Cargo check subkey
-    runs-on:                   [ubuntu-latest]
+    runs-on:                   [self-hosted]
     container:                 parity/rust-builder:latest
     env:
       BUILD_DUMMY_WASM_BINARY: 1
@@ -66,7 +66,7 @@ jobs:
 
   test-stable:
     name:                      Test linux stable
-    runs-on:                   ubuntu-latest
+    runs-on:                   self-hosted
     container:                 parity/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
@@ -97,7 +97,7 @@ jobs:
 
   test-frame-staking:
     name:                      Test frame staking
-    runs-on:                   ubuntu-latest
+    runs-on:                   self-hosted
     container:                 parity/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
@@ -127,7 +127,7 @@ jobs:
 
   test-wasmtime:
     name:                      Test wasmtime
-    runs-on:                   ubuntu-latest
+    runs-on:                   self-hosted
     container:                 parity/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
@@ -157,7 +157,7 @@ jobs:
 
   test-stable-int:
     name:                      Test linux stable int
-    runs-on:                   ubuntu-latest
+    runs-on:                   self-hosted
     container:                 parity/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
@@ -189,7 +189,7 @@ jobs:
 
   test-full-crypto-feature:
     name:                      Test full crypto feature
-    runs-on:                   ubuntu-latest
+    runs-on:                   self-hosted
     container:                 parity/rust-builder:latest
     env:
       RUSTFLAGS:               "-Cdebug-assertions=y"
@@ -223,7 +223,7 @@ jobs:
 
   linux-dependency-rules:
     name:                      Test dependency rules
-    runs-on:                   ubuntu-latest
+    runs-on:                   self-hosted
     container:                 parity/rust-builder:latest
     steps:
       - name:                  Checkout sources
