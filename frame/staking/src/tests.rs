@@ -3043,28 +3043,6 @@ fn set_history_depth_works() {
 /* Benchmarking Tests */
 
 #[test]
-fn create_validators_with_nominators_works() {
-	ExtBuilder::default().build().execute_with(|| {
-		let v = 5;
-		let n = 10;
-
-		let validators = crate::benchmarking::create_validators_with_nominators::<Test>(v, n).unwrap();
-		assert_eq!(validators.len(), v as usize);
-
-		let current_era = CurrentEra::get().unwrap();
-		let controller = validators.last().unwrap().clone();
-		let ledger = Staking::ledger(&controller).unwrap();
-		let stash = &ledger.stash;
-
-		let original_free_balance = Balances::free_balance(stash);
-		assert_ok!(Staking::payout_validator(Origin::signed(controller), current_era));
-		let new_free_balance = Balances::free_balance(stash);
-
-		assert!(original_free_balance < new_free_balance);
-	});
-}
-
-#[test]
 fn create_validator_with_nominators_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		let n = 10;
@@ -3075,7 +3053,10 @@ fn create_validator_with_nominators_works() {
 			Validators::<Test>::remove(key);
 		}
 
-		let validator = crate::benchmarking::create_validator_with_nominators::<Test>(n).unwrap();
+		let validator = crate::benchmarking::create_validator_with_nominators::<Test>(
+			n,
+			MAX_NOMINATIONS as u32,
+		).unwrap();
 
 		let current_era = CurrentEra::get().unwrap();
 		let controller = validator;
