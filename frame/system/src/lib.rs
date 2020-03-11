@@ -325,10 +325,8 @@ decl_storage! {
 		AllExtrinsicsLen: Option<u32>;
 
 		/// Map of block numbers to block hashes.
-		// TODO: should be hasher(twox64_concat) - will need one-off migration
-		// https://github.com/paritytech/substrate/issues/4917
 		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
-			map hasher(blake2_256) T::BlockNumber => T::Hash;
+			map hasher(twox_64_concat) T::BlockNumber => T::Hash;
 
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
@@ -431,13 +429,46 @@ decl_error! {
 		/// Suicide called when the account has non-default composite data.
 		NonDefaultComposite,
 		/// There is a non-zero reference count preventing the account from being purged.
-		NonZeroRefCount
+		NonZeroRefCount,
+	}
+}
+
+mod migration {
+	use super::*;
+	use sp_runtime::traits::SaturatedConversion;
+	use sp_io::hashing::blake2_256;
+	use frame_support::storage::migration::take_storage_value;
+
+	pub fn migrate<T: Trait>() {
+		// Number is current block - we obviously don't know that hash.
+		// Number - 1 is the parent block, who hash we record in this block, but then that's already
+		//  with the new storage so we don't migrate it.
+		// Number - 2 is therefore the most recent block's hash that needs migrating.
+		let mut n = Number::<T>::get() - One::one() - One::one();
+		sp_runtime::print("Migrating BlockHash...");
+		while !n.is_zero() {
+			sp_runtime::print(n.saturated_into::<u32>());
+			let k = n.using_encoded(blake2_256);
+			if let Some(value) = take_storage_value::<T::Hash>(&b"System"[..], &b"BlockHash"[..], &k) {
+				BlockHash::<T>::insert(n, value);
+			} else {
+				break;
+			}
+			n -= One::one();
+		}
 	}
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
+
+		fn on_runtime_upgrade() {
+			migration::migrate::<T>();
+		}
+		fn on_initialize() {
+			sp_runtime::print("Initialising System");
+		}
 
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but

@@ -180,6 +180,7 @@ where
 		digest: &Digest<System::Hash>,
 	) {
 		if frame_system::RuntimeUpgraded::take() {
+			<frame_system::Module<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
 			<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
 			<frame_system::Module<System>>::register_extra_weight_unchecked(
 				<AllModules as WeighBlock<System::BlockNumber>>::on_runtime_upgrade()
@@ -192,6 +193,7 @@ where
 			digest,
 			frame_system::InitKind::Full,
 		);
+		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		<frame_system::Module<System>>::register_extra_weight_unchecked(
 			<AllModules as WeighBlock<System::BlockNumber>>::on_initialize(*block_number)
@@ -235,11 +237,11 @@ where
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
-
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
 		// post-extrinsics book-keeping
 		<frame_system::Module<System>>::note_finished_extrinsics();
+		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 	}
 
@@ -247,7 +249,9 @@ where
 	/// except state-root.
 	pub fn finalize_block() -> System::Header {
 		<frame_system::Module<System>>::note_finished_extrinsics();
-		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(<frame_system::Module<System>>::block_number());
+		let block_number = <frame_system::Module<System>>::block_number();
+		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 
 		// set up extrinsics
 		<frame_system::Module<System>>::derive_extrinsics();
