@@ -362,11 +362,12 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_runtime::traits::BlakeTwo256;
 
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {
-		let storage = InMemory::<sp_core::Blake2Hasher>::default();
+		let storage = InMemory::<BlakeTwo256>::default();
 		let child_info = OwnedChildInfo::new_default(b"unique_id_1".to_vec());
 		let mut storage = storage.update(
 			vec![(

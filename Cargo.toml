@@ -62,6 +62,7 @@ members = [
 	"frame/babe",
 	"frame/balances",
 	"frame/benchmarking",
+	"frame/benchmark",
 	"frame/collective",
 	"frame/contracts",
 	"frame/contracts/rpc",
@@ -167,5 +168,3 @@ members = [
 # Substrate runtime requires unwinding.
 panic = "unwind"
 
-[patch.crates-io]
-libp2p = { git = "https://github.com/libp2p/rust-libp2p" }

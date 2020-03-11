@@ -1,14 +1,17 @@
 [package]
 name = "sp-keyring"
-version = "2.0.0-dev"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Keyring support code for the runtime. A set of test accounts."
+documentation = "https://docs.rs/sp-keyring"
+
 
 [dependencies]
-sp-core = { version = "2.0.0-dev", path = "../core" }
-sp-runtime = { version = "2.0.0-dev", path = "../runtime" }
+sp-core = { version = "2.0.0-alpha.2", path = "../core" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../runtime" }
 lazy_static = "1.4.0"
 strum = { version = "0.16.0", features = ["derive"] }
