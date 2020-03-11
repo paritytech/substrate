@@ -30,19 +30,25 @@ pub mod testing;
 pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
-use std::{collections::HashMap, sync::Arc, pin::Pin};
+use std::{collections::{HashMap, VecDeque}, sync::Arc, pin::Pin};
 use futures::{Future, FutureExt, future::ready};
 use parking_lot::Mutex;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic},
+	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic, Zero},
 };
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream, TxHash, TransactionFor,
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
 };
 use wasm_timer::Instant;
+
+type BoxedReadyIterator<Hash, Data> = Box<dyn Iterator<Item=Arc<sc_transaction_graph::base_pool::Transaction<Hash, Data>>> + Send>;
+
+type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<sc_transaction_graph::ExHash<PoolApi>, sc_transaction_graph::ExtrinsicFor<PoolApi>>;
+
+type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output=ReadyIteratorFor<PoolApi>> + Send>>;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -54,6 +60,55 @@ pub struct BasicPool<PoolApi, Block>
 	api: Arc<PoolApi>,
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
 	revalidation_queue: Arc<revalidation::RevalidationQueue<PoolApi>>,
+	ready_poll: Arc<Mutex<ReadyPoll<ReadyIteratorFor<PoolApi>, Block>>>,
+}
+
+struct ReadyPoll<T, Block>
+where
+	Block: BlockT,
+{
+	updated_at: Option<NumberFor<Block>>,
+	pollers: Vec<(NumberFor<Block>, futures::channel::oneshot::Sender<T>)>,
+}
+
+impl<T, Block> Default for ReadyPoll<T, Block>
+where
+	Block: BlockT,
+{
+	fn default() -> Self {
+		Self {
+			updated_at: None,
+			pollers: Default::default(),
+		}
+	}
+}
+
+impl<T, Block> ReadyPoll<T, Block>
+where
+	Block: BlockT,
+{
+	fn trigger(&mut self, number: NumberFor<Block>, iterator_factory: impl Fn() -> T) {
+		self.updated_at = Some(number);
+		let pollers = self.pollers.drain(..).collect::<Vec<(_, _)>>();
+
+		for (poller_number, poller_sender) in pollers {
+			if poller_number <= number {
+				let _s = poller_sender.send(iterator_factory());
+			} else {
+				self.pollers.push((poller_number, poller_sender));
+			}
+		}
+	}
+
+	fn add(&mut self, number: NumberFor<Block>) -> futures::channel::oneshot::Receiver<T> {
+		let (sender, receiver) = futures::channel::oneshot::channel();
+		self.pollers.push((number, sender));
+		receiver
+	}
+
+	fn updated_at(&self) -> NumberFor<Block> {
+		self.updated_at.unwrap_or(NumberFor::<Block>::zero())
+	}
 }
 
 #[cfg(not(target_os = "unknown"))]
@@ -128,6 +183,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 						RevalidationType::Full => RevalidationStrategy::Always,
 					}
 				)),
+				ready_poll: Default::default(),
 			},
 			background_task,
 		)
@@ -196,8 +252,21 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		self.pool.validated_pool().status()
 	}
 
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>> {
-		Box::new(self.pool.validated_pool().ready())
+	fn ready_at(&self, at: Option<NumberFor<Self::Block>>) -> PolledIterator<PoolApi> {
+		if self.ready_poll.lock().updated_at() >= at.unwrap_or(NumberFor::<Self::Block>::zero()) {
+			let iterator: ReadyIteratorFor<PoolApi> = Box::new(self.pool.validated_pool().ready());
+			Box::pin(futures::future::ready(iterator))
+		} else {
+			Box::pin(self.ready_poll.lock().add(at.expect("Should be Some(_) otherwise expression above is true.")).map(|received| {
+				match received {
+					Err(e) => {
+						log::warn!("Error receiving pending set: {:?}", e);
+						Box::new(vec![].into_iter())
+					},
+					Ok(v) => v,
+				}
+			}))
+		}
 	}
 
 	fn import_notification_stream(&self) -> ImportNotificationStream<TxHash<Self>> {
@@ -329,6 +398,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 				let revalidation_strategy = self.revalidation_strategy.clone();
 				let retracted = retracted.clone();
 				let revalidation_queue = self.revalidation_queue.clone();
+				let ready_poll = self.ready_poll.clone();
 
 				async move {
 					// We don't query block if we won't prune anything
@@ -347,6 +417,9 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 							log::error!("Cannot prune known in the pool {:?}!", e);
 						}
 					}
+
+					let extra_pool = pool.clone();
+					ready_poll.lock().trigger(block_number, move || Box::new(extra_pool.validated_pool().ready()));
 
 					if next_action.resubmit {
 						let mut resubmit_transactions = Vec::new();

@@ -210,7 +210,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 		let mut is_first = true;
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
-		let pending_iterator = self.transaction_pool.ready();
+		let pending_iterator = futures::executor::block_on(self.transaction_pool.ready_at(Some(self.parent_number)));
 
 		debug!("Attempting to push transactions from the pool.");
 		debug!("Pool status: {:?}", self.transaction_pool.status());
