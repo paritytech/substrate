@@ -41,8 +41,7 @@ use sp_runtime::{
 use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProof,
-	merge_storage_proofs,
+	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo};
 use sp_consensus::{
@@ -55,6 +54,7 @@ use sp_blockchain::{self as blockchain,
 	well_known_cache_keys::Id as CacheKeyId,
 	HeaderMetadata, CachedHeaderMetadata,
 };
+use sp_trie::StorageProof;
 
 use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
@@ -472,7 +472,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Ok(())
 		}, ())?;
 
-		Ok(merge_storage_proofs(proofs))
+		Ok(StorageProof::merge(proofs))
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
@@ -1140,9 +1140,20 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		method: &str,
 		call_data: &[u8]
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
+		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
+		// backwards compatible.
+		//
+		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
+		let code_proof = self.read_proof(
+			id,
+			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
+		)?;
+
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
-		prove_execution(state, header, &self.executor, method, call_data)
+		prove_execution(state, header, &self.executor, method, call_data).map(|(r, p)| {
+			(r, StorageProof::merge(vec![p, code_proof]))
+		})
 	}
 
 	fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, StorageProof)> {

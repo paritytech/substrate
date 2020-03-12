@@ -19,9 +19,7 @@
 use crate::{crypto::KeyTypeId, ed25519, sr25519};
 
 use std::{
-	fmt::{Debug, Display},
-	panic::UnwindSafe,
-	sync::Arc,
+	fmt::{Debug, Display}, panic::UnwindSafe, sync::Arc, borrow::Cow,
 };
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
@@ -97,11 +95,89 @@ pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	>(
 		&self,
 		ext: &mut dyn Externalities,
+		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
 		native_call: Option<NC>,
 	) -> (Result<crate::NativeOrEncoded<R>, Self::Error>, bool);
+}
+
+/// Something that can fetch the runtime `:code`.
+pub trait FetchRuntimeCode {
+	/// Fetch the runtime `:code`.
+	///
+	/// If the `:code` could not be found/not available, `None` should be returned.
+	fn fetch_runtime_code<'a>(&'a self) -> Option<Cow<'a, [u8]>>;
+}
+
+/// Wrapper to use a `u8` slice or `Vec` as [`FetchRuntimeCode`].
+pub struct WrappedRuntimeCode<'a>(pub std::borrow::Cow<'a, [u8]>);
+
+impl<'a> FetchRuntimeCode for WrappedRuntimeCode<'a> {
+	fn fetch_runtime_code<'b>(&'b self) -> Option<Cow<'b, [u8]>> {
+		Some(self.0.as_ref().into())
+	}
+}
+
+/// Type that implements [`FetchRuntimeCode`] and always returns `None`.
+pub struct NoneFetchRuntimeCode;
+
+impl FetchRuntimeCode for NoneFetchRuntimeCode {
+	fn fetch_runtime_code<'a>(&'a self) -> Option<Cow<'a, [u8]>> {
+		None
+	}
+}
+
+/// The Wasm code of a Substrate runtime.
+#[derive(Clone)]
+pub struct RuntimeCode<'a> {
+	/// The code fetcher that can be used to lazily fetch the code.
+	pub code_fetcher: &'a dyn FetchRuntimeCode,
+	/// The optional heap pages this `code` should be executed with.
+	///
+	/// If `None` are given, the default value of the executor will be used.
+	pub heap_pages: Option<u64>,
+	/// The SCALE encoded hash of `code`.
+	///
+	/// The hashing algorithm isn't that important, as long as all runtime
+	/// code instances use the same.
+	pub hash: Vec<u8>,
+}
+
+impl<'a> PartialEq for RuntimeCode<'a> {
+	fn eq(&self, other: &Self) -> bool {
+		self.hash == other.hash
+	}
+}
+
+impl<'a> RuntimeCode<'a> {
+	/// Create an empty instance.
+	///
+	/// This is only useful for tests that don't want to execute any code.
+	pub fn empty() -> Self {
+		Self {
+			code_fetcher: &NoneFetchRuntimeCode,
+			hash: Vec::new(),
+			heap_pages: None,
+		}
+	}
+}
+
+impl<'a> FetchRuntimeCode for RuntimeCode<'a> {
+	fn fetch_runtime_code<'b>(&'b self) -> Option<Cow<'b, [u8]>> {
+		self.code_fetcher.fetch_runtime_code()
+	}
+}
+
+/// Could not find the `:code` in the externalities while initializing the [`RuntimeCode`].
+#[derive(Debug)]
+pub struct CodeNotFound;
+
+impl std::fmt::Display for CodeNotFound {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+		write!(f, "the storage entry `:code` doesn't have any code")
+	}
 }
 
 /// Something that can call a method in a WASM blob.
@@ -110,9 +186,15 @@ pub trait CallInWasm: Send + Sync {
 	/// to decode the arguments for the method.
 	///
 	/// Returns the SCALE encoded return value of the method.
+	///
+	/// # Note
+	///
+	/// If `code_hash` is `Some(_)` the `wasm_code` module and instance will be cached internally,
+	/// otherwise it is thrown away after the call.
 	fn call_in_wasm(
 		&self,
-		wasm_blob: &[u8],
+		wasm_code: &[u8],
+		code_hash: Option<Vec<u8>>,
 		method: &str,
 		call_data: &[u8],
 		ext: &mut dyn Externalities,

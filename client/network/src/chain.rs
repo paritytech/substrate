@@ -66,7 +66,12 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	) -> Result<StorageProof, Error>;
 
 	/// Get method execution proof.
-	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, StorageProof), Error>;
+	fn execution_proof(
+		&self,
+		block: &Block::Hash,
+		method: &str,
+		data: &[u8],
+	) -> Result<(Vec<u8>, StorageProof), Error>;
 
 	/// Get key changes proof.
 	fn key_changes_proof(

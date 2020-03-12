@@ -61,7 +61,6 @@ struct ServiceMetrics {
 	memory_usage_bytes: Gauge<U64>,
 	cpu_usage_percentage: Gauge<F64>,
 	network_per_sec_bytes: GaugeVec<U64>,
-	node_roles: Gauge<U64>,
 	database_cache: Gauge<U64>,
 	state_cache: Gauge<U64>,
 	state_db: GaugeVec<U64>,
@@ -86,9 +85,6 @@ impl ServiceMetrics {
 			network_per_sec_bytes: register(GaugeVec::new(
 				Opts::new("network_per_sec_bytes", "Networking bytes per second"),
 				&["direction"]
-			)?, registry)?,
-			node_roles: register(Gauge::new(
-				"node_roles", "The roles the node is running as",
 			)?, registry)?,
 			database_cache: register(Gauge::new(
 				"database_cache_bytes", "RocksDB cache size in bytes",
@@ -1011,18 +1007,34 @@ ServiceBuilder<
 			);
 		}
 
-		// Prometheus metrics
+		// Prometheus metrics.
 		let metrics = if let Some(PrometheusConfig { port, registry }) = config.prometheus_config.clone() {
+			// Set static metrics.
+			register(Gauge::<U64>::with_opts(
+				Opts::new(
+					"build_info",
+					"A metric with a constant '1' value labeled by name, version, and commit."
+				)
+					.const_label("name", config.impl_name)
+					.const_label("version", config.impl_version)
+					.const_label("commit", config.impl_commit),
+			)?, &registry)?.set(1);
+			register(Gauge::<U64>::new(
+				"node_roles", "The roles the node is running as",
+			)?, &registry)?.set(u64::from(config.roles.bits()));
+
 			let metrics = ServiceMetrics::register(&registry)?;
-			metrics.node_roles.set(u64::from(config.roles.bits()));
+
 			spawn_handle.spawn(
 				"prometheus-endpoint",
 				prometheus_endpoint::init_prometheus(port, registry).map(drop)
 			);
+
 			Some(metrics)
 		} else {
 			None
 		};
+
 		// Periodically notify the telemetry.
 		let transaction_pool_ = transaction_pool.clone();
 		let client_ = client.clone();
