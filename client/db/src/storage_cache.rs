@@ -1173,7 +1173,6 @@ mod tests {
 		);
 
 		let key = H256::random()[..].to_vec();
-		let s_key = H256::random()[..].to_vec();
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1191,7 +1190,7 @@ mod tests {
 			&[],
 			&[],
 			vec![],
-			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))], child_info1)],
+			vec![(child_info1, Default::default(), vec![(key.clone(), Some(vec![1, 2]))])],
 			Some(h0),
 			Some(0),
 			true,
