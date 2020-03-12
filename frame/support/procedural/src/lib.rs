@@ -36,7 +36,7 @@ use proc_macro::TokenStream;
 /// 	trait Store for Module<T: Trait> as Example {
 /// 		Foo get(fn foo) config(): u32=12;
 /// 		Bar: map hasher(identity) u32 => u32;
-/// 		pub Zed build(|config| vec![(0, 0)]): linked_map hasher(identity) u32 => u32;
+/// 		pub Zed build(|config| vec![(0, 0)]): map hasher(identity) u32 => u32;
 /// 	}
 /// }
 /// ```
@@ -103,36 +103,6 @@ use proc_macro::TokenStream;
 ///   Thus the keys are stored at:
 ///   ```nocompile
 ///   twox128(module_prefix) ++ twox128(storage_prefix) ++ hasher(encode(key))
-///   ```
-///
-/// * Linked map: `Foo: linked_map hasher($hash) type => type`: Implements the
-///   [`StorageLinkedMap`](../frame_support/storage/trait.StorageLinkedMap.html) trait using the
-///   [`StorageLinkedMap generator`](../frame_support/storage/generator/trait.StorageLinkedMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
-///
-///   `$hash` representing a choice of hashing algorithms available in the
-///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
-///
-///   `blake2_256` and `blake2_128_concat` are strong hasher. One should use another hasher
-///   with care, see generator documentation.
-///
-///   All key formatting logic can be accessed in a type-agnostic format via the
-///   `KeyFormat` trait, which
-///   is implemented for the storage linked map type as well.
-///
-///   The generator key format is implemented with:
-///   * `module_prefix`: $module_prefix
-///   * `storage_prefix`: storage_name
-///   * `head_prefix`: `"HeadOf" ++ storage_name`
-///   * `Hasher`: $hash
-///
-///   Thus the keys are stored at:
-///   ```nocompile
-///   Twox128(module_prefix) ++ Twox128(storage_prefix) ++ Hasher(encode(key))
-///   ```
-///   and head is stored at:
-///   ```nocompile
-///   Twox128(module_prefix) ++ Twox128(head_prefix)
 ///   ```
 ///
 /// * Double map: `Foo: double_map hasher($hash1) u32, hasher($hash2) u32 => u32`: Implements the

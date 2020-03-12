@@ -353,7 +353,7 @@ decl_storage! {
 		Dummy get(fn dummy) config(): Option<T::Balance>;
 
 		// A map that has enumerable entries.
-		Bar get(fn bar) config(): linked_map hasher(blake2_128_concat) T::AccountId => T::Balance;
+		Bar get(fn bar) config(): map hasher(blake2_128_concat) T::AccountId => T::Balance;
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(fn foo) config(): T::Balance;
