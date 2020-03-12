@@ -31,7 +31,7 @@ fn create_funded_user<T: Trait>(string: &'static str, n: u32) -> T::AccountId {
 	let user = account(string, n, SEED);
 	let balance = T::Currency::minimum_balance() * 100.into();
 	T::Currency::make_free_balance_be(&user, balance);
-	return user
+	user
 }
 
 pub fn create_stash_controller<T: Trait>(n: u32) -> Result<(T::AccountId, T::AccountId), &'static str> {
@@ -55,7 +55,7 @@ fn create_stash_controller2<T: Trait>(n: u32) -> Result<(T::AccountId, T::Accoun
 }
 
 fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
-	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::new();
+	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max);
 	for i in 0 .. max {
 		let (stash, controller) = create_stash_controller::<T>(i)?;
 		let validator_prefs = ValidatorPrefs {
@@ -65,12 +65,12 @@ fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLooku
 		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash);
 		validators.push(stash_lookup);
 	}
-	return Ok(validators)
+	Ok(validators)
 }
 
 // This function generates v validators each of whom have n nominators ready for a new era.
 pub fn create_validators_with_nominators_for_era<T: Trait>(v: u32, n: u32) -> Result<(), &'static str> {
-	let mut validators: Vec<T::AccountId> = Vec::new();
+	let mut validators: Vec<T::AccountId> = Vec::with_capacity(v);
 
 	// Create v validators
 	for i in 0 .. v {
@@ -359,8 +359,8 @@ benchmarks! {
 		create_validators_with_nominators_for_era::<T>(v, n)?;
 		let session_index = SessionIndex::one();
 	}: {
-		let maybe_validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
-		assert!(maybe_validators.len() == v as usize);
+		let validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
+		assert!(validators.len() == v as usize);
 	}
 
 	new_era_vary {
