@@ -880,6 +880,13 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-staking" | b"staking" => Staking::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				b"pallet-vesting" | b"vesting" => Vesting::run_benchmark(
 					extrinsic,
 					lowest_range_values,

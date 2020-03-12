@@ -23,7 +23,7 @@ use sp_staking::offence::OffenceDetails;
 use frame_support::{
 	assert_ok, assert_noop,
 	traits::{Currency, ReservableCurrency},
-	StorageMap,
+	StorageMap, StorageLinkedMap,
 };
 use pallet_balances::Error as BalancesError;
 use substrate_test_utils::assert_eq_uvec;
@@ -3037,5 +3037,58 @@ fn set_history_depth_works() {
 		Staking::set_history_depth(Origin::ROOT, 8).unwrap();
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
+	});
+}
+
+/* Benchmarking Tests */
+
+#[test]
+fn create_validator_with_nominators_works() {
+	ExtBuilder::default().build().execute_with(|| {
+		let n = 10;
+		let mut iter = Validators::<Test>::enumerate();
+
+		// Clean up genesis validators to make test work
+		while let Some((key, _value)) = iter.next() {
+			Validators::<Test>::remove(key);
+		}
+
+		let validator = crate::benchmarking::create_validator_with_nominators::<Test>(
+			n,
+			MAX_NOMINATIONS as u32,
+		).unwrap();
+
+		let current_era = CurrentEra::get().unwrap();
+		let controller = validator;
+		let ledger = Staking::ledger(&controller).unwrap();
+		let stash = &ledger.stash;
+
+		let original_free_balance = Balances::free_balance(stash);
+		assert_ok!(Staking::payout_validator(Origin::signed(controller), current_era));
+		let new_free_balance = Balances::free_balance(stash);
+
+		assert!(original_free_balance < new_free_balance);
+	});
+}
+
+#[test]
+fn create_nominator_with_validators_works() {
+	ExtBuilder::default().build().execute_with(|| {
+		let v = 5;
+
+		let (nominator, validators) = crate::benchmarking::create_nominator_with_validators::<Test>(v).unwrap();
+
+		let current_era = CurrentEra::get().unwrap();
+		let controller = nominator;
+		let ledger = Staking::ledger(&controller).unwrap();
+		let stash = &ledger.stash;
+
+		let find_nominator = validators.into_iter().map(|x| (x, 0)).collect();
+
+		let original_free_balance = Balances::free_balance(stash);
+		assert_ok!(Staking::payout_nominator(Origin::signed(controller), current_era, find_nominator));
+		let new_free_balance = Balances::free_balance(stash);
+
+		assert!(original_free_balance < new_free_balance);
 	});
 }
