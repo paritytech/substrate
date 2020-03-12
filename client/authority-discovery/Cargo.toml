@@ -1,6 +1,6 @@
 [package]
 name = "sc-authority-discovery"
-version = "0.8.0-alpha.2"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
@@ -14,12 +14,13 @@ prost-build = "0.6.1"
 
 [dependencies]
 bytes = "0.5.0"
-codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
+codec = { package = "parity-scale-codec", default-features = false, version = "1.2.0" }
 derive_more = "0.99.2"
 futures = "0.3.1"
 futures-timer = "3.0.1"
-libp2p = { version = "0.16.1", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
+libp2p = { version = "0.16.2", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0-alpha.2" }
 prost = "0.6.1"
 rand = "0.7.2"
 sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }

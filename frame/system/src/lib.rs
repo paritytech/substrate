@@ -367,6 +367,9 @@ decl_storage! {
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
 		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+
+		/// A bool to track if the runtime was upgraded last block.
+		pub RuntimeUpgraded: bool;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -486,6 +489,7 @@ decl_module! {
 			}
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			RuntimeUpgraded::put(true);
 			Self::deposit_event(RawEvent::CodeUpdated);
 		}
 
@@ -494,6 +498,7 @@ decl_module! {
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			RuntimeUpgraded::put(true);
 			Self::deposit_event(RawEvent::CodeUpdated);
 		}
 
@@ -521,6 +526,9 @@ decl_module! {
 			ensure_root(origin)?;
 			for i in &items {
 				storage::unhashed::put_raw(&i.0, &i.1);
+				if i.0 == well_known_keys::CODE {
+					RuntimeUpgraded::put(true);
+				}
 			}
 		}
 
@@ -885,7 +893,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the block number to something in particular. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
-	#[cfg(any(feature = "std", test))]
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn set_block_number(n: T::BlockNumber) {
 		<Number<T>>::put(n);
 	}
@@ -1249,7 +1257,7 @@ impl<T: Trait> CheckNonce<T> {
 impl<T: Trait> Debug for CheckNonce<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		self.0.fmt(f)
+		write!(f, "CheckNonce({})", self.0)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1328,19 +1336,19 @@ impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
 
 /// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckEra<T: Trait + Send + Sync>((Era, sp_std::marker::PhantomData<T>));
+pub struct CheckEra<T: Trait + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckEra<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(era: Era) -> Self {
-		Self((era, sp_std::marker::PhantomData))
+		Self(era, sp_std::marker::PhantomData)
 	}
 }
 
 impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		self.0.fmt(f)
+		write!(f, "CheckEra({:?})", self.0)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1365,7 +1373,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 		_len: usize,
 	) -> TransactionValidity {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let valid_till = (self.0).0.death(current_u64);
+		let valid_till = self.0.death(current_u64);
 		Ok(ValidTransaction {
 			longevity: valid_till.saturating_sub(current_u64),
 			..Default::default()
@@ -1374,7 +1382,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
+		let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
 		if !<BlockHash<T>>::contains_key(n) {
 			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {
@@ -1917,6 +1925,7 @@ mod tests {
 			fn call_in_wasm(
 				&self,
 				_: &[u8],
+				_: Option<Vec<u8>>,
 				_: &str,
 				_: &[u8],
 				_: &mut dyn sp_externalities::Externalities,
@@ -1971,6 +1980,26 @@ mod tests {
 				System::events(),
 				vec![EventRecord { phase: Phase::ApplyExtrinsic(0), event: 102u16, topics: vec![] }],
 			);
+
+			assert_eq!(RuntimeUpgraded::get(), true);
+		});
+	}
+
+	#[test]
+	fn runtime_upgraded_with_set_storage() {
+		let executor = substrate_test_runtime_client::new_native_executor();
+		let mut ext = new_test_ext();
+		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
+		ext.execute_with(|| {
+			System::set_storage(
+				RawOrigin::Root.into(),
+				vec![(
+					well_known_keys::CODE.to_vec(),
+					substrate_test_runtime_client::runtime::WASM_BINARY.to_vec()
+				)],
+			).unwrap();
+
+			assert_eq!(RuntimeUpgraded::get(), true);
 		});
 	}
 }

@@ -36,7 +36,7 @@ use sp_blockchain::{
 use sc_client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
 use sp_runtime::generic::{DigestItem, BlockId};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HasherFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HashFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, DatabaseType, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::{DatabaseSettings, FrozenForDuration};
@@ -305,7 +305,7 @@ impl<Block: BlockT> LightStorage<Block> {
 				Some(old_current_num)
 			});
 
-			let new_header_cht_root = cht::compute_root::<Block::Header, HasherFor<Block>, _>(
+			let new_header_cht_root = cht::compute_root::<Block::Header, HashFor<Block>, _>(
 				cht::size(), new_cht_number, cht_range.map(|num| self.hash(num))
 			)?;
 			transaction.put(
@@ -317,12 +317,12 @@ impl<Block: BlockT> LightStorage<Block> {
 			// if the header includes changes trie root, let's build a changes tries roots CHT
 			if header.digest().log(DigestItem::as_changes_trie_root).is_some() {
 				let mut current_num = new_cht_start;
-				let cht_range = ::std::iter::from_fn(|| {
+				let cht_range = std::iter::from_fn(|| {
 					let old_current_num = current_num;
 					current_num = current_num + One::one();
 					Some(old_current_num)
 				});
-				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, HasherFor<Block>, _>(
+				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, HashFor<Block>, _>(
 					cht::size(), new_cht_number, cht_range
 						.map(|num| self.changes_trie_root(BlockId::Number(num)))
 				)?;
@@ -572,15 +572,16 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 	#[cfg(not(target_os = "unknown"))]
 	fn usage_info(&self) -> Option<UsageInfo> {
-		use sc_client_api::{MemoryInfo, IoInfo};
+		use sc_client_api::{MemoryInfo, IoInfo, MemorySize};
 
-		let database_cache = parity_util_mem::malloc_size(&*self.db);
+		let database_cache = MemorySize::from_bytes(parity_util_mem::malloc_size(&*self.db));
 		let io_stats = self.io_stats.take_or_else(|| self.db.io_stats(kvdb::IoStatsKind::SincePrevious));
 
 		Some(UsageInfo {
 			memory: MemoryInfo {
 				database_cache,
-				state_cache: 0,
+				state_cache: Default::default(),
+				state_db: Default::default(),
 			},
 			io: IoInfo {
 				transactions: io_stats.transactions,

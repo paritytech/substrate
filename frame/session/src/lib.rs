@@ -156,16 +156,23 @@ pub trait SessionManager<ValidatorId> {
 	/// `new_index` is strictly greater than from previous call.
 	///
 	/// The first session start at index 0.
+	///
+	/// `new_session(session)` is guaranteed to be called before `end_session(session-1)`.
 	fn new_session(new_index: SessionIndex) -> Option<Vec<ValidatorId>>;
 	/// End the session.
 	///
 	/// Because the session pallet can queue validator set the ending session can be lower than the
 	/// last new session index.
 	fn end_session(end_index: SessionIndex);
+	/// Start the session.
+	///
+	/// The session start to be used for validation
+	fn start_session(start_index: SessionIndex);
 }
 
 impl<A> SessionManager<A> for () {
 	fn new_session(_: SessionIndex) -> Option<Vec<A>> { None }
+	fn start_session(_: SessionIndex) {}
 	fn end_session(_: SessionIndex) {}
 }
 
@@ -335,8 +342,6 @@ pub trait Trait: frame_system::Trait {
 	type DisabledValidatorsThreshold: Get<Perbill>;
 }
 
-const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// The current set of validators.
@@ -359,20 +364,10 @@ decl_storage! {
 		DisabledValidators get(fn disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
-		///
-		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
-		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		// TODO: Migrate to a normal map now https://github.com/paritytech/substrate/issues/4917
-		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) T::ValidatorId
-			=> Option<T::Keys>;
+		NextKeys: map hasher(blake2_256) T::ValidatorId => Option<T::Keys>;
 
-		/// The owner of a key. The second key is the `KeyTypeId` + the encoded key.
-		///
-		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
-		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		// TODO: Migrate to a normal map now https://github.com/paritytech/substrate/issues/4917
-		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) (KeyTypeId, Vec<u8>)
-			=> Option<T::ValidatorId>;
+		/// The owner of a key. The key is the `KeyTypeId` + the encoded key.
+		KeyOwner: map hasher(blake2_256) (KeyTypeId, Vec<u8>) => Option<T::ValidatorId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::AccountId, T::ValidatorId, T::Keys)>;
@@ -423,6 +418,8 @@ decl_storage! {
 
 			<Validators<T>>::put(initial_validators_0);
 			<QueuedKeys<T>>::put(queued_keys);
+
+			T::SessionManager::start_session(0);
 		});
 	}
 }
@@ -451,10 +448,6 @@ decl_error! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Used as first key for `NextKeys` and `KeyOwner` to put all the data into the same branch
-		/// of the trie.
-		const DEDUP_KEY_PREFIX: &[u8] = DEDUP_KEY_PREFIX;
-
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -505,10 +498,36 @@ decl_module! {
 				Self::rotate_session();
 			}
 		}
+
+		/// Called when the runtime is upgraded.
+		fn on_runtime_upgrade() {
+			Self::migrate();
+		}
 	}
 }
 
 impl<T: Trait> Module<T> {
+	/// Move keys from NextKeys and KeyOwner, if any exist.
+	fn migrate() {
+		use frame_support::storage::migration::{put_storage_value, StorageIterator};
+		sp_runtime::print("Migrating session's double-maps...");
+
+		let prefix = {
+			const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
+			let encoded_prefix_key_hash = codec::Encode::encode(&DEDUP_KEY_PREFIX);
+			let mut h = sp_io::hashing::twox_64(&encoded_prefix_key_hash[..]).to_vec();
+			h.extend(&encoded_prefix_key_hash[..]);
+			h
+		};
+
+		for (hash, value) in StorageIterator::<T::Keys>::with_suffix(b"Session", b"NextKeys", &prefix[..]).drain() {
+			put_storage_value(b"Session", b"NextKeys", &hash, value);
+		}
+		for (hash, value) in StorageIterator::<T::ValidatorId>::with_suffix(b"Session", b"KeyOwner", &prefix[..]).drain() {
+			put_storage_value(b"Session", b"KeyOwner", &hash, value);
+		}
+	}
+
 	/// Move on to next session. Register new validator set and session keys. Changes
 	/// to the validator set have a session of delay to take effect. This allows for
 	/// equivocation punishment after a fork.
@@ -519,6 +538,8 @@ impl<T: Trait> Module<T> {
 
 		// Inform the session handlers that a session is going to end.
 		T::SessionHandler::on_before_session_ending();
+
+		T::SessionManager::end_session(session_index);
 
 		// Get queued session keys and validators.
 		let session_keys = <QueuedKeys<T>>::get();
@@ -532,11 +553,11 @@ impl<T: Trait> Module<T> {
 			DisabledValidators::take();
 		}
 
-		T::SessionManager::end_session(session_index);
-
 		// Increment session index.
 		let session_index = session_index + 1;
 		CurrentIndex::put(session_index);
+
+		T::SessionManager::start_session(session_index);
 
 		// Get next validator set.
 		let maybe_next_validators = T::SessionManager::new_session(session_index + 1);
@@ -693,27 +714,27 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		<NextKeys<T>>::get(DEDUP_KEY_PREFIX, v)
+		<NextKeys<T>>::get(v)
 	}
 
 	fn take_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		<NextKeys<T>>::take(DEDUP_KEY_PREFIX, v)
+		<NextKeys<T>>::take(v)
 	}
 
 	fn put_keys(v: &T::ValidatorId, keys: &T::Keys) {
-		<NextKeys<T>>::insert(DEDUP_KEY_PREFIX, v, keys);
+		<NextKeys<T>>::insert(v, keys);
 	}
 
 	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
-		<KeyOwner<T>>::get(DEDUP_KEY_PREFIX, (id, key_data))
+		<KeyOwner<T>>::get((id, key_data))
 	}
 
 	fn put_key_owner(id: KeyTypeId, key_data: &[u8], v: &T::ValidatorId) {
-		<KeyOwner<T>>::insert(DEDUP_KEY_PREFIX, (id, key_data), v)
+		<KeyOwner<T>>::insert((id, key_data), v)
 	}
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
-		<KeyOwner<T>>::remove(DEDUP_KEY_PREFIX, (id, key_data));
+		<KeyOwner<T>>::remove((id, key_data));
 	}
 }
 

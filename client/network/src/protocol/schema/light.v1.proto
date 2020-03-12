@@ -14,26 +14,22 @@ message Pair {
 
 // Enumerate all possible light client request messages.
 message Request {
-	// Unique request id.
-	uint64 id = 1;
 	oneof request {
-		RemoteCallRequest remote_call_request = 2;
-		RemoteReadRequest remote_read_request = 3;
-		RemoteHeaderRequest remote_header_request = 4;
-		RemoteReadChildRequest remote_read_child_request = 5;
-		RemoteChangesRequest remote_changes_request = 6;
+		RemoteCallRequest remote_call_request = 1;
+		RemoteReadRequest remote_read_request = 2;
+		RemoteHeaderRequest remote_header_request = 3;
+		RemoteReadChildRequest remote_read_child_request = 4;
+		RemoteChangesRequest remote_changes_request = 5;
 	}
 }
 
 // Enumerate all possible light client response messages.
 message Response {
-	/// Id of a request this response was made for.
-	uint64 id = 1;
 	oneof response {
-		RemoteCallResponse remote_call_response = 2;
-		RemoteReadResponse remote_read_response = 3;
-		RemoteHeaderResponse remote_header_response = 4;
-		RemoteChangesResponse remote_changes_response = 6;
+		RemoteCallResponse remote_call_response = 1;
+		RemoteReadResponse remote_read_response = 2;
+		RemoteHeaderResponse remote_header_response = 3;
+		RemoteChangesResponse remote_changes_response = 4;
 	}
 }
 

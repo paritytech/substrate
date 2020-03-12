@@ -179,30 +179,6 @@ where
 		result.map(|r| r.encode())
 	}
 
-	fn original_storage(&self, key: &[u8]) -> Option<StorageValue> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
-		let result = self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
-
-		trace!(target: "state-trace", "{:04x}: GetOriginal {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from)
-		);
-		result
-	}
-
-	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
-		let result = self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
-
-		trace!(target: "state-trace", "{:04x}: GetOriginalHash {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			result,
-		);
-		result.map(|r| r.encode())
-	}
-
 	fn child_storage(
 		&self,
 		child_info: &ChildInfo,
@@ -213,7 +189,7 @@ where
 		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
-			.child_storage(child_info.storage_key(), key)
+			.child_storage(child_info, key)
 			.map(|x| x.map(|x| x.to_vec()))
 			.unwrap_or_else(||
 				self.backend.child_storage(child_info, key)
@@ -240,7 +216,7 @@ where
 		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
-			.child_storage(child_info.storage_key(), key)
+			.child_storage(child_info, key)
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(||
 				self.backend.child_storage_hash(child_info, key)
@@ -254,51 +230,6 @@ where
 			result,
 		);
 
-		result.map(|r| r.encode())
-	}
-
-	fn original_child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<StorageValue> {
-		if child_info.is_top_trie() {
-			return self.original_storage(key);
-		}
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
-		let result = self.backend
-			.child_storage(child_info, key)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL);
-
-		trace!(target: "state-trace", "{:04x}: ChildOriginal({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from),
-		);
-
-		result
-	}
-
-	fn original_child_storage_hash(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		if child_info.is_top_trie() {
-			return self.original_storage_hash(key);
-		}
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
-		let result = self.backend
-			.child_storage_hash(child_info, key)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL);
-
-		trace!(target: "state-trace", "{}: ChildHashOriginal({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			result,
-		);
 		result.map(|r| r.encode())
 	}
 
@@ -328,7 +259,7 @@ where
 		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
-		let result = match self.overlay.child_storage(child_info.storage_key(), key) {
+		let result = match self.overlay.child_storage(child_info, key) {
 			Some(x) => x.is_some(),
 			_ => self.backend
 				.exists_child_storage(child_info, key)
@@ -826,21 +757,18 @@ mod tests {
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
 		assert_eq!(ext.child_storage(child_info, &[10]), Some(vec![10]));
-		assert_eq!(ext.original_child_storage(child_info, &[10]), Some(vec![10]));
 		assert_eq!(
 			ext.child_storage_hash(child_info, &[10]),
 			Some(Blake2Hasher::hash(&[10]).as_ref().to_vec()),
 		);
 
 		assert_eq!(ext.child_storage(child_info, &[20]), None);
-		assert_eq!(ext.original_child_storage(child_info, &[20]), Some(vec![20]));
 		assert_eq!(
 			ext.child_storage_hash(child_info, &[20]),
 			None,
 		);
 
 		assert_eq!(ext.child_storage(child_info, &[30]), Some(vec![31]));
-		assert_eq!(ext.original_child_storage(child_info, &[30]), Some(vec![40]));
 		assert_eq!(
 			ext.child_storage_hash(child_info, &[30]),
 			Some(Blake2Hasher::hash(&[31]).as_ref().to_vec()),

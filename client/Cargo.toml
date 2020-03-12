@@ -1,6 +1,6 @@
 [package]
 name = "sc-client"
-version = "0.8.0-alpha.2"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -11,7 +11,7 @@ description = "Substrate Client and associated logic."
 [dependencies]
 sc-block-builder = { version = "0.8.0-alpha.2", path = "block-builder" }
 sc-client-api = { version = "2.0.0-alpha.2", path = "api" }
-codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 sp-consensus = { version = "0.8.0-alpha.2", path = "../primitives/consensus/common" }
 derive_more = { version = "0.99.2" }
 sc-executor = { version = "0.8.0-alpha.2", path = "executor" }
@@ -34,6 +34,7 @@ sp-blockchain = { version = "2.0.0-alpha.2", path = "../primitives/blockchain" }
 sp-state-machine = { version = "0.8.0-alpha.2", path = "../primitives/state-machine" }
 sc-telemetry = { version = "2.0.0-alpha.2", path = "telemetry" }
 sp-trie = { version = "2.0.0-alpha.2", path = "../primitives/trie" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0-alpha.2", path = "../utils/prometheus" }
 tracing = "0.1.10"
 
 [dev-dependencies]

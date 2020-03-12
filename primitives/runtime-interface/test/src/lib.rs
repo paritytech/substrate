@@ -22,26 +22,29 @@
 use sp_runtime_interface::*;
 use sp_runtime_interface_test_wasm::{WASM_BINARY, test_api::HostFunctions};
 use sp_wasm_interface::HostFunctions as HostFunctionsT;
+use sc_executor::CallInWasm;
 
-type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher, u64>;
+type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits::BlakeTwo256, u64>;
 
 fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 	let mut ext = TestExternalities::default();
 	let mut ext_ext = ext.ext();
+	let mut host_functions = HF::host_functions();
+	host_functions.extend(sp_io::SubstrateHostFunctions::host_functions());
 
-	sc_executor::call_in_wasm::<
-		(
-			HF,
-			sp_io::SubstrateHostFunctions,
-		)
-	>(
+	let executor = sc_executor::WasmExecutor::new(
+		sc_executor::WasmExecutionMethod::Interpreted,
+		Some(8),
+		host_functions,
+		false,
+		8,
+	);
+	executor.call_in_wasm(
+		&WASM_BINARY[..],
+		None,
 		method,
 		&[],
-		sc_executor::WasmExecutionMethod::Interpreted,
 		&mut ext_ext,
-		&WASM_BINARY[..],
-		8,
-		false,
 	).expect(&format!("Executes `{}`", method));
 
 	ext
@@ -87,7 +90,7 @@ fn test_return_input_public_key() {
 
 #[test]
 #[should_panic(
-	expected = "Other(\"Instantiation: Export ext_test_api_return_input_version_1 not found\")"
+	expected = "Instantiation: Export ext_test_api_return_input_version_1 not found"
 )]
 fn host_function_not_found() {
 	call_wasm_method::<()>("test_return_data");
@@ -96,8 +99,9 @@ fn host_function_not_found() {
 #[test]
 #[should_panic(
 	expected =
-		"FunctionExecution(\"ext_test_api_invalid_utf8_data_version_1\", \
-		\"Invalid utf8 data provided\")"
+		"Executes `test_invalid_utf8_data_should_return_an_error`: \
+		\"Trap: Trap { kind: Host(FunctionExecution(\\\"ext_test_api_invalid_utf8_data_version_1\\\", \
+		\\\"Invalid utf8 data provided\\\")) }\""
 )]
 fn test_invalid_utf8_data_should_return_an_error() {
 	call_wasm_method::<HostFunctions>("test_invalid_utf8_data_should_return_an_error");
@@ -126,9 +130,4 @@ fn test_encoded_return_value_memory_is_freed() {
 #[test]
 fn test_array_return_value_memory_is_freed() {
 	call_wasm_method::<HostFunctions>("test_array_return_value_memory_is_freed");
-}
-
-#[test]
-fn test_ext_blake2_256() {
-	call_wasm_method::<HostFunctions>("test_ext_blake2_256");
 }

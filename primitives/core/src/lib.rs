@@ -61,6 +61,7 @@ pub mod ed25519;
 pub mod sr25519;
 pub mod ecdsa;
 pub mod hash;
+#[cfg(feature = "std")]
 mod hasher;
 pub mod offchain;
 pub mod sandbox;
@@ -78,8 +79,7 @@ pub use crypto::{DeriveJunction, Pair, Public};
 
 pub use hash_db::Hasher as InnerHasher;
 pub use hash_db::{Prefix, EMPTY_PREFIX};
-// Switch back to Blake after PoC-3 is out
-// pub use self::hasher::blake::BlakeHasher;
+#[cfg(feature = "std")]
 pub use self::hasher::blake2::Blake2Hasher;
 
 pub use sp_storage as storage;
@@ -366,6 +366,7 @@ pub trait Hasher: InnerHasher {
 	const EMPTY_ROOT: &'static [u8];
 }
 
+#[cfg(feature = "std")]
 impl Hasher for Blake2Hasher {
 	const EMPTY_ROOT: &'static [u8] = &[
 		3, 23, 10, 46, 117, 151, 183, 183, 227, 216,

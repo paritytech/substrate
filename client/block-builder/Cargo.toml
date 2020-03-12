@@ -1,6 +1,6 @@
 [package]
 name = "sc-block-builder"
-version = "0.8.0-alpha.2"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -18,4 +18,8 @@ sp-blockchain = { version = "2.0.0-alpha.2", path = "../../primitives/blockchain
 sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
 sp-block-builder = { version = "2.0.0-alpha.2", path = "../../primitives/block-builder" }
 sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
-codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
+
+[dev-dependencies]
+substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
+sp-trie = { version = "2.0.0-alpha.2", path = "../../primitives/trie" }

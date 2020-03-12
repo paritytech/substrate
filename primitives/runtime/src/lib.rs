@@ -101,7 +101,7 @@ use crate::traits::IdentifyAccount;
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
-pub trait BuildStorage: Sized {
+pub trait BuildStorage {
 	/// Build the storage out of this builder.
 	fn build_storage(&self) -> Result<sp_core::storage::Storage, String> {
 		let mut storage = Default::default();
