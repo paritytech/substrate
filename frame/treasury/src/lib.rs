@@ -200,7 +200,9 @@ decl_storage! {
 		ProposalCount get(fn proposal_count): ProposalIndex;
 
 		/// Proposals that have been made.
-		Proposals get(fn proposals): map hasher(blake2_256) ProposalIndex => Option<Proposal<T::AccountId, BalanceOf<T>>>;
+		Proposals get(fn proposals):
+			map hasher(twox_64_concat) ProposalIndex
+			=> Option<Proposal<T::AccountId, BalanceOf<T>>>;
 
 		/// Proposal indices that have been approved but not yet awarded.
 		Approvals get(fn approvals): Vec<ProposalIndex>;
@@ -208,12 +210,13 @@ decl_storage! {
 		/// Tips that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
 		/// This has the insecure enumerable hash function since the key itself is already
 		/// guaranteed to be a secure hash.
-		pub Tips get(fn tips): map hasher(twox_64_concat) T::Hash
+		pub Tips get(fn tips):
+			map hasher(twox_64_concat) T::Hash
 			=> Option<OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>>;
 
 		/// Simple preimage lookup from the reason's hash to the original data. Again, has an
 		/// insecure enumerable hash since the key is guaranteed to be the result of a secure hash.
-		pub Reasons get(fn reasons): map hasher(twox_64_concat) T::Hash => Option<Vec<u8>>;
+		pub Reasons get(fn reasons): map hasher(identity) T::Hash => Option<Vec<u8>>;
 	}
 	add_extra_genesis {
 		build(|_config| {
@@ -280,8 +283,22 @@ decl_error! {
 	}
 }
 
+mod migration {
+	use super::*;
+	pub fn migrate<T: Trait>() {
+		for i in 0..ProposalCount::get() {
+			Proposals::<T>::migrate_key_from_blake(i);
+		}
+		Reasons::<T>::remove_all();
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn on_runtime_upgrade() {
+			migration::migrate::<T>();
+		}
+
 		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
 		/// An accepted proposal gets these back. A rejected proposal does not.
 		const ProposalBond: Permill = T::ProposalBond::get();
