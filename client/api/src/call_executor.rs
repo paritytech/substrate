@@ -35,6 +35,7 @@ use crate::execution_extensions::ExecutionExtensions;
 pub trait ExecutorProvider<Block: BlockT> {
 	/// executor instance
 	type Executor: CallExecutor<Block>;
+
 	/// Get call executor reference.
 	fn executor(&self) -> &Self::Executor;
 

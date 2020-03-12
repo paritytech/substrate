@@ -22,7 +22,7 @@ use crate::{StorageHasher, Twox128};
 
 /// Utility to iterate through raw items in storage.
 pub struct StorageIterator<T> {
-	prefix: [u8; 32],
+	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
 	drain: bool,
 	_phantom: ::sp_std::marker::PhantomData<T>,
@@ -31,11 +31,19 @@ pub struct StorageIterator<T> {
 impl<T> StorageIterator<T> {
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
 	pub fn new(module: &[u8], item: &[u8]) -> Self {
-		let mut prefix = [0u8; 32];
-		prefix[0..16].copy_from_slice(&Twox128::hash(module));
-		prefix[16..32].copy_from_slice(&Twox128::hash(item));
-		Self { prefix, previous_key: prefix[..].to_vec(), drain: false, _phantom: Default::default() }
+		Self::with_suffix(module, item, &[][..])
 	}
+
+	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	pub fn with_suffix(module: &[u8], item: &[u8], suffix: &[u8]) -> Self {
+		let mut prefix = Vec::new();
+		prefix.extend_from_slice(&Twox128::hash(module));
+		prefix.extend_from_slice(&Twox128::hash(item));
+		prefix.extend_from_slice(suffix);
+		let previous_key = prefix.clone();
+		Self { prefix, previous_key, drain: false, _phantom: Default::default() }
+	}
+
 	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
 	pub fn drain(mut self) -> Self {
 		self.drain = true;
@@ -59,7 +67,7 @@ impl<T: Decode + Sized> Iterator for StorageIterator<T> {
 							if self.drain {
 								frame_support::storage::unhashed::kill(&next);
 							}
-							Some((self.previous_key[32..].to_vec(), value))
+							Some((self.previous_key[self.prefix.len()..].to_vec(), value))
 						}
 						None => continue,
 					}

@@ -857,7 +857,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let get_justification = request
 			.fields
 			.contains(message::BlockAttributes::JUSTIFICATION);
-		while let Some(header) = self.context_data.chain.header(&id).unwrap_or(None) {
+		while let Some(header) = self.context_data.chain.header(id).unwrap_or(None) {
 			if blocks.len() >= max {
 				break;
 			}
@@ -875,7 +875,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				body: if get_body {
 					self.context_data
 						.chain
-						.body(&BlockId::Hash(hash))
+						.block_body(&BlockId::Hash(hash))
 						.unwrap_or(None)
 				} else {
 					None
@@ -1300,7 +1300,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
 	pub fn announce_block(&mut self, hash: B::Hash, data: Vec<u8>) {
-		let header = match self.context_data.chain.header(&BlockId::Hash(hash)) {
+		let header = match self.context_data.chain.header(BlockId::Hash(hash)) {
 			Ok(Some(header)) => header,
 			Ok(None) => {
 				warn!("Trying to announce unknown block: {}", hash);
@@ -1468,7 +1468,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.block
 		);
 		let proof = match self.context_data.chain.execution_proof(
-			&request.block,
+			&BlockId::Hash(request.block),
 			&request.method,
 			&request.data,
 		) {
@@ -1601,7 +1601,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
 			request.id, who, keys_str(), request.block);
 		let proof = match self.context_data.chain.read_proof(
-			&request.block,
+			&BlockId::Hash(request.block),
 			&mut request.keys.iter().map(AsRef::as_ref)
 		) {
 			Ok(proof) => proof,
@@ -1650,7 +1650,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
 		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
 			match self.context_data.chain.read_child_proof(
-				&request.block,
+				&BlockId::Hash(request.block),
 				&request.storage_key,
 				child_info,
 				&mut request.keys.iter().map(AsRef::as_ref),
@@ -1708,7 +1708,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	) {
 		trace!(target: "sync", "Remote header proof request {} from {} ({})",
 			request.id, who, request.block);
-		let (header, proof) = match self.context_data.chain.header_proof(request.block) {
+		let (header, proof) = match self.context_data.chain.header_proof(&BlockId::Number(request.block)) {
 			Ok((header, proof)) => (Some(header), proof),
 			Err(error) => {
 				trace!(target: "sync", "Remote header proof request {} from {} ({}) failed with: {}",
