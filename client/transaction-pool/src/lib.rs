@@ -31,7 +31,7 @@ pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
 use std::{collections::HashMap, sync::Arc, pin::Pin};
-use futures::{Future, FutureExt, future::ready};
+use futures::{Future, FutureExt, future::ready, channel::oneshot};
 use parking_lot::Mutex;
 
 use sp_runtime::{
@@ -68,7 +68,7 @@ where
 	Block: BlockT,
 {
 	updated_at: Option<NumberFor<Block>>,
-	pollers: Vec<(NumberFor<Block>, futures::channel::oneshot::Sender<T>)>,
+	pollers: Vec<(NumberFor<Block>, oneshot::Sender<T>)>,
 }
 
 impl<T, Block> Default for ReadyPoll<T, Block>
@@ -102,8 +102,8 @@ where
 		}
 	}
 
-	fn add(&mut self, number: NumberFor<Block>) -> futures::channel::oneshot::Receiver<T> {
-		let (sender, receiver) = futures::channel::oneshot::channel();
+	fn add(&mut self, number: NumberFor<Block>) -> oneshot::Receiver<T> {
+		let (sender, receiver) = oneshot::channel();
 		self.pollers.push((number, sender));
 		receiver
 	}
