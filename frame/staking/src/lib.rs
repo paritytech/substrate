@@ -254,7 +254,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod slashing;
-mod migration;
 
 pub mod inflation;
 
@@ -684,13 +683,13 @@ impl Default for Forcing {
 // storage migration logic. This should match directly with the semantic versions of the Rust crate.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 enum Releases {
-	V1_0_0,
+	V1_0_0Ancient,
 	V2_0_0,
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V1_0_0
+		Releases::V2_0_0
 	}
 }
 
@@ -946,7 +945,6 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() {
-			migration::on_runtime_upgrade::<T>();
 			migrate::<T>();
 		}
 
