@@ -28,7 +28,8 @@ use crate::{
 use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::{Decode, Encode};
-use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
+use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo,
+	ChildChange};
 use std::{mem, ops};
 
 use sp_core::Hasher;
@@ -46,7 +47,7 @@ pub type StorageValue = Vec<u8>;
 pub type StorageCollection = Vec<(StorageKey, Option<StorageValue>)>;
 
 /// In memory arrays of storage values for multiple child tries.
-pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection, ChildInfo)>;
+pub type ChildStorageCollection = Vec<(ChildInfo, ChildChange, StorageCollection)>;
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///

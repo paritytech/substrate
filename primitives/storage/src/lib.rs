@@ -270,13 +270,6 @@ impl ChildInfo {
 			),
 		}
 	}
-
-	/// Create a child change from a state update.
-	pub fn update_change(&self, changes: Vec<Vec<u8>, Option<Vec<u8>>>) -> ChildChange {
-		match self {
-			ChildInfo::ParentKeyId(..) => ChildChange::Update(changes),
-		}
-	}
 }
 
 /// Type of child.
@@ -464,17 +457,15 @@ const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default
 
 /// Information related to change to apply on a whole child trie.
 pub enum ChildChange {
-	/// No changes to apply.
-	None,
-	/// Update to content of child trie
-	Update(Vec<(Vec<u8>, Option<Vec<u8>>>),
+	/// Update to content of child trie.
+	Update,
 	/// The child trie allow to delete base on keyspace only.
 	BulkDeleteByKeyspace(Vec<u8>),
 }
 
 impl Default for ChildChange {
 	fn default() -> Self {
-		ChildChange::None
+		ChildChange::Update
 	}
 }
 
