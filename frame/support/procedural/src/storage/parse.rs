@@ -27,7 +27,6 @@ mod keyword {
 	syn::custom_keyword!(build);
 	syn::custom_keyword!(get);
 	syn::custom_keyword!(map);
-	syn::custom_keyword!(linked_map);
 	syn::custom_keyword!(double_map);
 	syn::custom_keyword!(blake2_256);
 	syn::custom_keyword!(blake2_128);
@@ -195,7 +194,6 @@ impl_parse_for_opt!(DeclStorageBuild => keyword::build);
 #[derive(ToTokens, Debug)]
 enum DeclStorageType {
 	Map(DeclStorageMap),
-	LinkedMap(DeclStorageLinkedMap),
 	DoubleMap(DeclStorageDoubleMap),
 	Simple(syn::Type),
 }
@@ -204,8 +202,6 @@ impl syn::parse::Parse for DeclStorageType {
 	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
 		if input.peek(keyword::map) {
 			Ok(Self::Map(input.parse()?))
-		} else if input.peek(keyword::linked_map) {
-			Ok(Self::LinkedMap(input.parse()?))
 		} else if input.peek(keyword::double_map) {
 			Ok(Self::DoubleMap(input.parse()?))
 		} else {
@@ -217,15 +213,6 @@ impl syn::parse::Parse for DeclStorageType {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageMap {
 	pub map_keyword: keyword::map,
-	pub hasher: Opt<SetHasher>,
-	pub key: syn::Type,
-	pub ass_keyword: Token![=>],
-	pub value: syn::Type,
-}
-
-#[derive(Parse, ToTokens, Debug)]
-struct DeclStorageLinkedMap {
-	pub map_keyword: keyword::linked_map,
 	pub hasher: Opt<SetHasher>,
 	pub key: syn::Type,
 	pub ass_keyword: Token![=>],
@@ -474,13 +461,6 @@ fn parse_storage_line_defs(
 
 		let storage_type = match line.storage_type {
 			DeclStorageType::Map(map) => super::StorageLineTypeDef::Map(
-				super::MapDef {
-					hasher: map.hasher.inner.ok_or_else(no_hasher_error)?.into(),
-					key: map.key,
-					value: map.value,
-				}
-			),
-			DeclStorageType::LinkedMap(map) => super::StorageLineTypeDef::LinkedMap(
 				super::MapDef {
 					hasher: map.hasher.inner.ok_or_else(no_hasher_error)?.into(),
 					key: map.key,

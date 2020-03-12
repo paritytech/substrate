@@ -45,19 +45,6 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 				}
 			}
 		},
-		StorageLineTypeDef::LinkedMap(map) => {
-			let hasher = map.hasher.into_metadata();
-			let key = &map.key;
-			let key = clean_type_string(&quote!(#key).to_string());
-			quote!{
-				#scrate::metadata::StorageEntryType::Map {
-					hasher: #scrate::metadata::#hasher,
-					key: #scrate::metadata::DecodeDifferent::Encode(#key),
-					value: #scrate::metadata::DecodeDifferent::Encode(#value_type),
-					is_linked: true,
-				}
-			}
-		},
 		StorageLineTypeDef::DoubleMap(map) => {
 			let hasher1 = map.hasher1.into_metadata();
 			let hasher2 = map.hasher2.into_metadata();

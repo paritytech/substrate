@@ -23,7 +23,7 @@ use frame_support::{
 		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
 		StorageEntryMetadata, StorageHasher,
 	},
-	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap,
+	StorageValue, StorageMap, StorageDoubleMap,
 };
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError};
 use sp_core::{H256, sr25519};
@@ -68,7 +68,6 @@ mod module1 {
 		{
 			pub Value config(value): T::GenericType;
 			pub Map: map hasher(identity) u32 => u64;
-			pub LinkedMap: linked_map hasher(identity) u32 => u64;
 		}
 
 		add_extra_genesis {
@@ -137,7 +136,6 @@ mod module2 {
 		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
 			pub Map config(map): map hasher(identity) u64 => u64;
-			pub LinkedMap config(linked_map): linked_map hasher(identity) u64 => Vec<u8>;
 			pub DoubleMap config(double_map): double_map hasher(identity) u64, hasher(identity) u64 => u64;
 		}
 	}
@@ -285,13 +283,11 @@ fn new_test_ext() -> sp_io::TestExternalities {
 		module2: Some(module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
-			linked_map: vec![(0, vec![0])],
 			double_map: vec![(0, 0, 0)],
 		}),
 		module2_Instance1: Some(module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
-			linked_map: vec![(0, vec![0])],
 			double_map: vec![(0, 0, 0)],
 		}),
 		module2_Instance2: None,
@@ -314,17 +310,13 @@ fn storage_instance_independence() {
 		module2::Map::<module2::Instance1>::insert(0, 0);
 		module2::Map::<module2::Instance2>::insert(0, 0);
 		module2::Map::<module2::Instance3>::insert(0, 0);
-		module2::LinkedMap::<module2::DefaultInstance>::insert::<_, Vec<u8>>(0, vec![]);
-		module2::LinkedMap::<module2::Instance1>::insert::<_, Vec<u8>>(0, vec![]);
-		module2::LinkedMap::<module2::Instance2>::insert::<_, Vec<u8>>(0, vec![]);
-		module2::LinkedMap::<module2::Instance3>::insert::<_, Vec<u8>>(0, vec![]);
 		module2::DoubleMap::<module2::DefaultInstance>::insert(&0, &0, &0);
 		module2::DoubleMap::<module2::Instance1>::insert(&0, &0, &0);
 		module2::DoubleMap::<module2::Instance2>::insert(&0, &0, &0);
 		module2::DoubleMap::<module2::Instance3>::insert(&0, &0, &0);
 	});
-	// 16 storage values + 4 linked_map head.
-	assert_eq!(storage.top.len(), 16 + 4);
+	// 12 storage values.
+	assert_eq!(storage.top.len(), 12);
 }
 
 #[test]
@@ -332,7 +324,6 @@ fn storage_with_instance_basic_operation() {
 	new_test_ext().execute_with(|| {
 		type Value = module2::Value<Runtime, module2::Instance1>;
 		type Map = module2::Map<module2::Instance1>;
-		type LinkedMap = module2::LinkedMap<module2::Instance1>;
 		type DoubleMap = module2::DoubleMap<module2::Instance1>;
 
 		assert_eq!(Value::exists(), true);
@@ -359,26 +350,6 @@ fn storage_with_instance_basic_operation() {
 		Map::remove(key);
 		assert_eq!(Map::contains_key(key), false);
 		assert_eq!(Map::get(key), 0);
-
-		assert_eq!(LinkedMap::contains_key(0), true);
-		assert_eq!(LinkedMap::contains_key(key), false);
-		LinkedMap::insert(key, vec![1]);
-		assert_eq!(LinkedMap::enumerate().count(), 2);
-		assert_eq!(LinkedMap::get(key), vec![1]);
-		assert_eq!(LinkedMap::take(key), vec![1]);
-		assert_eq!(LinkedMap::enumerate().count(), 1);
-		assert_eq!(LinkedMap::get(key), vec![]);
-		LinkedMap::mutate(key, |a| *a=vec![2]);
-		assert_eq!(LinkedMap::enumerate().count(), 2);
-		assert_eq!(LinkedMap::get(key), vec![2]);
-		LinkedMap::remove(key);
-		assert_eq!(LinkedMap::enumerate().count(), 1);
-		assert_eq!(LinkedMap::contains_key(key), false);
-		assert_eq!(LinkedMap::get(key), vec![]);
-		assert_eq!(LinkedMap::contains_key(key), false);
-		assert_eq!(LinkedMap::enumerate().count(), 1);
-		LinkedMap::insert(key, &vec![1]);
-		assert_eq!(LinkedMap::enumerate().count(), 2);
 
 		let key1 = 1;
 		let key2 = 1;
@@ -424,24 +395,6 @@ const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(
 						&module2::__GetByteStructMap(
-							std::marker::PhantomData::<(Runtime, module2::Instance2)>
-						)
-					)
-				),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("LinkedMap"),
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Map {
-					hasher: StorageHasher::Identity,
-					key: DecodeDifferent::Encode("u64"),
-					value: DecodeDifferent::Encode("Vec<u8>"),
-					is_linked: true,
-				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(
-						&module2::__GetByteStructLinkedMap(
 							std::marker::PhantomData::<(Runtime, module2::Instance2)>
 						)
 					)

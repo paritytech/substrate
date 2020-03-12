@@ -71,7 +71,7 @@ pub use self::hash::{
 	StorageHasher
 };
 pub use self::storage::{
-	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap,
+	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap,
 	IterableStorageMap
 };
 pub use self::dispatch::{Parameter, Callable, IsSubType};

@@ -16,7 +16,7 @@
 
 use frame_support::storage::unhashed;
 use codec::Encode;
-use frame_support::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue, StoragePrefixedMap};
+use frame_support::{StorageDoubleMap, StorageMap, StorageValue, StoragePrefixedMap};
 use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 
 mod no_instance {
@@ -37,9 +37,6 @@ mod no_instance {
 
 			pub Map: map hasher(blake2_128_concat) u32 => u32;
 			pub Map2: map hasher(twox_64_concat) u32 => u32;
-
-			pub LinkedMap: linked_map hasher(blake2_128_concat) u32 => u32;
-			pub LinkedMap2: linked_map hasher(twox_64_concat) u32 => u32;
 
 			pub DoubleMap: double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) u32 => u32;
 			pub DoubleMap2: double_map hasher(twox_64_concat) u32, hasher(twox_64_concat) u32 => u32;
@@ -67,9 +64,6 @@ mod instance {
 
 			pub Map: map hasher(blake2_128_concat) u32 => u32;
 			pub Map2: map hasher(twox_64_concat) u32 => u32;
-
-			pub LinkedMap: linked_map hasher(blake2_128_concat) u32 => u32;
-			pub LinkedMap2: linked_map hasher(twox_64_concat) u32 => u32;
 
 			pub DoubleMap: double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) u32 => u32;
 			pub DoubleMap2: double_map hasher(twox_64_concat) u32, hasher(twox_64_concat) u32 => u32;
@@ -116,20 +110,6 @@ fn final_keys_no_instance() {
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		assert_eq!(&k[..32], &<no_instance::Map2>::final_prefix());
 
-		let head = [twox_128(b"FinalKeysNone"), twox_128(b"HeadOfLinkedMap")].concat();
-		assert_eq!(unhashed::get::<u32>(&head), None);
-
-		no_instance::LinkedMap::insert(1, 2);
-		let mut k = [twox_128(b"FinalKeysNone"), twox_128(b"LinkedMap")].concat();
-		k.extend(1u32.using_encoded(blake2_128_concat));
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
-		assert_eq!(unhashed::get::<u32>(&head), Some(1u32));
-
-		no_instance::LinkedMap2::insert(1, 2);
-		let mut k = [twox_128(b"FinalKeysNone"), twox_128(b"LinkedMap2")].concat();
-		k.extend(1u32.using_encoded(twox_64_concat));
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
-
 		no_instance::DoubleMap::insert(&1, &2, &3);
 		let mut k = [twox_128(b"FinalKeysNone"), twox_128(b"DoubleMap")].concat();
 		k.extend(1u32.using_encoded(blake2_128_concat));
@@ -165,20 +145,6 @@ fn final_keys_default_instance() {
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		assert_eq!(&k[..32], &<instance::Map2<instance::DefaultInstance>>::final_prefix());
 
-		let head = [twox_128(b"FinalKeysSome"), twox_128(b"HeadOfLinkedMap")].concat();
-		assert_eq!(unhashed::get::<u32>(&head), None);
-
-		<instance::LinkedMap<instance::DefaultInstance>>::insert(1, 2);
-		let mut k = [twox_128(b"FinalKeysSome"), twox_128(b"LinkedMap")].concat();
-		k.extend(1u32.using_encoded(blake2_128_concat));
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
-		assert_eq!(unhashed::get::<u32>(&head), Some(1u32));
-
-		<instance::LinkedMap2<instance::DefaultInstance>>::insert(1, 2);
-		let mut k = [twox_128(b"FinalKeysSome"), twox_128(b"LinkedMap2")].concat();
-		k.extend(1u32.using_encoded(twox_64_concat));
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
-
 		<instance::DoubleMap<instance::DefaultInstance>>::insert(&1, &2, &3);
 		let mut k = [twox_128(b"FinalKeysSome"), twox_128(b"DoubleMap")].concat();
 		k.extend(1u32.using_encoded(blake2_128_concat));
@@ -213,20 +179,6 @@ fn final_keys_instance_2() {
 		k.extend(1u32.using_encoded(twox_64_concat));
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		assert_eq!(&k[..32], &<instance::Map2<instance::Instance2>>::final_prefix());
-
-		let head = [twox_128(b"Instance2FinalKeysSome"), twox_128(b"HeadOfLinkedMap")].concat();
-		assert_eq!(unhashed::get::<u32>(&head), None);
-
-		<instance::LinkedMap<instance::Instance2>>::insert(1, 2);
-		let mut k = [twox_128(b"Instance2FinalKeysSome"), twox_128(b"LinkedMap")].concat();
-		k.extend(1u32.using_encoded(blake2_128_concat));
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
-		assert_eq!(unhashed::get::<u32>(&head), Some(1u32));
-
-		<instance::LinkedMap2<instance::Instance2>>::insert(1, 2);
-		let mut k = [twox_128(b"Instance2FinalKeysSome"), twox_128(b"LinkedMap2")].concat();
-		k.extend(1u32.using_encoded(twox_64_concat));
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 
 		<instance::DoubleMap<instance::Instance2>>::insert(&1, &2, &3);
 		let mut k = [twox_128(b"Instance2FinalKeysSome"), twox_128(b"DoubleMap")].concat();

@@ -91,6 +91,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 pub struct StorageMapIterator<K, V, Hasher> {
 	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
+	drain: bool,
 	_phantom: ::sp_std::marker::PhantomData<(K, V, Hasher)>,
 }
 
@@ -108,9 +109,11 @@ impl<
 			break match maybe_next {
 				Some(next) => {
 					self.previous_key = next;
-					let maybe_value = frame_support::storage::unhashed::get::<V>(&self.previous_key);
-					match maybe_value {
+					match unhashed::get::<V>(&self.previous_key) {
 						Some(value) => {
+							if self.drain {
+								unhashed::kill(&self.previous_key)
+							}
 							let mut key_material = Hasher::reverse(&self.previous_key[self.prefix.len()..]);
 							match K::decode(&mut key_material) {
 								Ok(key) => Some((key, value)),
@@ -141,8 +144,48 @@ impl<
 		Self::Iterator {
 			prefix: prefix.clone(),
 			previous_key: prefix,
+			drain: false,
 			_phantom: Default::default(),
 		}
+	}
+
+	/// Enumerate all elements in the map.
+	fn drain() -> Self::Iterator {
+		let prefix = G::prefix_hash();
+		Self::Iterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: true,
+			_phantom: Default::default(),
+		}
+	}
+
+	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) {
+		let prefix = G::prefix_hash();
+		let mut previous_key = prefix.clone();
+		loop {
+			match sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix)) {
+				Some(next) => {
+					previous_key = next;
+					let maybe_value = unhashed::get::<O>(&previous_key);
+					match maybe_value {
+						Some(value) => {
+							let mut key_material = G::Hasher::reverse(&previous_key[prefix.len()..]);
+							match K::decode(&mut key_material) {
+								Ok(key) => match f(key, value) {
+									Some(new) => unhashed::put::<V>(&previous_key, &new),
+									None => unhashed::kill(&previous_key),
+								},
+								Err(_) => continue,
+							}
+						}
+						None => continue,
+					}
+				}
+				None => return,
+			}
+		}
+
 	}
 }
 

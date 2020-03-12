@@ -224,78 +224,14 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
 	/// this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
-}
 
-/// A strongly-typed linked map in storage.
-///
-/// Similar to `StorageMap` but allows to enumerate other elements and doesn't implement append.
-///
-/// Details on implementation can be found at
-/// [`generator::StorageLinkedMap`]
-pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
-	/// The type that get/take return.
-	type Query;
+	/// Remove all elements from the map and iterate through them in no particular order. If you
+	/// add elements to the map while doing this, you'll get undefined results.
+	fn drain() -> Self::Iterator;
 
-	/// The type that iterates over all `(key, value)`.
-	type Enumerator: Iterator<Item = (K, V)>;
-
-	/// Does the value (explicitly) exist in storage?
-	fn contains_key<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool;
-
-	/// Load the value associated with the given key from the map.
-	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
-
-	/// Swap the values of two keys.
-	fn swap<KeyArg1: EncodeLike<K>, KeyArg2: EncodeLike<K>>(key1: KeyArg1, key2: KeyArg2);
-
-	/// Store a value to be associated with the given key from the map.
-	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg);
-
-	/// Remove the value under a key.
-	fn remove<KeyArg: EncodeLike<K>>(key: KeyArg);
-
-	/// Mutate the value under a key.
-	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
-
-	/// Take the value under a key.
-	fn take<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
-
-	/// Return current head element.
-	fn head() -> Option<K>;
-
-	/// Enumerate all elements in the map.
-	fn enumerate() -> Self::Enumerator;
-
-	/// Read the length of the value in a fast way, without decoding the entire value.
-	///
-	/// `T` is required to implement `Codec::DecodeLength`.
-	///
-	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
-	/// Therefore, this function cannot be used as a sign of _existence_. use the `::contains_key()`
-	/// function for this purpose.
-	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len;
-
-	/// Translate the keys and values from some previous `(K2, V2)` to the current type.
-	///
-	/// `TK` translates keys from the old type, and `TV` translates values.
-	///
-	/// Returns `Err` if the map could not be interpreted as the old type, and Ok if it could.
-	/// The `Err` contains the first key which could not be migrated, or `None` if the
-	/// head of the list could not be read.
-	///
-	/// # Warning
-	///
-	/// This function must be used with care, before being updated the storage still contains the
-	/// old type, thus other calls (such as `get`) will fail at decoding it.
-	///
-	/// # Usage
-	///
-	/// This would typically be called inside the module implementation of on_runtime_upgrade, while
-	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**. (More
-	/// precisely prior initialized modules doesn't make use of this storage).
-	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), Option<K2>>
-		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> K, TV: Fn(V2) -> V;
+	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	/// By returning `None` from `f` for an element, you'll remove it from the map.
+	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F);
 }
 
 /// An implementation of a map with a two keys.
