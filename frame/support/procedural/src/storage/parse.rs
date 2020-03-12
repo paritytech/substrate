@@ -469,7 +469,7 @@ fn parse_storage_line_defs(
 		let span = line.storage_type.span();
 		let no_hasher_error = || syn::Error::new(
 			span,
-			"Default hasher has been removed, use explicit hasher(blake2_256) instead."
+			"Default hasher has been removed, use explicit hasher(blake2_128_concat) instead."
 		);
 
 		let storage_type = match line.storage_type {

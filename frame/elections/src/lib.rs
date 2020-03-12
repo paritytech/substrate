@@ -266,7 +266,7 @@ decl_storage! {
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
-		pub Proxy get(fn proxy): map hasher(blake2_256) T::AccountId => Option<T::AccountId>;
+		pub Proxy get(fn proxy): map hasher(blake2_128_concat) T::AccountId => Option<T::AccountId>;
 	}
 }
 

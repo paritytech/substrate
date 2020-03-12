@@ -35,8 +35,8 @@ use proc_macro::TokenStream;
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
 /// 		Foo get(fn foo) config(): u32=12;
-/// 		Bar: map hasher(blake2_256) u32 => u32;
-/// 		pub Zed build(|config| vec![(0, 0)]): linked_map hasher(blake2_256) u32 => u32;
+/// 		Bar: map hasher(identity) u32 => u32;
+/// 		pub Zed build(|config| vec![(0, 0)]): linked_map hasher(identity) u32 => u32;
 /// 	}
 /// }
 /// ```

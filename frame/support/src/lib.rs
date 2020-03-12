@@ -254,24 +254,24 @@ mod tests {
 	decl_storage! {
 		trait Store for Module<T: Trait> as Example {
 			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
-				linked_map hasher(twox_64_concat) u32 => u64;
-			pub OptionLinkedMap: linked_map hasher(blake2_256) u32 => Option<u32>;
+				linked_map hasher(identity) u32 => u64;
+			pub OptionLinkedMap: linked_map hasher(identity) u32 => Option<u32>;
 			pub GenericData get(fn generic_data):
-				linked_map hasher(twox_128) T::BlockNumber => T::BlockNumber;
+				linked_map hasher(identity) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(fn generic_data2):
-				linked_map hasher(blake2_256) T::BlockNumber => Option<T::BlockNumber>;
+				linked_map hasher(identity) T::BlockNumber => Option<T::BlockNumber>;
 			pub GetterNoFnKeyword get(no_fn): Option<u32>;
 
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
-				double_map hasher(twox_64_concat) u32, hasher(blake2_256) u32 => u64;
+				double_map hasher(identity) u32, hasher(identity) u32 => u64;
 			pub GenericDataDM:
-				double_map hasher(blake2_256) T::BlockNumber, hasher(twox_128) T::BlockNumber
+				double_map hasher(identity) T::BlockNumber, hasher(twox_128) T::BlockNumber
 				=> T::BlockNumber;
 			pub GenericData2DM:
-				double_map hasher(blake2_256) T::BlockNumber, hasher(twox_256) T::BlockNumber
+				double_map hasher(identity) T::BlockNumber, hasher(twox_256) T::BlockNumber
 				=> Option<T::BlockNumber>;
 			pub AppendableDM:
-				double_map hasher(blake2_256) u32, hasher(blake2_256) T::BlockNumber => Vec<u32>;
+				double_map hasher(identity) u32, hasher(identity) T::BlockNumber => Vec<u32>;
 		}
 	}
 
@@ -496,7 +496,7 @@ mod tests {
 					name: DecodeDifferent::Encode("Data"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map{
-						hasher: StorageHasher::Twox64Concat,
+						hasher: StorageHasher::Identity,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u64"),
 						is_linked: true,
@@ -510,7 +510,7 @@ mod tests {
 					name: DecodeDifferent::Encode("OptionLinkedMap"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Identity,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u32"),
 						is_linked: true,
@@ -524,7 +524,7 @@ mod tests {
 					name: DecodeDifferent::Encode("GenericData"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map{
-						hasher: StorageHasher::Twox128,
+						hasher: StorageHasher::Identity,
 						key: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
 						is_linked: true
@@ -538,7 +538,7 @@ mod tests {
 					name: DecodeDifferent::Encode("GenericData2"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map{
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Identity,
 						key: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
 						is_linked: true
@@ -561,11 +561,11 @@ mod tests {
 					name: DecodeDifferent::Encode("DataDM"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::DoubleMap{
-						hasher: StorageHasher::Twox64Concat,
+						hasher: StorageHasher::Identity,
 						key1: DecodeDifferent::Encode("u32"),
 						key2: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u64"),
-						key2_hasher: StorageHasher::Blake2_256,
+						key2_hasher: StorageHasher::Identity,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructDataDM(PhantomData::<Test>))
@@ -576,11 +576,11 @@ mod tests {
 					name: DecodeDifferent::Encode("GenericDataDM"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::DoubleMap{
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Identity,
 						key1: DecodeDifferent::Encode("T::BlockNumber"),
 						key2: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
-						key2_hasher: StorageHasher::Twox128,
+						key2_hasher: StorageHasher::Identity,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericDataDM(PhantomData::<Test>))
@@ -591,7 +591,7 @@ mod tests {
 					name: DecodeDifferent::Encode("GenericData2DM"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::DoubleMap{
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Identity,
 						key1: DecodeDifferent::Encode("T::BlockNumber"),
 						key2: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
@@ -606,11 +606,11 @@ mod tests {
 					name: DecodeDifferent::Encode("AppendableDM"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::DoubleMap{
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Identity,
 						key1: DecodeDifferent::Encode("u32"),
 						key2: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("Vec<u32>"),
-						key2_hasher: StorageHasher::Blake2_256,
+						key2_hasher: StorageHasher::Identity,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
