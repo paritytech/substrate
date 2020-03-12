@@ -2,7 +2,6 @@ use super::*;
 use sp_runtime::traits::SaturatedConversion;
 
 pub fn migrate<T: Trait>() {
-
 	// Number is current block - we obviously don't know that hash.
 	// Number - 1 is the parent block, who hash we record in this block, but then that's already
 	//  with the new storage so we don't migrate it.
