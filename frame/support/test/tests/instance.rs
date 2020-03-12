@@ -416,7 +416,7 @@ const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 				name: DecodeDifferent::Encode("Map"),
 				modifier: StorageEntryModifier::Default,
 				ty: StorageEntryType::Map {
-					hasher: StorageHasher::Blake2_256,
+					hasher: StorageHasher::Identity,
 					key: DecodeDifferent::Encode("u64"),
 					value: DecodeDifferent::Encode("u64"),
 					is_linked: false,
@@ -434,7 +434,7 @@ const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 				name: DecodeDifferent::Encode("LinkedMap"),
 				modifier: StorageEntryModifier::Default,
 				ty: StorageEntryType::Map {
-					hasher: StorageHasher::Blake2_256,
+					hasher: StorageHasher::Identity,
 					key: DecodeDifferent::Encode("u64"),
 					value: DecodeDifferent::Encode("Vec<u8>"),
 					is_linked: true,
@@ -452,8 +452,8 @@ const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 				name: DecodeDifferent::Encode("DoubleMap"),
 				modifier: StorageEntryModifier::Default,
 				ty: StorageEntryType::DoubleMap {
-					hasher: StorageHasher::Blake2_256,
-					key2_hasher: StorageHasher::Blake2_256,
+					hasher: StorageHasher::Identity,
+					key2_hasher: StorageHasher::Identity,
 					key1: DecodeDifferent::Encode("u64"),
 					key2: DecodeDifferent::Encode("u64"),
 					value: DecodeDifferent::Encode("u64"),

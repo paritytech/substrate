@@ -37,10 +37,10 @@ mod tests {
 			// non-getters: pub / $default
 
 			/// Hello, this is doc!
-			U32 : Option<u32>;
-			pub PUBU32 : Option<u32>;
-			U32MYDEF : Option<u32>;
-			pub PUBU32MYDEF : Option<u32>;
+			U32: Option<u32>;
+			pub PUBU32: Option<u32>;
+			U32MYDEF: Option<u32>;
+			pub PUBU32MYDEF: Option<u32>;
 
 			// getters: pub / $default
 			// we need at least one type which uses T, otherwise GenesisConfig will complain.
@@ -59,10 +59,10 @@ mod tests {
 			GetOptU32WithBuilderNone get(fn opt_u32_with_builder_none) build(|_| None): Option<u32>;
 
 			// map non-getters: pub / $default
-			MAPU32 : map hasher(blake2_128_concat) u32 => Option<String>;
-			pub PUBMAPU32 : map hasher(blake2_128_concat) u32 => Option<String>;
-			MAPU32MYDEF : map hasher(blake2_128_concat) u32 => Option<String>;
-			pub PUBMAPU32MYDEF : map hasher(blake2_128_concat) u32 => Option<String>;
+			MAPU32: map hasher(blake2_128_concat) u32 => Option<String>;
+			pub PUBMAPU32: map hasher(blake2_128_concat) u32 => Option<String>;
+			MAPU32MYDEF: map hasher(blake2_128_concat) u32 => Option<String>;
+			pub PUBMAPU32MYDEF: map hasher(blake2_128_concat) u32 => Option<String>;
 
 			// map getters: pub / $default
 			GETMAPU32 get(fn map_u32_getter): map hasher(blake2_128_concat) u32 => String;
@@ -74,7 +74,7 @@ mod tests {
 				map hasher(blake2_128_concat) u32 => String = "pubmap".into();
 
 			// linked map
-			LINKEDMAPU32 : linked_map hasher(blake2_128_concat) u32 => Option<String>;
+			LINKEDMAPU32: linked_map hasher(blake2_128_concat) u32 => Option<String>;
 			pub PUBLINKEDMAPU32MYDEF : linked_map hasher(blake2_128_concat) u32 => Option<String>;
 			GETLINKEDMAPU32 get(fn linked_map_u32_getter):
 				linked_map hasher(blake2_128_concat) u32 => String;
@@ -82,8 +82,8 @@ mod tests {
 				linked_map hasher(blake2_128_concat) u32 => String = "pubmap".into();
 
 			COMPLEXTYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
-			COMPLEXTYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
-			COMPLEXTYPE3: [u32;25];
+			COMPLEXTYPE2: (Vec<Vec<(u16, Box<()>)>>, u32);
+			COMPLEXTYPE3: [u32; 25];
 		}
 		add_extra_genesis {
 			build(|_| {});
@@ -249,7 +249,7 @@ mod tests {
 					name: DecodeDifferent::Encode("MAPU32"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: false,
@@ -263,7 +263,7 @@ mod tests {
 					name: DecodeDifferent::Encode("PUBMAPU32"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: false,
@@ -277,7 +277,7 @@ mod tests {
 					name: DecodeDifferent::Encode("MAPU32MYDEF"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: false,
@@ -291,7 +291,7 @@ mod tests {
 					name: DecodeDifferent::Encode("PUBMAPU32MYDEF"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: false,
@@ -305,7 +305,7 @@ mod tests {
 					name: DecodeDifferent::Encode("GETMAPU32"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: false,
@@ -319,7 +319,7 @@ mod tests {
 					name: DecodeDifferent::Encode("PUBGETMAPU32"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: false,
@@ -333,7 +333,7 @@ mod tests {
 					name: DecodeDifferent::Encode("GETMAPU32MYDEF"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: false,
@@ -347,7 +347,7 @@ mod tests {
 					name: DecodeDifferent::Encode("PUBGETMAPU32MYDEF"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: false,
@@ -361,7 +361,7 @@ mod tests {
 					name: DecodeDifferent::Encode("LINKEDMAPU32"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: true,
@@ -375,7 +375,7 @@ mod tests {
 					name: DecodeDifferent::Encode("PUBLINKEDMAPU32MYDEF"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: true,
@@ -389,7 +389,7 @@ mod tests {
 					name: DecodeDifferent::Encode("GETLINKEDMAPU32"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: true,
@@ -403,7 +403,7 @@ mod tests {
 					name: DecodeDifferent::Encode("PUBGETLINKEDMAPU32MYDEF"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128_Concat,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
 						is_linked: true,
