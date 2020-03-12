@@ -3370,6 +3370,7 @@ dependencies = [
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
+ "parity-util-mem",
  "rand 0.7.3",
  "sc-authority-discovery",
  "sc-basic-authorship",
