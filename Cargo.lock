@@ -1471,7 +1471,6 @@ dependencies = [
  "sc-executor",
  "sc-service",
  "sp-runtime",
- "sp-state-machine",
  "structopt",
 ]
 
@@ -7178,7 +7177,6 @@ name = "sp-externalities"
 version = "0.8.0-alpha.3"
 dependencies = [
  "environmental",
- "sp-stats",
  "sp-std",
  "sp-storage",
 ]
@@ -7313,7 +7311,6 @@ dependencies = [
  "sp-runtime-interface-proc-macro",
  "sp-runtime-interface-test-wasm",
  "sp-state-machine",
- "sp-stats",
  "sp-std",
  "sp-wasm-interface",
  "static_assertions",
@@ -7419,9 +7416,10 @@ dependencies = [
 
 [[package]]
 name = "sp-stats"
-version = "2.0.0-alpha.2"
+version = "0.8.0-alpha.3"
 dependencies = [
  "parity-scale-codec",
+ "sp-runtime-interface",
 ]
 
 [[package]]
