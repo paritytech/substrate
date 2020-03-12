@@ -252,13 +252,13 @@ impl BenchDb {
 
 			let signed = self.keyring.sign(
 				CheckedExtrinsic {
-					signed: Some((sender, signed_extra(0, 1*DOLLARS))),
+					signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
 					function: Call::Balances(
 						BalancesCall::transfer(
 							pallet_indices::address::Address::Id(receiver),
 							match block_type {
-								BlockType::RandomTransfers(_) => 1*DOLLARS,
-								BlockType::RandomTransfersReaping(_) => 99*DOLLARS,
+								BlockType::RandomTransfers(_) => node_runtime::ExistentialDeposit::get() + 1,
+								BlockType::RandomTransfersReaping(_) => 100*DOLLARS - node_runtime::ExistentialDeposit::get() - 1,
 							}
 						)
 					),
