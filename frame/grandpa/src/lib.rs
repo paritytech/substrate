@@ -184,6 +184,15 @@ decl_storage! {
 	}
 }
 
+mod migration {
+	use super::*;
+	pub fn migrate<T: Trait>() {
+		for i in 0..=CurrentSetId::get() {
+			SetIdSession::migrate_key_from_blake(i);
+		}
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
@@ -194,6 +203,10 @@ decl_module! {
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
+		}
+
+		fn on_runtime_upgrade() {
+			migration::migrate::<T>();
 		}
 
 		fn on_initialize() {
