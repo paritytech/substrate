@@ -152,6 +152,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 					 child.number < *number && is_descendent_of(&child.hash, hash).unwrap_or(false))
 				{
 					root.children.push(child);
+					// assuming that the tree is well formed only one child should pass this requirement
+					// due to ancestry restrictions (i.e. they must be different forks).
 					is_first = false;
 				} else {
 					removed.push((child.hash, child.number, child.data));
