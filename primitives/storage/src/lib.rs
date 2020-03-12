@@ -260,6 +260,16 @@ impl ChildInfo {
 			ChildInfo::ParentKeyId(..) => ChildType::ParentKeyId,
 		}
 	}
+
+	/// Return `ChildChange` applicable for this state in the case of a bulk
+	/// content deletion.
+	pub fn bulk_delete_change(&self) -> ChildChange {
+		match self {
+			ChildInfo::ParentKeyId(..) => ChildChange::BulkDeleteByKeyspace(
+				self.storage_key().to_vec(),
+			),
+		}
+	}
 }
 
 /// Type of child.
@@ -444,6 +454,20 @@ impl<T> IntoIterator for ChildrenMap<T> {
 }
 
 const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default:";
+
+/// Information related to change to apply on a whole child trie.
+pub enum ChildChange {
+	/// No changes to apply.
+	None,
+	/// The child trie allow to delete base on keyspace only.
+	BulkDeleteByKeyspace(Vec<u8>),
+}
+
+impl Default for ChildChange {
+	fn default() -> Self {
+		ChildChange::None
+	}
+}
 
 #[test]
 fn test_prefix_default_child_info() {
