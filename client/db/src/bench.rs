@@ -137,7 +137,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let state = self.state.borrow_mut();
 		let toto = state.as_ref().ok_or_else(state_err)?;
-		self.usage_info.try_borrow_mut().map(|mut usage_info| {
+		let _ = self.usage_info.try_borrow_mut().map(|mut usage_info| {
 			usage_info.reads.ops += 1;
 			usage_info.reads.bytes += 1;
 		});
@@ -272,7 +272,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				}
 			}
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
-			self.usage_info.try_borrow_mut().map(|mut usage_info| {
+			let _ = self.usage_info.try_borrow_mut().map(|mut usage_info| {
 				usage_info.writes.ops += 1;
 				usage_info.writes.bytes += 1;
 			});
