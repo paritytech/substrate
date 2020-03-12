@@ -43,12 +43,14 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	pinned_insertions: HashMap<BlockHash, Vec<Key>>,
 }
 
+// TODO new format!!
 #[derive(Encode, Decode)]
 struct JournalRecord<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	parent_hash: BlockHash,
 	inserted: Vec<(Key, DBValue)>,
 	deleted: Vec<Key>,
+	deleted_child: Vec<Vec<u8>>,
 }
 
 fn to_journal_key(block: u64, index: u64) -> Vec<u8> {
@@ -62,6 +64,7 @@ struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	journal_key: Vec<u8>,
 	inserted: Vec<Key>,
 	deleted: Vec<Key>,
+	deleted_child: Vec<Vec<u8>>,
 }
 
 fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted: Vec<(Key, DBValue)>) {
@@ -156,6 +159,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 								journal_key,
 								inserted: inserted,
 								deleted: record.deleted,
+								deleted_child: record.deleted_child,
 							};
 							insert_values(&mut values, record.inserted);
 							trace!(target: "state-db", "Uncanonicalized journal entry {}.{} ({} inserted, {} deleted)", block, index, overlay.inserted.len(), overlay.deleted.len());
@@ -231,6 +235,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			journal_key: journal_key.clone(),
 			inserted: inserted,
 			deleted: changeset.deleted.clone(),
+			deleted_child: changeset.deleted_child.clone(),
 		};
 		level.push(overlay);
 		self.parents.insert(hash.clone(), parent_hash.clone());
@@ -239,6 +244,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			parent_hash: parent_hash.clone(),
 			inserted: changeset.inserted,
 			deleted: changeset.deleted,
+			deleted_child: changeset.deleted_child,
 		};
 		commit.meta.inserted.push((journal_key, journal_record.encode()));
 		trace!(target: "state-db", "Inserted uncanonicalized changeset {}.{} ({} inserted, {} deleted)", number, index, journal_record.inserted.len(), journal_record.deleted.len());

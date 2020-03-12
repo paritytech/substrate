@@ -167,3 +167,12 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+kvdb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
+kvdb-rocksdb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
+kvdb-web = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
+kvdb-memorydb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
+#parity-util-mem = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
+#fixed-hash = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
+#primitive-types = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }

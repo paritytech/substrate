@@ -121,6 +121,9 @@ pub struct ChangeSet<H: Hash> {
 	pub inserted: Vec<(H, DBValue)>,
 	/// Deleted nodes.
 	pub deleted: Vec<H>,
+	/// Bulk deletion of child trie, contains
+	/// its unique identifier.
+	pub deleted_child: Vec<Vec<u8>>,
 }
 
 /// A set of changes to the backing database.

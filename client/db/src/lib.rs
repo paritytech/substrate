@@ -1364,11 +1364,17 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::Comm
 	for key in commit.data.deleted.into_iter() {
 		transaction.delete(columns::STATE, &key[..]);
 	}
+	for keyspace in commit.data.deleted_child.into_iter() {
+		transaction.delete_prefix(columns::STATE, &keyspace[..]);
+	}
 	for (key, val) in commit.meta.inserted.into_iter() {
 		transaction.put(columns::STATE_META, &key[..], &val);
 	}
 	for key in commit.meta.deleted.into_iter() {
 		transaction.delete(columns::STATE_META, &key[..]);
+	}
+	for keyspace in commit.meta.deleted_child.into_iter() {
+		transaction.delete_prefix(columns::STATE_META, &keyspace[..]);
 	}
 }
 
