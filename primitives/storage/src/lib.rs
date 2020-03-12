@@ -265,9 +265,7 @@ impl ChildInfo {
 	/// content deletion.
 	pub fn bulk_delete_change(&self) -> ChildChange {
 		match self {
-			ChildInfo::ParentKeyId(..) => ChildChange::BulkDeleteByKeyspace(
-				self.storage_key().to_vec(),
-			),
+			ChildInfo::ParentKeyId(..) => ChildChange::BulkDeleteByKeyspace,
 		}
 	}
 }
@@ -463,7 +461,7 @@ pub enum ChildChange {
 	Update,
 	/// The child trie allow to delete base on keyspace only.
 	/// This deletion means that any joined key delta will be ignored.
-	BulkDeleteByKeyspace(Vec<u8>),
+	BulkDeleteByKeyspace,
 }
 
 impl Default for ChildChange {

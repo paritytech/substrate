@@ -24,7 +24,7 @@ use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
 use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
 use sp_core::hexdisplay::HexDisplay;
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildChange};
 use sp_state_machine::{
 	backend::Backend as StateBackend, TrieBackend, StorageKey, StorageValue,
 	StorageCollection, ChildStorageCollection,
@@ -148,6 +148,20 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 
 }
 
+impl<V: EstimateSize> LRUMap<(Vec<u8>, Vec<u8>), V> {
+	fn remove_by_storage_key(&mut self, storage_key: &[u8]) {
+		let map = &mut self.0;
+		let storage_used_size = &mut self.1;
+		map.entries().for_each(|entry| {
+			if entry.key().0.starts_with(storage_key) {
+				*storage_used_size -= entry.key().estimate_size();
+				*storage_used_size -= entry.get().estimate_size();
+				let _ = entry.remove();
+			}
+		});
+	}
+}
+
 impl<B: BlockT> Cache<B> {
 	/// Returns the used memory size of the storage cache in bytes.
 	pub fn used_storage_cache_size(&self) -> usize {
@@ -179,6 +193,10 @@ impl<B: BlockT> Cache<B> {
 						trace!("Reverting enacted child key {:?}", a);
 						self.lru_child_storage.remove(a);
 					}
+					for a in &m.deleted_child {
+						trace!("Retracted child {:?}", a);
+						self.lru_child_storage.remove_by_storage_key(a.as_slice());
+					}
 					false
 				} else {
 					true
@@ -198,6 +216,10 @@ impl<B: BlockT> Cache<B> {
 					for a in &m.child_storage {
 						trace!("Retracted child key {:?}", a);
 						self.lru_child_storage.remove(a);
+					}
+					for a in &m.deleted_child {
+						trace!("Retracted child {:?}", a);
+						self.lru_child_storage.remove_by_storage_key(a.as_slice());
 					}
 					false
 				} else {
@@ -256,6 +278,8 @@ struct BlockChanges<B: Header> {
 	storage: HashSet<StorageKey>,
 	/// A set of modified child storage keys.
 	child_storage: HashSet<ChildStorageKey>,
+	/// A collection of removed child.
+	deleted_child: HashSet<Vec<u8>>,
 	/// Block is part of the canonical chain.
 	is_canon: bool,
 }
@@ -274,6 +298,8 @@ struct LocalCache<H: Hasher> {
 	///
 	/// `None` indicates that key is known to be missing.
 	child_storage: HashMap<ChildStorageKey, Option<StorageValue>>,
+	/// A collection of removed child.
+	deleted_child: HashSet<Vec<u8>>,
 }
 
 /// Cache changes.
@@ -379,15 +405,22 @@ impl<B: BlockT> CacheChanges<B> {
 			}
 			let mut modifications = HashSet::new();
 			let mut child_modifications = HashSet::new();
+			let mut deleted_child = HashSet::new();
 			// TODO manage delete
-			child_changes.into_iter().for_each(|(child_info, _child_change, child_values)|
-				for (k, v) in child_values.into_iter() {
-					// TODO prefixed storage key instead ??
-					let k = (child_info.storage_key().to_vec(), k);
-					if is_best {
-						cache.lru_child_storage.add(k.clone(), v);
-					}
-					child_modifications.insert(k);
+			child_changes.into_iter().for_each(|(child_info, child_change, child_values)|
+				match child_change {
+					ChildChange::Update => for (k, v) in child_values.into_iter() {
+						let k = (child_info.storage_key().to_vec(), k);
+						if is_best {
+							cache.lru_child_storage.add(k.clone(), v);
+						}
+						child_modifications.insert(k);
+					},
+					ChildChange::BulkDeleteByKeyspace => {
+						// Note that this is a rather costy operation.
+						cache.lru_child_storage.remove_by_storage_key(child_info.storage_key());
+						deleted_child.insert(child_info.storage_key().to_vec());
+					},
 				}
 			);
 			for (k, v) in changes.into_iter() {
@@ -397,11 +430,11 @@ impl<B: BlockT> CacheChanges<B> {
 				}
 				modifications.insert(k);
 			}
-
 			// Save modified storage. These are ordered by the block number in reverse.
 			let block_changes = BlockChanges {
 				storage: modifications,
 				child_storage: child_modifications,
+				deleted_child,
 				number: *number,
 				hash: hash.clone(),
 				is_canon: is_best,
@@ -437,6 +470,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 					storage: Default::default(),
 					hashes: Default::default(),
 					child_storage: Default::default(),
+					deleted_child: Default::default(),
 				}),
 				parent_hash,
 			},
