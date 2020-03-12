@@ -356,7 +356,7 @@ impl<B: BlockT> CacheChanges<B> {
 					local_cache.storage.len(),
 					local_cache.hashes.len(),
 					changes.len(),
-					child_changes.iter().map(|v|v.1.len()).sum::<usize>(),
+					child_changes.iter().map(|v|v.2.len()).sum::<usize>(),
 				);
 				for (k, v) in local_cache.storage.drain() {
 					cache.lru_storage.add(k, v);
@@ -379,9 +379,11 @@ impl<B: BlockT> CacheChanges<B> {
 			}
 			let mut modifications = HashSet::new();
 			let mut child_modifications = HashSet::new();
-			child_changes.into_iter().for_each(|(sk, changes, _ci)|
-				for (k, v) in changes.into_iter() {
-					let k = (sk.clone(), k);
+			// TODO manage delete
+			child_changes.into_iter().for_each(|(child_info, _child_change, child_values)|
+				for (k, v) in child_values.into_iter() {
+					// TODO prefixed storage key instead ??
+					let k = (child_info.storage_key().to_vec(), k);
 					if is_best {
 						cache.lru_child_storage.add(k.clone(), v);
 					}
