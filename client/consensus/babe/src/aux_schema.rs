@@ -28,8 +28,9 @@ use sp_consensus_babe::BabeBlockWeight;
 use sc_consensus_epochs::{EpochChangesFor, SharedEpochChanges, migration::EpochChangesForV0};
 use crate::Epoch;
 
-const BABE_EPOCH_CHANGES_V0: &[u8] = b"babe_epoch_changes";
-const BABE_EPOCH_CHANGES: &[u8] = b"babe_epoch_changes1";
+const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_epoch_changes_version";
+const BABE_EPOCH_CHANGES_KEY: &[u8] = b"babe_epoch_changes";
+const BABE_EPOCH_CHANGES_CURRENT_VERSION: u32 = 1;
 
 fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> {
 	(b"block_weight", block_hash).encode()
@@ -53,28 +54,30 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
 ) -> ClientResult<SharedEpochChanges<Block, Epoch>> {
-	let epoch_changes = match load_decode::<_, EpochChangesFor<Block, Epoch>>(
-		backend,
-		BABE_EPOCH_CHANGES
-	)?.map(|v| Arc::new(Mutex::new(v))) {
-		Some(epoch_changes) => epoch_changes,
-		None => {
-			info!(target: "babe",
-				  "V1 version of BABE epoch changes does not exist, trying to load V0.");
-			match load_decode::<_, EpochChangesForV0<Block, Epoch>>(
-				backend,
-				BABE_EPOCH_CHANGES_V0
-			)? {
-				Some(v0) => Arc::new(Mutex::new(v0.migrate())),
-				None => {
-					info!(target: "babe",
-						  "Creating empty BABE epoch changes on what appears to be first startup."
-					);
-					SharedEpochChanges::<Block, Epoch>::default()
-				},
-			}
+	let version = load_decode::<_, u32>(backend, BABE_EPOCH_CHANGES_VERSION)?;
+
+	let maybe_epoch_changes = match version {
+		None => load_decode::<_, EpochChangesForV0<Block, Epoch>>(
+			backend,
+			BABE_EPOCH_CHANGES_KEY,
+		)?.map(|v0| v0.migrate()),
+		Some(BABE_EPOCH_CHANGES_CURRENT_VERSION) => load_decode::<_, EpochChangesFor<Block, Epoch>>(
+			backend,
+			BABE_EPOCH_CHANGES_KEY,
+		)?,
+		Some(other) => {
+			return Err(ClientError::Backend(
+				format!("Unsupported BABE DB version: {:?}", other)
+			))
 		},
 	};
+
+	let epoch_changes = Arc::new(Mutex::new(maybe_epoch_changes.unwrap_or_else(|| {
+		info!(target: "babe",
+			  "Creating empty BABE epoch changes on what appears to be first startup."
+		);
+		EpochChangesFor::<Block, Epoch>::default()
+	})));
 
 	// rebalance the tree after deserialization. this isn't strictly necessary
 	// since the tree is now rebalanced on every update operation. but since the
@@ -92,10 +95,13 @@ pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
 ) -> R where
 	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
 {
-	let encoded_epoch_changes = epoch_changes.encode();
-	write_aux(
-		&[(BABE_EPOCH_CHANGES, encoded_epoch_changes.as_slice())],
-	)
+	BABE_EPOCH_CHANGES_CURRENT_VERSION.using_encoded(|version| {
+		let encoded_epoch_changes = epoch_changes.encode();
+		write_aux(
+			&[(BABE_EPOCH_CHANGES_KEY, encoded_epoch_changes.as_slice()),
+			  (BABE_EPOCH_CHANGES_VERSION, version)],
+		)
+	})
 }
 
 /// Write the cumulative chain-weight of a block ot aux storage.
@@ -106,7 +112,6 @@ pub(crate) fn write_block_weight<H: Encode, F, R>(
 ) -> R where
 	F: FnOnce(&[(Vec<u8>, &[u8])]) -> R,
 {
-
 	let key = block_weight_key(block_hash);
 	block_weight.using_encoded(|s|
 		write_aux(
