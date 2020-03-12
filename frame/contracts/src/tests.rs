@@ -770,7 +770,8 @@ fn run_out_of_gas() {
 const CODE_SET_RENT: &str = r#"
 (module
 	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
-	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
+	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
+	(import "env" "ext_clear_storage" (func $ext_clear_storage (param i32)))
 	(import "env" "ext_set_rent_allowance" (func $ext_set_rent_allowance (param i32 i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
@@ -780,7 +781,6 @@ const CODE_SET_RENT: &str = r#"
 	(func $call_0
 		(call $ext_set_storage
 			(i32.const 1)
-			(i32.const 1)
 			(i32.const 0)
 			(i32.const 4)
 		)
@@ -788,11 +788,8 @@ const CODE_SET_RENT: &str = r#"
 
 	;; remove the value inserted by call_1
 	(func $call_1
-		(call $ext_set_storage
+		(call $ext_clear_storage
 			(i32.const 1)
-			(i32.const 0)
-			(i32.const 0)
-			(i32.const 0)
 		)
 	)
 
@@ -852,7 +849,6 @@ const CODE_SET_RENT: &str = r#"
 		)
 		(call $ext_set_storage
 			(i32.const 0)
-			(i32.const 1)
 			(i32.const 0)
 			(i32.const 4)
 		)
@@ -1327,7 +1323,7 @@ fn default_rent_allowance_on_instantiate() {
 
 const CODE_RESTORATION: &str = r#"
 (module
-	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
+	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
 	(import "env" "ext_restore_to" (func $ext_restore_to (param i32 i32 i32 i32 i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -1352,7 +1348,6 @@ const CODE_RESTORATION: &str = r#"
 		;; Data to restore
 		(call $ext_set_storage
 			(i32.const 0)
-			(i32.const 1)
 			(i32.const 0)
 			(i32.const 4)
 		)
@@ -1360,7 +1355,6 @@ const CODE_RESTORATION: &str = r#"
 		;; ACL
 		(call $ext_set_storage
 			(i32.const 100)
-			(i32.const 1)
 			(i32.const 0)
 			(i32.const 4)
 		)
@@ -1377,8 +1371,8 @@ const CODE_RESTORATION: &str = r#"
 
 	;; Code hash of SET_RENT
 	(data (i32.const 264)
-		"\14\eb\65\3c\86\98\d6\b2\3d\8d\3c\4a\54\c6\c4\71"
-		"\b9\fc\19\36\df\ca\a0\a1\f2\dc\ad\9d\e5\36\0b\25"
+		"\c2\1c\41\10\a5\22\d8\59\1c\4c\77\35\dd\2d\bf\a1"
+		"\13\0b\50\93\76\9b\92\31\97\b7\c5\74\26\aa\38\2a"
 	)
 
 	;; Rent allowance
@@ -1624,7 +1618,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 const CODE_STORAGE_SIZE: &str = r#"
 (module
 	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
-	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
+	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 16 16))
@@ -1657,7 +1651,6 @@ const CODE_STORAGE_SIZE: &str = r#"
 		;; place a garbage value in storage, the size of which is specified by the call input.
 		(call $ext_set_storage
 			(i32.const 0)		;; Pointer to storage key
-			(i32.const 1)		;; Value is not null
 			(i32.const 0)		;; Pointer to value
 			(i32.load (i32.const 32))	;; Size of value
 		)
@@ -2278,7 +2271,7 @@ const CODE_DESTROY_AND_TRANSFER: &str = r#"
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
-	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
+	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
@@ -2340,7 +2333,6 @@ const CODE_DESTROY_AND_TRANSFER: &str = r#"
 		;; Store the return address.
 		(call $ext_set_storage
 			(i32.const 16)	;; Pointer to the key
-			(i32.const 1)	;; Value is not null
 			(i32.const 80)	;; Pointer to the value
 			(i32.const 8)	;; Length of the value
 		)

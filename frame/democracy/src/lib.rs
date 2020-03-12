@@ -15,12 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Democracy Pallet
-//! 
+//!
 //! - [`democracy::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
-//! 
+//!
 //! The Democracy pallet handles the administration of general stakeholder voting.
 //!
 //! There are two different queues that a proposal can be added to before it
@@ -28,7 +28,7 @@
 //! and 2) the external queue consisting of a single proposal that originates
 //! from one of the _external_ origins (such as a collective group).
 //!
-//! Every launch period - a length defined in the runtime - the Democracy pallet 
+//! Every launch period - a length defined in the runtime - the Democracy pallet
 //! launches a referendum from a proposal that it takes from either the proposal
 //! queue or the external queue in turn. Any token holder in the system can vote
 //! on referenda. The voting system
@@ -39,7 +39,7 @@
 //! ### Terminology
 //!
 //! - **Enactment Period:** The minimum period of locking and the period between a proposal being
-//! approved and enacted. 
+//! approved and enacted.
 //! - **Lock Period:** A period of time after proposal enactment that the tokens of _winning_ voters
 //! will be locked.
 //! - **Conviction:** An indication of a voter's strength of belief in their vote. An increase
@@ -49,7 +49,7 @@
 //!   of a particular referendum.
 //! - **Proposal:** A submission to the chain that represents an action that a proposer (either an
 //! account or an external origin) suggests that the system adopt.
-//! - **Referendum:** A proposal that is in the process of being voted on for 
+//! - **Referendum:** A proposal that is in the process of being voted on for
 //!   either acceptance or rejection as a change to the system.
 //! - **Proxy:** An account that votes on behalf of a separate "Stash" account
 //!   that holds the funds.
@@ -60,7 +60,7 @@
 //! A _referendum_ can be either simple majority-carries in which 50%+1 of the
 //! votes decide the outcome or _adaptive quorum biased_. Adaptive quorum biasing
 //! makes the threshold for passing or rejecting a referendum higher or lower
-//! depending on how the referendum was originally proposed. There are two types of 
+//! depending on how the referendum was originally proposed. There are two types of
 //! adaptive quorum biasing: 1) _positive turnout bias_ makes a referendum
 //! require a super-majority to pass that decreases as turnout increases and
 //! 2) _negative turnout bias_ makes a referendum require a super-majority to
@@ -77,11 +77,11 @@
 //! These calls can be made from any externally held account capable of creating
 //! a signed extrinsic.
 //!
-//! - `propose` - Submits a sensitive action, represented as a hash. 
+//! - `propose` - Submits a sensitive action, represented as a hash.
 //!	  Requires a deposit.
 //! - `second` - Signals agreement with a proposal, moves it higher on the
 //!   proposal queue, and requires a matching deposit to the original.
-//! - `vote` - Votes in a referendum, either the vote is "Aye" to enact the 
+//! - `vote` - Votes in a referendum, either the vote is "Aye" to enact the
 //!   proposal or "Nay" to keep the status quo.
 //! - `proxy_vote` - Votes in a referendum on behalf of a stash account.
 //! - `activate_proxy` - Activates a proxy that is already open to the sender.
@@ -97,7 +97,7 @@
 //! - `note_imminent_preimage` - Registers the preimage for an upcoming proposal.
 //!   Does not require a deposit, but the proposal must be in the dispatch queue.
 //! - `reap_preimage` - Removes the preimage for an expired proposal. Will only
-//!   work under the condition that it's the same account that noted it and 
+//!   work under the condition that it's the same account that noted it and
 //!   after the voting period, OR it's a different account after the enactment period.
 //! - `unlock` - Unlocks tokens that have an expired lock.
 //!
@@ -137,7 +137,7 @@
 //!   is "majority-carries" to become a referendum immediately.
 //!
 //! #### Veto Origin
-//! 
+//!
 //! This call can only be made by the `VetoOrigin`.
 //!
 //! - `veto_external` - Vetoes and blacklists the external proposal hash.
@@ -760,7 +760,7 @@ decl_module! {
 		/// an external referendum.
 		///
 		/// The dispatch of this call must be `ExternalMajorityOrigin`.
-		/// 
+		///
 		/// - `proposal_hash`: The preimage hash of the proposal.
 		///
 		/// Unlike `external_propose`, blacklisting has no effect on this and it may replace a
@@ -839,7 +839,7 @@ decl_module! {
 		/// Veto and blacklist the external proposal hash.
 		///
 		/// The dispatch origin of this call must be `VetoOrigin`.
-		/// 
+		///
 		/// - `proposal_hash`: The preimage hash of the proposal to veto and blacklist.
 		///
 		/// Emits `Vetoed`.
@@ -1071,7 +1071,7 @@ decl_module! {
 		/// Emits `PreimageNoted`.
 		///
 		/// # <weight>
-		/// - Dependent on the size of `encoded_proposal` but protected by a 
+		/// - Dependent on the size of `encoded_proposal` but protected by a
 		///   required deposit.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
@@ -1678,55 +1678,6 @@ mod tests {
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Democracy = Module<Test>;
-
-	#[test]
-	fn lock_info_via_migration_should_work() {
-		let mut s = Storage::default();
-		use hex_literal::hex;
-		// A dump of data from the previous version for which we know account 1 has 5 of its 10
-		// reserved and 3 of the rest is locked for misc. Account 2 has all 20 locked until block 5
-		// for everything and additionally 3 locked for just fees.
-		let data = vec![
-			(hex!["26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac"].to_vec(), hex!["0100000000000000"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850"].to_vec(), hex!["02000000"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7"].to_vec(), hex!["08000000000000000000000000"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc"].to_vec(), hex!["4545454545454545454545454545454545454545454545454545454545454545"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef7a44704b568d21667356a5a050c11874681e47a19e6b29b0a65b9591762ce5143ed30d0261e5d24a3201752506b20f15c"].to_vec(), hex!["4545454545454545454545454545454545454545454545454545454545454545"].to_vec()),
-			(hex!["3a636f6465"].to_vec(), hex![""].to_vec()),
-			(hex!["3a65787472696e7369635f696e646578"].to_vec(), hex!["00000000"].to_vec()),
-			(hex!["3a686561707061676573"].to_vec(), hex!["0800000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f218f26c73add634897550b4003b26bc61dbd7d0b561a41d23c2a469ad42fbd70d5438bae826f6fd607413190c37c363b"].to_vec(), hex!["046d697363202020200300000000000000ffffffffffffffff04"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f218f26c73add634897550b4003b26bc66cddb367afbd583bb48f9bbd7d5ba3b1d0738b4881b1cddd38169526d8158137"].to_vec(), hex!["0474786665657320200300000000000000ffffffffffffffff01"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f218f26c73add634897550b4003b26bc6e88b43fded6323ef02ffeffbd8c40846ee09bf316271bd22369659c959dd733a"].to_vec(), hex!["08616c6c20202020200300000000000000ffffffffffffffff1f64656d6f63726163ffffffffffffffff030000000000000002"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f3c22813def93ef32c365b55cb92f10f91dbd7d0b561a41d23c2a469ad42fbd70d5438bae826f6fd607413190c37c363b"].to_vec(), hex!["0500000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80"].to_vec(), hex!["d200000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f5f27b51b5ec208ee9cb25b55d8728243b8788bb218b185b63e3e92653953f29b6b143fb8cf5159fc908632e6fe490501"].to_vec(), hex!["1e0000000000000006000000000000000200000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b41dbd7d0b561a41d23c2a469ad42fbd70d5438bae826f6fd607413190c37c363b"].to_vec(), hex!["0500000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b46cddb367afbd583bb48f9bbd7d5ba3b1d0738b4881b1cddd38169526d8158137"].to_vec(), hex!["1e00000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4b8788bb218b185b63e3e92653953f29b6b143fb8cf5159fc908632e6fe490501"].to_vec(), hex!["3c00000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4e88b43fded6323ef02ffeffbd8c40846ee09bf316271bd22369659c959dd733a"].to_vec(), hex!["1400000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4e96760d274653a39b429a87ebaae9d3aa4fdf58b9096cf0bebc7c4e5a4c2ed8d"].to_vec(), hex!["2800000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4effb728943197fd12e694cbf3f3ede28fbf7498b0370c6dfa0013874b417c178"].to_vec(), hex!["3200000000000000"].to_vec()),
-			(hex!["f2794c22e353e9a839f12faab03a911b7f17cdfbfa73331856cca0acddd7842e"].to_vec(), hex!["00000000"].to_vec()),
-			(hex!["f2794c22e353e9a839f12faab03a911bbdcb0c5143a8617ed38ae3810dd45bc6"].to_vec(), hex!["00000000"].to_vec()),
-			(hex!["f2794c22e353e9a839f12faab03a911be2f6cb0456905c189bcb0458f9440f13"].to_vec(), hex!["00000000"].to_vec()),
-		];
-		s.top = data.into_iter().collect();
-		sp_io::TestExternalities::new(s).execute_with(|| {
-			Balances::on_runtime_upgrade();
-			assert_eq!(Balances::free_balance(1), 5);
-			assert_eq!(Balances::reserved_balance(1), 5);
-			assert_eq!(Balances::usable_balance(&1), 2);
-			assert_eq!(Balances::usable_balance_for_fees(&1), 5);
-			assert_eq!(Balances::free_balance(2), 20);
-			assert_eq!(Balances::reserved_balance(2), 0);
-			assert_eq!(Balances::usable_balance(&2), 0);
-			assert_eq!(Balances::usable_balance_for_fees(&2), 17);
-			fast_forward_to(5);
-			assert_ok!(Democracy::unlock(Origin::signed(2), 2));
-			assert_eq!(Balances::usable_balance(&2), 17);
-		});
-	}
 
 	#[test]
 	fn params_should_work() {

@@ -30,14 +30,14 @@
 //! ```rust
 //! use std::collections::HashMap;
 //! use serde::{Serialize, Deserialize};
-//! use sc_chain_spec::{ChainSpec, ChainSpecExtension};
+//! use sc_chain_spec::{GenericChainSpec, ChainSpecExtension};
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecExtension)]
 //! pub struct MyExtension {
 //!		pub known_blocks: HashMap<u64, String>,
 //! }
 //!
-//! pub type MyChainSpec<G> = ChainSpec<G, MyExtension>;
+//! pub type MyChainSpec<G> = GenericChainSpec<G, MyExtension>;
 //! ```
 //!
 //! Some parameters may require different values depending on the
@@ -49,7 +49,7 @@
 //!
 //! ```rust
 //! use serde::{Serialize, Deserialize};
-//! use sc_chain_spec::{Forks, ChainSpec, ChainSpecGroup, ChainSpecExtension};
+//! use sc_chain_spec::{Forks, ChainSpecGroup, ChainSpecExtension, GenericChainSpec};
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
@@ -71,10 +71,10 @@
 //! pub type BlockNumber = u64;
 //!
 //! /// A chain spec supporting forkable `ClientParams`.
-//! pub type MyChainSpec1<G> = ChainSpec<G, Forks<BlockNumber, ClientParams>>;
+//! pub type MyChainSpec1<G> = GenericChainSpec<G, Forks<BlockNumber, ClientParams>>;
 //!
 //! /// A chain spec supporting forkable `Extension`.
-//! pub type MyChainSpec2<G> = ChainSpec<G, Forks<BlockNumber, Extension>>;
+//! pub type MyChainSpec2<G> = GenericChainSpec<G, Forks<BlockNumber, Extension>>;
 //! ```
 //!
 //! It's also possible to have a set of parameters that is allowed to change
@@ -84,7 +84,7 @@
 //!
 //! ```rust
 //! use serde::{Serialize, Deserialize};
-//! use sc_chain_spec::{Forks, ChainSpec, ChainSpecGroup, ChainSpecExtension};
+//! use sc_chain_spec::{Forks, GenericChainSpec, ChainSpecGroup, ChainSpecExtension};
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
@@ -104,20 +104,48 @@
 //!		pub pool: Forks<u64, PoolParams>,
 //! }
 //!
-//! pub type MyChainSpec<G> = ChainSpec<G, Extension>;
+//! pub type MyChainSpec<G> = GenericChainSpec<G, Extension>;
 //! ```
 
 
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{ChainSpec, Properties, NoExtension};
-pub use extension::{Group, Fork, Forks, Extension};
+pub use chain_spec::{ChainSpec as GenericChainSpec, Properties, NoExtension};
+pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 
 use serde::{Serialize, de::DeserializeOwned};
 use sp_runtime::BuildStorage;
+use sc_network::Multiaddr;
+use sc_telemetry::TelemetryEndpoints;
 
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
+
+/// Common interface to `GenericChainSpec`
+pub trait ChainSpec: BuildStorage {
+	/// Spec name.
+	fn name(&self) -> &str;
+	/// Spec id.
+	fn id(&self) -> &str;
+	/// A list of bootnode addresses.
+	fn boot_nodes(&self) -> &[String];
+	/// Telemetry endpoints (if any)
+	fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints>;
+	/// Network protocol id.
+	fn protocol_id(&self) -> Option<&str>;
+	/// Additional loosly-typed properties of the chain.
+	///
+	/// Returns an empty JSON object if 'properties' not defined in config
+	fn properties(&self) -> Properties;
+	/// Returns a reference to defined chain spec extensions.
+	fn extensions(&self) -> &dyn GetExtension;
+	/// Add a bootnode to the list.
+	fn add_boot_node(&mut self, addr: Multiaddr);
+	/// Return spec as JSON.
+	fn as_json(&self, raw: bool) -> Result<String, String>;
+	/// Return StorageBuilder for this spec.
+	fn as_storage_builder(&self) -> &dyn BuildStorage;
+}

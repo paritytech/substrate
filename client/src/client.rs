@@ -41,8 +41,7 @@ use sp_runtime::{
 use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProof,
-	merge_storage_proofs,
+	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo};
 use sp_consensus::{
@@ -55,6 +54,7 @@ use sp_blockchain::{self as blockchain,
 	well_known_cache_keys::Id as CacheKeyId,
 	HeaderMetadata, CachedHeaderMetadata,
 };
+use sp_trie::StorageProof;
 
 use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
@@ -71,7 +71,7 @@ pub use sc_client_api::{
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, BadBlocks, ForkBlocks,
+		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
 		BlockOf,
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
@@ -243,10 +243,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	Block: BlockT,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
-	pub fn new<S: BuildStorage>(
+	pub fn new(
 		backend: Arc<B>,
 		executor: E,
-		build_genesis_storage: &S,
+		build_genesis_storage: &dyn BuildStorage,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
@@ -472,7 +472,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Ok(())
 		}, ())?;
 
-		Ok(merge_storage_proofs(proofs))
+		Ok(StorageProof::merge(proofs))
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
@@ -1058,11 +1058,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.blockchain().body(*id)
 	}
 
-	/// Get block justification set by id.
-	pub fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
-		self.backend.blockchain().justification(*id)
-	}
-
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		let load_header = |id: Block::Hash| -> sp_blockchain::Result<Block::Header> {
@@ -1140,9 +1135,20 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		method: &str,
 		call_data: &[u8]
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
+		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
+		// backwards compatible.
+		//
+		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
+		let code_proof = self.read_proof(
+			id,
+			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
+		)?;
+
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
-		prove_execution(state, header, &self.executor, method, call_data)
+		prove_execution(state, header, &self.executor, method, call_data).map(|(r, p)| {
+			(r, StorageProof::merge(vec![p, code_proof]))
+		})
 	}
 
 	fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, StorageProof)> {
@@ -1854,7 +1860,7 @@ where
 	}
 }
 
-impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
+impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	where
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
@@ -1874,6 +1880,33 @@ impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
 				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
 			_ => None,
 		})
+	}
+
+	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
+		// this can probably be implemented more efficiently
+		if let BlockId::Hash(ref h) = id {
+			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
+				return Ok(BlockStatus::Queued);
+			}
+		}
+		let hash_and_number = match id.clone() {
+			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
+			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
+		};
+		match hash_and_number {
+			Some((hash, number)) => {
+				if self.backend.have_state_at(&hash, number) {
+					Ok(BlockStatus::InChainWithState)
+				} else {
+					Ok(BlockStatus::InChainPruned)
+				}
+			}
+			None => Ok(BlockStatus::Unknown),
+		}
+	}
+
+	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
+		self.backend.blockchain().justification(*id)
 	}
 }
 
