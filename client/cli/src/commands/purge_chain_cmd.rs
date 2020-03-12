@@ -18,10 +18,7 @@ use std::fmt::Debug;
 use std::io::{Write, self};
 use std::fs;
 use structopt::StructOpt;
-use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec,
-	config::{DatabaseConfig},
-};
+use sc_service::{ Configuration, ChainSpec, config::{DatabaseConfig} };
 
 use crate::error;
 use crate::VersionInfo;
@@ -41,14 +38,10 @@ pub struct PurgeChainCmd {
 
 impl PurgeChainCmd {
 	/// Run the purge command
-	pub fn run<G, E>(
+	pub fn run(
 		self,
-		config: Configuration<G, E>,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
+		config: Configuration,
+	) -> error::Result<()> {
 		let db_path = match config.expect_database() {
 			DatabaseConfig::Path { path, .. } => path,
 			_ => {
@@ -88,15 +81,13 @@ impl PurgeChainCmd {
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
+	pub fn update_config<F>(
 		&self,
-		mut config: &mut Configuration<G, E>,
+		mut config: &mut Configuration,
 		spec_factory: F,
 		version: &VersionInfo,
 	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
 		config.use_in_memory_keystore()?;
