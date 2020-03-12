@@ -508,7 +508,7 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 
 		if parent_number == Zero::zero() {
 			// need to insert the genesis epoch.
-			return Ok(Some(ViableEpochDescriptor::UnimportedGenesis(slot_number)))
+			return Ok(Some(ViableEpochDescriptor::UnimportedGenesis(slot_number)));
 		}
 
 		// We want to find the deepest node in the tree which is an ancestor
