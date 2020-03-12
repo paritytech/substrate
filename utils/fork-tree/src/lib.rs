@@ -101,13 +101,11 @@ impl<H, N, V> ForkTree<H, N, V> where
 		number: &N,
 		is_descendent_of: &F,
 		predicate: &P,
-	) -> Result<Vec<(H, N, V)>, Error<E>>
+	) -> Result<Vec<Node<H, N, V>>, Error<E>>
 		where E: std::error::Error,
 			  F: Fn(&H, &H) -> Result<bool, E>,
 			  P: Fn(&V) -> bool,
 	{
-		let mut removed = Vec::new();
-
 		let new_root_index = self.find_node_index_where(
 			hash,
 			number,
@@ -115,24 +113,18 @@ impl<H, N, V> ForkTree<H, N, V> where
 			predicate,
 		)?;
 
-		if let Some(mut root_index) = new_root_index {
-			let old_roots = std::mem::replace(&mut self.roots, Vec::new());
+		let removed = if let Some(mut root_index) = new_root_index {
+			let mut old_roots = std::mem::replace(&mut self.roots, Vec::new());
 
 			let mut root = None;
-			let mut cur_children = Some(old_roots);
+			let mut cur_children = Some(&mut old_roots);
 
 			while let Some(cur_index) = root_index.pop() {
 				if let Some(children) = cur_children.take() {
-					for (index, child) in children.into_iter().enumerate() {
-						if index == cur_index {
-							if root_index.is_empty() {
-								root = Some(child);
-							} else {
-								cur_children = Some(child.children);
-							}
-						} else {
-							removed.push((child.hash, child.number, child.data));
-						}
+					if root_index.is_empty() {
+						root = Some(children.remove(cur_index));
+					} else {
+						cur_children = Some(&mut children[cur_index].children);
 					}
 				}
 			}
@@ -140,6 +132,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 			let mut root = root
 				.expect("find_node_index_where will return array with at least one index; \
                          this results in at least one item in removed; qed");
+
+			let mut removed = old_roots;
 
 			// we found the deepest ancestor of the finalized block, so we prune
 			// out any children that don't include the finalized block.
@@ -156,12 +150,16 @@ impl<H, N, V> ForkTree<H, N, V> where
 					// due to ancestry restrictions (i.e. they must be different forks).
 					is_first = false;
 				} else {
-					removed.push((child.hash, child.number, child.data));
+					removed.push(child);
 				}
 			}
 
 			self.roots = vec![root];
-		}
+
+			removed
+		} else {
+			Vec::new()
+		};
 
 		self.rebalance();
 
@@ -889,7 +887,7 @@ impl<'a, H, N, V> Iterator for ForkTreeIterator<'a, H, N, V> {
 
 #[cfg(test)]
 mod test {
-	use super::{FinalizationResult, ForkTree, Error};
+	use super::{FinalizationResult, ForkTree, ForkTreeIterator, Error};
 
 	#[derive(Debug, PartialEq)]
 	struct TestError;
@@ -912,7 +910,7 @@ mod test {
 		//  /   /
 		// A - F - H - I
 		//          \
-		//           - L - M - N
+		//           - L - M
 		//              \
 		//               - O
 		//  \
@@ -920,22 +918,21 @@ mod test {
 		//
 		// (where N is not a part of fork tree)
 		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
-			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
+			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "O"];
 			match (*base, *block) {
 				("A", b) => Ok(letters.into_iter().any(|n| n == b)),
 				("B", b) => Ok(b == "C" || b == "D" || b == "E"),
 				("C", b) => Ok(b == "D" || b == "E"),
 				("D", b) => Ok(b == "E"),
 				("E", _) => Ok(false),
-				("F", b) => Ok(b == "G" || b == "H" || b == "I" || b == "L" || b == "M" || b == "N" || b == "O"),
+				("F", b) => Ok(b == "G" || b == "H" || b == "I" || b == "L" || b == "M" || b == "O"),
 				("G", _) => Ok(false),
 				("H", b) => Ok(b == "I" || b == "L" || b == "M" || b == "O"),
 				("I", _) => Ok(false),
 				("J", b) => Ok(b == "K"),
 				("K", _) => Ok(false),
-				("L", b) => Ok(b == "M" || b == "O" || b == "N"),
-				("M", b) => Ok(b == "N"),
-				("N", _) => Ok(false),
+				("L", b) => Ok(b == "M" || b == "O"),
+				("M", _) => Ok(false),
 				("O", _) => Ok(false),
 				("0", _) => Ok(true),
 				_ => Ok(false),
@@ -1435,7 +1432,7 @@ mod test {
 	fn prune_works() {
 		let (mut tree, is_descendent_of) = test_fork_tree();
 
-		tree.prune(
+		let removed = tree.prune(
 			&"C",
 			&3,
 			&is_descendent_of,
@@ -1452,7 +1449,13 @@ mod test {
 			vec!["B", "C", "D", "E"],
 		);
 
-		tree.prune(
+		assert_eq!(
+			ForkTreeIterator { stack: removed.iter().collect() }
+			.map(|node| node.hash).collect::<Vec<_>>(),
+			vec!["A", "F", "G", "H", "I", "L", "M", "O", "J", "K"]
+		);
+
+		let removed = tree.prune(
 			&"E",
 			&5,
 			&is_descendent_of,
@@ -1467,6 +1470,12 @@ mod test {
 		assert_eq!(
 			tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(),
 			vec!["D", "E"],
+		);
+
+		assert_eq!(
+			ForkTreeIterator { stack: removed.iter().collect() }
+			.map(|node| node.hash).collect::<Vec<_>>(),
+			vec!["B", "C"]
 		);
 	}
 
