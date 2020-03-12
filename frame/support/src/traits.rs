@@ -143,12 +143,14 @@ impl<
 /// are made about the scheduling of the sessions.
 pub trait EstimateNextSessionRotation<BlockNumber> {
 	/// Return the block number at which the next session rotation is estimated to happen.
-	fn estimate_next_session_rotation(now: BlockNumber) -> BlockNumber;
+	///
+	/// None should be returned if the estimation fails to come to an answer
+	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber>;
 }
 
 impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
-	fn estimate_next_session_rotation(_: BlockNumber) -> BlockNumber {
-		Bounded::max_value()
+	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
+		Default::default()
 	}
 }
 
@@ -156,12 +158,12 @@ impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
 /// always be implemented by the session module.
 pub trait EstimateNextNewSession<BlockNumber> {
 	/// Return the block number at which the next new session is estimated to happen.
-	fn estimate_next_new_session(now: BlockNumber) -> BlockNumber;
+	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
 }
 
 impl<BlockNumber: Bounded> EstimateNextNewSession<BlockNumber> for () {
-	fn estimate_next_new_session(_: BlockNumber) -> BlockNumber {
-		Bounded::max_value()
+	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
+		Default::default()
 	}
 }
 

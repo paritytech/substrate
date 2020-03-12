@@ -26,7 +26,7 @@ use sp_std::{result, prelude::*};
 use frame_support::{decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT}};
 use sp_timestamp::OnTimestampSet;
 use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill, PerThing};
-use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash, One, Bounded};
+use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash, One};
 use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
@@ -317,21 +317,24 @@ impl<T: Trait> Module<T> {
 
 	/// Return the _best guess_ block number, at which the next epoch change is predicted to happen.
 	///
+	/// Returns None if the prediction is in the past; This implies an error internally in the Babe
+	/// and should not happen under normal circumstances.
+	///
 	/// In other word, this is only accurate if no slots are missed. Given missed slots, the slot
 	/// number will grow while the block number will not. Hence, the result can be interpreted as an
 	/// upper bound.
-	//
 	// -------------- IMPORTANT NOTE --------------
 	// This implementation is linked to how [`should_epoch_change`] is working. This might need to
 	// be updated accordingly, if the underlying mechanics of slot and epochs change.
-	pub fn next_expected_epoch_change(now: T::BlockNumber) -> T::BlockNumber {
+	pub fn next_expected_epoch_change(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
-		let slots_remaining = next_slot
+		next_slot
 			.checked_sub(CurrentSlot::get())
-			.unwrap_or(Bounded::max_value());
-		// This is a best effort guess. Drifts in the slot/block ratio will cause errors here.
-		let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
-		now.saturating_add(blocks_remaining)
+			.map(|slots_remaining| {
+				// This is a best effort guess. Drifts in the slot/block ratio will cause errors here.
+				let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
+				now.saturating_add(blocks_remaining)
+			})
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
@@ -492,7 +495,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 }
 
 impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
-	fn estimate_next_session_rotation(now: T::BlockNumber) -> T::BlockNumber {
+	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
 	}
 }

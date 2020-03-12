@@ -1145,31 +1145,36 @@ decl_module! {
 				Self::era_election_status().is_closed() &&
 				Self::is_current_session_final()
 			{
-				let next_session_change =
-					T::NextNewSession::estimate_next_new_session(now);
-				if let Some(remaining) = next_session_change.checked_sub(&now) {
-					if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
-						// create snapshot.
-						if Self::create_stakers_snapshot() {
-							// Set the flag to make sure we don't waste any compute here in the same era
-							// after we have triggered the offline compute.
-							<EraElectionStatus<T>>::put(
-								ElectionStatus::<T::BlockNumber>::Open(now)
-							);
-							debug::native::info!(
-								target: "staking",
-								"Election window is Open({:?}). Snapshot created",
-								now,
-							);
-						} else {
-							debug::native::warn!(
-								target: "staking",
-								"Failed to create snapshot at {:?}. Election window will remain closed.",
-								now,
-							);
-						}
+				if let Some(next_session_change) = T::NextNewSession::estimate_next_new_session(now){
+					if let Some(remaining) = next_session_change.checked_sub(&now) {
+						if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
+							// create snapshot.
+							if Self::create_stakers_snapshot() {
+								// Set the flag to make sure we don't waste any compute here in the same era
+								// after we have triggered the offline compute.
+								<EraElectionStatus<T>>::put(
+									ElectionStatus::<T::BlockNumber>::Open(now)
+								);
+								debug::native::info!(
+									target: "staking",
+									"Election window is Open({:?}). Snapshot created",
+									now,
+								);
+							} else {
+								debug::native::warn!(
+									target: "staking",
+									"Failed to create snapshot at {:?}. Election window will remain closed.",
+									now,
+								);
+							}
 
+						}
 					}
+				} else {
+					debug::native::warn!(
+						target: "staking",
+						"estimate_next_new_session() failed to predict. Election status cannot be changed.",
+					);
 				}
 			}
 		}

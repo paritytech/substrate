@@ -76,43 +76,26 @@ fn combinations_2<T: Clone>(input: &[T]) -> Vec<(T, T)> {
 
 /// Returns the count of trailing common elements in two slices.
 pub(crate) fn trailing_common<T: Eq>(t1: &[T], t2: &[T]) -> usize {
-	let mut t1_pointer = t1.len() - 1;
-	let mut t2_pointer = t2.len() - 1;
-	let mut common = 0usize;
-
-	while t1[t1_pointer] == t2[t2_pointer] {
-		common += 1;
-		if t1_pointer == 0 || t2_pointer == 0 {
-			break;
-		}
-		t1_pointer -= 1;
-		t2_pointer -= 1;
-	}
-
-	common
+	t1.iter().rev().zip(t2.iter().rev()).take_while(|e| e.0 == e.1).count()
 }
 
 /// Merges two parent roots as described by the reduce algorithm.
 fn merge<A: IdentifierT>(voter_root_path: Vec<NodeRef<A>>, target_root_path: Vec<NodeRef<A>>) {
-	if voter_root_path.len() <= target_root_path.len() {
-		// iterate from last to beginning, skipping the first one. This asserts that
-		// indexing is always correct.
-		voter_root_path
-			.iter()
-			.take(voter_root_path.len() - 1) // take all except for last.
-			.enumerate()
-			.map(|(i, n)| (n, voter_root_path[i + 1].clone()))
-			.for_each(|(voter, next)| Node::set_parent_of(&next, &voter));
-		Node::set_parent_of(&voter_root_path[0], &target_root_path[0]);
+	let (shorter_path, longer_path) = if voter_root_path.len() <= target_root_path.len() {
+		(voter_root_path, target_root_path)
 	} else {
-		target_root_path
-			.iter()
-			.take(target_root_path.len() - 1) // take all except for last.
-			.enumerate()
-			.map(|(i, n)| (n, target_root_path[i + 1].clone()))
-			.for_each(|(target, next)| Node::set_parent_of(&next, &target));
-		Node::set_parent_of(&target_root_path[0], &voter_root_path[0]);
-	}
+		(target_root_path, voter_root_path)
+	};
+
+	// iterate from last to beginning, skipping the first one. This asserts that
+	// indexing is always correct.
+	shorter_path
+		.iter()
+		.take(shorter_path.len() - 1) // take all except for last.
+		.enumerate()
+		.map(|(i, n)| (n, shorter_path[i + 1].clone()))
+		.for_each(|(voter, next)| Node::set_parent_of(&next, &voter));
+	Node::set_parent_of(&shorter_path[0], &longer_path[0]);
 }
 
 /// Reduce only redundant edges with cycle length of 4.
@@ -334,7 +317,9 @@ fn reduce_4<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32 {
 	num_changed
 }
 
-/// Reduce all redundant edges from the edge weight graph.
+/// Reduce redundant edges from the edge weight graph, with all possible length.
+///
+/// To get the best performance, this should be called after `reduce_4()`.
 ///
 /// Returns the number of edges removed.
 ///
@@ -417,7 +402,6 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 				let common_count = trailing_common(&voter_root_path, &target_root_path);
 
 				// because roots are the same.
-				#[cfg(feature = "std")]
 				debug_assert_eq!(
 					target_root_path.last().unwrap(),
 					voter_root_path.last().unwrap()
@@ -440,7 +424,6 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 					)
 					.collect::<Vec<NodeRef<A>>>();
 				// a cycle's length shall always be multiple of two.
-				#[cfg(feature = "std")]
 				debug_assert_eq!(cycle.len() % 2, 0);
 
 				// find minimum of cycle.
@@ -698,6 +681,31 @@ mod tests {
 		//					  |
 		//		F --> E --> -->
 		assert_eq!(e.borrow().clone().parent.unwrap().borrow().id.who, 4u32); // c
+	}
+
+	#[test]
+	fn merge_with_len_one() {
+		//	D <-- A <-- B <-- C
+		//
+		//		F <-- E
+		let d = Node::new(NodeId::from(1, NodeRole::Target)).into_ref();
+		let a = Node::new(NodeId::from(2, NodeRole::Target)).into_ref();
+		let b = Node::new(NodeId::from(3, NodeRole::Target)).into_ref();
+		let c = Node::new(NodeId::from(4, NodeRole::Target)).into_ref();
+		let f = Node::new(NodeId::from(6, NodeRole::Target)).into_ref();
+
+		Node::set_parent_of(&c, &b);
+		Node::set_parent_of(&b, &a);
+		Node::set_parent_of(&a, &d);
+
+		let path1 = vec![c.clone(), b.clone(), a.clone(), d.clone()];
+		let path2 = vec![f.clone()];
+
+		merge(path1, path2);
+		//	D <-- A <-- B <-- C
+		//					  |
+		//			F -->  -->
+		assert_eq!(f.borrow().clone().parent.unwrap().borrow().id.who, 4u32); // c
 	}
 
 	#[test]

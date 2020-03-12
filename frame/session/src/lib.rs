@@ -152,23 +152,21 @@ impl<
 	Period: Get<BlockNumber>,
 	Offset: Get<BlockNumber>,
 > EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset> {
-	fn estimate_next_session_rotation(now: BlockNumber) -> BlockNumber {
+	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber> {
 		let offset = Offset::get();
 		let period = Period::get();
-		if now > offset {
+		Some(if now > offset {
 			let block_after_last_session = (now.clone() - offset) % period.clone();
-			match block_after_last_session > Zero::zero() {
-				true =>
-				{
-					now.saturating_add(
-						period.saturating_sub(block_after_last_session)
-					)
-				}
-				false => Zero::zero()
+			if block_after_last_session > Zero::zero() {
+				now.saturating_add(
+					period.saturating_sub(block_after_last_session)
+				)
+			} else {
+				Zero::zero()
 			}
 		} else {
 			offset
-		}
+		})
 	}
 }
 
@@ -783,7 +781,7 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 	/// This session module always calls new_session and next_session at the same time, hence we
 	/// do a simple proxy and pass the function to next rotation.
-	fn estimate_next_new_session(now: T::BlockNumber) -> T::BlockNumber {
+	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
 	}
 }
@@ -1048,16 +1046,16 @@ mod tests {
 		type P = PeriodicSessions<Period, Offset>;
 
 		for i in 0..3 {
-			assert_eq!(P::estimate_next_session_rotation(i), 3);
+			assert_eq!(P::estimate_next_session_rotation(i), Some(3));
 			assert!(!P::should_end_session(i));
 		}
 
 		assert!(P::should_end_session(3));
-		assert_eq!(P::estimate_next_session_rotation(3), 3);
+		assert_eq!(P::estimate_next_session_rotation(3), Some(3));
 
 		for i in 4..13 {
 			assert!(!P::should_end_session(i));
-			assert_eq!(P::estimate_next_session_rotation(i), 13);
+			assert_eq!(P::estimate_next_session_rotation(i), Some(13));
 		}
 
 		assert!(P::should_end_session(13));
