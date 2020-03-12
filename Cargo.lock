@@ -4376,6 +4376,7 @@ dependencies = [
 name = "pallet-session"
 version = "2.0.0-alpha.3"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",

@@ -134,8 +134,9 @@ std = [
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
-	"pallet-timestamp/runtime-benchmarks",
-	"pallet-identity/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
+	"pallet-identity/runtime-benchmarks",
+	"pallet-session/runtime-benchmarks",
+	"pallet-timestamp/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
 ]

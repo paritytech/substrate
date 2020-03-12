@@ -866,6 +866,13 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-session" | b"session" => Session::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(
 					extrinsic,
 					lowest_range_values,
