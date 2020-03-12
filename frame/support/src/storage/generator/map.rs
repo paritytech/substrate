@@ -18,8 +18,8 @@
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
 use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike, Ref, EncodeAppend};
-use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
-use crate::hash::ReversibleStorageHasher;
+use crate::{storage::{self, unhashed}, traits::Len};
+use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
 
 /// Generator for `StorageMap` used by `decl_storage`.
 ///
@@ -185,7 +185,6 @@ impl<
 				None => return,
 			}
 		}
-
 	}
 }
 

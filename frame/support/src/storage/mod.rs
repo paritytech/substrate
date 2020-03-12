@@ -234,6 +234,30 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F);
 }
 
+/// A strongly-typed double map in storage whose secondary keys and values can be iterated over.
+pub trait IterableStorageDoubleMap<
+	K1: FullCodec,
+	K2: FullCodec,
+	V: FullCodec
+>: StorageDoubleMap<K1, K2, V> {
+	/// The type that iterates over all `(key, value)`.
+	type Iterator: Iterator<Item = (K2, V)>;
+
+	/// Enumerate all elements in the map with first key `k1` in no particular order. If you add or
+	/// remove values whose first key is `k1` to the map while doing this, you'll get undefined
+	/// results.
+	fn iter(k1: impl EncodeLike<K1>) -> Self::Iterator;
+
+	/// Remove all elements from the map with first key `k1` and iterate through them in no
+	/// particular order. If you add elements with first key `k1` to the map while doing this,
+	/// you'll get undefined results.
+	fn drain(k1: impl EncodeLike<K1>) -> Self::Iterator;
+
+	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	/// By returning `None` from `f` for an element, you'll remove it from the map.
+	fn translate<O: Decode, F: Fn(O) -> Option<V>>(f: F);
+}
+
 /// An implementation of a map with a two keys.
 ///
 /// It provides an important ability to efficiently remove all entries

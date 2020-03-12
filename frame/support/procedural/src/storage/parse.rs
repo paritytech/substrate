@@ -28,14 +28,17 @@ mod keyword {
 	syn::custom_keyword!(get);
 	syn::custom_keyword!(map);
 	syn::custom_keyword!(double_map);
-	syn::custom_keyword!(blake2_256);
-	syn::custom_keyword!(blake2_128);
+	syn::custom_keyword!(opaque_blake2_256);
+	syn::custom_keyword!(opaque_blake2_128);
 	syn::custom_keyword!(blake2_128_concat);
-	syn::custom_keyword!(twox_256);
-	syn::custom_keyword!(twox_128);
+	syn::custom_keyword!(opaque_twox_256);
+	syn::custom_keyword!(opaque_twox_128);
 	syn::custom_keyword!(twox_64_concat);
 	syn::custom_keyword!(identity);
 	syn::custom_keyword!(hasher);
+	syn::custom_keyword!(tainted);
+	syn::custom_keyword!(natural);
+	syn::custom_keyword!(prehashed);
 }
 
 /// Specific `Opt` to implement structure with optional parsing
@@ -233,11 +236,11 @@ struct DeclStorageDoubleMap {
 
 #[derive(ToTokens, Debug)]
 enum Hasher {
-	Blake2_256(keyword::blake2_256),
-	Blake2_128(keyword::blake2_128),
+	Blake2_256(keyword::opaque_blake2_256),
+	Blake2_128(keyword::opaque_blake2_128),
 	Blake2_128Concat(keyword::blake2_128_concat),
-	Twox256(keyword::twox_256),
-	Twox128(keyword::twox_128),
+	Twox256(keyword::opaque_twox_256),
+	Twox128(keyword::opaque_twox_128),
 	Twox64Concat(keyword::twox_64_concat),
 	Identity(keyword::identity),
 }
@@ -245,19 +248,25 @@ enum Hasher {
 impl syn::parse::Parse for Hasher {
 	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
 		let lookahead = input.lookahead1();
-		if lookahead.peek(keyword::blake2_256) {
+		if lookahead.peek(keyword::opaque_blake2_256) {
 			Ok(Self::Blake2_256(input.parse()?))
-		} else if lookahead.peek(keyword::blake2_128) {
+		} else if lookahead.peek(keyword::opaque_blake2_128) {
 			Ok(Self::Blake2_128(input.parse()?))
 		} else if lookahead.peek(keyword::blake2_128_concat) {
 			Ok(Self::Blake2_128Concat(input.parse()?))
-		} else if lookahead.peek(keyword::twox_256) {
+		} else if lookahead.peek(keyword::opaque_twox_256) {
 			Ok(Self::Twox256(input.parse()?))
-		} else if lookahead.peek(keyword::twox_128) {
+		} else if lookahead.peek(keyword::opaque_twox_128) {
 			Ok(Self::Twox128(input.parse()?))
 		} else if lookahead.peek(keyword::twox_64_concat) {
 			Ok(Self::Twox64Concat(input.parse()?))
 		} else if lookahead.peek(keyword::identity) {
+			Ok(Self::Identity(input.parse()?))
+		} else if lookahead.peek(keyword::tainted) {
+			Ok(Self::Blake2_128Concat(input.parse()?))
+		} else if lookahead.peek(keyword::natural) {
+			Ok(Self::Twox64Concat(input.parse()?))
+		} else if lookahead.peek(keyword::prehashed) {
 			Ok(Self::Identity(input.parse()?))
 		} else {
 			Err(lookahead.error())

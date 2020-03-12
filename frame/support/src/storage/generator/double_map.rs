@@ -16,8 +16,9 @@
 
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
-use codec::{Ref, FullCodec, FullEncode, Encode, EncodeLike, EncodeAppend};
-use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
+use codec::{Ref, FullCodec, FullEncode, Decode, Encode, EncodeLike, EncodeAppend};
+use crate::{storage::{self, unhashed}, traits::Len};
+use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
 ///
@@ -54,6 +55,22 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	/// Storage prefix. Used for generating final key.
 	fn storage_prefix() -> &'static [u8];
+
+	/// The full prefix; just the hash of `module_prefix` concatenated to the hash of
+	/// `storage_prefix`.
+	fn prefix_hash() -> Vec<u8> {
+		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
+		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+
+		let mut result = Vec::with_capacity(
+			module_prefix_hashed.len() + storage_prefix_hashed.len()
+		);
+
+		result.extend_from_slice(&module_prefix_hashed[..]);
+		result.extend_from_slice(&storage_prefix_hashed[..]);
+
+		result
+	}
 
 	/// Convert an optional value retrieved from storage to the type queried.
 	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
@@ -314,7 +331,103 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 			unhashed::put(Self::storage_double_map_final_key(key1, key2).as_ref(), &value);
 			value
 		})
+	}
+}
 
+/// Utility to iterate through items in a storage map.
+pub struct MapIterator<K, V, Hasher> {
+	prefix: Vec<u8>,
+	previous_key: Vec<u8>,
+	drain: bool,
+	_phantom: ::sp_std::marker::PhantomData<(K, V, Hasher)>,
+}
+
+impl<
+	K: Decode + Sized,
+	V: Decode + Sized,
+	Hasher: ReversibleStorageHasher
+> Iterator for MapIterator<K, V, Hasher> {
+	type Item = (K, V);
+
+	fn next(&mut self) -> Option<(K, V)> {
+		loop {
+			let maybe_next = sp_io::storage::next_key(&self.previous_key)
+				.filter(|n| n.starts_with(&self.prefix));
+			break match maybe_next {
+				Some(next) => {
+					self.previous_key = next;
+					match unhashed::get::<V>(&self.previous_key) {
+						Some(value) => {
+							if self.drain {
+								unhashed::kill(&self.previous_key)
+							}
+							let mut key_material = Hasher::reverse(&self.previous_key[self.prefix.len()..]);
+							match K::decode(&mut key_material) {
+								Ok(key) => Some((key, value)),
+								Err(_) => continue,
+							}
+						}
+						None => continue,
+					}
+				}
+				None => None,
+			}
+		}
+	}
+}
+
+impl<
+	K1: FullCodec,
+	K2: FullCodec,
+	V: FullCodec,
+	G: StorageDoubleMap<K1, K2, V>,
+> storage::IterableStorageDoubleMap<K1, K2, V> for G where
+	G::Hasher1: ReversibleStorageHasher,
+	G::Hasher2: ReversibleStorageHasher
+{
+	type Iterator = MapIterator<K2, V, G::Hasher2>;
+
+	/// Enumerate all elements in the map.
+	fn iter(k1: impl EncodeLike<K1>) -> Self::Iterator {
+		let prefix = G::storage_double_map_final_key1(k1);
+		Self::Iterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			_phantom: Default::default(),
+		}
+	}
+
+	/// Enumerate all elements in the map.
+	fn drain(k1: impl EncodeLike<K1>) -> Self::Iterator {
+		let prefix = G::storage_double_map_final_key1(k1);
+		Self::Iterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: true,
+			_phantom: Default::default(),
+		}
+	}
+
+	fn translate<O: Decode, F: Fn(O) -> Option<V>>(f: F) {
+		let prefix = G::prefix_hash();
+		let mut previous_key = prefix.clone();
+		loop {
+			match sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix)) {
+				Some(next) => {
+					previous_key = next;
+					let maybe_value = unhashed::get::<O>(&previous_key);
+					match maybe_value {
+						Some(value) => match f(value) {
+							Some(new) => unhashed::put::<V>(&previous_key, &new),
+							None => unhashed::kill(&previous_key),
+						},
+						None => continue,
+					}
+				}
+				None => return,
+			}
+		}
 	}
 }
 
