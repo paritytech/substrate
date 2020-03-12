@@ -1,0 +1,7 @@
+image: parity/rust-builder:latest
+sources:
+  - git@git.sr.ht:~generalbeck/substrate
+tasks:
+  - cargo-check-benches: |
+      cd substrate/
+      BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
