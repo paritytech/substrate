@@ -25,7 +25,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use sp_core::{self, InnerHasher as Hasher, TypeId, RuntimeDebug};
+use sp_core::{self, InnerHasher, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -378,20 +378,19 @@ pub trait OffchainWorker<BlockNumber> {
 // Stupid bug in the Rust compiler believes derived
 // traits must be fulfilled by all type parameters.
 pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq
-	+ PartialEq + Hasher<Out = <Self as Hash>::Output> + sp_core::Hasher {
-	// TODO try fuse the alt Hasher into this??
+	+ PartialEq + InnerHasher<Out = <Self as Hash>::Output> + Hasher {
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output {
-		<Self as Hasher>::hash(s)
+		<Self as InnerHasher>::hash(s)
 	}
 
 	/// Produce the hash of some codec-encodable value.
 	fn hash_of<S: Encode>(s: &S) -> Self::Output {
-		Encode::using_encoded(s, <Self as Hasher>::hash)
+		Encode::using_encoded(s, <Self as InnerHasher>::hash)
 	}
 
 	/// The ordered Patricia tree root of the given `input`.
@@ -406,7 +405,7 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
-impl Hasher for BlakeTwo256 {
+impl InnerHasher for BlakeTwo256 {
 	type Out = sp_core::H256;
 	type StdHasher = hash256_std_hasher::Hash256StdHasher;
 	const LENGTH: usize = 32;
@@ -428,7 +427,7 @@ impl Hash for BlakeTwo256 {
 	}
 }
 
-impl sp_core::Hasher for BlakeTwo256 {
+impl Hasher for BlakeTwo256 {
 	const EMPTY_ROOT: &'static [u8] = &[
 		3, 23, 10, 46, 117, 151, 183, 183, 227, 216,
 		76, 5, 57, 29, 19, 154, 98, 177, 87, 231,
@@ -1429,7 +1428,6 @@ mod tests {
 
 	#[test]
 	fn empty_root_const() {
-		use sp_core::Hasher;
 		let empty = <BlakeTwo256 as Hash>::hash(&[0u8]);
 		assert_eq!(BlakeTwo256::EMPTY_ROOT, empty.as_ref());
 	}
