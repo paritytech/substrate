@@ -380,6 +380,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 }
 
 /// Iterator for prefixed map.
+///
+/// If a value fails to decode, the iteration stop immediately.
 pub struct PrefixIterator<Value> {
 	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
@@ -412,13 +414,75 @@ impl<Value: Decode> Iterator for PrefixIterator<Value> {
 	}
 }
 
+/// Iterator for prefixed map with key information.
+///
+/// If a value or info fails to decode, the iteration stop immediately.
+pub struct PrefixIteratorWithInfo<S, V> {
+	prefix: Vec<u8>,
+	previous_key: Vec<u8>,
+	phantom_data: PhantomData<(S, V)>,
+}
+
+impl<Value: FullCodec, S: StoragePrefixedMap<Value>> Iterator for PrefixIteratorWithInfo<S, Value> {
+	type Item = (S::KeyInfo, Value);
+
+	fn next(&mut self) -> Option<Self::Item> {
+		match sp_io::storage::next_key(&self.previous_key)
+			.filter(|n| n.starts_with(&self.prefix[..]))
+		{
+			Some(next_key) => {
+				let info = match S::decode_key_info_from_encoded_key(&mut &next_key[..]) {
+					Ok(info) => info,
+					Err(err) => {
+						crate::debug::error!(
+							"Info cannot be decoded at key: {:?}; error: {:?}", next_key, err
+						);
+						return None
+					}
+				};
+
+				let value = match unhashed::get(&next_key) {
+					Some(value) => value,
+					None => {
+						crate::debug::error!(
+							"Returned next_key has no decoded value: key: {:?}; next_key: {:?}",
+							self.previous_key, next_key
+						);
+						return None
+					}
+				};
+
+				self.previous_key = next_key;
+
+				Some((info, value))
+			},
+			None => None,
+		}
+	}
+}
+
 /// Trait for maps that store all its value after a unique prefix.
 ///
 /// By default the final prefix is:
 /// ```nocompile
 /// Twox128(module_prefix) ++ Twox128(storage_prefix)
 /// ```
-pub trait StoragePrefixedMap<Value: FullCodec> {
+pub trait StoragePrefixedMap<Value: FullCodec>: Sized {
+	/// The information contained in the encoded key.
+	type KeyInfo;
+
+	/// Convert the encoded key to the key info.
+	fn decode_key_info_from_encoded_key(encoded_key: &[u8]) -> Result<Self::KeyInfo, codec::Error> {
+		if encoded_key.len() > 32 {
+			Self::decode_key_info_from_encoded_key_without_prefix(&encoded_key[32..])
+		} else {
+			Err("invalid encoded key length".into())
+		}
+	}
+
+	/// Convert the encoded key without the storage prefix to the key info.
+	fn decode_key_info_from_encoded_key_without_prefix(encoded_key: &[u8])
+		-> Result<Self::KeyInfo, codec::Error>;
 
 	/// Module prefix. Used for generating final key.
 	fn module_prefix() -> &'static [u8];
@@ -434,15 +498,29 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 		final_key
 	}
 
-	/// Remove all value of the storage.
+	/// Remove all value of the prefixed storage.
 	fn remove_all() {
 		sp_io::storage::clear_prefix(&Self::final_prefix())
 	}
 
-	/// Iter over all value of the storage.
+	/// Iter over all value of the prefixed storage.
+	///
+	/// If a value fails to decode, the iteration stop immediately.
 	fn iter() -> PrefixIterator<Value> {
 		let prefix = Self::final_prefix();
 		PrefixIterator {
+			prefix: prefix.to_vec(),
+			previous_key: prefix.to_vec(),
+			phantom_data: Default::default(),
+		}
+	}
+
+	/// Iter over all value of the prefixed storage.
+	///
+	/// If a value or info fails to decode, the iteration stop immediately.
+	fn iter_with_key_info() -> PrefixIteratorWithInfo<Self, Value> {
+		let prefix = Self::final_prefix();
+		PrefixIteratorWithInfo {
 			prefix: prefix.to_vec(),
 			previous_key: prefix.to_vec(),
 			phantom_data: Default::default(),
@@ -506,6 +584,13 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			struct MyStorage;
 			impl StoragePrefixedMap<u64> for MyStorage {
+				// In this test the info will be the first byte of the key.
+				type KeyInfo = u8;
+				fn decode_key_info_from_encoded_key_without_prefix(encoded_key: &[u8])
+					-> Result<Self::KeyInfo, codec::Error>
+				{
+					Ok(encoded_key[0])
+				}
 				fn module_prefix() -> &'static [u8] {
 					b"MyModule"
 				}
@@ -536,6 +621,7 @@ mod test {
 
 			// test iteration
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(MyStorage::iter_with_key_info().collect::<Vec<_>>(), vec![]);
 
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u64);
 			unhashed::put(&[&k[..], &vec![1, 1][..]].concat(), &2u64);
@@ -543,6 +629,10 @@ mod test {
 			unhashed::put(&[&k[..], &vec![10][..]].concat(), &4u64);
 
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 2, 3, 4]);
+			assert_eq!(
+				MyStorage::iter_with_key_info().collect::<Vec<_>>(),
+				vec![(1, 1), (1, 2), (8, 3), (10, 4)]
+			);
 
 			// test removal
 			MyStorage::remove_all();
@@ -555,6 +645,7 @@ mod test {
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![]);
 			MyStorage::translate_values(|v: u32| v as u64).unwrap();
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 2]);
+			assert_eq!(MyStorage::iter_with_key_info().collect::<Vec<_>>(), vec![(1, 1), (8, 2)]);
 			MyStorage::remove_all();
 
 			// test migration 2
@@ -565,8 +656,16 @@ mod test {
 
 			// (contains some value that successfully decoded to u64)
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 2, 3]);
+			assert_eq!(
+				MyStorage::iter_with_key_info().collect::<Vec<_>>(),
+				vec![(1, 1), (1, 2), (8, 3)]
+			);
 			assert_eq!(MyStorage::translate_values(|v: u128| v as u64), Err(2));
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 3]);
+			assert_eq!(
+				MyStorage::iter_with_key_info().collect::<Vec<_>>(),
+				vec![(1, 1), (8, 3)]
+			);
 			MyStorage::remove_all();
 
 			// test that other values are not modified.
@@ -575,3 +674,73 @@ mod test {
 		});
 	}
 }
+
+#[cfg(test)]
+mod test_with_decl_storage {
+	use codec::{Codec, EncodeLike};
+
+	pub trait Trait {
+		type BlockNumber: Codec + EncodeLike + Default;
+		type Origin;
+	}
+
+	mod module {
+		#![allow(dead_code)]
+
+		use super::Trait;
+
+		crate::decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		}
+	}
+	use self::module::Module;
+
+	crate::decl_storage! {
+		trait Store for Module<T: Trait> as Example {
+			Map: map hasher(blake2_128_concat) u32 => u32;
+			DoubleMap: double_map hasher(blake2_128_concat) u32, hasher(twox_64_concat) u8 => u32;
+			DoubleMapPartialInfo:
+				double_map hasher(blake2_128_concat) u32, hasher(twox_128) u8 => u32;
+			DoubleMapPartialInfo2:
+				double_map hasher(twox_256) u32, hasher(twox_64_concat) u8 => u32;
+		}
+	}
+
+	#[test]
+	fn iteration_with_info_works() {
+		sp_io::TestExternalities::new(Default::default()).execute_with(|| {
+			Map::insert(1, 2);
+			Map::insert(3, 4);
+			Map::insert(5, 6);
+			assert_eq!(
+				Map::iter_with_key_info().collect::<Vec<_>>(),
+				vec![(5, 6), (1, 2), (3, 4)]
+			);
+
+			DoubleMap::insert(1, 2, 3);
+			DoubleMap::insert(4, 5, 6);
+			DoubleMap::insert(7, 8, 9);
+			assert_eq!(
+				DoubleMap::iter_with_key_info().collect::<Vec<_>>(),
+				vec![((4, 5), 6), ((7, 8), 9), ((1, 2), 3)]
+			);
+
+			DoubleMapPartialInfo::insert(1, 2, 3);
+			DoubleMapPartialInfo::insert(4, 5, 6);
+			DoubleMapPartialInfo::insert(7, 8, 9);
+			assert_eq!(
+				DoubleMapPartialInfo::iter_with_key_info().collect::<Vec<_>>(),
+				vec![((4, ()), 6), ((7, ()), 9), ((1, ()), 3)]
+			);
+
+			DoubleMapPartialInfo2::insert(1, 2, 3);
+			DoubleMapPartialInfo2::insert(4, 5, 6);
+			DoubleMapPartialInfo2::insert(7, 8, 9);
+			assert_eq!(
+				DoubleMapPartialInfo2::iter_with_key_info().collect::<Vec<_>>(),
+				vec![(((), 8), 9), (((), 2), 3), (((), 5), 6)]
+			);
+		})
+	}
+}
+

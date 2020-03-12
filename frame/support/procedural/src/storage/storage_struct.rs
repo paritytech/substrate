@@ -121,10 +121,25 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 			},
 			StorageLineTypeDef::Map(map) => {
 				let hasher = map.hasher.to_storage_hasher_struct();
+				let key_type = &map.key;
+				let hasher_info = quote!(
+					<
+						<Self as #scrate::#storage_generator_trait>::Hasher
+						as #scrate::StorageHasherInfo<#key_type>
+					>
+				);
 				quote!(
 					impl<#impl_trait> #scrate::storage::StoragePrefixedMap<#value_type>
 						for #storage_struct #optional_storage_where_clause
 					{
+						type KeyInfo = #hasher_info::Info;
+
+						fn decode_key_info_from_encoded_key_without_prefix(encoded_key: &[u8])
+							-> Result<Self::KeyInfo, codec::Error>
+						{
+							#hasher_info::decode_hash_and_then_info(&mut &encoded_key[..])
+						}
+
 						fn module_prefix() -> &'static [u8] {
 							#instance_or_inherent::PREFIX.as_bytes()
 						}
@@ -201,11 +216,42 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 			},
 			StorageLineTypeDef::DoubleMap(map) => {
 				let hasher1 = map.hasher1.to_storage_hasher_struct();
+				let key1_type = &map.key1;
+				let hasher1_info = quote!(
+					<
+						<Self as #scrate::#storage_generator_trait>::Hasher1
+						as #scrate::StorageHasherInfo<#key1_type>
+					>
+				);
+
 				let hasher2 = map.hasher2.to_storage_hasher_struct();
+				let key2_type = &map.key2;
+				let hasher2_info = quote!(
+					<
+						<Self as #scrate::#storage_generator_trait>::Hasher2
+						as #scrate::StorageHasherInfo<#key2_type>
+					>
+				);
+
 				quote!(
 					impl<#impl_trait> #scrate::storage::StoragePrefixedMap<#value_type>
 						for #storage_struct #optional_storage_where_clause
 					{
+						type KeyInfo = (
+							#hasher1_info::Info,
+							#hasher2_info::Info
+						);
+
+						fn decode_key_info_from_encoded_key_without_prefix(encoded_key: &[u8])
+							-> Result<Self::KeyInfo, codec::Error>
+						{
+							let mut input = encoded_key;
+							Ok((
+								#hasher1_info::decode_hash_and_then_info(&mut input)?,
+								#hasher2_info::decode_hash_and_then_info(&mut input)?
+							))
+						}
+
 						fn module_prefix() -> &'static [u8] {
 							#instance_or_inherent::PREFIX.as_bytes()
 						}
