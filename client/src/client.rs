@@ -243,10 +243,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	Block: BlockT,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
-	pub fn new<S: BuildStorage>(
+	pub fn new(
 		backend: Arc<B>,
 		executor: E,
-		build_genesis_storage: &S,
+		build_genesis_storage: &dyn BuildStorage,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,

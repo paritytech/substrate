@@ -19,7 +19,7 @@
 use crate::error;
 use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
 use crate::error::Error;
-use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
+use sc_chain_spec::ChainSpec;
 use log::{warn, info};
 use futures::{future, prelude::*};
 use sp_runtime::traits::{
@@ -38,19 +38,16 @@ use std::{io::{Read, Write, Seek}, pin::Pin};
 use sc_client_api::BlockBody;
 
 /// Build a chain spec json
-pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<String> where
-	G: RuntimeGenesis,
-	E: Extension,
-{
-	Ok(spec.to_json(raw)?)
+pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
+	Ok(spec.as_json(raw)?)
 }
 
 impl<
-	TBl, TRtApi, TGen, TCSExt, TBackend,
+	TBl, TRtApi, TBackend,
 	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp,
 	TExPool, TRpc, Backend
 > ServiceBuilderCommand for ServiceBuilder<
-	TBl, TRtApi, TGen, TCSExt,
+	TBl, TRtApi,
 	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
 	TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend
 > where

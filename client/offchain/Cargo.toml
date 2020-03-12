@@ -29,7 +29,7 @@ sc-keystore = { version = "2.0.0-alpha.2", path = "../keystore" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 hyper = "0.13.2"
-hyper-rustls = "0.19"
+hyper-rustls = "0.20"
 
 [dev-dependencies]
 env_logger = "0.7.0"
