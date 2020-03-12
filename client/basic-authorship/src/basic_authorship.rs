@@ -217,7 +217,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 			Either::Left((iterator, _)) => iterator,
 			Either::Right(_) => {
 				debug!(
-					"Consensus deadline reached while waiting transaction pool to reutnr pending set. Returning error!",
+					"Consensus deadline reached while waiting for transaction pool to return the pending set. Returning error!",
 				);
 				return Err(sp_blockchain::Error::TransactionPoolNotReady);
 			}
