@@ -88,7 +88,7 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(v: u32, n: u32) -> Re
 			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
 		}
 	}
-	
+
 	ValidatorCount::put(v);
 
 	Ok(())
@@ -121,9 +121,9 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> R
 			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
 		}
 	}
-	
+
 	ValidatorCount::put(1);
-	
+
 	// Start a new Era
 	let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 
@@ -176,9 +176,9 @@ pub fn create_nominator_with_validators<T: Trait>(v: u32) -> Result<(T::AccountI
 	// Create a nominator
 	let (_n_stash, n_controller) = create_stash_controller2::<T>(0)?;
 	Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), validator_lookups)?;
-	
+
 	ValidatorCount::put(v);
-	
+
 	// Start a new Era
 	let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 
@@ -358,7 +358,7 @@ benchmarks! {
 		MinimumValidatorCount::put(0);
 		create_validators_with_nominators_for_era::<T>(v, n)?;
 		let session_index = SessionIndex::one();
-	}: { 
+	}: {
 		let maybe_validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
 		assert!(maybe_validators.len() == v as usize);
 	}
@@ -370,7 +370,7 @@ benchmarks! {
 		MinimumValidatorCount::put(m);
 		create_validators_with_nominators_for_era::<T>(v, n)?;
 		let session_index = SessionIndex::one();
-	}: { 
+	}: {
 		let maybe_validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
 		assert!(maybe_validators.len() == v as usize);
 	}
