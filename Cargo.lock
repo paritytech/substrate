@@ -1589,7 +1589,6 @@ version = "2.0.0-alpha.3"
 dependencies = [
  "criterion 0.2.11",
  "frame-support",
- "hex-literal",
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "serde",
