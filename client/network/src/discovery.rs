@@ -773,6 +773,7 @@ where
 
 #[cfg(test)]
 mod tests {
+	use crate::config::ProtocolId;
 	use futures::prelude::*;
 	use libp2p::identity::Keypair;
 	use libp2p::Multiaddr;
@@ -810,13 +811,14 @@ mod tests {
 					upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
 				});
 
-			let behaviour = futures::executor::block_on({
+			let mut behaviour = futures::executor::block_on({
 				let user_defined = user_defined.clone();
 				let keypair_public = keypair.public();
 				async move {
 					DiscoveryBehaviour::new(keypair_public, user_defined, false, true, 50).await
 				}
 			});
+			behaviour.add_discovery(ProtocolId::from(libp2p::kad::protocol::DEFAULT_PROTO_NAME));
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 			let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
