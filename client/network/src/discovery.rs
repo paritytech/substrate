@@ -72,7 +72,7 @@ use libp2p::{swarm::toggle::Toggle};
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn, error};
-use std::{cmp, collections::{HashMap, VecDeque}, time::Duration};
+use std::{cmp, collections::{HashMap, HashSet, VecDeque}, time::Duration};
 use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
 
@@ -179,7 +179,11 @@ impl DiscoveryBehaviour {
 
 	/// Returns the list of nodes that we know exist in the network.
 	pub fn known_peers(&mut self) -> impl Iterator<Item = &PeerId> {
-		self.kademlias.values_mut().map(|k| k.kbuckets_entries()).flatten()
+		let mut set = HashSet::new();
+		for p in self.kademlias.values_mut().map(|k| k.kbuckets_entries()).flatten() {
+			set.insert(p);
+		}
+		set.into_iter()
 	}
 
 	/// Adds a hard-coded address for the given peer, that never expires.
