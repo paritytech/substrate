@@ -557,7 +557,7 @@ where
 		log::trace!("remote header proof request from {} ({:?})", peer, request.block);
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
-		let (header, proof) = match self.chain.header_proof(&BlockId::Hash(block)) {
+		let (header, proof) = match self.chain.header_proof(&BlockId::Number(block)) {
 			Ok((header, proof)) => (header.encode(), proof),
 			Err(error) => {
 				log::trace!("remote header proof request from {} ({:?}) failed with: {}",
