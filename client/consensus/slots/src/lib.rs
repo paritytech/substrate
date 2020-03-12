@@ -195,10 +195,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		let authorities_len = self.authorities_len(&epoch_data);
 
-		if authorities_len.is_none() ||
-			(!self.force_authoring() &&
-			 self.sync_oracle().is_offline() &&
-			 authorities_len.map(|a| a > 1).unwrap_or(false))
+		if !self.force_authoring() &&
+			self.sync_oracle().is_offline() &&
+			authorities_len.map(|a| a > 1).unwrap_or(false)
 		{
 			debug!(target: self.logging_target(), "Skipping proposal slot. Waiting for the network.");
 			telemetry!(
