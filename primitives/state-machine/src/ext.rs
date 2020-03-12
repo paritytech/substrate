@@ -474,11 +474,6 @@ where
 		42
 	}
 
-	// SCOTT
-	fn bench_usage_info(&self) -> UsageInfo {
-		self.backend.usage_info()
-	}
-
 	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
@@ -597,6 +592,12 @@ where
 		self.storage_transaction_cache.reset();
 		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
+
+	// SCOTT
+	fn bench_usage_info(&self) -> UsageInfo {
+		self.backend.usage_info()
+	}
+
 
 	fn commit(&mut self) {
 		self.overlay.commit_prospective();

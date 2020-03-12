@@ -29,6 +29,7 @@ use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend};
 use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
+use sp_stats::UsageInfo;
 
 type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
@@ -54,6 +55,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	state: RefCell<Option<DbState<B>>>,
 	db: Cell<Option<Arc<dyn KeyValueDB>>>,
 	genesis: <DbState<B> as StateBackend<HashFor<B>>>::Transaction,
+	usage_info: RefCell<UsageInfo>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -74,6 +76,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			path,
 			root: Cell::new(root),
 			genesis: Default::default(),
+			usage_info: RefCell::new(UsageInfo::empty()),
 		};
 
 		state.reopen()?;
@@ -132,7 +135,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.borrow().as_ref().ok_or_else(state_err)?.storage(key)
+		let state = self.state.borrow_mut();
+		let toto = state.as_ref().ok_or_else(state_err)?;
+		let mut usage_info = self.usage_info.try_borrow_mut().map_err(|_| "salut".to_string())?;
+		usage_info.reads.ops += 1;
+		usage_info.reads.bytes += 1;
+		toto.storage(key)
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<B::Hash>, Self::Error> {
@@ -263,6 +271,9 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				}
 			}
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
+			let mut usage_info = self.usage_info.try_borrow_mut().map_err(|_| "salut".to_string())?;
+			usage_info.writes.ops += 1;
+			usage_info.writes.bytes += 1;
 			self.root.set(storage_root);
 		} else {
 			return Err("Trying to commit to a closed db".into())
@@ -281,8 +292,9 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.state.borrow_mut().as_mut().map(|s| s.register_overlay_stats(stats));
 	}
 
-	fn usage_info(&self) -> sp_stats::UsageInfo {
-		self.state.borrow().as_ref().map_or(sp_stats::UsageInfo::empty(), |s| s.usage_info())
+	fn usage_info(&self) -> UsageInfo {
+		self.usage_info.clone().into_inner()
+		// self.state.borrow().as_ref().map_or(sp_stats::UsageInfo::empty(), |s| s.usage_info())
 	}
 }
 

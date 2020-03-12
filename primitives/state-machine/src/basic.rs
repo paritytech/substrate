@@ -282,11 +282,6 @@ impl Externalities for BasicExternalities {
 		Layout::<Blake2Hasher>::trie_root(self.inner.top.clone()).as_ref().into()
 	}
 
-	// SCOTT
-	fn bench_usage_info(&self) -> UsageInfo {
-		unimplemented!()
-	}
-
 	fn child_storage_root(
 		&mut self,
 		storage_key: ChildStorageKey,
@@ -305,7 +300,13 @@ impl Externalities for BasicExternalities {
 		Ok(None)
 	}
 
-	fn wipe(&mut self) {}
+	fn wipe(&mut self) {
+		unimplemented!("IN BASIC EXT")
+	}
+
+	fn bench_usage_info(&self) -> UsageInfo {
+		unimplemented!("IN BASIC USAGE");
+	}
 
 	fn commit(&mut self) {}
 }

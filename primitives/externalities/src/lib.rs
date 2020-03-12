@@ -196,10 +196,6 @@ pub trait Externalities: ExtensionStore {
 		storage_key: ChildStorageKey,
 	) -> Vec<u8>;
 
-
-	/// SCOTT
-	fn bench_usage_info(&self) -> UsageInfo;
-
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	/// `parent` is expects a SCALE encoded hash.
 	///
@@ -216,6 +212,9 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// The state will be reset to genesis.
 	fn wipe(&mut self);
+
+	/// SCOTT
+	fn bench_usage_info(&self) -> UsageInfo;
 
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	/// Benchmarking related functionality and shouldn't be used anywhere else!

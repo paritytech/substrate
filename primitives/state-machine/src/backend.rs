@@ -216,11 +216,13 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	///
 	/// Not all implementations are expected to be able to do this. In the
 	/// case when they don't, empty statistics is returned.
-	fn usage_info(&self) -> UsageInfo;
+	fn usage_info(&self) -> UsageInfo {
+		unimplemented!()
+	}
 
 	/// Wipe the state database.
 	fn wipe(&self) -> Result<(), Self::Error> {
-		unimplemented!()
+		unimplemented!("WIPE IN BACKEND TRAIT")
 	}
 
 	/// Commit given transaction to storage.
