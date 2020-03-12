@@ -9,7 +9,7 @@ jobs:
   build-substrate:
     name:                      Build linux Substrate
     runs-on:                   self-hosted
-    container:                 generalbeck/rust-builder:musl
+    container:                 generalbeck/rust-builder:alpine
     steps:
       - name:                  Checkout sources
         uses:                  actions/checkout@master
@@ -27,7 +27,7 @@ jobs:
           echo "_____ Post-processing binaries _____"
           rm -rf artifacts/*
           mkdir -p artifacts/
-          cp -v target/x86_64-unknown-linux-musl/release/substrate artifacts/substrate
+          cp -v target/release/substrate artifacts/substrate
       - name:                  Upload artifact
         uses:                  actions/upload-artifact@v1
         continue-on-error:     true
@@ -56,7 +56,7 @@ jobs:
           echo "_____ Post-processing binaries _____"
           rm -rf artifacts/*
           mkdir -p artifacts/
-          cp -v target/x86_64-unknown-linux-musl/release/subkey artifacts/subkey
+          cp -v target/release/subkey artifacts/subkey
       - name:                  Upload artifact
         uses:                  actions/upload-artifact@v1
         continue-on-error:     true
