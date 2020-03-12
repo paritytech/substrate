@@ -71,7 +71,7 @@ impl<'a, H, Block> IsDescendentOfBuilder<Block::Hash>
 /// Epoch data, distinguish whether it is genesis or not.
 ///
 /// Once an epoch is created, it must have a known `start_slot` and `end_slot`, which cannot be
-/// changed. Consensus engine can modify and other data into the epoch, if needed.
+/// changed. Consensus engine may modify any other data in the epoch, if needed.
 pub trait Epoch {
 	/// Descriptor for the next epoch.
 	type NextEpochDescriptor;
