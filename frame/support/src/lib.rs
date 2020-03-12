@@ -71,7 +71,8 @@ pub use self::hash::{
 	StorageHasher
 };
 pub use self::storage::{
-	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap
+	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap,
+	IterableStorageMap
 };
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};

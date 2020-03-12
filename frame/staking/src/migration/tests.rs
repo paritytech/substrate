@@ -1,6 +1,6 @@
 use crate::*;
 use crate::mock::*;
-use frame_support::storage::migration::*;
+use frame_support::storage::{migration::*, IterableStorageMap};
 use sp_core::hashing::blake2_256;
 use super::test_upgrade_from_master_dataset;
 use sp_runtime::traits::OnRuntimeUpgrade;
@@ -153,7 +153,7 @@ fn test_upgrade_from_master_works() {
 			assert_eq!(<Staking as Store>::ErasStartSessionIndex::iter().count(), 1);
 
 			// Check ErasStakers
-			assert_eq!(<Staking as Store>::ErasStakers::iter().count(), 2);
+			assert_eq!(<Staking as Store>::ErasStakers::iter_values().count(), 2);
 			assert_eq!(
 				<Staking as Store>::ErasStakers::get(current_era, old_staker_0),
 				old_staker_0_exposure
@@ -164,8 +164,8 @@ fn test_upgrade_from_master_works() {
 			);
 
 			// Check ErasStakersClipped
-			assert_eq!(<Staking as Store>::ErasStakersClipped::iter().count(), 2);
-			assert!(<Staking as Store>::ErasStakersClipped::iter().all(|exposure_clipped| {
+			assert_eq!(<Staking as Store>::ErasStakersClipped::iter_values().count(), 2);
+			assert!(<Staking as Store>::ErasStakersClipped::iter_values().all(|exposure_clipped| {
 				let max = <Test as Trait>::MaxNominatorRewardedPerValidator::get() as usize;
 				exposure_clipped.others.len() <= max
 			}));
@@ -179,7 +179,7 @@ fn test_upgrade_from_master_works() {
 			);
 
 			// Check ErasValidatorPrefs
-			assert_eq!(<Staking as Store>::ErasValidatorPrefs::iter().count(), 2);
+			assert_eq!(<Staking as Store>::ErasValidatorPrefs::iter_values().count(), 2);
 			assert_eq!(
 				<Staking as Store>::ErasValidatorPrefs::get(current_era, old_staker_0),
 				Staking::validators(old_staker_0)

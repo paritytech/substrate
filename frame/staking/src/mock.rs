@@ -25,10 +25,8 @@ use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use sp_core::{H256, crypto::key_types};
 use sp_io;
 use frame_support::{
-	assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue, StorageMap,
-	StorageDoubleMap,
-	traits::{Currency, Get, FindAuthor},
-	weights::Weight,
+	assert_ok, impl_outer_origin, parameter_types, StorageValue, StorageMap,
+	StorageDoubleMap, IterableStorageMap, traits::{Currency, Get, FindAuthor}, weights::Weight,
 };
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
@@ -373,7 +371,7 @@ pub fn check_exposure_all(era: EraIndex) {
 }
 
 pub fn check_nominator_all(era: EraIndex) {
-	<Nominators<Test>>::enumerate()
+	<Nominators<Test>>::iter()
 		.for_each(|(acc, _)| check_nominator_exposure(era, acc));
 }
 

@@ -399,6 +399,17 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 			KArg1: EncodeLike<K1>,
 			KArg2: EncodeLike<K2>,
 			V: codec::DecodeLength + Len;
+
+	/// Migrate an item with the given `key1` and `key2` from defunct `OldHasher1` and
+	/// `OldHasher2` to the current hashers.
+	///
+	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
+	fn migrate_keys<
+		OldHasher1: StorageHasher,
+		OldHasher2: StorageHasher,
+		KeyArg1: EncodeLike<K1>,
+		KeyArg2: EncodeLike<K2>,
+	>(key1: KeyArg1, key2: KeyArg2) -> Option<V>;
 }
 
 /// Iterator for prefixed map.
