@@ -75,7 +75,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, marker::PhantomData};
-use frame_support::weights::{GetDispatchInfo, WeighBlock, DispatchInfo};
+use frame_support::{storage::StorageValue, weights::{GetDispatchInfo, WeighBlock, DispatchInfo}};
 use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
 	traits::{
@@ -85,7 +85,7 @@ use sp_runtime::{
 	transaction_validity::TransactionValidity,
 };
 use sp_runtime::traits::ValidateUnsigned;
-use codec::{Codec, Encode, Decode, Compact};
+use codec::{Codec, Encode};
 use frame_system::{extrinsics_root, DigestOf};
 
 /// Trait that can be used to execute a block.
@@ -97,45 +97,6 @@ pub trait ExecuteBlock<Block: BlockT> {
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
-
-/// The key for [`LastRuntimeUpgrade`] in the storage.
-const LAST_RUNTIME_UPGRADE: &'static [u8] = b":last_runtime_upgrade:";
-
-/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade
-/// happened.
-#[derive(sp_runtime::RuntimeDebug, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(PartialEq))]
-struct LastRuntimeUpgrade {
-	spec_version: Compact<u32>,
-	spec_name: sp_runtime::RuntimeString,
-}
-
-impl Default for LastRuntimeUpgrade {
-	fn default() -> Self {
-		Self {
-			spec_version: 0.into(),
-			spec_name: "".into(),
-		}
-	}
-}
-
-impl LastRuntimeUpgrade {
-	/// Returns if the runtime was upgraded in comparison of `self` and `current`.
-	///
-	/// Checks if either the `spec_version` increased or the `spec_name` changed.
-	fn was_upgraded(&self, current: &sp_version::RuntimeVersion) -> bool {
-		current.spec_version > self.spec_version.0 || current.spec_name != self.spec_name
-	}
-}
-
-impl From<sp_version::RuntimeVersion> for LastRuntimeUpgrade {
-	fn from(version: sp_version::RuntimeVersion) -> Self {
-		Self {
-			spec_version: version.spec_version.into(),
-			spec_name: version.spec_name,
-		}
-	}
-}
 
 pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
@@ -240,19 +201,14 @@ where
 	}
 
 	/// Returns if the runtime was upgraded since the last time this function was called.
-	///
-	/// If no value for [`LAST_RUNTIME_UPGRADE`] key exists in storage, `spec_version = 0` and
-	/// `spec_name = ""` is assumed.
 	fn runtime_upgraded() -> bool {
-		let last = sp_io::storage::get(LAST_RUNTIME_UPGRADE)
-			.and_then(|v| LastRuntimeUpgrade::decode(&mut &v[..]).ok())
-			.unwrap_or_default();
+		let last = frame_system::LastRuntimeUpgrade::get();
 		let current = <System::Version as frame_support::traits::Get<_>>::get();
 
-		if last.was_upgraded(&current) {
-			let new = LastRuntimeUpgrade::from(current);
-			sp_io::storage::set(LAST_RUNTIME_UPGRADE, &new.encode());
-
+		if last.map(|v| v.was_upgraded(&current)).unwrap_or(true) {
+			frame_system::LastRuntimeUpgrade::put(
+				frame_system::LastRuntimeUpgradeInfo::from(current),
+			);
 			true
 		} else {
 			false
@@ -434,7 +390,7 @@ mod tests {
 		weights::Weight,
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
 	};
-	use frame_system::{self as system, Call as SystemCall, ChainContext};
+	use frame_system::{self as system, Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
 	use hex_literal::hex;
 
@@ -639,7 +595,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("8a22606e925c39bb0c8e8f6f5871c0aceab88a2fcff6b2d92660af8f6daff0b1").into(),
+					state_root: hex!("e97d724f480f6e3215bd5c24b9ba51250e2514ac1c99e563fd77bfb9d6100b1c").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -834,8 +790,9 @@ mod tests {
 	fn runtime_upgraded_should_work() {
 		new_test_ext(1).execute_with(|| {
 			RUNTIME_VERSION.with(|v| *v.borrow_mut() = Default::default());
+			// It should be added at genesis
+			assert!(frame_system::LastRuntimeUpgrade::exists());
 			assert!(!Executive::runtime_upgraded());
-			assert!(sp_io::storage::get(LAST_RUNTIME_UPGRADE).is_none());
 
 			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
 				spec_version: 1,
@@ -843,10 +800,8 @@ mod tests {
 			});
 			assert!(Executive::runtime_upgraded());
 			assert_eq!(
-				Ok(LastRuntimeUpgrade { spec_version: 1.into(), spec_name: "".into() }),
-				LastRuntimeUpgrade::decode(
-					&mut &sp_io::storage::get(LAST_RUNTIME_UPGRADE,
-				).unwrap_or_default()[..]),
+				Some(LastRuntimeUpgradeInfo { spec_version: 1.into(), spec_name: "".into() }),
+				frame_system::LastRuntimeUpgrade::get(),
 			);
 
 			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
@@ -856,10 +811,8 @@ mod tests {
 			});
 			assert!(Executive::runtime_upgraded());
 			assert_eq!(
-				Ok(LastRuntimeUpgrade { spec_version: 1.into(), spec_name: "test".into() }),
-				LastRuntimeUpgrade::decode(
-					&mut &sp_io::storage::get(LAST_RUNTIME_UPGRADE,
-				).unwrap_or_default()[..]),
+				Some(LastRuntimeUpgradeInfo { spec_version: 1.into(), spec_name: "test".into() }),
+				frame_system::LastRuntimeUpgrade::get(),
 			);
 
 			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
@@ -869,6 +822,13 @@ mod tests {
 				..Default::default()
 			});
 			assert!(!Executive::runtime_upgraded());
+
+			frame_system::LastRuntimeUpgrade::take();
+			assert!(Executive::runtime_upgraded());
+			assert_eq!(
+				Some(LastRuntimeUpgradeInfo { spec_version: 1.into(), spec_name: "test".into() }),
+				frame_system::LastRuntimeUpgrade::get(),
+			);
 		})
 	}
 
@@ -889,7 +849,7 @@ mod tests {
 				..Default::default()
 			};
 
-			let last = LastRuntimeUpgrade {
+			let last = LastRuntimeUpgradeInfo {
 				spec_version: spec_version.into(),
 				spec_name: spec_name.into(),
 			};
