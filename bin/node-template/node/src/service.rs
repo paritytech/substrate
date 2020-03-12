@@ -6,7 +6,6 @@ use sc_client::LongestChain;
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use sc_service::{error::Error as ServiceError, AbstractService, Configuration, ServiceBuilder};
 use sp_inherents::InherentDataProviders;
-use sc_network::construct_simple_protocol;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
@@ -79,15 +78,14 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 				client_ = Some(client.clone());
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
 				let pool = sc_transaction_pool::BasicPool::new(config, Arc::new(pool_api));
-				pool_ = Some(pool.pool().clone());
+				pool_ = Some(pool.0.pool().clone());
 
 				Ok(pool)
 			})?
 			.with_import_queue(|_config, client, _select_chain, _txpool| {
 				Ok(import_queue(Box::new(client.clone()), client))
 			})?
-			.with_network_protocol(|_| Ok(NodeProtocol::new()))?
-			.with_rpc_extensions(|_, _a, _b, _c, _d| {
+			.with_rpc_extensions(|_| {
 				let mut io = jsonrpc_core::IoHandler::default();
 				let (sender, receiver) = futures::channel::mpsc::channel(100);
 				stream = Some(receiver);
@@ -103,10 +101,10 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 
 	let service = builder.build()?;
 
-	let proposer = sc_basic_authorship::ProposerFactory {
-		client: service.client(),
-		transaction_pool: service.transaction_pool(),
-	};
+	let proposer = sc_basic_authorship::ProposerFactory::new(
+		service.client(),
+		service.transaction_pool(),
+	);
 
 	let future = run_manual_seal(
 		Box::new(client_.unwrap().clone()),

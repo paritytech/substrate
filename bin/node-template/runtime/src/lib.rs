@@ -169,24 +169,24 @@ impl system::Trait for Runtime {
 	type AccountData = balances::AccountData<Balance>;
 }
 
-//impl aura::Trait for Runtime {
-//	type AuthorityId = AuraId;
-//}
-
-//impl grandpa::Trait for Runtime {
-//	type Event = Event;
-//}
+// impl aura::Trait for Runtime {
+// 	type AuthorityId = AuraId;
+// }
+//
+// impl grandpa::Trait for Runtime {
+// 	type Event = Event;
+// }
 
 parameter_types! {
 	pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
 }
 
-//impl timestamp::Trait for Runtime {
-//	/// A timestamp: milliseconds since the unix epoch.
-//	type Moment = u64;
-//	type OnTimestampSet = Aura;
-//	type MinimumPeriod = MinimumPeriod;
-//}
+impl timestamp::Trait for Runtime {
+	/// A timestamp: milliseconds since the unix epoch.
+	type Moment = u64;
+	type OnTimestampSet = ();
+	type MinimumPeriod = MinimumPeriod;
+}
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 500;
@@ -236,10 +236,11 @@ construct_runtime!(
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 //		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 //		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
-		Indices: indices::{Module, Call, Storage, Event<T>, Config<T>},
+// 		Indices: indices::{Module, Call, Storage, Event<T>, Config<T>},
 		Balances: balances::{Module, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: transaction_payment::{Module, Storage},
 		Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
+		RandomnessCollectiveFlip: randomness_collective_flip::{Module, Call, Storage},
 		// Used for the module template in `./template.rs`
 		TemplateModule: template::{Module, Call, Storage, Event<T>},
 	}
