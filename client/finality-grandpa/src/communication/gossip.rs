@@ -91,6 +91,7 @@ use sp_finality_grandpa::AuthorityId;
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug};
 use futures::channel::mpsc;
+use prometheus_endpoint::{CounterVec, Opts, PrometheusError, register, Registry, U64};
 use rand::seq::SliceRandom;
 
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
@@ -1197,11 +1198,34 @@ impl<Block: BlockT> Inner<Block> {
 	}
 }
 
+// Prometheus metrics for [`GossipValidator`].
+pub(crate) struct Metrics {
+	messages_validated: CounterVec<U64>,
+}
+
+impl Metrics {
+	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			messages_validated: register(
+				CounterVec::new(
+					Opts::new(
+						"finality_grandpa_communication_gossip_validator_messages",
+						"Number of messages validated by the finality grandpa gossip validator."
+					),
+					&["message", "action"]
+				)?,
+				registry,
+			)?,
+		})
+	}
+}
+
 /// A validator for GRANDPA gossip messages.
 pub(super) struct GossipValidator<Block: BlockT> {
 	inner: parking_lot::RwLock<Inner<Block>>,
 	set_state: environment::SharedVoterSetState<Block>,
 	report_sender: mpsc::UnboundedSender<PeerReport>,
+	metrics: Option<Metrics>,
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
@@ -1211,12 +1235,27 @@ impl<Block: BlockT> GossipValidator<Block> {
 	pub(super) fn new(
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
+		prometheus_registry: Option<&Registry>,
 	) -> (GossipValidator<Block>, mpsc::UnboundedReceiver<PeerReport>)	{
+		let metrics = match prometheus_registry {
+			Some(registry) => {
+				match Metrics::register(registry) {
+					Ok(metrics) => Some(metrics),
+					Err(e) => {
+						debug!(target: "afg", "Failed to register metrics: {:?}", e);
+						None
+					}
+				}
+			},
+			None => None,
+		};
+
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
 			set_state,
 			report_sender: tx,
+			metrics: metrics,
 		};
 
 		(val, rx)
@@ -1279,12 +1318,21 @@ impl<Block: BlockT> GossipValidator<Block> {
 		let mut broadcast_topics = Vec::new();
 		let mut peer_reply = None;
 
+		// Message name for Prometheus metric recording.
+		let message_name;
+
 		let action = {
 			match GossipMessage::<Block>::decode(&mut data) {
-				Ok(GossipMessage::Vote(ref message))
-					=> self.inner.write().validate_round_message(who, message),
-				Ok(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
+				Ok(GossipMessage::Vote(ref message)) => {
+					message_name = Some("vote");
+					self.inner.write().validate_round_message(who, message)
+				},
+				Ok(GossipMessage::Commit(ref message)) => {
+					message_name = Some("commit");
+					self.inner.write().validate_commit_message(who, message)
+				},
 				Ok(GossipMessage::Neighbor(update)) => {
+					message_name = Some("neighbor");
 					let (topics, action, catch_up, report) = self.inner.write().import_neighbor_message(
 						who,
 						update.into_neighbor_packet(),
@@ -1298,9 +1346,12 @@ impl<Block: BlockT> GossipValidator<Block> {
 					peer_reply = catch_up;
 					action
 				}
-				Ok(GossipMessage::CatchUp(ref message))
-					=> self.inner.write().validate_catch_up_message(who, message),
+				Ok(GossipMessage::CatchUp(ref message)) => {
+					message_name = Some("catch_up");
+					self.inner.write().validate_catch_up_message(who, message)
+				},
 				Ok(GossipMessage::CatchUpRequest(request)) => {
+					message_name = Some("catch_up_request");
 					let (reply, action) = self.inner.write().handle_catch_up_request(
 						who,
 						request,
@@ -1311,6 +1362,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 					action
 				}
 				Err(e) => {
+					message_name = None;
 					debug!(target: "afg", "Error decoding message: {}", e.what());
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 
@@ -1319,6 +1371,16 @@ impl<Block: BlockT> GossipValidator<Block> {
 				}
 			}
 		};
+
+		// Prometheus metric recording.
+		if let (Some(metrics), Some(message_name)) = (&self.metrics, message_name) {
+			let action_name = match action {
+				Action::Keep(_, _) => "keep",
+				Action::ProcessAndDiscard(_, _) => "process_and_discard",
+				Action::Discard(_) => "discard",
+			};
+			metrics.messages_validated.with_label_values(&[message_name, action_name]).inc();
+		}
 
 		(action, broadcast_topics, peer_reply)
 	}
