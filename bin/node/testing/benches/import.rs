@@ -152,7 +152,7 @@ fn bench_account_ed25519(c: &mut Criterion) {
 				|| {
 					let context = bench_db.create_context(*profile);
 					context.client.runtime_version_at(&BlockId::Number(0))
-						.expect("Failed to get runtime version")
+						.expect("Failed to get runtime version");
 						.spec_version;
 
 					context
