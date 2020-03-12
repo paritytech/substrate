@@ -1102,7 +1102,6 @@ decl_module! {
 			let mut value = value.min(ledger.active);
 
 			if !value.is_zero() {
-				let stash = &ledger.stash;
 				ledger.active -= value;
 
 				// Avoid there being a dust balance left in the staking system.
@@ -1115,7 +1114,7 @@ decl_module! {
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
-				Self::deposit_event(RawEvent::Unbonded(stash.clone(), value));
+				Self::deposit_event(RawEvent::Unbonded(ledger.stash.clone(), value));
 			}
 		}
 
@@ -1141,7 +1140,7 @@ decl_module! {
 		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			let (stash, old_total) = (ledger.stash.clone(), ledger.total.clone());
+			let (stash, old_total) = (ledger.stash.clone(), ledger.total);
 			if let Some(current_era) = Self::current_era() {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
