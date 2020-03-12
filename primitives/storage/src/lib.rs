@@ -456,10 +456,13 @@ impl<T> IntoIterator for ChildrenMap<T> {
 const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default:";
 
 /// Information related to change to apply on a whole child trie.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub enum ChildChange {
 	/// Update to content of child trie.
 	Update,
 	/// The child trie allow to delete base on keyspace only.
+	/// This deletion means that any joined key delta will be ignored.
 	BulkDeleteByKeyspace(Vec<u8>),
 }
 

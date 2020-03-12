@@ -977,7 +977,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				.trigger(
 					&notify_import.hash,
 					storage_changes.0.into_iter(),
-					storage_changes.1.into_iter().map(|(sk, v, _ci)| (sk, v.into_iter())),
+					// TODO trigger batch delete
+					storage_changes.1.into_iter().map(|(sk, child)| (sk, child.values.into_iter())),
 				);
 		}
 

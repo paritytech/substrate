@@ -461,14 +461,15 @@ where
 		} else {
 
 			if let Some(child_info) = self.overlay.default_child_info(storage_key).cloned() {
+				// TODO manage delete!!!
 				let (root, _is_empty, _) = {
 					let delta = self.overlay.committed.children_default.get(storage_key)
 						.into_iter()
-						.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
+						.flat_map(|child| child.values.clone().into_iter().map(|(k, v)| (k, v.value)))
 						.chain(
 							self.overlay.prospective.children_default.get(storage_key)
 								.into_iter()
-								.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
+								.flat_map(|child| child.values.clone().into_iter().map(|(k, v)| (k, v.value)))
 						);
 
 					self.backend.child_storage_root(&child_info, delta)

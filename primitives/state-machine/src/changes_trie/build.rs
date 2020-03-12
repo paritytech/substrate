@@ -108,9 +108,10 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 
 	let mut children_info = BTreeSet::<ChildInfo>::new();
 	let mut children_result = BTreeMap::new();
-	for (_storage_key, (_map, child_info)) in changes.prospective.children_default.iter()
+	for (_storage_key, child) in changes.prospective.children_default.iter()
 		.chain(changes.committed.children_default.iter()) {
-		children_info.insert(child_info.clone());
+		// TODO manage child.change type here to add deletion
+		children_info.insert(child.info.clone());
 	}
 	for child_info in children_info {
 		let child_index = ChildIndex::<Number> {
@@ -141,8 +142,8 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	let (committed, prospective) = if let Some(child_info) = child_info.as_ref() {
 		match child_info.child_type() {
 			ChildType::ParentKeyId => (
-				changes.committed.children_default.get(child_info.storage_key()).map(|c| &c.0),
-				changes.prospective.children_default.get(child_info.storage_key()).map(|c| &c.0),
+				changes.committed.children_default.get(child_info.storage_key()).map(|c| &c.values),
+				changes.prospective.children_default.get(child_info.storage_key()).map(|c| &c.values),
 			),
 		}
 	} else {
@@ -349,7 +350,7 @@ mod test {
 	use crate::InMemoryBackend;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
-	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
+	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet, ChildChangeSet};
 	use super::*;
 
 	fn prepare_for_build(zero: u64) -> (
@@ -432,18 +433,26 @@ mod test {
 				}),
 			].into_iter().collect(),
 				children_default: vec![
-					(child_trie_key1.clone(), (vec![
-						(vec![100], OverlayedValue {
-							value: Some(vec![200]),
-							extrinsics: Some(vec![0, 2].into_iter().collect())
-						})
-					].into_iter().collect(), child_info_1.clone())),
-					(child_trie_key2, (vec![
-						(vec![100], OverlayedValue {
-							value: Some(vec![200]),
-							extrinsics: Some(vec![0, 2].into_iter().collect())
-						})
-					].into_iter().collect(), child_info_2)),
+					(child_trie_key1.clone(), ChildChangeSet {
+						info: child_info_1.clone(),
+						change: Default::default(),
+						values: vec![
+							(vec![100], OverlayedValue {
+								value: Some(vec![200]),
+								extrinsics: Some(vec![0, 2].into_iter().collect())
+							})
+						].into_iter().collect(),
+					}),
+					(child_trie_key2, ChildChangeSet {
+						info: child_info_2,
+						change: Default::default(),
+						values: vec![
+							(vec![100], OverlayedValue {
+								value: Some(vec![200]),
+								extrinsics: Some(vec![0, 2].into_iter().collect())
+							})
+						].into_iter().collect(),
+					}),
 				].into_iter().collect()
 			},
 			committed: OverlayedChangeSet { top: vec![
@@ -461,12 +470,16 @@ mod test {
 				}),
 			].into_iter().collect(),
 				children_default: vec![
-					(child_trie_key1, (vec![
-						(vec![100], OverlayedValue {
-							value: Some(vec![202]),
-							extrinsics: Some(vec![3].into_iter().collect())
-						})
-					].into_iter().collect(), child_info_1)),
+					(child_trie_key1, ChildChangeSet {
+						info: child_info_1,
+						change: Default::default(),
+						values: vec![
+							(vec![100], OverlayedValue {
+								value: Some(vec![202]),
+								extrinsics: Some(vec![3].into_iter().collect())
+							})
+						].into_iter().collect()
+					}),
 				].into_iter().collect(),
 			},
 			collect_extrinsics: true,
