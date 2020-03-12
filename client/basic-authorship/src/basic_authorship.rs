@@ -212,14 +212,14 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 		let mut unqueue_invalid = Vec::new();
 		let pending_iterator = match executor::block_on(future::select(
 			self.transaction_pool.ready_at(Some(self.parent_number)),
-			futures_timer::Delay::new(deadline - (self.now)()),
+			futures_timer::Delay::new((deadline - (self.now)()) / 8),
 		)) {
 			Either::Left((iterator, _)) => iterator,
 			Either::Right(_) => {
-				debug!(
-					"Consensus deadline reached while waiting for transaction pool to return the pending set. Returning error!",
+				log::warn!(
+					"Timeout fired waiting for transaction pool to be ready. Proceeding to block production anyway.",
 				);
-				return Err(sp_blockchain::Error::TransactionPoolNotReady);
+				self.transaction_pool.ready()
 			}
 		};
 
