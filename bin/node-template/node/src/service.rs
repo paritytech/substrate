@@ -106,10 +106,11 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 		service.transaction_pool(),
 	);
 
+	let client = client_.unwrap();
 	let future = run_manual_seal(
-		Box::new(client_.unwrap().clone()),
+		Box::new(client.clone()),
 		proposer,
-		backend_.unwrap().clone(),
+		client,
 		pool_.unwrap().clone(),
 		stream.unwrap(),
 		select_chain_.unwrap(),

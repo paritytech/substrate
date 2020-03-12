@@ -30,7 +30,7 @@ use sp_consensus::{
 };
 use sp_inherents::InherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justification};
-use sc_client_api::backend::Backend as ClientBackend;
+use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use futures::prelude::*;
 use sp_api::{TransactionFor, ProvideRuntimeApi};
 use sc_transaction_pool::txpool;
@@ -46,6 +46,7 @@ use seal_new_block::{seal_new_block, SealBlockParams};
 pub use error::Error;
 pub use rpc::{EngineCommand, CreatedBlock};
 use serde::export::PhantomData;
+use sp_blockchain::HeaderBackend;
 
 /// The synchronous block-import worker of the engine.
 pub struct ManualSealBlockImport<C, I> {
@@ -118,10 +119,10 @@ pub fn import_queue<B: BlockT, C: ProvideRuntimeApi<B> + 'static>(
 }
 
 /// Creates the background authorship task for the manual seal engine.
-pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
+pub async fn run_manual_seal<B, CB, E, F, A, C, S, T>(
 	mut block_import: BoxBlockImport<B, T>,
 	mut env: E,
-	backend: Arc<CB>,
+	client: Arc<F>,
 	pool: Arc<txpool::Pool<A>>,
 	mut seal_block_channel: S,
 	select_chain: C,
@@ -129,6 +130,7 @@ pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
 )
 	where
 		B: BlockT + 'static,
+		F: HeaderBackend<B> + Finalizer<B, CB> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
 		E::Error: std::fmt::Display,
@@ -156,7 +158,7 @@ pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
 						block_import: &mut block_import,
 						inherent_data_provider: &inherent_data_providers,
 						pool: pool.clone(),
-						backend: backend.clone(),
+						client: client.clone(),
 					}
 				).await;
 			}
@@ -166,7 +168,8 @@ pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
 						hash,
 						sender,
 						justification,
-						backend: backend.clone(),
+						finalizer: client.clone(),
+						_phantom: PhantomData,
 					}
 				).await
 			}
@@ -177,10 +180,10 @@ pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
 /// runs the background authorship task for the instant seal engine.
 /// instant-seal creates a new block for every transaction imported into
 /// the transaction pool.
-pub async fn run_instant_seal<B, CB, E, A, C, T>(
+pub async fn run_instant_seal<B, CB, E, F, A, C, T>(
 	block_import: BoxBlockImport<B, T>,
 	env: E,
-	backend: Arc<CB>,
+	backend: Arc<F>,
 	pool: Arc<txpool::Pool<A>>,
 	select_chain: C,
 	inherent_data_providers: InherentDataProviders,
@@ -188,6 +191,7 @@ pub async fn run_instant_seal<B, CB, E, A, C, T>(
 	where
 		A: txpool::ChainApi<Block=B, Hash=<B as BlockT>::Hash> + 'static,
 		B: BlockT + 'static,
+		F: HeaderBackend<B> + Finalizer<B, CB> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
 		E::Error: std::fmt::Display,
