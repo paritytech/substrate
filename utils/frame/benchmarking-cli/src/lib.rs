@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{fmt::Debug, path::PathBuf};
-use sp_runtime::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
+use std::fmt::Debug;
+use sp_runtime::{traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sc_client::StateMachine;
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod, VersionInfo};
 use sc_client_db::BenchmarkingState;
-use sc_service::{RuntimeGenesis, ChainSpecExtension, Configuration, ChainSpec};
+use sc_service::{Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use codec::{Encode, Decode};
 use frame_benchmarking::BenchmarkResults;
@@ -82,13 +82,11 @@ impl BenchmarkCmd {
 	}
 
 	/// Runs the command and benchmarks the chain.
-	pub fn run<G, E, BB, ExecDispatch>(
+	pub fn run<BB, ExecDispatch>(
 		self,
-		config: Configuration<G, E>,
+		config: Configuration,
 	) -> sc_cli::Result<()>
 	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
 		BB: BlockT + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
@@ -164,21 +162,16 @@ impl BenchmarkCmd {
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E>(
+	pub fn update_config(
 		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: impl FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		mut config: &mut Configuration,
+		spec_factory: impl FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 		_version: &VersionInfo,
-	) -> sc_cli::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+	) -> sc_cli::Result<()>
 	{
 		// Configure chain spec.
 		let chain_key = self.shared_params.chain.clone().unwrap_or("dev".into());
-		let spec = match spec_factory(&chain_key)? {
-			Some(spec) => spec,
-			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
-		};
+		let spec = spec_factory(&chain_key)?;
 		config.chain_spec = Some(spec);
 
 		// Make sure to configure keystore.
