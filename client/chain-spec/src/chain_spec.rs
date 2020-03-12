@@ -26,6 +26,7 @@ use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild
 use sp_runtime::BuildStorage;
 use serde_json as json;
 use crate::RuntimeGenesis;
+use crate::extension::GetExtension;
 use sc_network::Multiaddr;
 use sc_telemetry::TelemetryEndpoints;
 
@@ -269,9 +270,9 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 	}
 }
 
-impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
+impl<G: RuntimeGenesis, E: serde::Serialize + Clone> ChainSpec<G, E> {
 	/// Dump to json string.
-	pub fn to_json(self, raw: bool) -> Result<String, String> {
+	pub fn as_json(&self, raw: bool) -> Result<String, String> {
 		#[derive(Serialize, Deserialize)]
 		struct Container<G, E> {
 			#[serde(flatten)]
@@ -306,11 +307,57 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 			(_, genesis) => genesis,
 		};
 		let container = Container {
-			client_spec: self.client_spec,
+			client_spec: self.client_spec.clone(),
 			genesis,
 		};
 		json::to_string_pretty(&container)
 			.map_err(|e| format!("Error generating spec json: {}", e))
+	}
+}
+
+impl<G, E> crate::ChainSpec for ChainSpec<G, E>
+where
+	G: RuntimeGenesis,
+	E: GetExtension + serde::Serialize + Clone,
+{
+	fn boot_nodes(&self) -> &[String] {
+		ChainSpec::boot_nodes(self)
+	}
+
+	fn name(&self) -> &str {
+		ChainSpec::name(self)
+	}
+
+	fn id(&self) -> &str {
+		ChainSpec::id(self)
+	}
+
+	fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints> {
+		ChainSpec::telemetry_endpoints(self)
+	}
+
+	fn protocol_id(&self) -> Option<&str> {
+		ChainSpec::protocol_id(self)
+	}
+
+	fn properties(&self) -> Properties {
+		ChainSpec::properties(self)
+	}
+
+	fn add_boot_node(&mut self, addr: Multiaddr) {
+		ChainSpec::add_boot_node(self, addr)
+	}
+
+	fn extensions(&self) -> &dyn GetExtension {
+		ChainSpec::extensions(self) as &dyn GetExtension
+	}
+
+	fn as_json(&self, raw: bool) -> Result<String, String> {
+		ChainSpec::as_json(self, raw)
+	}
+
+	fn as_storage_builder(&self) -> &dyn BuildStorage {
+		self
 	}
 }
 
@@ -344,7 +391,7 @@ mod tests {
 			PathBuf::from("./res/chain_spec.json")
 		).unwrap();
 
-		assert_eq!(spec1.to_json(false), spec2.to_json(false));
+		assert_eq!(spec1.as_json(false), spec2.as_json(false));
 	}
 
 	#[derive(Debug, Serialize, Deserialize)]

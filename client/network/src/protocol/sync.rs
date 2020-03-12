@@ -28,7 +28,7 @@
 //!
 
 use blocks::BlockCollection;
-use sp_blockchain::{Error as ClientError, Info as BlockchainInfo};
+use sp_blockchain::{Error as ClientError, Info as BlockchainInfo, HeaderMetadata};
 use sp_consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
 	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
@@ -459,7 +459,7 @@ impl<B: BlockT> ChainSync<B> {
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let client = &self.client;
 		self.extra_justifications.schedule((*hash, number), |base, block| {
-			client.is_descendent_of(base, block)
+			is_descendent_of(&**client, base, block)
 		})
 	}
 
@@ -467,7 +467,7 @@ impl<B: BlockT> ChainSync<B> {
 	pub fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let client = &self.client;
 		self.extra_finality_proofs.schedule((*hash, number), |base, block| {
-			client.is_descendent_of(base, block)
+			is_descendent_of(&**client, base, block)
 		})
 	}
 
@@ -693,7 +693,7 @@ impl<B: BlockT> ChainSync<B> {
 							}).collect()
 						}
 						PeerSyncState::AncestorSearch(num, state) => {
-							let matching_hash = match (blocks.get(0), self.client.block_hash(*num)) {
+							let matching_hash = match (blocks.get(0), self.client.hash(*num)) {
 								(Some(block), Ok(maybe_our_block_hash)) => {
 									trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", num, block.hash, who);
 									maybe_our_block_hash.filter(|x| x == &block.hash)
@@ -1001,7 +1001,7 @@ impl<B: BlockT> ChainSync<B> {
 	pub fn on_block_finalized(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let client = &self.client;
 		let r = self.extra_finality_proofs.on_block_finalized(hash, number, |base, block| {
-			client.is_descendent_of(base, block)
+			is_descendent_of(&**client, base, block)
 		});
 
 		if let Err(err) = r {
@@ -1010,7 +1010,7 @@ impl<B: BlockT> ChainSync<B> {
 
 		let client = &self.client;
 		let r = self.extra_justifications.on_block_finalized(hash, number, |base, block| {
-			client.is_descendent_of(base, block)
+			is_descendent_of(&**client, base, block)
 		});
 
 		if let Err(err) = r {
@@ -1381,6 +1381,21 @@ fn fork_sync_request<B: BlockT>(
 		}
 	}
 	None
+}
+
+/// Returns `true` if the given `block` is a descendent of `base`.
+fn is_descendent_of<Block, T>(client: &T, base: &Block::Hash, block: &Block::Hash) -> sp_blockchain::Result<bool>
+	where
+		Block: BlockT,
+		T: HeaderMetadata<Block, Error = sp_blockchain::Error> + ?Sized,
+{
+	if base == block {
+		return Ok(false);
+	}
+
+	let ancestor = sp_blockchain::lowest_common_ancestor(client, *block, *base)?;
+
+	Ok(ancestor.hash == *base)
 }
 
 #[cfg(test)]

@@ -220,7 +220,7 @@ decl_module! {
 			Self::update_lock(T::Lookup::lookup(target)?)
 		}
 
-		/// Create a vested transfer. 
+		/// Create a vested transfer.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -245,12 +245,12 @@ decl_module! {
 
 			let who = T::Lookup::lookup(target)?;
 			ensure!(!Vesting::<T>::contains_key(&who), Error::<T>::ExistingVestingSchedule);
-			
+
 			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
 
 			Self::add_vesting_schedule(&who, schedule.locked, schedule.per_block, schedule.starting_block)
 				.expect("user does not have an existing vesting schedule; q.e.d.");
-			
+
 			Ok(())
 		}
 	}
@@ -452,54 +452,6 @@ mod tests {
 			}.assimilate_storage(&mut t).unwrap();
 			t.into()
 		}
-	}
-
-	#[test]
-	fn vesting_info_via_migration_should_work() {
-		let mut s = Storage::default();
-		use hex_literal::hex;
-		// A dump of data from the previous version for which we know account 6 vests 30 of its 60
-		// over 5  blocks from block 3.
-		let data = vec![
-			(hex!["26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac"].to_vec(), hex!["0100000000000000"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850"].to_vec(), hex!["02000000"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7"].to_vec(), hex!["08000000000000000000000000"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc"].to_vec(), hex!["4545454545454545454545454545454545454545454545454545454545454545"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef7a44704b568d21667356a5a050c11874681e47a19e6b29b0a65b9591762ce5143ed30d0261e5d24a3201752506b20f15c"].to_vec(), hex!["4545454545454545454545454545454545454545454545454545454545454545"].to_vec()),
-			(hex!["3a636f6465"].to_vec(), hex![""].to_vec()),
-			(hex!["3a65787472696e7369635f696e646578"].to_vec(), hex!["00000000"].to_vec()),
-			(hex!["3a686561707061676573"].to_vec(), hex!["0800000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f218f26c73add634897550b4003b26bc61dbd7d0b561a41d23c2a469ad42fbd70d5438bae826f6fd607413190c37c363b"].to_vec(), hex!["046d697363202020200300000000000000ffffffffffffffff04"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f218f26c73add634897550b4003b26bc66cddb367afbd583bb48f9bbd7d5ba3b1d0738b4881b1cddd38169526d8158137"].to_vec(), hex!["0474786665657320200300000000000000ffffffffffffffff01"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f218f26c73add634897550b4003b26bc6e88b43fded6323ef02ffeffbd8c40846ee09bf316271bd22369659c959dd733a"].to_vec(), hex!["08616c6c20202020200300000000000000ffffffffffffffff1f64656d6f63726163ffffffffffffffff030000000000000002"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f3c22813def93ef32c365b55cb92f10f91dbd7d0b561a41d23c2a469ad42fbd70d5438bae826f6fd607413190c37c363b"].to_vec(), hex!["0500000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80"].to_vec(), hex!["d200000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f5f27b51b5ec208ee9cb25b55d8728243b8788bb218b185b63e3e92653953f29b6b143fb8cf5159fc908632e6fe490501"].to_vec(), hex!["1e0000000000000006000000000000000200000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b41dbd7d0b561a41d23c2a469ad42fbd70d5438bae826f6fd607413190c37c363b"].to_vec(), hex!["0500000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b46cddb367afbd583bb48f9bbd7d5ba3b1d0738b4881b1cddd38169526d8158137"].to_vec(), hex!["1e00000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4b8788bb218b185b63e3e92653953f29b6b143fb8cf5159fc908632e6fe490501"].to_vec(), hex!["3c00000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4e88b43fded6323ef02ffeffbd8c40846ee09bf316271bd22369659c959dd733a"].to_vec(), hex!["1400000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4e96760d274653a39b429a87ebaae9d3aa4fdf58b9096cf0bebc7c4e5a4c2ed8d"].to_vec(), hex!["2800000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4effb728943197fd12e694cbf3f3ede28fbf7498b0370c6dfa0013874b417c178"].to_vec(), hex!["3200000000000000"].to_vec()),
-			(hex!["f2794c22e353e9a839f12faab03a911b7f17cdfbfa73331856cca0acddd7842e"].to_vec(), hex!["00000000"].to_vec()),
-			(hex!["f2794c22e353e9a839f12faab03a911bbdcb0c5143a8617ed38ae3810dd45bc6"].to_vec(), hex!["00000000"].to_vec()),
-			(hex!["f2794c22e353e9a839f12faab03a911be2f6cb0456905c189bcb0458f9440f13"].to_vec(), hex!["00000000"].to_vec()),
-		];
-		s.top = data.into_iter().collect();
-		sp_io::TestExternalities::new(s).execute_with(|| {
-			Balances::on_runtime_upgrade();
-			assert_eq!(Balances::free_balance(6), 60);
-			assert_eq!(Balances::usable_balance(&6), 30);
-			System::set_block_number(2);
-			assert_ok!(Vesting::vest(Origin::signed(6)));
-			assert_eq!(Balances::usable_balance(&6), 30);
-			System::set_block_number(3);
-			assert_ok!(Vesting::vest(Origin::signed(6)));
-			assert_eq!(Balances::usable_balance(&6), 36);
-			System::set_block_number(4);
-			assert_ok!(Vesting::vest(Origin::signed(6)));
-			assert_eq!(Balances::usable_balance(&6), 42);
-		});
 	}
 
 	#[test]

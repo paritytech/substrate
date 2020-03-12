@@ -31,15 +31,12 @@ impl InspectCmd {
 	}
 
 	/// Parse CLI arguments and initialize given config.
-	pub fn update_config<G, E>(
+	pub fn update_config(
 		&self,
-		mut config: &mut sc_service::config::Configuration<G, E>,
-		spec_factory: impl FnOnce(&str) -> Result<Option<sc_service::ChainSpec<G, E>>, String>,
+		mut config: &mut sc_service::config::Configuration,
+		spec_factory: impl FnOnce(&str) -> Result<Box<dyn sc_service::ChainSpec>, String>,
 		version: &sc_cli::VersionInfo,
-	) -> sc_cli::Result<()> where
-		G: sc_service::RuntimeGenesis,
-		E: sc_service::ChainSpecExtension,
-	{
+	) -> sc_cli::Result<()> {
 		self.shared_params.update_config(config, spec_factory, version)?;
 
 		// make sure to configure keystore

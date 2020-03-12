@@ -30,7 +30,7 @@ use std::{
 	marker::PhantomData
 };
 use codec::{Encode, Decode};
-use sc_client_api::BlockBody;
+use sc_client_api::BlockBackend;
 use sp_blockchain::HeaderBackend;
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::{
@@ -101,12 +101,12 @@ impl std::error::Error for Error {
 /// A helper trait to access block headers and bodies.
 pub trait ChainAccess<TBlock: Block>:
 	HeaderBackend<TBlock> +
-	BlockBody<TBlock>
+	BlockBackend<TBlock>
 {}
 
 impl<T, TBlock> ChainAccess<TBlock> for T where
 	TBlock: Block,
-	T: sp_blockchain::HeaderBackend<TBlock> + sc_client_api::BlockBody<TBlock>,
+	T: sp_blockchain::HeaderBackend<TBlock> + sc_client_api::BlockBackend<TBlock>,
 {}
 
 /// Blockchain inspector.

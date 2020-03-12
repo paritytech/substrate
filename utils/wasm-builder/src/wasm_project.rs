@@ -16,7 +16,10 @@
 
 use crate::write_file_if_changed;
 
-use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process, env};
+use std::{
+	fs, path::{Path, PathBuf}, borrow::ToOwned, process, env, collections::HashSet,
+	hash::{Hash, Hasher}, ops::Deref,
+};
 
 use toml::value::Table;
 
@@ -454,6 +457,45 @@ fn compact_wasm_file(
 	(WasmBinary(wasm_compact_file), WasmBinaryBloaty(wasm_file))
 }
 
+/// Custom wrapper for a [`cargo_metadata::Package`] to store it in
+/// a `HashSet`.
+#[derive(Debug)]
+struct DeduplicatePackage<'a> {
+	package: &'a cargo_metadata::Package,
+	identifier: String,
+}
+
+impl<'a> From<&'a cargo_metadata::Package> for DeduplicatePackage<'a> {
+	fn from(package: &'a cargo_metadata::Package) -> Self {
+		Self {
+			package,
+			identifier: format!("{}{}{:?}", package.name, package.version, package.source),
+		}
+	}
+}
+
+impl<'a> Hash for DeduplicatePackage<'a> {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.identifier.hash(state);
+	}
+}
+
+impl<'a> PartialEq for DeduplicatePackage<'a> {
+	fn eq(&self, other: &Self) -> bool {
+		self.identifier == other.identifier
+	}
+}
+
+impl<'a> Eq for DeduplicatePackage<'a> {}
+
+impl<'a> Deref for DeduplicatePackage<'a> {
+	type Target = cargo_metadata::Package;
+
+	fn deref(&self) -> &Self::Target {
+		self.package
+	}
+}
+
 /// Generate the `rerun-if-changed` instructions for cargo to make sure that the WASM binary is
 /// rebuilt when needed.
 fn generate_rerun_if_changed_instructions(
@@ -471,11 +513,35 @@ fn generate_rerun_if_changed_instructions(
 		.exec()
 		.expect("`cargo metadata` can not fail!");
 
+	// Start with the dependencies of the crate we want to compile for wasm.
+	let mut dependencies = metadata.packages
+		.iter()
+		.find(|p| p.manifest_path == cargo_manifest)
+		.expect("The crate package is contained in its own metadata; qed")
+		.dependencies
+		.iter()
+		.collect::<Vec<_>>();
+
+	// Collect all packages by follow the dependencies of all packages we find.
+	let mut packages = HashSet::new();
+	while let Some(dependency) = dependencies.pop() {
+		let package = metadata.packages
+			.iter()
+			.filter(|p| !p.manifest_path.starts_with(wasm_workspace))
+			.find(|p| dependency.req.matches(&p.version) && dependency.name == p.name);
+
+		if let Some(package) = package {
+			if packages.insert(DeduplicatePackage::from(package)) {
+				dependencies.extend(package.dependencies.iter());
+			}
+		}
+	}
+
 	// Make sure that if any file/folder of a dependency change, we need to rerun the `build.rs`
-	metadata.packages.into_iter()
-		.filter(|package| !package.manifest_path.starts_with(wasm_workspace))
+	packages.into_iter()
+		.filter(|p| !p.manifest_path.starts_with(wasm_workspace))
 		.for_each(|package| {
-			let mut manifest_path = package.manifest_path;
+			let mut manifest_path = package.manifest_path.clone();
 			if manifest_path.ends_with("Cargo.toml") {
 				manifest_path.pop();
 			}
