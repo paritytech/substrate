@@ -89,6 +89,7 @@ where
 {
 	fn trigger(&mut self, number: NumberFor<Block>, iterator_factory: impl Fn() -> T) {
 		self.updated_at = Some(number);
+
 		let pollers = self.pollers.drain(..).collect::<Vec<(_, _)>>();
 
 		for (poller_number, poller_sender) in pollers {
@@ -257,15 +258,12 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 			let iterator: ReadyIteratorFor<PoolApi> = Box::new(self.pool.validated_pool().ready());
 			Box::pin(futures::future::ready(iterator))
 		} else {
-			Box::pin(self.ready_poll.lock().add(at.expect("Should be Some(_) otherwise expression above is true.")).map(|received| {
-				match received {
-					Err(e) => {
-						log::warn!("Error receiving pending set: {:?}", e);
-						Box::new(vec![].into_iter())
-					},
-					Ok(v) => v,
-				}
-			}))
+			Box::pin(self.ready_poll.lock().add(at.expect("Should be Some(_) otherwise expression above is true."))
+				.map(|received| received.unwrap_or_else(|e| {
+					log::warn!("Error receiving pending set: {:?}", e);
+					Box::new(vec![].into_iter())
+				})
+			))
 		}
 	}
 
@@ -419,6 +417,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 					}
 
 					let extra_pool = pool.clone();
+					// After #5200 lands, this arguably might be moved to the handler of "all blocks notification".
 					ready_poll.lock().trigger(block_number, move || Box::new(extra_pool.validated_pool().ready()));
 
 					if next_action.resubmit {
