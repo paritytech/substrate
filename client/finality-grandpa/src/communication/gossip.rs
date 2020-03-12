@@ -1741,6 +1741,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		let set_id = 1;
@@ -1776,6 +1777,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 		let set_id = 1;
 		let auth = AuthorityId::from_slice(&[1u8; 32]);
@@ -1820,6 +1822,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		let set_id = 1;
@@ -1888,6 +1891,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			set_state.clone(),
+			None,
 		);
 
 		let set_id = 1;
@@ -1942,6 +1946,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			set_state.clone(),
+			None,
 		);
 
 		// the validator starts at set id 2
@@ -2021,6 +2026,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2094,6 +2100,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config,
 			voter_set_state(),
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2127,6 +2134,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2186,6 +2194,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config,
 			voter_set_state(),
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2224,6 +2233,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2256,6 +2266,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config,
 			voter_set_state(),
+			None,
 		);
 
 		// the validator start at set id 0
@@ -2333,6 +2344,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		// the validator start at set id 0
@@ -2372,6 +2384,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config,
 			voter_set_state(),
+			None,
 		);
 
 		// the validator start at set id 0
@@ -2420,7 +2433,7 @@ mod tests {
 
 	#[test]
 	fn only_gossip_commits_to_peers_on_same_set() {
-		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None);
 
 		// the validator start at set id 1
 		val.note_set(SetId(1), Vec::new(), |_, _| {});
@@ -2498,7 +2511,7 @@ mod tests {
 
 	#[test]
 	fn expire_commits_from_older_rounds() {
-		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None);
 
 		let commit = |round, set_id, target_number| {
 			let commit = finality_grandpa::CompactCommit {
