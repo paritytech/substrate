@@ -20,7 +20,7 @@ jobs:
           key:                 ${{ runner.OS }}-cargo-build-[build-substrate]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo build Substrate
         shell:                 bash
-        run:                   cargo build --target x86_64-unknown-linux-musl --release --verbose
+        run:                   cargo build --release --verbose
       - name: Prepare artifacts
         shell: bash
         run: |
@@ -49,7 +49,7 @@ jobs:
           key:                 ${{ runner.OS }}-cargo-build-[build-subkey-linux]-${{ hashFiles('**/Cargo.lock') }}
       - name:                  Run cargo build Subkey
         shell:                 bash
-        run:                   cargo build --target x86_64-unknown-linux-musl --release --verbose
+        run:                   cargo build --release --verbose
       - name: Prepare artifacts
         shell: bash
         run: |
