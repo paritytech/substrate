@@ -91,9 +91,7 @@ fn merge<A: IdentifierT>(voter_root_path: Vec<NodeRef<A>>, target_root_path: Vec
 	// indexing is always correct.
 	shorter_path
 		.iter()
-		.take(shorter_path.len() - 1) // take all except for last.
-		.enumerate()
-		.map(|(i, n)| (n, shorter_path[i + 1].clone()))
+		.zip(shorter_path.iter().skip(1))
 		.for_each(|(voter, next)| Node::set_parent_of(&next, &voter));
 	Node::set_parent_of(&shorter_path[0], &longer_path[0]);
 }

@@ -39,8 +39,8 @@ fn main() {
 	 		let (assignments, winners) = generate_random_phragmen_assignment(
 	 			rr(100, 1000),
 	 			rr(100, 2000),
-	 			10,
-	 			6,
+	 			8,
+	 			8,
 	 		);
 			reduce_and_compare(&assignments, &winners);
 	 	});
