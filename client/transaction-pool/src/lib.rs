@@ -94,6 +94,7 @@ where
 
 		for (poller_number, poller_sender) in pollers {
 			if poller_number <= number {
+				log::debug!(target: "txpool", "Sending ready signal at block {}", number);
 				let _s = poller_sender.send(iterator_factory());
 			} else {
 				self.pollers.push((poller_number, poller_sender));
