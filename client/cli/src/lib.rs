@@ -38,6 +38,7 @@ pub use commands::*;
 pub use arg_enums::*;
 pub use error::*;
 pub use config::*;
+pub use runtime::*;
 use log::info;
 use lazy_static::lazy_static;
 use sc_service::{
@@ -45,7 +46,6 @@ use sc_service::{
 	ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-pub use crate::runtime::{run_until_exit, run_service_until_exit};
 
 /// Substrate client CLI
 pub trait SubstrateCLI<G, E>: Sized
@@ -208,6 +208,10 @@ where
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
 		subcommand.run::<G, E, B, BC, BB>(config, builder)
+	}
+
+	fn create_runtime<T: IntoConfiguration>(command: &T) -> error::Result<Runtime<Self, G, E>> {
+		Runtime::<Self, G, E>::new(command)
 	}
 }
 

@@ -15,12 +15,15 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
+use std::marker::PhantomData;
 
 use futures::{Future, future, future::FutureExt};
 use futures::select;
 use futures::pin_mut;
-use sc_service::{AbstractService, Configuration};
+use sc_service::{AbstractService, Configuration, RuntimeGenesis, ChainSpecExtension};
 use crate::error;
+use crate::SubstrateCLI;
+use crate::IntoConfiguration;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> Result<(), Box<dyn std::error::Error>>
@@ -138,4 +141,30 @@ where
 	drop(runtime);
 
 	Ok(())
+}
+
+pub struct Runtime<C: SubstrateCLI<G, E>, G, E>
+where
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+{
+	pub config: Configuration<G, E>,
+	pub tokio_runtime: tokio::runtime::Runtime,
+	phantom: PhantomData<C>,
+}
+
+impl<C: SubstrateCLI<G, E>, G, E> Runtime<C, G, E>
+where
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+{
+	pub fn new<T: IntoConfiguration>(cli_config: &T) -> error::Result<Runtime<C, G, E>> {
+		let tokio_runtime = build_runtime()?;
+
+		Ok(Runtime {
+			config: cli_config.into_configuration::<C, G, E>()?,
+			tokio_runtime,
+			phantom: PhantomData,
+		})
+	}
 }
