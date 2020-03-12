@@ -1163,7 +1163,7 @@ decl_module! {
 			if ledger.total < old_total {
 				// Already checked that this won't overflow by entry condition.
 				let value = old_total - ledger.total;
-				Self::deposit_event(RawEvent::Withdrawn(stash, value))
+				Self::deposit_event(RawEvent::Withdrawn(stash, value));
 			}
 		}
 
