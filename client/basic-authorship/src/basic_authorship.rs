@@ -320,6 +320,7 @@ mod tests {
 	use sp_api::Core;
 	use backend::Backend;
 	use sp_blockchain::HeaderBackend;
+	use sp_runtime::traits::NumberFor;
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
@@ -328,6 +329,17 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx()
+	}
+
+	fn chain_event<B: BlockT>(block_number: u64, header: B::Header) -> ChainEvent<B>
+		where NumberFor<B>: From<u64>
+	{
+		ChainEvent::NewBlock {
+			id: BlockId::Number(block_number.into()),
+			retracted: vec![],
+			is_new_best: true,
+			header: header,
+		}
 	}
 
 	#[test]
@@ -343,14 +355,10 @@ mod tests {
 		).unwrap();
 
 		futures::executor::block_on(
-			txpool.maintain(
-				ChainEvent::NewBlock {
-					id: BlockId::Number(0u64),
-					retracted: vec![],
-					is_new_best: true,
-					header: client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header"),
-				},
-			)
+			txpool.maintain(chain_event(
+				0,
+				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
+			))
 		);
 
 		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
@@ -399,14 +407,10 @@ mod tests {
 		).unwrap();
 
 		futures::executor::block_on(
-			txpool.maintain(
-				ChainEvent::NewBlock {
-					id: block_id.clone(),
-					retracted: vec![],
-					is_new_best: true,
-					header: client.header(&block_id).expect("header get error").expect("there should be header"),
-				},
-			)
+			txpool.maintain(chain_event(
+				0,
+				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
+			))
 		);
 
 		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
@@ -498,14 +502,10 @@ mod tests {
 		};
 
 		futures::executor::block_on(
-			txpool.maintain(
-				ChainEvent::NewBlock {
-					id: BlockId::Number(0u64),
-					retracted: vec![],
-					is_new_best: true,
-					header: client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header"),
-				},
-			)
+			txpool.maintain(chain_event(
+				0,
+				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
+			))
 		);
 
 		// let's create one block and import it
@@ -513,14 +513,10 @@ mod tests {
 		client.import(BlockOrigin::Own, block).unwrap();
 
 		futures::executor::block_on(
-			txpool.maintain(
-				ChainEvent::NewBlock {
-					id: BlockId::Number(1u64),
-					retracted: vec![],
-					is_new_best: true,
-					header: client.header(&BlockId::Number(1u64)).expect("header get error").expect("there should be header"),
-				},
-			)
+			txpool.maintain(chain_event(
+				1,
+				client.header(&BlockId::Number(1)).expect("header get error").expect("there should be header")
+			))
 		);
 
 		// now let's make sure that we can still make some progress
