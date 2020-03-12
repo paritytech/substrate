@@ -952,6 +952,7 @@ mod tests {
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_state_machine::ExecutionStrategy;
 	use codec::Encode;
+	use sc_block_builder::BlockBuilderProvider;
 
 	#[test]
 	fn heap_pages_is_respected() {
