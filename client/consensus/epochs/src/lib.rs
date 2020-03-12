@@ -80,7 +80,8 @@ pub trait Epoch {
 
 	/// The starting slot of the epoch.
 	fn start_slot(&self) -> Self::SlotNumber;
-	/// The end slot of the epoch.
+	/// Produce the "end slot" of the epoch. This is NOT inclusive to the epoch,
+	/// i.e. the slots covered by the epoch are `self.start_slot() .. self.end_slot()`.
 	fn end_slot(&self) -> Self::SlotNumber;
 	/// Increment the epoch data, using the next epoch descriptor.
 	fn increment(&self, descriptor: Self::NextEpochDescriptor) -> Self;
@@ -100,7 +101,8 @@ impl<'a, E: Epoch> From<&'a E> for EpochHeader<E> {
 pub struct EpochHeader<E: Epoch> {
 	/// The starting slot of the epoch.
 	pub start_slot: E::SlotNumber,
-	/// The end slot of the epoch.
+	/// The end slot of the epoch. This is NOT inclusive to the epoch,
+	/// i.e. the slots covered by the epoch are `self.start_slot() .. self.end_slot()`.
 	pub end_slot: E::SlotNumber,
 }
 
