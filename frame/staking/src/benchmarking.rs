@@ -55,7 +55,7 @@ fn create_stash_controller2<T: Trait>(n: u32) -> Result<(T::AccountId, T::Accoun
 }
 
 fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
-	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max);
+	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max as usize);
 	for i in 0 .. max {
 		let (stash, controller) = create_stash_controller::<T>(i)?;
 		let validator_prefs = ValidatorPrefs {
@@ -70,7 +70,7 @@ fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLooku
 
 // This function generates v validators each of whom have n nominators ready for a new era.
 pub fn create_validators_with_nominators_for_era<T: Trait>(v: u32, n: u32) -> Result<(), &'static str> {
-	let mut validators: Vec<T::AccountId> = Vec::with_capacity(v);
+	let mut validators: Vec<T::AccountId> = Vec::with_capacity(v as usize);
 
 	// Create v validators
 	for i in 0 .. v {
@@ -97,7 +97,6 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(v: u32, n: u32) -> Re
 // This function generates one validator being nominated by n nominators.
 // It starts an era and creates pending payouts.
 pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> Result<T::AccountId, &'static str> {
-	let mut validators: Vec<T::AccountId> = Vec::new();
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
@@ -109,7 +108,6 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> R
 	};
 	Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
 	let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
-	validators.push(v_controller.clone());
 
 	points_total += 10;
 	points_individual.push((v_stash, 10));
@@ -142,7 +140,7 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> R
 	let total_payout = T::Currency::minimum_balance() * 1000.into();
 	<ErasValidatorReward<T>>::insert(current_era, total_payout);
 
-	Ok(validators[0].clone())
+	Ok(v_controller)
 }
 
 // This function generates one nominator nominating v validators.
