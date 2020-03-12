@@ -213,7 +213,11 @@ pub trait Externalities: ExtensionStore {
 	/// The state will be reset to genesis.
 	fn wipe(&mut self);
 
-	/// SCOTT
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Returns the benchmarking usage info.
 	fn bench_usage_info(&self) -> UsageInfo;
 
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -593,11 +593,9 @@ where
 		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
-	// SCOTT
 	fn bench_usage_info(&self) -> UsageInfo {
 		self.backend.usage_info()
 	}
-
 
 	fn commit(&mut self) {
 		self.overlay.commit_prospective();

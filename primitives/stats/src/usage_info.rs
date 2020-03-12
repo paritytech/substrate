@@ -1,3 +1,21 @@
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Usage statistics
+
 use core::time::{Duration};
 use codec::{Encode, Decode};
 use crate::StateMachineStats;
@@ -10,25 +28,6 @@ pub struct UsageUnit {
 	/// Number of bytes.
 	pub bytes: u64,
 }
-
-
-/// A wrapper around Instant to add a Default impl in order to skip encoding / decoding.
-// #[derive(Clone, Debug)]
-// pub struct InstantWithDefault(Instant);
-
-// impl std::default::Default for InstantWithDefault {
-// 	fn default() -> Self {
-// 		Self(Instant::now())
-// 	}
-// }
-
-/// SCOTT
-// SCOTT INVESTIGATE
-// impl InstantWithDefault {
-// 	pub fn new(instant: Instant) -> Self {
-// 		Self(instant)
-// 	}
-// }
 
 /// Usage statistics for state backend.
 #[derive(Clone, Debug, Encode, Decode)]
@@ -53,7 +52,6 @@ pub struct UsageInfo {
 	pub memory: u32,
 
 	/// Moment at which current statistics has been started being collected.
-	// previously was Instant and InstantWithDefault
 	#[codec(skip)]
 	pub started: Duration,
 	/// Timespan of the statistics.
@@ -77,7 +75,6 @@ impl UsageInfo {
 			cache_reads: UsageUnit::default(),
 			modified_reads: UsageUnit::default(),
 			memory: 0,
-			// breaks Instant...
 			started: Default::default(),
 			span: Default::default(),
 		}

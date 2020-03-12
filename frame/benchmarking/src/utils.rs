@@ -68,7 +68,7 @@ pub trait Benchmarking {
 		self.wipe()
 	}
 
-	/// SCOTT
+	/// Wrapper function to get the usage info from the benchmarking state.
 	fn db_usage_info(&self) -> UsageInfo {
 		self.bench_usage_info()
 	}
