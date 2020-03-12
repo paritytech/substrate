@@ -126,7 +126,6 @@ fn bench_account_reaping(c: &mut Criterion) {
 					// mostly to just launch compiler before benching!
 					context.client.runtime_version_at(&BlockId::Number(0))
 						.expect("Failed to get runtime version");
-						.spec_version;
 
 					context
 				},
