@@ -291,6 +291,7 @@ pub enum StorageEntryType {
 		value: DecodeDifferentStr,
 		is_linked: bool,
 	},
+	Unused,
 	DoubleMap {
 		hasher: StorageHasher,
 		key1: DecodeDifferentStr,
