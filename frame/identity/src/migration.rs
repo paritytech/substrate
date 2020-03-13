@@ -40,11 +40,13 @@ fn change_name_sudo_to_identity<T: Trait>() {
 		put_storage_value(b"Identity", b"SuperOf", &hash, super_of);
 	}
 
-	for (hash, subs_of) in StorageIterator::<(T::AccountId, Data)>::new(b"Sudo", b"SubsOf").drain() {
+	for (hash, subs_of) in StorageIterator::<(BalanceOf<T>, Vec<T::AccountId>)>::new(b"Sudo", b"SubsOf").drain() {
 		put_storage_value(b"Identity", b"SubsOf", &hash, subs_of);
 	}
 
 	if let Some(recent_hints) = take_storage_value::<Vec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>>>(b"Sudo", b"Registrars", &[]) {
 		put_storage_value(b"Identity", b"Registrars", &[], recent_hints);
 	}
+
+	sp_runtime::print("Done Identity.");
 }
