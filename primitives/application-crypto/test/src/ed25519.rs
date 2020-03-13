@@ -37,6 +37,6 @@ fn ed25519_works_in_runtime() {
 		.expect("Tests `ed25519` crypto.");
 
 	let supported_keys = keystore.read().keys(ED25519).unwrap();
-	assert!(true, supported_keys.contains(&public.into()));
+	assert!(supported_keys.contains(&public.into()));
 	assert!(AppPair::verify(&signature, "ed25519", &AppPublic::from(public)));
 }
