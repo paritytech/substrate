@@ -1555,12 +1555,11 @@ mod tests {
 	};
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup, Bounded, BadOrigin, OnRuntimeUpgrade},
+		traits::{BlakeTwo256, IdentityLookup, Bounded, BadOrigin},
 		testing::Header, Perbill,
 	};
 	use pallet_balances::{BalanceLock, Error as BalancesError};
 	use frame_system::EnsureSignedBy;
-	use sp_storage::Storage;
 
 	const AYE: Vote = Vote{ aye: true, conviction: Conviction::None };
 	const NAY: Vote = Vote{ aye: false, conviction: Conviction::None };
