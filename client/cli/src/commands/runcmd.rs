@@ -31,7 +31,7 @@ use sc_service::{
 };
 use sc_telemetry::TelemetryEndpoints;
 
-use crate::{SubstrateCLI, IntoConfiguration};
+use crate::{SubstrateCLI, CliConfiguration};
 use crate::error;
 use crate::params::ImportParams;
 use crate::params::SharedParams;
@@ -472,7 +472,7 @@ impl RunCmd {
 	}
 }
 
-impl IntoConfiguration for RunCmd
+impl CliConfiguration for RunCmd
 {
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<ChainSpec<G, E>>
 	where

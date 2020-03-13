@@ -29,7 +29,7 @@ use sc_telemetry::TelemetryEndpoints;
 use crate::SubstrateCLI;
 use crate::error::Result;
 
-pub trait IntoConfiguration: Sized
+pub trait CliConfiguration: Sized
 {
 	fn get_roles(&self) -> Roles { Roles::FULL }
 	fn get_task_executor(&self) -> Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;

@@ -36,7 +36,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
 use crate::SubstrateCLI;
-use crate::IntoConfiguration;
+use crate::CliConfiguration;
 use crate::params::SharedParams;
 
 pub use crate::commands::runcmd::RunCmd;
@@ -140,7 +140,7 @@ impl Subcommand {
 	}
 }
 
-impl IntoConfiguration for Subcommand
+impl CliConfiguration for Subcommand
 {
 	fn get_task_executor(&self) -> Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync> { todo!() }
 	fn get_network(&self) -> NetworkConfiguration { todo!() }

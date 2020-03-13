@@ -28,7 +28,7 @@ use sc_service::{
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use crate::error;
 use crate::SubstrateCLI;
-use crate::IntoConfiguration;
+use crate::CliConfiguration;
 use crate::{RunCmd, Subcommand};
 
 #[cfg(target_family = "unix")]
@@ -164,7 +164,7 @@ where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 {
-	pub fn new<T: IntoConfiguration>(cli_config: &T) -> error::Result<Runtime<C, G, E>> {
+	pub fn new<T: CliConfiguration>(cli_config: &T) -> error::Result<Runtime<C, G, E>> {
 		let tokio_runtime = build_runtime()?;
 
 		Ok(Runtime {

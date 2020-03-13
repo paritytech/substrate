@@ -180,11 +180,11 @@ where
 		*/
 	}
 
-	fn make_configuration<T: IntoConfiguration>(command: &T) -> error::Result<Configuration<G, E>> {
+	fn make_configuration<T: CliConfiguration>(command: &T) -> error::Result<Configuration<G, E>> {
 		command.into_configuration::<Self, G, E>()
 	}
 
-	fn create_runtime<T: IntoConfiguration>(command: &T) -> error::Result<Runtime<Self, G, E>> {
+	fn create_runtime<T: CliConfiguration>(command: &T) -> error::Result<Runtime<Self, G, E>> {
 		command.init::<Self, G, E>()?;
 		Runtime::<Self, G, E>::new(command)
 	}
