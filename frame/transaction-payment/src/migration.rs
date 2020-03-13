@@ -30,9 +30,9 @@ pub fn on_runtime_upgrade() {
 // upgraded, nothing here will happen anyway.
 
 fn change_name_balances_to_transaction_payment() {
-    sp_runtime::print("Migrating Transaction Payment.");
+	sp_runtime::print("Migrating Transaction Payment.");
 
-    if let Some(next_fee_multiplier) = take_storage_value::<Multiplier>(b"Balances", b"NextFeeMultiplier", &[]) {
-        put_storage_value(b"TransactionPayment", b"NextFeeMultiplier", &[], next_fee_multiplier);
-    }
+	if let Some(next_fee_multiplier) = take_storage_value::<Multiplier>(b"Balances", b"NextFeeMultiplier", &[]) {
+		put_storage_value(b"TransactionPayment", b"NextFeeMultiplier", &[], next_fee_multiplier);
+	}
 }

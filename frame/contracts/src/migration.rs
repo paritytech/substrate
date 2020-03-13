@@ -20,7 +20,7 @@ use super::*;
 use frame_support::storage::migration::{put_storage_value, take_storage_value, StorageIterator};
 
 pub fn on_runtime_upgrade<T: Trait>() {
-    change_name_contract_to_contracts::<T>()
+	change_name_contract_to_contracts::<T>()
 }
 
 // Change the storage name used by this pallet from `Contract` to `Contracts`.
@@ -30,33 +30,33 @@ pub fn on_runtime_upgrade<T: Trait>() {
 // upgraded, nothing here will happen anyway.
 
 fn change_name_contract_to_contracts<T: Trait>() {
-    sp_runtime::print("Migrating Contracts.");
+	sp_runtime::print("Migrating Contracts.");
 
-    if let Some(gas_spent) = take_storage_value::<Gas>(b"Contract", b"GasSpent", &[]) {
-        put_storage_value(b"Contracts", b"GasSpent", &[], gas_spent);
-    }
+	if let Some(gas_spent) = take_storage_value::<Gas>(b"Contract", b"GasSpent", &[]) {
+		put_storage_value(b"Contracts", b"GasSpent", &[], gas_spent);
+	}
 
-    if let Some(current_schedule) = take_storage_value::<Schedule>(b"Contract", b"CurrentSchedule", &[]) {
-        put_storage_value(b"Contracts", b"CurrentSchedule", &[], current_schedule);
-    }
+	if let Some(current_schedule) = take_storage_value::<Schedule>(b"Contract", b"CurrentSchedule", &[]) {
+		put_storage_value(b"Contracts", b"CurrentSchedule", &[], current_schedule);
+	}
 
-    for (hash, pristine_code) in StorageIterator::<Option<Vec<u8>>>::new(b"Contract", b"PristineCode").drain() {
-        put_storage_value(b"Contracts", b"PristineCode", &hash, pristine_code);
-    }
+	for (hash, pristine_code) in StorageIterator::<Vec<u8>>::new(b"Contract", b"PristineCode").drain() {
+		put_storage_value(b"Contracts", b"PristineCode", &hash, pristine_code);
+	}
 
-    for (hash, code_storage) in StorageIterator::<Option<wasm::PrefabWasmModule>>::new(b"Contract", b"CodeStorage").drain() {
-        put_storage_value(b"Contracts", b"CodeStorage", &hash, code_storage);
-    }
+	for (hash, code_storage) in StorageIterator::<wasm::PrefabWasmModule>::new(b"Contract", b"CodeStorage").drain() {
+		put_storage_value(b"Contracts", b"CodeStorage", &hash, code_storage);
+	}
 
-    if let Some(current_schedule) = take_storage_value::<u64>(b"Contract", b"AccountCounter", &[]) {
-        put_storage_value(b"Contracts", b"AccountCounter", &[], current_schedule);
-    }
+	if let Some(current_schedule) = take_storage_value::<u64>(b"Contract", b"AccountCounter", &[]) {
+		put_storage_value(b"Contracts", b"AccountCounter", &[], current_schedule);
+	}
 
-    for (hash, contract_info_of) in StorageIterator::<Option<ContractInfo<T>>>::new(b"Contract", b"ContractInfoOf").drain() {
-        put_storage_value(b"Contracts", b"ContractInfoOf", &hash, contract_info_of);
-    }
+	for (hash, contract_info_of) in StorageIterator::<ContractInfo<T>>::new(b"Contract", b"ContractInfoOf").drain() {
+		put_storage_value(b"Contracts", b"ContractInfoOf", &hash, contract_info_of);
+	}
 
-    if let Some(get_price) = take_storage_value::<BalanceOf<T>>(b"Contract", b"GetPrice", &[]) {
-        put_storage_value(b"Contracts", b"GetPrice", &[], get_price);
-    }
+	if let Some(get_price) = take_storage_value::<BalanceOf<T>>(b"Contract", b"GetPrice", &[]) {
+		put_storage_value(b"Contracts", b"GetPrice", &[], get_price);
+	}
 }
