@@ -56,6 +56,10 @@ pub struct StorageChild {
 	/// Associated child info for a child
 	/// trie.
 	pub child_info: ChildInfo,
+	/// Associated child change, not that
+	/// it does not always have a strict
+	/// change semantic.
+	pub child_change: ChildChange,
 }
 
 #[cfg(feature = "std")]
@@ -144,6 +148,19 @@ pub enum ChildInfo {
 	ParentKeyId(ChildTrieParentKeyId),
 }
 
+/// How should I update between two child state.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+pub enum ChildUpdate {
+	/// Merge the new values.
+	Merge,
+	/// Ignore the new values, for instance on a bulk deleted
+	/// child state.
+	Ignore,
+	/// No update possible.
+	Incompatible,
+}
+
 impl ChildInfo {
 	/// Instantiates child information for a default child trie
 	/// of kind `ChildType::ParentKeyId`, using an unprefixed parent
@@ -162,9 +179,11 @@ impl ChildInfo {
 
 	/// Try to update with another instance, return false if both instance
 	/// are not compatible.
-	pub fn try_update(&mut self, other: &ChildInfo) -> bool {
-		match self {
-			ChildInfo::ParentKeyId(child_trie) => child_trie.try_update(other),
+	/// Passing current child change as parameter is needed
+	pub fn try_update(&mut self, self_change: &ChildChange, other: &ChildInfo) -> ChildUpdate {
+		match (self, self_change) {
+			(_, ChildChange::BulkDeleteByKeyspace) => ChildUpdate::Ignore,
+			(ChildInfo::ParentKeyId(child_trie), ChildChange::Update) => child_trie.try_update(other),
 		}
 	}
 
@@ -353,9 +372,13 @@ pub struct ChildTrieParentKeyId {
 impl ChildTrieParentKeyId {
 	/// Try to update with another instance, return false if both instance
 	/// are not compatible.
-	fn try_update(&mut self, other: &ChildInfo) -> bool {
+	fn try_update(&mut self, other: &ChildInfo) -> ChildUpdate {
 		match other {
-			ChildInfo::ParentKeyId(other) => self.data[..] == other.data[..],
+			ChildInfo::ParentKeyId(other) => if self.data[..] == other.data[..] {
+				ChildUpdate::Merge
+			} else {
+				ChildUpdate::Incompatible
+			},
 		}
 	}
 }

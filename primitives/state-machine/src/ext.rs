@@ -701,6 +701,7 @@ mod tests {
 						vec![40] => vec![40]
 					],
 					child_info: child_info.clone(),
+					child_change: Default::default(),
 				}
 			],
 		}.into();
@@ -748,6 +749,7 @@ mod tests {
 						vec![30] => vec![40]
 					],
 					child_info: child_info.clone(),
+					child_change: Default::default(),
 				}
 			],
 		}.into();

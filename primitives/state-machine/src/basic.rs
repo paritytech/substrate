@@ -172,6 +172,7 @@ impl Externalities for BasicExternalities {
 		let child_map = self.inner.children_default.entry(child_info.storage_key().to_vec())
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
+				child_change: Default::default(),
 				child_info: child_info.to_owned(),
 			});
 		if let Some(value) = value {
@@ -318,6 +319,7 @@ mod tests {
 				child_info.storage_key().to_vec() => StorageChild {
 					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
 					child_info: child_info.clone(),
+					child_change: Default::default(),
 				}
 			]
 		});

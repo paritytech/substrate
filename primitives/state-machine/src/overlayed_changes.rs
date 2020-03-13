@@ -29,7 +29,7 @@ use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::{Decode, Encode};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo,
-	ChildChange};
+	ChildChange, ChildUpdate};
 use std::{mem, ops};
 
 use sp_core::Hasher;
@@ -280,10 +280,11 @@ impl OverlayedChanges {
 				change: Default::default(),
 				values: Default::default(),
 			});
-		// TODO do not allow new value on deleted child info for delete
-		// -> changing try update semantic can be good
-		let updatable = map_entry.info.try_update(child_info);
-		debug_assert!(updatable);
+		let updatable = map_entry.info.try_update(&map_entry.change, child_info);
+		debug_assert!(updatable != ChildUpdate::Incompatible);
+		if updatable == ChildUpdate::Ignore {
+			return;
+		}
 
 		let entry = map_entry.values.entry(key).or_default();
 		entry.value = val;
@@ -313,16 +314,17 @@ impl OverlayedChanges {
 				change: Default::default(),
 				values: Default::default(),
 			});
-		// TODO ignore if already deleted 
-		let updatable = map_entry.info.try_update(child_info);
-		debug_assert!(updatable);
+		let updatable = map_entry.info.try_update(&map_entry.change, child_info);
+		debug_assert!(updatable != ChildUpdate::Incompatible);
+		if updatable == ChildUpdate::Ignore {
+			return;
+		}
 
 		map_entry.values.values_mut().for_each(|e| {
 			if let Some(extrinsic) = extrinsic_index {
 				e.extrinsics.get_or_insert_with(Default::default)
 					.insert(extrinsic);
 			}
-
 			e.value = None;
 		});
 
@@ -393,9 +395,11 @@ impl OverlayedChanges {
 				change: Default::default(),
 				values: Default::default(),
 			});
-		let updatable = map_entry.info.try_update(child_info);
-		// TODO ignore on deleted
-		debug_assert!(updatable);
+		let updatable = map_entry.info.try_update(&map_entry.change, child_info);
+		debug_assert!(updatable != ChildUpdate::Incompatible);
+		if updatable == ChildUpdate::Ignore {
+			return;
+		}
 
 		for (key, entry) in map_entry.values.iter_mut() {
 			if key.starts_with(prefix) {

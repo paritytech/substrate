@@ -38,7 +38,7 @@ pub use paste;
 pub use sp_application_crypto as app_crypto;
 
 #[cfg(feature = "std")]
-pub use sp_core::storage::{Storage, StorageChild};
+pub use sp_core::storage::{Storage, StorageChild, ChildUpdate};
 
 use sp_std::prelude::*;
 use sp_std::convert::TryFrom;
@@ -135,9 +135,10 @@ impl BuildStorage for sp_core::storage::Storage {
 		for (k, other_map) in self.children_default.iter() {
 			let k = k.clone();
 			if let Some(map) = storage.children_default.get_mut(&k) {
-				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
-				if !map.child_info.try_update(&other_map.child_info) {
-					return Err("Incompatible child info update".to_string());
+				match map.child_info.try_update(&map.child_change, &other_map.child_info) {
+					ChildUpdate::Merge => map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone()))),
+					ChildUpdate::Ignore => (),
+					ChildUpdate::Incompatible => return Err("Incompatible child info update".to_string()),
 				}
 			} else {
 				storage.children_default.insert(k, other_map.clone());

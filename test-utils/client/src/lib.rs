@@ -138,6 +138,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
 				child_info: child_info.clone(),
+				child_change: Default::default(),
 			});
 		entry.data.insert(key.as_ref().to_vec(), value.as_ref().to_vec());
 		self
@@ -194,6 +195,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 					StorageChild {
 						data: child_content.data.into_iter().collect(),
 						child_info: child_content.child_info,
+						child_change: Default::default(),
 					},
 				);
 			}
