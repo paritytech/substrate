@@ -297,6 +297,7 @@ mod tests {
 	use crate::in_mem::Backend as InMemBackend;
 	use sc_client_api::ProofProvider;
 	use sp_runtime::traits::BlakeTwo256;
+	use sc_block_builder::BlockBuilderProvider;
 
 	struct DummyCallExecutor;
 
