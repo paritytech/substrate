@@ -48,7 +48,7 @@ pub trait CliConfiguration: Sized
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{ Ok(Default::default()) }
-	fn get_keystore_config(&self) -> KeystoreConfig;
+	fn get_keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig>;
 	fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig;
 	fn get_state_cache_size(&self) -> usize { Default::default() }
 	fn get_state_cache_child_ratio(&self) -> Option<usize> { Default::default() }
@@ -104,7 +104,7 @@ pub trait CliConfiguration: Sized
 			task_executor,
 			transaction_pool: self.get_transaction_pool(),
 			network: self.get_network_config(&chain_spec, is_dev, &config_dir, client_id.as_str())?,
-			keystore: self.get_keystore_config(),
+			keystore: self.get_keystore_config(config_dir)?,
 			database: self.get_database_config(&config_dir),
 			state_cache_size: self.get_state_cache_size(),
 			state_cache_child_ratio: self.get_state_cache_child_ratio(),

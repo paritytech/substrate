@@ -37,13 +37,11 @@ use crate::params::ImportParams;
 use crate::params::SharedParams;
 use crate::params::NetworkConfigurationParams;
 use crate::params::TransactionPoolParams;
+use crate::params::KeystoreParams;
 use crate::runtime::run_service_until_exit;
 
 /// The maximum number of characters for a node name.
 const NODE_NAME_MAX_LENGTH: usize = 32;
-
-/// default sub directory for the key store
-const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
 
 arg_enum! {
 	/// Whether off-chain workers are enabled.
@@ -244,32 +242,8 @@ pub struct RunCmd {
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 
-	/// Specify custom keystore path.
-	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
-	pub keystore_path: Option<PathBuf>,
-
-	/// Use interactive shell for entering the password used by the keystore.
-	#[structopt(
-		long = "password-interactive",
-		conflicts_with_all = &[ "password", "password-filename" ]
-	)]
-	pub password_interactive: bool,
-
-	/// Password used by the keystore.
-	#[structopt(
-		long = "password",
-		conflicts_with_all = &[ "password-interactive", "password-filename" ]
-	)]
-	pub password: Option<String>,
-
-	/// File that contains the password used by the keystore.
-	#[structopt(
-		long = "password-filename",
-		value_name = "PATH",
-		parse(from_os_str),
-		conflicts_with_all = &[ "password-interactive", "password" ]
-	)]
-	pub password_filename: Option<PathBuf>
+	#[structopt(flatten)]
+	pub keystore_params: KeystoreParams,
 }
 
 impl RunCmd {
@@ -297,32 +271,6 @@ impl RunCmd {
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		/*
-		let password = if self.password_interactive {
-			#[cfg(not(target_os = "unknown"))]
-			{
-				Some(input_keystore_password()?.into())
-			}
-			#[cfg(target_os = "unknown")]
-			None
-		} else if let Some(ref file) = self.password_filename {
-			Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
-		} else if let Some(ref password) = self.password {
-			Some(password.clone().into())
-		} else {
-			None
-		};
-
-		let path = self.keystore_path.clone().unwrap_or(
-			C::base_path(self.shared_params.base_path.as_ref()).join(DEFAULT_KEYSTORE_CONFIG_PATH)
-		);
-
-		config.keystore = KeystoreConfig::Path {
-			path,
-			password,
-		};
-		*/
-
 		let keyring = self.get_keyring();
 		let is_dev = self.shared_params.dev;
 		let is_light = self.light;
@@ -484,7 +432,9 @@ impl CliConfiguration for RunCmd
 	{
 		self.network_config.get_network_config(chain_spec, client_id, is_dev, base_path)
 	}
-	fn get_keystore_config(&self) -> KeystoreConfig { todo!() }
+	fn get_keystore_config(&self, base_path: &PathBuf) -> error::Result<KeystoreConfig> {
+		self.keystore_params.get_keystore_config(base_path)
+	}
 	fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig { self.shared_params.get_database_config(base_path) }
 	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
 	where
@@ -513,12 +463,6 @@ pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	}
 
 	Ok(())
-}
-
-#[cfg(not(target_os = "unknown"))]
-fn input_keystore_password() -> Result<String, String> {
-	rpassword::read_password_from_tty(Some("Keystore password: "))
-		.map_err(|e| format!("{:?}", e))
 }
 
 fn generate_node_name() -> String {
