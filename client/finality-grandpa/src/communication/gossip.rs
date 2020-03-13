@@ -1237,15 +1237,11 @@ impl<Block: BlockT> GossipValidator<Block> {
 		set_state: environment::SharedVoterSetState<Block>,
 		prometheus_registry: Option<&Registry>,
 	) -> (GossipValidator<Block>, mpsc::UnboundedReceiver<PeerReport>)	{
-		let metrics = match prometheus_registry {
-			Some(registry) => {
-				match Metrics::register(registry) {
-					Ok(metrics) => Some(metrics),
-					Err(e) => {
-						debug!(target: "afg", "Failed to register metrics: {:?}", e);
-						None
-					}
-				}
+		let metrics = match prometheus_registry.map(Metrics::register) {
+			Some(Ok(metrics)) => Some(metrics),
+			Some(Err(e)) => {
+				debug!(target: "afg", "Failed to register metrics: {:?}", e);
+				None
 			},
 			None => None,
 		};
