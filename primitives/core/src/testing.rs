@@ -27,9 +27,9 @@ use crate::{
 use std::collections::HashSet;
 
 /// Key type for generic Ed25519 key.
-pub const ED25519_TEST: KeyTypeId = KeyTypeId(*b"ed25");
+pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 /// Key type for generic Sr 25519 key.
-pub const SR25519_TEST: KeyTypeId = KeyTypeId(*b"sr25");
+pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
 
 /// A keystore implementation usable in tests.
 #[cfg(feature = "std")]
@@ -280,17 +280,17 @@ macro_rules! wasm_export_functions {
 mod tests {
 	use super::*;
 	use crate::sr25519;
-	use crate::testing::{ED25519_TEST, SR25519_TEST};
+	use crate::testing::{ED25519, SR25519};
 
 	#[test]
 	fn store_key_and_extract() {
 		let store = KeyStore::new();
 
 		let public = store.write()
-			.ed25519_generate_new(ED25519_TEST, None)
+			.ed25519_generate_new(ED25519, None)
 			.expect("Generates key");
 
-		let public_keys = store.read().keys(ED25519_TEST).unwrap();
+		let public_keys = store.read().keys(ED25519).unwrap();
 
 		assert!(public_keys.contains(&public.into()));
 	}
@@ -303,12 +303,12 @@ mod tests {
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
 		store.write().insert_unknown(
-			SR25519_TEST,
+			SR25519,
 			secret_uri,
 			key_pair.public().as_ref(),
 		).expect("Inserts unknown key");
 
-		let public_keys = store.read().keys(SR25519_TEST).unwrap();
+		let public_keys = store.read().keys(SR25519).unwrap();
 
 		assert!(public_keys.contains(&key_pair.public().into()));
 	}
