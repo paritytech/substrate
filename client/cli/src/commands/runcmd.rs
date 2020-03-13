@@ -14,36 +14,35 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::path::PathBuf;
-use std::net::SocketAddr;
-use std::fs;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use log::info;
-use structopt::{StructOpt, clap::arg_enum};
-use regex::Regex;
+use crate::error;
+use crate::params::ImportParams;
+use crate::params::KeystoreParams;
+use crate::params::NetworkConfigurationParams;
+use crate::params::SharedParams;
+use crate::params::TransactionPoolParams;
+use crate::runtime::run_service_until_exit;
+use crate::{CliConfiguration, SubstrateCLI};
 use chrono::prelude::*;
+use log::info;
+use regex::Regex;
+use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec, Roles,
 	config::{
-		DatabaseConfig, KeystoreConfig, NetworkConfiguration, WasmExecutionMethod,
-		TransactionPoolOptions,
+		DatabaseConfig, KeystoreConfig, NetworkConfiguration, TransactionPoolOptions,
+		WasmExecutionMethod,
 	},
-	PruningMode,
+	AbstractService, ChainSpec, ChainSpecExtension, Configuration, PruningMode, Roles,
+	RuntimeGenesis,
 };
 use sc_telemetry::TelemetryEndpoints;
 use sc_tracing::TracingReceiver;
-use sc_client_api::execution_extensions::ExecutionStrategies;
-
-use crate::{SubstrateCLI, CliConfiguration};
-use crate::error;
-use crate::params::ImportParams;
-use crate::params::SharedParams;
-use crate::params::NetworkConfigurationParams;
-use crate::params::TransactionPoolParams;
-use crate::params::KeystoreParams;
-use crate::runtime::run_service_until_exit;
+use std::fs;
+use std::future::Future;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::pin::Pin;
+use std::sync::Arc;
+use structopt::{clap::arg_enum, StructOpt};
 
 arg_enum! {
 	/// Whether off-chain workers are enabled.
@@ -253,15 +252,25 @@ impl RunCmd {
 	pub fn get_keyring(&self) -> Option<sp_keyring::Sr25519Keyring> {
 		use sp_keyring::Sr25519Keyring::*;
 
-		if self.alice { Some(Alice) }
-		else if self.bob { Some(Bob) }
-		else if self.charlie { Some(Charlie) }
-		else if self.dave { Some(Dave) }
-		else if self.eve { Some(Eve) }
-		else if self.ferdie { Some(Ferdie) }
-		else if self.one { Some(One) }
-		else if self.two { Some(Two) }
-		else { None }
+		if self.alice {
+			Some(Alice)
+		} else if self.bob {
+			Some(Bob)
+		} else if self.charlie {
+			Some(Charlie)
+		} else if self.dave {
+			Some(Dave)
+		} else if self.eve {
+			Some(Eve)
+		} else if self.ferdie {
+			Some(Ferdie)
+		} else if self.one {
+			Some(One)
+		} else if self.two {
+			Some(Two)
+		} else {
+			None
+		}
 	}
 
 	/// Run the command that runs the node
@@ -286,20 +295,13 @@ impl RunCmd {
 		info!("Roles: {}", config.display_role());
 
 		match config.roles {
-			Roles::LIGHT => run_service_until_exit(
-				config,
-				new_light,
-			),
-			_ => run_service_until_exit(
-				config,
-				new_full,
-			),
+			Roles::LIGHT => run_service_until_exit(config, new_light),
+			_ => run_service_until_exit(config, new_full),
 		}
 	}
 }
 
-impl CliConfiguration for RunCmd
-{
+impl CliConfiguration for RunCmd {
 	fn get_base_path(&self) -> Option<&PathBuf> {
 		self.shared_params.base_path.as_ref()
 	}
@@ -313,17 +315,31 @@ impl CliConfiguration for RunCmd
 	{
 		self.shared_params.get_chain_spec::<C, G, E>()
 	}
-	fn get_network_config<G, E>(&self, chain_spec: &ChainSpec<G, E>, is_dev: bool, base_path: &PathBuf, client_id: &str) -> error::Result<NetworkConfiguration>
+	fn get_network_config<G, E>(
+		&self,
+		chain_spec: &ChainSpec<G, E>,
+		is_dev: bool,
+		base_path: &PathBuf,
+		client_id: &str,
+	) -> error::Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		self.network_config.get_network_config(chain_spec, client_id, is_dev, base_path)
+		self.network_config
+			.get_network_config(chain_spec, client_id, is_dev, base_path)
 	}
 	fn get_keystore_config(&self, base_path: &PathBuf) -> error::Result<KeystoreConfig> {
 		self.keystore_params.get_keystore_config(base_path)
 	}
-	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> DatabaseConfig { self.shared_params.get_database_config(base_path, cache_size) }
+	fn get_database_config(
+		&self,
+		base_path: &PathBuf,
+		cache_size: Option<usize>,
+	) -> DatabaseConfig {
+		self.shared_params
+			.get_database_config(base_path, cache_size)
+	}
 	fn get_name(&self) -> error::Result<String> {
 		let name: String = match (self.name.as_ref(), self.get_keyring()) {
 			(Some(name), _) => name.to_string(),
@@ -332,22 +348,22 @@ impl CliConfiguration for RunCmd
 		};
 
 		if let Err(msg) = is_node_name_valid(&name) {
-			return Err(error::Error::Input(
-				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.", name, msg)
-			));
+			return Err(error::Error::Input(format!(
+				"Invalid node name '{}'. Reason: {}. If unsure, use none.",
+				name, msg
+			)));
 		}
 
 		Ok(name)
 	}
 	fn get_dev_key_seed(&self, is_dev: bool) -> Option<String> {
-		self.get_keyring()
-			.map(|a| format!("//{}", a)).or_else(|| {
-				if is_dev && !self.light {
-					Some("//Alice".into())
-				} else {
-					None
-				}
-			})
+		self.get_keyring().map(|a| format!("//{}", a)).or_else(|| {
+			if is_dev && !self.light {
+				Some("//Alice".into())
+			} else {
+				None
+			}
+		})
 	}
 	fn get_telemetry_endpoints<G, E>(
 		&self,
@@ -365,7 +381,9 @@ impl CliConfiguration for RunCmd
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-	{ self.shared_params.init::<C, G, E>() }
+	{
+		self.shared_params.init::<C, G, E>()
+	}
 
 	fn get_sentry_mode(&self) -> bool {
 		self.sentry
@@ -375,8 +393,8 @@ impl CliConfiguration for RunCmd
 		let keyring = self.get_keyring();
 		let is_dev = self.shared_params.dev;
 		let is_light = self.light;
-		let is_authority = (self.validator || self.sentry || is_dev || keyring.is_some())
-			&& !is_light;
+		let is_authority =
+			(self.validator || self.sentry || is_dev || keyring.is_some()) && !is_light;
 
 		if is_light {
 			sc_service::Roles::LIGHT
@@ -426,31 +444,44 @@ impl CliConfiguration for RunCmd
 	}
 
 	fn get_rpc_cors(&self, is_dev: bool) -> Option<Vec<String>> {
-		self.rpc_cors.clone().unwrap_or_else(|| if is_dev {
-			log::warn!("Running in --dev mode, RPC CORS has been disabled.");
-			Cors::All
-		} else {
-			Cors::List(vec![
-				"http://localhost:*".into(),
-				"http://127.0.0.1:*".into(),
-				"https://localhost:*".into(),
-				"https://127.0.0.1:*".into(),
-				"https://polkadot.js.org".into(),
-				"https://substrate-ui.parity.io".into(),
-			])
-		}).into()
+		self.rpc_cors
+			.clone()
+			.unwrap_or_else(|| {
+				if is_dev {
+					log::warn!("Running in --dev mode, RPC CORS has been disabled.");
+					Cors::All
+				} else {
+					Cors::List(vec![
+						"http://localhost:*".into(),
+						"http://127.0.0.1:*".into(),
+						"https://localhost:*".into(),
+						"https://127.0.0.1:*".into(),
+						"https://polkadot.js.org".into(),
+						"https://substrate-ui.parity.io".into(),
+					])
+				}
+			})
+			.into()
 	}
 
 	fn get_rpc_http(&self) -> error::Result<Option<SocketAddr>> {
-		let rpc_interface: &str = interface_str(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
+		let rpc_interface: &str =
+			interface_str(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
 
-		Ok(Some(parse_address(&format!("{}:{}", rpc_interface, 9933), self.rpc_port)?))
+		Ok(Some(parse_address(
+			&format!("{}:{}", rpc_interface, 9933),
+			self.rpc_port,
+		)?))
 	}
 
 	fn get_rpc_ws(&self) -> error::Result<Option<SocketAddr>> {
-		let ws_interface: &str = interface_str(self.ws_external, self.unsafe_ws_external, self.validator)?;
+		let ws_interface: &str =
+			interface_str(self.ws_external, self.unsafe_ws_external, self.validator)?;
 
-		Ok(Some(parse_address(&format!("{}:{}", ws_interface, 9944), self.ws_port)?))
+		Ok(Some(parse_address(
+			&format!("{}:{}", ws_interface, 9944),
+			self.ws_port,
+		)?))
 	}
 
 	fn get_offchain_worker(&self) -> bool {
@@ -511,13 +542,10 @@ pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-fn parse_address(
-	address: &str,
-	port: Option<u16>,
-) -> Result<SocketAddr, String> {
-	let mut address: SocketAddr = address.parse().map_err(
-		|_| format!("Invalid address: {}", address)
-	)?;
+fn parse_address(address: &str, port: Option<u16>) -> Result<SocketAddr, String> {
+	let mut address: SocketAddr = address
+		.parse()
+		.map_err(|_| format!("Invalid address: {}", address))?;
 	if let Some(port) = port {
 		address.set_port(port);
 	}
@@ -531,14 +559,19 @@ fn interface_str(
 	is_validator: bool,
 ) -> Result<&'static str, error::Error> {
 	if is_external && is_validator {
-		return Err(error::Error::Input("--rpc-external and --ws-external options shouldn't be \
+		return Err(error::Error::Input(
+			"--rpc-external and --ws-external options shouldn't be \
 		used if the node is running as a validator. Use `--unsafe-rpc-external` if you understand \
-		the risks. See the options description for more information.".to_owned()));
+		the risks. See the options description for more information."
+				.to_owned(),
+		));
 	}
 
 	if is_external || is_unsafe_external {
-		log::warn!("It isn't safe to expose RPC publicly without a proxy server that filters \
-		available set of RPC methods.");
+		log::warn!(
+			"It isn't safe to expose RPC publicly without a proxy server that filters \
+		available set of RPC methods."
+		);
 
 		Ok("0.0.0.0")
 	} else {
@@ -550,9 +583,7 @@ fn interface_str(
 fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<dyn std::error::Error>> {
 	let pos = s.find(' ');
 	match pos {
-		None => {
-			Ok((s.to_owned(), 0))
-		},
+		None => Ok((s.to_owned(), 0)),
 		Some(pos_) => {
 			let verbosity = s[pos_ + 1..].parse()?;
 			let url = s[..pos_].parse()?;
@@ -591,12 +622,16 @@ fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 			"all" | "*" => {
 				is_all = true;
 				break;
-			},
+			}
 			other => origins.push(other.to_owned()),
 		}
 	}
 
-	Ok(if is_all { Cors::All } else { Cors::List(origins) })
+	Ok(if is_all {
+		Cors::All
+	} else {
+		Cors::List(origins)
+	})
 }
 
 #[cfg(test)]
@@ -652,7 +687,12 @@ mod tests {
 			config.config_dir = Some(PathBuf::from("/test/path"));
 			config.chain_spec = Some(chain_spec.clone());
 			let chain_spec = chain_spec.clone();
-			cli.update_config(&mut config, move |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+			cli.update_config(
+				&mut config,
+				move |_| Ok(Some(chain_spec)),
+				TEST_VERSION_INFO,
+			)
+			.unwrap();
 
 			let expected_path = match keystore_path {
 				Some(path) => PathBuf::from(path),
@@ -680,7 +720,8 @@ mod tests {
 		let cli = RunCmd::from_iter(args);
 
 		let mut config = Configuration::from_version(TEST_VERSION_INFO);
-		cli.update_config(&mut config, |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+		cli.update_config(&mut config, |_| Ok(Some(chain_spec)), TEST_VERSION_INFO)
+			.unwrap();
 
 		assert!(config.chain_spec.is_some());
 		assert!(!config.network.boot_nodes.is_empty());
@@ -705,7 +746,8 @@ mod tests {
 
 		let mut config = Configuration::from_version(TEST_VERSION_INFO);
 		cli.init(&TEST_VERSION_INFO).unwrap();
-		cli.update_config(&mut config, |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+		cli.update_config(&mut config, |_| Ok(Some(chain_spec)), TEST_VERSION_INFO)
+			.unwrap();
 
 		assert!(config.config_dir.is_some());
 		assert!(config.database.is_some());
