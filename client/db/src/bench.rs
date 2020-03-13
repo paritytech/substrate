@@ -271,7 +271,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				} else if rc < 0 {
 					db_transaction.delete(0, &key);
 				}
-				bytes += key.len();
+				bytes += key.len() as u64;
 			}
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
 			let _ = self.usage_info.try_borrow_mut().map(|mut usage_info| {
