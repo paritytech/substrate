@@ -852,6 +852,7 @@ impl_runtime_apis! {
 			repeat: u32,
 		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::Benchmarking;
+			use pallet_session_benchmarking::Module as SessionBench;
 
 			let result = match module.as_slice() {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(
@@ -868,14 +869,7 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
-				b"pallet-session" | b"session" => pallet_session_benchmarking::Module::<Runtime>::run_benchmark(
-					extrinsic,
-					lowest_range_values,
-					highest_range_values,
-					steps,
-					repeat,
-				),
-				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(
+				b"pallet-session" | b"session" => SessionBench::<Runtime>::run_benchmark(
 					extrinsic,
 					lowest_range_values,
 					highest_range_values,
@@ -883,6 +877,13 @@ impl_runtime_apis! {
 					repeat,
 				),
 				b"pallet-staking" | b"staking" => Staking::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(
 					extrinsic,
 					lowest_range_values,
 					highest_range_values,
