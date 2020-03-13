@@ -1,7 +1,7 @@
 use sp_core::{Pair, Public, sr25519};
 use node_template_runtime::{
 	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
-	IndicesConfig, SudoConfig, SystemConfig, WASM_BINARY, Signature
+	SudoConfig, SystemConfig, WASM_BINARY, Signature
 };
 use sp_consensus_aura::sr25519::{AuthorityId as AuraId};
 use grandpa_primitives::{AuthorityId as GrandpaId};
@@ -12,7 +12,7 @@ use sp_runtime::traits::{Verify, IdentifyAccount};
 //const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
-pub type ChainSpec = sc_service::ChainSpec<GenesisConfig>;
+pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
 /// The chain specification option. This is expected to come in from the CLI and
 /// is little more than one of a number of alternatives which can easily be converted
@@ -127,14 +127,8 @@ fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
 			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
-		indices: Some(IndicesConfig {
-			indices: vec![],
-		}),
 		balances: Some(BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
-		}),
-		sudo: Some(SudoConfig {
-			key: root_key,
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
@@ -142,12 +136,15 @@ fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
 		}),
+		sudo: Some(SudoConfig {
+			key: root_key,
+		}),
 	}
 }
 
-pub fn load_spec(id: &str) -> Result<Option<ChainSpec>, String> {
+pub fn load_spec(id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 	Ok(match Alternative::from(id) {
-		Some(spec) => Some(spec.load()?),
-		None => None,
+		Some(spec) => Box::new(spec.load()?),
+		None => Box::new(ChainSpec::from_json_file(std::path::PathBuf::from(id))?),
 	})
 }

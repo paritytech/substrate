@@ -25,8 +25,9 @@ use libp2p::swarm::{PollParameters, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::{PeerId, Multiaddr, Transport};
 use rand::seq::SliceRandom;
 use std::{error, io, task::Context, task::Poll, time::Duration};
-use crate::message::Message;
-use crate::protocol::legacy_proto::{LegacyProto, LegacyProtoOut};
+use std::collections::HashSet;
+use crate::message::{generic::BlockResponse, Message};
+use crate::protocol::generic_proto::{GenericProto, GenericProtoOut};
 use sp_test_primitives::Block;
 
 /// Builds two nodes that have each other as bootstrap nodes.
@@ -81,7 +82,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: LegacyProto::new(&b"test"[..], &[1], peerset),
+			inner: GenericProto::new(&b"test"[..], &[1], peerset),
 			addrs: addrs
 				.iter()
 				.enumerate()
@@ -111,12 +112,12 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 
 /// Wraps around the `CustomBehaviour` network behaviour, and adds hardcoded node addresses to it.
 struct CustomProtoWithAddr {
-	inner: LegacyProto,
+	inner: GenericProto,
 	addrs: Vec<(PeerId, Multiaddr)>,
 }
 
 impl std::ops::Deref for CustomProtoWithAddr {
-	type Target = LegacyProto;
+	type Target = GenericProto;
 
 	fn deref(&self) -> &Self::Target {
 		&self.inner
@@ -130,8 +131,8 @@ impl std::ops::DerefMut for CustomProtoWithAddr {
 }
 
 impl NetworkBehaviour for CustomProtoWithAddr {
-	type ProtocolsHandler = <LegacyProto as NetworkBehaviour>::ProtocolsHandler;
-	type OutEvent = <LegacyProto as NetworkBehaviour>::OutEvent;
+	type ProtocolsHandler = <GenericProto as NetworkBehaviour>::ProtocolsHandler;
+	type OutEvent = <GenericProto as NetworkBehaviour>::OutEvent;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		self.inner.new_handler()
@@ -223,11 +224,14 @@ fn two_nodes_transfer_lots_of_packets() {
 	let fut1 = future::poll_fn(move |cx| -> Poll<()> {
 		loop {
 			match ready!(service1.poll_next_unpin(cx)) {
-				Some(LegacyProtoOut::CustomProtocolOpen { peer_id, .. }) => {
+				Some(GenericProtoOut::CustomProtocolOpen { peer_id, .. }) => {
 					for n in 0 .. NUM_PACKETS {
 						service1.send_packet(
 							&peer_id,
-							Message::<Block>::ChainSpecific(vec![(n % 256) as u8]).encode()
+							Message::<Block>::BlockResponse(BlockResponse {
+								id: n as _,
+								blocks: Vec::new(),
+							}).encode()
 						);
 					}
 				},
@@ -240,11 +244,11 @@ fn two_nodes_transfer_lots_of_packets() {
 	let fut2 = future::poll_fn(move |cx| {
 		loop {
 			match ready!(service2.poll_next_unpin(cx)) {
-				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
-				Some(LegacyProtoOut::CustomMessage { message, .. }) => {
+				Some(GenericProtoOut::CustomProtocolOpen { .. }) => {},
+				Some(GenericProtoOut::CustomMessage { message, .. }) => {
 					match Message::<Block>::decode(&mut &message[..]).unwrap() {
-						Message::<Block>::ChainSpecific(message) => {
-							assert_eq!(message.len(), 1);
+						Message::<Block>::BlockResponse(BlockResponse { id: _, blocks }) => {
+							assert!(blocks.is_empty());
 							packet_counter += 1;
 							if packet_counter == NUM_PACKETS {
 								return Poll::Ready(())
@@ -270,9 +274,21 @@ fn basic_two_nodes_requests_in_parallel() {
 	// Generate random messages with or without a request id.
 	let mut to_send = {
 		let mut to_send = Vec::new();
+		let mut existing_ids = HashSet::new();
 		for _ in 0..200 { // Note: don't make that number too high or the CPU usage will explode.
-			let msg = (0..10).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-			to_send.push(Message::<Block>::ChainSpecific(msg));
+			let req_id = loop {
+				let req_id = rand::random::<u64>();
+
+				// ensure uniqueness - odds of randomly sampling collisions
+				// is unlikely, but possible to cause spurious test failures.
+				if existing_ids.insert(req_id) {
+					break req_id;
+				}
+			};
+
+			to_send.push(Message::<Block>::BlockResponse(
+				BlockResponse { id: req_id, blocks: Vec::new() }
+			));
 		}
 		to_send
 	};
@@ -285,7 +301,7 @@ fn basic_two_nodes_requests_in_parallel() {
 	let fut1 = future::poll_fn(move |cx| -> Poll<()> {
 		loop {
 			match ready!(service1.poll_next_unpin(cx)) {
-				Some(LegacyProtoOut::CustomProtocolOpen { peer_id, .. }) => {
+				Some(GenericProtoOut::CustomProtocolOpen { peer_id, .. }) => {
 					for msg in to_send.drain(..) {
 						service1.send_packet(&peer_id, msg.encode());
 					}
@@ -298,8 +314,8 @@ fn basic_two_nodes_requests_in_parallel() {
 	let fut2 = future::poll_fn(move |cx| {
 		loop {
 			match ready!(service2.poll_next_unpin(cx)) {
-				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
-				Some(LegacyProtoOut::CustomMessage { message, .. }) => {
+				Some(GenericProtoOut::CustomProtocolOpen { .. }) => {},
+				Some(GenericProtoOut::CustomMessage { message, .. }) => {
 					let pos = to_receive.iter().position(|m| m.encode() == message).unwrap();
 					to_receive.remove(pos);
 					if to_receive.is_empty() {
@@ -335,7 +351,7 @@ fn reconnect_after_disconnect() {
 			let mut service1_not_ready = false;
 
 			match service1.poll_next_unpin(cx) {
-				Poll::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
+				Poll::Ready(Some(GenericProtoOut::CustomProtocolOpen { .. })) => {
 					match service1_state {
 						ServiceState::NotConnected => {
 							service1_state = ServiceState::FirstConnec;
@@ -347,7 +363,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Poll::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
+				Poll::Ready(Some(GenericProtoOut::CustomProtocolClosed { .. })) => {
 					match service1_state {
 						ServiceState::FirstConnec => service1_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |
@@ -359,7 +375,7 @@ fn reconnect_after_disconnect() {
 			}
 
 			match service2.poll_next_unpin(cx) {
-				Poll::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
+				Poll::Ready(Some(GenericProtoOut::CustomProtocolOpen { .. })) => {
 					match service2_state {
 						ServiceState::NotConnected => {
 							service2_state = ServiceState::FirstConnec;
@@ -371,7 +387,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Poll::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
+				Poll::Ready(Some(GenericProtoOut::CustomProtocolClosed { .. })) => {
 					match service2_state {
 						ServiceState::FirstConnec => service2_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |

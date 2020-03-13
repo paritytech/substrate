@@ -50,8 +50,6 @@ pub trait BabeApi {
 }
 
 /// Implements the BabeRPC trait for interacting with Babe.
-///
-/// Uses a background thread to calculate epoch_authorship data.
 pub struct BabeRPCHandler<B: BlockT, C, SC> {
 	/// shared reference to the client.
 	client: Arc<C>,
@@ -74,7 +72,6 @@ impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
 		babe_config: Config,
 		select_chain: SC,
 	) -> Self {
-
 		Self {
 			client,
 			shared_epoch_changes,
@@ -228,7 +225,6 @@ mod tests {
 		let config = Config::get_or_compute(&*client).expect("config available");
 		let (_, link) = block_import(
 			config.clone(),
-			client.clone(),
 			client.clone(),
 			client.clone(),
 		).expect("can initialize block-import");

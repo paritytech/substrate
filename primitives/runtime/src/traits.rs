@@ -25,12 +25,12 @@ use std::fmt::Display;
 use std::str::FromStr;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
+use sp_core::{self, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
-use crate::generic::{Digest, DigestItem, CheckSignature};
+use crate::generic::{Digest, DigestItem};
 pub use sp_arithmetic::traits::{
 	AtLeast32Bit, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -345,6 +345,14 @@ pub trait OnInitialize<BlockNumber> {
 	fn on_initialize(_n: BlockNumber) {}
 }
 
+/// The runtime upgrade trait. Implementing this lets you express what should happen
+/// when the runtime upgrades, and changes may need to occur to your module.
+#[impl_for_tuples(30)]
+pub trait OnRuntimeUpgrade {
+	/// Perform a module upgrade.
+	fn on_runtime_upgrade() {}
+}
+
 /// Off-chain computation trait.
 ///
 /// Implementing this trait on a module allows you to perform long-running tasks
@@ -369,20 +377,19 @@ pub trait OffchainWorker<BlockNumber> {
 /// Abstraction around hashing
 // Stupid bug in the Rust compiler believes derived
 // traits must be fulfilled by all type parameters.
-pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq {
+pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq + Hasher<Out = <Self as Hash>::Output> {
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
 
-	/// The associated hash_db Hasher type.
-	type Hasher: Hasher<Out=Self::Output>;
-
 	/// Produce the hash of some byte-slice.
-	fn hash(s: &[u8]) -> Self::Output;
+	fn hash(s: &[u8]) -> Self::Output {
+		<Self as Hasher>::hash(s)
+	}
 
 	/// Produce the hash of some codec-encodable value.
 	fn hash_of<S: Encode>(s: &S) -> Self::Output {
-		Encode::using_encoded(s, Self::hash)
+		Encode::using_encoded(s, <Self as Hasher>::hash)
 	}
 
 	/// The ordered Patricia tree root of the given `input`.
@@ -397,12 +404,18 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
-impl Hash for BlakeTwo256 {
-	type Output = sp_core::H256;
-	type Hasher = Blake2Hasher;
-	fn hash(s: &[u8]) -> Self::Output {
+impl Hasher for BlakeTwo256 {
+	type Out = sp_core::H256;
+	type StdHasher = hash256_std_hasher::Hash256StdHasher;
+	const LENGTH: usize = 32;
+
+	fn hash(s: &[u8]) -> Self::Out {
 		sp_io::hashing::blake2_256(s).into()
 	}
+}
+
+impl Hash for BlakeTwo256 {
+	type Output = sp_core::H256;
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
 		sp_io::trie::blake2_256_root(input)
@@ -616,8 +629,6 @@ pub trait ExtrinsicMetadata {
 	type SignedExtensions: SignedExtension;
 }
 
-/// Extract the hasher type for a block.
-pub type HasherFor<B> = <HashFor<B> as Hash>::Hasher;
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
@@ -636,7 +647,7 @@ pub trait Checkable<Context>: Sized {
 	type Checked;
 
 	/// Check self, given an instance of Context.
-	fn check(self, signature: CheckSignature, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
+	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -648,15 +659,15 @@ pub trait BlindCheckable: Sized {
 	type Checked;
 
 	/// Check self.
-	fn check(self, signature: CheckSignature) -> Result<Self::Checked, TransactionValidityError>;
+	fn check(self) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 // Every `BlindCheckable` is also a `StaticCheckable` for arbitrary `Context`.
 impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
 
-	fn check(self, signature: CheckSignature, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
-		BlindCheckable::check(self, signature)
+	fn check(self, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
+		BlindCheckable::check(self)
 	}
 }
 
@@ -876,20 +887,13 @@ impl SignedExtension for () {
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable: Sized + Send + Sync {
-	/// ID of the account that is responsible for this piece of information (sender).
-	type AccountId: Member + MaybeDisplay;
-
 	/// Type by which we can dispatch. Restricts the `UnsignedValidator` type.
 	type Call;
 
 	/// An opaque set of information attached to the transaction.
 	type DispatchInfo: Clone;
 
-	/// Returns a reference to the sender if any.
-	fn sender(&self) -> Option<&Self::AccountId>;
-
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		info: Self::DispatchInfo,
@@ -898,7 +902,6 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: Self::DispatchInfo,
@@ -924,7 +927,6 @@ pub trait GetNodeBlockType {
 /// the transaction for the transaction pool.
 /// During block execution phase one need to perform the same checks anyway,
 /// since this function is not being called.
-#[deprecated(note = "Use SignedExtensions instead.")]
 pub trait ValidateUnsigned {
 	/// The call to validate
 	type Call;

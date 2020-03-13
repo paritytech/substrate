@@ -1,9 +1,12 @@
 [package]
 name = "sc-service-test"
-version = "2.0.0"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+publish = false
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 tempfile = "3.1.0"
@@ -13,10 +16,10 @@ log = "0.4.8"
 env_logger = "0.7.0"
 fdlimit = "0.1.1"
 futures = { version = "0.3.1", features = ["compat"] }
-sc-service = { version = "0.8.0", default-features = false, path = "../../service" }
-sc-network = { version = "0.8", path = "../../network" }
-sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
-sc-client = { version = "0.8", path = "../../" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
+sc-service = { version = "0.8.0-alpha.2", default-features = false, path = "../../service" }
+sc-network = { version = "0.8.0-alpha.2", path = "../../network" }
+sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/common" }
+sc-client = { version = "0.8.0-alpha.2", path = "../../" }
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
+sp-transaction-pool = { version = "2.0.0-alpha.2", path = "../../../primitives/transaction-pool" }

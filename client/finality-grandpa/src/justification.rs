@@ -15,10 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
-use sc_client::Client;
-use sc_client_api::{CallExecutor, backend::Backend};
-use sp_blockchain::Error as ClientError;
+use sp_blockchain::{Error as ClientError, HeaderBackend};
 use parity_scale_codec::{Encode, Decode};
 use finality_grandpa::voter_set::VoterSet;
 use finality_grandpa::{Error as GrandpaError};
@@ -47,14 +46,12 @@ pub struct GrandpaJustification<Block: BlockT> {
 impl<Block: BlockT> GrandpaJustification<Block> {
 	/// Create a GRANDPA justification from the given commit. This method
 	/// assumes the commit is valid and well-formed.
-	pub(crate) fn from_commit<B, E, RA>(
-		client: &Client<B, E, Block, RA>,
+	pub(crate) fn from_commit<C>(
+		client: &Arc<C>,
 		round: u64,
 		commit: Commit<Block>,
 	) -> Result<GrandpaJustification<Block>, Error> where
-		B: Backend<Block>,
-		E: CallExecutor<Block> + Send + Sync,
-		RA: Send + Sync,
+		C: HeaderBackend<Block>,
 	{
 		let mut votes_ancestries_hashes = HashSet::new();
 		let mut votes_ancestries = Vec::new();
@@ -69,7 +66,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			loop {
 				if current_hash == commit.target_hash { break; }
 
-				match client.header(&BlockId::Hash(current_hash))? {
+				match client.header(BlockId::Hash(current_hash))? {
 					Some(current_header) => {
 						if *current_header.number() <= commit.target_number {
 							return error();
