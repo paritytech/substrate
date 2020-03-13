@@ -297,6 +297,7 @@ mod tests {
 	use crate::in_mem::Backend as InMemBackend;
 	use sc_client_api::ProofProvider;
 	use sp_runtime::traits::BlakeTwo256;
+	use sc_block_builder::BlockBuilderProvider;
 
 	struct DummyCallExecutor;
 
@@ -367,7 +368,7 @@ mod tests {
 	}
 
 	fn local_executor() -> NativeExecutor<substrate_test_runtime_client::LocalExecutor> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 	}
 
 	#[test]

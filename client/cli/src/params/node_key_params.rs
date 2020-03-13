@@ -16,7 +16,7 @@
 
 use std::{path::PathBuf, str::FromStr};
 use structopt::StructOpt;
-use sc_service::{Configuration, RuntimeGenesis};
+use sc_service::Configuration;
 use sc_network::config::NodeKeyConfig;
 use sp_core::H256;
 
@@ -93,14 +93,11 @@ pub struct NodeKeyParams {
 impl NodeKeyParams {
 	/// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
 	/// of an optional network config storage directory.
-	pub fn update_config<'a, G, E>(
+	pub fn update_config<'a>(
 		&self,
-		mut config: &'a mut Configuration<G, E>,
+		mut config: &'a mut Configuration,
 		net_config_path: Option<&PathBuf>,
-	) -> error::Result<&'a NodeKeyConfig>
-	where
-		G: RuntimeGenesis,
-	{
+	) -> error::Result<&'a NodeKeyConfig> {
 		config.network.node_key = match self.node_key_type {
 			NodeKeyType::Ed25519 => {
 				let secret = if let Some(node_key) = self.node_key.as_ref() {
@@ -146,7 +143,7 @@ mod tests {
 	fn test_node_key_config_input() {
 		fn secret_input(net_config_dir: Option<&PathBuf>) -> error::Result<()> {
 			NodeKeyType::variants().iter().try_for_each(|t| {
-				let mut config = Configuration::<(), ()>::default();
+				let mut config = Configuration::default();
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let sk = match node_key_type {
 					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
@@ -173,7 +170,7 @@ mod tests {
 	fn test_node_key_config_file() {
 		fn secret_file(net_config_dir: Option<&PathBuf>) -> error::Result<()> {
 			NodeKeyType::variants().iter().try_for_each(|t| {
-				let mut config = Configuration::<(), ()>::default();
+				let mut config = Configuration::default();
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let tmp = tempfile::Builder::new().prefix("alice").tempdir()?;
 				let file = tmp.path().join(format!("{}_mysecret", t)).to_path_buf();
@@ -212,7 +209,7 @@ mod tests {
 
 		fn no_config_dir() -> error::Result<()> {
 			with_def_params(|params| {
-				let mut config = Configuration::<(), ()>::default();
+				let mut config = Configuration::default();
 				let typ = params.node_key_type;
 				params.update_config(&mut config, None)
 					.and_then(|c| match c {
@@ -225,7 +222,7 @@ mod tests {
 
 		fn some_config_dir(net_config_dir: &PathBuf) -> error::Result<()> {
 			with_def_params(|params| {
-				let mut config = Configuration::<(), ()>::default();
+				let mut config = Configuration::default();
 				let dir = PathBuf::from(net_config_dir.clone());
 				let typ = params.node_key_type;
 				params.update_config(&mut config, Some(net_config_dir))

@@ -767,6 +767,7 @@ decl_storage! {
 		///
 		/// This is similar to [`ErasStakers`] but number of nominators exposed is reduce to the
 		/// `T::MaxNominatorRewardedPerValidator` biggest stakers.
+		/// (Note: the field `total` and `own` of the exposure remains unchanged).
 		/// This is used to limit the i/o cost for the nominator payout.
 		///
 		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
@@ -896,6 +897,16 @@ decl_event!(
 		/// An old slashing report from a prior era was discarded because it could
 		/// not be processed.
 		OldSlashingReportDiscarded(SessionIndex),
+		/// An account has bonded this amount.
+		///
+		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
+		/// it will not be emitted for staking rewards when they are added to stake.
+		Bonded(AccountId, Balance),
+		/// An account has unbonded this amount.
+		Unbonded(AccountId, Balance),
+		/// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
+		/// from the unlocking queue.
+		Withdrawn(AccountId, Balance),
 	}
 );
 
@@ -966,6 +977,8 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
+		/// Emits `Bonded`.
+		///
 		/// # <weight>
 		/// - Independent of the arguments. Moderate complexity.
 		/// - O(1).
@@ -1006,6 +1019,7 @@ decl_module! {
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
+			Self::deposit_event(RawEvent::Bonded(stash.clone(), value));
 			let item = StakingLedger {
 				stash,
 				total: value,
@@ -1025,6 +1039,8 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
 		///
+		/// Emits `Bonded`.
+		///
 		/// # <weight>
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - O(1).
@@ -1043,6 +1059,7 @@ decl_module! {
 				let extra = extra.min(max_additional);
 				ledger.total += extra;
 				ledger.active += extra;
+				Self::deposit_event(RawEvent::Bonded(stash, extra));
 				Self::update_ledger(&controller, &ledger);
 			}
 		}
@@ -1059,6 +1076,8 @@ decl_module! {
 		/// to be called first to remove some of the chunks (if possible).
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		///
+		/// Emits `Unbonded`.
 		///
 		/// See also [`Call::withdraw_unbonded`].
 		///
@@ -1095,6 +1114,7 @@ decl_module! {
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
+				Self::deposit_event(RawEvent::Unbonded(ledger.stash.clone(), value));
 			}
 		}
 
@@ -1104,6 +1124,8 @@ decl_module! {
 		/// whatever it wants.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		///
+		/// Emits `Withdrawn`.
 		///
 		/// See also [`Call::unbond`].
 		///
@@ -1118,6 +1140,7 @@ decl_module! {
 		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let (stash, old_total) = (ledger.stash.clone(), ledger.total);
 			if let Some(current_era) = Self::current_era() {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
@@ -1125,15 +1148,21 @@ decl_module! {
 			if ledger.unlocking.is_empty() && ledger.active.is_zero() {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
-				// left. We can now safely remove this.
-				let stash = ledger.stash;
-				// remove all staking-related information.
+				// left. We can now safely remove all staking-related information.
 				Self::kill_stash(&stash)?;
 				// remove the lock.
 				T::Currency::remove_lock(STAKING_ID, &stash);
 			} else {
 				// This was the consequence of a partial unbond. just update the ledger and move on.
 				Self::update_ledger(&controller, &ledger);
+			}
+
+			// `old_total` should never be less than the new total because
+			// `consolidate_unlocked` strictly subtracts balance.
+			if ledger.total < old_total {
+				// Already checked that this won't overflow by entry condition.
+				let value = old_total - ledger.total;
+				Self::deposit_event(RawEvent::Withdrawn(stash, value));
 			}
 		}
 
@@ -1349,7 +1378,10 @@ decl_module! {
 		/// - `who` is the controller account of the nominator to pay out.
 		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
 		///   then it indicates an instruction to skip the payout of all previous eras.
-		/// - `validators` is the list of all validators that `who` had exposure to during `era`.
+		/// - `validators` is the list of all validators that `who` had exposure to during `era`,
+		///   alongside the index of `who` in the clipped exposure of the validator.
+		///   I.e. each element is a tuple of
+		///   `(validator, index of `who` in clipped exposure of validator)`.
 		///   If it is incomplete, then less than the full reward will be paid out.
 		///   It must not exceed `MAX_NOMINATIONS`.
 		///
@@ -1542,7 +1574,7 @@ impl<T: Trait> Module<T> {
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 		let commission = Self::eras_validator_prefs(&era, &ledger.stash).commission;
-		let exposure = <ErasStakers<T>>::get(&era, &ledger.stash);
+		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
 
 		let exposure_part = Perbill::from_rational_approximation(
 			exposure.own,

@@ -351,6 +351,7 @@ pub mod tests {
 	use sp_state_machine::Backend;
 	use super::*;
 	use sc_client_api::{StorageProvider, ProofProvider};
+	use sc_block_builder::BlockBuilderProvider;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
@@ -362,7 +363,7 @@ pub mod tests {
 	>;
 
 	fn local_executor() -> NativeExecutor<substrate_test_runtime_client::LocalExecutor> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 	}
 
 	fn prepare_for_read_proof_check() -> (TestChecker, Header, StorageProof, u32) {
