@@ -2869,7 +2869,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 			// Fail: Era not finished yet
 			Error::<Test>::InvalidEraToReward
 		);
-		
+
 		// Era 0 can't be rewarded anymore and current era can't be rewarded yet
 		// only era 1 and 2 can be rewarded.
 
@@ -3042,6 +3042,48 @@ fn set_history_depth_works() {
 
 /* Benchmarking Tests */
 
+use crate::benchmarking::{
+	create_validators_with_nominators_for_era,
+	create_validator_with_nominators,
+	create_nominator_with_validators,
+};
+
+#[test]
+fn create_validators_with_nominators_for_era_works() {
+	ExtBuilder::default().build().execute_with(|| {
+		let v = 10;
+		let n = 100;
+		let mut validator_iter = Validators::<Test>::enumerate();
+		let mut nominator_iter = Nominators::<Test>::enumerate();
+
+		// Clean up genesis validators and nominators to make test work
+		while let Some((key, _value)) = validator_iter.next() {
+			Validators::<Test>::remove(key);
+		}
+		while let Some((key, _value)) = nominator_iter.next() {
+			Nominators::<Test>::remove(key);
+		}
+
+		create_validators_with_nominators_for_era::<Test>(v,n).unwrap();
+
+		let mut validator_iter = Validators::<Test>::enumerate();
+		let mut nominator_iter = Nominators::<Test>::enumerate();
+
+		let mut count_validators = 0;
+		while let Some(_) = validator_iter.next() {
+			count_validators += 1;
+		}
+		let mut count_nominators = 0;
+		while let Some((_key, value)) = nominator_iter.next() {
+			assert_eq!(value.targets.len(), v as usize);
+			count_nominators += 1;
+		}
+
+		assert_eq!(count_validators, v);
+		assert_eq!(count_nominators, n);
+	});
+}
+
 #[test]
 fn create_validator_with_nominators_works() {
 	ExtBuilder::default().build().execute_with(|| {
@@ -3053,7 +3095,7 @@ fn create_validator_with_nominators_works() {
 			Validators::<Test>::remove(key);
 		}
 
-		let validator = crate::benchmarking::create_validator_with_nominators::<Test>(
+		let validator = create_validator_with_nominators::<Test>(
 			n,
 			MAX_NOMINATIONS as u32,
 		).unwrap();
@@ -3076,7 +3118,7 @@ fn create_nominator_with_validators_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		let v = 5;
 
-		let (nominator, validators) = crate::benchmarking::create_nominator_with_validators::<Test>(v).unwrap();
+		let (nominator, validators) = create_nominator_with_validators::<Test>(v).unwrap();
 
 		let current_era = CurrentEra::get().unwrap();
 		let controller = nominator;

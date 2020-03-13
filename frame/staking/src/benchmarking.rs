@@ -18,9 +18,13 @@
 
 use super::*;
 
+use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
+
+use sp_runtime::traits::One;
+use sp_io::hashing::blake2_256;
+
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::One;
 
 use crate::Module as Staking;
 use frame_system::Module as System;
@@ -44,16 +48,6 @@ pub fn create_stash_controller<T: Trait>(n: u32) -> Result<(T::AccountId, T::Acc
 	return Ok((stash, controller))
 }
 
-fn create_stash_controller2<T: Trait>(n: u32) -> Result<(T::AccountId, T::AccountId), &'static str> {
-	let stash = create_funded_user::<T>("stash2", n);
-	let controller = create_funded_user::<T>("controller2", n);
-	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
-	let reward_destination = RewardDestination::Staked;
-	let amount = T::Currency::minimum_balance() * 10.into();
-	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
-	return Ok((stash, controller))
-}
-
 fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
 	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max as usize);
 	for i in 0 .. max {
@@ -68,9 +62,10 @@ fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLooku
 	Ok(validators)
 }
 
-// This function generates v validators each of whom have n nominators ready for a new era.
+// This function generates v validators and n nominators who are randomly nominating up to MAX_NOMINATIONS.
 pub fn create_validators_with_nominators_for_era<T: Trait>(v: u32, n: u32) -> Result<(), &'static str> {
-	let mut validators: Vec<T::AccountId> = Vec::with_capacity(v as usize);
+	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(v as usize);
+	let mut rng = ChaChaRng::from_seed(SEED.using_encoded(blake2_256));
 
 	// Create v validators
 	for i in 0 .. v {
@@ -80,13 +75,22 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(v: u32, n: u32) -> Re
 		};
 		Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
 		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
-		validators.push(v_controller.clone());
+		validators.push(stash_lookup.clone());
+	}
 
-		// Give each validator n nominators
-		for j in 0 .. n {
-			let (_n_stash, n_controller) = create_stash_controller2::<T>(n * i + j)?;
-			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
+	// Create n nominators
+	for j in 0 .. n {
+		let (_n_stash, n_controller) = create_stash_controller::<T>(u32::max_value() - j)?;
+
+		// Have them randomly validate
+		let mut available_validators = validators.clone();
+		let mut selected_validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(MAX_NOMINATIONS);
+		for _ in 0 .. v.min(MAX_NOMINATIONS as u32) {
+			let selected = rng.next_u32() as usize % available_validators.len();
+			let validator = available_validators.remove(selected);
+			selected_validators.push(validator);
 		}
+		Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), selected_validators)?;
 	}
 
 	ValidatorCount::put(v);
@@ -114,7 +118,7 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> R
 
 	// Give the validator n nominators, but keep total users in the system the same.
 	for i in 0 .. upper_bound {
-		let (_n_stash, n_controller) = create_stash_controller2::<T>(i)?;
+		let (_n_stash, n_controller) = create_stash_controller::<T>(u32::max_value() - i)?;
 		if i < n {
 			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
 		}
@@ -172,7 +176,7 @@ pub fn create_nominator_with_validators<T: Trait>(v: u32) -> Result<(T::AccountI
 	}
 
 	// Create a nominator
-	let (_n_stash, n_controller) = create_stash_controller2::<T>(0)?;
+	let (_n_stash, n_controller) = create_stash_controller::<T>(u32::max_value())?;
 	Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), validator_lookups)?;
 
 	ValidatorCount::put(v);
