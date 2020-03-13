@@ -285,7 +285,7 @@ decl_module! {
 					set_id,
 					equivocation_proof.round(),
 				),
-			);
+			).map_err(|_| "Duplicate offence report.")?;
 		}
 
 		fn on_initialize() {

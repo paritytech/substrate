@@ -39,7 +39,7 @@ use sp_application_crypto::{key_types::GRANDPA, RuntimeAppPublic};
 use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
 use sp_runtime::{traits::IdentifyAccount, DispatchResult, KeyTypeId, PerThing, Perbill};
 use sp_staking::{
-	offence::{Kind, Offence, ReportOffence},
+	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,
 };
 
@@ -65,7 +65,10 @@ pub trait HandleEquivocation<T: super::Trait> {
 	) -> Option<(Self::KeyOwnerIdentification, SessionIndex, u32)>;
 
 	/// Report an offence proved by the given reporters.
-	fn report_offence(reporters: Vec<T::AccountId>, offence: Self::Offence);
+	fn report_offence(
+		reporters: Vec<T::AccountId>,
+		offence: Self::Offence,
+	) -> Result<(), OffenceError>;
 
 	/// Create and dispatch an equivocation report extrinsic.
 	fn submit_equivocation_report(
@@ -89,7 +92,8 @@ impl<T: super::Trait> HandleEquivocation<T> for () {
 	fn report_offence(
 		_reporters: Vec<T::AccountId>,
 		_offence: GrandpaEquivocationOffence<Self::KeyOwnerIdentification>,
-	) {
+	) -> Result<(), OffenceError> {
+		Ok(())
 	}
 
 	fn submit_equivocation_report(
@@ -160,8 +164,8 @@ where
 		Some((offender, session_index, validator_set_count))
 	}
 
-	fn report_offence(reporters: Vec<T::AccountId>, offence: O) {
-		R::report_offence(reporters, offence);
+	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
+		R::report_offence(reporters, offence)
 	}
 
 	fn submit_equivocation_report(
