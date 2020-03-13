@@ -116,6 +116,9 @@ pub trait BareCryptoStore: Send + Sync {
 	///
 	/// Signs a message with the private key that matches
 	/// the public key passed.
+	///
+	/// Returns the signature if key is found & supported,
+	/// an error otherwise.
 	fn sign_with(
 		&self,
 		id: KeyTypeId,
