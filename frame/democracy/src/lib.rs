@@ -2863,7 +2863,7 @@ mod tests {
 				2,
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
-				0
+				0,
 			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, Vote {
 				aye: true,
