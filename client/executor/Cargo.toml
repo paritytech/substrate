@@ -39,6 +39,7 @@ sc-runtime-test = { version = "2.0.0-dev", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0-dev", path = "../../test-utils/runtime" }
 sp-state-machine = { version = "0.8.0-alpha.2", path = "../../primitives/state-machine" }
 test-case = "0.3.3"
+sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
 
 [features]
 default = [ "std" ]

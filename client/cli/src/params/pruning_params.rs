@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use structopt::StructOpt;
-use sc_service::{Configuration, RuntimeGenesis, PruningMode};
+use sc_service::{Configuration, PruningMode};
 
 use crate::error;
 
@@ -33,15 +33,12 @@ pub struct PruningParams {
 
 impl PruningParams {
 	/// Put block pruning CLI params into `config` object.
-	pub fn update_config<G, E>(
+	pub fn update_config(
 		&self,
-		mut config: &mut Configuration<G, E>,
+		mut config: &mut Configuration,
 		role: sc_service::Roles,
 		unsafe_pruning: bool,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-	{
+	) -> error::Result<()> {
 		// by default we disable pruning if the node is an authority (i.e.
 		// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
 		// node is an authority and pruning is enabled explicitly, then we error

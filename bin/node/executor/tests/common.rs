@@ -17,11 +17,8 @@
 use codec::{Encode, Decode};
 use frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
-use sp_core::{
-	Blake2Hasher, NeverNativeValue, NativeOrEncoded,
-	traits::CodeExecutor,
-};
-use sp_runtime::{ApplyExtrinsicResult, traits::Header as HeaderT};
+use sp_core::{NeverNativeValue, NativeOrEncoded, traits::{CodeExecutor, RuntimeCode}};
+use sp_runtime::{ApplyExtrinsicResult, traits::{Header as HeaderT, BlakeTwo256}};
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
 use sc_executor::error::Result;
 
@@ -32,6 +29,7 @@ use node_runtime::{
 };
 use node_primitives::{Hash, BlockNumber};
 use node_testing::keyring::*;
+use sp_externalities::Externalities;
 
 /// The wasm runtime code.
 ///
@@ -60,22 +58,32 @@ pub fn from_block_number(n: u32) -> Header {
 }
 
 pub fn executor() -> NativeExecutor<Executor> {
-	NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+	NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 }
 
 pub fn executor_call<
 	R:Decode + Encode + PartialEq,
 	NC: FnOnce() -> std::result::Result<R, String> + std::panic::UnwindSafe
 >(
-	t: &mut TestExternalities<Blake2Hasher>,
+	t: &mut TestExternalities<BlakeTwo256>,
 	method: &str,
 	data: &[u8],
 	use_native: bool,
 	native_call: Option<NC>,
 ) -> (Result<NativeOrEncoded<R>>, bool) {
 	let mut t = t.ext();
-	executor().call::<_, R, NC>(
+
+	let code = t.storage(sp_core::storage::well_known_keys::CODE).unwrap();
+	let heap_pages = t.storage(sp_core::storage::well_known_keys::HEAP_PAGES);
+	let runtime_code = RuntimeCode {
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(code.as_slice().into()),
+		hash: sp_core::blake2_256(&code).to_vec(),
+		heap_pages: heap_pages.and_then(|hp| Decode::decode(&mut &hp[..]).ok()),
+	};
+
+	executor().call::<R, NC>(
 		&mut t,
+		&runtime_code,
 		method,
 		data,
 		use_native,
@@ -83,7 +91,7 @@ pub fn executor_call<
 	)
 }
 
-pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
+pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<BlakeTwo256> {
 	let mut ext = TestExternalities::new_with_code(
 		code,
 		node_testing::genesis::config(support_changes_trie, Some(code)).build_storage().unwrap(),
@@ -97,7 +105,7 @@ pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalitie
 /// `extrinsics` must be a list of valid extrinsics, i.e. none of the extrinsics for example
 /// can report `ExhaustResources`. Otherwise, this function panics.
 pub fn construct_block(
-	env: &mut TestExternalities<Blake2Hasher>,
+	env: &mut TestExternalities<BlakeTwo256>,
 	number: BlockNumber,
 	parent_hash: Hash,
 	extrinsics: Vec<CheckedExtrinsic>,
@@ -109,7 +117,7 @@ pub fn construct_block(
 
 	// calculate the header fields that we can.
 	let extrinsics_root =
-		Layout::<Blake2Hasher>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
+		Layout::<BlakeTwo256>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
 			.to_fixed_bytes()
 			.into();
 
