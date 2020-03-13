@@ -17,13 +17,13 @@
 //! Migration types for epoch changes.
 
 use std::collections::BTreeMap;
-use codec::Decode;
+use codec::{Encode, Decode};
 use fork_tree::ForkTree;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use crate::{Epoch, EpochChanges, PersistedEpoch, PersistedEpochHeader};
 
 /// Legacy definition of epoch changes.
-#[derive(Clone, Decode)]
+#[derive(Clone, Encode, Decode)]
 pub struct EpochChangesV0<Hash, Number, E: Epoch> {
 	inner: ForkTree<Hash, Number, PersistedEpoch<E>>,
 }
@@ -35,11 +35,16 @@ impl<Hash, Number, E: Epoch> EpochChangesV0<Hash, Number, E> where
 	Hash: PartialEq + Ord + Copy,
 	Number: Ord + Copy,
 {
+	/// Create a new value of this type from raw.
+	pub fn from_raw(inner: ForkTree<Hash, Number, PersistedEpoch<E>>) -> Self {
+		Self { inner }
+	}
+
 	/// Migrate the type into current epoch changes definition.
 	pub fn migrate(self) -> EpochChanges<Hash, Number, E> {
 		let mut epochs = BTreeMap::new();
 
-		let inner = self.inner.map(|hash, number, data| {
+		let inner = self.inner.map(&mut |hash, number, data| {
 			let header = PersistedEpochHeader::from(&data);
 			epochs.insert((*hash, *number), data);
 			header
