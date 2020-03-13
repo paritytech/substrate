@@ -1446,6 +1446,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			return;
 		}
 
+		// blocks are announced by default
+		if !self.config.default_block_announce {
+			return;
+		}
+
 		// send out block announcements
 		self.send_announcement(header, data, is_best, false);
 	}
