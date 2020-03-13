@@ -179,30 +179,6 @@ where
 		result.map(|r| r.encode())
 	}
 
-	fn original_storage(&self, key: &[u8]) -> Option<StorageValue> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
-		let result = self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
-
-		trace!(target: "state-trace", "{:04x}: GetOriginal {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from)
-		);
-		result
-	}
-
-	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
-		let result = self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
-
-		trace!(target: "state-trace", "{:04x}: GetOriginalHash {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			result,
-		);
-		result.map(|r| r.encode())
-	}
-
 	fn child_storage(
 		&self,
 		storage_key: ChildStorageKey,
@@ -250,47 +226,6 @@ where
 			result,
 		);
 
-		result.map(|r| r.encode())
-	}
-
-	fn original_child_storage(
-		&self,
-		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
-		key: &[u8],
-	) -> Option<StorageValue> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
-		let result = self.backend
-			.child_storage(storage_key.as_ref(), child_info, key)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL);
-
-		trace!(target: "state-trace", "{:04x}: ChildOriginal({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&storage_key.as_ref()),
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from),
-		);
-
-		result
-	}
-
-	fn original_child_storage_hash(
-		&self,
-		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
-		let result = self.backend
-			.child_storage_hash(storage_key.as_ref(), child_info, key)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL);
-
-		trace!(target: "state-trace", "{}: ChildHashOriginal({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&storage_key.as_ref()),
-			HexDisplay::from(&key),
-			result,
-		);
 		result.map(|r| r.encode())
 	}
 
@@ -820,21 +755,18 @@ mod tests {
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
 		assert_eq!(ext.child_storage(child(), CHILD_INFO_1, &[10]), Some(vec![10]));
-		assert_eq!(ext.original_child_storage(child(), CHILD_INFO_1, &[10]), Some(vec![10]));
 		assert_eq!(
 			ext.child_storage_hash(child(), CHILD_INFO_1, &[10]),
 			Some(Blake2Hasher::hash(&[10]).as_ref().to_vec()),
 		);
 
 		assert_eq!(ext.child_storage(child(), CHILD_INFO_1, &[20]), None);
-		assert_eq!(ext.original_child_storage(child(), CHILD_INFO_1, &[20]), Some(vec![20]));
 		assert_eq!(
 			ext.child_storage_hash(child(), CHILD_INFO_1, &[20]),
 			None,
 		);
 
 		assert_eq!(ext.child_storage(child(), CHILD_INFO_1, &[30]), Some(vec![31]));
-		assert_eq!(ext.original_child_storage(child(), CHILD_INFO_1, &[30]), Some(vec![40]));
 		assert_eq!(
 			ext.child_storage_hash(child(), CHILD_INFO_1, &[30]),
 			Some(Blake2Hasher::hash(&[31]).as_ref().to_vec()),

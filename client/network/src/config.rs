@@ -21,7 +21,7 @@
 
 pub use crate::chain::{Client, FinalityProofProvider};
 pub use crate::on_demand_layer::OnDemand;
-pub use crate::service::TransactionPool;
+pub use crate::service::{TransactionPool, EmptyTransactionPool};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -41,6 +41,8 @@ use core::{fmt, iter};
 use std::{future::Future, pin::Pin};
 use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
 use zeroize::Zeroize;
+use prometheus_endpoint::Registry;
+
 
 /// Network initialization parameters.
 pub struct Params<B: BlockT, H: ExHashT> {
@@ -90,6 +92,9 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Type to check incoming block announcements.
 	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
+
+	/// Registry for recording prometheus metrics to.
+	pub metrics_registry: Option<Registry>,
 }
 
 bitflags! {

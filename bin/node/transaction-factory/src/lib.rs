@@ -26,12 +26,12 @@ use std::fmt::Display;
 
 use log::info;
 
-use sc_client::Client;
 use sp_block_builder::BlockBuilder;
-use sp_api::{ConstructRuntimeApi, ProvideRuntimeApi, ApiExt};
+use sc_block_builder::BlockBuilderProvider;
+use sp_api::{ProvideRuntimeApi, ApiExt, CallApiAt, TransactionFor};
 use sp_consensus::{
-	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy,
-	SelectChain
+	BlockOrigin, BlockImportParams, InherentData,
+	ForkChoiceStrategy, SelectChain
 };
 use sp_consensus::block_import::BlockImport;
 use codec::{Decode, Encode};
@@ -39,6 +39,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, AtLeast32Bit, One, Zero,
 };
+use sp_blockchain::HeaderBackend;
 
 pub trait RuntimeAdapter {
 	type AccountId: Display;
@@ -79,30 +80,28 @@ pub trait RuntimeAdapter {
 }
 
 /// Manufactures transactions. The exact amount depends on `num` and `rounds`.
-pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
+pub fn factory<Backend, Block, Client, Sc, RA>(
 	mut factory_state: RA,
-	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
+	client: &Arc<Client>,
 	select_chain: &Sc,
 ) -> sc_cli::Result<()>
-where
-	Block: BlockT,
-	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
-	Backend: sc_client_api::backend::Backend<Block> + Send,
-	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-		BlockBuilder<Block, Error = sp_blockchain::Error> +
-		ApiExt<Block, StateBackend = Backend::State>,
-	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
-	Sc: SelectChain<Block>,
-	RA: RuntimeAdapter<Block = Block>,
-	Block::Hash: From<sp_core::H256>,
+	where
+		Backend: sc_client_api::backend::Backend<Block> + Send,
+		Block: BlockT,
+		Client: BlockBuilderProvider<Backend, Block, Client> + CallApiAt<Block, Error = sp_blockchain::Error>
+			+ ProvideRuntimeApi<Block> + HeaderBackend<Block>,
+		Client::Api: BlockBuilder<Block, Error = sp_blockchain::Error> + ApiExt<Block, StateBackend = Backend::State>,
+		Sc: SelectChain<Block>,
+		RA: RuntimeAdapter<Block = Block>,
+		Block::Hash: From<sp_core::H256>,
+		for<'a> &'a Client: BlockImport<Block, Transaction = TransactionFor<Client, Block>>,
 {
 	let best_header: Result<<Block as BlockT>::Header, sc_cli::Error> =
 		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
 	let mut best_hash = best_header?.hash();
 	let mut best_block_id = BlockId::<Block>::hash(best_hash);
 	let version = client.runtime_version_at(&best_block_id)?.spec_version;
-	let genesis_hash = client.block_hash(Zero::zero())?
+	let genesis_hash = client.hash(Zero::zero())?
 		.expect("Genesis block always exists; qed").into();
 
 	while factory_state.block_number() < factory_state.blocks() {
@@ -159,7 +158,7 @@ where
 		let mut import = BlockImportParams::new(BlockOrigin::File, block.header().clone());
 		import.body = Some(block.extrinsics().to_vec());
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-		client.clone().import_block(import, HashMap::new()).expect("Failed to import block");
+		(&**client).import_block(import, HashMap::new()).expect("Failed to import block");
 
 		info!("Imported block at {}", factory_state.block_number());
 	}

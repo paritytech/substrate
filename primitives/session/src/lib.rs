@@ -25,6 +25,8 @@ use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 #[cfg(feature = "std")]
 use sp_api::ProvideRuntimeApi;
 
+use sp_runtime::RuntimeDebug;
+
 use sp_core::crypto::KeyTypeId;
 use sp_staking::SessionIndex;
 use sp_std::vec::Vec;
@@ -60,12 +62,19 @@ sp_api::decl_runtime_apis! {
 }
 
 /// Proof of membership of a specific key in a given session.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, Debug)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct MembershipProof {
 	/// The session index on which the specific key is a member.
 	pub session: SessionIndex,
 	/// Trie nodes of a merkle proof of session membership.
 	pub trie_nodes: Vec<Vec<u8>>,
+}
+
+impl MembershipProof {
+	/// Returns a session this proof was generated for.
+	pub fn session(&self) -> SessionIndex {
+		self.session
+	}
 }
 
 /// Generate the initial session keys with the given seeds, at the given block and store them in

@@ -191,6 +191,20 @@ impl PeerState {
 			PeerState::Incoming { .. } => false,
 		}
 	}
+
+	/// True if that node has been requested by the PSM.
+	fn is_requested(&self) -> bool {
+		match self {
+			PeerState::Poisoned => false,
+			PeerState::Banned { .. } => false,
+			PeerState::PendingRequest { .. } => true,
+			PeerState::Requested => true,
+			PeerState::Disabled { .. } => false,
+			PeerState::DisabledPendingEnable { .. } => true,
+			PeerState::Enabled { .. } => true,
+			PeerState::Incoming { .. } => false,
+		}
+	}
 }
 
 /// State of an "incoming" message sent to the peer set manager.
@@ -277,6 +291,11 @@ impl GenericProto {
 		self.notif_protocols.push((protocol_name.into(), engine_id, handshake_msg.into()));
 	}
 
+	/// Returns the number of discovered nodes that we keep in memory.
+	pub fn num_discovered_peers(&self) -> usize {
+		self.peerset.num_discovered_peers()
+	}
+
 	/// Returns the list of all the peers we have an open channel to.
 	pub fn open_peers<'a>(&'a self) -> impl Iterator<Item = &'a PeerId> + 'a {
 		self.peers.iter().filter(|(_, state)| state.is_open()).map(|(id, _)| id)
@@ -358,6 +377,11 @@ impl GenericProto {
 			PeerState::Poisoned =>
 				error!(target: "sub-libp2p", "State of {:?} is poisoned", peer_id),
 		}
+	}
+
+	/// Returns the list of all the peers that the peerset currently requests us to be connected to.
+	pub fn requested_peers<'a>(&'a self) -> impl Iterator<Item = &'a PeerId> + 'a {
+		self.peers.iter().filter(|(_, state)| state.is_requested()).map(|(id, _)| id)
 	}
 
 	/// Returns true if we try to open protocols with the given peer.

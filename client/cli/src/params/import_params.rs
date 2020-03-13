@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use structopt::StructOpt;
-use sc_service::{Configuration, RuntimeGenesis, config::DatabaseConfig};
+use sc_service::{Configuration, config::DatabaseConfig};
 
 use crate::error;
 use crate::arg_enums::{
@@ -55,7 +55,7 @@ pub struct ImportParams {
 	pub execution_strategies: ExecutionStrategies,
 
 	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB", default_value = "1024")]
+	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
 	pub database_cache_size: u32,
 
 	/// Specify the state cache size.
@@ -79,15 +79,12 @@ pub struct ImportParams {
 
 impl ImportParams {
 	/// Put block import CLI params into `config` object.
-	pub fn update_config<G, E>(
+	pub fn update_config(
 		&self,
-		mut config: &mut Configuration<G, E>,
+		mut config: &mut Configuration,
 		role: sc_service::Roles,
 		is_dev: bool,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-	{
+	) -> error::Result<()> {
 		use sc_client_api::execution_extensions::ExecutionStrategies;
 
 		if let Some(DatabaseConfig::Path { ref mut cache_size, .. }) = config.database {
