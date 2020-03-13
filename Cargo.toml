@@ -79,6 +79,7 @@ members = [
 	"frame/identity",
 	"frame/im-online",
 	"frame/indices",
+	"frame/inflation",
 	"frame/membership",
 	"frame/metadata",
 	"frame/nicks",
