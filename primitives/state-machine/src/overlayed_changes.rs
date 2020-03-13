@@ -80,8 +80,11 @@ pub struct OverlayedValue {
 pub struct ChildChangeSet {
 	/// Child definition.
 	pub info: ChildInfo,
-	/// Kind of modification for this change.
-	pub change: ChildChange,
+	/// Kind of modification for this change, and
+	/// possibly extrinsic index of the change.
+	/// Currently it can only be a single extrinsic
+	/// for first bulk deletion.
+	pub change: (ChildChange, Option<u32>),
 	/// Deltas of modified values for this change.
 	pub values: BTreeMap<StorageKey, OverlayedValue>,
 }
@@ -233,14 +236,18 @@ impl OverlayedChanges {
 	/// value has been set.
 	pub fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(child) = self.prospective.children_default.get(child_info.storage_key()) {
-			// TODO filter deleted
+			if child.change.0 == ChildChange::BulkDeleteByKeyspace {
+				return Some(None);
+			}
 			if let Some(val) = child.values.get(key) {
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
 
 		if let Some(child) = self.committed.children_default.get(child_info.storage_key()) {
-			// TODO filter deleted
+			if child.change.0 == ChildChange::BulkDeleteByKeyspace {
+				return Some(None);
+			}
 			if let Some(val) = child.values.get(key) {
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
@@ -273,14 +280,8 @@ impl OverlayedChanges {
 		val: Option<StorageValue>,
 	) {
 		let extrinsic_index = self.extrinsic_index();
-		let storage_key = child_info.storage_key().to_vec();
-		let map_entry = self.prospective.children_default.entry(storage_key)
-			.or_insert_with(|| ChildChangeSet {
-				info: child_info.to_owned(),
-				change: Default::default(),
-				values: Default::default(),
-			});
-		let updatable = map_entry.info.try_update(&map_entry.change, child_info);
+		let map_entry = self.get_or_init_prospective(child_info);
+		let updatable = map_entry.info.try_update(&map_entry.change.0, child_info);
 		debug_assert!(updatable != ChildUpdate::Incompatible);
 		if updatable == ChildUpdate::Ignore {
 			return;
@@ -305,44 +306,18 @@ impl OverlayedChanges {
 		&mut self,
 		child_info: &ChildInfo,
 	) {
-		panic!("TODO");
 		let extrinsic_index = self.extrinsic_index();
-		let storage_key = child_info.storage_key();
-		let map_entry = self.prospective.children_default.entry(storage_key.to_vec())
-			.or_insert_with(|| ChildChangeSet {
-				info: child_info.to_owned(),
-				change: Default::default(),
-				values: Default::default(),
-			});
-		let updatable = map_entry.info.try_update(&map_entry.change, child_info);
+
+		let map_entry = self.get_or_init_prospective(child_info);
+		let updatable = map_entry.info.try_update(&map_entry.change.0, child_info);
 		debug_assert!(updatable != ChildUpdate::Incompatible);
 		if updatable == ChildUpdate::Ignore {
 			return;
 		}
 
-		map_entry.values.values_mut().for_each(|e| {
-			if let Some(extrinsic) = extrinsic_index {
-				e.extrinsics.get_or_insert_with(Default::default)
-					.insert(extrinsic);
-			}
-			e.value = None;
-		});
-
-		if let Some(child) = self.committed.children_default.get(storage_key) {
-			for (key, value) in child.values.iter() {
-				if !map_entry.values.contains_key(key) {
-					map_entry.values.insert(key.clone(), OverlayedValue {
-						value: None,
-						extrinsics: extrinsic_index.map(|i| {
-							let mut e = value.extrinsics.clone()
-								.unwrap_or_else(|| BTreeSet::default());
-							e.insert(i);
-							e
-						}),
-					});
-				}
-			}
-		}
+		map_entry.change = (ChildChange::BulkDeleteByKeyspace, extrinsic_index);
+		// drop value to reclaim some memory, not strictly needed.
+		map_entry.values.clear();
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
@@ -388,14 +363,12 @@ impl OverlayedChanges {
 		prefix: &[u8],
 	) {
 		let extrinsic_index = self.extrinsic_index();
-		let storage_key = child_info.storage_key();
-		let map_entry = self.prospective.children_default.entry(storage_key.to_vec())
-			.or_insert_with(|| ChildChangeSet {
-				info: child_info.to_owned(),
-				change: Default::default(),
-				values: Default::default(),
-			});
-		let updatable = map_entry.info.try_update(&map_entry.change, child_info);
+		let map_entry =	Self::get_or_init_prospective_inner(
+			&mut self.prospective,
+			&self.committed,
+			child_info,
+		);
+		let updatable = map_entry.info.try_update(&map_entry.change.0, child_info);
 		debug_assert!(updatable != ChildUpdate::Incompatible);
 		if updatable == ChildUpdate::Ignore {
 			return;
@@ -412,7 +385,7 @@ impl OverlayedChanges {
 			}
 		}
 
-		if let Some(child_committed) = self.committed.children_default.get(storage_key) {
+		if let Some(child_committed) = self.committed.children_default.get(child_info.storage_key()) {
 			// Then do the same with keys from committed changes.
 			// NOTE that we are making changes in the prospective change set.
 			for key in child_committed.values.keys() {
@@ -453,7 +426,7 @@ impl OverlayedChanges {
 				let child_committed = self.committed.children_default.entry(storage_key)
 					.or_insert_with(|| ChildChangeSet {
 						info: child.info.clone(), 
-						change: Default::default(), 
+						change: child.change,
 						values: Default::default()
 					});
 				child_committed.change = child.change;
@@ -486,7 +459,7 @@ impl OverlayedChanges {
 				.map(|(k, v)| (k, v.value)),
 			std::mem::replace(&mut self.committed.children_default, Default::default())
 				.into_iter()
-				.map(|(_sk, child)| (child.info, child.change, child.values.into_iter().map(|(k, v)| (k, v.value)))),
+				.map(|(_sk, child)| (child.info, child.change.0, child.values.into_iter().map(|(k, v)| (k, v.value)))),
 		)
 	}
 
@@ -688,11 +661,20 @@ impl OverlayedChanges {
 	) -> Option<(&[u8], &OverlayedValue)> {
 		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
 
-		let next_prospective_key = self.prospective.children_default.get(storage_key)
-			// TODO filter deleted
+		let prospective = self.prospective.children_default.get(storage_key);
+		if prospective.map(|child| child.change.0) == Some(ChildChange::BulkDeleteByKeyspace) {
+			return None;
+		}
+
+		let next_prospective_key = prospective
 			.and_then(|child| child.values.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v)));
 
-		let next_committed_key = self.committed.children_default.get(storage_key)
+		let committed = self.committed.children_default.get(storage_key);
+		if committed.map(|child| child.change.0) == Some(ChildChange::BulkDeleteByKeyspace) {
+			return None;
+		}
+
+		let next_committed_key = committed
 			.and_then(|child| child.values.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v)));
 
 		match (next_committed_key, next_prospective_key) {
@@ -703,6 +685,25 @@ impl OverlayedChanges {
 			// Prospective key is less or equal to committed or committed doesn't exist
 			(_, prospective_key) => prospective_key,
 		}
+	}
+
+	fn get_or_init_prospective_inner<'a>(
+		prospective: &'a mut OverlayedChangeSet,
+		committed: &OverlayedChangeSet,
+		child_info: &ChildInfo,
+	) -> &'a mut ChildChangeSet {
+		prospective.children_default.entry(child_info.storage_key().to_vec())
+			.or_insert(ChildChangeSet {
+				info: child_info.to_owned(),
+				change: committed.children_default.get(child_info.storage_key())
+					.map(|child| (child.change.0, None))
+					.unwrap_or(Default::default()),
+				values: Default::default(),
+			})
+	}
+
+	fn get_or_init_prospective(&mut self, child_info: &ChildInfo) -> &mut ChildChangeSet {
+		Self::get_or_init_prospective_inner(&mut self.prospective, &self.committed, child_info)
 	}
 }
 

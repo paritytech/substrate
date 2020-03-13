@@ -1876,6 +1876,7 @@ pub(crate) mod tests {
 		}
 	}
 
+	// TODO EMCH do a bulk delet test similar to this
 	#[test]
 	fn set_state_data() {
 		let db = Backend::<Block>::new_test(2, 0);
@@ -1915,6 +1916,7 @@ pub(crate) mod tests {
 			let mut children_default = HashMap::default();
 			children_default.insert(child_info.storage_key().to_vec(), sp_core::storage::StorageChild {
 				child_info: child_info.clone(),
+				child_change: Default::default(),
 				data: child_storage.iter().map(|(k, v)| (k.clone(), v.clone().unwrap())).collect(),
 			});
 			op.reset_storage(Storage {
