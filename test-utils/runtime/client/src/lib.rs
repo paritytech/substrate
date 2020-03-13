@@ -208,6 +208,7 @@ pub trait TestClientBuilderExt<B>: Sized {
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
 				child_info: child_info.clone(),
+				child_change: Default::default(),
 			}).data.insert(key, value.into());
 		self
 	}

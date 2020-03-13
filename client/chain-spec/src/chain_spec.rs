@@ -84,6 +84,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 						StorageChild {
 							data: child_content.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 							child_info,
+							child_change: Default::default(),
 						},
 					)
 				}).collect(),
