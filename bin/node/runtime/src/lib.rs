@@ -539,7 +539,7 @@ impl frame_system::offchain::AppCrypto<<Signature as traits::Verify>::Signer, Si
 
 impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
-	type AuthorityId2 = ImOnlineAuthId;
+	type OffchainAuthorityId = ImOnlineAuthId;
 	type Event = Event;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
