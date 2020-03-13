@@ -16,31 +16,34 @@
 
 //! Configuration trait for a CLI based on substrate
 
+use crate::error::Result;
+use crate::SubstrateCLI;
+use app_dirs::{AppDataType, AppInfo};
+use names::{Generator, Name};
+use sc_service::config::{
+	Configuration, DatabaseConfig, ExecutionStrategies, ExtTransport, KeystoreConfig,
+	NetworkConfiguration, PruningMode, Roles, TransactionPoolOptions, WasmExecutionMethod,
+};
+use sc_service::{ChainSpec, ChainSpecExtension, RuntimeGenesis};
+use sc_telemetry::TelemetryEndpoints;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
-use app_dirs::{AppInfo, AppDataType};
-use names::{Generator, Name};
-use sc_service::config::{
-	Configuration, TransactionPoolOptions, DatabaseConfig, KeystoreConfig, PruningMode,
-	ExtTransport, NetworkConfiguration, Roles, WasmExecutionMethod, ExecutionStrategies,
-};
-use sc_service::{ChainSpec, RuntimeGenesis, ChainSpecExtension};
-use sc_telemetry::TelemetryEndpoints;
-use crate::SubstrateCLI;
-use crate::error::Result;
 
 /// The maximum number of characters for a node name.
 pub(crate) const NODE_NAME_MAX_LENGTH: usize = 32;
 
-pub trait CliConfiguration: Sized
-{
+pub trait CliConfiguration: Sized {
 	fn get_base_path(&self) -> Option<&PathBuf>;
 	fn get_is_dev(&self) -> bool;
-	fn get_roles(&self) -> Roles { Roles::FULL }
-	fn get_transaction_pool(&self) -> TransactionPoolOptions { Default::default() }
+	fn get_roles(&self) -> Roles {
+		Roles::FULL
+	}
+	fn get_transaction_pool(&self) -> TransactionPoolOptions {
+		Default::default()
+	}
 	fn get_network_config<G, E>(
 		&self,
 		_chain_spec: &ChainSpec<G, E>,
@@ -51,40 +54,81 @@ pub trait CliConfiguration: Sized
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-	{ Ok(Default::default()) }
+	{
+		Ok(Default::default())
+	}
 	fn get_keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig>;
 	fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig;
-	fn get_state_cache_size(&self) -> usize { Default::default() }
-	fn get_state_cache_child_ratio(&self) -> Option<usize> { Default::default() }
-	fn get_pruning(&self) -> PruningMode { Default::default() }
+	fn get_state_cache_size(&self) -> usize {
+		Default::default()
+	}
+	fn get_state_cache_child_ratio(&self) -> Option<usize> {
+		Default::default()
+	}
+	fn get_pruning(&self) -> PruningMode {
+		Default::default()
+	}
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	;
-	fn get_name(&self) -> Result<String> { Ok(generate_node_name()) }
-	fn get_wasm_method(&self) -> WasmExecutionMethod { WasmExecutionMethod::Interpreted }
-	fn get_execution_strategies(&self) -> ExecutionStrategies { Default::default() }
-	fn get_rpc_http(&self) -> Option<SocketAddr> { Default::default() }
-	fn get_rpc_ws(&self) -> Option<SocketAddr> { Default::default() }
-	fn get_rpc_ws_max_connections(&self) -> Option<usize> { Default::default() }
-	fn get_rpc_cors(&self) -> Option<Vec<String>> { Some(Vec::new()) }
-	fn get_prometheus_port(&self) -> Option<SocketAddr> { Default::default() }
+		E: ChainSpecExtension;
+	fn get_name(&self) -> Result<String> {
+		Ok(generate_node_name())
+	}
+	fn get_wasm_method(&self) -> WasmExecutionMethod {
+		WasmExecutionMethod::Interpreted
+	}
+	fn get_execution_strategies(&self) -> ExecutionStrategies {
+		Default::default()
+	}
+	fn get_rpc_http(&self) -> Option<SocketAddr> {
+		Default::default()
+	}
+	fn get_rpc_ws(&self) -> Option<SocketAddr> {
+		Default::default()
+	}
+	fn get_rpc_ws_max_connections(&self) -> Option<usize> {
+		Default::default()
+	}
+	fn get_rpc_cors(&self) -> Option<Vec<String>> {
+		Some(Vec::new())
+	}
+	fn get_prometheus_port(&self) -> Option<SocketAddr> {
+		Default::default()
+	}
 	fn get_telemetry_endpoints<G, E>(
 		&self,
 		chain_spec: &ChainSpec<G, E>,
 	) -> Option<TelemetryEndpoints> {
 		chain_spec.telemetry_endpoints().clone()
 	}
-	fn get_telemetry_external_transport(&self) -> Option<ExtTransport> { Default::default() }
-	fn get_default_heap_pages(&self) -> Option<u64> { Default::default() }
-	fn get_offchain_worker(&self) -> bool { Default::default() }
-	fn get_sentry_mode(&self) -> bool { Default::default() }
-	fn get_force_authoring(&self) -> bool { Default::default() }
-	fn get_disable_grandpa(&self) -> bool { Default::default() }
-	fn get_dev_key_seed(&self, is_dev: bool) -> Option<String> { Default::default() }
-	fn get_tracing_targets(&self) -> Option<String> { Default::default() }
-	fn get_tracing_receiver(&self) -> sc_tracing::TracingReceiver { Default::default() }
+	fn get_telemetry_external_transport(&self) -> Option<ExtTransport> {
+		Default::default()
+	}
+	fn get_default_heap_pages(&self) -> Option<u64> {
+		Default::default()
+	}
+	fn get_offchain_worker(&self) -> bool {
+		Default::default()
+	}
+	fn get_sentry_mode(&self) -> bool {
+		Default::default()
+	}
+	fn get_force_authoring(&self) -> bool {
+		Default::default()
+	}
+	fn get_disable_grandpa(&self) -> bool {
+		Default::default()
+	}
+	fn get_dev_key_seed(&self, _is_dev: bool) -> Option<String> {
+		Default::default()
+	}
+	fn get_tracing_targets(&self) -> Option<String> {
+		Default::default()
+	}
+	fn get_tracing_receiver(&self) -> sc_tracing::TracingReceiver {
+		Default::default()
+	}
 
 	fn create_configuration<C: SubstrateCLI<G, E>, G, E>(
 		&self,
@@ -96,14 +140,14 @@ pub trait CliConfiguration: Sized
 	{
 		let chain_spec = self.get_chain_spec::<C, G, E>()?;
 		let is_dev = self.get_is_dev();
-		let default_config_dir =
-			app_dirs::get_app_root(
-				AppDataType::UserData,
-				&AppInfo {
-					name: C::get_executable_name(),
-					author: C::get_author(),
-				}
-			).expect("app directories exist on all supported platforms; qed");
+		let default_config_dir = app_dirs::get_app_root(
+			AppDataType::UserData,
+			&AppInfo {
+				name: C::get_executable_name(),
+				author: C::get_author(),
+			},
+		)
+		.expect("app directories exist on all supported platforms; qed");
 		let config_dir = self.get_base_path().unwrap_or(&default_config_dir);
 		let client_id = C::client_id();
 
@@ -113,7 +157,12 @@ pub trait CliConfiguration: Sized
 			roles: self.get_roles(),
 			task_executor,
 			transaction_pool: self.get_transaction_pool(),
-			network: self.get_network_config(&chain_spec, is_dev, &config_dir, client_id.as_str())?,
+			network: self.get_network_config(
+				&chain_spec,
+				is_dev,
+				&config_dir,
+				client_id.as_str(),
+			)?,
 			keystore: self.get_keystore_config(config_dir)?,
 			database: self.get_database_config(&config_dir),
 			state_cache_size: self.get_state_cache_size(),
@@ -151,8 +200,7 @@ pub trait CliConfiguration: Sized
 	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
 	where
 		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	;
+		E: ChainSpecExtension;
 }
 
 /// Generate a valid random name for the node
@@ -162,7 +210,7 @@ pub fn generate_node_name() -> String {
 		let count = node_name.chars().count();
 
 		if count < NODE_NAME_MAX_LENGTH {
-			break node_name
+			break node_name;
 		}
 	};
 
