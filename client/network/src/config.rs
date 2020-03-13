@@ -283,6 +283,8 @@ pub struct NetworkConfiguration {
 	pub transport: TransportConfig,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+	/// Use default block announcement
+	pub default_announce_block: bool,
 }
 
 impl Default for NetworkConfiguration {
@@ -308,6 +310,7 @@ impl Default for NetworkConfiguration {
 				use_yamux_flow_control: false,
 			},
 			max_parallel_downloads: 5,
+			default_announce_block: true,
 		}
 	}
 }

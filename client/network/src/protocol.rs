@@ -451,6 +451,8 @@ pub struct ProtocolConfig {
 	pub roles: Roles,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+	/// Use default block announcement
+	pub default_announce_block: bool,
 }
 
 impl Default for ProtocolConfig {
@@ -458,6 +460,7 @@ impl Default for ProtocolConfig {
 		ProtocolConfig {
 			roles: Roles::FULL,
 			max_parallel_downloads: 5,
+			default_announce_block: true,
 		}
 	}
 }
@@ -1447,7 +1450,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		// blocks are announced by default
-		if !self.config.default_block_announce {
+		if !self.config.default_announce_block {
 			return;
 		}
 

@@ -326,7 +326,6 @@ fn build_network_future<
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
 	mut rpc_rx: mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
-	default_announce_block: bool,
 ) -> impl Future<Output = ()> {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 	let mut finality_notification_stream = client.finality_notification_stream().fuse();

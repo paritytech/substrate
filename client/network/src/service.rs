@@ -233,6 +233,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			protocol::ProtocolConfig {
 				roles: params.roles,
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
+				default_announce_block: params.network_config.default_announce_block,
 			},
 			params.chain.clone(),
 			checker.clone(),
