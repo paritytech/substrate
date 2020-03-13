@@ -22,7 +22,7 @@ use codec::Encode;
 use sp_core::{
 	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore},
 	traits::BareCryptoStorePtr, ed25519, sr25519,
-    crypto::{CryptoTypePublicPair, Pair, Public},
+	crypto::{CryptoTypePublicPair, Pair, Public},
 };
 use rpc::futures::Stream as _;
 use substrate_test_runtime_client::{
@@ -174,7 +174,7 @@ fn should_return_pending_extrinsics() {
 
 	let ex = uxt(AccountKeyring::Alice, 0);
 	AuthorApi::submit_extrinsic(&p, ex.encode().into()).wait().unwrap();
- 	assert_matches!(
+	assert_matches!(
 		p.pending_extrinsics(),
 		Ok(ref expected) if *expected == vec![Bytes(ex.encode())]
 	);
@@ -200,7 +200,7 @@ fn should_remove_extrinsics() {
 		hash::ExtrinsicOrHash::Extrinsic(ex1.encode().into()),
 	]).unwrap();
 
- 	assert_eq!(removed.len(), 3);
+	assert_eq!(removed.len(), 3);
 }
 
 #[test]

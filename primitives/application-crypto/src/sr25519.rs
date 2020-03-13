@@ -27,9 +27,9 @@ pub use sp_core::sr25519::*;
 pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
 
 mod app {
-    use sp_core::crypto::{CryptoTypePublicPair, Public as TraitPublic};
+	use sp_core::crypto::{CryptoTypePublicPair, Public as TraitPublic};
 	use sp_core::testing::SR25519;
-    use crate::sr25519::CRYPTO_ID;
+	use crate::sr25519::CRYPTO_ID;
 
 	crate::app_crypto!(super, SR25519);
 
@@ -37,17 +37,17 @@ mod app {
 		type Public = Self;
 	}
 
-    impl From<Public> for CryptoTypePublicPair {
-        fn from(key: Public) -> Self {
-            (&key).into()
-        }
-    }
+	impl From<Public> for CryptoTypePublicPair {
+		fn from(key: Public) -> Self {
+			(&key).into()
+		}
+	}
 
-    impl From<&Public> for CryptoTypePublicPair {
-        fn from(key: &Public) -> Self {
-            CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
-        }
-    }
+	impl From<&Public> for CryptoTypePublicPair {
+		fn from(key: &Public) -> Self {
+			CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
+		}
+	}
 }
 
 pub use app::{Public as AppPublic, Signature as AppSignature};

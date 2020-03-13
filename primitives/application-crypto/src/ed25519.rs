@@ -27,9 +27,9 @@ pub use sp_core::ed25519::*;
 pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ed25");
 
 mod app {
-    use sp_core::crypto::{CryptoTypePublicPair, Public as TraitPublic};
+	use sp_core::crypto::{CryptoTypePublicPair, Public as TraitPublic};
 	use sp_core::testing::ED25519;
-    use crate::ed25519::CRYPTO_ID;
+	use crate::ed25519::CRYPTO_ID;
 
 	crate::app_crypto!(super, ED25519);
 
@@ -37,17 +37,17 @@ mod app {
 		type Public = Self;
 	}
 
-    impl From<Public> for CryptoTypePublicPair {
-        fn from(key: Public) -> Self {
-            (&key).into()
-        }
-    }
+	impl From<Public> for CryptoTypePublicPair {
+		fn from(key: Public) -> Self {
+			(&key).into()
+		}
+	}
 
-    impl From<&Public> for CryptoTypePublicPair {
-        fn from(key: &Public) -> Self {
-            CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
-        }
-    }
+	impl From<&Public> for CryptoTypePublicPair {
+		fn from(key: &Public) -> Self {
+			CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
+		}
+	}
 }
 
 pub use app::{Public as AppPublic, Signature as AppSignature};
