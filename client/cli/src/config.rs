@@ -22,6 +22,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use app_dirs::{AppInfo, AppDataType};
+use names::{Generator, Name};
 use sc_service::config::{
 	Configuration, TransactionPoolOptions, DatabaseConfig, KeystoreConfig, PruningMode,
 	ExtTransport, NetworkConfiguration, Roles, WasmExecutionMethod, ExecutionStrategies,
@@ -30,6 +31,9 @@ use sc_service::{ChainSpec, RuntimeGenesis, ChainSpecExtension};
 use sc_telemetry::TelemetryEndpoints;
 use crate::SubstrateCLI;
 use crate::error::Result;
+
+/// The maximum number of characters for a node name.
+pub(crate) const NODE_NAME_MAX_LENGTH: usize = 32;
 
 pub trait CliConfiguration: Sized
 {
@@ -58,7 +62,7 @@ pub trait CliConfiguration: Sized
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	;
-	fn get_name(&self) -> String { Default::default() }
+	fn get_name(&self) -> Result<String> { Ok(generate_node_name()) }
 	fn get_wasm_method(&self) -> WasmExecutionMethod { WasmExecutionMethod::Interpreted }
 	fn get_execution_strategies(&self) -> ExecutionStrategies { Default::default() }
 	fn get_rpc_http(&self) -> Option<SocketAddr> { Default::default() }
@@ -109,7 +113,7 @@ pub trait CliConfiguration: Sized
 			state_cache_size: self.get_state_cache_size(),
 			state_cache_child_ratio: self.get_state_cache_child_ratio(),
 			pruning: self.get_pruning(),
-			name: self.get_name(),
+			name: self.get_name()?,
 			wasm_method: self.get_wasm_method(),
 			execution_strategies: self.get_execution_strategies(),
 			rpc_http: self.get_rpc_http(),
@@ -143,4 +147,18 @@ pub trait CliConfiguration: Sized
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	;
+}
+
+/// Generate a valid random name for the node
+pub fn generate_node_name() -> String {
+	let result = loop {
+		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
+		let count = node_name.chars().count();
+
+		if count < NODE_NAME_MAX_LENGTH {
+			break node_name
+		}
+	};
+
+	result
 }

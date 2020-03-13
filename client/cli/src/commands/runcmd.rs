@@ -22,7 +22,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use log::info;
 use structopt::{StructOpt, clap::arg_enum};
-use names::{Generator, Name};
 use regex::Regex;
 use chrono::prelude::*;
 use sc_service::{
@@ -39,9 +38,6 @@ use crate::params::NetworkConfigurationParams;
 use crate::params::TransactionPoolParams;
 use crate::params::KeystoreParams;
 use crate::runtime::run_service_until_exit;
-
-/// The maximum number of characters for a node name.
-const NODE_NAME_MAX_LENGTH: usize = 32;
 
 arg_enum! {
 	/// Whether off-chain workers are enabled.
@@ -287,20 +283,6 @@ impl RunCmd {
 
 		self.import_params.update_config(&mut config, role, is_dev)?;
 
-		config.name = match (self.name.as_ref(), keyring) {
-			(Some(name), _) => name.to_string(),
-			(_, Some(keyring)) => keyring.to_string(),
-			(None, None) => generate_node_name(),
-		};
-		if let Err(msg) = is_node_name_valid(&config.name) {
-			return Err(error::Error::Input(
-				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
-					config.name,
-					msg,
-				)
-			));
-		}
-
 		// set sentry mode (i.e. act as an authority but **never** actively participate)
 		config.sentry_mode = self.sentry;
 
@@ -436,6 +418,21 @@ impl CliConfiguration for RunCmd
 		self.keystore_params.get_keystore_config(base_path)
 	}
 	fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig { self.shared_params.get_database_config(base_path) }
+	fn get_name(&self) -> error::Result<String> {
+		let name: String = match (self.name.as_ref(), self.get_keyring()) {
+			(Some(name), _) => name.to_string(),
+			(_, Some(keyring)) => keyring.to_string(),
+			(None, None) => crate::generate_node_name(),
+		};
+
+		if let Err(msg) = is_node_name_valid(&name) {
+			return Err(error::Error::Input(
+				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.", name, msg)
+			));
+		}
+
+		Ok(name)
+	}
 	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
@@ -446,7 +443,7 @@ impl CliConfiguration for RunCmd
 /// Check whether a node name is considered as valid
 pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	let name = _name.to_string();
-	if name.chars().count() >= NODE_NAME_MAX_LENGTH {
+	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
 		return Err("Node name too long");
 	}
 
@@ -463,19 +460,6 @@ pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	}
 
 	Ok(())
-}
-
-fn generate_node_name() -> String {
-	let result = loop {
-		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
-		let count = node_name.chars().count();
-
-		if count < NODE_NAME_MAX_LENGTH {
-			break node_name
-		}
-	};
-
-	result
 }
 
 fn parse_address(
