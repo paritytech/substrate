@@ -34,7 +34,7 @@ pub use sp_externalities::{Externalities, ExternalitiesExt};
 #[derive(Debug)]
 pub enum BareCryptoStoreError {
 	/// Public key type is not supported
-	KeyNotSupported,
+	KeyNotSupported(KeyTypeId),
 	/// Pair not found for public key and KeyTypeId
 	PairNotFound(String),
 	/// Validation error
@@ -143,7 +143,7 @@ pub trait BareCryptoStore: Send + Sync {
 				}
 			}
 		}
-		Err(BareCryptoStoreError::KeyNotSupported)
+		Err(BareCryptoStoreError::KeyNotSupported(id))
 	}
 
 	/// Sign with all keys

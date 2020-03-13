@@ -47,7 +47,7 @@ pub enum Error {
 	InvalidSeed,
 	/// Public key type is not supported
 	#[display(fmt="Key crypto type is not supported")]
-	KeyNotSupported,
+	KeyNotSupported(KeyTypeId),
 	/// Pair not found for public key and KeyTypeId
 	#[display(fmt="Pair not found for {} public key", "_0")]
 	PairNotFound(String),
@@ -62,7 +62,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl From<Error> for TraitError {
 	fn from(error: Error) -> Self {
 		match error {
-			Error::KeyNotSupported => TraitError::KeyNotSupported,
+			Error::KeyNotSupported(id) => TraitError::KeyNotSupported(id),
 			Error::PairNotFound(e) => TraitError::PairNotFound(e),
 			Error::InvalidSeed | Error::InvalidPhrase | Error::InvalidPassword => {
 				TraitError::ValidationError(error.to_string())
@@ -332,7 +332,7 @@ impl BareCryptoStore for Store {
 					.map_err(|e| TraitError::from(e))?;
 				Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec())
 			}
-			_ => Err(TraitError::KeyNotSupported)
+			_ => Err(TraitError::KeyNotSupported(id))
 		}
 	}
 

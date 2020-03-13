@@ -171,7 +171,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 					.ok_or(BareCryptoStoreError::PairNotFound("sr25519".to_owned()))?;
 				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
 			}
-			_ => Err(BareCryptoStoreError::KeyNotSupported)
+			_ => Err(BareCryptoStoreError::KeyNotSupported(id))
 		}
 	}
 }
