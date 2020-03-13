@@ -298,15 +298,6 @@ impl RunCmd {
 
 		self.pool_config.update_config(&mut config)?;
 
-		config.dev_key_seed = keyring
-			.map(|a| format!("//{}", a)).or_else(|| {
-				if is_dev && !is_light {
-					Some("//Alice".into())
-				} else {
-					None
-				}
-			});
-
 		if config.rpc_http.is_none() || self.rpc_port.is_some() {
 			let rpc_interface: &str = interface_str(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
 			config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), self.rpc_port)?);
@@ -432,6 +423,16 @@ impl CliConfiguration for RunCmd
 		}
 
 		Ok(name)
+	}
+	fn get_dev_key_seed(&self, is_dev: bool) -> Option<String> {
+		self.get_keyring()
+			.map(|a| format!("//{}", a)).or_else(|| {
+				if is_dev && !self.light {
+					Some("//Alice".into())
+				} else {
+					None
+				}
+			})
 	}
 	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
 	where

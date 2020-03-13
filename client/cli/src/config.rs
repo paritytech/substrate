@@ -76,7 +76,7 @@ pub trait CliConfiguration: Sized
 	fn get_sentry_mode(&self) -> bool { Default::default() }
 	fn get_force_authoring(&self) -> bool { Default::default() }
 	fn get_disable_grandpa(&self) -> bool { Default::default() }
-	fn get_dev_key_seed(&self) -> Option<String> { Default::default() }
+	fn get_dev_key_seed(&self, is_dev: bool) -> Option<String> { Default::default() }
 	fn get_tracing_targets(&self) -> Option<String> { Default::default() }
 	fn get_tracing_receiver(&self) -> sc_tracing::TracingReceiver { Default::default() }
 
@@ -128,7 +128,7 @@ pub trait CliConfiguration: Sized
 			sentry_mode: self.get_sentry_mode(),
 			force_authoring: self.get_force_authoring(),
 			disable_grandpa: self.get_disable_grandpa(),
-			dev_key_seed: self.get_dev_key_seed(),
+			dev_key_seed: self.get_dev_key_seed(is_dev),
 			tracing_targets: self.get_tracing_targets(),
 			tracing_receiver: self.get_tracing_receiver(),
 			chain_spec,
