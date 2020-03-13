@@ -2171,6 +2171,7 @@ mod tests {
 			ProtocolConfig {
 				roles: Roles::FULL,
 				max_parallel_downloads: 10,
+				default_announce_block: true,
 			},
 			client.clone(),
 			Arc::new(AlwaysBadChecker),
