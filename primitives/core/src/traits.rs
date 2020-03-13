@@ -22,7 +22,7 @@ use crate::{
 };
 
 use std::{
-	borrow:Cow,
+	borrow::Cow,
 	collections::HashSet,
 	fmt::{Debug, Display},
 	panic::UnwindSafe,

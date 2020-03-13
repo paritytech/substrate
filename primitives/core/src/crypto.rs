@@ -953,6 +953,7 @@ pub struct CryptoTypeId(pub [u8; 4]);
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
 
+#[cfg(feature = "std")]
 impl sp_std::fmt::Display for CryptoTypePublicPair {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		let id = match str::from_utf8(&(self.0).0[..]) {
