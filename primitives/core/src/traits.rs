@@ -59,7 +59,7 @@ pub trait BareCryptoStore: Send + Sync {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<sr25519::Public, String>;
+	) -> Result<sr25519::Public, BareCryptoStoreError>;
 	/// Returns all ed25519 public keys for the given key type.
 	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
 	/// Generate a new ed25519 key pair for the given key type and an optional seed.
@@ -71,7 +71,7 @@ pub trait BareCryptoStore: Send + Sync {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ed25519::Public, String>;
+	) -> Result<ed25519::Public, BareCryptoStoreError>;
 
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.

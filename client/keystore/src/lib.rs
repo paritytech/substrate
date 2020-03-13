@@ -345,11 +345,11 @@ impl BareCryptoStore for Store {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> std::result::Result<sr25519::Public, String> {
+	) -> std::result::Result<sr25519::Public, TraitError> {
 		let pair = match seed {
 			Some(seed) => self.insert_ephemeral_from_seed_by_type::<sr25519::Pair>(seed, id),
 			None => self.generate_by_type::<sr25519::Pair>(id),
-		}.map_err(|e| e.to_string())?;
+		}.map_err(|e| -> TraitError { e.into() })?;
 
 		Ok(pair.public())
 	}
@@ -362,11 +362,11 @@ impl BareCryptoStore for Store {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> std::result::Result<ed25519::Public, String> {
+	) -> std::result::Result<ed25519::Public, TraitError> {
 		let pair = match seed {
 			Some(seed) => self.insert_ephemeral_from_seed_by_type::<ed25519::Pair>(seed, id),
 			None => self.generate_by_type::<ed25519::Pair>(id),
-		}.map_err(|e| e.to_string())?;
+		}.map_err(|e| -> TraitError { e.into() })?;
 
 		Ok(pair.public())
 	}

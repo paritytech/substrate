@@ -81,10 +81,11 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<sr25519::Public, String> {
+	) -> Result<sr25519::Public, BareCryptoStoreError> {
 		match seed {
 			Some(seed) => {
-				let pair = sr25519::Pair::from_string(seed, None).expect("Generates an `sr25519` pair.");
+				let pair = sr25519::Pair::from_string(seed, None)
+					.map_err(|_| BareCryptoStoreError::ValidationError("Generates an `sr25519` pair.".to_owned()))?;
 				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
 				Ok(pair.public())
 			},
@@ -111,10 +112,11 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ed25519::Public, String> {
+	) -> Result<ed25519::Public, BareCryptoStoreError> {
 		match seed {
 			Some(seed) => {
-				let pair = ed25519::Pair::from_string(seed, None).expect("Generates an `ed25519` pair.");
+				let pair = ed25519::Pair::from_string(seed, None)
+					.map_err(|_| BareCryptoStoreError::ValidationError("Generates an `ed25519` pair.".to_owned()))?;
 				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
 				Ok(pair.public())
 			},
