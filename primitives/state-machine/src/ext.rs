@@ -372,10 +372,7 @@ where
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-		self.overlay.clear_child_storage(child_info);
-		self.backend.for_keys_in_child_storage(child_info, |key| {
-			self.overlay.set_child_storage(child_info, key.to_vec(), None);
-		});
+		self.overlay.kill_child_storage(child_info);
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {

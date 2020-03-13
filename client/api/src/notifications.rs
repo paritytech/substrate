@@ -23,14 +23,14 @@ use std::{
 
 use fnv::{FnvHashSet, FnvHashMap};
 use futures::channel::mpsc;
-use sp_core::storage::{StorageKey, StorageData};
+use sp_core::storage::{StorageKey, StorageData, ChildChange};
 use sp_runtime::traits::Block as BlockT;
 
 /// Storage change set
 #[derive(Debug)]
 pub struct StorageChangeSet {
 	changes: Arc<Vec<(StorageKey, Option<StorageData>)>>,
-	child_changes: Arc<Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>>,
+	child_changes: Arc<Vec<(StorageKey, ChildChange, Vec<(StorageKey, Option<StorageData>)>)>>,
 	filter: Option<HashSet<StorageKey>>,
 	child_filters: Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>,
 }
@@ -48,16 +48,25 @@ impl StorageChangeSet {
 			.map(move |(k,v)| (None, k, v.as_ref()));
 		let children = self.child_changes
 			.iter()
-			.filter_map(move |(sk, changes)| {
+			.filter_map(move |(sk, change, changes)| {
 				if let Some(cf) = self.child_filters.as_ref() {
 					if let Some(filter) = cf.get(sk) {
-						Some(changes
-							.iter()
-							.filter(move |&(key, _)| match filter {
-								Some(ref filter) => filter.contains(key),
-								None => true,
-							})
-							.map(move |(k,v)| (Some(sk), k, v.as_ref())))
+						let bulk_delete = change == &ChildChange::BulkDeleteByKeyspace;
+							Some(changes
+								.iter()
+								.filter(move |&(key, _)| if bulk_delete {
+									true
+								} else {
+									match filter {
+										Some(ref filter) => filter.contains(key),
+										None => true,
+									}
+								})
+								.map(move |(k,v)| (Some(sk), k, if bulk_delete {
+									None
+								} else {
+									v.as_ref()
+								})))
 					} else { None }
 				} else { None	}
 			})
@@ -110,7 +119,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		hash: &Block::Hash,
 		changeset: impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		child_changeset: impl Iterator<
-			Item=(Vec<u8>, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)
+			Item=(Vec<u8>, ChildChange, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)
 		>,
 	) {
 		let has_wildcard = !self.wildcard_listeners.is_empty();
@@ -137,7 +146,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 				changes.push((k, v.map(StorageData)));
 			}
 		}
-		for (sk, changeset) in child_changeset {
+		for (sk, change, changeset) in child_changeset {
 			let sk = StorageKey(sk);
 			if let Some((cl, cw)) = self.child_listeners.get(&sk) {
 				let mut changes = Vec::new();
@@ -156,7 +165,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 					}
 				}
 				if !changes.is_empty() {
-					child_changes.push((sk, changes));
+					child_changes.push((sk, change, changes));
 				}
 			}
 		}
@@ -313,7 +322,7 @@ mod tests {
 
 	type TestChangeSet = (
 		Vec<(StorageKey, Option<StorageData>)>,
-		Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>,
+		Vec<(StorageKey, ChildChange, Vec<(StorageKey, Option<StorageData>)>)>,
 	);
 
 	#[cfg(test)]
@@ -360,18 +369,18 @@ mod tests {
 			(vec![5], Some(vec![4])),
 			(vec![6], None),
 		];
-		let c_changeset = vec![(vec![4], c_changeset_1)];
+		let c_changeset = vec![(vec![4], ChildChange::Update, c_changeset_1)];
 		notifications.trigger(
 			&Hash::from_low_u64_be(1),
 			changeset.into_iter(),
-			c_changeset.into_iter().map(|(a,b)| (a, b.into_iter())),
+			c_changeset.into_iter().map(|(a, b, c)| (a, b, c.into_iter())),
 		);
 
 		// then
 		assert_eq!(recv.next().unwrap(), (Hash::from_low_u64_be(1), (vec![
 			(StorageKey(vec![2]), Some(StorageData(vec![3]))),
 			(StorageKey(vec![3]), None),
-		], vec![(StorageKey(vec![4]), vec![
+		], vec![(StorageKey(vec![4]), ChildChange::Update, vec![
 			(StorageKey(vec![5]), Some(StorageData(vec![4]))),
 			(StorageKey(vec![6]), None),
 		])]).into()));
@@ -402,11 +411,11 @@ mod tests {
 			(vec![6], None),
 		];
 
-		let c_changeset = vec![(vec![4], c_changeset_1)];
+		let c_changeset = vec![(vec![4], ChildChange::Update, c_changeset_1)];
 		notifications.trigger(
 			&Hash::from_low_u64_be(1),
 			changeset.into_iter(),
-			c_changeset.into_iter().map(|(a,b)| (a, b.into_iter())),
+			c_changeset.into_iter().map(|(a, b, c)| (a, b, c.into_iter())),
 		);
 
 		// then
@@ -417,9 +426,11 @@ mod tests {
 			(StorageKey(vec![2]), Some(StorageData(vec![3]))),
 		], vec![]).into()));
 		assert_eq!(recv3.next().unwrap(), (Hash::from_low_u64_be(1), (vec![],
-		vec![
-			(StorageKey(vec![4]), vec![(StorageKey(vec![5]), Some(StorageData(vec![4])))]),
-		]).into()));
+		vec![(
+			StorageKey(vec![4]),
+			ChildChange::Update,
+			vec![(StorageKey(vec![5]), Some(StorageData(vec![4])))],
+		)]).into()));
 
 	}
 
@@ -451,7 +462,7 @@ mod tests {
 			(vec![2], Some(vec![3])),
 			(vec![1], None),
 		];
-		let c_changeset = empty::<(_, Empty<_>)>();
+		let c_changeset = empty::<(_, _, Empty<_>)>();
 		notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter(), c_changeset);
 
 		// then
@@ -469,7 +480,7 @@ mod tests {
 
 			// when
 			let changeset = vec![];
-			let c_changeset = empty::<(_, Empty<_>)>();
+			let c_changeset = empty::<(_, _, Empty<_>)>();
 			notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter(), c_changeset);
 			recv
 		};

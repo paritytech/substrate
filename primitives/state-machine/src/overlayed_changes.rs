@@ -300,10 +300,11 @@ impl OverlayedChanges {
 	/// change set, and still can be reverted by [`discard_prospective`].
 	///
 	/// [`discard_prospective`]: #method.discard_prospective
-	pub(crate) fn clear_child_storage(
+	pub(crate) fn kill_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
 	) {
+		panic!("TODO");
 		let extrinsic_index = self.extrinsic_index();
 		let storage_key = child_info.storage_key();
 		let map_entry = self.prospective.children_default.entry(storage_key.to_vec())
