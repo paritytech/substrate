@@ -39,15 +39,15 @@ pub trait CliConfiguration: Sized
 	fn get_transaction_pool(&self) -> TransactionPoolOptions { Default::default() }
 	fn get_network_config<G, E>(
 		&self,
-		chain_spec: &ChainSpec<G, E>,
-		is_dev: bool,
-		base_path: &PathBuf,
-		client_id: &str,
+		_chain_spec: &ChainSpec<G, E>,
+		_is_dev: bool,
+		_base_path: &PathBuf,
+		_client_id: &str,
 	) -> Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-	;
+	{ Ok(Default::default()) }
 	fn get_keystore_config(&self) -> KeystoreConfig;
 	fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig;
 	fn get_state_cache_size(&self) -> usize { Default::default() }

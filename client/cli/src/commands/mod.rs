@@ -150,13 +150,6 @@ impl CliConfiguration for Subcommand
 	fn get_is_dev(&self) -> bool {
 		self.get_shared_params().dev
 	}
-	fn get_network_config<G, E>(&self, chain_spec: &ChainSpec<G, E>, is_dev: bool, base_path: &PathBuf, client_id: &str) -> error::Result<NetworkConfiguration>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		todo!()
-	}
 	fn get_keystore_config(&self) -> KeystoreConfig { todo!() }
 	fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig { self.get_shared_params().get_database_config(base_path) }
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<ChainSpec<G, E>>
