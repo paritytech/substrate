@@ -19,7 +19,7 @@ use log::{warn, debug};
 use sp_core::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use sp_core::storage::{ChildInfo, ChildType, ChildrenMap};
+use sp_core::storage::{ChildInfo, ChildChange, ChildType, ChildrenMap};
 use codec::{Codec, Decode};
 use crate::{
 	StorageKey, StorageValue, Backend,
@@ -207,6 +207,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
+		child_change: ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -217,41 +218,47 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>()
 		};
 
-		let mut write_overlay = S::Overlay::default();
-		let prefixed_storage_key = child_info.prefixed_storage_key();
-		let mut root = match self.storage(prefixed_storage_key.as_slice()) {
-			Ok(value) =>
-				value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or(default_root.clone()),
-			Err(e) => {
-				warn!(target: "trie", "Failed to read child storage root: {}", e);
-				default_root.clone()
-			},
-		};
+		if child_change == ChildChange::BulkDeleteByKeyspace {
+			let mut tx = ChildrenMap::default();
+			tx.insert(child_info.clone(), (child_change, Default::default()));
+			(default_root, true, tx)
+		} else {
+			let mut write_overlay = S::Overlay::default();
+			let prefixed_storage_key = child_info.prefixed_storage_key();
+			let mut root = match self.storage(prefixed_storage_key.as_slice()) {
+				Ok(value) =>
+					value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or(default_root.clone()),
+				Err(e) => {
+					warn!(target: "trie", "Failed to read child storage root: {}", e);
+					default_root.clone()
+				},
+			};
 
-		{
-			let storage = self.essence.backend_storage();
-			// Do not write prefix in overlay.
-			let mut eph = Ephemeral::new(
-				storage,
-				child_info,
-				&mut write_overlay,
-			);
+			{
+				let storage = self.essence.backend_storage();
+				// Do not write prefix in overlay.
+				let mut eph = Ephemeral::new(
+					storage,
+					child_info,
+					&mut write_overlay,
+				);
 
-			match delta_trie_root::<Layout<H>, _, _, _, _>(
-				&mut eph,
-				root,
-				delta
-			) {
-				Ok(ret) => root = ret,
-				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
+				match delta_trie_root::<Layout<H>, _, _, _, _>(
+					&mut eph,
+					root,
+					delta
+				) {
+					Ok(ret) => root = ret,
+					Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
+				}
 			}
+
+			let is_default = root == default_root;
+
+			let mut tx = ChildrenMap::default();
+			tx.insert(child_info.clone(), (child_change, write_overlay));
+			(root, is_default, tx)
 		}
-
-		let is_default = root == default_root;
-
-		let mut tx = ChildrenMap::default();
-		tx.insert(child_info.clone(), write_overlay);
-		(root, is_default, tx)
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {

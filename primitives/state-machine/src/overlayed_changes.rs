@@ -557,10 +557,12 @@ impl OverlayedChanges {
 	{
 		let child_storage_keys = self.prospective.children_default.keys()
 				.chain(self.committed.children_default.keys());
-		let child_delta_iter = child_storage_keys.map(|storage_key|
+		let child_delta_iter = child_storage_keys.map(|storage_key| {
+			let (child_info, child_change) = self.default_child_info(storage_key)
+					.expect("child info initialized in either committed or prospective");
 			(
-				self.default_child_info(storage_key).cloned()
-					.expect("child info initialized in either committed or prospective"),
+				child_info.clone(),
+				child_change,
 				self.committed.children_default.get(storage_key)
 					.into_iter()
 					// TODO deleted
@@ -571,7 +573,7 @@ impl OverlayedChanges {
 							.flat_map(|child| child.values.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 					),
 			)
-		);
+		});
 
 		// compute and memoize
 		let delta = self.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
@@ -617,12 +619,12 @@ impl OverlayedChanges {
 
 	/// Get child info for a storage key.
 	/// Take the latest value so prospective first.
-	pub fn default_child_info(&self, storage_key: &[u8]) -> Option<&ChildInfo> {
+	pub fn default_child_info(&self, storage_key: &[u8]) -> Option<(&ChildInfo, ChildChange)> {
 		if let Some(child) = self.prospective.children_default.get(storage_key) {
-			return Some(&child.info);
+			return Some((&child.info, child.change.0));
 		}
 		if let Some(child) = self.committed.children_default.get(storage_key) {
-			return Some(&child.info);
+			return Some((&child.info, child.change.0));
 		}
 		None
 	}

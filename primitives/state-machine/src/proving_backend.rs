@@ -34,7 +34,7 @@ use crate::trie_backend_essence::{BackendStorageDBRef, TrieBackendEssence,
 use crate::{Error, ExecutionError, Backend};
 use std::collections::HashMap;
 use crate::DBValue;
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildChange};
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -276,13 +276,14 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
+		child_change: ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		let (root, is_empty, mut tx) = self.0.child_storage_root(child_info, delta);
+		let (root, is_empty, mut tx) = self.0.child_storage_root(child_info, child_change, delta);
 		(root, is_empty, tx.remove(child_info))
 	}
 }

@@ -27,7 +27,7 @@ use sp_trie::{
 	MemoryDB, empty_child_trie_root, TrieConfiguration, trie_types::Layout,
 };
 use codec::Codec;
-use sp_core::storage::{ChildInfo, ChildType, Storage};
+use sp_core::storage::{ChildInfo, ChildChange, ChildType, Storage};
 
 /// Error impossible.
 // FIXME: use `!` type when stabilized. https://github.com/rust-lang/rust/issues/35121
@@ -248,6 +248,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
+		child_change: ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -256,26 +257,31 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	{
 		let child_type = child_info.child_type();
 		let child_info = Some(child_info.to_owned());
-
-		let existing_pairs = self.inner.get(&child_info)
-			.into_iter()
-			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
-
-		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = Layout::<H>::trie_root(
-			existing_pairs.chain(transaction.iter().cloned())
-				.collect::<HashMap<_, _>>()
+		let (root, full_transaction, is_default) = if child_change == ChildChange::BulkDeleteByKeyspace {
+			let root = empty_child_trie_root::<Layout<H>>();
+			(root, Default::default(), true)
+		} else {
+			let existing_pairs = self.inner.get(&child_info)
 				.into_iter()
-				.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
-		);
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
-		let full_transaction = transaction.into_iter().collect();
+			let transaction: Vec<_> = delta.into_iter().collect();
+			let root = Layout::<H>::trie_root(
+				existing_pairs.chain(transaction.iter().cloned())
+					.collect::<HashMap<_, _>>()
+					.into_iter()
+					.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+			);
 
-		let is_default = match child_type {
-			ChildType::ParentKeyId => root == empty_child_trie_root::<Layout<H>>(),
+			let is_default = match child_type {
+				ChildType::ParentKeyId => root == empty_child_trie_root::<Layout<H>>(),
+			};
+
+			(root, transaction.into_iter().collect(), is_default)
 		};
 
-		(root, is_default, vec![(child_info, full_transaction)])
+
+		(root, is_default, vec![(child_info, child_change, full_transaction)])
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {

@@ -24,7 +24,7 @@ use crate::{
 
 use sp_core::{
 	Hasher,
-	storage::{well_known_keys::is_child_storage_key, ChildInfo},
+	storage::{well_known_keys::is_child_storage_key, ChildInfo, ChildChange},
 	traits::Externalities, hexdisplay::HexDisplay,
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
@@ -457,8 +457,10 @@ where
 			root
 		} else {
 
-			if let Some(child_info) = self.overlay.default_child_info(storage_key).cloned() {
-				// TODO manage delete!!!
+			if let Some((child_info, child_change)) = self.overlay.default_child_info(storage_key) {
+				if child_change == ChildChange::BulkDeleteByKeyspace {
+					return empty_child_trie_root::<Layout<H>>().encode();
+				}
 				let (root, _is_empty, _) = {
 					let delta = self.overlay.committed.children_default.get(storage_key)
 						.into_iter()
@@ -469,7 +471,7 @@ where
 								.flat_map(|child| child.values.clone().into_iter().map(|(k, v)| (k, v.value)))
 						);
 
-					self.backend.child_storage_root(&child_info, delta)
+					self.backend.child_storage_root(child_info, delta)
 				};
 
 				let root = root.encode();

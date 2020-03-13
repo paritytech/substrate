@@ -21,7 +21,7 @@ use sp_core::{Hasher, InnerHasher};
 use codec::{Decode, Encode};
 
 use sp_core::{traits::RuntimeCode,
-	storage::{ChildInfo, ChildrenMap, well_known_keys}};
+	storage::{ChildInfo, ChildChange, ChildrenMap, well_known_keys}};
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 use crate::{
 	trie_backend::TrieBackend,
@@ -132,6 +132,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
+		child_change: ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -176,16 +177,16 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	where
 		I1: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		I2i: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		I2: IntoIterator<Item=(ChildInfo, I2i)>,
+		I2: IntoIterator<Item=(ChildInfo, ChildChange, I2i)>,
 		H::Out: Ord + Encode,
 	{
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
 		let mut result_child_roots: Vec<_> = Default::default();
 		// child first
-		for (child_info, child_delta) in child_deltas {
+		for (child_info, child_change, child_delta) in child_deltas {
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(&child_info, child_delta);
+				self.child_storage_root(&child_info, child_change, child_delta);
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
@@ -289,13 +290,14 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
+		child_change: ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		H::Out: Ord,
 	{
-		(*self).child_storage_root(child_info, delta)
+		(*self).child_storage_root(child_info, child_change, delta)
 	}
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
