@@ -17,9 +17,11 @@
 // tag::description[]
 //! Cryptographic utilities.
 // end::description[]
+use rustc_hex::ToHex;
 
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
+use sp_std::str;
 #[cfg(feature = "std")]
 use sp_std::convert::TryInto;
 use sp_std::convert::TryFrom;
@@ -929,9 +931,15 @@ pub struct CryptoTypeId(pub [u8; 4]);
 pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
 
 impl sp_std::fmt::Display for CryptoTypePublicPair {
-    fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-        write!(f, "{:#?}-{:x?}", self.0, self.1)
-    }
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		let id = match str::from_utf8(&(self.0).0[..]) {
+			Ok(id) => id.to_string(),
+			Err(_) => {
+				format!("{:#?}", self.0)
+			}
+		};
+		write!(f, "{}-{}", id, self.1.to_hex::<String>())
+	}
 }
 
 /// Known key types; this also functions as a global registry of key types for projects wishing to
