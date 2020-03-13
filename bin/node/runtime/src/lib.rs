@@ -610,8 +610,6 @@ impl pallet_society::Trait for Runtime {
 	type ChallengePeriod = ChallengePeriod;
 }
 
-impl pallet_session_benchmarking::Trait for Runtime {}
-
 parameter_types! {
 	pub const MinVestedTransfer: Balance = 100 * DOLLARS;
 }
@@ -853,6 +851,7 @@ impl_runtime_apis! {
 		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::Benchmarking;
 			use pallet_session_benchmarking::Module as SessionBench;
+			impl pallet_session_benchmarking::Trait for Runtime {}
 
 			let result = match module.as_slice() {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(
