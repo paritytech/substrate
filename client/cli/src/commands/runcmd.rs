@@ -275,9 +275,11 @@ impl CliConfiguration for RunCmd {
 	fn get_base_path(&self) -> Option<&PathBuf> {
 		self.shared_params.base_path.as_ref()
 	}
+
 	fn get_is_dev(&self) -> bool {
 		self.shared_params.dev
 	}
+
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,
@@ -285,6 +287,7 @@ impl CliConfiguration for RunCmd {
 	{
 		self.shared_params.get_chain_spec::<C, G, E>()
 	}
+
 	fn get_network_config<G, E>(
 		&self,
 		chain_spec: &ChainSpec<G, E>,
@@ -299,9 +302,11 @@ impl CliConfiguration for RunCmd {
 		self.network_config
 			.get_network_config(chain_spec, client_id, is_dev, base_path)
 	}
+
 	fn get_keystore_config(&self, base_path: &PathBuf) -> error::Result<KeystoreConfig> {
 		self.keystore_params.get_keystore_config(base_path)
 	}
+
 	fn get_database_config(
 		&self,
 		base_path: &PathBuf,
@@ -310,6 +315,7 @@ impl CliConfiguration for RunCmd {
 		self.shared_params
 			.get_database_config(base_path, cache_size)
 	}
+
 	fn get_name(&self) -> error::Result<String> {
 		let name: String = match (self.name.as_ref(), self.get_keyring()) {
 			(Some(name), _) => name.to_string(),
