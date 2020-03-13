@@ -139,7 +139,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		let db_state = state.as_ref().ok_or_else(state_err)?;
 		let _ = self.usage_info.try_borrow_mut().map(|mut usage_info| {
 			usage_info.reads.ops += 1;
-			usage_info.reads.bytes += key.len();
+			usage_info.reads.bytes += key.len() as u64;
 		});
 		db_state.storage(key)
 	}
