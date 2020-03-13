@@ -1473,19 +1473,22 @@ impl<T: Trait> Module<T> {
 		let (approve, against, capital) = Self::tally(index);
 		let total_issuance = T::Currency::total_issuance();
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
+		let enactment_period = T::EnactmentPeriod::get();
 
 		// Logic defined in https://www.slideshare.net/gavofyork/governance-in-polkadot-poc3
 		// Essentially, we extend the lock-period of the coins behind the winning votes to be the
 		// vote strength times the public delay period from now.
-		for (a, Vote { conviction, .. }) in Self::voters_for(index).into_iter()
+		for (a, lock_periods) in Self::voters_for(index).into_iter()
 			.map(|a| (a.clone(), Self::vote_of((index, a))))
 			// ^^^ defensive only: all items come from `voters`; for an item to be in `voters`
 			// there must be a vote registered; qed
 			.filter(|&(_, vote)| vote.aye == approved)  // Just the winning coins
+			.map(|(a, vote)| (a, vote.conviction.lock_periods()))
+			.filter(|&(_, lock_periods)| !lock_periods.is_zero()) // Just the lock votes
 		{
 			// now plus: the base lock period multiplied by the number of periods this voter
 			// offered to lock should they win...
-			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
+			let locked_until = now + enactment_period * lock_periods.into();
 			Locks::<T>::insert(&a, locked_until);
 			// ...extend their bondage until at least then.
 			T::Currency::extend_lock(
@@ -1494,7 +1497,6 @@ impl<T: Trait> Module<T> {
 				Bounded::max_value(),
 				WithdrawReason::Transfer.into()
 			);
-
 		}
 
 		Self::clear_referendum(index);
