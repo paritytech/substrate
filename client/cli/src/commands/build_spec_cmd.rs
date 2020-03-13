@@ -17,7 +17,7 @@
 use structopt::StructOpt;
 use log::info;
 use sc_network::config::build_multiaddr;
-use sc_service::{Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec};
+use sc_service::{Configuration, ChainSpec};
 
 use crate::error;
 use crate::VersionInfo;
@@ -49,16 +49,12 @@ pub struct BuildSpecCmd {
 
 impl BuildSpecCmd {
 	/// Run the build-spec command
-	pub fn run<G, E>(
+	pub fn run(
 		self,
-		config: Configuration<G, E>,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
+		config: Configuration,
+	) -> error::Result<()> {
 		info!("Building chain spec");
-		let mut spec = config.expect_chain_spec().clone();
+		let mut spec = config.chain_spec.expect("`chain_spec` is set to `Some` in `update_config`");
 		let raw_output = self.raw;
 
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
@@ -72,7 +68,7 @@ impl BuildSpecCmd {
 			spec.add_boot_node(addr)
 		}
 
-		let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
+		let json = sc_service::chain_ops::build_spec(&*spec, raw_output)?;
 
 		print!("{}", json);
 
@@ -80,15 +76,13 @@ impl BuildSpecCmd {
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
+	pub fn update_config<F>(
 		&self,
-		mut config: &mut Configuration<G, E>,
+		mut config: &mut Configuration,
 		spec_factory: F,
 		version: &VersionInfo,
 	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
 

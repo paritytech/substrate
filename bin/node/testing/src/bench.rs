@@ -56,6 +56,7 @@ use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 };
 use sp_core::{Pair, Public, sr25519};
+use sc_block_builder::BlockBuilderProvider;
 
 /// Keyring full of accounts for benching.
 ///
@@ -150,7 +151,7 @@ impl BenchDb {
 
 		let (client, backend) = sc_client_db::new_client(
 			db_config,
-			NativeExecutor::new(WasmExecutionMethod::Compiled, None),
+			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 8),
 			&keyring.generate_genesis(),
 			None,
 			None,

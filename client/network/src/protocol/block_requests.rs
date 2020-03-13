@@ -192,7 +192,7 @@ where
 
 		let mut blocks = Vec::new();
 		let mut block_id = from_block_id;
-		while let Some(header) = self.chain.header(&block_id).unwrap_or(None) {
+		while let Some(header) = self.chain.header(block_id).unwrap_or(None) {
 			if blocks.len() >= max_blocks as usize {
 				break
 			}
@@ -209,7 +209,7 @@ where
 					Vec::new()
 				},
 				body: if get_body {
-					self.chain.body(&BlockId::Hash(hash))?
+					self.chain.block_body(&BlockId::Hash(hash))?
 						.unwrap_or(Vec::new())
 						.iter_mut()
 						.map(|extrinsic| extrinsic.encode())

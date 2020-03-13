@@ -81,6 +81,7 @@ where
 			id, self.backend.changes_trie_storage()
 		)?;
 		let state = self.backend.state_at(*id)?;
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let return_data = StateMachine::new(
 			&state,
 			changes_trie,
@@ -89,6 +90,7 @@ where
 			method,
 			call_data,
 			extensions.unwrap_or_default(),
+			&state_runtime_code.runtime_code()?,
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			None,
@@ -135,42 +137,53 @@ where
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
 		let mut state = self.backend.state_at(*at)?;
-		match recorder {
-			Some(recorder) => state.as_trie_backend()
-				.ok_or_else(||
-					Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
-						as Box<dyn sp_state_machine::Error>
-				)
-				.and_then(|trie_state| {
-					let backend = sp_state_machine::ProvingBackend::new_with_recorder(
-						trie_state,
-						recorder.clone(),
-					);
 
-					StateMachine::new(
-						&backend,
-						changes_trie_state,
-						&mut *changes.borrow_mut(),
-						&self.executor,
-						method,
-						call_data,
-						extensions.unwrap_or_default(),
-					)
-					// TODO: https://github.com/paritytech/substrate/issues/4455
-					// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-					.execute_using_consensus_failure_handler(execution_manager, native_call)
-				}),
-			None => StateMachine::new(
-				&state,
-				changes_trie_state,
-				&mut *changes.borrow_mut(),
-				&self.executor,
-				method,
-				call_data,
-				extensions.unwrap_or_default(),
-			)
-			.with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-			.execute_using_consensus_failure_handler(execution_manager, native_call)
+		match recorder {
+			Some(recorder) => {
+				let trie_state = state.as_trie_backend()
+					.ok_or_else(||
+						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>
+					)?;
+
+				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_state);
+				// It is important to extract the runtime code here before we create the proof
+				// recorder.
+				let runtime_code = state_runtime_code.runtime_code()?;
+
+				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
+					trie_state,
+					recorder.clone(),
+				);
+
+				StateMachine::new(
+					&backend,
+					changes_trie_state,
+					&mut *changes.borrow_mut(),
+					&self.executor,
+					method,
+					call_data,
+					extensions.unwrap_or_default(),
+					&runtime_code,
+				)
+				// TODO: https://github.com/paritytech/substrate/issues/4455
+				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
+				.execute_using_consensus_failure_handler(execution_manager, native_call)
+			},
+			None => {
+				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+				StateMachine::new(
+					&state,
+					changes_trie_state,
+					&mut *changes.borrow_mut(),
+					&self.executor,
+					method,
+					call_data,
+					extensions.unwrap_or_default(),
+					&state_runtime_code.runtime_code()?,
+				)
+				.with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
+				.execute_using_consensus_failure_handler(execution_manager, native_call)
+			}
 		}.map_err(Into::into)
 	}
 
@@ -189,7 +202,8 @@ where
 			changes_trie_state,
 			None,
 		);
-		self.executor.runtime_version(&mut ext)
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+		self.executor.runtime_version(&mut ext, &state_runtime_code.runtime_code()?)
 			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
@@ -206,6 +220,7 @@ where
 			&self.executor,
 			method,
 			call_data,
+			&sp_state_machine::backend::BackendRuntimeCode::new(trie_state).runtime_code()?,
 		)
 		.map_err(Into::into)
 	}
