@@ -7131,7 +7131,6 @@ dependencies = [
  "sp-application-crypto",
  "sp-consensus",
  "sp-consensus-vrf",
- "sp-core",
  "sp-inherents",
  "sp-runtime",
  "sp-std",
@@ -7151,7 +7150,7 @@ dependencies = [
 
 [[package]]
 name = "sp-consensus-vrf"
-version = "0.8.0"
+version = "0.8.0-alpha.2"
 dependencies = [
  "parity-scale-codec",
  "schnorrkel",
