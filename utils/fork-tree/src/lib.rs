@@ -101,7 +101,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		number: &N,
 		is_descendent_of: &F,
 		predicate: &P,
-	) -> Result<Vec<Node<H, N, V>>, Error<E>>
+	) -> Result<impl Iterator<Item=(H, N, V)>, Error<E>>
 		where E: std::error::Error,
 			  F: Fn(&H, &H) -> Result<bool, E>,
 			  P: Fn(&V) -> bool,
@@ -163,7 +163,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 		self.rebalance();
 
-		Ok(removed)
+		Ok(RemovedIterator { stack: removed })
 	}
 }
 
@@ -289,14 +289,14 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// Map fork tree into values of new types.
 	pub fn map<VT, F>(
 		self,
-		mut f: F,
+		f: &mut F,
 	) -> ForkTree<H, N, VT> where
 		F: FnMut(&H, &N, V) -> VT,
 	{
 		let roots = self.roots
 			.into_iter()
 			.map(|root| {
-				root.map(&mut f)
+				root.map(f)
 			})
 			.collect();
 
@@ -673,14 +673,14 @@ mod node_implementation {
 		/// Map node data into values of new types.
 		pub fn map<VT, F>(
 			self,
-			mut f: F,
+			f: &mut F,
 		) -> Node<H, N, VT> where
 			F: FnMut(&H, &N, V) -> VT,
 		{
 			let children = self.children
 				.into_iter()
 				.map(|node| {
-					node.map(&mut f)
+					node.map(f)
 				})
 				.collect();
 
@@ -885,9 +885,30 @@ impl<'a, H, N, V> Iterator for ForkTreeIterator<'a, H, N, V> {
 	}
 }
 
+struct RemovedIterator<H, N, V> {
+	stack: Vec<Node<H, N, V>>,
+}
+
+impl<H, N, V> Iterator for RemovedIterator<H, N, V> {
+	type Item = (H, N, V);
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.stack.pop().map(|mut node| {
+			// child nodes are stored ordered by max branch height (decreasing),
+			// we want to keep this ordering while iterating but since we're
+			// using a stack for iterator state we need to reverse it.
+			let mut children = Vec::new();
+			std::mem::swap(&mut children, &mut node.children);
+
+			self.stack.extend(children.into_iter().rev());
+			(node.hash, node.number, node.data)
+		})
+	}
+}
+
 #[cfg(test)]
 mod test {
-	use super::{FinalizationResult, ForkTree, ForkTreeIterator, Error};
+	use super::{FinalizationResult, ForkTree, Error};
 
 	#[derive(Debug, PartialEq)]
 	struct TestError;
@@ -1429,6 +1450,13 @@ mod test {
 	}
 
 	#[test]
+	fn map_works() {
+		let (tree, _is_descendent_of) = test_fork_tree();
+
+		let _tree = tree.map(&mut |_, _, _| ());
+	}
+
+	#[test]
 	fn prune_works() {
 		let (mut tree, is_descendent_of) = test_fork_tree();
 
@@ -1450,8 +1478,7 @@ mod test {
 		);
 
 		assert_eq!(
-			ForkTreeIterator { stack: removed.iter().collect() }
-			.map(|node| node.hash).collect::<Vec<_>>(),
+			removed.map(|(hash, _, _)| hash).collect::<Vec<_>>(),
 			vec!["A", "F", "G", "H", "I", "L", "M", "O", "J", "K"]
 		);
 
@@ -1473,8 +1500,7 @@ mod test {
 		);
 
 		assert_eq!(
-			ForkTreeIterator { stack: removed.iter().collect() }
-			.map(|node| node.hash).collect::<Vec<_>>(),
+			removed.map(|(hash, _, _)| hash).collect::<Vec<_>>(),
 			vec!["B", "C"]
 		);
 	}
