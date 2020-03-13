@@ -150,7 +150,9 @@ impl CliConfiguration for Subcommand
 	fn get_is_dev(&self) -> bool {
 		self.get_shared_params().dev
 	}
-	fn get_keystore_config(&self, base_path: &PathBuf) -> error::Result<KeystoreConfig> { todo!() }
+	fn get_keystore_config(&self, _base_path: &PathBuf) -> error::Result<KeystoreConfig> {
+		Ok(KeystoreConfig::InMemory)
+	}
 	fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig { self.get_shared_params().get_database_config(base_path) }
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<ChainSpec<G, E>>
 	where
