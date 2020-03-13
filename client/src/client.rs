@@ -544,28 +544,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok((storage, configs))
 	}
 
-	/// Create a new block, built on the head of the chain.
-	pub fn new_block(
-		&self,
-		inherent_digests: DigestFor<Block>,
-	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> where
-		E: Clone + Send + Sync,
-		RA: Send + Sync,
-		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error> +
-			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-	{
-		let info = self.chain_info();
-		sc_block_builder::BlockBuilder::new(
-			self,
-			info.best_hash,
-			info.best_number,
-			RecordProof::No,
-			inherent_digests,
-			&self.backend,
-		)
-	}
-
 	/// Apply a checked and validated block to an operation. If a justification is provided
 	/// then `finalized` *must* be true.
 	fn apply_block(
@@ -1199,6 +1177,21 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 			record_proof.into(),
 			inherent_digests,
 			&self.backend
+		)
+	}
+
+	fn new_block(
+		&self,
+		inherent_digests: DigestFor<Block>,
+	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
+		let info = self.chain_info();
+		sc_block_builder::BlockBuilder::new(
+			self,
+			info.best_hash,
+			info.best_number,
+			RecordProof::No,
+			inherent_digests,
+			&self.backend,
 		)
 	}
 }
