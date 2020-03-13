@@ -26,9 +26,15 @@ use regex::Regex;
 use chrono::prelude::*;
 use sc_service::{
 	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec, Roles,
-	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
+	config::{
+		DatabaseConfig, KeystoreConfig, NetworkConfiguration, WasmExecutionMethod,
+		TransactionPoolOptions,
+	},
+	PruningMode,
 };
 use sc_telemetry::TelemetryEndpoints;
+use sc_tracing::TracingReceiver;
+use sc_client_api::execution_extensions::ExecutionStrategies;
 
 use crate::{SubstrateCLI, CliConfiguration};
 use crate::error;
@@ -258,88 +264,6 @@ impl RunCmd {
 		else { None }
 	}
 
-	/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`
-	pub fn update_config<C: SubstrateCLI<G, E>, G, E>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		let keyring = self.get_keyring();
-		let is_dev = self.shared_params.dev;
-		let is_light = self.light;
-		let is_authority = (self.validator || self.sentry || is_dev || keyring.is_some())
-			&& !is_light;
-		let role =
-			if is_light {
-				sc_service::Roles::LIGHT
-			} else if is_authority {
-				sc_service::Roles::AUTHORITY
-			} else {
-				sc_service::Roles::FULL
-			};
-
-		self.import_params.update_config(&mut config, role, is_dev)?;
-
-		// set sentry mode (i.e. act as an authority but **never** actively participate)
-		config.sentry_mode = self.sentry;
-
-		config.offchain_worker = match (&self.offchain_worker, role) {
-			(OffchainWorkerEnabled::WhenValidating, sc_service::Roles::AUTHORITY) => true,
-			(OffchainWorkerEnabled::Always, _) => true,
-			(OffchainWorkerEnabled::Never, _) => false,
-			(OffchainWorkerEnabled::WhenValidating, _) => false,
-		};
-
-		config.roles = role;
-		config.disable_grandpa = self.no_grandpa;
-
-		self.pool_config.update_config(&mut config)?;
-
-		if config.rpc_http.is_none() || self.rpc_port.is_some() {
-			let rpc_interface: &str = interface_str(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
-			config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), self.rpc_port)?);
-		}
-		if config.rpc_ws.is_none() || self.ws_port.is_some() {
-			let ws_interface: &str = interface_str(self.ws_external, self.unsafe_ws_external, self.validator)?;
-			config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), self.ws_port)?);
-		}
-
-		config.rpc_ws_max_connections = self.ws_max_connections;
-		config.rpc_cors = self.rpc_cors.clone().unwrap_or_else(|| if is_dev {
-			log::warn!("Running in --dev mode, RPC CORS has been disabled.");
-			Cors::All
-		} else {
-			Cors::List(vec![
-				"http://localhost:*".into(),
-				"http://127.0.0.1:*".into(),
-				"https://localhost:*".into(),
-				"https://127.0.0.1:*".into(),
-				"https://polkadot.js.org".into(),
-				"https://substrate-ui.parity.io".into(),
-			])
-		}).into();
-
-		// Override prometheus
-		if self.no_prometheus {
-			config.prometheus_port = None;
-		} else if config.prometheus_port.is_none() {
-			let prometheus_interface: &str = if self.prometheus_external { "0.0.0.0" } else { "127.0.0.1" };
-			config.prometheus_port = Some(
-			parse_address(&format!("{}:{}", prometheus_interface, 9615), self.prometheus_port)?);
-		}
-
-		config.tracing_targets = self.import_params.tracing_targets.clone().into();
-		config.tracing_receiver = self.import_params.tracing_receiver.clone().into();
-
-		// Imply forced authoring on --dev
-		config.force_authoring = self.shared_params.dev || self.force_authoring;
-
-		Ok(())
-	}
-
 	/// Run the command that runs the node
 	pub fn run<C: SubstrateCLI<G, E>, G, E, FNL, FNF, SL, SF>(
 		config: Configuration<G, E>,
@@ -399,7 +323,7 @@ impl CliConfiguration for RunCmd
 	fn get_keystore_config(&self, base_path: &PathBuf) -> error::Result<KeystoreConfig> {
 		self.keystore_params.get_keystore_config(base_path)
 	}
-	fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig { self.shared_params.get_database_config(base_path) }
+	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> DatabaseConfig { self.shared_params.get_database_config(base_path, cache_size) }
 	fn get_name(&self) -> error::Result<String> {
 		let name: String = match (self.name.as_ref(), self.get_keyring()) {
 			(Some(name), _) => name.to_string(),
@@ -442,6 +366,127 @@ impl CliConfiguration for RunCmd
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{ self.shared_params.init::<C, G, E>() }
+
+	fn get_sentry_mode(&self) -> bool {
+		self.sentry
+	}
+
+	fn get_roles(&self) -> Roles {
+		let keyring = self.get_keyring();
+		let is_dev = self.shared_params.dev;
+		let is_light = self.light;
+		let is_authority = (self.validator || self.sentry || is_dev || keyring.is_some())
+			&& !is_light;
+
+		if is_light {
+			sc_service::Roles::LIGHT
+		} else if is_authority {
+			sc_service::Roles::AUTHORITY
+		} else {
+			sc_service::Roles::FULL
+		}
+	}
+
+	fn get_force_authoring(&self) -> bool {
+		// Imply forced authoring on --dev
+		self.shared_params.dev || self.force_authoring
+	}
+
+	fn get_tracing_receiver(&self) -> TracingReceiver {
+		self.import_params.tracing_receiver.clone().into() // TODO: get from import_params
+	}
+
+	fn get_tracing_targets(&self) -> Option<String> {
+		self.import_params.tracing_targets.clone().into() // TODO: get from import_params
+	}
+
+	fn get_prometheus_port(&self) -> error::Result<Option<SocketAddr>> {
+		if self.no_prometheus {
+			Ok(None)
+		} else {
+			let prometheus_interface: &str = if self.prometheus_external {
+				"0.0.0.0"
+			} else {
+				"127.0.0.1"
+			};
+
+			Ok(Some(parse_address(
+				&format!("{}:{}", prometheus_interface, 9615),
+				self.prometheus_port,
+			)?))
+		}
+	}
+
+	fn get_disable_grandpa(&self) -> bool {
+		self.no_grandpa
+	}
+
+	fn get_rpc_ws_max_connections(&self) -> Option<usize> {
+		self.ws_max_connections
+	}
+
+	fn get_rpc_cors(&self, is_dev: bool) -> Option<Vec<String>> {
+		self.rpc_cors.clone().unwrap_or_else(|| if is_dev {
+			log::warn!("Running in --dev mode, RPC CORS has been disabled.");
+			Cors::All
+		} else {
+			Cors::List(vec![
+				"http://localhost:*".into(),
+				"http://127.0.0.1:*".into(),
+				"https://localhost:*".into(),
+				"https://127.0.0.1:*".into(),
+				"https://polkadot.js.org".into(),
+				"https://substrate-ui.parity.io".into(),
+			])
+		}).into()
+	}
+
+	fn get_rpc_http(&self) -> error::Result<Option<SocketAddr>> {
+		let rpc_interface: &str = interface_str(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
+
+		Ok(Some(parse_address(&format!("{}:{}", rpc_interface, 9933), self.rpc_port)?))
+	}
+
+	fn get_rpc_ws(&self) -> error::Result<Option<SocketAddr>> {
+		let ws_interface: &str = interface_str(self.ws_external, self.unsafe_ws_external, self.validator)?;
+
+		Ok(Some(parse_address(&format!("{}:{}", ws_interface, 9944), self.ws_port)?))
+	}
+
+	fn get_offchain_worker(&self) -> bool {
+		let role = self.get_roles(); // TODO: it it role or roles?
+
+		match (&self.offchain_worker, role) {
+			(OffchainWorkerEnabled::WhenValidating, sc_service::Roles::AUTHORITY) => true,
+			(OffchainWorkerEnabled::Always, _) => true,
+			(OffchainWorkerEnabled::Never, _) => false,
+			(OffchainWorkerEnabled::WhenValidating, _) => false,
+		}
+	}
+
+	fn get_state_cache_size(&self) -> usize {
+		self.import_params.state_cache_size
+	}
+
+	fn get_wasm_method(&self) -> WasmExecutionMethod {
+		self.import_params.get_wasm_method()
+	}
+
+	fn get_execution_strategies(&self, is_dev: bool) -> error::Result<ExecutionStrategies> {
+		self.import_params.get_execution_strategies(is_dev)
+	}
+
+	fn get_database_cache_size(&self) -> Option<usize> {
+		self.import_params.database_cache_size
+	}
+
+	fn get_pruning(&self, is_dev: bool) -> error::Result<PruningMode> {
+		self.import_params.get_pruning(self.get_roles(), is_dev)
+	}
+
+	fn get_transaction_pool(&self) -> error::Result<TransactionPoolOptions> {
+		self.pool_config.get_transaction_pool()
+	}
 }
 
 /// Check whether a node name is considered as valid

@@ -86,11 +86,11 @@ impl SharedParams {
 		Ok(())
 	}
 
-	pub fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig
+	pub fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> DatabaseConfig
 	{
 		DatabaseConfig::Path {
 			path: base_path.join(DEFAULT_DB_CONFIG_PATH),
-			cache_size: None,
+			cache_size,
 		}
 	}
 }

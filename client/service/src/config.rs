@@ -131,7 +131,7 @@ pub enum DatabaseConfig {
 		/// Path to the database.
 		path: PathBuf,
 		/// Cache Size for internal database in MiB
-		cache_size: Option<u32>,
+		cache_size: Option<usize>,
 	},
 
 	/// A custom implementation of an already-open database.

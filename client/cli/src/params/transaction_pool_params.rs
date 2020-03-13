@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use structopt::StructOpt;
-use sc_service::Configuration;
+use sc_service::{Configuration, config::TransactionPoolOptions};
 use crate::error;
 
 /// Parameters used to create the pool configuration.
@@ -31,19 +31,20 @@ pub struct TransactionPoolParams {
 
 impl TransactionPoolParams {
 	/// Fill the given `PoolConfiguration` by looking at the cli parameters.
-	pub fn update_config<G, E>(
+	pub fn get_transaction_pool(
 		&self,
-		config: &mut Configuration<G, E>,
-	) -> error::Result<()> {
+	) -> error::Result<TransactionPoolOptions> {
+		let mut opts = TransactionPoolOptions::default();
+
 		// ready queue
-		config.transaction_pool.ready.count = self.pool_limit;
-		config.transaction_pool.ready.total_bytes = self.pool_kbytes * 1024;
+		opts.ready.count = self.pool_limit;
+		opts.ready.total_bytes = self.pool_kbytes * 1024;
 
 		// future queue
 		let factor = 10;
-		config.transaction_pool.future.count = self.pool_limit / factor;
-		config.transaction_pool.future.total_bytes = self.pool_kbytes * 1024 / factor;
+		opts.future.count = self.pool_limit / factor;
+		opts.future.total_bytes = self.pool_kbytes * 1024 / factor;
 
-		Ok(())
+		Ok(opts)
 	}
 }

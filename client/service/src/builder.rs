@@ -238,7 +238,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 				DatabaseConfig::Path { path, cache_size } =>
 					sc_client_db::DatabaseSettingsSrc::Path {
 						path: path.clone(),
-						cache_size: cache_size.clone().map(|u| u as usize),
+						cache_size: *cache_size,
 					},
 				DatabaseConfig::Custom(db) =>
 					sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),
@@ -347,7 +347,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 					DatabaseConfig::Path { path, cache_size } =>
 						sc_client_db::DatabaseSettingsSrc::Path {
 							path: path.clone(),
-							cache_size: cache_size.clone().map(|u| u as usize),
+							cache_size: *cache_size,
 						},
 					DatabaseConfig::Custom(db) =>
 						sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),

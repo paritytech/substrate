@@ -32,21 +32,16 @@ pub struct PruningParams {
 }
 
 impl PruningParams {
-	/// Put block pruning CLI params into `config` object.
-	pub fn update_config<G, E>(
+	pub fn get_pruning(
 		&self,
-		mut config: &mut Configuration<G, E>,
 		role: sc_service::Roles,
 		unsafe_pruning: bool,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-	{
+	) -> error::Result<PruningMode> {
 		// by default we disable pruning if the node is an authority (i.e.
 		// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
 		// node is an authority and pruning is enabled explicitly, then we error
 		// unless `unsafe_pruning` is set.
-		config.pruning = match &self.pruning {
+		Ok(match &self.pruning {
 			Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
 			None if role == sc_service::Roles::AUTHORITY => PruningMode::ArchiveAll,
 			None => PruningMode::default(),
@@ -62,8 +57,6 @@ impl PruningParams {
 					.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
 				)
 			},
-		};
-
-		Ok(())
+		})
 	}
 }
