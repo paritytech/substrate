@@ -1473,19 +1473,22 @@ impl<T: Trait> Module<T> {
 		let (approve, against, capital) = Self::tally(index);
 		let total_issuance = T::Currency::total_issuance();
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
+		let enactment_period = T::EnactmentPeriod::get();
 
 		// Logic defined in https://www.slideshare.net/gavofyork/governance-in-polkadot-poc3
 		// Essentially, we extend the lock-period of the coins behind the winning votes to be the
 		// vote strength times the public delay period from now.
-		for (a, Vote { conviction, .. }) in Self::voters_for(index).into_iter()
+		for (a, lock_periods) in Self::voters_for(index).into_iter()
 			.map(|a| (a.clone(), Self::vote_of((index, a))))
 			// ^^^ defensive only: all items come from `voters`; for an item to be in `voters`
 			// there must be a vote registered; qed
 			.filter(|&(_, vote)| vote.aye == approved)  // Just the winning coins
+			.map(|(a, vote)| (a, vote.conviction.lock_periods()))
+			.filter(|&(_, lock_periods)| !lock_periods.is_zero()) // Just the lock votes
 		{
 			// now plus: the base lock period multiplied by the number of periods this voter
 			// offered to lock should they win...
-			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
+			let locked_until = now + enactment_period * lock_periods.into();
 			Locks::<T>::insert(&a, locked_until);
 			// ...extend their bondage until at least then.
 			T::Currency::extend_lock(
@@ -1494,7 +1497,6 @@ impl<T: Trait> Module<T> {
 				Bounded::max_value(),
 				WithdrawReason::Transfer.into()
 			);
-
 		}
 
 		Self::clear_referendum(index);
@@ -2850,6 +2852,28 @@ mod tests {
 			fast_forward_to(18);
 			assert_ok!(Democracy::unlock(Origin::signed(1), 2));
 			assert_noop!(Democracy::unlock(Origin::signed(1), 2), Error::<Test>::NotLocked);
+		});
+	}
+
+	#[test]
+	fn no_locks_without_conviction_should_work() {
+		new_test_ext().execute_with(|| {
+			System::set_block_number(0);
+			let r = Democracy::inject_referendum(
+				2,
+				set_balance_proposal_hash_and_note(2),
+				VoteThreshold::SuperMajorityApprove,
+				0,
+			);
+			assert_ok!(Democracy::vote(Origin::signed(1), r, Vote {
+				aye: true,
+				conviction: Conviction::None,
+			}));
+
+			fast_forward_to(2);
+
+			assert_eq!(Balances::free_balance(42), 2);
+			assert_eq!(Balances::locks(1), vec![]);
 		});
 	}
 
