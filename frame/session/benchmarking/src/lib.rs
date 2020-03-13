@@ -15,17 +15,32 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Benchmarks for the Session Pallet.
+// This is separated into its own crate due to cyclic dependency issues.
 
-use super::*;
+#![cfg_attr(not(feature = "std"), no_std)]
+
+use sp_std::prelude::*;
+use sp_std::vec;
+
+use sp_runtime::traits::OnInitialize;
 
 use frame_system::RawOrigin;
-use sp_std::prelude::*;
 use frame_benchmarking::{benchmarks, account};
 
-use crate::Module as Session;
-use frame_staking::Module as Staking;
+use pallet_session::*;
+use pallet_session::Module as Session;
+
+use pallet_staking::Module as Staking;
+use pallet_staking::{
+	MAX_NOMINATIONS,
+	benchmarking::create_validator_with_nominators
+};
 
 const SEED: u32 = 0;
+
+pub struct Module<T: Trait>(pallet_session::Module<T>);
+
+pub trait Trait: pallet_session::Trait + pallet_staking::Trait {}
 
 benchmarks! {
 	_ {
@@ -34,16 +49,23 @@ benchmarks! {
 
 	set_keys {
 		let u in ...;
-		let user = account("user", u, SEED);
+		let validator = create_validator_with_nominators::<T>(10, MAX_NOMINATIONS as u32)?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
-	}: _(RawOrigin::Signed(user), keys, proof)
+	}: _(RawOrigin::Signed(validator), keys, proof)
 
 	purge_keys {
 		let u in ...;
-		let user = account("user", u, SEED);
+		let validator = create_validator_with_nominators::<T>(10, MAX_NOMINATIONS as u32)?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
-	}: _(RawOrigin::Signed(user))
+		Session::<T>::set_keys(RawOrigin::Signed(validator.clone()).into(), keys, proof)?;
+	}: _(RawOrigin::Signed(validator))
+
+	on_initialize {
+		let u in ...;
+	}: {
+		Session::<T>::on_initialize(10.into());
+	}
 
 }

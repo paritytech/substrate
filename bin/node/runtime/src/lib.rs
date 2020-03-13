@@ -610,6 +610,8 @@ impl pallet_society::Trait for Runtime {
 	type ChallengePeriod = ChallengePeriod;
 }
 
+impl pallet_session_benchmarking::Trait for Runtime {}
+
 parameter_types! {
 	pub const MinVestedTransfer: Balance = 100 * DOLLARS;
 }
@@ -866,7 +868,7 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
-				b"pallet-session" | b"session" => Session::run_benchmark(
+				b"pallet-session" | b"session" => pallet_session_benchmarking::Module::<Runtime>::run_benchmark(
 					extrinsic,
 					lowest_range_values,
 					highest_range_values,

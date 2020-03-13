@@ -115,9 +115,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(any(feature = "runtime-benchmarks", test))]
-mod benchmarking;
-
 #[cfg(feature = "historical")]
 pub mod historical;
 
@@ -470,7 +467,7 @@ decl_module! {
 		///   In this case, purge_keys will need to be called before the account can be removed.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
-		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
+		pub fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(keys.ownership_proof_is_valid(&proof), Error::<T>::InvalidProof);
@@ -491,7 +488,7 @@ decl_module! {
 		/// - Reduces system account refs by one on success.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
-		fn purge_keys(origin) {
+		pub fn purge_keys(origin) {
 			let who = ensure_signed(origin)?;
 			Self::do_purge_keys(&who)?;
 		}
