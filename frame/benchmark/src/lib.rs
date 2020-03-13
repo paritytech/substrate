@@ -26,6 +26,7 @@ use frame_system::{self as system, ensure_signed};
 use codec::{Encode, Decode};
 use sp_std::prelude::Vec;
 
+#[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
 /// Type alias for currency balance.
