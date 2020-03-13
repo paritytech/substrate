@@ -97,7 +97,7 @@ benchmarks! {
 	// These are the common parameters along with their instancing.
 	_ {
 		let r in 1 .. MAX_REGISTRARS => add_registrars::<T>(r)?;
-		let s in 1 .. T::MaxSubAccounts::get() - 1 => {
+		let s in 1 .. T::MaxSubAccounts::get() => {
 			// Give them s many sub accounts
 			let caller = account::<T>("caller", 0);
 			let _ = add_sub_accounts::<T>(caller, s)?;
@@ -153,14 +153,8 @@ benchmarks! {
 
 		let caller = account::<T>("caller", 0);
 		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
-	}: _(RawOrigin::Signed(caller), {
-		let mut subs = Module::<T>::subs(&caller);
-		// Generic data to be used.
-		let data = Data::Raw(vec![0; 32]);
-		// Create an s+1 sub account to add
-		subs.push((account::<T>("sub", s + 1), data));
-		subs
-	})
+		let subs = Module::<T>::subs(&caller);
+	}: _(RawOrigin::Signed(caller), subs)
 
 	clear_identity {
 		let caller = account::<T>("caller", 0);
