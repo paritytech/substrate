@@ -2856,6 +2856,28 @@ mod tests {
 	}
 
 	#[test]
+	fn no_locks_without_conviction_should_work() {
+		new_test_ext().execute_with(|| {
+			System::set_block_number(0);
+			let r = Democracy::inject_referendum(
+				2,
+				set_balance_proposal_hash_and_note(2),
+				VoteThreshold::SuperMajorityApprove,
+				0
+			);
+			assert_ok!(Democracy::vote(Origin::signed(1), r, Vote {
+				aye: true,
+				conviction: Conviction::None,
+			}));
+
+			fast_forward_to(2);
+
+			assert_eq!(Balances::free_balance(42), 2);
+			assert_eq!(Balances::locks(1), vec![]);
+		});
+	}
+
+	#[test]
 	fn lock_voting_should_work_with_delegation() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
