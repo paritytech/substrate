@@ -32,10 +32,12 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-session = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/session" }
 sp-api = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/api" }
 sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
-pallet-babe = { version = "2.0.0-alpha.2", default-features = false, path = "../../frame/babe" }
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "2.0.0-alpha.2", default-features = false, path = "../../frame/system/rpc/runtime-api" }
-pallet-timestamp = { version = "2.0.0-alpha.2", default-features = false, path = "../../frame/timestamp" }
+pallet-babe = { version = "2.0.0-alpha.2", default-features = false, path = "../../frame/babe" }
+pallet-timestamp = { version = "2.0.0-alpha.3", default-features = false, path = "../../frame/timestamp" }
+pallet-indices = { version = "2.0.0-alpha.3", default-features = false, path = "../../frame/indices" }
+pallet-balances = { version = "2.0.0-alpha.3", default-features = false, path = "../../frame/balances" }
 sc-client = { version = "0.8.0-alpha.2", optional = true, path = "../../client" }
 sp-trie = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/transaction-pool" }
@@ -55,6 +57,7 @@ wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-run
 default = [
 	"std",
 ]
+indices-lookup = []
 std = [
 	"sp-application-crypto/std",
 	"sp-consensus-aura/std",
@@ -79,6 +82,7 @@ std = [
 	"sp-api/std",
 	"sp-runtime/std",
 	"pallet-babe/std",
+	"pallet-indices/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
 	"pallet-timestamp/std",

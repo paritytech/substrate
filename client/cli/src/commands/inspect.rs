@@ -40,11 +40,11 @@ pub struct InspectCmd {
 impl InspectCmd {
 	pub fn run<C: RuntimeAdapter>(self) -> error::Result<()> {
 		let uri = read_uri(self.uri)?;
-		let pass = get_password(&self.shared_params)?;
+		let pass = get_password(&self.shared_params).ok();
 
 		C::print_from_uri(
 			&uri,
-			Some(pass.as_str()),
+			pass.as_ref().map(String::as_str),
 			self.shared_params.network,
 			self.shared_params.output_type
 		);

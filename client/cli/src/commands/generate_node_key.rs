@@ -41,7 +41,7 @@ impl GenerateNodeKeyCmd {
 		let secret = keypair.secret();
 		let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
 
-		fs::write(file, secret.as_ref())?;
+		fs::write(file, hex::encode(secret.as_ref()))?;
 
 		println!("{}", peer_id);
 

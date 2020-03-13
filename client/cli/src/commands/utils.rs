@@ -18,9 +18,8 @@
 use std::{io::Read, path::PathBuf};
 use sp_core::{Pair, Public, crypto::{Ss58Codec, Ss58AddressFormat}, hexdisplay::HexDisplay};
 use sp_runtime::{
-	MultiSignature, MultiSigner,
-	generic::{UncheckedExtrinsic, SignedPayload},
-	traits::IdentifyAccount,
+	MultiSignature, MultiSigner, generic::{UncheckedExtrinsic, SignedPayload},
+	traits::IdentifyAccount, AccountId32,
 };
 use parity_scale_codec::{Encode, Decode};
 use serde_json::json;
@@ -48,14 +47,14 @@ pub trait RuntimeAdapter: Sized {
 	type Pair: Pair<Public = Self::Public, Signature = Self::Signature>;
 	/// public type
 	type Public: Public + Into<MultiSigner> + Ss58Codec + AsRef<[u8]> + std::hash::Hash;
-	/// sugnature type
+	/// signature type
 	type Signature: Into<MultiSignature> + AsRef<[u8]> + AsMut<[u8]> + Encode + Default;
 	/// runtime
 	type Runtime: frame_system::Trait + pallet_balances::Trait + pallet_indices::Trait;
 	/// extras
 	type Extra: SignedExtension;
 	/// Address type
-	type Address: Encode + Decode + From<Self::Public>;
+	type Address: Encode + Decode + From<AccountId32>;
 
 	/// generate a pair from suri
 	fn pair_from_suri(suri: &str, password: &str) -> Self::Pair {
@@ -178,7 +177,7 @@ pub fn get_password(params: &SharedParams) -> error::Result<String> {
 	let pass = if password_interactive {
 		rpassword::read_password_from_tty(Some("Key password: "))?
 	} else {
-		password.map(Into::into).expect("")
+		password.map(Into::into).ok_or("Password not specified")?
 	};
 
 	Ok(pass)
@@ -241,13 +240,14 @@ pub fn create_extrinsic_for<RA: RuntimeAdapter, Call>(
 ) -> Result<UncheckedExtrinsic<RA::Address, Call, RA::Signature, RA::Extra>, Error>
 	where
 		Call: Encode,
+		RA::Address: From<AccountId32>,
 {
 	let extra = RA::build_extra(nonce);
 	let payload = SignedPayload::new(call, extra)
 		.map_err(|_| Error::Other("Transaction validity error".into()))?;
 
 	let signature = payload.using_encoded(|payload| signer.sign(payload));
-	let signer = RA::Address::from(signer.public());
+	let signer = signer.public().into().into_account().into();
 	let (function, extra, _) = payload.deconstruct();
 
 	Ok(UncheckedExtrinsic::new_signed(

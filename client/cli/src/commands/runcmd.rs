@@ -243,6 +243,12 @@ pub struct RunCmd {
 	/// Specify custom keystore path.
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
+
+	/// The size of the instances cache for each runtime.
+	///
+	/// The default value is 8 and the values higher than 256 are ignored.
+	#[structopt(long = "max-runtime-instances", default_value = "8")]
+	pub max_runtime_instances: usize,
 }
 
 impl RunCmd {

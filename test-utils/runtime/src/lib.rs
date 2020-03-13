@@ -46,7 +46,7 @@ use sp_version::RuntimeVersion;
 pub use sp_core::{hash::H256};
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 use sp_core::storage::ChildType;
@@ -359,12 +359,11 @@ impl_outer_origin!{
 	pub enum Origin for Runtime where system = frame_system {}
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-pub struct Event;
-
-impl From<frame_system::Event<Runtime>> for Event {
-	fn from(_evt: frame_system::Event<Runtime>) -> Self {
-		unimplemented!("Not required in tests!")
+impl_outer_event!{
+	pub enum MetaEvent for Runtime {
+		frame_system<T>,
+		pallet_balances<T>,
+		pallet_indices<T>,
 	}
 }
 
@@ -374,6 +373,23 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+	pub const Deposit: u64 = 1;
+	pub const ExistentialDeposit: u64 = 1;
+}
+
+impl pallet_indices::Trait for Runtime {
+	type AccountIndex = u64;
+	type Currency = pallet_balances::Module<Runtime>;
+	type Deposit = Deposit;
+	type Event = MetaEvent;
+}
+
+impl pallet_balances::Trait for Runtime {
+	type Balance = u64;
+	type DustRemoval = ();
+	type Event = MetaEvent;
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = frame_system::Module<Runtime>;
 }
 
 impl frame_system::Trait for Runtime {
@@ -383,17 +399,23 @@ impl frame_system::Trait for Runtime {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
+	#[cfg(feature = "indices-lookup")]
+	type AccountId = sp_core::crypto::AccountId32;
+	#[cfg(not(feature = "indices-lookup"))]
 	type AccountId = u64;
+	#[cfg(feature = "indices-lookup")]
+	type Lookup = pallet_indices::Module<Runtime>;
+	#[cfg(not(feature = "indices-lookup"))]
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
-	type AccountData = ();
+	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }

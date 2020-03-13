@@ -31,6 +31,8 @@ mod transfer;
 mod verify;
 mod vanity;
 mod insert;
+#[cfg(test)]
+mod tests;
 
 use std::fmt::Debug;
 use structopt::StructOpt;
@@ -50,6 +52,15 @@ pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
 pub use crate::commands::check_block_cmd::CheckBlockCmd;
 pub use crate::commands::revert_cmd::RevertCmd;
 pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
+pub use crate::commands::generate::GenerateCmd;
+pub use crate::commands::generate_node_key::GenerateNodeKeyCmd;
+pub use crate::commands::insert::InsertCmd;
+pub use crate::commands::sign::SignCmd;
+pub use crate::commands::sign_transaction::SignTransactionCmd;
+pub use crate::commands::transfer::TransferCmd;
+pub use crate::commands::vanity::VanityCmd;
+pub use crate::commands::verify::VerifyCmd;
+
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
