@@ -75,7 +75,7 @@ use sp_state_machine::{
 	StorageCollection, ChildStorageCollection,
 	backend::Backend as StateBackend,
 };
-use sp_stats::{StateMachineStats, UsageInfo as StateUsageInfo};
+use sp_stats::{UsageInfo as StateUsageInfo};
 use crate::utils::{DatabaseType, Meta, db_err, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
 use sc_client::leaves::{LeafSet, FinalizationDisplaced};
@@ -256,14 +256,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		-> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>>>
 	{
 		self.state.as_trie_backend()
-	}
-
-	fn register_overlay_stats(&mut self, stats: &StateMachineStats) {
-		self.state.register_overlay_stats(stats);
-	}
-
-	fn usage_info(&self) -> StateUsageInfo {
-		self.state.usage_info()
 	}
 }
 
@@ -1125,8 +1117,6 @@ impl<Block: BlockT> Backend<Block> {
 				let mut changeset: sc_state_db::ChangeSet<Vec<u8>> = sc_state_db::ChangeSet::default();
 				let mut ops: u64 = 0;
 				let mut bytes: u64 = 0;
-				let mut removal: u64 = 0;
-				let mut bytes_removal: u64 = 0;
 				for (key, (val, rc)) in operation.db_updates.drain() {
 					if rc > 0 {
 						ops += 1;
@@ -1134,26 +1124,14 @@ impl<Block: BlockT> Backend<Block> {
 
 						changeset.inserted.push((key, val.to_vec()));
 					} else if rc < 0 {
-						removal += 1;
-						bytes_removal += key.len() as u64;
+						ops += 1;
+						bytes += key.len() as u64;
 
 						changeset.deleted.push(key);
 					}
 				}
-				self.state_usage.tally_writes_nodes(ops, bytes);
-				self.state_usage.tally_removed_nodes(removal, bytes_removal);
-
-				let mut ops: u64 = 0;
-				let mut bytes: u64 = 0;
-				for (key, value) in operation.storage_updates.iter()
-					.chain(operation.child_storage_updates.iter().flat_map(|(_, s)| s.iter())) {
-						ops += 1;
-						bytes += key.len() as u64;
-						if let Some(v) = value.as_ref() {
-							bytes += v.len() as u64;
-						}
-				}
 				self.state_usage.tally_writes(ops, bytes);
+
 				let number_u64 = number.saturated_into::<u64>();
 				let commit = self.storage.state_db.insert_block(
 					&hash,
@@ -1521,10 +1499,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				reads: io_stats.reads,
 				average_transaction_size: io_stats.avg_transaction_size() as u64,
 				state_reads: state_stats.reads.ops,
-				state_writes: state_stats.writes.ops,
-				state_writes_cache: state_stats.overlay_writes.ops,
 				state_reads_cache: state_stats.cache_reads.ops,
-				state_writes_nodes: state_stats.nodes_writes.ops,
+				state_writes: state_stats.writes.ops,
 			},
 		})
 	}
@@ -1701,7 +1677,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn get_import_lock(&self) -> &RwLock<()> {
 		&*self.import_lock
 	}
-
 }
 
 impl<Block: BlockT> sc_client_api::backend::LocalBackend<Block> for Backend<Block> {}

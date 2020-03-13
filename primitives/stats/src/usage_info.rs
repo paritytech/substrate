@@ -18,7 +18,6 @@
 
 use core::time::{Duration};
 use codec::{Encode, Decode};
-use crate::StateMachineStats;
 
 /// Measured count of operations and total bytes.
 #[derive(Clone, Debug, Default, Encode, Decode)]
@@ -34,19 +33,10 @@ pub struct UsageUnit {
 pub struct UsageInfo {
 	/// Read statistics (total).
 	pub reads: UsageUnit,
-	/// Write statistics (total).
+	/// Write statistics.
 	pub writes: UsageUnit,
-	/// Write trie nodes statistics.
-	pub nodes_writes: UsageUnit,
-	/// Write into cached state machine
-	/// change overlay.
-	pub overlay_writes: UsageUnit,
-	/// Removed trie nodes statistics.
-	pub removed_nodes: UsageUnit,
 	/// Cache read statistics.
 	pub cache_reads: UsageUnit,
-	/// Modified value read statistics.
-	pub modified_reads: UsageUnit,
 	/// Memory used.
 	// Encoded as u32 because wasm's usize is u32.
 	pub memory: u32,
@@ -69,21 +59,10 @@ impl UsageInfo {
 		Self {
 			reads: UsageUnit::default(),
 			writes: UsageUnit::default(),
-			overlay_writes: UsageUnit::default(),
-			nodes_writes: UsageUnit::default(),
-			removed_nodes: UsageUnit::default(),
 			cache_reads: UsageUnit::default(),
-			modified_reads: UsageUnit::default(),
 			memory: 0,
 			started: Default::default(),
 			span: Default::default(),
 		}
-	}
-	/// Add collected state machine to this state.
-	pub fn include_state_machine_states(&mut self, count: &StateMachineStats) {
-		self.modified_reads.ops += *count.reads_modified.borrow();
-		self.modified_reads.bytes += *count.bytes_read_modified.borrow();
-		self.overlay_writes.ops += *count.writes_overlay.borrow();
-		self.overlay_writes.bytes += *count.bytes_writes_overlay.borrow();
 	}
 }

@@ -292,10 +292,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		Ok(())
 	}
 
-	fn register_overlay_stats(&mut self, stats: &sp_stats::StateMachineStats) {
-		self.state.borrow_mut().as_mut().map(|s| s.register_overlay_stats(stats));
-	}
-
 	fn usage_info(&self) -> UsageInfo {
 		self.usage_info.try_borrow().map_or(UsageInfo::empty(), |info| info.clone())
 	}

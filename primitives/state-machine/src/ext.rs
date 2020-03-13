@@ -658,7 +658,6 @@ mod tests {
 			].into_iter().collect(),
 			committed: Default::default(),
 			collect_extrinsics: true,
-			stats: Default::default(),
 		}
 	}
 

@@ -22,7 +22,7 @@ use codec::Encode;
 
 use sp_core::storage::{ChildInfo, OwnedChildInfo};
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
-use sp_stats::{StateMachineStats, UsageInfo};
+use sp_stats::UsageInfo;
 
 use crate::{
 	trie_backend::TrieBackend,
@@ -207,11 +207,6 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		(root, txs)
 	}
 
-	/// Register stats from overlay of state machine.
-	///
-	/// By default nothing is registered.
-	fn register_overlay_stats(&mut self, _stats: &StateMachineStats);
-
 	/// Query backend usage statistics (i/o, memory)
 	///
 	/// Not all implementations are expected to be able to do this. In the
@@ -314,12 +309,10 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).for_key_values_with_prefix(prefix, f);
 	}
 
-	fn register_overlay_stats(&mut self, _stats: &StateMachineStats) {	}
-
 	fn usage_info(&self) -> UsageInfo {
 		(*self).usage_info()
 	}
-}
+ }
 
 /// Trait that allows consolidate two transactions together.
 pub trait Consolidate {

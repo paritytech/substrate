@@ -27,7 +27,6 @@ use sp_trie::{
 };
 pub use sp_trie::Recorder;
 pub use sp_trie::trie_types::{Layout, TrieError};
-use sp_stats::{StateMachineStats, UsageInfo};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
@@ -359,12 +358,6 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		H::Out: Ord
 	{
 		self.0.child_storage_root(storage_key, child_info, delta)
-	}
-
-	fn register_overlay_stats(&mut self, _stats: &StateMachineStats) { }
-
-	fn usage_info(&self) -> UsageInfo {
-		self.0.usage_info()
 	}
 }
 
