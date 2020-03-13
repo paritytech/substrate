@@ -8,6 +8,7 @@ pub fn migrate<T: Trait>() {
 	// Number - 2 is therefore the most recent block's hash that needs migrating.
 	if Number::<T>::get() > One::one() {
 		sp_runtime::print("Migrating BlockHash...");
+		BlockHash::<T>::migrate_key_from_blake(0);
 		let mut n = Number::<T>::get() - One::one() - One::one();
 		while !n.is_zero() {
 			sp_runtime::print(n.saturated_into::<u32>());
