@@ -78,21 +78,4 @@ impl BuildSpecCmd {
 
 		Ok(())
 	}
-
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<C: SubstrateCLI<G, E>, G, E>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		self.shared_params.update_config::<C, G, E>(&mut config)?;
-
-		let net_config_path = C::base_path(self.shared_params.base_path.as_ref()).join(crate::commands::DEFAULT_NETWORK_CONFIG_PATH);
-
-		self.node_key_params.update_config(&mut config, Some(&net_config_path))?;
-
-		Ok(())
-	}
 }

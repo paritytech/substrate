@@ -19,9 +19,9 @@ use std::iter;
 use std::net::Ipv4Addr;
 use structopt::StructOpt;
 use sc_network::{
-	config::{NonReservedPeerMode, TransportConfig}, multiaddr::Protocol,
+	config::{NonReservedPeerMode, TransportConfig, NetworkConfiguration}, multiaddr::Protocol,
 };
-use sc_service::{Configuration, RuntimeGenesis};
+use sc_service::{Configuration, RuntimeGenesis, ChainSpec};
 
 use crate::error;
 use crate::params::node_key_params::NodeKeyParams;
@@ -101,60 +101,57 @@ pub struct NetworkConfigurationParams {
 
 impl NetworkConfigurationParams {
 	/// Fill the given `NetworkConfiguration` by looking at the cli parameters.
-	pub fn update_config<G, E>(
+	pub fn get_network_config<G, E>(
 		&self,
-		mut config: &mut Configuration<G, E>,
-		config_path: PathBuf,
-		client_id: String,
+		chain_spec: &ChainSpec<G, E>,
+		client_id: &str,
 		is_dev: bool,
-	) -> error::Result<()>
+		base_path: &PathBuf,
+	) -> error::Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
 	{
-		config.network.boot_nodes.extend(self.bootnodes.clone());
-		config.network.config_path = Some(config_path.clone());
-		config.network.net_config_path = Some(config_path.clone());
-
-		config.network.reserved_nodes.extend(self.reserved_nodes.clone());
-		if self.reserved_only {
-			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
-		}
-
-		config.network.sentry_nodes.extend(self.sentry_nodes.clone());
+		let config_path = base_path.join(crate::commands::DEFAULT_NETWORK_CONFIG_PATH);
+		let port = self.port.unwrap_or(30333);
+		let mut listen_addresses = vec![
+			iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
+				.chain(iter::once(Protocol::Tcp(port)))
+				.collect()
+		];
 
 		for addr in self.listen_addr.iter() {
 			let addr = addr.parse().ok().ok_or(error::Error::InvalidListenMultiaddress)?;
-			config.network.listen_addresses.push(addr);
+			listen_addresses.push(addr);
 		}
 
-		if config.network.listen_addresses.is_empty() {
-			let port = match self.port {
-				Some(port) => port,
-				None => 30333,
-			};
+		let mut boot_nodes = chain_spec.boot_nodes().to_vec();
+		boot_nodes.extend(self.bootnodes.clone());
 
-			config.network.listen_addresses = vec![
-				iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
-					.chain(iter::once(Protocol::Tcp(port)))
-					.collect()
-			];
-		}
-
-		config.network.client_version = client_id;
-		self.node_key_params.update_config(&mut config, Some(&config_path))?;
-
-		config.network.in_peers = self.in_peers;
-		config.network.out_peers = self.out_peers;
-
-		config.network.transport = TransportConfig::Normal {
-			enable_mdns: !is_dev && !self.no_mdns,
-			allow_private_ipv4: !self.no_private_ipv4,
-			wasm_external_transport: None,
-			use_yamux_flow_control: self.use_yamux_flow_control,
-		};
-
-		config.network.max_parallel_downloads = self.max_parallel_downloads;
-
-		Ok(())
+		Ok(NetworkConfiguration {
+			boot_nodes,
+			config_path: Some(config_path.clone()),
+			net_config_path: Some(config_path.clone()), // TODO: why are there 2 identical config_path here?
+			reserved_nodes: self.reserved_nodes.clone(),
+			non_reserved_mode: if self.reserved_only {
+				NonReservedPeerMode::Deny
+			} else {
+				NonReservedPeerMode::Accept
+			},
+			listen_addresses,
+			public_addresses: Vec::new(), // TODO: is this never set/used?
+			node_key: self.node_key_params.get_node_key::<G, E>(Some(&config_path))?,
+			node_name: "unknown".into(), // TODO: this seems to be never set/used
+			sentry_nodes: self.sentry_nodes.clone(),
+			client_version: client_id.to_string(),
+			in_peers: self.in_peers,
+			out_peers: self.out_peers,
+			transport: TransportConfig::Normal {
+				enable_mdns: !is_dev && !self.no_mdns,
+				allow_private_ipv4: !self.no_private_ipv4,
+				wasm_external_transport: None,
+				use_yamux_flow_control: self.use_yamux_flow_control,
+			},
+			max_parallel_downloads: self.max_parallel_downloads,
+		})
 	}
 }

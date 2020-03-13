@@ -167,8 +167,13 @@ where
 	pub fn new<T: CliConfiguration>(cli_config: &T) -> error::Result<Runtime<C, G, E>> {
 		let tokio_runtime = build_runtime()?;
 
+		let task_executor = {
+			let runtime_handle = tokio_runtime.handle().clone();
+			Arc::new(move |fut| { runtime_handle.spawn(fut); })
+		};
+
 		Ok(Runtime {
-			config: cli_config.create_configuration::<C, G, E>()?,
+			config: cli_config.create_configuration::<C, G, E>(task_executor)?,
 			tokio_runtime,
 			phantom: PhantomData,
 		})

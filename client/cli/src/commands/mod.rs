@@ -23,11 +23,13 @@ mod build_spec_cmd;
 //mod purge_chain_cmd;
 
 use std::fmt::Debug;
+use std::path::PathBuf;
 use structopt::StructOpt;
 use core::future::Future;
 use core::pin::Pin;
 use std::sync::Arc;
 
+use app_dirs::{AppInfo, AppDataType};
 use sc_service::{
 	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
 	config::KeystoreConfig, config::DatabaseConfig, config::NetworkConfiguration,
@@ -50,7 +52,7 @@ pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
 */
 
 /// default sub directory to store network config
-const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
+pub(crate) const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 
 /// All core commands that are provided by default.
 ///
@@ -142,10 +144,21 @@ impl Subcommand {
 
 impl CliConfiguration for Subcommand
 {
-	fn get_task_executor(&self) -> Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync> { todo!() }
-	fn get_network(&self) -> NetworkConfiguration { todo!() }
-	fn get_keystore(&self) -> KeystoreConfig { todo!() }
-	fn get_database(&self) -> DatabaseConfig { todo!() }
+	fn get_base_path(&self) -> Option<&PathBuf> {
+		self.get_shared_params().base_path.as_ref()
+	}
+	fn get_is_dev(&self) -> bool {
+		self.get_shared_params().dev
+	}
+	fn get_network_config<G, E>(&self, chain_spec: &ChainSpec<G, E>, is_dev: bool, base_path: &PathBuf, client_id: &str) -> error::Result<NetworkConfiguration>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		todo!()
+	}
+	fn get_keystore_config(&self) -> KeystoreConfig { todo!() }
+	fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig { self.get_shared_params().get_database_config(base_path) }
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,

@@ -16,7 +16,6 @@
 
 use std::path::PathBuf;
 use structopt::StructOpt;
-use app_dirs::{AppInfo, AppDataType};
 use sc_service::{
 	Configuration, ChainSpecExtension, RuntimeGenesis, config::DatabaseConfig, ChainSpec,
 };
@@ -65,29 +64,6 @@ impl SharedParams {
 		})
 	}
 
-	/// Load spec to `Configuration` from `SharedParams` and spec factory.
-	pub fn update_config<'a, C: SubstrateCLI<G, E>, G, E>(
-		&self,
-		mut config: &'a mut Configuration<G, E>,
-	) -> Result<&'a ChainSpec<G, E>> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		let spec = self.get_chain_spec::<C, G, E>()?;
-
-		config.network.boot_nodes = spec.boot_nodes().to_vec();
-		config.telemetry_endpoints = spec.telemetry_endpoints().clone();
-
-		config.chain_spec = spec;
-
-		config.database = DatabaseConfig::Path {
-			path: C::base_path(self.base_path.as_ref()).join(DEFAULT_DB_CONFIG_PATH),
-			cache_size: None,
-		};
-
-		Ok(&config.chain_spec)
-	}
-
 	/// Initialize substrate. This must be done only once.
 	///
 	/// This method:
@@ -108,5 +84,13 @@ impl SharedParams {
 		init_logger(logger_pattern);
 
 		Ok(())
+	}
+
+	pub fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig
+	{
+		DatabaseConfig::Path {
+			path: base_path.join(DEFAULT_DB_CONFIG_PATH),
+			cache_size: None,
+		}
 	}
 }

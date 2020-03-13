@@ -93,15 +93,14 @@ pub struct NodeKeyParams {
 impl NodeKeyParams {
 	/// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
 	/// of an optional network config storage directory.
-	pub fn update_config<'a, G, E>(
+	pub fn get_node_key<G, E>(
 		&self,
-		mut config: &'a mut Configuration<G, E>,
 		net_config_path: Option<&PathBuf>,
-	) -> error::Result<&'a NodeKeyConfig>
+	) -> error::Result<NodeKeyConfig>
 	where
 		G: RuntimeGenesis,
 	{
-		config.network.node_key = match self.node_key_type {
+		Ok(match self.node_key_type {
 			NodeKeyType::Ed25519 => {
 				let secret = if let Some(node_key) = self.node_key.as_ref() {
 					parse_ed25519_secret(node_key)?
@@ -118,9 +117,7 @@ impl NodeKeyParams {
 
 				NodeKeyConfig::Ed25519(secret)
 			}
-		};
-
-		Ok(&config.network.node_key)
+		})
 	}
 }
 

@@ -16,10 +16,12 @@
 
 //! Configuration trait for a CLI based on substrate
 
-use std::sync::Arc;
-use std::pin::Pin;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::pin::Pin;
+use std::sync::Arc;
+use app_dirs::{AppInfo, AppDataType};
 use sc_service::config::{
 	Configuration, TransactionPoolOptions, DatabaseConfig, KeystoreConfig, PruningMode,
 	ExtTransport, NetworkConfiguration, Roles, WasmExecutionMethod, ExecutionStrategies,
@@ -31,12 +33,23 @@ use crate::error::Result;
 
 pub trait CliConfiguration: Sized
 {
+	fn get_base_path(&self) -> Option<&PathBuf>;
+	fn get_is_dev(&self) -> bool;
 	fn get_roles(&self) -> Roles { Roles::FULL }
-	fn get_task_executor(&self) -> Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
 	fn get_transaction_pool(&self) -> TransactionPoolOptions { Default::default() }
-	fn get_network(&self) -> NetworkConfiguration;
-	fn get_keystore(&self) -> KeystoreConfig;
-	fn get_database(&self) -> DatabaseConfig;
+	fn get_network_config<G, E>(
+		&self,
+		chain_spec: &ChainSpec<G, E>,
+		is_dev: bool,
+		base_path: &PathBuf,
+		client_id: &str,
+	) -> Result<NetworkConfiguration>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	;
+	fn get_keystore_config(&self) -> KeystoreConfig;
+	fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig;
 	fn get_state_cache_size(&self) -> usize { Default::default() }
 	fn get_state_cache_child_ratio(&self) -> Option<usize> { Default::default() }
 	fn get_pruning(&self) -> PruningMode { Default::default() }
@@ -53,7 +66,6 @@ pub trait CliConfiguration: Sized
 	fn get_rpc_ws_max_connections(&self) -> Option<usize> { Default::default() }
 	fn get_rpc_cors(&self) -> Option<Vec<String>> { Some(Vec::new()) }
 	fn get_prometheus_port(&self) -> Option<SocketAddr> { Default::default() }
-	fn get_telemetry_endpoints(&self) -> Option<TelemetryEndpoints> { Default::default() }
 	fn get_telemetry_external_transport(&self) -> Option<ExtTransport> { Default::default() }
 	fn get_default_heap_pages(&self) -> Option<u64> { Default::default() }
 	fn get_offchain_worker(&self) -> bool { Default::default() }
@@ -64,24 +76,39 @@ pub trait CliConfiguration: Sized
 	fn get_tracing_targets(&self) -> Option<String> { Default::default() }
 	fn get_tracing_receiver(&self) -> sc_tracing::TracingReceiver { Default::default() }
 
-	fn create_configuration<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<Configuration<G, E>>
+	fn create_configuration<C: SubstrateCLI<G, E>, G, E>(
+		&self,
+		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
+	) -> Result<Configuration<G, E>>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
+		let chain_spec = self.get_chain_spec::<C, G, E>()?;
+		let is_dev = self.get_is_dev();
+		let default_config_dir =
+			app_dirs::get_app_root(
+				AppDataType::UserData,
+				&AppInfo {
+					name: C::get_executable_name(),
+					author: C::get_author(),
+				}
+			).expect("app directories exist on all supported platforms; qed");
+		let config_dir = self.get_base_path().unwrap_or(&default_config_dir);
+		let client_id = C::client_id();
+
 		Ok(Configuration {
 			impl_name: C::get_impl_name(),
 			impl_version: C::get_impl_version(),
 			roles: self.get_roles(),
-			task_executor: self.get_task_executor(),
+			task_executor,
 			transaction_pool: self.get_transaction_pool(),
-			network: self.get_network(),
-			keystore: self.get_keystore(),
-			database: self.get_database(),
+			network: self.get_network_config(&chain_spec, is_dev, &config_dir, client_id.as_str())?,
+			keystore: self.get_keystore_config(),
+			database: self.get_database_config(&config_dir),
 			state_cache_size: self.get_state_cache_size(),
 			state_cache_child_ratio: self.get_state_cache_child_ratio(),
 			pruning: self.get_pruning(),
-			chain_spec: self.get_chain_spec::<C, G, E>()?,
 			name: self.get_name(),
 			wasm_method: self.get_wasm_method(),
 			execution_strategies: self.get_execution_strategies(),
@@ -90,7 +117,7 @@ pub trait CliConfiguration: Sized
 			rpc_ws_max_connections: self.get_rpc_ws_max_connections(),
 			rpc_cors: self.get_rpc_cors(),
 			prometheus_port: self.get_prometheus_port(),
-			telemetry_endpoints: self.get_telemetry_endpoints(),
+			telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
 			telemetry_external_transport: self.get_telemetry_external_transport(),
 			default_heap_pages: self.get_default_heap_pages(),
 			offchain_worker: self.get_offchain_worker(),
@@ -100,6 +127,7 @@ pub trait CliConfiguration: Sized
 			dev_key_seed: self.get_dev_key_seed(),
 			tracing_targets: self.get_tracing_targets(),
 			tracing_receiver: self.get_tracing_receiver(),
+			chain_spec,
 		})
 	}
 

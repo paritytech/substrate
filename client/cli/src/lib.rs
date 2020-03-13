@@ -27,8 +27,11 @@ mod runtime;
 mod commands;
 mod config;
 
+use std::sync::Arc;
+use std::future::Future;
 use std::io::Write;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::fmt::Debug;
 use regex::Regex;
 use structopt::{StructOpt, clap::{self, AppSettings}};
@@ -164,24 +167,11 @@ where
 		format!("{}/v{}", Self::get_impl_name(), Self::get_impl_version())
 	}
 
-	fn base_path(user_defined: Option<&PathBuf>) -> PathBuf {
-		user_defined.expect("todo").clone()
-		/*
-		user_defined.clone()
-			.unwrap_or_else(||
-				app_dirs::get_app_root(
-					AppDataType::UserData,
-					&AppInfo {
-						name: V::executable_name(),
-						author: V::author(),
-					}
-				).expect("app directories exist on all supported platforms; qed")
-			)
-		*/
-	}
-
-	fn make_configuration<T: CliConfiguration>(command: &T) -> error::Result<Configuration<G, E>> {
-		command.create_configuration::<Self, G, E>()
+	fn create_configuration<T: CliConfiguration>(
+		command: &T,
+		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
+	) -> error::Result<Configuration<G, E>> {
+		command.create_configuration::<Self, G, E>(task_executor)
 	}
 
 	fn create_runtime<T: CliConfiguration>(command: &T) -> error::Result<Runtime<Self, G, E>> {

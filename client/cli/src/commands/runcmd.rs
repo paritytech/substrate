@@ -297,8 +297,7 @@ impl RunCmd {
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		self.shared_params.update_config::<C, G, E>(&mut config)?;
-
+		/*
 		let password = if self.password_interactive {
 			#[cfg(not(target_os = "unknown"))]
 			{
@@ -322,6 +321,7 @@ impl RunCmd {
 			path,
 			password,
 		};
+		*/
 
 		let keyring = self.get_keyring();
 		let is_dev = self.shared_params.dev;
@@ -365,16 +365,6 @@ impl RunCmd {
 
 		config.roles = role;
 		config.disable_grandpa = self.no_grandpa;
-
-		let client_id = C::client_id();
-		let network_path = C::base_path(self.shared_params.base_path.as_ref())
-			.join(crate::commands::DEFAULT_NETWORK_CONFIG_PATH);
-		self.network_config.update_config(
-			&mut config,
-			network_path,
-			client_id,
-			is_dev,
-		)?;
 
 		self.pool_config.update_config(&mut config)?;
 
@@ -474,6 +464,12 @@ impl RunCmd {
 
 impl CliConfiguration for RunCmd
 {
+	fn get_base_path(&self) -> Option<&PathBuf> {
+		self.shared_params.base_path.as_ref()
+	}
+	fn get_is_dev(&self) -> bool {
+		self.shared_params.dev
+	}
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,
@@ -481,10 +477,15 @@ impl CliConfiguration for RunCmd
 	{
 		self.shared_params.get_chain_spec::<C, G, E>()
 	}
-	fn get_task_executor(&self) -> Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync> { todo!() }
-	fn get_network(&self) -> NetworkConfiguration { todo!() }
-	fn get_keystore(&self) -> KeystoreConfig { todo!() }
-	fn get_database(&self) -> DatabaseConfig { todo!() }
+	fn get_network_config<G, E>(&self, chain_spec: &ChainSpec<G, E>, is_dev: bool, base_path: &PathBuf, client_id: &str) -> error::Result<NetworkConfiguration>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		self.network_config.get_network_config(chain_spec, client_id, is_dev, base_path)
+	}
+	fn get_keystore_config(&self) -> KeystoreConfig { todo!() }
+	fn get_database_config(&self, base_path: &PathBuf) -> DatabaseConfig { self.shared_params.get_database_config(base_path) }
 	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
