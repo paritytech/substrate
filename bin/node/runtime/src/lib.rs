@@ -24,14 +24,15 @@ use sp_std::prelude::*;
 use frame_support::{
 	construct_runtime, parameter_types, debug,
 	weights::Weight,
-	traits::{SplitTwoWays, Currency, Randomness},
+	traits::{Currency, Randomness, OnUnbalanced, Imbalance},
 };
 use sp_core::u32_trait::{_1, _2, _3, _4};
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str,
+	Permill, Perbill, Percent, ApplyExtrinsicResult,
+	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::TransactionValidity;
@@ -81,7 +82,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 226,
+	spec_version: 236,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -97,12 +98,21 @@ pub fn native_version() -> NativeVersion {
 
 type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
 
-pub type DealWithFees = SplitTwoWays<
-	Balance,
-	NegativeImbalance,
-	_4, Treasury,   // 4 parts (80%) goes to the treasury.
-	_1, Author,     // 1 part (20%) goes to the block author.
->;
+pub struct DealWithFees;
+impl OnUnbalanced<NegativeImbalance> for DealWithFees {
+	fn on_unbalanceds<B>(mut fees_then_tips: impl Iterator<Item=NegativeImbalance>) {
+		if let Some(fees) = fees_then_tips.next() {
+			// for fees, 80% to treasury, 20% to author
+			let mut split = fees.ration(80, 20);
+			if let Some(tips) = fees_then_tips.next() {
+				// for tips, if any, 80% to treasury, 20% to author (though this can be anything)
+				tips.ration_merge_into(80, 20, &mut split);
+			}
+			Treasury::on_unbalanced(split.0);
+			Author::on_unbalanced(split.1);
+		}
+	}
+}
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
@@ -268,6 +278,7 @@ parameter_types! {
 	pub const BondingDuration: pallet_staking::EraIndex = 24 * 28;
 	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
+	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 }
 
 impl pallet_staking::Trait for Runtime {
@@ -285,6 +296,7 @@ impl pallet_staking::Trait for Runtime {
 	type SlashCancelOrigin = pallet_collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilCollective>;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
+	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 }
 
 parameter_types! {
@@ -327,11 +339,16 @@ impl pallet_democracy::Trait for Runtime {
 	type Slash = Treasury;
 }
 
+parameter_types! {
+	pub const CouncilMotionDuration: BlockNumber = 5 * DAYS;
+}
+
 type CouncilCollective = pallet_collective::Instance1;
 impl pallet_collective::Trait<CouncilCollective> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
+	type MotionDuration = CouncilMotionDuration;
 }
 
 parameter_types! {
@@ -357,11 +374,16 @@ impl pallet_elections_phragmen::Trait for Runtime {
 	type TermDuration = TermDuration;
 }
 
+parameter_types! {
+	pub const TechnicalMotionDuration: BlockNumber = 5 * DAYS;
+}
+
 type TechnicalCollective = pallet_collective::Instance2;
 impl pallet_collective::Trait<TechnicalCollective> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
+	type MotionDuration = TechnicalMotionDuration;
 }
 
 impl pallet_membership::Trait<pallet_membership::Instance1> for Runtime {
@@ -370,6 +392,7 @@ impl pallet_membership::Trait<pallet_membership::Instance1> for Runtime {
 	type RemoveOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type SwapOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type ResetOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type PrimeOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type MembershipInitialized = TechnicalCommittee;
 	type MembershipChanged = TechnicalCommittee;
 }
@@ -587,10 +610,15 @@ impl pallet_society::Trait for Runtime {
 	type ChallengePeriod = ChallengePeriod;
 }
 
+parameter_types! {
+	pub const MinVestedTransfer: Balance = 100 * DOLLARS;
+}
+
 impl pallet_vesting::Trait for Runtime {
 	type Event = Event;
 	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;
+	type MinVestedTransfer = MinVestedTransfer;
 }
 
 construct_runtime!(
@@ -683,10 +711,6 @@ impl_runtime_apis! {
 	impl sp_block_builder::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 			Executive::apply_extrinsic(extrinsic)
-		}
-
-		fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-			Executive::apply_trusted_extrinsic(extrinsic)
 		}
 
 		fn finalize_block() -> <Block as BlockT>::Header {
@@ -815,21 +839,51 @@ impl_runtime_apis! {
 		}
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn dispatch_benchmark(
 			module: Vec<u8>,
 			extrinsic: Vec<u8>,
+			lowest_range_values: Vec<u32>,
+			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
-		) -> Option<Vec<frame_benchmarking::BenchmarkResults>> {
+		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::Benchmarking;
 
-			match module.as_slice() {
-				b"pallet-balances" | b"balances" => Balances::run_benchmark(extrinsic, steps, repeat).ok(),
-				b"pallet-identity" | b"identity" => Identity::run_benchmark(extrinsic, steps, repeat).ok(),
-				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(extrinsic, steps, repeat).ok(),
-				_ => None,
-			}
+			let result = match module.as_slice() {
+				b"pallet-balances" | b"balances" => Balances::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-identity" | b"identity" => Identity::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-vesting" | b"vesting" => Vesting::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				_ => Err("Benchmark not found for this pallet."),
+			};
+
+			result.map_err(|e| e.into())
 		}
 	}
 }

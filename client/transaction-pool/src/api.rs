@@ -25,9 +25,8 @@ use futures::{
 use sc_client_api::{
 	blockchain::HeaderBackend,
 	light::{Fetcher, RemoteCallRequest, RemoteBodyRequest},
-	BlockBody,
+	BlockBackend,
 };
-use sp_core::Hasher;
 use sp_runtime::{
 	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
 	transaction_validity::TransactionValidity,
@@ -64,7 +63,7 @@ impl<Client, Block> FullChainApi<Client, Block> where
 
 impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block> where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBody<Block> + BlockIdTo<Block>,
+	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 	sp_api::ApiErrorFor<Client, Block>: Send,
@@ -120,7 +119,7 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 
 	fn hash_and_length(&self, ex: &sc_transaction_graph::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
 		ex.using_encoded(|x| {
-			(traits::HasherFor::<Block>::hash(x), x.len())
+			(<traits::HashFor::<Block> as traits::Hash>::hash(x), x.len())
 		})
 	}
 }

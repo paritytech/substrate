@@ -23,4 +23,4 @@ mod imports;
 mod instance_wrapper;
 mod util;
 
-pub use runtime::create_instance;
+pub use runtime::create_runtime;

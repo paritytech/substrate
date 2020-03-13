@@ -22,10 +22,10 @@ use std::sync::Arc;
 
 use sc_consensus_babe;
 use sc_client::{self, LongestChain};
-use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
+use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
 use node_executor;
 use node_primitives::Block;
-use node_runtime::{GenesisConfig, RuntimeApi};
+use node_runtime::RuntimeApi;
 use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
@@ -45,6 +45,7 @@ use sc_offchain::OffchainWorkers;
 /// be able to perform chain operations.
 macro_rules! new_full_start {
 	($config:expr) => {{
+		use std::sync::Arc;
 		type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 		let mut import_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
@@ -64,7 +65,7 @@ macro_rules! new_full_start {
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
 					client.clone(),
-					&*client,
+					&(client.clone() as Arc<_>),
 					select_chain,
 				)?;
 				let justification_import = grandpa_block_import.clone();
@@ -116,6 +117,7 @@ macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
 		use futures::prelude::*;
 		use sc_network::Event;
+		use sc_client_api::ExecutorProvider;
 
 		let (
 			is_authority,
@@ -139,9 +141,11 @@ macro_rules! new_full {
 		let (builder, mut import_setup, inherent_data_providers) = new_full_start!($config);
 
 		let service = builder
-			.with_finality_proof_provider(|client, backend|
-				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, client)) as _)
-			)?
+			.with_finality_proof_provider(|client, backend| {
+				// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
+				let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
+				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, provider)) as _)
+			})?
 			.build()?;
 
 		let (block_import, grandpa_link, babe_link) = import_setup.take()
@@ -150,10 +154,10 @@ macro_rules! new_full {
 		($with_startup_data)(&block_import, &babe_link);
 
 		if participates_in_consensus {
-			let proposer = sc_basic_authorship::ProposerFactory {
-				client: service.client(),
-				transaction_pool: service.transaction_pool(),
-			};
+			let proposer = sc_basic_authorship::ProposerFactory::new(
+				service.client(),
+				service.transaction_pool()
+			);
 
 			let client = service.client();
 			let select_chain = service.select_chain()
@@ -189,6 +193,7 @@ macro_rules! new_full {
 				sentry_nodes,
 				service.keystore(),
 				dht_event_stream,
+				service.prometheus_registry(),
 			);
 
 			service.spawn_task("authority-discovery", authority_discovery);
@@ -225,9 +230,9 @@ macro_rules! new_full {
 				link: grandpa_link,
 				network: service.network(),
 				inherent_data_providers: inherent_data_providers.clone(),
-				on_exit: service.on_exit(),
 				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 				voting_rule: grandpa::VotingRulesBuilder::default().build(),
+				prometheus_registry: service.prometheus_registry(),
 			};
 
 			// the GRANDPA voter task is considered infallible, i.e.
@@ -255,8 +260,7 @@ type ConcreteBlock = node_primitives::Block;
 type ConcreteClient =
 	Client<
 		Backend<ConcreteBlock>,
-		LocalCallExecutor<Backend<ConcreteBlock>,
-		NativeExecutor<node_executor::Executor>>,
+		LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>,
 		ConcreteBlock,
 		node_runtime::RuntimeApi
 	>;
@@ -266,11 +270,8 @@ type ConcreteTransactionPool = sc_transaction_pool::BasicPool<
 	ConcreteBlock
 >;
 
-/// A specialized configuration object for setting up the node..
-pub type NodeConfiguration = Configuration<GenesisConfig, crate::chain_spec::Extensions>;
-
 /// Builds a new service for a full client.
-pub fn new_full(config: NodeConfiguration)
+pub fn new_full(config: Configuration)
 -> Result<
 	Service<
 		ConcreteBlock,
@@ -292,7 +293,7 @@ pub fn new_full(config: NodeConfiguration)
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: NodeConfiguration)
+pub fn new_light(config: Configuration)
 -> Result<impl AbstractService, ServiceError> {
 	type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
@@ -314,10 +315,10 @@ pub fn new_light(config: NodeConfiguration)
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi>(
+			let grandpa_block_import = grandpa::light_block_import(
 				client.clone(),
 				backend,
-				&*client,
+				&(client.clone() as Arc<_>),
 				Arc::new(fetch_checker),
 			)?;
 
@@ -342,9 +343,11 @@ pub fn new_light(config: NodeConfiguration)
 
 			Ok((import_queue, finality_proof_request_builder))
 		})?
-		.with_finality_proof_provider(|client, backend|
-			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
-		)?
+		.with_finality_proof_provider(|client, backend| {
+			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
+			let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
+			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
+		})?
 		.with_rpc_extensions(|builder,| ->
 			Result<RpcExtension, _>
 		{
@@ -501,10 +504,10 @@ mod tests {
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
 				let parent_hash = parent_header.hash();
 				let parent_number = *parent_header.number();
-				let mut proposer_factory = sc_basic_authorship::ProposerFactory {
-					client: service.client(),
-					transaction_pool: service.transaction_pool(),
-				};
+				let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
+					service.client(),
+					service.transaction_pool()
+				);
 
 				let epoch = babe_link.epoch_changes().lock().epoch_for_child_of(
 					descendent_query(&*service.client()),

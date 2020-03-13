@@ -1,17 +1,21 @@
 [package]
 name = "sc-state-db"
-version = "0.8.0-alpha.1"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "State database maintenance. Handles canonicalization and pruning in the database."
 
 [dependencies]
 parking_lot = "0.10.0"
 log = "0.4.8"
-sp-core = { version = "2.0.0-alpha.1", path = "../../primitives/core" }
-codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
+sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
+codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
+parity-util-mem = "0.5.1"
+parity-util-mem-derive = "0.1.0"
 
 [dev-dependencies]
 env_logger = "0.7.0"

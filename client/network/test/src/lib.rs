@@ -21,7 +21,7 @@ mod block_import;
 #[cfg(test)]
 mod sync;
 
-use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData};
+use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData, task::{Poll, Context as FutureContext}};
 
 use libp2p::build_multiaddr;
 use log::trace;
@@ -29,13 +29,8 @@ use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
 	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId}, Info as BlockchainInfo,
 };
-use sc_client_api::{
-	BlockchainEvents, BlockImportNotification,
-	FinalityNotifications, ImportNotifications,
-	FinalityNotification,
-	backend::{TransactionFor, AuxStore, Backend, Finalizer},
-};
-use sc_block_builder::BlockBuilder;
+use sc_client_api::{BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification, backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend};
+use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client::LongestChain;
 use sc_network::config::Roles;
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
@@ -46,18 +41,18 @@ use sp_consensus::block_import::{BlockImport, ImportResult};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
-use futures03::{Future as _, FutureExt as _, TryFutureExt as _, StreamExt as _, TryStreamExt as _};
-use sc_network::{NetworkWorker, NetworkStateInfo, NetworkService, ReportHandle, config::ProtocolId};
+use sc_network::{NetworkWorker, NetworkStateInfo, NetworkService, config::ProtocolId};
 use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
-use sc_network::config::{ProtocolConfig, TransactionPool};
+use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
 use substrate_test_runtime_client::{self, AccountKeyring};
 
+pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
 
@@ -187,8 +182,8 @@ pub struct Peer<D> {
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
 	network: NetworkWorker<Block, <Block as BlockT>::Hash>,
-	imported_blocks_stream: Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>,
-	finality_notification_stream: Box<dyn Stream<Item = FinalityNotification<Block>, Error = ()> + Send>,
+	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
+	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
 }
 
 impl<D> Peer<D> {
@@ -381,31 +376,6 @@ impl<D> Peer<D> {
 	pub fn failed_verifications(&self) -> HashMap<<Block as BlockT>::Hash, String> {
 		self.verifier.failed_verifications.lock().clone()
 	}
-}
-
-pub struct EmptyTransactionPool;
-
-impl TransactionPool<Hash, Block> for EmptyTransactionPool {
-	fn transactions(&self) -> Vec<(Hash, Extrinsic)> {
-		Vec::new()
-	}
-
-	fn hash_of(&self, _transaction: &Extrinsic) -> Hash {
-		Hash::default()
-	}
-
-	fn import(
-		&self,
-		_report_handle: ReportHandle,
-		_who: PeerId,
-		_rep_change_good: sc_network::ReputationChange,
-		_rep_change_bad: sc_network::ReputationChange,
-		_transaction: Extrinsic
-	) {}
-
-	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
-
-	fn transaction(&self, _h: &Hash) -> Option<Extrinsic> { None }
 }
 
 /// Implements `BlockImport` for any `Transaction`. Internally the transaction is
@@ -641,7 +611,8 @@ pub trait TestNetFactory: Sized {
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
-			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
+			metrics_registry: None,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -649,10 +620,8 @@ pub trait TestNetFactory: Sized {
 				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
 			}
 
-			let imported_blocks_stream = Box::new(client.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat().fuse());
-			let finality_notification_stream = Box::new(client.finality_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat().fuse());
+			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
+			let finality_notification_stream = Box::pin(client.finality_notification_stream().fuse());
 
 			peers.push(Peer {
 				data,
@@ -716,7 +685,8 @@ pub trait TestNetFactory: Sized {
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
-			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
+			metrics_registry: None,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -724,10 +694,8 @@ pub trait TestNetFactory: Sized {
 				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
 			}
 
-			let imported_blocks_stream = Box::new(client.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat().fuse());
-			let finality_notification_stream = Box::new(client.finality_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat().fuse());
+			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
+			let finality_notification_stream = Box::pin(client.finality_notification_stream().fuse());
 
 			peers.push(Peer {
 				data,
@@ -746,70 +714,70 @@ pub trait TestNetFactory: Sized {
 	/// Polls the testnet until all nodes are in sync.
 	///
 	/// Must be executed in a task context.
-	fn poll_until_sync(&mut self) -> Async<()> {
-		self.poll();
+	fn poll_until_sync(&mut self, cx: &mut FutureContext) -> Poll<()> {
+		self.poll(cx);
 
 		// Return `NotReady` if there's a mismatch in the highest block number.
 		let mut highest = None;
 		for peer in self.peers().iter() {
 			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
-				return Async::NotReady
+				return Poll::Pending
 			}
 			if peer.network.num_sync_requests() != 0 {
-				return Async::NotReady
+				return Poll::Pending
 			}
 			match (highest, peer.client.info().best_hash) {
 				(None, b) => highest = Some(b),
 				(Some(ref a), ref b) if a == b => {},
-				(Some(_), _) => return Async::NotReady,
+				(Some(_), _) => return Poll::Pending
 			}
 		}
-		Async::Ready(())
+		Poll::Ready(())
 	}
 
 	/// Polls the testnet until theres' no activiy of any kind.
 	///
 	/// Must be executed in a task context.
-	fn poll_until_idle(&mut self) -> Async<()> {
-		self.poll();
+	fn poll_until_idle(&mut self, cx: &mut FutureContext) -> Poll<()> {
+		self.poll(cx);
 
 		for peer in self.peers().iter() {
 			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
-				return Async::NotReady
+				return Poll::Pending
 			}
 			if peer.network.num_sync_requests() != 0 {
-				return Async::NotReady
+				return Poll::Pending
 			}
 		}
-		Async::Ready(())
+		Poll::Ready(())
 	}
 
 	/// Blocks the current thread until we are sync'ed.
 	///
-	/// Calls `poll_until_sync` repeatedly with the runtime passed as parameter.
-	fn block_until_sync(&mut self, runtime: &mut tokio::runtime::current_thread::Runtime) {
-		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(self.poll_until_sync()))).unwrap();
+	/// Calls `poll_until_sync` repeatedly.
+	fn block_until_sync(&mut self) {
+		futures::executor::block_on(futures::future::poll_fn::<(), _>(|cx| self.poll_until_sync(cx)));
 	}
 
 	/// Blocks the current thread until there are no pending packets.
 	///
 	/// Calls `poll_until_idle` repeatedly with the runtime passed as parameter.
-	fn block_until_idle(&mut self, runtime: &mut tokio::runtime::current_thread::Runtime) {
-		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(self.poll_until_idle()))).unwrap();
+	fn block_until_idle(&mut self) {
+		futures::executor::block_on(futures::future::poll_fn::<(), _>(|cx| self.poll_until_idle(cx)));
 	}
 
 	/// Polls the testnet. Processes all the pending actions and returns `NotReady`.
-	fn poll(&mut self) {
+	fn poll(&mut self, cx: &mut FutureContext) {
 		self.mut_peers(|peers| {
 			for peer in peers {
 				trace!(target: "sync", "-- Polling {}", peer.id());
-				futures03::future::poll_fn(|cx| Pin::new(&mut peer.network).poll(cx))
-					.map(|item| Ok::<_, ()>(item))
-					.compat().poll().unwrap();
+				if let Poll::Ready(res) = Pin::new(&mut peer.network).poll(cx) {
+					res.unwrap();
+				}
 				trace!(target: "sync", "-- Polling complete {}", peer.id());
 
 				// We poll `imported_blocks_stream`.
-				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {
+				while let Poll::Ready(Some(notification)) = peer.imported_blocks_stream.as_mut().poll_next(cx) {
 					peer.network.on_block_imported(
 						notification.header,
 						Vec::new(),
@@ -819,7 +787,7 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `finality_notification_stream`, but we only take the last event.
 				let mut last = None;
-				while let Ok(Async::Ready(Some(item))) = peer.finality_notification_stream.poll() {
+				while let Poll::Ready(Some(item)) = peer.finality_notification_stream.as_mut().poll_next(cx) {
 					last = Some(item);
 				}
 				if let Some(notification) = last {

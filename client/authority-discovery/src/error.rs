@@ -52,4 +52,6 @@ pub enum Error {
 	MissingSignature(CryptoTypePublicPair),
 	/// Failed to sign using all public keys
 	Signing,
+	/// Failed to register Prometheus metric.
+	Prometheus(prometheus_endpoint::PrometheusError),
 }

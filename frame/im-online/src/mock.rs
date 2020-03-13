@@ -22,7 +22,7 @@ use std::cell::RefCell;
 
 use crate::{Module, Trait};
 use sp_runtime::Perbill;
-use sp_staking::{SessionIndex, offence::ReportOffence};
+use sp_staking::{SessionIndex, offence::{ReportOffence, OffenceError}};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use sp_core::H256;
@@ -49,6 +49,7 @@ impl pallet_session::SessionManager<u64> for TestSessionManager {
 		VALIDATORS.with(|l| l.borrow_mut().take())
 	}
 	fn end_session(_: SessionIndex) {}
+	fn start_session(_: SessionIndex) {}
 }
 
 impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager {
@@ -62,6 +63,7 @@ impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager
 		)
 	}
 	fn end_session(_: SessionIndex) {}
+	fn start_session(_: SessionIndex) {}
 }
 
 /// An extrinsic type used for tests.
@@ -77,8 +79,9 @@ thread_local! {
 /// A mock offence report handler.
 pub struct OffenceHandler;
 impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
-	fn report_offence(reporters: Vec<u64>, offence: Offence) {
+	fn report_offence(reporters: Vec<u64>, offence: Offence) -> Result<(), OffenceError> {
 		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
+		Ok(())
 	}
 }
 
