@@ -256,7 +256,7 @@ mod tests;
 mod slashing;
 mod migration;
 #[cfg(any(feature = "runtime-benchmarks", test))]
-mod benchmarking;
+pub mod benchmarking;
 
 pub mod inflation;
 
@@ -291,7 +291,7 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 use sp_phragmen::ExtendedBalance;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
-const MAX_NOMINATIONS: usize = 16;
+pub const MAX_NOMINATIONS: usize = 16;
 const MAX_UNLOCKING_CHUNKS: usize = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 

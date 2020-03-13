@@ -3541,6 +3541,7 @@ dependencies = [
  "pallet-randomness-collective-flip",
  "pallet-recovery",
  "pallet-session",
+ "pallet-session-benchmarking",
  "pallet-society",
  "pallet-staking",
  "pallet-staking-reward-curve",
@@ -3716,6 +3717,15 @@ checksum = "2ad2a91a8e869eeb30b9cb3119ae87773a8f4ae617f41b1eb9c154b2905f7bd6"
 dependencies = [
  "memchr",
  "version_check 0.1.5",
+]
+
+[[package]]
+name = "ntapi"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f26e041cd983acbc087e30fcba770380cfa352d0e392e175b2344ebaf7ea0602"
+dependencies = [
+ "winapi 0.3.8",
 ]
 
 [[package]]
@@ -4381,6 +4391,18 @@ dependencies = [
  "sp-staking",
  "sp-std",
  "sp-trie",
+]
+
+[[package]]
+name = "pallet-session-benchmarking"
+version = "2.0.0-alpha.3"
+dependencies = [
+ "frame-benchmarking",
+ "frame-system",
+ "pallet-session",
+ "pallet-staking",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -7902,13 +7924,15 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.9.6"
+version = "0.11.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f4b2468c629cffba39c0a4425849ab3cdb03d9dfacba69684609aea04d08ff9"
+checksum = "e15d793f059727ad34a9245503c13b38262bb32e9906d8122ca64d6ca54b0858"
 dependencies = [
  "cfg-if",
  "doc-comment",
  "libc",
+ "ntapi",
+ "once_cell",
  "rayon",
  "winapi 0.3.8",
 ]
