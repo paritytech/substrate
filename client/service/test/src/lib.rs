@@ -29,9 +29,11 @@ use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
 use sc_service::{
 	AbstractService,
-	ChainSpec,
+	GenericChainSpec,
+	ChainSpecExtension,
 	Configuration,
 	config::{DatabaseConfig, KeystoreConfig},
+	RuntimeGenesis,
 	Roles,
 	Error,
 };
@@ -48,7 +50,7 @@ struct TestNet<G, E, F, L, U> {
 	authority_nodes: Vec<(usize, SyncService<F>, U, Multiaddr)>,
 	full_nodes: Vec<(usize, SyncService<F>, U, Multiaddr)>,
 	light_nodes: Vec<(usize, SyncService<L>, Multiaddr)>,
-	chain_spec: ChainSpec<G, E>,
+	chain_spec: GenericChainSpec<G, E>,
 	base_port: u16,
 	nodes: usize,
 }
@@ -129,15 +131,15 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 	}
 }
 
-fn node_config<G, E: Clone> (
+fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'static> (
 	index: usize,
-	spec: &ChainSpec<G, E>,
+	spec: &GenericChainSpec<G, E>,
 	role: Roles,
 	task_executor: Arc<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>) + Send + Sync>,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
-) -> Configuration<G, E>
+) -> Configuration
 {
 	let root = root.path().join(format!("node-{}", index));
 
@@ -191,7 +193,7 @@ fn node_config<G, E: Clone> (
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
-		chain_spec: Some((*spec).clone()),
+		chain_spec: Some(Box::new((*spec).clone())),
 		name: format!("Node {}", index),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
@@ -217,16 +219,17 @@ fn node_config<G, E: Clone> (
 impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	F: AbstractService,
 	L: AbstractService,
-	E: Clone,
+	E: ChainSpecExtension + Clone + 'static,
+	G: RuntimeGenesis + 'static,
 {
 	fn new(
 		temp: &TempDir,
-		spec: ChainSpec<G, E>,
-		full: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>>,
-		light: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<L, Error>>,
+		spec: GenericChainSpec<G, E>,
+		full: impl Iterator<Item = impl FnOnce(Configuration) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration) -> Result<L, Error>>,
 		authorities: impl Iterator<Item = (
 			String,
-			impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>
+			impl FnOnce(Configuration) -> Result<(F, U), Error>
 		)>,
 		base_port: u16
 	) -> TestNet<G, E, F, L, U> {
@@ -249,9 +252,9 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	fn insert_nodes(
 		&mut self,
 		temp: &TempDir,
-		full: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>>,
-		light: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<L, Error>>,
-		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>)>
+		full: impl Iterator<Item = impl FnOnce(Configuration) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration) -> Result<L, Error>>,
+		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration) -> Result<(F, U), Error>)>
 	) {
 		let executor = self.runtime.executor();
 
@@ -317,14 +320,15 @@ fn tempdir_with_prefix(prefix: &str) -> TempDir {
 }
 
 pub fn connectivity<G, E, Fb, F, Lb, L>(
-	spec: ChainSpec<G, E>,
+	spec: GenericChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
 ) where
-	E: Clone,
-	Fb: Fn(Configuration<G, E>) -> Result<F, Error>,
+	E: ChainSpecExtension + Clone + 'static,
+	G: RuntimeGenesis + 'static,
+	Fb: Fn(Configuration) -> Result<F, Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration) -> Result<L, Error>,
 	L: AbstractService,
 {
 	const NUM_FULL_NODES: usize = 5;
@@ -415,20 +419,21 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 }
 
 pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
-	spec: ChainSpec<G, E>,
+	spec: GenericChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
 	mut make_block_and_import: B,
 	mut extrinsic_factory: ExF
 ) where
-	Fb: Fn(Configuration<G, E>) -> Result<(F, U), Error>,
+	Fb: Fn(Configuration) -> Result<(F, U), Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration) -> Result<L, Error>,
 	L: AbstractService,
 	B: FnMut(&F, &mut U),
 	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
 	U: Clone + Send + 'static,
-	E: Clone,
+	E: ChainSpecExtension + Clone + 'static,
+	G: RuntimeGenesis + 'static,
 {
 	const NUM_FULL_NODES: usize = 10;
 	// FIXME: BABE light client support is currently not working.
@@ -485,16 +490,17 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 }
 
 pub fn consensus<G, E, Fb, F, Lb, L>(
-	spec: ChainSpec<G, E>,
+	spec: GenericChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
 	authorities: impl IntoIterator<Item = String>
 ) where
-	Fb: Fn(Configuration<G, E>) -> Result<F, Error>,
+	Fb: Fn(Configuration) -> Result<F, Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration) -> Result<L, Error>,
 	L: AbstractService,
-	E: Clone,
+	E: ChainSpecExtension + Clone + 'static,
+	G: RuntimeGenesis + 'static,
 {
 	const NUM_FULL_NODES: usize = 10;
 	const NUM_LIGHT_NODES: usize = 10;

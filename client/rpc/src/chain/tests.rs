@@ -22,6 +22,7 @@ use substrate_test_runtime_client::{
 	runtime::{H256, Block, Header},
 };
 use sp_rpc::list::ListOrValue;
+use sc_block_builder::BlockBuilderProvider;
 
 #[test]
 fn should_return_header() {

@@ -98,7 +98,7 @@ pub use crate::{
 	client::{
 		new_with_backend,
 		new_in_mem,
-		BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents, LockImportRun,
+		BlockBackend, ImportNotifications, FinalityNotifications, BlockchainEvents, LockImportRun,
 		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
 		LongestChain, BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
 	},
