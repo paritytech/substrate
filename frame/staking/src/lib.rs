@@ -261,7 +261,13 @@ pub mod slashing;
 pub mod offchain_election;
 pub mod inflation;
 
-use sp_std::{prelude::*, result, collections::btree_map::BTreeMap, convert::{TryInto, From}, mem::size_of};
+use sp_std::{
+	result,
+	prelude::*,
+	collections::btree_map::BTreeMap,
+	convert::{TryInto, From},
+	mem::size_of,
+};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug, Parameter,
@@ -311,7 +317,7 @@ pub type NominatorIndex = u32;
 /// Data type used to index validators in the compact type.
 pub type ValidatorIndex = u16;
 
-// Ensure the size of both ValidatorIndex and NominatorIndex
+// Ensure the size of both ValidatorIndex and NominatorIndex. They both need to be well below usize.
 static_assertions::const_assert!(size_of::<ValidatorIndex>() <= size_of::<usize>());
 static_assertions::const_assert!(size_of::<NominatorIndex>() <= size_of::<usize>());
 
@@ -340,7 +346,7 @@ pub struct ActiveEraInfo<Moment> {
 	start: Option<Moment>,
 }
 
-/// Accuracy used for on-chain phragmen
+/// Accuracy used for on-chain phragmen.
 pub type ChainAccuracy = Perbill;
 
 /// Accuracy used for off-chain phragmen. This better be small.
@@ -634,8 +640,9 @@ pub enum ElectionCompute {
 	OnChain,
 	/// Result was submitted and accepted to the chain via a signed transaction.
 	Signed,
-	/// Result was submitted by an authority (probably via an unsigned transaction)
-	Authority,
+	/// Result was submitted and accepted to the chain via an unsigned transaction (by an
+	/// authority).
+	Unsigned,
 }
 
 /// The result of an election round.
@@ -706,7 +713,8 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Trait>::AccountId>,
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Trait>::AccountId>,
-	T::ValidatorIdOf: Convert<<T as frame_system::Trait>::AccountId, Option<<T as frame_system::Trait>::AccountId>>,
+	T::ValidatorIdOf:
+		Convert<<T as frame_system::Trait>::AccountId, Option<<T as frame_system::Trait>::AccountId>>,
 {
 	fn disable_validator(validator: &<T as frame_system::Trait>::AccountId) -> Result<bool, ()> {
 		<pallet_session::Module<T>>::disable(validator)
@@ -1000,10 +1008,11 @@ decl_storage! {
 		/// The score of the current [`QueuedElected`].
 		pub QueuedScore get(fn queued_score): Option<PhragmenScore>;
 
-		/// Flag to control the execution of the offchain election.
+		/// Flag to control the execution of the offchain election. When `Open(_)`, we accept
+		/// solutions to be submitted.
 		pub EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
 
-		/// True of the current planned session is final
+		/// True if the current planned session is final.
 		pub IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
 
 		/// True if network has been upgraded to this version.
@@ -1133,13 +1142,11 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		/// Does the following:
-		///
-		/// 1. potential storage migration
-		/// 2. sets `ElectionStatus` to `Open(now)` where `now` is the block number at which
-		///    the election window has opened. The offchain worker, if applicable, will execute at
-		///    the end of the current block. `submit_election_solution` will accept solutions from
-		///    this block until the end of the era.
+		/// sets `ElectionStatus` to `Open(now)` where `now` is the block number at which the
+		/// election window has opened, if we are at the last session and less blocks than
+		/// `T::ElectionLookahead` is remaining until the next new session schedule. The offchain
+		/// worker, if applicable, will execute at the end of the current block, and solutions may
+		/// be submitted.
 		fn on_initialize(now: T::BlockNumber) {
 			if
 				// if we don't have any ongoing offchain compute.
@@ -1174,7 +1181,7 @@ decl_module! {
 				} else {
 					debug::native::warn!(
 						target: "staking",
-						"estimate_next_new_session() failed to predict. Election status cannot be changed.",
+						"estimate_next_new_session() failed to execute. Election status cannot be changed.",
 					);
 				}
 			}
@@ -1185,21 +1192,21 @@ decl_module! {
 		fn offchain_worker(now: T::BlockNumber) {
 			use offchain_election::{set_check_offchain_execution_status, compute_offchain_election};
 
-			let window_open = Self::era_election_status().is_open_at(now);
 
-			if window_open {
+
+			if Self::era_election_status().is_open_at(now) {
 				let offchain_status = set_check_offchain_execution_status::<T>(now);
 				if let Err(why) = offchain_status {
 					debug::native::warn!(
 						target: "staking",
-						"skipping offchain call in open election window due to [{}]",
+						"skipping offchain worker in open election window due to [{}]",
 						why,
 					);
 				} else {
 					if let Err(e) = compute_offchain_election::<T>() {
 						debug::native::warn!(
 							target: "staking",
-							"Error in phragmen offchain worker call: {:?}",
+							"Error in phragmen offchain worker: {:?}",
 							e,
 						);
 					};
@@ -1713,10 +1720,10 @@ decl_module! {
 
 		/// Submit a phragmen result to the chain. If the solution:
 		///
-		/// 1. is valid
-		/// 2. has a better score than a potentially existing solution on chain
+		/// 1. is valid.
+		/// 2. has a better score than a potentially existing solution on chain.
 		///
-		/// then, it will be put on chain.
+		/// then, it will be _put_ on chain.
 		///
 		/// A solution consists of two pieces of data:
 		///
@@ -1728,13 +1735,14 @@ decl_module! {
 		///
 		/// Additionally, the submitter must provide:
 		///
-		/// - The score that they claim their solution has.
+		/// - The `score` that they claim their solution has.
 		///
 		/// Both validators and nominators will be represented by indices in the solution. The
 		/// indices should respect the corresponding types ([`ValidatorIndex`] and
 		/// [`NominatorIndex`]). Moreover, they should be valid when used to index into
 		/// [`SnapshotValidators`] and [`SnapshotNominators`]. Any invalid index will cause the
-		/// solution to be rejected.
+		/// solution to be rejected. These two storage items are set during the election window and
+		/// may be used to determine the indices.
 		///
 		/// A solution is valid if:
 		///
@@ -1755,14 +1763,11 @@ decl_module! {
 		///    minimized (to ensure less variance)
 		///
 		/// # <weight>
-		/// E: number of edges.
-		/// m: size of winner committee.
-		/// n: number of nominators.
-		/// d: edge degree (16 for now)
-		/// v: number of on-chain validator candidates.
+		/// E: number of edges. m: size of winner committee. n: number of nominators. d: edge degree
+		/// (16 for now) v: number of on-chain validator candidates.
 		///
 		/// NOTE: given a solution which is reduced, we can enable a new check the ensure `|E| < n +
-		/// m`.
+		/// m`. We don't do this _yet_, but our offchain worker code executes it nonetheless.
 		///
 		/// major steps (all done in `check_and_replace_solution`):
 		///
@@ -1770,14 +1775,18 @@ decl_module! {
 		/// - Storage: O(1) read `PhragmenScore`.
 		/// - Storage: O(1) read `ValidatorCount`.
 		/// - Storage: O(1) length read from `SnapshotValidators`.
-		/// - Storage: O(v) reads of `AccountId`.
+		///
+		/// - Storage: O(v) reads of `AccountId` to fetch `snapshot_validators`.
 		/// - Memory: O(m) iterations to map winner index to validator id.
-		/// - Storage: O(n) reads `AccountId`.
+		/// - Storage: O(n) reads `AccountId` to fetch `snapshot_nominators`.
 		/// - Memory: O(n + m) reads to map index to `AccountId` for un-compact.
+		///
 		/// - Storage: O(e) accountid reads from `Nomination` to read correct nominations.
 		/// - Storage: O(e) calls into `slashable_balance_of_extended` to convert ratio to staked.
+		///
 		/// - Memory: build_support_map. O(e).
 		/// - Memory: evaluate_support: O(E).
+		///
 		/// - Storage: O(e) writes to `QueuedElected`.
 		/// - Storage: O(1) write to `QueuedScore`
 		///
@@ -1799,8 +1808,10 @@ decl_module! {
 			)?
 		}
 
-		/// Unsigned version of `submit_election_solution`. Will only be accepted from those who are
-		/// in the current validator set.
+		/// Unsigned version of `submit_election_solution`. A signature and claimed validator index
+		/// must be provided. For the call to be validated, the signature must contain the signed
+		/// payload of the first three elements, and match the public key at the claimed validator
+		/// index (using the staking key).
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
 		pub fn submit_election_solution_unsigned(
 			origin,
@@ -1815,7 +1826,7 @@ decl_module! {
 			Self::check_and_replace_solution(
 				winners,
 				compact_assignments,
-				ElectionCompute::Authority,
+				ElectionCompute::Unsigned,
 				score,
 			)?
 		}
@@ -2102,6 +2113,9 @@ impl<T: Trait> Module<T> {
 
 		// check if all winners were legit; this is rather cheap. Replace with accountId.
 		let winners = winners.into_iter().map(|widx| {
+			// NOTE: at the moment, since staking is explicitly blocking any offence until election
+			// is closed, we don't check here if the account id at `snapshot_validators[widx]` is
+			// actually a validator. If this ever changes, this loop needs to also check this.
 			snapshot_validators.get(widx as usize).cloned().ok_or(Error::<T>::PhragmenBogusWinner)
 		}).collect::<Result<Vec<T::AccountId>, Error<T>>>()?;
 
@@ -2122,6 +2136,7 @@ impl<T: Trait> Module<T> {
 			nominator_at,
 			validator_at,
 		).map_err(|e| {
+			// log the error since it is not propagated into the runtime error.
 			debug::native::warn!(
 				target: "staking",
 				"un-compacting solution failed due to {:?}",
@@ -2152,9 +2167,10 @@ impl<T: Trait> Module<T> {
 			if !is_validator {
 				// a normal vote
 				let nomination = maybe_nomination.expect(
-					"exactly one of maybe_validator and maybe_nomination is true. \
+					"exactly one of `maybe_validator` and `maybe_nomination.is_some` is true. \
 					is_validator is false; maybe_nomination is some; qed"
 				);
+
 				// NOTE: we don't really have to check here if the sum of all edges are the
 				// nominator correct. Un-compacting assures this by definition.
 
@@ -2207,12 +2223,13 @@ impl<T: Trait> Module<T> {
 
 		// At last, alles Ok. Exposures and store the result.
 		let exposures = Self::collect_exposure(supports);
-
 		debug::native::info!(
 			target: "staking",
-			"A better solution has been validated and stored on chain.",
+			"A better solution (with compute {:?}) has been validated and stored on chain.",
+			compute,
 		);
 
+		// write new results.
 		<QueuedElected<T>>::put(ElectionResult {
 			elected_stashes: winners,
 			compute,
@@ -2453,7 +2470,7 @@ impl<T: Trait> Module<T> {
 			// collect exposures
 			let exposures = Self::collect_exposure(supports);
 
-			// In order to keep the property required by `n_session_ending` that we must return the
+			// In order to keep the property required by `on_session_ending` that we must return the
 			// new validator set even if it's the same as the old, as long as any underlying
 			// economic conditions have changed, we don't attempt to do any optimization where we
 			// compare against the prior set.
@@ -2876,13 +2893,8 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 pub struct LockStakingStatus<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> sp_std::fmt::Debug for LockStakingStatus<T> {
-	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "LockStakingStatus<{:?}>", self.0)
-	}
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
+		write!(f, "LockStakingStatus")
 	}
 }
 
@@ -3000,9 +3012,17 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			Ok(ValidTransaction {
+				// The higher the score[0], the better a solution is.
 				priority: score[0].saturated_into(),
 				requires: vec![],
+				// a duplicate solution from the same validator within an era cannot be accepted
+				// at the transaction pool layer.
 				provides: vec![(Self::current_era(), validator_key).encode()],
+				// Note: this can be more accurate in the future. We do something like
+				// `era_end_block - current_block` but that is not needed now as we eagerly run
+				// offchain workers now and the above should be same as `T::ElectionLookahead`
+				// without the need to query more storage in the validation phase. If we randomize
+				// offchain worker, then we might re-consider this.
 				longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(150_u64),
 				propagate: true,
 			})

@@ -100,7 +100,9 @@ pub(crate) fn set_check_offchain_execution_status<T: Trait>(
 	}
 }
 
-/// The internal logic of the offchain worker of this module.
+/// The internal logic of the offchain worker of this module. This runs the phragmen election,
+/// compacts and reduces the solution, computes the score and submits it back to the chain as an
+/// unsigned transaction.
 pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElectionError> {
 	let keys = <Module<T>>::keys();
 	let local_keys = T::KeyType::all();
@@ -112,7 +114,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 			.enumerate()
 			.find(|(_, val_key)| **val_key == key)
 	}) {
-		// compute raw solution.
+		// compute raw solution. Note that we use `OffchainAccuracy`.
 		let PhragmenResult {
 			winners,
 			assignments,
@@ -135,19 +137,16 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 			score,
 			index as u32,
 			signature,
-		)
-		.into();
+		).into();
 
-		let ok = T::SubmitTransaction::submit_unsigned(call)
-			.map_err(|_| {
-				debug::native::warn!(
-					target: "staking",
-					"failed to submit offchain solution with key {:?}",
-					pubkey,
-				);
-			})
-			.is_ok();
-		if ok {
+		if T::SubmitTransaction::submit_unsigned(call).map_err(|_| {
+			debug::native::warn!(
+				target: "staking",
+				"failed to submit offchain solution with key {:?}",
+				pubkey,
+			);
+		}).is_ok() {
+			// return and break out after the first successful submission
 			return Ok(());
 		}
 	}
@@ -156,8 +155,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 	Err(OffchainElectionError::NoSigningKey)
 }
 
-/// Takes a phragmen result and the snapshot data and spits out some data that can be submitted to
-/// the chain.
+/// Takes a phragmen result and spits out some data that can be submitted to the chain.
 ///
 /// This does a lot of stuff; read the inline comments.
 pub fn prepare_submission<T: Trait>(
@@ -211,10 +209,10 @@ where
 	// nicer, for now we do it as such since this code is not time-critical. This ensure that the
 	// score _predicted_ here is the same as the one computed on chain and you will not get a
 	// `PhragmenBogusScore` error. This is totally NOT needed if we don't do reduce. This whole
-	// accuracy glitch happens because reduce breaks that assumption of _scale_. The initial
-	// phragmen results are computed in `OffchainAccuracy` and the initial `staked` assignment set
-	// is also all multiples of this value. After reduce, this no longer holds. Hence converting to
-	// ratio thereafter is not trivially reversible.
+	// _accuracy glitch_ happens because reduce breaks that assumption of rounding and **scale**.
+	// The initial phragmen results are computed in `OffchainAccuracy` and the initial `staked`
+	// assignment set is also all multiples of this value. After reduce, this no longer holds. Hence
+	// converting to ratio thereafter is not trivially reversible.
 	let score = {
 		let staked = sp_phragmen::assignment_ratio_to_staked(
 			low_accuracy_assignment.clone(),
@@ -232,7 +230,7 @@ where
 		validator_index,
 	).map_err(|e| OffchainElectionError::from(e))?;
 
-	// winners to index.
+	// winners to index. Use a simple for loop for a more expressive early exit in case of error.
 	let mut winners_indexed: Vec<ValidatorIndex> = Vec::with_capacity(winners.len());
 	for w in winners {
 		if let Some(idx) = snapshot_validators.iter().position(|v| *v == w) {

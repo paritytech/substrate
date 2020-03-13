@@ -234,14 +234,14 @@ parameter_types! {
 
 /// We prefer using the dummy key defined in `mock::dummy_sr25519`, not `crate::sr25519`, since the
 /// dummy one gives us some nice helpers and a fake `IdentifyAccount`.
-pub struct TestStaking;
-impl sp_runtime::BoundToRuntimeAppPublic for TestStaking {
+pub struct TestStakingKeys;
+impl sp_runtime::BoundToRuntimeAppPublic for TestStakingKeys {
 	type Public = dummy_sr25519::AuthorityId;
 }
 
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
-		pub staking: TestStaking,
+		pub staking: TestStakingKeys,
 		pub other: OtherSessionHandler,
 	}
 }
@@ -460,8 +460,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn offchain_phragmen_ext(self) -> Self {
-		self
-			.session_per_era(4)
+		self.session_per_era(4)
 			.session_length(5)
 			.election_lookahead(3)
 			.local_key_account(11)

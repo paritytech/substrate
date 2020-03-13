@@ -1,4 +1,3 @@
-
 [package]
 name = "pallet-staking-fuzz"
 version = "0.0.0"

@@ -146,7 +146,7 @@ where
 		let applied = Self::report_or_store_offence(
 			&concurrent_offenders,
 			&slash_perbill,
-			offence.session_index()
+			offence.session_index(),
 		);
 
 		// Deposit the event.
