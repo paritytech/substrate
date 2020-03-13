@@ -41,7 +41,6 @@
 //! > designed to detect and remove cycles of length four exclusively. This pre-computation is
 //! > optional, and if we skip it then the running time becomes `O (|E_w| ⋅ m), so the
 //! > pre-computation makes sense only if `m >> k` and `|E_w| >> m^2`.
-//! >
 //!
 //! ### Resources:
 //!
@@ -297,10 +296,13 @@ fn reduce_4<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32 {
 							(false, true) => {
 								*other_who = who.clone();
 							}
-							(true, false) => {} // nothing, other_who can stay there.
+							(true, false) => {
+								// nothing, other_who can stay there.
+							}
 							(true, true) => {
+								// remove and don't replace
 								entry.remove();
-							} // remove and don't replace
+							}
 							(false, false) => {
 								// Neither of the edges was removed? impossible.
 								debug_assert!(false, "Duplicate voter (or other corrupt input).");
@@ -642,9 +644,9 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 ///
 /// Returns the number of edges removed.
 ///
-/// It is strictly assumed that the `who` attribute of all provided assignments are unique. The
-/// result will most likely be corrupt otherwise. Furthermore, if the _distribution vector_ contains
-/// duplicate ids, only the first instance is ever updates.
+/// IMPORTANT: It is strictly assumed that the `who` attribute of all provided assignments are
+/// unique. The result will most likely be corrupt otherwise. Furthermore, if the _distribution
+/// vector_ contains duplicate ids, only the first instance is ever updates.
 ///
 /// O(min{ |Ew| ⋅ k + m3 , |Ew| ⋅ m })
 pub fn reduce<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32 where {

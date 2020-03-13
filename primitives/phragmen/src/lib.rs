@@ -188,6 +188,8 @@ where
 				if p == Bounded::min_value() {
 					None
 				} else {
+					// NOTE: this mul impl will always round to the nearest number, so we might both
+					// overflow and underflow.
 					let distribution_stake = p * stake;
 					// defensive only. We assume that balance cannot exceed extended balance.
 					sum = sum.saturating_add(distribution_stake);
@@ -206,10 +208,6 @@ where
 			} else if let Some(excess) = sum.checked_sub(stake) {
 				if let Some(last) = distribution.last_mut() {
 					last.1 = last.1.saturating_sub(excess);
-				}
-			} else if let Some(excess) = sum.checked_sub(stake) {
-				if let Some(last) = distribution.last_mut() {
-					last.1 -= excess;
 				}
 			}
 		}
@@ -269,15 +267,15 @@ impl<AccountId> StakedAssignment<AccountId> {
 		if fill {
 			if let Some(leftover) = accuracy.checked_sub(sum) {
 				if let Some(last) = distribution.last_mut() {
-					last.1 = last
-						.1
-						.saturating_add(T::from_parts(leftover.saturated_into()));
+					last.1 = last.1.saturating_add(
+						T::from_parts(leftover.saturated_into())
+					);
 				}
 			} else if let Some(excess) = sum.checked_sub(accuracy) {
 				if let Some(last) = distribution.last_mut() {
-					last.1 = last
-						.1
-						.saturating_sub(T::from_parts(excess.saturated_into()));
+					last.1 = last.1.saturating_sub(
+						T::from_parts(excess.saturated_into())
+					);
 				}
 			}
 		}
@@ -554,9 +552,10 @@ pub fn elect<AccountId, Balance, FS, C, R>(
 ///		},
 /// }
 /// ```
-/// The second returned flag indicates the number of edges who corresponded to an actual winner from
-/// the given winner set. A value in this place larger than 0 indicates a potentially faulty
-/// assignment.
+///
+/// The second returned flag indicates the number of edges who didn't corresponded to an actual
+/// winner from the given winner set. A value in this place larger than 0 indicates a potentially
+/// faulty assignment.
 ///
 /// `O(E)` where `E` is the total number of edges.
 pub fn build_support_map<AccountId>(
