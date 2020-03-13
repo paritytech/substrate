@@ -2739,7 +2739,6 @@ fn remove_multi_deferred() {
 
 		let slashes = <Staking as Store>::UnappliedSlashes::get(&1);
 		assert_eq!(slashes.len(), 2);
-		println!("Slashes: {:?}", slashes);
 		assert_eq!(slashes[0].validator, 21);
 		assert_eq!(slashes[1].validator, 42);
 	})
@@ -2858,12 +2857,6 @@ mod offchain_phragmen {
 				assert!(Staking::snapshot_nominators().is_none());
 				assert!(Staking::snapshot_validators().is_none());
 
-				run_to_block(18);
-				assert_session_era!(1, 0);
-
-				run_to_block(27);
-				assert_session_era!(2, 0);
-
 				run_to_block(36);
 				assert_session_era!(3, 0);
 
@@ -2944,13 +2937,14 @@ mod offchain_phragmen {
 				assert!(Staking::snapshot_validators().is_some());
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-				// nominate more than the limit
+				// validate more than the limit
 				let limit: NominatorIndex = ValidatorIndex::max_value() as NominatorIndex + 1;
 				let ctrl = 1_000_000;
 				for i in 0..limit {
 					bond_validator((1000 + i).into(), (1000 + i + ctrl).into(), 100);
 				}
 
+				// window stays closed since no snapshot was taken.
 				run_to_block(27);
 				assert!(Staking::snapshot_validators().is_none());
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
@@ -3107,7 +3101,7 @@ mod offchain_phragmen {
 					Origin::signed(10),
 					winners,
 					compact,
-					score
+					score,
 				));
 
 				// a bad solution
@@ -3137,7 +3131,7 @@ mod offchain_phragmen {
 					Origin::signed(10),
 					winners,
 					compact,
-					score
+					score,
 				));
 
 				// a better solution
@@ -3146,13 +3140,12 @@ mod offchain_phragmen {
 					Origin::signed(10),
 					winners,
 					compact,
-					score
+					score,
 				));
 			})
 	}
 
 	#[test]
-	#[allow(deprecated)]
 	fn offchain_worker_runs_when_window_open() {
 		// at the end of the first finalized block with ElectionStatus::open(_), it should execute.
 		let mut ext = ExtBuilder::default()
@@ -3185,8 +3178,7 @@ mod offchain_phragmen {
 					priority: 1125, // the proposed slot stake.
 					requires: vec![],
 					provides: vec![(Staking::current_era(), signing_key).encode()],
-					longevity: TryInto::<u64>::try_into(<Test as Trait>::ElectionLookahead::get())
-						.unwrap_or(150_u64),
+					longevity: 3,
 					propagate: true,
 				})
 			)
@@ -3194,7 +3186,6 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	#[allow(deprecated)]
 	fn mediocre_submission_from_authority_is_early_rejected() {
 		let mut ext = ExtBuilder::default()
 			.offchain_phragmen_ext()
@@ -3209,7 +3200,7 @@ mod offchain_phragmen {
 				Origin::signed(10),
 				winners,
 				compact,
-				score
+				score,
 			),);
 
 			// now run the offchain worker in the same chain state.
@@ -3323,7 +3314,7 @@ mod offchain_phragmen {
 					Origin::signed(10),
 					winners,
 					compact,
-					score
+					score,
 				),);
 			})
 	}
@@ -3414,7 +3405,7 @@ mod offchain_phragmen {
 		// similar to the test that raises `PhragmenBogusNomination`.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
-			.validator_count(2)
+			.validator_count(2) // we select only 2.
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
@@ -3426,6 +3417,8 @@ mod offchain_phragmen {
 				let (compact, winners, score) = prepare_submission_with(true, |a| {
 					a.iter_mut()
 						.find(|x| x.who == 5)
+						// all 3 cannot be among the winners. Although, all of them are validator
+						// candidates.
 						.map(|x| x.distribution = vec![(21, 50), (41, 30), (31, 20)]);
 				});
 
@@ -3535,8 +3528,8 @@ mod offchain_phragmen {
 
 	#[test]
 	fn invalid_phragmen_result_invalid_target_stealing() {
-		// A valid voter who voted for someone who is a candidate, but is actually NOT nominated by
-		// this nominator.
+		// A valid voter who voted for someone who is a candidate, and is a correct winner, but is
+		// actually NOT nominated by this nominator.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.validator_count(4)
@@ -3611,12 +3604,12 @@ mod offchain_phragmen {
 						);
 				});
 
-				// can also be submitted.
+				// can be submitted.
 				assert_ok!(Staking::submit_election_solution(
 					Origin::signed(10),
 					winners,
 					compact,
-					score
+					score,
 				));
 
 				// a wrong solution.
@@ -3628,6 +3621,7 @@ mod offchain_phragmen {
 					});
 				});
 
+				// is rejected.
 				assert_noop!(
 					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
 					Error::<Test>::PhragmenSlashedNomination,
@@ -3658,7 +3652,7 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn session_handler_work() {
+	fn session_keys_are_set() {
 		let mut ext = ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.validator_count(4)
@@ -3711,8 +3705,9 @@ mod offchain_phragmen {
 			use sp_runtime::offchain::storage::StorageValueRef;
 			let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 
-			// first run -- ok
 			run_to_block(12);
+
+			// first run -- ok
 			assert_eq!(
 				offchain_election::set_check_offchain_execution_status::<Test>(12),
 				Ok(()),
@@ -3725,10 +3720,18 @@ mod offchain_phragmen {
 				Err("recently executed."),
 			);
 
-			// a fork like situation -- re-execute 12. But it won't go through.
+			// a fork like situation -- re-execute 10, 11, 12. But it won't go through.
+			assert_eq!(
+				offchain_election::set_check_offchain_execution_status::<Test>(10),
+				Err("fork."),
+			);
 			assert_eq!(
 				offchain_election::set_check_offchain_execution_status::<Test>(11),
 				Err("fork."),
+			);
+			assert_eq!(
+				offchain_election::set_check_offchain_execution_status::<Test>(12),
+				Err("recently executed."),
 			);
 		})
 	}

@@ -158,9 +158,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "1.1.2"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f747c06d9f3b2ad387ac881b9667298c81b1243aa9833f086e05996937c35507"
+checksum = "f509c5e67ca0605ee17dcd3f91ef41cadd685c75a298fb6261b781a5acb3f910"
 dependencies = [
  "arrayvec",
  "bitvec",
@@ -171,9 +171,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec-derive"
-version = "1.1.1"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34e513ff3e406f3ede6796dcdc83d0b32ffb86668cea1ccf7363118abeb00476"
+checksum = "5a0ec292e92e8ec7c58e576adacc1e3f399c597c8f263c42f18420abe58e7245"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -218,9 +218,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "053a8c8bcc71fcce321828dc897a98ab9760bef03a4fc36693c231e5b3216cfe"
+checksum = "2bdc6c187c65bca4260c9011c9e3132efe4909da44726bad24cf7572ae338d7f"
 dependencies = [
  "proc-macro2",
 ]
@@ -294,7 +294,7 @@ dependencies = [
 
 [[package]]
 name = "sp-arithmetic"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.3"
 dependencies = [
  "integer-sqrt",
  "num-traits",
@@ -317,7 +317,7 @@ dependencies = [
 
 [[package]]
 name = "sp-debug-derive"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "sp-std"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.3"
 
 [[package]]
 name = "static_assertions"
