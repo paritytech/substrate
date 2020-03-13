@@ -26,6 +26,7 @@ services:
   validator-a:
     ports:
       - "9944:9944"
+      - "9615:9615"
     volumes:
       - ../../target/release/substrate:/usr/local/bin/substrate
     image: parity/substrate
@@ -58,6 +59,7 @@ services:
       - "--no-telemetry"
       - "--rpc-cors"
       - "all"
+      - "--prometheus-external"
 
   sentry-a:
     image: parity/substrate

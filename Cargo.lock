@@ -3656,6 +3656,7 @@ dependencies = [
  "pallet-transaction-payment",
  "pallet-treasury",
  "parity-scale-codec",
+ "sc-block-builder",
  "sc-cli",
  "sc-client",
  "sc-client-api",
@@ -3684,6 +3685,7 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "log 0.4.8",
  "parity-scale-codec",
+ "sc-block-builder",
  "sc-cli",
  "sc-client",
  "sc-client-api",
@@ -3716,6 +3718,15 @@ checksum = "2ad2a91a8e869eeb30b9cb3119ae87773a8f4ae617f41b1eb9c154b2905f7bd6"
 dependencies = [
  "memchr",
  "version_check 0.1.5",
+]
+
+[[package]]
+name = "ntapi"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f26e041cd983acbc087e30fcba770380cfa352d0e392e175b2344ebaf7ea0602"
+dependencies = [
+ "winapi 0.3.8",
 ]
 
 [[package]]
@@ -5605,6 +5616,7 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-runtime",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
 ]
 
@@ -5824,6 +5836,7 @@ dependencies = [
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
+ "sc-block-builder",
  "sc-client",
  "sc-client-api",
  "sc-consensus-slots",
@@ -6328,6 +6341,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.10.0",
  "rustc-hex",
+ "sc-block-builder",
  "sc-client",
  "sc-client-api",
  "sc-executor",
@@ -7771,6 +7785,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "parity-util-mem",
+ "sc-block-builder",
  "sc-client",
  "sc-executor",
  "serde",
@@ -7900,13 +7915,15 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.9.6"
+version = "0.11.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f4b2468c629cffba39c0a4425849ab3cdb03d9dfacba69684609aea04d08ff9"
+checksum = "e15d793f059727ad34a9245503c13b38262bb32e9906d8122ca64d6ca54b0858"
 dependencies = [
  "cfg-if",
  "doc-comment",
  "libc",
+ "ntapi",
+ "once_cell",
  "rayon",
  "winapi 0.3.8",
 ]
