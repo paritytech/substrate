@@ -70,6 +70,12 @@ pub trait CliConfiguration: Sized
 	fn get_rpc_ws_max_connections(&self) -> Option<usize> { Default::default() }
 	fn get_rpc_cors(&self) -> Option<Vec<String>> { Some(Vec::new()) }
 	fn get_prometheus_port(&self) -> Option<SocketAddr> { Default::default() }
+	fn get_telemetry_endpoints<G, E>(
+		&self,
+		chain_spec: &ChainSpec<G, E>,
+	) -> Option<TelemetryEndpoints> {
+		chain_spec.telemetry_endpoints().clone()
+	}
 	fn get_telemetry_external_transport(&self) -> Option<ExtTransport> { Default::default() }
 	fn get_default_heap_pages(&self) -> Option<u64> { Default::default() }
 	fn get_offchain_worker(&self) -> bool { Default::default() }
@@ -121,7 +127,7 @@ pub trait CliConfiguration: Sized
 			rpc_ws_max_connections: self.get_rpc_ws_max_connections(),
 			rpc_cors: self.get_rpc_cors(),
 			prometheus_port: self.get_prometheus_port(),
-			telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
+			telemetry_endpoints: self.get_telemetry_endpoints(&chain_spec),
 			telemetry_external_transport: self.get_telemetry_external_transport(),
 			default_heap_pages: self.get_default_heap_pages(),
 			offchain_worker: self.get_offchain_worker(),

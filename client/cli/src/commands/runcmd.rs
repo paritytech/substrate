@@ -322,15 +322,6 @@ impl RunCmd {
 			])
 		}).into();
 
-		// Override telemetry
-		if self.no_telemetry {
-			config.telemetry_endpoints = None;
-		} else if !self.telemetry_endpoints.is_empty() {
-			config.telemetry_endpoints = Some(
-				TelemetryEndpoints::new(self.telemetry_endpoints.clone())
-			);
-		}
-
 		// Override prometheus
 		if self.no_prometheus {
 			config.prometheus_port = None;
@@ -433,6 +424,18 @@ impl CliConfiguration for RunCmd
 					None
 				}
 			})
+	}
+	fn get_telemetry_endpoints<G, E>(
+		&self,
+		chain_spec: &ChainSpec<G, E>,
+	) -> Option<TelemetryEndpoints> {
+		if self.no_telemetry {
+			None
+		} else if !self.telemetry_endpoints.is_empty() {
+			Some(TelemetryEndpoints::new(self.telemetry_endpoints.clone()))
+		} else {
+			chain_spec.telemetry_endpoints().clone()
+		}
 	}
 	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
 	where
