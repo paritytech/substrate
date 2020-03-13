@@ -181,7 +181,7 @@ where
 	}
 
 	fn make_configuration<T: CliConfiguration>(command: &T) -> error::Result<Configuration<G, E>> {
-		command.into_configuration::<Self, G, E>()
+		command.create_configuration::<Self, G, E>()
 	}
 
 	fn create_runtime<T: CliConfiguration>(command: &T) -> error::Result<Runtime<Self, G, E>> {

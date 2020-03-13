@@ -64,7 +64,7 @@ pub trait CliConfiguration: Sized
 	fn get_tracing_targets(&self) -> Option<String> { Default::default() }
 	fn get_tracing_receiver(&self) -> sc_tracing::TracingReceiver { Default::default() }
 
-	fn into_configuration<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<Configuration<G, E>>
+	fn create_configuration<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<Configuration<G, E>>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,

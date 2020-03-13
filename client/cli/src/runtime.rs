@@ -168,7 +168,7 @@ where
 		let tokio_runtime = build_runtime()?;
 
 		Ok(Runtime {
-			config: cli_config.into_configuration::<C, G, E>()?,
+			config: cli_config.create_configuration::<C, G, E>()?,
 			tokio_runtime,
 			phantom: PhantomData,
 		})
