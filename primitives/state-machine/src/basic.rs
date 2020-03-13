@@ -301,11 +301,11 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn wipe(&mut self) {
-		unimplemented!("IN BASIC EXT")
+		unimplemented!()
 	}
 
 	fn bench_usage_info(&self) -> UsageInfo {
-		unimplemented!("IN BASIC USAGE");
+		UsageInfo::empty()
 	}
 
 	fn commit(&mut self) {}
