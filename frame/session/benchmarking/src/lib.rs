@@ -22,50 +22,50 @@
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use sp_runtime::traits::OnInitialize;
+//use sp_runtime::traits::OnInitialize;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::benchmarks;
 
 use pallet_session::*;
 use pallet_session::Module as Session;
 
-use pallet_staking::Module as Staking;
 use pallet_staking::{
 	MAX_NOMINATIONS,
-	benchmarking::create_validator_with_nominators
+	benchmarking::create_validator_with_nominators,
+	//benchmarking::create_validators_with_nominators_for_era,
 };
-
-const SEED: u32 = 0;
 
 pub struct Module<T: Trait>(pallet_session::Module<T>);
 
 pub trait Trait: pallet_session::Trait + pallet_staking::Trait {}
 
 benchmarks! {
-	_ {
-		let u in 0 .. 100 => ();
-	}
+	_ {	}
 
 	set_keys {
-		let u in ...;
-		let validator = create_validator_with_nominators::<T>(10, MAX_NOMINATIONS as u32)?;
+		let n in 1 .. MAX_NOMINATIONS as u32;
+		let validator = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32)?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
 	}: _(RawOrigin::Signed(validator), keys, proof)
 
 	purge_keys {
-		let u in ...;
-		let validator = create_validator_with_nominators::<T>(10, MAX_NOMINATIONS as u32)?;
+		let n in 1 .. MAX_NOMINATIONS as u32;
+		let validator = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32)?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		Session::<T>::set_keys(RawOrigin::Signed(validator.clone()).into(), keys, proof)?;
 	}: _(RawOrigin::Signed(validator))
 
-	on_initialize {
-		let u in ...;
-	}: {
-		Session::<T>::on_initialize(10.into());
-	}
+	// TODO: Complete on_initialize benchmarks
+	// on_initialize {
+	// 	let v in 1 .. 10;
+	// 	let n in 1 .. 100;
+	// 	let b in 1 .. 10;
+	// 	create_validators_with_nominators_for_era::<T>(v, n)?;
+	// }: {
+	// 	Session::<T>::on_initialize(b.into());
+	// }
 
 }
