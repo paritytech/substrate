@@ -1229,8 +1229,8 @@ mod tests {
 			Some(0),
 			true,
 		);
-		// 35 + (2 * 32) key, 2 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 101 /* bytes */);
+		// 35 + 32 key + prefixed_key, 2 byte size
+		assert_eq!(shared.lock().used_storage_cache_size(), 80 /* bytes */);
 	}
 
 	#[test]

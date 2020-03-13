@@ -2529,7 +2529,7 @@ dependencies = [
 [[package]]
 name = "kvdb"
 version = "0.4.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#dac8aa1fbd32b54502461b82752d628193ad5863"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#a3a2a54cb50615e15912302f3df21d36f0762b93"
 dependencies = [
  "parity-bytes",
  "parity-util-mem",
@@ -2539,7 +2539,7 @@ dependencies = [
 [[package]]
 name = "kvdb-memorydb"
 version = "0.4.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#dac8aa1fbd32b54502461b82752d628193ad5863"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#a3a2a54cb50615e15912302f3df21d36f0762b93"
 dependencies = [
  "kvdb",
  "parity-util-mem",
@@ -2549,7 +2549,7 @@ dependencies = [
 [[package]]
 name = "kvdb-rocksdb"
 version = "0.6.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#dac8aa1fbd32b54502461b82752d628193ad5863"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#a3a2a54cb50615e15912302f3df21d36f0762b93"
 dependencies = [
  "fs-swap",
  "interleaved-ordered",
@@ -2567,7 +2567,7 @@ dependencies = [
 [[package]]
 name = "kvdb-web"
 version = "0.4.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#dac8aa1fbd32b54502461b82752d628193ad5863"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#a3a2a54cb50615e15912302f3df21d36f0762b93"
 dependencies = [
  "futures 0.3.4",
  "js-sys",
@@ -4571,7 +4571,7 @@ dependencies = [
 [[package]]
 name = "parity-bytes"
 version = "0.1.1"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#dac8aa1fbd32b54502461b82752d628193ad5863"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#a3a2a54cb50615e15912302f3df21d36f0762b93"
 
 [[package]]
 name = "parity-multiaddr"
