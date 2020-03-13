@@ -14,16 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
+use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use futures::{Future, future, future::FutureExt};
 use futures::select;
 use futures::pin_mut;
-use sc_service::{AbstractService, Configuration, RuntimeGenesis, ChainSpecExtension};
+use sc_service::{
+	AbstractService, Configuration, RuntimeGenesis, ChainSpecExtension,
+	ServiceBuilderCommand,
+};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use crate::error;
 use crate::SubstrateCLI;
 use crate::IntoConfiguration;
+use crate::{RunCmd, Subcommand};
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> Result<(), Box<dyn std::error::Error>>
@@ -166,5 +172,26 @@ where
 			tokio_runtime,
 			phantom: PhantomData,
 		})
+	}
+
+	pub fn run_node<FNL, FNF, SL, SF>(self, new_light: FNL, new_full: FNF) -> error::Result<()>
+	where
+		FNL: FnOnce(Configuration<G, E>) -> sc_service::error::Result<SL>,
+		FNF: FnOnce(Configuration<G, E>) -> sc_service::error::Result<SF>,
+		SL: AbstractService + Unpin,
+		SF: AbstractService + Unpin,
+	{
+		RunCmd::run::<C, G, E, FNL, FNF, SL, SF>(self.config, new_light, new_full)
+	}
+
+	pub fn run_subcommand<B, BC, BB>(self, subcommand: &Subcommand, builder: B) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> sc_service::error::Result<BC>,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		subcommand.run::<G, E, B, BC, BB>(self.config, builder)
 	}
 }
