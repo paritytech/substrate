@@ -14,22 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::sync::Arc;
-
-use futures::{Future, future, future::FutureExt};
-use futures::select;
+use crate::error;
+use crate::CliConfiguration;
+use crate::SubstrateCLI;
+use crate::{RunCmd, Subcommand};
+use chrono::prelude::*;
 use futures::pin_mut;
+use futures::select;
+use futures::{future, future::FutureExt, Future};
+use log::info;
 use sc_service::{
-	AbstractService, Configuration, RuntimeGenesis, ChainSpecExtension,
+	AbstractService, ChainSpecExtension, Configuration, Roles, RuntimeGenesis,
 	ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use crate::error;
-use crate::SubstrateCLI;
-use crate::CliConfiguration;
-use crate::{RunCmd, Subcommand};
+use std::fmt::Debug;
+use std::marker::PhantomData;
+use std::sync::Arc;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> Result<(), Box<dyn std::error::Error>>
@@ -86,65 +87,18 @@ fn build_runtime() -> Result<tokio::runtime::Runtime, std::io::Error> {
 		.build()
 }
 
-/// A helper function that runs a future with tokio and stops if the process receives the signal
-/// SIGTERM or SIGINT
-pub fn run_until_exit<FUT, ERR, G, E, F>(
-	mut config: Configuration<G, E>,
-	future_builder: F,
+fn run_until_exit<FUT, ERR>(
+	mut tokio_runtime: tokio::runtime::Runtime,
+	future: FUT,
 ) -> error::Result<()>
 where
-	F: FnOnce(Configuration<G, E>) -> error::Result<FUT>,
 	FUT: Future<Output = Result<(), ERR>> + future::Future,
 	ERR: 'static + std::error::Error,
 {
-	let mut runtime = build_runtime()?;
-
-	config.task_executor = {
-		let runtime_handle = runtime.handle().clone();
-		Arc::new(move |fut| { runtime_handle.spawn(fut); })
-	};
-
-	let f = future_builder(config)?;
-	let f = f.fuse();
+	let f = future.fuse();
 	pin_mut!(f);
 
-	runtime.block_on(main(f)).map_err(|e| e.to_string())?;
-
-	Ok(())
-}
-
-/// A helper function that runs an `AbstractService` with tokio and stops if the process receives
-/// the signal SIGTERM or SIGINT
-pub fn run_service_until_exit<T, G, E, F>(
-	mut config: Configuration<G, E>,
-	service_builder: F,
-) -> error::Result<()>
-where
-	F: FnOnce(Configuration<G, E>) -> Result<T, sc_service::error::Error>,
-	T: AbstractService + Unpin,
-{
-	let mut runtime = build_runtime()?;
-
-	config.task_executor = {
-		let runtime_handle = runtime.handle().clone();
-		Arc::new(move |fut| { runtime_handle.spawn(fut); })
-	};
-
-	let service = service_builder(config)?;
-
-	let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
-	let _informant_handle = runtime.spawn(informant_future);
-
-	// we eagerly drop the service so that the internal exit future is fired,
-	// but we need to keep holding a reference to the global telemetry guard
-	// and drop the runtime first.
-	let _telemetry = service.telemetry();
-
-	let f = service.fuse();
-	pin_mut!(f);
-
-	runtime.block_on(main(f)).map_err(|e| e.to_string())?;
-	drop(runtime);
+	tokio_runtime.block_on(main(f)).map_err(|e| e.to_string())?;
 
 	Ok(())
 }
@@ -169,7 +123,9 @@ where
 
 		let task_executor = {
 			let runtime_handle = tokio_runtime.handle().clone();
-			Arc::new(move |fut| { runtime_handle.spawn(fut); })
+			Arc::new(move |fut| {
+				runtime_handle.spawn(fut);
+			})
 		};
 
 		Ok(Runtime {
@@ -179,6 +135,8 @@ where
 		})
 	}
 
+	/// A helper function that runs an `AbstractService` with tokio and stops if the process receives
+	/// the signal SIGTERM or SIGINT
 	pub fn run_node<FNL, FNF, SL, SF>(self, new_light: FNL, new_full: FNF) -> error::Result<()>
 	where
 		FNL: FnOnce(Configuration<G, E>) -> sc_service::error::Result<SL>,
@@ -186,10 +144,27 @@ where
 		SL: AbstractService + Unpin,
 		SF: AbstractService + Unpin,
 	{
-		RunCmd::run::<C, G, E, FNL, FNF, SL, SF>(self.config, new_light, new_full)
+		info!("{}", C::get_impl_name());
+		info!("  version {}", C::get_impl_version());
+		info!(
+			"  by {}, {}-{}",
+			C::get_author(),
+			C::get_copyright_start_year(),
+			Local::today().year()
+		);
+		info!("Chain specification: {}", self.config.chain_spec.name());
+		info!("Node name: {}", self.config.name);
+		info!("Roles: {}", self.config.display_role());
+
+		match self.config.roles {
+			Roles::LIGHT => self.run_service_until_exit(new_light),
+			_ => self.run_service_until_exit(new_full),
+		}
 	}
 
-	pub fn run_subcommand<B, BC, BB>(self, subcommand: &Subcommand, builder: B) -> error::Result<()>
+	/// A helper function that runs a future with tokio and stops if the process receives the signal
+	/// SIGTERM or SIGINT
+	pub fn run_subcommand<B, BC, BB>(self, subcommand: Subcommand, builder: B) -> error::Result<()>
 	where
 		B: FnOnce(Configuration<G, E>) -> sc_service::error::Result<BC>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
@@ -197,6 +172,43 @@ where
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		subcommand.run::<G, E, B, BC, BB>(self.config, builder)
+		match subcommand {
+			Subcommand::BuildSpec(cmd) => cmd.run(self.config),
+			Subcommand::ExportBlocks(cmd) => {
+				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
+			}
+			/*
+			Subcommand::ImportBlocks(cmd) => cmd.run(config, builder),
+			Subcommand::CheckBlock(cmd) => cmd.run(config, builder),
+			Subcommand::PurgeChain(cmd) => cmd.run(config),
+			Subcommand::Revert(cmd) => cmd.run(config, builder),
+			*/
+		}
+	}
+
+	fn run_service_until_exit<T, F>(mut self, service_builder: F) -> error::Result<()>
+	where
+		F: FnOnce(Configuration<G, E>) -> Result<T, sc_service::error::Error>,
+		T: AbstractService + Unpin,
+	{
+		let service = service_builder(self.config)?;
+
+		let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
+		let _informant_handle = self.tokio_runtime.spawn(informant_future);
+
+		// we eagerly drop the service so that the internal exit future is fired,
+		// but we need to keep holding a reference to the global telemetry guard
+		// and drop the runtime first.
+		let _telemetry = service.telemetry();
+
+		let f = service.fuse();
+		pin_mut!(f);
+
+		self.tokio_runtime
+			.block_on(main(f))
+			.map_err(|e| e.to_string())?;
+		drop(self.tokio_runtime);
+
+		Ok(())
 	}
 }

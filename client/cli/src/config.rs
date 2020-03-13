@@ -67,7 +67,7 @@ pub trait CliConfiguration: Sized {
 	fn get_state_cache_child_ratio(&self) -> Option<usize> {
 		Default::default()
 	}
-	fn get_pruning(&self, is_dev: bool) -> Result<PruningMode> {
+	fn get_pruning(&self, _is_dev: bool) -> Result<PruningMode> {
 		Ok(Default::default())
 	}
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>

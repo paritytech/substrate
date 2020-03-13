@@ -20,10 +20,7 @@ use crate::params::KeystoreParams;
 use crate::params::NetworkConfigurationParams;
 use crate::params::SharedParams;
 use crate::params::TransactionPoolParams;
-use crate::runtime::run_service_until_exit;
 use crate::{CliConfiguration, SubstrateCLI};
-use chrono::prelude::*;
-use log::info;
 use regex::Regex;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
@@ -270,33 +267,6 @@ impl RunCmd {
 			Some(Two)
 		} else {
 			None
-		}
-	}
-
-	/// Run the command that runs the node
-	pub fn run<C: SubstrateCLI<G, E>, G, E, FNL, FNF, SL, SF>(
-		config: Configuration<G, E>,
-		new_light: FNL,
-		new_full: FNF,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
-		FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
-		SL: AbstractService + Unpin,
-		SF: AbstractService + Unpin,
-	{
-		info!("{}", C::get_impl_name());
-		info!("  version {}", C::get_impl_version());
-		//info!("  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
-		info!("Chain specification: {}", config.chain_spec.name());
-		info!("Node name: {}", config.name);
-		info!("Roles: {}", config.display_role());
-
-		match config.roles {
-			Roles::LIGHT => run_service_until_exit(config, new_light),
-			_ => run_service_until_exit(config, new_full),
 		}
 	}
 }

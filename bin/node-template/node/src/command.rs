@@ -59,7 +59,7 @@ pub fn run() -> sc_cli::Result<()> {
 		Some(subcommand) => {
 			let runtime = Cli::create_runtime(&subcommand)?;
 			runtime.run_subcommand(
-				&subcommand,
+				subcommand,
 				|config: _| Ok(new_full_start!(config).0),
 			)
 		},

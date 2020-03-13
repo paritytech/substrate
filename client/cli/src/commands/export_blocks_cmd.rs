@@ -22,13 +22,11 @@ use log::info;
 use structopt::StructOpt;
 use sc_service::{
 	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
-	config::DatabaseConfig, Roles,
+	config::DatabaseConfig, Roles, PruningMode,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
-use crate::VersionInfo;
-use crate::runtime::run_until_exit;
 use crate::params::{SharedParams, BlockNumber, PruningParams};
 
 /// The `export-blocks` command used to export blocks.
@@ -65,7 +63,7 @@ pub struct ExportBlocksCmd {
 
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
-	pub fn run<G, E, B, BC, BB>(
+	pub async fn run<G, E, B, BC, BB>(
 		self,
 		config: Configuration<G, E>,
 		builder: B,
@@ -82,6 +80,7 @@ impl ExportBlocksCmd {
 		if let DatabaseConfig::Path { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
+
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());
 
@@ -92,26 +91,6 @@ impl ExportBlocksCmd {
 			None => Box::new(io::stdout()),
 		};
 
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.export_blocks(file, from.into(), to, json))
-		})
-	}
-
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.pruning_params.update_config(&mut config, Roles::FULL, true)?;
-		config.use_in_memory_keystore()?;
-
-		Ok(())
+		builder(config)?.export_blocks(file, from.into(), to, json).await.map_err(|e| e.into())
 	}
 }

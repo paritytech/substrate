@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 mod runcmd;
-//mod export_blocks_cmd;
+mod export_blocks_cmd;
 mod build_spec_cmd;
 //mod import_blocks_cmd;
 //mod check_block_cmd;
@@ -32,7 +32,8 @@ use std::sync::Arc;
 use app_dirs::{AppInfo, AppDataType};
 use sc_service::{
 	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
-	config::KeystoreConfig, config::DatabaseConfig, config::NetworkConfiguration,
+	config::KeystoreConfig, config::DatabaseConfig, config::NetworkConfiguration, Roles,
+	PruningMode,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
@@ -43,8 +44,8 @@ use crate::params::SharedParams;
 
 pub use crate::commands::runcmd::RunCmd;
 pub use crate::commands::build_spec_cmd::BuildSpecCmd;
-/*
 pub use crate::commands::export_blocks_cmd::ExportBlocksCmd;
+/*
 pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
 pub use crate::commands::check_block_cmd::CheckBlockCmd;
 pub use crate::commands::revert_cmd::RevertCmd;
@@ -64,10 +65,10 @@ pub enum Subcommand {
 	/// Build a spec.json file, outputing to stdout.
 	BuildSpec(BuildSpecCmd),
 
-	/*
 	/// Export blocks to a file.
 	ExportBlocks(ExportBlocksCmd),
 
+	/*
 	/// Import blocks from file.
 	ImportBlocks(ImportBlocksCmd),
 
@@ -89,39 +90,12 @@ impl Subcommand {
 
 		match self {
 			BuildSpec(params) => &params.shared_params,
-			/*
 			ExportBlocks(params) => &params.shared_params,
+			/*
 			ImportBlocks(params) => &params.shared_params,
 			CheckBlock(params) => &params.shared_params,
 			Revert(params) => &params.shared_params,
 			PurgeChain(params) => &params.shared_params,
-			*/
-		}
-	}
-
-	/// Run any `CoreParams` command
-	pub fn run<G, E, B, BC, BB>(
-		&self,
-		config: Configuration<G, E>,
-		builder: B,
-	) -> error::Result<()>
-	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
-	{
-		match self {
-			Subcommand::BuildSpec(cmd) => cmd.run(config),
-			/*
-			Subcommand::ExportBlocks(cmd) => cmd.run(config, builder),
-			Subcommand::ImportBlocks(cmd) => cmd.run(config, builder),
-			Subcommand::CheckBlock(cmd) => cmd.run(config, builder),
-			Subcommand::PurgeChain(cmd) => cmd.run(config),
-			Subcommand::Revert(cmd) => cmd.run(config, builder),
 			*/
 		}
 	}
@@ -164,4 +138,11 @@ impl CliConfiguration for Subcommand
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{ self.get_shared_params().init::<C, G, E>() }
+
+	fn get_pruning(&self, is_dev: bool) -> error::Result<PruningMode> {
+		match self {
+			Subcommand::BuildSpec(_) => Ok(Default::default()),
+			Subcommand::ExportBlocks(cmd) => cmd.pruning_params.get_pruning(Roles::FULL, is_dev),
+		}
+	}
 }
