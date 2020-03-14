@@ -358,6 +358,35 @@ pub fn local_testnet_config() -> ChainSpec {
 	)
 }
 
+fn benchmark_genesis() -> GenesisConfig {
+	testnet_genesis(
+		vec![
+			get_authority_keys_from_seed("Alice"),
+		],
+		get_account_id_from_seed::<sr25519::Public>("Alice"),
+		Some({
+			(0..50_000).map(|i| {
+					get_account_id_from_seed::<sr25519::Public>(&i.to_string())
+			}).collect()
+		}),
+		false,
+	)
+}
+
+/// Benchmark config (multivalidator Alice + Bob) w/ 50_000 funded accounts.
+pub fn benchmark_config() -> ChainSpec {
+	ChainSpec::from_genesis(
+		"Benchmark",
+		"benchmark",
+		benchmark_genesis,
+		vec![],
+		None,
+		None,
+		None,
+		Default::default(),
+	)
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;

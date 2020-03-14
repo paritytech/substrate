@@ -59,6 +59,9 @@ pub enum ChainSpec {
 	FlamingFir,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
+	/// Whatever the current runtime is, with just Alice as an auth and 50_000
+	/// pre-funded users.
+	Benchmark,
 }
 
 /// Get a chain config from a spec setting.
@@ -69,6 +72,7 @@ impl ChainSpec {
 			ChainSpec::Development => chain_spec::development_config(),
 			ChainSpec::LocalTestnet => chain_spec::local_testnet_config(),
 			ChainSpec::StagingTestnet => chain_spec::staging_testnet_config(),
+			ChainSpec::Benchmark => chain_spec::benchmark_config(),
 		})
 	}
 
@@ -78,6 +82,7 @@ impl ChainSpec {
 			"local" => Some(ChainSpec::LocalTestnet),
 			"" | "fir" | "flaming-fir" => Some(ChainSpec::FlamingFir),
 			"staging" => Some(ChainSpec::StagingTestnet),
+			"benchmark" => Some(ChainSpec::Benchmark),
 			_ => None,
 		}
 	}

@@ -30,7 +30,8 @@ const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
 pub struct SharedParams {
-	/// Specify the chain specification (one of dev, local or staging).
+	/// Specify the chain specification (one of flaming-fir, dev, local, staging, or benchmark).
+	/// By default, the selected chain specification is flaming-fir.
 	#[structopt(long = "chain", value_name = "CHAIN_SPEC")]
 	pub chain: Option<String>,
 
