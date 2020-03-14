@@ -28,17 +28,51 @@ use sp_core::{
 		well_known_keys::is_child_storage_key, ChildStorageKey, Storage,
 		ChildInfo, StorageChild,
 	},
-	traits::Externalities, Blake2Hasher,
+	traits::{Externalities, ClonableSpawn}, Blake2Hasher,
 };
 use log::warn;
 use codec::Encode;
 use sp_externalities::Extensions;
+use futures::{task, executor};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
 pub struct BasicExternalities {
 	inner: Storage,
 	extensions: Extensions,
+}
+
+
+#[derive(Debug, Clone)]
+struct LocalSpawn {
+	pool: executor::ThreadPool,
+}
+
+impl LocalSpawn {
+	fn new() -> Self {
+		Self {
+			pool: executor::ThreadPool::builder().pool_size(1).create()
+				.expect("Failed to create task executor")
+		}
+	}
+}
+
+impl task::Spawn for LocalSpawn {
+	fn spawn_obj(&self, future: task::FutureObj<'static, ()>)
+	-> Result<(), task::SpawnError> {
+		self.pool.spawn_obj(future)
+	}
+}
+
+impl ClonableSpawn for LocalSpawn {
+	fn clone(&self) -> Box<dyn ClonableSpawn> {
+		Box::new(Clone::clone(self))
+	}
+}
+
+/// Creates tasks executor for test client.
+pub fn local_task_executor() -> Box<dyn ClonableSpawn> {
+	Box::new(LocalSpawn::new())
 }
 
 impl BasicExternalities {
@@ -50,6 +84,17 @@ impl BasicExternalities {
 	/// New basic externalities with empty storage.
 	pub fn new_empty() -> Self {
 		Self::new(Storage::default())
+	}
+
+	/// New basic extternalities with tasks executor.
+	pub fn with_tasks_executor() -> Self {
+		let mut extensions = Extensions::default();
+		extensions.register(sp_core::traits::TaskExecutorExt(local_task_executor()));
+
+		Self {
+			inner: Storage::default(),
+			extensions,
+		}
 	}
 
 	/// Insert key/value

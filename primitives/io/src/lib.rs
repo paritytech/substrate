@@ -34,7 +34,7 @@ use sp_std::ops::Deref;
 #[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
-	traits::{KeystoreExt, CallInWasmExt},
+	traits::{KeystoreExt, CallInWasmExt, TaskExecutorExt},
 	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
 	storage::{ChildStorageKey, ChildInfo},
@@ -626,7 +626,12 @@ sp_externalities::decl_extension! {
 pub trait Extensions {
 	/// Start verification extension.
 	fn start_verification_extension(&mut self) {
-		self.register_extension(VerificationExt(BatchVerifier::new()))
+		let scheduler = self.extension::<TaskExecutorExt>()
+			.expect("Task executor extension is required!")
+			.0
+			.clone();
+
+		self.register_extension(VerificationExt(BatchVerifier::new(scheduler)))
 			.expect("Failed to register required extension: VerificationExt");
 	}
 
@@ -1085,7 +1090,7 @@ mod tests {
 
 	#[test]
 	fn dynamic_extensions_work() {
-		let mut ext = BasicExternalities::new_empty();
+		let mut ext = BasicExternalities::with_tasks_executor();
 		ext.execute_with(|| {
 			extensions::start_verification_extension();
 		});
@@ -1101,7 +1106,7 @@ mod tests {
 
 	#[test]
 	fn batching_works() {
-		let mut ext = BasicExternalities::new_empty();
+		let mut ext = BasicExternalities::with_tasks_executor();
 		ext.execute_with(|| {
 			extensions::start_verification_extension();
 

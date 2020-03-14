@@ -16,8 +16,9 @@
 
 //! This is part of the Substrate runtime.
 
-use sp_core::{ed25519, sr25519, crypto::Pair};
+use sp_core::{ed25519, sr25519, crypto::Pair, traits::ClonableSpawn};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering}};
+use futures::{future::FutureExt, task::FutureObj};
 
 #[derive(Debug, Clone)]
 struct Ed25519BatchItem {
@@ -33,27 +34,17 @@ struct Sr25519BatchItem {
 	message: Vec<u8>,
 }
 
-#[derive(Debug)]
 pub struct BatchVerifier {
+	scheduler: Box<dyn ClonableSpawn>,
 	sr25519_items: Vec<Sr25519BatchItem>,
 	invalid: Arc<AtomicBool>,
 	left: Arc<AtomicUsize>,
 }
 
-
-lazy_static::lazy_static! {
-	static ref LOCAL_POOL: futures::executor::ThreadPool = {
-		futures::executor::ThreadPool::builder()
-			.stack_size(16*1024)
-			.name_prefix("io-background")
-			.create()
-			.expect("failed to create background thread pool")
-	};
-}
-
 impl BatchVerifier {
-	pub fn new() -> Self {
+	pub fn new(scheduler: Box<dyn ClonableSpawn>) -> Self {
 		BatchVerifier {
+			scheduler,
 			sr25519_items: Default::default(),
 			invalid: Arc::new(false.into()),
 			left: Arc::new(0.into()),
@@ -72,12 +63,12 @@ impl BatchVerifier {
 		let left_clone = self.left.clone();
 		self.left.fetch_add(1, AtomicOrdering::SeqCst);
 
-		LOCAL_POOL.spawn_ok(async move {
+		self.scheduler.spawn_obj(FutureObj::new(async move {
 			if !ed25519::Pair::verify(&signature, &message, &pub_key) {
 				invalid_clone.store(true, AtomicOrdering::Relaxed);
 			}
 			left_clone.fetch_sub(1, AtomicOrdering::SeqCst);
-		});
+		}.boxed())).expect("Scheduler should be ready");
 	}
 
 	pub fn push_sr25519(
