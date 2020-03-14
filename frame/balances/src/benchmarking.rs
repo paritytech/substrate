@@ -116,15 +116,4 @@ benchmarks! {
 		let balance_amount = existential_deposit.saturating_mul(e.into());
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, balance_amount);
 	}: set_balance(RawOrigin::Root, user_lookup, 0.into(), 0.into())
-
-	confirm_genesis {
-		let x in 1 .. 1;
-		let mut iter = frame_system::Account::<T>::iter();
-		let mut user_count = 0;
-		while let Some(_) = iter.next() {
-			user_count += 1;
-		}
-	}: {
-		assert!(user_count >= 1);
-	}
 }
