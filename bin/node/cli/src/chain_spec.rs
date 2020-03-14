@@ -373,7 +373,7 @@ fn benchmark_genesis() -> GenesisConfig {
 	)
 }
 
-/// Benchmark config (multivalidator Alice + Bob) w/ 50_000 funded accounts.
+/// Benchmark config (single validator Alice) w/ 50_000 funded accounts.
 pub fn benchmark_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Benchmark",
