@@ -44,8 +44,8 @@ fn change_name_sudo_to_identity<T: Trait>() {
 		put_storage_value(b"Identity", b"SubsOf", &hash, subs_of);
 	}
 
-	if let Some(recent_hints) = take_storage_value::<Vec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>>>(b"Sudo", b"Registrars", &[]) {
-		put_storage_value(b"Identity", b"Registrars", &[], recent_hints);
+	if let Some(registrars) = take_storage_value::<Vec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>>>(b"Sudo", b"Registrars", &[]) {
+		put_storage_value(b"Identity", b"Registrars", &[], registrars);
 	}
 
 	sp_runtime::print("Done Identity.");
