@@ -26,6 +26,7 @@ use futures::{
 	compat::*,
 	task::{Spawn, FutureObj, SpawnError},
 };
+use sc_client_api::CloneableSpawn;
 
 /// Type alias for service task executor (usually runtime).
 pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
@@ -115,6 +116,12 @@ impl Spawn for SpawnTaskHandle {
 		let future = select(self.on_exit.clone(), future).map(drop);
 		self.sender.unbounded_send((Box::pin(future), From::from("unnamed")))
 			.map_err(|_| SpawnError::shutdown())
+	}
+}
+
+impl sc_client_api::CloneableSpawn for SpawnTaskHandle {
+	fn clone(&self) -> Box<dyn CloneableSpawn> {
+		Box::new(Clone::clone(self))
 	}
 }
 
