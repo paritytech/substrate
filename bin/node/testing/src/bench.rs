@@ -274,7 +274,7 @@ impl BenchDb {
 			let opaque = OpaqueExtrinsic::decode(&mut &encoded[..])
 				.expect("Failed  to decode opaque");
 
-			match block.push_trusted(opaque) {
+			match block.push(opaque) {
 				Err(sp_blockchain::Error::ApplyExtrinsicFailed(
 						sp_blockchain::ApplyExtrinsicFailed::Validity(e)
 				)) if e.exhausted_resources() => {
