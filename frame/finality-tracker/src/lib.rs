@@ -28,6 +28,8 @@ use frame_support::weights::{DispatchClass};
 use frame_system::{ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
+mod migration;
+
 pub const DEFAULT_WINDOW_SIZE: u32 = 101;
 pub const DEFAULT_REPORT_LATENCY: u32 = 1000;
 
@@ -91,6 +93,10 @@ decl_module! {
 
 		fn on_finalize() {
 			Self::update_hint(<Self as Store>::Update::take())
+		}
+
+		fn on_runtime_upgrade() {
+			migration::on_runtime_upgrade::<T>()
 		}
 	}
 }

@@ -80,7 +80,9 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
-mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
+mod migration;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
@@ -1131,6 +1133,10 @@ decl_module! {
 				sub_ids.len() as Weight, // S
 				id.info.additional.len() as Weight // X
 			)).into())
+		}
+
+		fn on_runtime_upgrade() {
+			migration::on_runtime_upgrade::<T>()
 		}
 	}
 }
