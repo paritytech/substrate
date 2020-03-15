@@ -365,18 +365,6 @@ benchmarks! {
 		assert!(validators.len() == v as usize);
 	}
 
-	new_era_vary {
-		let v in 1 .. 10;
-		let n in 1 .. 100;
-		let m in 1 .. 10;
-		MinimumValidatorCount::put(m);
-		create_validators_with_nominators_for_era::<T>(v, n)?;
-		let session_index = SessionIndex::one();
-	}: {
-		let validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
-		assert!(validators.len() == v as usize);
-	}
-
 	do_slash {
 		let l in 1 .. 1000;
 		let (stash, controller) = create_stash_controller::<T>(0)?;

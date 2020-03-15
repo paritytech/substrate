@@ -57,15 +57,4 @@ benchmarks! {
 		let proof: Vec<u8> = vec![0,1,2,3];
 		Session::<T>::set_keys(RawOrigin::Signed(validator.clone()).into(), keys, proof)?;
 	}: _(RawOrigin::Signed(validator))
-
-	// TODO: Complete on_initialize benchmarks
-	// on_initialize {
-	// 	let v in 1 .. 10;
-	// 	let n in 1 .. 100;
-	// 	let b in 1 .. 10;
-	// 	create_validators_with_nominators_for_era::<T>(v, n)?;
-	// }: {
-	// 	Session::<T>::on_initialize(b.into());
-	// }
-
 }
