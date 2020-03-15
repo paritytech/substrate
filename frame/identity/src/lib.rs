@@ -81,6 +81,7 @@ use frame_support::traits::MigrateAccount;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
+mod migration;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
@@ -383,7 +384,7 @@ pub struct RegistrarInfo<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Sudo {
+	trait Store for Module<T: Trait> as Identity {
 		/// Information that is pertinent to identify the entity behind an account.
 		pub IdentityOf get(fn identity):
 			map hasher(twox_64_concat) T::AccountId => Option<Registration<BalanceOf<T>>>;
@@ -873,6 +874,10 @@ decl_module! {
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit).0);
 
 			Self::deposit_event(RawEvent::IdentityKilled(target, deposit));
+		}
+
+		fn on_runtime_upgrade() {
+			migration::on_runtime_upgrade::<T>()
 		}
 	}
 }

@@ -244,6 +244,20 @@ mod tests {
 
 			Ok((address, ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }))
 		}
+		fn transfer(
+			&mut self,
+			to: &u64,
+			value: u64,
+			gas_meter: &mut GasMeter<Test>,
+		) -> Result<(), DispatchError> {
+			self.transfers.push(TransferEntry {
+				to: *to,
+				value,
+				data: Vec::new(),
+				gas_left: gas_meter.gas_left(),
+			});
+			Ok(())
+		}
 		fn call(
 			&mut self,
 			to: &u64,
@@ -254,7 +268,7 @@ mod tests {
 			self.transfers.push(TransferEntry {
 				to: *to,
 				value,
-				data: data.to_vec(),
+				data: data,
 				gas_left: gas_meter.gas_left(),
 			});
 			// Assume for now that it was just a plain transfer.
@@ -357,6 +371,14 @@ mod tests {
 		) -> Result<(u64, ExecReturnValue), ExecError> {
 			(**self).instantiate(code, value, gas_meter, input_data)
 		}
+		fn transfer(
+			&mut self,
+			to: &u64,
+			value: u64,
+			gas_meter: &mut GasMeter<Test>,
+		) -> Result<(), DispatchError> {
+			(**self).transfer(to, value, gas_meter)
+		}
 		fn call(
 			&mut self,
 			to: &u64,
@@ -454,6 +476,59 @@ mod tests {
 
 	const CODE_TRANSFER: &str = r#"
 (module
+	;; ext_transfer(
+	;;    account_ptr: u32,
+	;;    account_len: u32,
+	;;    value_ptr: u32,
+	;;    value_len: u32,
+	;;) -> u32
+	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(drop
+			(call $ext_transfer
+				(i32.const 4)  ;; Pointer to "account" address.
+				(i32.const 8)  ;; Length of "account" address.
+				(i32.const 12) ;; Pointer to the buffer with value to transfer
+				(i32.const 8)  ;; Length of the buffer with value to transfer.
+			)
+		)
+	)
+	(func (export "deploy"))
+
+	;; Destination AccountId to transfer the funds.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 4) "\07\00\00\00\00\00\00\00")
+
+	;; Amount of value to transfer.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 12) "\99\00\00\00\00\00\00\00")
+)
+"#;
+
+	#[test]
+	fn contract_transfer() {
+		let mut mock_ext = MockExt::default();
+		let _ = execute(
+			CODE_TRANSFER,
+			vec![],
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		).unwrap();
+
+		assert_eq!(
+			&mock_ext.transfers,
+			&[TransferEntry {
+				to: 7,
+				value: 153,
+				data: Vec::new(),
+				gas_left: 49978,
+			}]
+		);
+	}
+
+	const CODE_CALL: &str = r#"
+(module
 	;; ext_call(
 	;;    callee_ptr: u32,
 	;;    callee_len: u32,
@@ -492,10 +567,10 @@ mod tests {
 "#;
 
 	#[test]
-	fn contract_transfer() {
+	fn contract_call() {
 		let mut mock_ext = MockExt::default();
 		let _ = execute(
-			CODE_TRANSFER,
+			CODE_CALL,
 			vec![],
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),

@@ -20,8 +20,6 @@
 
 #![recursion_limit="512"]
 
-extern crate proc_macro;
-
 mod storage;
 mod construct_runtime;
 

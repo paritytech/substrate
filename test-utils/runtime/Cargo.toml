@@ -43,6 +43,7 @@ trie-db = { version = "0.20.0", default-features = false }
 parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
+sc-block-builder = { version = "0.8.0-alpha.2", path = "../../client/block-builder" }
 sc-executor = { version = "0.8.0-alpha.2", path = "../../client/executor" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "./client" }
 sp-state-machine = { version = "0.8.0-alpha.2", path = "../../primitives/state-machine" }

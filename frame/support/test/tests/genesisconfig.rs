@@ -24,7 +24,7 @@ frame_support::decl_module! {
 }
 
 frame_support::decl_storage! {
-	trait Store for Module<T: Trait> as Example {
+	trait Store for Module<T: Trait> as Test {
 		pub AppendableDM config(t): double_map hasher(identity) u32, hasher(identity) T::BlockNumber => Vec<u32>;
 	}
 }

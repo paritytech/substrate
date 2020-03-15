@@ -209,7 +209,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Council {
+	trait Store for Module<T: Trait> as Elections {
 		// ---- parameters
 
 		/// How long to give each top candidate to present themselves after the vote ends.
