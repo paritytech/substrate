@@ -598,7 +598,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("8b63875449ecd8f2777ded4aa16d4b2a8165067a8af4f6d948760f573050e068").into(),
+					state_root: hex!("489ae9b57a19bb4733a264dc64bbcae9b140a904657a681ed3bb5fbbe8cf412b").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
