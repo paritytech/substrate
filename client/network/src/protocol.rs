@@ -156,43 +156,43 @@ impl Metrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Metrics {
 			handshaking_peers: {
-				let g = Gauge::new("sync_handshaking_peers", "number of newly connected peers")?;
+				let g = Gauge::new("sync_handshaking_peers", "Number of newly connected peers")?;
 				register(g, r)?
 			},
 			obsolete_requests: {
-				let g = Gauge::new("sync_obsolete_requests", "total number of obsolete requests")?;
+				let g = Gauge::new("sync_obsolete_requests", "Total number of obsolete requests")?;
 				register(g, r)?
 			},
 			peers: {
-				let g = Gauge::new("sync_peers", "number of peers we sync with")?;
+				let g = Gauge::new("sync_peers", "Number of peers we sync with")?;
 				register(g, r)?
 			},
 			queued_blocks: {
-				let g = Gauge::new("sync_queued_blocks", "number of blocks in import queue")?;
+				let g = Gauge::new("sync_queued_blocks", "Number of blocks in import queue")?;
 				register(g, r)?
 			},
 			fork_targets: {
-				let g = Gauge::new("sync_fork_targets", "fork sync targets")?;
+				let g = Gauge::new("sync_fork_targets", "Fork sync targets")?;
 				register(g, r)?
 			},
 			justifications_pending: {
 				let g = Gauge::new(
 					"sync_extra_justifications_pending",
-					"number of pending extra justifications requests"
+					"Number of pending extra justifications requests"
 				)?;
 				register(g, r)?
 			},
 			justifications_active: {
 				let g = Gauge::new(
 					"sync_extra_justifications_active",
-					"number of active extra justifications requests"
+					"Number of active extra justifications requests"
 				)?;
 				register(g, r)?
 			},
 			justifications_failed: {
 				let g = Gauge::new(
 					"sync_extra_justifications_failed",
-					"number of failed extra justifications requests"
+					"Number of failed extra justifications requests"
 				)?;
 				register(g, r)?
 			},
@@ -206,28 +206,28 @@ impl Metrics {
 			finality_proofs_pending: {
 				let g = Gauge::new(
 					"sync_extra_finality_proofs_pending",
-					"number of pending extra finality proof requests"
+					"Number of pending extra finality proof requests"
 				)?;
 				register(g, r)?
 			},
 			finality_proofs_active: {
 				let g = Gauge::new(
 					"sync_extra_finality_proofs_active",
-					"number of active extra finality proof requests"
+					"Number of active extra finality proof requests"
 				)?;
 				register(g, r)?
 			},
 			finality_proofs_failed: {
 				let g = Gauge::new(
 					"sync_extra_finality_proofs_failed",
-					"number of failed extra finality proof requests"
+					"Number of failed extra finality proof requests"
 				)?;
 				register(g, r)?
 			},
 			finality_proofs_importing: {
 				let g = Gauge::new(
 					"sync_extra_finality_proofs_importing",
-					"number of importing extra finality proof requests"
+					"Number of importing extra finality proof requests"
 				)?;
 				register(g, r)?
 			},
