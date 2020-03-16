@@ -22,8 +22,6 @@
 use sp_std::prelude::*;
 use sp_std::vec;
 
-//use sp_runtime::traits::OnInitialize;
-
 use frame_system::RawOrigin;
 use frame_benchmarking::benchmarks;
 
@@ -33,7 +31,6 @@ use pallet_session::Module as Session;
 use pallet_staking::{
 	MAX_NOMINATIONS,
 	benchmarking::create_validator_with_nominators,
-	//benchmarking::create_validators_with_nominators_for_era,
 };
 
 pub struct Module<T: Trait>(pallet_session::Module<T>);

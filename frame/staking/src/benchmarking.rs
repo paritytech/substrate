@@ -387,3 +387,87 @@ benchmarks! {
 		);
 	}
 }
+
+mod tests {
+	use crate::*;
+	use crate::mock::*;
+	use frame_support::assert_ok;
+
+	use crate::benchmarking::{
+		create_validators_with_nominators_for_era,
+		create_validator_with_nominators,
+		create_nominator_with_validators,
+	};
+
+	#[test]
+	fn create_validators_with_nominators_for_era_works() {
+		ExtBuilder::default().build().execute_with(|| {
+			let v = 10;
+			let n = 100;
+
+			create_validators_with_nominators_for_era::<Test>(v,n).unwrap();
+
+			let mut validator_iter = Validators::<Test>::enumerate();
+			let mut nominator_iter = Nominators::<Test>::enumerate();
+
+			let mut count_validators = 0;
+			while let Some(_) = validator_iter.next() {
+				count_validators += 1;
+			}
+			let mut count_nominators = 0;
+			while let Some((_key, value)) = nominator_iter.next() {
+				assert_eq!(value.targets.len(), v as usize);
+				count_nominators += 1;
+			}
+
+			assert_eq!(count_validators, v);
+			assert_eq!(count_nominators, n);
+		});
+	}
+
+	#[test]
+	fn create_validator_with_nominators_works() {
+		ExtBuilder::default().build().execute_with(|| {
+			let n = 10;
+
+			let validator = create_validator_with_nominators::<Test>(
+				n,
+				MAX_NOMINATIONS as u32,
+			).unwrap();
+
+			let current_era = CurrentEra::get().unwrap();
+			let controller = validator;
+			let ledger = Staking::ledger(&controller).unwrap();
+			let stash = &ledger.stash;
+
+			let original_free_balance = Balances::free_balance(stash);
+			assert_ok!(Staking::payout_validator(Origin::signed(controller), current_era));
+			let new_free_balance = Balances::free_balance(stash);
+
+			assert!(original_free_balance < new_free_balance);
+		});
+	}
+
+	#[test]
+	fn create_nominator_with_validators_works() {
+		ExtBuilder::default().build().execute_with(|| {
+			let v = 5;
+
+			let (nominator, validators) = create_nominator_with_validators::<Test>(v).unwrap();
+
+			let current_era = CurrentEra::get().unwrap();
+			let controller = nominator;
+			let ledger = Staking::ledger(&controller).unwrap();
+			let stash = &ledger.stash;
+
+			let find_nominator = validators.into_iter().map(|x| (x, 0)).collect();
+
+			let original_free_balance = Balances::free_balance(stash);
+			assert_ok!(Staking::payout_nominator(Origin::signed(controller), current_era, find_nominator));
+			let new_free_balance = Balances::free_balance(stash);
+
+			assert!(original_free_balance < new_free_balance);
+		});
+	}
+
+}

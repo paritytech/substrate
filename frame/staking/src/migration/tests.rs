@@ -7,7 +7,7 @@ use sp_runtime::traits::OnRuntimeUpgrade;
 
 #[test]
 fn upgrade_works() {
-	ExtBuilder::default().build().execute_with(|| {
+	ExtBuilder::default().has_stakers().build().execute_with(|| {
 		start_era(3);
 
 		assert_eq!(Session::validators(), vec![21, 11]);

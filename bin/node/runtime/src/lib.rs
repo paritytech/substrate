@@ -850,6 +850,9 @@ impl_runtime_apis! {
 			repeat: u32,
 		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::Benchmarking;
+			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency issues.
+			// To get around that, we separated the Session benchmarks into its own crate, which is why
+			// we need these two lines below.
 			use pallet_session_benchmarking::Module as SessionBench;
 			impl pallet_session_benchmarking::Trait for Runtime {}
 
