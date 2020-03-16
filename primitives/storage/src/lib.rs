@@ -477,14 +477,15 @@ impl<T> IntoIterator for ChildrenMap<T> {
 const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default:";
 
 /// Information related to change to apply on a whole child trie.
+#[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[cfg_attr(feature = "std", derive(Hash, PartialOrd, Ord))]
 pub enum ChildChange {
 	/// Update to content of child trie.
-	Update,
+	Update = 0,
 	/// The child trie allow to delete base on keyspace only.
 	/// This deletion means that any joined key delta will be ignored.
-	BulkDeleteByKeyspace,
+	BulkDeleteByKeyspace = 1,
 }
 
 impl ChildChange {
@@ -497,6 +498,15 @@ impl ChildChange {
 				ChildChange::Update => *self = other,
 				ChildChange::BulkDeleteByKeyspace => panic!("Bulk delete cannot be overwritten"),
 			}
+		}
+	}
+
+	/// Get a child change from its u8 representation
+	pub fn from_u8(repr: u8) -> Option<Self> {
+		match repr {
+			0 => Some(ChildChange::Update),
+			1 => Some(ChildChange::BulkDeleteByKeyspace),
+			_ => None,
 		}
 	}
 }

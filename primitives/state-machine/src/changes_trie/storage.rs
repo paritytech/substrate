@@ -32,7 +32,7 @@ use crate::{
 #[cfg(test)]
 use crate::backend::insert_into_memory_db;
 #[cfg(test)]
-use crate::changes_trie::input::{InputPair, ChildIndex};
+use crate::changes_trie::input::{InputPair, ChildIndex, ChildIndexValue};
 
 /// In-memory implementation of changes trie storage.
 pub struct InMemoryStorage<H: Hasher, Number: BlockNumber> {
@@ -115,7 +115,10 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 					};
 					top_inputs[ix].1.push(InputPair::ChildIndex(
 						ChildIndex { block: block.clone(), storage_key: storage_key.clone() },
-						root.as_ref().to_vec(),
+						ChildIndexValue {
+							changes_root: Some(root.as_ref().to_vec()),
+							child_change: Vec::new(),
+						},
 					));
 				}
 			}

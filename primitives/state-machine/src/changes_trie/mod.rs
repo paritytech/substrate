@@ -298,7 +298,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 
 	let mut mdb = MemoryDB::default();
 	let mut child_roots = Vec::with_capacity(child_input_pairs.len());
-	for (child_index, input_pairs) in child_input_pairs {
+	for (child_index, child_change, input_pairs) in child_input_pairs {
 		let mut not_empty = false;
 		let mut root = Default::default();
 		{
@@ -321,8 +321,21 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 				storage_changed_keys,
 			);
 		}
-		if not_empty {
-			child_roots.push(input::InputPair::ChildIndex(child_index, root.as_ref().to_vec()));
+		let changes_root = if not_empty {
+			Some(root.as_ref().to_vec())
+		} else {
+			None
+		};
+		let child_change = if let Some(index) = child_change.1 {
+			vec![(child_change.0, index)]
+		} else {
+			Vec::new()
+		};
+		if not_empty || !child_change.is_empty() {
+			child_roots.push(input::InputPair::ChildIndex(child_index, input::ChildIndexValue {
+				changes_root,
+				child_change,
+			}));
 		}
 	}
 	let mut root = Default::default();

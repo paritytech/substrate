@@ -27,7 +27,7 @@ use sp_trie::Recorder;
 use crate::changes_trie::{AnchorBlockId, ConfigurationRange, RootsStorage, Storage, BlockNumber};
 use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
 use crate::changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
-use crate::changes_trie::input::ChildIndex;
+use crate::changes_trie::input::{ChildIndex, ChildIndexValue};
 use crate::changes_trie::surface_iterator::{surface_iterator, SurfaceIterator};
 use crate::proving_backend::ProvingBackendRecorder;
 use crate::trie_backend_essence::{TrieBackendEssence};
@@ -244,12 +244,12 @@ impl<'a, H, Number> DrilldownIteratorEssence<'a, H, Number>
 						storage_key: storage_key.to_vec(),
 					}.encode();
 					if let Some(trie_root) = trie_reader(self.storage, trie_root, &child_key)?
-						.and_then(|v| <Vec<u8>>::decode(&mut &v[..]).ok())
-						.map(|v| {
+						.and_then(|v| ChildIndexValue::decode(&mut &v[..]).ok())
+						.and_then(|v| v.changes_root.as_ref().map(|root| {
 							let mut hash = H::Out::default();
-							hash.as_mut().copy_from_slice(&v[..]);
+							hash.as_mut().copy_from_slice(&root[..]);
 							hash
-						}) {
+						})) {
 						trie_root
 					} else {
 						continue;

@@ -24,7 +24,7 @@ use crate::proving_backend::ProvingBackendRecorder;
 use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_trie::{AnchorBlockId, Storage, BlockNumber};
 use crate::changes_trie::storage::TrieBackendAdapter;
-use crate::changes_trie::input::{ChildIndex, InputKey};
+use crate::changes_trie::input::{ChildIndex, ChildIndexValue, InputKey};
 use codec::{Decode, Codec};
 
 /// Prune obsolete changes tries. Pruning happens at the same block, where highest
@@ -68,10 +68,12 @@ pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 			let child_info = sp_core::storage::ChildInfo::top_trie();
 			trie_storage.for_key_values_with_prefix(&child_info, &child_prefix, |key, value| {
 				if let Ok(InputKey::ChildIndex::<Number>(_trie_key)) = Decode::decode(&mut &key[..]) {
-					if let Ok(value) = <Vec<u8>>::decode(&mut &value[..]) {
-						let mut trie_root = <H as InnerHasher>::Out::default();
-						trie_root.as_mut().copy_from_slice(&value[..]);
-						children_roots.push(trie_root);
+					if let Ok(value) = ChildIndexValue::decode(&mut &value[..]) {
+						value.changes_root.as_ref().map(|root| {
+							let mut trie_root = <H as InnerHasher>::Out::default();
+							trie_root.as_mut().copy_from_slice(&root[..]);
+							children_roots.push(trie_root);
+						});
 					}
 				}
 			});
@@ -153,7 +155,10 @@ mod tests {
 			let root3 = insert_into_memory_db::<BlakeTwo256, _>(&mut mdb3, vec![
 				(vec![13], vec![23]),
 				(vec![14], vec![24]),
-				(child_key, ch_root3.as_ref().encode()),
+				(child_key, ChildIndexValue {
+					changes_root: Some(ch_root3[..].to_vec()),
+					child_change: Vec::new(),
+				}.encode()),
 			]).unwrap();
 			let mut mdb4 = MemoryDB::<BlakeTwo256>::default();
 			let root4 = insert_into_memory_db::<BlakeTwo256, _>(

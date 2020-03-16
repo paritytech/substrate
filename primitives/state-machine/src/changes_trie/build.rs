@@ -29,10 +29,10 @@ use crate::{
 	changes_trie::{
 		AnchorBlockId, ConfigurationRange, Storage, BlockNumber,
 		build_iterator::digest_build_iterator,
-		input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex, ChildIndex},
+		input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex, ChildIndex, ChildIndexValue},
 	},
 };
-use sp_core::storage::{ChildInfo, ChildType};
+use sp_core::storage::{ChildInfo, ChildType, ChildChange};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -46,7 +46,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 	parent: &'a AnchorBlockId<H::Out, Number>,
 ) -> Result<(
 		impl Iterator<Item=InputPair<Number>> + 'a,
-		Vec<(ChildIndex<Number>, impl Iterator<Item=InputPair<Number>> + 'a)>,
+		Vec<(ChildIndex<Number>, (ChildChange, Option<u32>), impl Iterator<Item=InputPair<Number>> + 'a)>,
 		Vec<Number>,
 	), String>
 	where
@@ -69,10 +69,11 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 	)?;
 
 	let mut children_digest = Vec::with_capacity(children_extrinsics_input.len());
-	for (child_index, ext_iter) in children_extrinsics_input.into_iter() {
+	for (child_index, (child_change, ext_iter)) in children_extrinsics_input.into_iter() {
 		let dig_iter = children_digest_input.remove(&child_index);
 		children_digest.push((
 			child_index,
+			child_change,
 			Some(ext_iter).into_iter().flatten()
 				.chain(dig_iter.into_iter().flatten()),
 		));
@@ -80,6 +81,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 	for (child_index, dig_iter) in children_digest_input.into_iter() {
 		children_digest.push((
 			child_index,
+			(ChildChange::Update, None), // default change type for digest
 			None.into_iter().flatten()
 				.chain(Some(dig_iter).into_iter().flatten()),
 		));
@@ -98,7 +100,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 	changes: &'a OverlayedChanges,
 ) -> Result<(
 		impl Iterator<Item=InputPair<Number>> + 'a,
-		BTreeMap<ChildIndex<Number>, impl Iterator<Item=InputPair<Number>> + 'a>,
+		BTreeMap<ChildIndex<Number>, ((ChildChange, Option<u32>), impl Iterator<Item=InputPair<Number>> + 'a)>,
 	), String>
 	where
 		B: Backend<H>,
@@ -110,7 +112,6 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 	let mut children_result = BTreeMap::new();
 	for (_storage_key, child) in changes.prospective.children_default.iter()
 		.chain(changes.committed.children_default.iter()) {
-		// TODO manage child.change type here to add deletion
 		children_info.insert(child.info.clone());
 	}
 	for child_info in children_info {
@@ -124,8 +125,9 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 	}
 
 	let top = prepare_extrinsics_input_inner(backend, block, changes, None)?;
+	debug_assert!((top.0).0 == ChildChange::Update);
 
-	Ok((top, children_result))
+	Ok((top.1, children_result))
 }
 
 fn prepare_extrinsics_input_inner<'a, B, H, Number>(
@@ -133,7 +135,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	block: &Number,
 	changes: &'a OverlayedChanges,
 	child_info: Option<ChildInfo>,
-) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
+) -> Result<((ChildChange, Option<u32>), impl Iterator<Item=InputPair<Number>> + 'a), String>
 	where
 		B: Backend<H>,
 		H: Hasher,
@@ -142,15 +144,25 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	let (committed, prospective) = if let Some(child_info) = child_info.as_ref() {
 		match child_info.child_type() {
 			ChildType::ParentKeyId => (
-				changes.committed.children_default.get(child_info.storage_key()).map(|c| &c.values),
-				changes.prospective.children_default.get(child_info.storage_key()).map(|c| &c.values),
+				changes.committed.children_default.get(child_info.storage_key()).map(|c| (c.change.clone(), &c.values)),
+				changes.prospective.children_default.get(child_info.storage_key()).map(|c| (c.change.clone(), &c.values)),
 			),
 		}
 	} else {
-		(Some(&changes.committed.top), Some(&changes.prospective.top))
+		(Some(((ChildChange::Update, None), &changes.committed.top)), Some(((ChildChange::Update, None), &changes.prospective.top)))
 	};
-	committed.iter().flat_map(|c| c.iter())
-		.chain(prospective.iter().flat_map(|c| c.iter()))
+	let mut change = (ChildChange::Update, None);
+	if let Some((child_change, _)) = prospective.as_ref().or_else(|| committed.as_ref()) {
+		match child_change.0 {
+			ChildChange::BulkDeleteByKeyspace => {
+				change.0 = ChildChange::BulkDeleteByKeyspace;
+				change.1 = child_change.1;
+			},
+			ChildChange::Update => (),
+		}
+	}
+	committed.iter().flat_map(|c| c.1.iter())
+		.chain(prospective.iter().flat_map(|c| c.1.iter()))
 		.filter(|( _, v)| v.extrinsics.is_some())
 		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, v)| {
 			match map.entry(k) {
@@ -196,7 +208,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 
 			Ok(map)
 		})
-		.map(|pairs| pairs.into_iter().map(|(_, (k, v))| InputPair::ExtrinsicIndex(k, v)))
+		.map(|pairs| (change, pairs.into_iter().map(|(_, (k, v))| InputPair::ExtrinsicIndex(k, v))))
 }
 
 
@@ -293,10 +305,12 @@ fn prepare_digest_input<'a, H, Number>(
 
 				trie_storage.for_key_values_with_prefix(child_info, &child_prefix, |key, value|
 					if let Ok(InputKey::ChildIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
-						if let Ok(value) = <Vec<u8>>::decode(&mut &value[..]) {
-							let mut trie_root = <H as InnerHasher>::Out::default();
-							trie_root.as_mut().copy_from_slice(&value[..]);
-							children_roots.insert(trie_key.storage_key, trie_root);
+						if let Ok(value) = ChildIndexValue::decode(&mut &value[..]) {
+							value.changes_root.as_ref().map(|root| {
+								let mut trie_root = <H as InnerHasher>::Out::default();
+								trie_root.as_mut().copy_from_slice(&root[..]);
+								children_roots.insert(trie_key.storage_key, trie_root);
+							});
 						}
 					});
 
@@ -517,12 +531,12 @@ mod test {
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 5, key: vec![103] }, vec![0, 1]),
 			]);
 			assert_eq!(changes_trie_nodes.1.into_iter()
-				.map(|(k,v)| (k, v.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
-				(ChildIndex { block: zero + 5u64, storage_key: child_trie_key1 },
+				.map(|(k, change, values)| (k, change, values.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
+				(ChildIndex { block: zero + 5u64, storage_key: child_trie_key1 }, (ChildChange::Update, None),
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 5u64, key: vec![100] }, vec![0, 2, 3]),
 					]),
-				(ChildIndex { block: zero + 5, storage_key: child_trie_key2 },
+				(ChildIndex { block: zero + 5, storage_key: child_trie_key2 }, (ChildChange::Update, None),
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 5, key: vec![100] }, vec![0, 2]),
 					]),
@@ -560,8 +574,8 @@ mod test {
 				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![105] }, vec![zero + 1, zero + 3]),
 			]);
 			assert_eq!(changes_trie_nodes.1.into_iter()
-				.map(|(k,v)| (k, v.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
-				(ChildIndex { block: zero + 4u64, storage_key: child_trie_key1.clone() },
+				.map(|(k, change, values)| (k, change, values.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
+				(ChildIndex { block: zero + 4u64, storage_key: child_trie_key1.clone() }, (ChildChange::Update, None),
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4u64, key: vec![100] }, vec![0, 2, 3]),
 
@@ -570,7 +584,7 @@ mod test {
 						InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![102] }, vec![zero + 2]),
 						InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![105] }, vec![zero + 1]),
 					]),
-				(ChildIndex { block: zero + 4, storage_key: child_trie_key2.clone() },
+				(ChildIndex { block: zero + 4, storage_key: child_trie_key2.clone() }, (ChildChange::Update, None),
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![100] }, vec![0, 2]),
 					]),
@@ -608,14 +622,14 @@ mod test {
 				InputPair::DigestIndex(DigestIndex { block: zero + 16, key: vec![105] }, vec![zero + 4, zero + 8]),
 			]);
 			assert_eq!(changes_trie_nodes.1.into_iter()
-				.map(|(k,v)| (k, v.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
-				(ChildIndex { block: zero + 16u64, storage_key: child_trie_key1.clone() },
+				.map(|(k, change, values)| (k, change, values.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
+				(ChildIndex { block: zero + 16u64, storage_key: child_trie_key1.clone() }, (ChildChange::Update, None),
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 16u64, key: vec![100] }, vec![0, 2, 3]),
 
 						InputPair::DigestIndex(DigestIndex { block: zero + 16, key: vec![102] }, vec![zero + 4]),
 					]),
-				(ChildIndex { block: zero + 16, storage_key: child_trie_key2.clone() },
+				(ChildIndex { block: zero + 16, storage_key: child_trie_key2.clone() }, (ChildChange::Update, None),
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 16, key: vec![100] }, vec![0, 2]),
 					]),
@@ -705,8 +719,8 @@ mod test {
 				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![105] }, vec![zero + 1, zero + 3]),
 			]);
 			assert_eq!(changes_trie_nodes.1.into_iter()
-				.map(|(k,v)| (k, v.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
-				(ChildIndex { block: zero + 4u64, storage_key: child_trie_key1.clone() },
+				.map(|(k, change, values)| (k, change, values.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
+				(ChildIndex { block: zero + 4u64, storage_key: child_trie_key1.clone() }, (ChildChange::Update, None),
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4u64, key: vec![100] }, vec![0, 2, 3]),
 
@@ -715,7 +729,7 @@ mod test {
 						InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![102] }, vec![zero + 2]),
 						InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![105] }, vec![zero + 1]),
 					]),
-				(ChildIndex { block: zero + 4, storage_key: child_trie_key2.clone() },
+				(ChildIndex { block: zero + 4, storage_key: child_trie_key2.clone() }, (ChildChange::Update, None),
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![100] }, vec![0, 2]),
 					]),
@@ -775,7 +789,7 @@ mod test {
 
 		let child_changes_tries_nodes = child_changes_tries_nodes
 			.into_iter()
-			.map(|(k, i)| (k, i.collect::<Vec<_>>()))
+			.map(|(k, _change, i)| (k, i.collect::<Vec<_>>()))
 			.collect::<BTreeMap<_, _>>();
 		assert_eq!(
 			child_changes_tries_nodes.get(&ChildIndex {
