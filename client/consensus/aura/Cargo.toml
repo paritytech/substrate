@@ -12,6 +12,7 @@ repository = "https://github.com/paritytech/substrate/"
 sp-application-crypto = { version = "2.0.0-alpha.2", path = "../../../primitives/application-crypto" }
 sp-consensus-aura = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/aura" }
 sp-block-builder = { version = "2.0.0-alpha.2", path = "../../../primitives/block-builder" }
+sc-block-builder = { version = "0.8.0-alpha.3", path = "../../../client/block-builder" }
 sc-client = { version = "0.8.0-alpha.2", path = "../../" }
 sc-client-api = { version = "2.0.0-alpha.2", path = "../../api" }
 codec = { package = "parity-scale-codec", version = "1.2.0" }

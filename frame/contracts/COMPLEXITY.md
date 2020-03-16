@@ -291,6 +291,21 @@ performed. Moreover, the DB read has to be synchronous and no progress can be ma
 **complexity**: The memory and computing complexity is proportional to the size of the fetched value. This function performs a
 DB read.
 
+## ext_transfer
+
+This function receives the following arguments:
+
+- `account` buffer of a marshaled `AccountId`,
+- `value` buffer of a marshaled `Balance`,
+
+It consists of the following steps:
+
+1. Loading `account` buffer from the sandbox memory (see sandboxing memory get) and then decoding it.
+2. Loading `value` buffer from the sandbox memory and then decoding it.
+4. Invoking the executive function `transfer`.
+
+Loading of `account` and `value` buffers should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId` and `Balance`.
+
 ## ext_call
 
 This function receives the following arguments:

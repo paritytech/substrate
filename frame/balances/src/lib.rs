@@ -157,11 +157,9 @@ mod tests_composite;
 mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod migration;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
-use sp_io::hashing::twox_64;
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
@@ -180,9 +178,6 @@ use sp_runtime::{
 	},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
-use frame_support::storage::migration::{
-	get_storage_value, take_storage_value, put_storage_value, StorageIterator, have_storage_value
-};
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
@@ -533,28 +528,6 @@ decl_module! {
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as Currency<_>>::transfer(&transactor, &dest, value, KeepAlive)?;
 		}
-
-		fn on_runtime_upgrade() {
-			migration::on_runtime_upgrade::<T, I>();
-		}
-	}
-}
-
-#[derive(Decode)]
-struct OldBalanceLock<Balance, BlockNumber> {
-	id: LockIdentifier,
-	amount: Balance,
-	until: BlockNumber,
-	reasons: WithdrawReasons,
-}
-
-impl<Balance, BlockNumber> OldBalanceLock<Balance, BlockNumber> {
-	fn upgraded(self) -> (BalanceLock<Balance>, BlockNumber) {
-		(BalanceLock {
-			id: self.id,
-			amount: self.amount,
-			reasons: self.reasons.into(),
-		}, self.until)
 	}
 }
 

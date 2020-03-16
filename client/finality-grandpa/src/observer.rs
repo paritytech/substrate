@@ -178,6 +178,7 @@ where
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
+		None,
 	);
 
 	let observer_work = ObserverWork::new(
