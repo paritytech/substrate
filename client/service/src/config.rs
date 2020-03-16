@@ -23,7 +23,7 @@ pub use sc_executor::WasmExecutionMethod;
 
 use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-use sc_chain_spec::{ChainSpec, NoExtension};
+use sc_chain_spec::ChainSpec;
 use sp_core::crypto::Protected;
 use target_info::Target;
 use sc_telemetry::TelemetryEndpoints;
@@ -51,7 +51,7 @@ pub struct VersionInfo {
 }
 
 /// Service configuration.
-pub struct Configuration<G, E = NoExtension> {
+pub struct Configuration {
 	/// Implementation name
 	pub impl_name: &'static str,
 	/// Implementation version
@@ -79,7 +79,7 @@ pub struct Configuration<G, E = NoExtension> {
 	/// Pruning settings.
 	pub pruning: PruningMode,
 	/// Chain configuration.
-	pub chain_spec: Option<ChainSpec<G, E>>,
+	pub chain_spec: Option<Box<dyn ChainSpec>>,
 	/// Node name.
 	pub name: String,
 	/// Wasm execution method.
@@ -192,7 +192,7 @@ impl PrometheusConfig {
 	}
 }
 
-impl<G, E> Default for Configuration<G, E> {
+impl Default for Configuration {
 	/// Create a default config
 	fn default() -> Self {
 		Configuration {
@@ -233,7 +233,7 @@ impl<G, E> Default for Configuration<G, E> {
 	}
 }
 
-impl<G, E> Configuration<G, E> {
+impl Configuration {
 	/// Create a default config using `VersionInfo`
 	pub fn from_version(version: &VersionInfo) -> Self {
 		let mut config = Configuration::default();
@@ -270,8 +270,8 @@ impl<G, E> Configuration<G, E> {
 	/// ### Panics
 	///
 	/// This method panic if the `chain_spec` is `None`
-	pub fn expect_chain_spec(&self) -> &ChainSpec<G, E> {
-		self.chain_spec.as_ref().expect("chain_spec must be specified")
+	pub fn expect_chain_spec(&self) -> &dyn ChainSpec {
+		&**self.chain_spec.as_ref().expect("chain_spec must be specified")
 	}
 
 	/// Return a reference to the `DatabaseConfig` of this `Configuration`.

@@ -207,7 +207,7 @@ impl<'a> ChildInfo<'a> {
 		}
 	}
 
-	/// Create child info from a linear byte packed value and a given type. 
+	/// Create child info from a linear byte packed value and a given type.
 	pub fn resolve_child_info(child_type: u32, data: &'a[u8]) -> Option<Self> {
 		match child_type {
 			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data)),

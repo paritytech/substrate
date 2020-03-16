@@ -18,8 +18,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use app_dirs::{AppInfo, AppDataType};
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis,
-	config::DatabaseConfig, ChainSpec,
+	Configuration, config::DatabaseConfig, ChainSpec,
 };
 
 use crate::VersionInfo;
@@ -50,25 +49,19 @@ pub struct SharedParams {
 
 impl SharedParams {
 	/// Load spec to `Configuration` from `SharedParams` and spec factory.
-	pub fn update_config<'a, G, E, F>(
+	pub fn update_config<'a, F>(
 		&self,
-		mut config: &'a mut Configuration<G, E>,
+		mut config: &'a mut Configuration,
 		spec_factory: F,
 		version: &VersionInfo,
-	) -> error::Result<&'a ChainSpec<G, E>> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	) -> error::Result<&'a dyn ChainSpec> where
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		let chain_key = match self.chain {
 			Some(ref chain) => chain.clone(),
 			None => if self.dev { "dev".into() } else { "".into() }
 		};
-		let spec = match spec_factory(&chain_key)? {
-			Some(spec) => spec,
-			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
-		};
-
+		let spec = spec_factory(&chain_key)?;
 		config.network.boot_nodes = spec.boot_nodes().to_vec();
 		config.telemetry_endpoints = spec.telemetry_endpoints().clone();
 
@@ -87,7 +80,7 @@ impl SharedParams {
 			});
 		}
 
-		Ok(config.chain_spec.as_ref().unwrap())
+		Ok(config.expect_chain_spec())
 	}
 
 	/// Initialize substrate. This must be done only once.

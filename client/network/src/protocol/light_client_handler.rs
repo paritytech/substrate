@@ -57,7 +57,10 @@ use sc_client_api::StorageProof;
 use sc_peerset::ReputationChange;
 use sp_core::storage::{ChildInfo, StorageKey};
 use sp_blockchain::{Error as ClientError};
-use sp_runtime::traits::{Block, Header, NumberFor, Zero};
+use sp_runtime::{
+	traits::{Block, Header, NumberFor, Zero},
+	generic::BlockId,
+};
 use std::{
 	collections::{BTreeMap, VecDeque, HashMap},
 	iter,
@@ -429,7 +432,7 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof = match self.chain.execution_proof(&block, &request.method, &request.data) {
+		let proof = match self.chain.execution_proof(&BlockId::Hash(block), &request.method, &request.data) {
 			Ok((_, proof)) => proof,
 			Err(e) => {
 				log::trace!("remote call request from {} ({} at {:?}) failed with: {}",
@@ -468,7 +471,7 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof = match self.chain.read_proof(&block, &mut request.keys.iter().map(AsRef::as_ref)) {
+		let proof = match self.chain.read_proof(&BlockId::Hash(block), &mut request.keys.iter().map(AsRef::as_ref)) {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!("remote read request from {} ({} at {:?}) failed with: {}",
@@ -510,7 +513,7 @@ where
 		let proof =
 			if let Some(info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
 				match self.chain.read_child_proof(
-					&block,
+					&BlockId::Hash(block),
 					&request.storage_key,
 					info,
 					&mut request.keys.iter().map(AsRef::as_ref)
@@ -554,8 +557,7 @@ where
 		log::trace!("remote header proof request from {} ({:?})", peer, request.block);
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
-
-		let (header, proof) = match self.chain.header_proof(block) {
+		let (header, proof) = match self.chain.header_proof(&BlockId::Number(block)) {
 			Ok((header, proof)) => (header.encode(), proof),
 			Err(error) => {
 				log::trace!("remote header proof request from {} ({:?}) failed with: {}",
