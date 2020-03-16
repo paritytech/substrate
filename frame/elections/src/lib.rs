@@ -240,7 +240,7 @@ decl_storage! {
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they
 		/// are not currently registered.
 		pub RegisterInfoOf get(fn candidate_reg_info):
-			map hasher(blake2_128_concat) T::AccountId => Option<(VoteIndex, u32)>;
+			map hasher(twox_64_concat) T::AccountId => Option<(VoteIndex, u32)>;
 		/// Basic information about a voter.
 		pub VoterInfoOf get(fn voter_info):
 			map hasher(twox_64_concat) T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
