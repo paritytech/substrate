@@ -244,7 +244,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructMAPU32(PhantomData::<TraitImpl>))
@@ -258,7 +258,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBMAPU32(PhantomData::<TraitImpl>))
@@ -272,7 +272,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructMAPU32MYDEF(PhantomData::<TraitImpl>))
@@ -286,7 +286,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBMAPU32MYDEF(PhantomData::<TraitImpl>))
@@ -300,7 +300,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGETMAPU32(PhantomData::<TraitImpl>))
@@ -314,7 +314,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBGETMAPU32(PhantomData::<TraitImpl>))
@@ -328,7 +328,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGETMAPU32MYDEF(PhantomData::<TraitImpl>))
@@ -342,7 +342,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBGETMAPU32MYDEF(PhantomData::<TraitImpl>))

@@ -498,7 +498,7 @@ mod tests {
 						hasher: StorageHasher::Twox64Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u64"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructData(PhantomData::<Test>))
@@ -512,7 +512,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u32"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructOptionLinkedMap(PhantomData::<Test>))
@@ -526,7 +526,7 @@ mod tests {
 						hasher: StorageHasher::Identity,
 						key: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
-						is_linked: false
+						unused: false
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData(PhantomData::<Test>))
@@ -540,7 +540,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
-						is_linked: false
+						unused: false
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))

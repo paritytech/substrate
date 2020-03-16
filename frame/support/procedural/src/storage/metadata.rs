@@ -41,7 +41,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 					hasher: #scrate::metadata::#hasher,
 					key: #scrate::metadata::DecodeDifferent::Encode(#key),
 					value: #scrate::metadata::DecodeDifferent::Encode(#value_type),
-					is_linked: false,
+					unused: false,
 				}
 			}
 		},
