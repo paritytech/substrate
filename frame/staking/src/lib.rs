@@ -542,10 +542,10 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	/// The validator's own stash that is exposed.
 	#[codec(compact)]
 	pub own: Balance,
-	/// The number of nominators they will pay out to.
-	pub max_payout: u16,
 	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+	/// The max payout for a validator for that era
+	pub max_payout: u16,
 }
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
@@ -1473,43 +1473,77 @@ impl<T: Trait> Module<T> {
 		let era_payout = <ErasValidatorReward<T>>::get(&era)
 			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
 
-		let mut ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
+		let mut ledger = <Ledger<T>>::get(&validator).ok_or_else(|| Error::<T>::NotController)?;
 		if ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
 			return Err(Error::<T>::InvalidEraToReward.into());
 		}
 
-		/* Payout to Validator */
-		// Update to the latest era
-		ledger.last_reward = Some(era);
-		<Ledger<T>>::insert(&validator, &ledger);
+		// TODO TRACK PREVIOUS PAYOUTS
+
+		// Get Era reward points. It has TOTAL and INDIVIDUAL
+		// Find the fraction of the era reward that belongs to the validator
+		// Take that fraction of the eras rewards to split to nominator and validator
+		//
+		// Then look at the validator, figure out the proportion of their reward
+		// which goes to them and each of their nominators.
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
-		let commission = Self::eras_validator_prefs(&era, &ledger.stash).commission;
-		let exposure = <ErasStakers<T>>::get(&era, &ledger.stash);
+		let total_reward_points = era_reward_points.total;
+		let validator_reward_points = era_reward_points.individual.get(&ledger.stash)
+			.map(|points| *points)
+			.unwrap_or_else(|| Zero::zero());
 
-		let exposure_part = Perbill::from_rational_approximation(
+		// This is the fraction of the total reward that the validator and the
+		// nominators will get.
+		let validator_total_reward_part = Perbill::from_rational_approximation(
+			validator_reward_points,
+			total_reward_points,
+		);
+
+		// This is how much validator + nominators are entitled to.
+		let validator_total_payout = validator_total_reward_part * era_payout;
+		// Validator first gets a cut off the top.
+		let validator_prefs = Self::eras_validator_prefs(&era, &ledger.stash);
+		let validator_commission = validator_prefs.commission;
+		let validator_commission_payout = validator_commission * validator_total_payout;
+
+		let validator_leftover_payout = validator_total_payout - validator_commission_payout;
+		// Now let's calculate how this is split to the validator.
+		let exposure = <ErasStakers<T>>::get(&era, &ledger.stash);
+		let validator_exposure_part = Perbill::from_rational_approximation(
 			exposure.own,
 			exposure.total,
 		);
-		let validator_point = era_reward_points.individual.get(&ledger.stash)
-			.map(|points| *points)
-			.unwrap_or_else(|| Zero::zero());
-		let validator_point_part = Perbill::from_rational_approximation(
-			validator_point,
-			era_reward_points.total,
-		);
-		let reward = validator_point_part.saturating_mul(
-			commission.saturating_add(
-				Perbill::one().saturating_sub(commission).saturating_mul(exposure_part)
-			)
-		);
+		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
 
-		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
+		// We can now make total validator payout:
+		if let Some(imbalance) = Self::make_payout(
+			&validator,
+			validator_staking_payout + validator_commission_payout
+		) {
 			Self::deposit_event(RawEvent::Reward(validator, imbalance.peek()));
 		}
 
+		// Lets now calculate how this is split to the nominators.
+		// Sort nominators by highest to lowest exposure, but only keep `max_payout` of them.
+		let nominators_exposure = exposure.others.clone();
+		// nominators_exposure.sort_by(|a, b| (b.value).cmp(&a.value));
+		//let nominators_exposure = nominators_exposure[0..exposure.max_payout as usize];
 
+		for nominator in nominators_exposure.iter() {
+			let nominator_exposure_part = Perbill::from_rational_approximation(
+				nominator.value,
+				exposure.total,
+			);
 
+			let nominator_reward: BalanceOf<T> = nominator_exposure_part * validator_leftover_payout;
+			// We can now make nominator payout:
+			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
+				Self::deposit_event(RawEvent::Reward(nominator.who.clone(), imbalance.peek()));
+			}
+		}
+
+		Ok(())
 	}
 
 	fn do_payout_nominator(who: T::AccountId, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
@@ -1915,6 +1949,8 @@ impl<T: Trait> Module<T> {
 					// of balance and receive some support. This is super unlikely to happen, yet
 					// we simulate it in some tests.
 					total,
+					// TODO TEMP ERROR REMOVAL
+					max_payout: 10,
 				};
 				<ErasStakers<T>>::insert(&current_era, &c, &exposure);
 
