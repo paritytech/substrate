@@ -16,7 +16,7 @@
 
 use crate::*;
 
-use codec::Decode;
+use codec::{Encode, Decode};
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types,
 	weights::{GetDispatchInfo, Weight},
@@ -24,13 +24,20 @@ use frame_support::{
 use sp_core::{
 	H256,
 	offchain::{OffchainExt, TransactionPoolExt, testing},
+	sr25519::Signature,
 	testing::KeyStore,
 	traits::KeystoreExt,
 };
 use sp_runtime::{
 	Perbill, RuntimeAppPublic,
 	testing::{Header, TestXt},
-	traits::{BlakeTwo256, IdentityLookup, Extrinsic as ExtrinsicsT},
+	traits::{
+		BlakeTwo256,
+		IdentityLookup,
+		Extrinsic as ExtrinsicsT,
+		IdentifyAccount,
+		Verify
+	},
 };
 
 impl_outer_origin! {
@@ -40,7 +47,7 @@ impl_outer_origin! {
 // For testing the module, we construct most of a mock runtime. This means
 // first constructing a configuration type (`Test`) which `impl`s each of the
 // configuration traits of modules we want to use.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -71,22 +78,37 @@ impl frame_system::Trait for Test {
 }
 
 type Extrinsic = TestXt<Call<Test>, ()>;
-type SubmitTransaction = frame_system::offchain::TransactionSubmitter<
-	crypto::Public,
-	Test,
-	Extrinsic
->;
+type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
-impl frame_system::offchain::CreateTransaction<Test, Extrinsic> for Test {
-	type Public = sp_core::sr25519::Public;
-	type Signature = sp_core::sr25519::Signature;
+impl frame_system::offchain::SigningTypes for Test {
+	type Public = <Signature as Verify>::Signer;
+	type Signature = Signature;
+}
 
-	fn create_transaction<F: frame_system::offchain::Signer<Self::Public, Self::Signature>>(
-		call: <Extrinsic as ExtrinsicsT>::Call,
-		_public: Self::Public,
-		_account: <Test as frame_system::Trait>::AccountId,
-		nonce: <Test as frame_system::Trait>::Index,
-	) -> Option<(<Extrinsic as ExtrinsicsT>::Call, <Extrinsic as ExtrinsicsT>::SignaturePayload)> {
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test where
+	Call<Test>: From<LocalCall>,
+{
+
+	type OverarchingCall = Call<Test>;
+	type Extrinsic = Extrinsic;
+}
+
+pub struct TestAuthId;
+impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature> for TestAuthId {
+	type RuntimeAppPublic = crypto::Public;
+	type GenericSignature = sp_core::sr25519::Signature;
+	type GenericPublic = sp_core::sr25519::Public;
+}
+
+impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Test where
+	Call<Test>: From<LocalCall>,
+{
+	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
+		call: Call<Test>,
+		_public: <Signature as Verify>::Signer,
+		_account: AccountId,
+		nonce: u64,
+	) -> Option<(Call<Test>, <Extrinsic as ExtrinsicsT>::SignaturePayload)> {
 		Some((call, (nonce, ())))
 	}
 }
@@ -98,9 +120,8 @@ parameter_types! {
 
 impl Trait for Test {
 	type Event = ();
+	type AuthorityId = TestAuthId;
 	type Call = Call<Test>;
-	type SubmitSignedTransaction = SubmitTransaction;
-	type SubmitUnsignedTransaction = SubmitTransaction;
 	type GracePeriod = GracePeriod;
 	type UnsignedInterval = UnsignedInterval;
 }
@@ -172,9 +193,12 @@ fn should_submit_signed_transaction_on_chain() {
 fn should_submit_unsigned_transaction_on_chain() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+	let keystore = KeyStore::new();
+
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
+	t.register_extension(KeystoreExt(keystore));
 
 	price_oracle_response(&mut offchain_state.write());
 
