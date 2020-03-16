@@ -13,11 +13,11 @@ parking_lot = "0.10.0"
 log = "0.4.8"
 rand = "0.7"
 kvdb = "0.4.0"
-kvdb-rocksdb = { version = "0.5", optional = true }
+kvdb-rocksdb = { version = "0.6", optional = true }
 kvdb-memorydb = "0.4.0"
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
-parity-util-mem = { version = "0.5.1", default-features = false, features = ["std"] }
+parity-util-mem = { version = "0.5.2", default-features = false, features = ["std"] }
 codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 
 sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
@@ -37,7 +37,7 @@ sp-keyring = { version = "2.0.0-alpha.2", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 quickcheck = "0.9"
-kvdb-rocksdb = "0.5"
+kvdb-rocksdb = "0.6"
 tempfile = "3"
 
 [features]
