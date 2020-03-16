@@ -48,8 +48,6 @@ use sp_runtime::{
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
-mod migration;
-
 type Multiplier = Fixed64;
 type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -96,10 +94,6 @@ decl_module! {
 			NextFeeMultiplier::mutate(|fm| {
 				*fm = T::FeeMultiplierUpdate::convert(*fm)
 			});
-		}
-
-		fn on_runtime_upgrade() {
-			migration::on_runtime_upgrade()
 		}
 	}
 }

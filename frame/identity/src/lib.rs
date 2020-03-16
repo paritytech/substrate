@@ -81,7 +81,6 @@ use frame_support::traits::MigrateAccount;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
-mod migration;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
@@ -874,10 +873,6 @@ decl_module! {
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit).0);
 
 			Self::deposit_event(RawEvent::IdentityKilled(target, deposit));
-		}
-
-		fn on_runtime_upgrade() {
-			migration::on_runtime_upgrade::<T>()
 		}
 	}
 }

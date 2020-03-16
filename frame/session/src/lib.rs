@@ -499,18 +499,11 @@ decl_module! {
 				Self::rotate_session();
 			}
 		}
-
-		/// Called when the runtime is upgraded.
-		fn on_runtime_upgrade() {
-			Self::migrate();
-		}
 	}
 }
 
 impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
 	fn migrate_account(a: &T::AccountId) {
-		Self::migrate();
-
 		use codec::Encode;
 		if let Ok(v) = a.using_encoded(|mut d| T::ValidatorId::decode(&mut d)) {
 			if let Some(keys) = NextKeys::<T>::migrate_key_from_blake(v) {
@@ -523,27 +516,6 @@ impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
 }
 
 impl<T: Trait> Module<T> {
-	/// Move keys from NextKeys and KeyOwner, if any exist.
-	fn migrate() {
-		use frame_support::storage::migration::{put_storage_value, StorageIterator};
-		sp_runtime::print("Migrating session's double-maps...");
-
-		let prefix = {
-			const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
-			let encoded_prefix_key_hash = codec::Encode::encode(&DEDUP_KEY_PREFIX);
-			let mut h = sp_io::hashing::twox_64(&encoded_prefix_key_hash[..]).to_vec();
-			h.extend(&encoded_prefix_key_hash[..]);
-			h
-		};
-
-		for (hash, value) in StorageIterator::<T::Keys>::with_suffix(b"Session", b"NextKeys", &prefix[..]).drain() {
-			put_storage_value(b"Session", b"NextKeys", &hash, value);
-		}
-		for (hash, value) in StorageIterator::<T::ValidatorId>::with_suffix(b"Session", b"KeyOwner", &prefix[..]).drain() {
-			put_storage_value(b"Session", b"KeyOwner", &hash, value);
-		}
-	}
-
 	/// Move on to next session. Register new validator set and session keys. Changes
 	/// to the validator set have a session of delay to take effect. This allows for
 	/// equivocation punishment after a fork.
