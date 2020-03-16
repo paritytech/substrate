@@ -193,6 +193,10 @@ fn should_submit_signed_transaction_on_chain() {
 fn should_submit_unsigned_transaction_on_chain() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+	// Keystore is required here to be used
+	// if the signed payload / unsigned transaction
+	// method is used
 	let keystore = KeyStore::new();
 
 	let mut t = sp_io::TestExternalities::default();
