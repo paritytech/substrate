@@ -34,6 +34,7 @@ sp-debug-derive = { version = "2.0.0-alpha.2", path = "../debug-derive" }
 sp-externalities = { version = "0.8.0-alpha.2", optional = true, path = "../externalities" }
 sp-storage = { version = "2.0.0-alpha.2", default-features = false, path = "../storage" }
 parity-util-mem = { version = "0.5.2", default-features = false, features = ["primitive-types"] }
+futures = { version = "0.3.1", optional = true }
 
 # full crypto
 ed25519-dalek = { version = "1.0.0-pre.3", default-features = false, features = ["u64_backend", "alloc"], optional = true }
@@ -102,7 +103,9 @@ std = [
 	"sp-externalities",
 	"sp-storage/std",
 	"sp-runtime-interface/std",
-	"zeroize/alloc"
+	"zeroize/alloc",
+	"futures",
+	"futures/thread-pool",
 ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
