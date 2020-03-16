@@ -400,7 +400,7 @@ impl frame_system::Trait for Runtime {
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	#[cfg(feature = "indices-lookup")]
-	type AccountId = sp_core::crypto::AccountId32;
+	type AccountId = sr25519::Public;
 	#[cfg(not(feature = "indices-lookup"))]
 	type AccountId = u64;
 	#[cfg(feature = "indices-lookup")]

@@ -14,15 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Implementation of the `sign` subcommand
-use crate::{error, IndexFor, BalanceFor, create_extrinsic_for, get_password, AddressFor};
+//! Implementation of the `transfer` subcommand
+
+use crate::{error, IndexFor, BalanceFor, create_extrinsic_for, get_password, AddressFor, VersionInfo};
 use super::{SharedParams, RuntimeAdapter};
 use structopt::StructOpt;
 use pallet_balances::Call as BalancesCall;
-use std::str::FromStr;
+use std::{str::FromStr, fmt::Display};
 use parity_scale_codec::{Encode, Decode};
-use std::fmt::Display;
+use sp_runtime::traits::IdentifyAccount;
+use sc_service::{Configuration, ChainSpec};
 
+/// The `transfer` command
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "transfer",
@@ -58,6 +61,7 @@ impl TransferCmd {
 			<IndexFor<RA> as FromStr>::Err: Display,
 			<BalanceFor<RA> as FromStr>::Err: Display,
 			BalancesCall<RA::Runtime>: Encode,
+			RA::Address: From<<RA::Public as IdentifyAccount>::AccountId>,
 	{
 		let password = get_password(&self.shared_params)?;
 		let nonce = IndexFor::<RA>::from_str(&self.index).map_err(|e| format!("{}", e))?;
@@ -69,6 +73,21 @@ impl TransferCmd {
 
 		let extrinsic = create_extrinsic_for::<RA, _>(call, nonce, signer)?;
 		println!("0x{}", hex::encode(Encode::encode(&extrinsic)));
+
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<F>(
+		&self,
+		mut config: &mut Configuration,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

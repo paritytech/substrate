@@ -32,13 +32,13 @@ mod verify;
 mod vanity;
 mod insert;
 #[cfg(test)]
-mod tests;
+pub mod tests;
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use structopt::StructOpt;
 
 use sc_service::{ Configuration, ServiceBuilderCommand, ChainSpec };
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, IdentifyAccount};
 
 use crate::error;
 use crate::VersionInfo;
@@ -60,6 +60,9 @@ pub use crate::commands::sign_transaction::SignTransactionCmd;
 pub use crate::commands::transfer::TransferCmd;
 pub use crate::commands::vanity::VanityCmd;
 pub use crate::commands::verify::VerifyCmd;
+use sp_core::crypto::{Ss58Codec, Derive};
+use std::str::FromStr;
+use parity_scale_codec::{Codec, WrapperTypeEncode};
 
 
 /// default sub directory to store network config
@@ -90,8 +93,29 @@ pub enum Subcommand {
 	/// Remove the whole chain data.
 	PurgeChain(purge_chain_cmd::PurgeChainCmd),
 
-	// Generate a key for a node
-	// GenerateNodeKey(generate_node_key::GenerateNodeKeyCmd),
+	/// Generate a random node libp2p key, save it to file and print its peer ID
+	GenerateNodeKey(generate_node_key::GenerateNodeKeyCmd),
+
+	/// Generate a random account
+	Generate(generate::GenerateCmd),
+
+	/// Gets a public key and a SS58 address from the provided Secret URI
+	Inspect(inspect::InspectCmd),
+
+	/// Insert a key to the keystore of a node.
+	Insert(insert::InsertCmd),
+
+	/// Sign a message, with a given (secret) key
+	Sign(sign::SignCmd),
+
+	/// Sign transaction from encoded Call. Returns a signed and encoded UncheckedMortalCompactExtrinsic as hex.
+	SignTransaction(sign_transaction::SignTransactionCmd),
+
+	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
+	Verify(verify::VerifyCmd),
+
+	/// Generate a seed that provides a vanity address.
+	Vanity(vanity::VanityCmd),
 }
 
 impl Subcommand {
@@ -106,21 +130,34 @@ impl Subcommand {
 			CheckBlock(params) => &params.shared_params,
 			Revert(params) => &params.shared_params,
 			PurgeChain(params) => &params.shared_params,
+			GenerateNodeKey(params) => &params.shared_params,
+			Generate(params) => &params.shared_params,
+			Inspect(params) => &params.shared_params,
+			Insert(params) => &params.shared_params,
+			Sign(params) => &params.shared_params,
+			SignTransaction(params) => &params.shared_params,
+			Verify(params) => &params.shared_params,
+			Vanity(params) => &params.shared_params,
 		}
 	}
 
 	/// Run any `CoreParams` command
-	pub fn run<B, BC, BB>(
+	pub fn run<RA, B, BC, Block>(
 		self,
 		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
 	where
 		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		BC: ServiceBuilderCommand<Block =Block> + Unpin,
+		Block: BlockT + Debug,
+		<<Block::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		Block::Hash: std::str::FromStr,
+		RA: RuntimeAdapter,
+		AccountIdFor<RA>: Ss58Codec + Derive,
+		<IndexFor<RA> as FromStr>::Err: Display,
+		CallFor<RA>: Codec + WrapperTypeEncode,
+		RA::Address: From<<RA::Public as IdentifyAccount>::AccountId>,
 	{
 		match self {
 			Subcommand::BuildSpec(cmd) => cmd.run(config),
@@ -129,6 +166,14 @@ impl Subcommand {
 			Subcommand::CheckBlock(cmd) => cmd.run(config, builder),
 			Subcommand::PurgeChain(cmd) => cmd.run(config),
 			Subcommand::Revert(cmd) => cmd.run(config, builder),
+			Subcommand::GenerateNodeKey(cmd) => cmd.run(),
+			Subcommand::Generate(cmd) => cmd.run::<RA>(),
+			Subcommand::Inspect(cmd) => cmd.run::<RA>(),
+			Subcommand::Insert(cmd) => cmd.run::<RA>(),
+			Subcommand::Sign(cmd) => cmd.run::<RA>(),
+			Subcommand::SignTransaction(cmd) => cmd.run::<RA>(),
+			Subcommand::Verify(cmd) => cmd.run::<RA>(),
+			Subcommand::Vanity(cmd) => cmd.run::<RA>(),
 		}
 	}
 
@@ -148,6 +193,14 @@ impl Subcommand {
 			Subcommand::CheckBlock(cmd) => cmd.update_config(&mut config, spec_factory, version),
 			Subcommand::PurgeChain(cmd) => cmd.update_config(&mut config, spec_factory, version),
 			Subcommand::Revert(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::GenerateNodeKey(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::Generate(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::Inspect(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::Insert(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::Sign(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::SignTransaction(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::Verify(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::Vanity(cmd) => cmd.update_config(&mut config, spec_factory, version),
 		}
 	}
 

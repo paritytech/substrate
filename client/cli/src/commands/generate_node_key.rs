@@ -16,11 +16,13 @@
 
 //! Implementation of the `generate-node-key` subcommand
 
-use crate::error;
+use crate::{error, SharedParams, VersionInfo};
 use structopt::StructOpt;
 use std::{path::PathBuf, fs};
 use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
+use sc_service::{Configuration, ChainSpec};
 
+/// The `generate-node-key` command
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "generate-node-key",
@@ -30,6 +32,10 @@ pub struct GenerateNodeKeyCmd {
 	/// Name of file to save secret key to.
 	#[structopt(long)]
 	file: PathBuf,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub shared_params: SharedParams,
 }
 
 impl GenerateNodeKeyCmd {
@@ -44,6 +50,21 @@ impl GenerateNodeKeyCmd {
 		fs::write(file, hex::encode(secret.as_ref()))?;
 
 		println!("{}", peer_id);
+
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<F>(
+		&self,
+		mut config: &mut Configuration,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

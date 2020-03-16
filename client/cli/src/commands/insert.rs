@@ -16,8 +16,8 @@
 
 //! Implementation of the `insert` subcommand
 
-use crate::{error, HashFor};
-use super::{SharedParams, RunCmd, get_password, read_uri, RuntimeAdapter};
+use crate::{error, HashFor, VersionInfo};
+use super::{SharedParams, get_password, read_uri, RuntimeAdapter};
 use structopt::StructOpt;
 use sp_core::{crypto::{KeyTypeId, Pair}, Bytes};
 use std::convert::TryFrom;
@@ -26,7 +26,9 @@ use hyper::rt;
 use sc_rpc::author::AuthorClient;
 use jsonrpc_core_client::transports::http;
 use serde::{de::DeserializeOwned, Serialize};
+use sc_service::{Configuration, ChainSpec};
 
+/// The `insert` command
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "insert",
@@ -53,13 +55,13 @@ pub struct InsertCmd {
 }
 
 impl InsertCmd {
-	pub fn run<C: RuntimeAdapter>(self) -> error::Result<()>
+	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()>
 		where
-			HashFor<C>: DeserializeOwned + Serialize + Send + Sync,
+			HashFor<RA>: DeserializeOwned + Serialize + Send + Sync,
 	{
 		let suri = read_uri(self.suri)?;
 		let password = get_password(&self.shared_params)?;
-		let pair = C::pair_from_suri(&suri, &password);
+		let pair = RA::pair_from_suri(&suri, &password);
 		let node_url = self.node_url.unwrap_or("http://localhost:9933".into());
 		let key_type = self.key_type;
 
@@ -70,12 +72,27 @@ impl InsertCmd {
 			})?;
 
 
-		insert_key::<HashFor<C>>(
+		insert_key::<HashFor<RA>>(
 			&node_url,
 			key_type.to_string(),
 			suri,
 			sp_core::Bytes(pair.public().as_ref().to_vec()),
 		);
+
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<F>(
+		&self,
+		mut config: &mut Configuration,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

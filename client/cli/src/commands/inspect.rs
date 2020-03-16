@@ -16,10 +16,13 @@
 
 //! Implementation of the `inspect` subcommand
 
-use crate::error;
-use super::{SharedParams, RunCmd, get_password, read_uri, RuntimeAdapter};
+use crate::{error, AccountIdFor, VersionInfo};
+use super::{SharedParams, get_password, read_uri, RuntimeAdapter};
 use structopt::StructOpt;
+use sp_core::crypto::{Ss58Codec, Derive};
+use sc_service::{Configuration, ChainSpec};
 
+/// The `inspect` command
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "inspect",
@@ -38,16 +41,34 @@ pub struct InspectCmd {
 }
 
 impl InspectCmd {
-	pub fn run<C: RuntimeAdapter>(self) -> error::Result<()> {
+	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()>
+		where
+			AccountIdFor<RA>: Ss58Codec + Derive,
+	{
 		let uri = read_uri(self.uri)?;
 		let pass = get_password(&self.shared_params).ok();
 
-		C::print_from_uri(
+		RA::print_from_uri(
 			&uri,
 			pass.as_ref().map(String::as_str),
 			self.shared_params.network,
 			self.shared_params.output_type
 		);
+
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<F>(
+		&self,
+		mut config: &mut Configuration,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

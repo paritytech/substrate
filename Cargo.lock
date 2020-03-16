@@ -3996,9 +3996,12 @@ dependencies = [
 name = "node-template"
 version = "2.0.0-alpha.3"
 dependencies = [
+ "frame-system",
  "futures 0.3.4",
  "log 0.4.8",
  "node-template-runtime",
+ "pallet-indices",
+ "pallet-transaction-payment",
  "sc-basic-authorship",
  "sc-cli",
  "sc-client",
@@ -6148,6 +6151,7 @@ dependencies = [
  "derive_more",
  "env_logger 0.7.1",
  "fdlimit",
+ "frame-support",
  "frame-system",
  "futures 0.1.29",
  "futures 0.3.4",
@@ -6179,6 +6183,7 @@ dependencies = [
  "sp-application-crypto",
  "sp-blockchain",
  "sp-core",
+ "sp-io",
  "sp-keyring",
  "sp-panic-handler",
  "sp-runtime",

@@ -20,6 +20,9 @@ use super::{SharedParams, RuntimeAdapter, get_password};
 use crate::error::{self, Error};
 use bip39::{MnemonicType, Mnemonic, Language};
 use structopt::StructOpt;
+use crate::{AccountIdFor, VersionInfo};
+use sp_core::crypto::{Ss58Codec, Derive};
+use sc_service::{Configuration, ChainSpec};
 
 /// The `generate` command
 #[derive(Debug, StructOpt, Clone)]
@@ -36,7 +39,10 @@ pub struct GenerateCmd {
 
 impl GenerateCmd {
 	/// Run the command
-	pub fn run<C: RuntimeAdapter>(self) -> error::Result<()> {
+	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()>
+		where
+			AccountIdFor<RA>: Ss58Codec + Derive,
+	{
 		let words = match self.words {
 			Some(words) => {
 				MnemonicType::for_word_count(words)
@@ -51,12 +57,27 @@ impl GenerateCmd {
 		let maybe_network = self.shared_params.network;
 		let output = self.shared_params.output_type;
 
-		C::print_from_uri(
+		RA::print_from_uri(
 			mnemonic.phrase(),
 			Some(password.as_str()),
 			maybe_network,
 			output
 		);
+
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<F>(
+		&self,
+		mut config: &mut Configuration,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

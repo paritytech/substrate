@@ -17,7 +17,7 @@
 use super::*;
 use substrate_test_runtime::{AccountSignature, Runtime};
 use sp_core::sr25519;
-use sp_runtime::{MultiSignature, MultiSigner};
+
 use sp_runtime::generic::Era;
 use sp_runtime::traits::StaticLookup;
 use tempfile::Builder;
@@ -52,6 +52,14 @@ impl RuntimeAdapter for Adapter {
 	}
 }
 
+fn new_test_ext() -> sp_io::TestExternalities {
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	pallet_balances::GenesisConfig::<Runtime>{
+		balances: vec![],
+	}.assimilate_storage(&mut t).unwrap();
+	sp_io::TestExternalities::new(t)
+}
+
 #[test]
 fn generate() {
 	let generate = GenerateCmd::from_iter(&["generate", "--password", "12345"]);
@@ -81,9 +89,6 @@ fn inspect() {
 
 	let inspect = InspectCmd::from_iter(&["inspect", "--uri", seed]);
 	assert!(inspect.run::<Adapter>().is_ok());
-
-	let inspect = InspectCmd::from_iter(&["inspect", "--uri", words]);
-	assert!(matches!(inspect.run::<Adapter>(), Err(Error::Input(_))))
 }
 
 #[test]
@@ -98,10 +103,16 @@ fn sign() {
 	assert!(matches!(sign.run::<Adapter>(), Err(Error::Input(_))))
 }
 
+#[test]
+fn vanity() {
+	let vanity = VanityCmd::from_iter(&["vanity", "--number", "1", "--pattern", "j"]);
+	assert!(vanity.run::<Adapter>().is_ok());
+}
 
 #[test]
 fn transfer() {
 	let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
+	let words = "remember fiber forum demise paper uniform squirrel feel access exclude casual effort";
 
 	let transfer = TransferCmd::from_iter(&["transfer",
 		"--from", seed,
@@ -110,8 +121,15 @@ fn transfer() {
 		"--index", "1",
 		"--password", "12345",
 	]);
-	// println!("{:?}", transfer.run::<Adapter>());
 
-	// let transfer = TransferCmd::from_iter(&["transfer", "--suri", words, "--message", &seed[2..]]);
-	// assert!(matches!(transfer.run::<Adapter>(), Err(Error::Input(_))))
+	new_test_ext().execute_with(|| {
+		assert!(matches!(transfer.run::<Adapter>(), Ok(())));
+		let transfer = TransferCmd::from_iter(&["transfer",
+			"--from", words,
+			"--to", "0xa2bc899a8a3b16a284a8cefcbc2dc48a687cd674e89b434fbbdb06f400979744",
+			"--amount", "5000",
+			"--index", "1",
+		]);
+		assert!(matches!(transfer.run::<Adapter>(), Err(Error::Input(_))))
+	});
 }

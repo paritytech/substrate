@@ -15,10 +15,13 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! implementation of the `verify` subcommand
-use crate::{RuntimeAdapter, read_message_from_stdin, decode_hex, read_uri, error};
+
+use crate::{RuntimeAdapter, read_message, decode_hex, read_uri, error, SharedParams, VersionInfo};
 use sp_core::{Pair, Public, crypto::Ss58Codec};
 use structopt::StructOpt;
+use sc_service::{Configuration, ChainSpec};
 
+/// The `verify` command
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "verify",
@@ -35,15 +38,24 @@ pub struct VerifyCmd {
 	#[structopt(long)]
 	uri: Option<String>,
 
+	/// Message to verify, if not provided you will be prompted to
+	/// pass the message via STDIN
+	#[structopt(long)]
+	message: Option<String>,
+
 	/// The message on STDIN is hex-encoded data
 	#[structopt(long)]
 	hex: bool,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub shared_params: SharedParams,
 }
 
 impl VerifyCmd {
 	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()> {
-		let message = read_message_from_stdin(self.hex)?;
-		let mut signature = <<RA as RuntimeAdapter>::Pair as Pair>::Signature::default();
+		let message = read_message(self.message, self.hex)?;
+		let mut signature = <RA::Pair as Pair>::Signature::default();
 		let sig_data = decode_hex(self.sig)?;
 
 		if sig_data.len() != signature.as_ref().len() {
@@ -63,18 +75,33 @@ impl VerifyCmd {
 		};
 
 		let pubkey = if let Ok(pubkey_vec) = hex::decode(uri) {
-			<RA as RuntimeAdapter>::Public::from_slice(pubkey_vec.as_slice())
+			RA::Public::from_slice(pubkey_vec.as_slice())
 		} else {
-			<RA as RuntimeAdapter>::Public::from_string(uri)
+			RA::Public::from_string(uri)
 				.ok()
 				.expect("Invalid URI; expecting either a secret URI or a public URI.")
 		};
 
-		if <<RA as RuntimeAdapter>::Pair as Pair>::verify(&signature, &message, &pubkey) {
+		if <RA::Pair as Pair>::verify(&signature, &message, &pubkey) {
 			println!("Signature verifies correctly.");
 		} else {
 			return Err(error::Error::Other("Signature invalid.".into()))
 		}
+
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<F>(
+		&self,
+		mut config: &mut Configuration,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

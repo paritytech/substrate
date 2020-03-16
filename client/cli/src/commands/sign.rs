@@ -15,18 +15,18 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign` subcommand
-use crate::error;
-use super::{SharedParams, decode_hex, get_password, read_message_from_stdin, read_uri, RuntimeAdapter};
+use crate::{error, VersionInfo};
+use super::{SharedParams, get_password, read_message, read_uri, RuntimeAdapter};
 use structopt::StructOpt;
 
 use sp_core::crypto::Pair;
+use sc_service::{Configuration, ChainSpec};
 
-type Bytes = Vec<u8>;
-
+/// The `sign` command
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "sign",
-	about = "Sign a message, provided on STDIN, with a given (secret) key"
+	about = "Sign a message, with a given (secret) key"
 )]
 pub struct SignCmd {
 	/// The secret key URI.
@@ -35,9 +35,14 @@ pub struct SignCmd {
 	#[structopt(long)]
 	suri: Option<String>,
 
-	/// Hex encoded message to sign
-	#[structopt(long, parse(try_from_str = decode_hex))]
-	message: Bytes,
+	/// Message to sign, if not provided you will be prompted to
+	/// pass the message via STDIN
+	#[structopt(long)]
+	message: Option<String>,
+
+	/// The message on STDIN is hex-encoded data
+	#[structopt(long)]
+	hex: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -46,12 +51,28 @@ pub struct SignCmd {
 
 
 impl SignCmd {
-	pub fn run<C: RuntimeAdapter>(self) -> error::Result<()> {
+	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()> {
+		let message = read_message(self.message, self.hex)?;
 		let suri = read_uri(self.suri)?;
 		let password = get_password(&self.shared_params)?;
-		let pair = C::pair_from_suri(&suri, &password);
-		let signature = format!("{}", hex::encode(pair.sign(&self.message)));
+		let pair = RA::pair_from_suri(&suri, &password);
+		let signature = format!("{}", hex::encode(pair.sign(&message)));
 		println!("{}", signature);
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<F>(
+		&self,
+		mut config: &mut Configuration,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		config.use_in_memory_keystore()?;
+
 		Ok(())
 	}
 }

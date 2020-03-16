@@ -15,18 +15,20 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign-transaction` subcommand
-use crate::error;
+use crate::{error, VersionInfo};
 use super::{
-	SharedParams, get_password, decode_hex,
-	create_extrinsic_for, RuntimeAdapter, IndexFor, CallFor,
+	SharedParams, get_password, decode_hex, create_extrinsic_for,
+	RuntimeAdapter, IndexFor, CallFor,
 };
 use structopt::StructOpt;
-use parity_scale_codec::{Decode, Encode, WrapperTypeEncode};
-use std::str::FromStr;
-use std::fmt::Display;
+use parity_scale_codec::{WrapperTypeEncode, Codec, Encode, Decode};
+use std::{str::FromStr, fmt::Display};
+use sp_runtime::traits::IdentifyAccount;
+use sc_service::{Configuration, ChainSpec};
 
 type Call = Vec<u8>;
 
+/// The `sign-transaction` command
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "sign-transaction",
@@ -54,7 +56,8 @@ impl SignTransactionCmd {
 	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()>
 		where
 			<IndexFor<RA> as FromStr>::Err: Display,
-			CallFor<RA>: Encode + Decode + WrapperTypeEncode,
+			CallFor<RA>: Codec + WrapperTypeEncode,
+			RA::Address: From<<RA::Public as IdentifyAccount>::AccountId>,
 	{
 		let signer = RA::pair_from_suri(&self.suri, &get_password(&self.shared_params)?);
 
@@ -63,6 +66,21 @@ impl SignTransactionCmd {
 		let extrinsic = create_extrinsic_for::<RA, _>(call, nonce, signer)?;
 
 		println!("0x{}", hex::encode(Encode::encode(&extrinsic)));
+
+		Ok(())
+	}
+
+	/// Update and prepare a `Configuration` with command line parameters
+	pub fn update_config<F>(
+		&self,
+		mut config: &mut Configuration,
+		spec_factory: F,
+		version: &VersionInfo,
+	) -> error::Result<()> where
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
+	{
+		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

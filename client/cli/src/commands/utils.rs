@@ -16,14 +16,16 @@
 
 //! subcommand utilities
 use std::{io::Read, path::PathBuf};
-use sp_core::{Pair, Public, crypto::{Ss58Codec, Ss58AddressFormat}, hexdisplay::HexDisplay};
+use sp_core::{Pair, Public, crypto::{Ss58Codec,Derive, Ss58AddressFormat}, hexdisplay::HexDisplay};
 use sp_runtime::{
 	MultiSignature, MultiSigner, generic::{UncheckedExtrinsic, SignedPayload},
 	traits::IdentifyAccount, AccountId32,
 };
 use parity_scale_codec::{Encode, Decode};
 use serde_json::json;
-use sp_runtime::traits::{SignedExtension, StaticLookup};
+use sp_runtime::traits::{
+	SignedExtension, StaticLookup,
+};
 use crate::{error::{self, Error}, SharedParams, arg_enums::OutputType};
 
 /// Public key type for Runtime
@@ -32,6 +34,8 @@ pub type PublicFor<R> = <<R as RuntimeAdapter>::Pair as Pair>::Public;
 pub type SeedFor<R> = <<R as RuntimeAdapter>::Pair as Pair>::Seed;
 /// AccountIndex type for Runtime
 pub type IndexFor<R> = <<R as RuntimeAdapter>::Runtime as frame_system::Trait>::Index;
+/// AccountId type for Runtime
+pub type AccountIdFor<R> = <<R as RuntimeAdapter>::Runtime as frame_system::Trait>::AccountId;
 /// Balance type
 pub type BalanceFor<R> = <<R as RuntimeAdapter>::Runtime as pallet_balances::Trait>::Balance;
 /// Call type for Runtime
@@ -46,15 +50,15 @@ pub trait RuntimeAdapter: Sized {
 	/// Pair type
 	type Pair: Pair<Public = Self::Public, Signature = Self::Signature>;
 	/// public type
-	type Public: Public + Into<MultiSigner> + Ss58Codec + AsRef<[u8]> + std::hash::Hash;
+	type Public: Public + IdentifyAccount<AccountId = AccountIdFor<Self>> + std::hash::Hash + Ss58Codec;
 	/// signature type
-	type Signature: Into<MultiSignature> + AsRef<[u8]> + AsMut<[u8]> + Encode + Default;
+	type Signature: AsRef<[u8]> + AsMut<[u8]> + Encode + Default;
 	/// runtime
 	type Runtime: frame_system::Trait + pallet_balances::Trait + pallet_indices::Trait;
 	/// extras
 	type Extra: SignedExtension;
 	/// Address type
-	type Address: Encode + Decode + From<AccountId32>;
+	type Address: Encode + Decode;
 
 	/// generate a pair from suri
 	fn pair_from_suri(suri: &str, password: &str) -> Self::Pair {
@@ -62,9 +66,11 @@ pub trait RuntimeAdapter: Sized {
 	}
 
 	/// generate an ss58 encoded address from pair
-	fn ss58_from_pair(pair: &Self::Pair) -> String {
-		let public: MultiSigner = pair.public().into();
-		public.into_account().to_ss58check()
+	fn ss58_from_pair(pair: &Self::Pair) -> String
+		where
+			AccountIdFor<Self>: Ss58Codec,
+	{
+		pair.public().into_account().to_ss58check()
 	}
 
 	/// print formatted pair from uri
@@ -73,7 +79,10 @@ pub trait RuntimeAdapter: Sized {
 		password: Option<&str>,
 		network_override: Ss58AddressFormat,
 		output: OutputType,
-	) {
+	)
+		where
+			AccountIdFor<Self>: Ss58Codec + Derive,
+	{
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = pair.public();
 
@@ -212,8 +221,11 @@ fn format_public_key<C: RuntimeAdapter>(public_key: PublicFor<C>) -> String {
 }
 
 /// formats public key as accountId as hex
-fn format_account_id<C: RuntimeAdapter>(public_key: PublicFor<C>) -> String {
-	format!("0x{}", HexDisplay::from(&public_key.into().into_account().as_ref()))
+fn format_account_id<C: RuntimeAdapter>(public_key: PublicFor<C>) -> String
+	where
+		AccountIdFor<C>: AsRef<[u8]>,
+{
+	format!("0x{}", HexDisplay::from(&public_key.into_account().as_ref()))
 }
 
 /// helper method for decoding hex
@@ -222,12 +234,19 @@ pub fn decode_hex<T: AsRef<[u8]>>(message: T) -> Result<Vec<u8>, Error> {
 		.map_err(|e| Error::Other(format!("Invalid hex ({})", e)))
 }
 
-/// reads input from stdin, optionally decodes hex to bytes.
-pub fn read_message_from_stdin(should_decode: bool) -> Result<Vec<u8>, Error> {
+/// checks if message is Some, otherwise reads message from stdin and optionally decodes hex
+pub fn read_message(msg: Option<String>, should_decode: bool) -> Result<Vec<u8>, Error> {
 	let mut message = vec![];
-	std::io::stdin().lock().read_to_end(&mut message)?;
-	if should_decode {
-		message = decode_hex(&message)?;
+	match msg {
+		Some(m) => {
+			message = decode_hex(&m)?;
+		},
+		None => {
+			std::io::stdin().lock().read_to_end(&mut message)?;
+			if should_decode {
+				message = decode_hex(&message)?;
+			}
+		}
 	}
 	Ok(message)
 }
@@ -240,14 +259,14 @@ pub fn create_extrinsic_for<RA: RuntimeAdapter, Call>(
 ) -> Result<UncheckedExtrinsic<RA::Address, Call, RA::Signature, RA::Extra>, Error>
 	where
 		Call: Encode,
-		RA::Address: From<AccountId32>,
+		RA::Address: From<<RA::Public as IdentifyAccount>::AccountId>,
 {
 	let extra = RA::build_extra(nonce);
 	let payload = SignedPayload::new(call, extra)
 		.map_err(|_| Error::Other("Transaction validity error".into()))?;
 
 	let signature = payload.using_encoded(|payload| signer.sign(payload));
-	let signer = signer.public().into().into_account().into();
+	let signer = signer.public().into_account().into();
 	let (function, extra, _) = payload.deconstruct();
 
 	Ok(UncheckedExtrinsic::new_signed(
