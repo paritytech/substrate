@@ -84,14 +84,14 @@ impl<T, Block: BlockT> ReadyPoll<T, Block>
 	fn trigger(&mut self, number: NumberFor<Block>, iterator_factory: impl Fn() -> T) {
 		self.updated_at = number;
 
-		let pollers = self.pollers.drain(..).collect::<Vec<(_, _)>>();
-
-		for (poller_number, poller_sender) in pollers {
-			if poller_number <= number {
+		let mut idx = 0;
+		while idx < self.pollers.len() {
+			if self.pollers[idx].0 <= number {
+				let poller_sender = self.pollers.swap_remove(idx);
 				log::debug!(target: "txpool", "Sending ready signal at block {}", number);
-				let _s = poller_sender.send(iterator_factory());
+				let _ = poller_sender.1.send(iterator_factory());
 			} else {
-				self.pollers.push((poller_number, poller_sender));
+				idx += 1;
 			}
 		}
 	}
