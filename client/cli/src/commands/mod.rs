@@ -148,10 +148,10 @@ impl CliConfiguration for Subcommand
 
 	fn get_network_config<G, E>(
 		&self,
-		chain_spec: &ChainSpec<G, E>,
-		is_dev: bool,
+		_chain_spec: &ChainSpec<G, E>,
+		_is_dev: bool,
 		base_path: &PathBuf,
-		client_id: &str,
+		_client_id: &str,
 	) -> error::Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
