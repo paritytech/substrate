@@ -16,7 +16,7 @@
 
 //! This is part of the Substrate runtime.
 
-use sp_core::{ed25519, sr25519, crypto::Pair, traits::ClonableSpawn};
+use sp_core::{ed25519, sr25519, crypto::Pair, traits::CloneableSpawn};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering}};
 use futures::{future::FutureExt, task::FutureObj};
 
@@ -35,14 +35,14 @@ struct Sr25519BatchItem {
 }
 
 pub struct BatchVerifier {
-	scheduler: Box<dyn ClonableSpawn>,
+	scheduler: Box<dyn CloneableSpawn>,
 	sr25519_items: Vec<Sr25519BatchItem>,
 	invalid: Arc<AtomicBool>,
 	left: Arc<AtomicUsize>,
 }
 
 impl BatchVerifier {
-	pub fn new(scheduler: Box<dyn ClonableSpawn>) -> Self {
+	pub fn new(scheduler: Box<dyn CloneableSpawn>) -> Self {
 		BatchVerifier {
 			scheduler,
 			sr25519_items: Default::default(),
