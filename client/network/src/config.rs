@@ -279,8 +279,8 @@ pub struct NetworkConfiguration {
 	pub max_parallel_downloads: u32,
 }
 
-impl Default for NetworkConfiguration {
-	fn default() -> Self {
+impl NetworkConfiguration {
+	pub fn new(node_name: &str) -> Self {
 		NetworkConfiguration {
 			net_config_path: None,
 			listen_addresses: Vec::new(),
@@ -293,7 +293,7 @@ impl Default for NetworkConfiguration {
 			non_reserved_mode: NonReservedPeerMode::Accept,
 			sentry_nodes: Vec::new(),
 			client_version: "unknown".into(),
-			node_name: "unknown".into(),
+			node_name: node_name.to_string(),
 			transport: TransportConfig::Normal {
 				enable_mdns: false,
 				allow_private_ipv4: true,
@@ -306,30 +306,29 @@ impl Default for NetworkConfiguration {
 }
 
 impl NetworkConfiguration {
-	/// Create a new instance of default settings.
-	pub fn new() -> Self {
-		Self::default()
-	}
-
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new();
+		let mut config = NetworkConfiguration::new("test-node".into());
+
 		config.listen_addresses = vec![
 			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
 				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
 				.collect()
 		];
+
 		config
 	}
 
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_memory() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new();
+		let mut config = NetworkConfiguration::new("test-node".into());
+
 		config.listen_addresses = vec![
 			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
 				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
 				.collect()
 		];
+
 		config
 	}
 }

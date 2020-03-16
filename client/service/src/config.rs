@@ -54,8 +54,6 @@ pub struct Configuration<G, E = NoExtension> {
 	pub pruning: PruningMode,
 	/// Chain configuration.
 	pub chain_spec: ChainSpec<G, E>,
-	/// Node name.
-	pub name: String,
 	/// Wasm execution method.
 	pub wasm_method: WasmExecutionMethod,
 	/// Execution strategies.

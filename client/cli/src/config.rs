@@ -51,12 +51,13 @@ pub trait CliConfiguration: Sized {
 		_is_dev: bool,
 		_base_path: &PathBuf,
 		_client_id: &str,
+		node_name: &str,
 	) -> Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		Ok(Default::default())
+		Ok(NetworkConfiguration::new(node_name))
 	}
 	fn get_keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig>;
 	fn get_database_cache_size(&self) -> Option<usize> { Default::default() }
@@ -70,13 +71,16 @@ pub trait CliConfiguration: Sized {
 	fn get_pruning(&self, _is_dev: bool) -> Result<PruningMode> {
 		Ok(Default::default())
 	}
+
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension;
-	fn get_name(&self) -> Result<String> {
+
+	fn get_node_name(&self) -> Result<String> {
 		Ok(generate_node_name())
 	}
+
 	fn get_wasm_method(&self) -> WasmExecutionMethod {
 		WasmExecutionMethod::Interpreted
 	}
@@ -169,13 +173,13 @@ pub trait CliConfiguration: Sized {
 				is_dev,
 				&config_dir,
 				client_id.as_str(),
+				self.get_node_name()?.as_str(),
 			)?,
 			keystore: self.get_keystore_config(config_dir)?,
 			database: self.get_database_config(&config_dir, database_cache_size),
 			state_cache_size: self.get_state_cache_size(),
 			state_cache_child_ratio: self.get_state_cache_child_ratio(),
 			pruning: self.get_pruning(is_dev)?,
-			name: self.get_name()?,
 			wasm_method: self.get_wasm_method(),
 			execution_strategies: self.get_execution_strategies(is_dev)?,
 			rpc_http: self.get_rpc_http()?,

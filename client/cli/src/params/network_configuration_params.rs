@@ -107,6 +107,7 @@ impl NetworkConfigurationParams {
 		client_id: &str,
 		is_dev: bool,
 		base_path: &PathBuf,
+		node_name: &str,
 	) -> error::Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
@@ -139,7 +140,7 @@ impl NetworkConfigurationParams {
 			listen_addresses,
 			public_addresses: Vec::new(),
 			node_key: self.node_key_params.get_node_key::<G, E>(Some(&config_path))?,
-			node_name: "unknown".into(), // TODO: this seems to be never set/used
+			node_name: node_name.to_string(),
 			sentry_nodes: self.sentry_nodes.clone(),
 			client_version: client_id.to_string(),
 			in_peers: self.in_peers,

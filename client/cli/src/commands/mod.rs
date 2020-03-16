@@ -152,24 +152,23 @@ impl CliConfiguration for Subcommand
 		_is_dev: bool,
 		base_path: &PathBuf,
 		_client_id: &str,
+		node_name: &str,
 	) -> error::Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
 		// TODO: we shouldn't have to set things in the middle of NetworkConfiguration
+		let config = NetworkConfiguration::new(node_name);
 		let config_path = base_path.join(crate::DEFAULT_NETWORK_CONFIG_PATH);
 
 		match self {
-			Subcommand::BuildSpec(cmd) => {
-				let config = NetworkConfiguration::default();
-
+			Subcommand::BuildSpec(cmd) =>
 				Ok(NetworkConfiguration {
 					node_key: cmd.node_key_params.get_node_key::<G, E>(Some(&config_path))?,
 					..config
-				})
-			},
-			Subcommand::ExportBlocks(_) => Ok(Default::default()),
+				}),
+			Subcommand::ExportBlocks(_) => Ok(config),
 		}
 	}
 }

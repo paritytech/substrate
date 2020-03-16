@@ -294,13 +294,14 @@ impl CliConfiguration for RunCmd {
 		is_dev: bool,
 		base_path: &PathBuf,
 		client_id: &str,
+		node_name: &str,
 	) -> error::Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
 		self.network_config
-			.get_network_config(chain_spec, client_id, is_dev, base_path)
+			.get_network_config(chain_spec, client_id, is_dev, base_path, node_name)
 	}
 
 	fn get_keystore_config(&self, base_path: &PathBuf) -> error::Result<KeystoreConfig> {
@@ -316,7 +317,7 @@ impl CliConfiguration for RunCmd {
 			.get_database_config(base_path, cache_size)
 	}
 
-	fn get_name(&self) -> error::Result<String> {
+	fn get_node_name(&self) -> error::Result<String> {
 		let name: String = match (self.name.as_ref(), self.get_keyring()) {
 			(Some(name), _) => name.to_string(),
 			(_, Some(keyring)) => keyring.to_string(),
