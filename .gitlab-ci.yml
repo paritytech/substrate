@@ -137,10 +137,6 @@ check-polkadot:
     - ./.maintain/gitlab/check_polkadot.sh
   interruptible:                   true
   allow_failure:                   true
-  # WIP remove before merge
-  only:
-    - general-check-polkadot
-
 
 
 cargo-audit:
