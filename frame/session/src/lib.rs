@@ -504,7 +504,6 @@ decl_module! {
 
 impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
 	fn migrate_account(a: &T::AccountId) {
-		use codec::Encode;
 		if let Some(v) = T::ValidatorIdOf::convert(a.clone()) {
 			if let Some(keys) = NextKeys::<T>::migrate_key_from_blake(v) {
 				for id in T::Keys::key_ids() {
