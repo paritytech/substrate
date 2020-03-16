@@ -65,7 +65,7 @@ pub struct BasicPool<PoolApi, Block>
 
 struct ReadyPoll<T, Block: BlockT>
 {
-	updated_at: Option<NumberFor<Block>>,
+	updated_at: NumberFor<Block>,
 	pollers: Vec<(NumberFor<Block>, oneshot::Sender<T>)>,
 }
 
@@ -73,7 +73,7 @@ impl<T, Block: BlockT> Default for ReadyPoll<T, Block>
 {
 	fn default() -> Self {
 		Self {
-			updated_at: None,
+			updated_at: NumberFor::<Block>::zero(),
 			pollers: Default::default(),
 		}
 	}
@@ -82,7 +82,7 @@ impl<T, Block: BlockT> Default for ReadyPoll<T, Block>
 impl<T, Block: BlockT> ReadyPoll<T, Block>
 {
 	fn trigger(&mut self, number: NumberFor<Block>, iterator_factory: impl Fn() -> T) {
-		self.updated_at = Some(number);
+		self.updated_at = number;
 
 		let pollers = self.pollers.drain(..).collect::<Vec<(_, _)>>();
 
@@ -103,7 +103,7 @@ impl<T, Block: BlockT> ReadyPoll<T, Block>
 	}
 
 	fn updated_at(&self) -> NumberFor<Block> {
-		self.updated_at.unwrap_or(NumberFor::<Block>::zero())
+		self.updated_at
 	}
 }
 
