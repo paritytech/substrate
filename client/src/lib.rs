@@ -62,6 +62,7 @@
 //! 	LocalCallExecutor::new(
 //! 		backend.clone(),
 //! 		NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None, 8),
+//!         sp_core::tasks::executor(),
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
 //! 	&<Storage>::default(),

@@ -70,6 +70,8 @@ mod changes_trie;
 #[cfg(feature = "std")]
 pub mod traits;
 pub mod testing;
+#[cfg(feature = "std")]
+pub mod tasks;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;

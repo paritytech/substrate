@@ -76,7 +76,7 @@ pub use sc_client_api::{
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	notifications::{StorageNotifications, StorageEventStream},
-	CallExecutor, ExecutorProvider, ProofProvider,
+	CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn,
 };
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
@@ -135,6 +135,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
+	spawn_handle: Box<dyn CloneableSpawn>,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
 	LocalCallExecutor<in_mem::Backend<Block>, E>,
@@ -145,7 +146,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	S: BuildStorage,
 	Block: BlockT,
 {
-	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore, prometheus_registry)
+	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore, spawn_handle, prometheus_registry)
 }
 
 /// Create a client with the explicitly provided backend.
@@ -155,6 +156,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	executor: E,
 	build_genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	prometheus_registry: Option<Registry>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
@@ -163,7 +165,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
 	Client::new(
 		backend,
@@ -1124,7 +1126,13 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
-		prove_execution(state, header, &self.executor, method, call_data).map(|(r, p)| {
+		prove_execution(
+			state,
+			header,
+			&self.executor,
+			method,
+			call_data,
+		).map(|(r, p)| {
 			(r, StorageProof::merge(vec![p, code_proof]))
 		})
 	}
@@ -3482,6 +3490,7 @@ pub(crate) mod tests {
 				&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
 				None,
 				None,
+				sp_core::tasks::executor(),
 			)
 			.unwrap();
 
