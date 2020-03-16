@@ -390,7 +390,7 @@ const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 					hasher: StorageHasher::Identity,
 					key: DecodeDifferent::Encode("u64"),
 					value: DecodeDifferent::Encode("u64"),
-					is_linked: false,
+					unused: false,
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(
