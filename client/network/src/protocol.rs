@@ -38,7 +38,7 @@ use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::Message as GenericMessage;
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
-use prometheus_endpoint::{Registry, Gauge, register, PrometheusError, U64};
+use prometheus_endpoint::{Registry, Gauge, GaugeVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{BoxFinalityProofRequestBuilder, Roles};
@@ -142,14 +142,8 @@ struct Metrics {
 	peers: Gauge<U64>,
 	queued_blocks: Gauge<U64>,
 	fork_targets: Gauge<U64>,
-	finality_proofs_pending: Gauge<U64>,
-	finality_proofs_active: Gauge<U64>,
-	finality_proofs_failed: Gauge<U64>,
-	finality_proofs_importing: Gauge<U64>,
-	justifications_pending: Gauge<U64>,
-	justifications_active: Gauge<U64>,
-	justifications_failed: Gauge<U64>,
-	justifications_importing: Gauge<U64>
+	finality_proofs: GaugeVec<U64>,
+	justifications: GaugeVec<U64>,
 }
 
 impl Metrics {
@@ -160,6 +154,7 @@ impl Metrics {
 				register(g, r)?
 			},
 			obsolete_requests: {
+				// TODO: Should this be a counter?
 				let g = Gauge::new("sync_obsolete_requests", "Total number of obsolete requests")?;
 				register(g, r)?
 			},
@@ -172,62 +167,26 @@ impl Metrics {
 				register(g, r)?
 			},
 			fork_targets: {
-				let g = Gauge::new("sync_fork_targets", "Fork sync targets")?;
+				let g = Gauge::new("sync_fork_targets", "Number of fork sync targets")?;
 				register(g, r)?
 			},
-			justifications_pending: {
-				let g = Gauge::new(
-					"sync_extra_justifications_pending",
-					"Number of pending extra justifications requests"
+			justifications: {
+				let g = GaugeVec::new(
+					Opts::new(
+						"sync_extra_justifications",
+						"Number of extra justifications requests"
+					),
+					&["status"],
 				)?;
 				register(g, r)?
 			},
-			justifications_active: {
-				let g = Gauge::new(
-					"sync_extra_justifications_active",
-					"Number of active extra justifications requests"
-				)?;
-				register(g, r)?
-			},
-			justifications_failed: {
-				let g = Gauge::new(
-					"sync_extra_justifications_failed",
-					"Number of failed extra justifications requests"
-				)?;
-				register(g, r)?
-			},
-			justifications_importing: {
-				let g = Gauge::new(
-					"sync_extra_justifications_importing",
-					"number of importing extra justifications requests"
-				)?;
-				register(g, r)?
-			},
-			finality_proofs_pending: {
-				let g = Gauge::new(
-					"sync_extra_finality_proofs_pending",
-					"Number of pending extra finality proof requests"
-				)?;
-				register(g, r)?
-			},
-			finality_proofs_active: {
-				let g = Gauge::new(
-					"sync_extra_finality_proofs_active",
-					"Number of active extra finality proof requests"
-				)?;
-				register(g, r)?
-			},
-			finality_proofs_failed: {
-				let g = Gauge::new(
-					"sync_extra_finality_proofs_failed",
-					"Number of failed extra finality proof requests"
-				)?;
-				register(g, r)?
-			},
-			finality_proofs_importing: {
-				let g = Gauge::new(
-					"sync_extra_finality_proofs_importing",
-					"Number of importing extra finality proof requests"
+			finality_proofs: {
+				let g = GaugeVec::new(
+					Opts::new(
+						"sync_extra_finality_proofs",
+						"Number of extra finality proof requests",
+					),
+					&["status"],
 				)?;
 				register(g, r)?
 			},
@@ -1917,15 +1876,23 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			metrics.fork_targets.set(m.fork_targets.into());
 			metrics.queued_blocks.set(m.queued_blocks.into());
 
-			metrics.justifications_pending.set(m.justifications.pending_requests.into());
-			metrics.justifications_active.set(m.justifications.active_requests.into());
-			metrics.justifications_failed.set(m.justifications.failed_requests.into());
-			metrics.justifications_importing.set(m.justifications.importing_requests.into());
+			metrics.justifications.with_label_values(&["pending"])
+				.set(m.justifications.pending_requests.into());
+			metrics.justifications.with_label_values(&["active"])
+				.set(m.justifications.active_requests.into());
+			metrics.justifications.with_label_values(&["failed"])
+				.set(m.justifications.failed_requests.into());
+			metrics.justifications.with_label_values(&["importing"])
+				.set(m.justifications.importing_requests.into());
 
-			metrics.finality_proofs_pending.set(m.finality_proofs.pending_requests.into());
-			metrics.finality_proofs_active.set(m.finality_proofs.active_requests.into());
-			metrics.finality_proofs_failed.set(m.finality_proofs.failed_requests.into());
-			metrics.finality_proofs_importing.set(m.finality_proofs.importing_requests.into());
+			metrics.finality_proofs.with_label_values(&["pending"])
+				.set(m.finality_proofs.pending_requests.into());
+			metrics.finality_proofs.with_label_values(&["active"])
+				.set(m.finality_proofs.active_requests.into());
+			metrics.finality_proofs.with_label_values(&["failed"])
+				.set(m.finality_proofs.failed_requests.into());
+			metrics.finality_proofs.with_label_values(&["importing"])
+				.set(m.finality_proofs.importing_requests.into());
 		}
 	}
 }
