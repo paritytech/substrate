@@ -46,7 +46,6 @@ schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated", "u64_backen
 sha2 = { version = "0.8.0", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
 twox-hash = { version = "1.5.0", default-features = false, optional = true }
-libsecp256k1 = { version = "0.3.2", default-features = false, features = ["hmac"], optional = true }
 
 sp-runtime-interface = { version = "2.0.0-alpha.2", default-features = false, path = "../runtime-interface" }
 
@@ -121,7 +120,6 @@ full_crypto = [
 	"hex",
 	"sha2",
 	"twox-hash",
-	"libsecp256k1",
 	"sp-runtime-interface/disable_target_static_assertions",
 	"merlin",
 ]
