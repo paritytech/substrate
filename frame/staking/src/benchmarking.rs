@@ -388,6 +388,7 @@ benchmarks! {
 	}
 }
 
+#[cfg(test)]
 mod tests {
 	use crate::*;
 	use crate::mock::*;
