@@ -249,8 +249,6 @@ impl From<multiaddr::Error> for ParseErr {
 /// Network service configuration.
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
-	/// Directory path to store general network configuration. None means nothing will be saved.
-	pub config_path: Option<PathBuf>,
 	/// Directory path to store network-specific configuration. None means nothing will be saved.
 	pub net_config_path: Option<PathBuf>,
 	/// Multiaddresses to listen for incoming connections.
@@ -284,7 +282,6 @@ pub struct NetworkConfiguration {
 impl Default for NetworkConfiguration {
 	fn default() -> Self {
 		NetworkConfiguration {
-			config_path: None,
 			net_config_path: None,
 			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),

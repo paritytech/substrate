@@ -129,8 +129,7 @@ impl NetworkConfigurationParams {
 
 		Ok(NetworkConfiguration {
 			boot_nodes,
-			config_path: Some(config_path.clone()),
-			net_config_path: Some(config_path.clone()), // TODO: why are there 2 identical config_path here?
+			net_config_path: Some(config_path.clone()),
 			reserved_nodes: self.reserved_nodes.clone(),
 			non_reserved_mode: if self.reserved_only {
 				NonReservedPeerMode::Deny
