@@ -25,8 +25,6 @@
 //! 3. The [`PassByEnum`](derive.PassByInner.html) derive macro for implementing `PassBy` with `Enum`.
 //! 4. The [`PassByInner`](derive.PassByInner.html) derive macro for implementing `PassBy` with `Inner`.
 
-extern crate proc_macro;
-
 use syn::{parse_macro_input, ItemTrait, DeriveInput};
 
 mod pass_by;

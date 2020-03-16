@@ -54,6 +54,7 @@ mod tests {
 		AccountKeyring, Sr25519Keyring,
 	};
 	use sp_runtime::traits::BlakeTwo256;
+	use sp_core::tasks::executor as tasks_executor;
 	use hex_literal::*;
 
 	native_executor_instance!(
@@ -101,6 +102,7 @@ mod tests {
 			&header.encode(),
 			Default::default(),
 			&runtime_code,
+			tasks_executor(),
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -115,6 +117,7 @@ mod tests {
 				&tx.encode(),
 				Default::default(),
 				&runtime_code,
+				tasks_executor(),
 			).execute(
 				ExecutionStrategy::NativeElseWasm,
 			).unwrap();
@@ -129,6 +132,7 @@ mod tests {
 			&[],
 			Default::default(),
 			&runtime_code,
+			tasks_executor(),
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -179,6 +183,7 @@ mod tests {
 			&b1data,
 			Default::default(),
 			&runtime_code,
+			tasks_executor(),
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -210,6 +215,7 @@ mod tests {
 			&b1data,
 			Default::default(),
 			&runtime_code,
+			tasks_executor(),
 		).execute(
 			ExecutionStrategy::AlwaysWasm,
 		).unwrap();
@@ -241,6 +247,7 @@ mod tests {
 			&b1data,
 			Default::default(),
 			&runtime_code,
+			tasks_executor(),
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		);

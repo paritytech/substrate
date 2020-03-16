@@ -179,6 +179,7 @@ pub(crate) fn make_test_network() -> (
 		net.clone(),
 		config(),
 		voter_set_state(),
+		None,
 	);
 
 	(
