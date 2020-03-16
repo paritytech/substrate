@@ -41,10 +41,10 @@ pub trait Trait: system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Benchmark {
 		MyMemberList: Vec<T::AccountId>;
-		MyMemberMap: map hasher(blake2_256) T::AccountId => bool;
+		MyMemberMap: map hasher(blake2_128_concat) T::AccountId => bool;
 		MyValue: u32;
-		MyMap: map hasher(blake2_256) u32 => u32;
-		MyDoubleMap: double_map hasher(blake2_256) u32, hasher(blake2_256) u32 => u32;
+		MyMap: map hasher(twox_64_concat) u32 => u32;
+		MyDoubleMap: double_map hasher(twox_64_concat) u32, hasher(identity) u32 => u32;
 	}
 }
 

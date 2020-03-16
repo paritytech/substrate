@@ -391,7 +391,7 @@ impl frame_system::Trait for Runtime {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = ();
-	type OnNewAccount = ();
+	type MigrateAccount = (); type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 

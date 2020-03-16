@@ -254,19 +254,16 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod slashing;
-mod migration;
 
 pub mod inflation;
 
 use sp_std::{prelude::*, result, collections::btree_map::BTreeMap};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error,
-	weights::SimpleDispatchInfo,
-	dispatch::DispatchResult,
-	traits::{
-		Currency, LockIdentifier, LockableCurrency,
-		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
+	decl_module, decl_event, decl_storage, ensure, decl_error, weights::SimpleDispatchInfo,
+	dispatch::DispatchResult, storage::IterableStorageMap, traits::{
+		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
+		Time
 	}
 };
 use pallet_session::historical::SessionManager;
@@ -287,6 +284,7 @@ use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 use sp_phragmen::ExtendedBalance;
+use frame_support::traits::MigrateAccount;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -685,13 +683,13 @@ impl Default for Forcing {
 // storage migration logic. This should match directly with the semantic versions of the Rust crate.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 enum Releases {
-	V1_0_0,
+	V1_0_0Ancient,
 	V2_0_0,
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V1_0_0
+		Releases::V2_0_0
 	}
 }
 
@@ -719,23 +717,23 @@ decl_storage! {
 		pub Invulnerables get(fn invulnerables) config(): Vec<T::AccountId>;
 
 		/// Map from all locked "stash" accounts to the controller account.
-		pub Bonded get(fn bonded): map hasher(blake2_256) T::AccountId => Option<T::AccountId>;
+		pub Bonded get(fn bonded): map hasher(twox_64_concat) T::AccountId => Option<T::AccountId>;
 
 		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 		pub Ledger get(fn ledger):
-			map hasher(blake2_256) T::AccountId
+			map hasher(blake2_128_concat) T::AccountId
 			=> Option<StakingLedger<T::AccountId, BalanceOf<T>>>;
 
 		/// Where the reward payment should be made. Keyed by stash.
-		pub Payee get(fn payee): map hasher(blake2_256) T::AccountId => RewardDestination;
+		pub Payee get(fn payee): map hasher(twox_64_concat) T::AccountId => RewardDestination;
 
 		/// The map from (wannabe) validator stash key to the preferences of that validator.
 		pub Validators get(fn validators):
-			linked_map hasher(blake2_256) T::AccountId => ValidatorPrefs;
+			map hasher(twox_64_concat) T::AccountId => ValidatorPrefs;
 
 		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 		pub Nominators get(fn nominators):
-			linked_map hasher(blake2_256) T::AccountId => Option<Nominations<T::AccountId>>;
+			map hasher(twox_64_concat) T::AccountId => Option<Nominations<T::AccountId>>;
 
 		/// The current era index.
 		///
@@ -751,7 +749,7 @@ decl_storage! {
 
 		/// The session index at which the era start for the last `HISTORY_DEPTH` eras
 		pub ErasStartSessionIndex get(fn eras_start_session_index):
-			map hasher(blake2_256) EraIndex => Option<SessionIndex>;
+			map hasher(twox_64_concat) EraIndex => Option<SessionIndex>;
 
 		/// Exposure of validator at era.
 		///
@@ -780,7 +778,7 @@ decl_storage! {
 
 		/// Similarly to `ErasStakers` this holds the preferences of validators.
 		///
-		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
+		/// This is keyed first by the era index to allow bulk deletion and then the stash account.
 		///
 		/// Is it removed after `HISTORY_DEPTH` eras.
 		// If prefs hasn't been set or has been removed then 0 commission is returned.
@@ -792,17 +790,17 @@ decl_storage! {
 		///
 		/// Eras that haven't finished yet or has been removed doesn't have reward.
 		pub ErasValidatorReward get(fn eras_validator_reward):
-			map hasher(blake2_256) EraIndex => Option<BalanceOf<T>>;
+			map hasher(twox_64_concat) EraIndex => Option<BalanceOf<T>>;
 
 		/// Rewards for the last `HISTORY_DEPTH` eras.
 		/// If reward hasn't been set or has been removed then 0 reward is returned.
 		pub ErasRewardPoints get(fn eras_reward_points):
-			map hasher(blake2_256) EraIndex => EraRewardPoints<T::AccountId>;
+			map hasher(twox_64_concat) EraIndex => EraRewardPoints<T::AccountId>;
 
 		/// The total amount staked for the last `HISTORY_DEPTH` eras.
 		/// If total hasn't been set or has been removed then 0 stake is returned.
 		pub ErasTotalStake get(fn eras_total_stake):
-			map hasher(blake2_256) EraIndex => BalanceOf<T>;
+			map hasher(twox_64_concat) EraIndex => BalanceOf<T>;
 
 		/// True if the next session change will be a new era regardless of index.
 		pub ForceEra get(fn force_era) config(): Forcing;
@@ -818,7 +816,7 @@ decl_storage! {
 
 		/// All unapplied slashes that are queued for later.
 		pub UnappliedSlashes:
-			map hasher(blake2_256) EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
+			map hasher(twox_64_concat) EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
 
 		/// A mapping from still-bonded eras to the first session index of that era.
 		///
@@ -829,21 +827,21 @@ decl_storage! {
 		/// All slashing events on validators, mapped by era to the highest slash proportion
 		/// and slash value of the era.
 		ValidatorSlashInEra:
-			double_map hasher(blake2_256) EraIndex, hasher(twox_128) T::AccountId
+			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> Option<(Perbill, BalanceOf<T>)>;
 
 		/// All slashing events on nominators, mapped by era to the highest slash value of the era.
 		NominatorSlashInEra:
-			double_map hasher(blake2_256) EraIndex, hasher(twox_128) T::AccountId
+			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> Option<BalanceOf<T>>;
 
 		/// Slashing spans for stash accounts.
-		SlashingSpans: map hasher(blake2_256) T::AccountId => Option<slashing::SlashingSpans>;
+		SlashingSpans: map hasher(twox_64_concat) T::AccountId => Option<slashing::SlashingSpans>;
 
 		/// Records information about the maximum slash of a stash within a slashing span,
 		/// as well as how much reward has been paid out.
 		SpanSlash:
-			map hasher(blake2_256) (T::AccountId, slashing::SpanIndex)
+			map hasher(twox_64_concat) (T::AccountId, slashing::SpanIndex)
 			=> slashing::SpanRecord<BalanceOf<T>>;
 
 		/// The earliest era for which we have a pending, unapplied slash.
@@ -957,7 +955,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() {
-			migration::on_runtime_upgrade::<T>();
+			migrate::<T>();
 		}
 
 		fn on_finalize() {
@@ -1480,6 +1478,30 @@ decl_module! {
 	}
 }
 
+impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
+	fn migrate_account(a: &T::AccountId) {
+		if let Some(controller) = Bonded::<T>::migrate_key_from_blake(a) {
+			Ledger::<T>::migrate_key_from_blake(controller);
+			Payee::<T>::migrate_key_from_blake(a);
+			Validators::<T>::migrate_key_from_blake(a);
+			Nominators::<T>::migrate_key_from_blake(a);
+			SlashingSpans::<T>::migrate_key_from_blake(a);
+		}
+	}
+}
+
+fn migrate<T: Trait>() {
+	if let Some(current_era) = CurrentEra::get() {
+		let history_depth = HistoryDepth::get();
+		for era in current_era.saturating_sub(history_depth)..=current_era {
+			ErasStartSessionIndex::migrate_key_from_blake(era);
+			ErasValidatorReward::<T>::migrate_key_from_blake(era);
+			ErasRewardPoints::<T>::migrate_key_from_blake(era);
+			ErasTotalStake::<T>::migrate_key_from_blake(era);
+		}
+	}
+}
+
 impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
 
@@ -1823,14 +1845,14 @@ impl<T: Trait> Module<T> {
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let mut all_validators_and_prefs = BTreeMap::new();
 		let mut all_validators = Vec::new();
-		for (validator, preference) in <Validators<T>>::enumerate() {
+		for (validator, preference) in <Validators<T>>::iter() {
 			let self_vote = (validator.clone(), vec![validator.clone()]);
 			all_nominators.push(self_vote);
 			all_validators_and_prefs.insert(validator.clone(), preference);
 			all_validators.push(validator);
 		}
 
-		let nominator_votes = <Nominators<T>>::enumerate().map(|(nominator, nominations)| {
+		let nominator_votes = <Nominators<T>>::iter().map(|(nominator, nominations)| {
 			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
 
 			// Filter out nomination targets which were nominated before the most recent

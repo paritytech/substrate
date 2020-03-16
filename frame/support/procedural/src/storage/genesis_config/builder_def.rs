@@ -88,7 +88,7 @@ impl BuilderDef {
 						}}
 					},
 					StorageLineTypeDef::Simple(_) => unreachable!(),
-					StorageLineTypeDef::Map(map) | StorageLineTypeDef::LinkedMap(map) => {
+					StorageLineTypeDef::Map(map) => {
 						let key = &map.key;
 						quote!{{
 							#data
