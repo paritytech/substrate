@@ -214,13 +214,11 @@ pub trait TransactionPool: Send + Sync {
 	///
 	/// Guarantees to return only when transaction pool got updated at `at` block.
 	/// Guarantees to return immediately when `None` is passed.
-	fn ready_at(&self, at: Option<NumberFor<Self::Block>>)
+	fn ready_at(&self, at: NumberFor<Self::Block>)
 		-> Pin<Box<dyn Future<Output=Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send>> + Send>>;
 
 	/// Get an iterator for ready transactions ordered by priority.
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>> {
-		futures::executor::block_on(self.ready_at(None))
-	}
+	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send>;
 
 	// *** Block production
 	/// Remove transactions identified by given hashes (and dependent transactions) from the pool.

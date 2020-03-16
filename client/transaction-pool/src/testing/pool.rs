@@ -609,7 +609,7 @@ fn ready_set_should_not_resolve_before_block_update() {
 	let xt1 = uxt(Alice, 209);
 	block_on(pool.submit_one(&BlockId::number(1), xt1.clone())).expect("1. Imported");
 
-	assert!(pool.ready_at(Some(1)).now_or_never().is_none());
+	assert!(pool.ready_at(1).now_or_never().is_none());
 }
 
 #[test]
@@ -622,7 +622,7 @@ fn ready_set_should_resolve_after_block_update() {
 	block_on(pool.submit_one(&BlockId::number(1), xt1.clone())).expect("1. Imported");
 	block_on(pool.maintain(block_event(1)));
 
-	assert!(pool.ready_at(Some(1)).now_or_never().is_some());
+	assert!(pool.ready_at(1).now_or_never().is_some());
 }
 
 #[test]
@@ -637,7 +637,7 @@ fn ready_set_should_eventually_resolve_when_block_update_arrives() {
 	let noop_waker = futures::task::noop_waker();
 	let mut context = futures::task::Context::from_waker(&noop_waker);
 
-	let mut ready_set_future = pool.ready_at(Some(1));
+	let mut ready_set_future = pool.ready_at(1);
 	if let Poll::Ready(_) = ready_set_future.poll_unpin(&mut context) {
 		panic!("Ready set should not be ready before block update!");
 	}

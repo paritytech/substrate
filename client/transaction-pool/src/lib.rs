@@ -248,20 +248,6 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		self.pool.validated_pool().status()
 	}
 
-	fn ready_at(&self, at: Option<NumberFor<Self::Block>>) -> PolledIterator<PoolApi> {
-		if self.ready_poll.lock().updated_at() >= at.unwrap_or(NumberFor::<Self::Block>::zero()) {
-			let iterator: ReadyIteratorFor<PoolApi> = Box::new(self.pool.validated_pool().ready());
-			Box::pin(futures::future::ready(iterator))
-		} else {
-			Box::pin(self.ready_poll.lock().add(at.expect("Should be Some(_) otherwise expression above is true."))
-				.map(|received| received.unwrap_or_else(|e| {
-					log::warn!("Error receiving pending set: {:?}", e);
-					Box::new(vec![].into_iter())
-				})
-			))
-		}
-	}
-
 	fn import_notification_stream(&self) -> ImportNotificationStream<TxHash<Self>> {
 		self.pool.validated_pool().import_notification_stream()
 	}
@@ -276,6 +262,27 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 
 	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>> {
 		self.pool.validated_pool().ready_by_hash(hash)
+	}
+
+	fn ready_at(&self, at: NumberFor<Self::Block>) -> PolledIterator<PoolApi> {
+		if self.ready_poll.lock().updated_at() >= at {
+			let iterator: ReadyIteratorFor<PoolApi> = Box::new(self.pool.validated_pool().ready());
+			return Box::pin(futures::future::ready(iterator));
+		}
+
+		Box::pin(
+			self.ready_poll
+				.lock()
+				.add(at)
+				.map(|received| received.unwrap_or_else(|e| {
+					log::warn!("Error receiving pending set: {:?}", e);
+					Box::new(vec![].into_iter())
+				}))
+		)
+	}
+
+	fn ready(&self) -> ReadyIteratorFor<PoolApi> {
+		Box::new(self.pool.validated_pool().ready())
 	}
 }
 
