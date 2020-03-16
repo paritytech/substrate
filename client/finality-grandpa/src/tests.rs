@@ -1220,6 +1220,7 @@ fn voter_persists_its_votes() {
 			net.lock().peers[1].network_service().clone(),
 			config.clone(),
 			set_state,
+			None,
 		);
 
 		let (round_rx, round_tx) = network.round_communication(
@@ -1616,6 +1617,7 @@ fn grandpa_environment_respects_voting_rules() {
 			network_service.clone(),
 			config.clone(),
 			set_state.clone(),
+			None,
 		);
 
 		Environment {
