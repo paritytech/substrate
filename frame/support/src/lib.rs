@@ -67,11 +67,12 @@ pub mod traits;
 pub mod weights;
 
 pub use self::hash::{
-	Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Blake2_128Concat, Hashable,
+	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,
 	StorageHasher
 };
 pub use self::storage::{
-	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap
+	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
+	IterableStorageDoubleMap,
 };
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
@@ -253,24 +254,24 @@ mod tests {
 	decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
-				linked_map hasher(twox_64_concat) u32 => u64;
-			pub OptionLinkedMap: linked_map hasher(blake2_256) u32 => Option<u32>;
+				map hasher(twox_64_concat) u32 => u64;
+			pub OptionLinkedMap: map hasher(blake2_128_concat) u32 => Option<u32>;
 			pub GenericData get(fn generic_data):
-				linked_map hasher(twox_128) T::BlockNumber => T::BlockNumber;
+				map hasher(identity) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(fn generic_data2):
-				linked_map hasher(blake2_256) T::BlockNumber => Option<T::BlockNumber>;
+				map hasher(blake2_128_concat) T::BlockNumber => Option<T::BlockNumber>;
 			pub GetterNoFnKeyword get(no_fn): Option<u32>;
 
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
-				double_map hasher(twox_64_concat) u32, hasher(blake2_256) u32 => u64;
+				double_map hasher(twox_64_concat) u32, hasher(blake2_128_concat) u32 => u64;
 			pub GenericDataDM:
-				double_map hasher(blake2_256) T::BlockNumber, hasher(twox_128) T::BlockNumber
+				double_map hasher(blake2_128_concat) T::BlockNumber, hasher(identity) T::BlockNumber
 				=> T::BlockNumber;
 			pub GenericData2DM:
-				double_map hasher(blake2_256) T::BlockNumber, hasher(twox_256) T::BlockNumber
+				double_map hasher(blake2_128_concat) T::BlockNumber, hasher(twox_64_concat) T::BlockNumber
 				=> Option<T::BlockNumber>;
 			pub AppendableDM:
-				double_map hasher(blake2_256) u32, hasher(blake2_256) T::BlockNumber => Vec<u32>;
+				double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) T::BlockNumber => Vec<u32>;
 		}
 	}
 
@@ -286,8 +287,16 @@ mod tests {
 
 	type Map = Data;
 
+	trait Sorted { fn sorted(self) -> Self; }
+	impl<T: Ord> Sorted for Vec<T> {
+		fn sorted(mut self) -> Self {
+			self.sort();
+			self
+		}
+	}
+
 	#[test]
-	fn linked_map_issue_3318() {
+	fn map_issue_3318() {
 		new_test_ext().execute_with(|| {
 			OptionLinkedMap::insert(1, 1);
 			assert_eq!(OptionLinkedMap::get(1), Some(1));
@@ -297,31 +306,31 @@ mod tests {
 	}
 
 	#[test]
-	fn linked_map_swap_works() {
+	fn map_swap_works() {
 		new_test_ext().execute_with(|| {
 			OptionLinkedMap::insert(0, 0);
 			OptionLinkedMap::insert(1, 1);
 			OptionLinkedMap::insert(2, 2);
 			OptionLinkedMap::insert(3, 3);
 
-			let collect = || OptionLinkedMap::enumerate().collect::<Vec<_>>();
-			assert_eq!(collect(), vec![(3, 3), (2, 2), (1, 1), (0, 0)]);
+			let collect = || OptionLinkedMap::iter().collect::<Vec<_>>().sorted();
+			assert_eq!(collect(), vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
 
 			// Two existing
 			OptionLinkedMap::swap(1, 2);
-			assert_eq!(collect(), vec![(3, 3), (2, 1), (1, 2), (0, 0)]);
+			assert_eq!(collect(), vec![(0, 0), (1, 2), (2, 1), (3, 3)]);
 
 			// Back to normal
 			OptionLinkedMap::swap(2, 1);
-			assert_eq!(collect(), vec![(3, 3), (2, 2), (1, 1), (0, 0)]);
+			assert_eq!(collect(), vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
 
 			// Left existing
 			OptionLinkedMap::swap(2, 5);
-			assert_eq!(collect(), vec![(5, 2), (3, 3), (1, 1), (0, 0)]);
+			assert_eq!(collect(), vec![(0, 0), (1, 1), (3, 3), (5, 2)]);
 
 			// Right existing
 			OptionLinkedMap::swap(5, 2);
-			assert_eq!(collect(), vec![(2, 2), (3, 3), (1, 1), (0, 0)]);
+			assert_eq!(collect(), vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
 		});
 	}
 
@@ -356,7 +365,7 @@ mod tests {
 	}
 
 	#[test]
-	fn linked_map_basic_insert_remove_should_work() {
+	fn map_basic_insert_remove_should_work() {
 		new_test_ext().execute_with(|| {
 			// initialized during genesis
 			assert_eq!(Map::get(&15u32), 42u64);
@@ -382,54 +391,45 @@ mod tests {
 	}
 
 	#[test]
-	fn linked_map_enumeration_and_head_should_work() {
+	fn map_iteration_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_eq!(Map::head(), Some(15));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(15, 42)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(15, 42)]);
 			// insert / remove
 			let key = 17u32;
 			Map::insert(key, 4u64);
-			assert_eq!(Map::head(), Some(key));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 4), (15, 42)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(15, 42), (key, 4)]);
 			assert_eq!(Map::take(&15), 42u64);
 			assert_eq!(Map::take(&key), 4u64);
-			assert_eq!(Map::head(), None);
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![]);
 
 			// Add couple of more elements
 			Map::insert(key, 42u64);
-			assert_eq!(Map::head(), Some(key));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 42)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key, 42)]);
 			Map::insert(key + 1, 43u64);
-			assert_eq!(Map::head(), Some(key + 1));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key + 1, 43), (key, 42)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key, 42), (key + 1, 43)]);
 
 			// mutate
 			let key = key + 2;
 			Map::mutate(&key, |val| {
 				*val = 15;
 			});
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 15), (key - 1, 43), (key - 2, 42)]);
-			assert_eq!(Map::head(), Some(key));
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key - 2, 42), (key - 1, 43), (key, 15)]);
 			Map::mutate(&key, |val| {
 				*val = 17;
 			});
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 17), (key - 1, 43), (key - 2, 42)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key - 2, 42), (key - 1, 43), (key, 17)]);
 
 			// remove first
 			Map::remove(&key);
-			assert_eq!(Map::head(), Some(key - 1));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key - 1, 43), (key - 2, 42)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key - 2, 42), (key - 1, 43)]);
 
 			// remove last from the list
 			Map::remove(&(key - 2));
-			assert_eq!(Map::head(), Some(key - 1));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key - 1, 43)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key - 1, 43)]);
 
 			// remove the last element
 			Map::remove(&(key - 1));
-			assert_eq!(Map::head(), None);
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![]);
 		});
 	}
 
@@ -498,7 +498,7 @@ mod tests {
 						hasher: StorageHasher::Twox64Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u64"),
-						is_linked: true,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructData(PhantomData::<Test>))
@@ -509,10 +509,10 @@ mod tests {
 					name: DecodeDifferent::Encode("OptionLinkedMap"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u32"),
-						is_linked: true,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructOptionLinkedMap(PhantomData::<Test>))
@@ -523,10 +523,10 @@ mod tests {
 					name: DecodeDifferent::Encode("GenericData"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map{
-						hasher: StorageHasher::Twox128,
+						hasher: StorageHasher::Identity,
 						key: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
-						is_linked: true
+						unused: false
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData(PhantomData::<Test>))
@@ -537,10 +537,10 @@ mod tests {
 					name: DecodeDifferent::Encode("GenericData2"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map{
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
-						is_linked: true
+						unused: false
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))
@@ -564,7 +564,7 @@ mod tests {
 						key1: DecodeDifferent::Encode("u32"),
 						key2: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u64"),
-						key2_hasher: StorageHasher::Blake2_256,
+						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructDataDM(PhantomData::<Test>))
@@ -575,11 +575,11 @@ mod tests {
 					name: DecodeDifferent::Encode("GenericDataDM"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::DoubleMap{
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key1: DecodeDifferent::Encode("T::BlockNumber"),
 						key2: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
-						key2_hasher: StorageHasher::Twox128,
+						key2_hasher: StorageHasher::Identity,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericDataDM(PhantomData::<Test>))
@@ -590,11 +590,11 @@ mod tests {
 					name: DecodeDifferent::Encode("GenericData2DM"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::DoubleMap{
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key1: DecodeDifferent::Encode("T::BlockNumber"),
 						key2: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
-						key2_hasher: StorageHasher::Twox256,
+						key2_hasher: StorageHasher::Twox64Concat,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
@@ -605,11 +605,11 @@ mod tests {
 					name: DecodeDifferent::Encode("AppendableDM"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::DoubleMap{
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key1: DecodeDifferent::Encode("u32"),
 						key2: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("Vec<u32>"),
-						key2_hasher: StorageHasher::Blake2_256,
+						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))

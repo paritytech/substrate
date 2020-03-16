@@ -53,10 +53,7 @@ use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
 	StaticLookup, Zero, AtLeast32Bit, MaybeSerializeDeserialize, Convert
 }};
 use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
-use frame_support::traits::{
-	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier, ExistenceRequirement,
-	Get,
-};
+use frame_support::traits::{Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier, ExistenceRequirement, Get, MigrateAccount};
 use frame_support::weights::SimpleDispatchInfo;
 use frame_system::{self as system, ensure_signed};
 
@@ -118,7 +115,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Vesting {
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(fn vesting):
-			map hasher(blake2_256) T::AccountId => Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>;
+			map hasher(blake2_128_concat) T::AccountId
+			=> Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>;
 	}
 	add_extra_genesis {
 		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, BalanceOf<T>)>;
@@ -256,6 +254,12 @@ decl_module! {
 	}
 }
 
+impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
+	fn migrate_account(a: &T::AccountId) {
+		Vesting::<T>::migrate_key_from_blake(a);
+	}
+}
+
 impl<T: Trait> Module<T> {
 	/// (Re)set or remove the module's currency lock on `who`'s account in accordance with their
 	/// current unvested amount.
@@ -384,7 +388,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	impl pallet_balances::Trait for Test {
