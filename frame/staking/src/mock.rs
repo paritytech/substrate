@@ -228,7 +228,7 @@ pub struct ExtBuilder {
 	fair: bool,
 	num_validators: Option<u32>,
 	invulnerables: Vec<u64>,
-	stakers: Vec<(u64, u64, u64, StakerStatus<AccountId>)>,
+	stakers: bool,
 }
 
 impl Default for ExtBuilder {
@@ -243,7 +243,7 @@ impl Default for ExtBuilder {
 			fair: true,
 			num_validators: None,
 			invulnerables: vec![],
-			stakers: vec![],
+			stakers: true,
 		}
 	}
 }
@@ -290,31 +290,8 @@ impl ExtBuilder {
 		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = self.slash_defer_duration);
 	}
 
-	pub fn has_stakers(mut self) -> Self {
-		let balance_factor = if self.existential_deposit > 1 {
-			256
-		} else {
-			1
-		};
-		let stake_21 = if self.fair { 1000 } else { 2000 };
-		let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
-		let status_41 = if self.validator_pool {
-			StakerStatus::<AccountId>::Validator
-		} else {
-			StakerStatus::<AccountId>::Idle
-		};
-		let nominated = if self.nominate { vec![11, 21] } else { vec![] };
-		let stakers = vec![
-				// (stash, controller, staked_amount, status)
-				(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
-				(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
-				(31, 30, stake_31, StakerStatus::<AccountId>::Validator),
-				(41, 40, balance_factor * 1000, status_41),
-				// nominator
-				(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated))
-			];
-
-		self.stakers = stakers;
+	pub fn stakers(mut self, has_stakers: bool) -> Self {
+		self.stakers = has_stakers;
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
@@ -352,8 +329,28 @@ impl ExtBuilder {
 			],
 		}.assimilate_storage(&mut storage);
 
+		let mut stakers = vec![];
+		if self.stakers {
+			let stake_21 = if self.fair { 1000 } else { 2000 };
+			let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
+			let status_41 = if self.validator_pool {
+				StakerStatus::<AccountId>::Validator
+			} else {
+				StakerStatus::<AccountId>::Idle
+			};
+			let nominated = if self.nominate { vec![11, 21] } else { vec![] };
+			stakers = vec![
+				// (stash, controller, staked_amount, status)
+				(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
+				(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
+				(31, 30, stake_31, StakerStatus::<AccountId>::Validator),
+				(41, 40, balance_factor * 1000, status_41),
+				// nominator
+				(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated))
+			];
+		}
 		let _ = GenesisConfig::<Test>{
-			stakers: self.stakers,
+			stakers: stakers,
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
 			invulnerables: self.invulnerables,
