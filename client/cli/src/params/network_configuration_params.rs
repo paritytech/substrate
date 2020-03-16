@@ -137,7 +137,7 @@ impl NetworkConfigurationParams {
 				NonReservedPeerMode::Accept
 			},
 			listen_addresses,
-			public_addresses: Vec::new(), // TODO: is this never set/used?
+			public_addresses: Vec::new(),
 			node_key: self.node_key_params.get_node_key::<G, E>(Some(&config_path))?,
 			node_name: "unknown".into(), // TODO: this seems to be never set/used
 			sentry_nodes: self.sentry_nodes.clone(),
