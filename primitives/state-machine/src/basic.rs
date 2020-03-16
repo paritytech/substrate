@@ -258,7 +258,7 @@ impl Externalities for BasicExternalities {
 			let delta = child.data.clone().into_iter().map(|(k, v)| (k, Some(v)));
 
 			InMemoryBackend::<Blake2Hasher>::default()
-				.child_storage_root(&child.child_info, delta).0
+				.child_storage_root(&child.child_info, child.child_change, delta).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}.encode()

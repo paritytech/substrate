@@ -24,7 +24,7 @@ use parking_lot::RwLock;
 use codec::{Decode, Encode};
 
 use sp_core::ChangesTrieConfiguration;
-use sp_core::storage::{well_known_keys, ChildInfo};
+use sp_core::storage::{well_known_keys, ChildInfo, ChildChange};
 use sp_core::offchain::storage::InMemOffchainStorage;
 use sp_state_machine::{
 	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction,
@@ -313,16 +313,16 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
 		let mut storage: HashMap<Option<ChildInfo>, _> = HashMap::new();
-		storage.insert(None, input.top);
+		storage.insert(None, (ChildChange::Update, input.top));
 
 		// create a list of children keys to re-compute roots for
 		let child_delta = input.children_default.iter()
-			.map(|(_storage_key, storage_child)| (storage_child.child_info.clone(), None))
+			.map(|(_storage_key, storage_child)| (storage_child.child_info.clone(), storage_child.child_change, None))
 			.collect::<Vec<_>>();
 
 		// make sure to persist the child storage
 		for (_child_key, storage_child) in input.children_default {
-			storage.insert(Some(storage_child.child_info), storage_child.data);
+			storage.insert(Some(storage_child.child_info), (storage_child.child_change, storage_child.data));
 		}
 
 		let storage_update = InMemoryBackend::from(storage);
@@ -471,6 +471,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
+		child_change: ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -478,7 +479,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	{
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(child_info, delta);
+				let (root, is_equal, _) = state.child_storage_root(child_info, child_change, delta);
 				(root, is_equal, Default::default())
 			},
 			GenesisOrUnavailableState::Unavailable =>

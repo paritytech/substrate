@@ -26,7 +26,7 @@
 use codec::Encode;
 use sp_trie;
 
-use sp_core::{H256, convert_hash};
+use sp_core::{H256, convert_hash, storage::ChildChange};
 use sp_runtime::traits::{Header as HeaderT, AtLeast32Bit, Zero, One};
 use sp_state_machine::{
 	MemoryDB, TrieBackend, Backend as StateBackend, StorageProof, InMemoryBackend,
@@ -113,7 +113,8 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 		.into_iter()
 		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
-	let mut storage = InMemoryBackend::<Hasher>::default().update(vec![(None, transaction)]);
+	let mut storage = InMemoryBackend::<Hasher>::default()
+		.update(vec![(None, ChildChange::Update, transaction)]);
 	let trie_storage = storage.as_trie_backend()
 		.expect("InMemoryState::as_trie_backend always returns Some; qed");
 	prove_read_on_trie_backend(

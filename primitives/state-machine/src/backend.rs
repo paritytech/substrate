@@ -325,8 +325,22 @@ impl Consolidate for () {
 	}
 }
 
+impl<A: Consolidate, B: Consolidate> Consolidate for (A, B) {
+	fn consolidate(&mut self, (a, b): Self) {
+		self.0.consolidate(a);
+		self.1.consolidate(b);
+	}
+}
+
+impl Consolidate for ChildChange {
+	fn consolidate(&mut self, c: Self) {
+		self.update(c);
+	}
+}
+
 impl Consolidate for Vec<(
 		Option<ChildInfo>,
+		ChildChange,
 		StorageCollection,
 	)> {
 	fn consolidate(&mut self, mut other: Self) {

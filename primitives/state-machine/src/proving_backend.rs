@@ -270,7 +270,12 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		let (root, mut tx) = self.0.storage_root(delta);
-		(root, tx.remove(&ChildInfo::top_trie()))
+		if let Some((change, tx)) = tx.remove(&ChildInfo::top_trie()) {
+			debug_assert!(change == ChildChange::Update);
+			(root, Some(tx))
+		} else {
+			(root, None)
+		}
 	}
 
 	fn child_storage_root<I>(
@@ -284,7 +289,17 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		H::Out: Ord
 	{
 		let (root, is_empty, mut tx) = self.0.child_storage_root(child_info, child_change, delta);
-		(root, is_empty, tx.remove(child_info))
+		if let Some((change, tx)) = tx.remove(child_info) {
+			match change {
+				ChildChange::Update => (root, is_empty, Some(tx)),
+				ChildChange::BulkDeleteByKeyspace => {
+					// no need to keep change trie info contained in tx
+					(root, true, Some(Default::default()))
+				},
+			}
+		} else {
+			(root, is_empty, None)
+		}
 	}
 }
 
@@ -355,7 +370,12 @@ mod tests {
 		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
 		let (proving_root, proving_mdb) = proving_backend.storage_root(::std::iter::empty());
 		assert_eq!(trie_root, proving_root);
-		let mut trie_mdb = trie_mdb.remove(&ChildInfo::top_trie()).unwrap();
+		let trie_mdb = trie_mdb.remove(&ChildInfo::top_trie()).unwrap();
+		let mut trie_mdb = if trie_mdb.0 == ChildChange::BulkDeleteByKeyspace {
+			Default::default()
+		} else {
+			trie_mdb.1
+		};
 		assert_eq!(trie_mdb.drain(), proving_mdb.unwrap().drain());
 	}
 
@@ -363,7 +383,7 @@ mod tests {
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let mut in_memory = in_memory.update(vec![(None, contents)]);
+		let mut in_memory = in_memory.update(vec![(None, ChildChange::Update, contents)]);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
@@ -388,17 +408,17 @@ mod tests {
 		let child_info_1 = &child_info_1;
 		let child_info_2 = &child_info_2;
 		let contents = vec![
-			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect()),
-			(Some(child_info_1.clone()),
+			(None, ChildChange::Update, (0..64).map(|i| (vec![i], Some(vec![i]))).collect()),
+			(Some(child_info_1.clone()), ChildChange::Update,
 				(28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
-			(Some(child_info_2.clone()),
+			(Some(child_info_2.clone()), ChildChange::Update,
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
 			::std::iter::empty(),
-			in_memory.child_storage_infos().map(|k|(k.to_owned(), Vec::new())),
+			in_memory.child_storage_infos().map(|k|(k.to_owned(), ChildChange::Update, Vec::new())),
 			false,
 		).0;
 		(0..64).for_each(|i| assert_eq!(

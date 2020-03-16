@@ -61,7 +61,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 use sp_trie::{MemoryDB, PrefixedMemoryDB};
 use parking_lot::RwLock;
 use sp_core::{ChangesTrieConfiguration, traits::CodeExecutor};
-use sp_core::storage::{well_known_keys, ChildInfo, ChildrenMap, ChildType};
+use sp_core::storage::{well_known_keys, ChildInfo, ChildChange, ChildrenMap, ChildType};
 use sp_runtime::{
 	generic::BlockId, Justification, Storage,
 	BuildStorage,
@@ -220,12 +220,13 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
+		child_change: ChildChange,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.child_storage_root(child_info, delta)
+		self.state.child_storage_root(child_info, child_change, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -516,7 +517,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: SyncingCachingState<RefTrackingState<Block>, Block>,
-	db_updates: ChildrenMap<PrefixedMemoryDB<HashFor<Block>>>,
+	db_updates: ChildrenMap<(ChildChange, PrefixedMemoryDB<HashFor<Block>>)>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<HashFor<Block>>,
@@ -573,7 +574,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 	fn update_db_storage(
 		&mut self,
-		update: ChildrenMap<PrefixedMemoryDB<HashFor<Block>>>,
+		update: ChildrenMap<(ChildChange, PrefixedMemoryDB<HashFor<Block>>)>,
 	) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
@@ -590,6 +591,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 		let child_delta = storage.children_default.into_iter().map(|(_storage_key, child_content)|(
 			child_content.child_info,
+			child_content.child_change,
 			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
 		));
 
@@ -878,8 +880,9 @@ impl<Block: BlockT> Backend<Block> {
 			};
 			let mut op = inmem.begin_operation().unwrap();
 			op.set_block_data(header, body, justification, new_block_state).unwrap();
-			op.update_db_storage(vec![(None, state.into_iter().map(|(k, v)| (k, Some(v))).collect())])
-				.unwrap();
+			op.update_db_storage(vec![
+				(None, ChildChange::Update, state.into_iter().map(|(k, v)| (k, Some(v))).collect())
+			]).unwrap();
 			inmem.commit_operation(op).unwrap();
 		}
 
@@ -1123,7 +1126,7 @@ impl<Block: BlockT> Backend<Block> {
 				let mut ops: u64 = 0;
 				let mut bytes = 0;
 				let mut keyspace = Keyspaced::new(&[]);
-				for (info, mut updates) in operation.db_updates.into_iter() {
+				for (info, (change, mut updates)) in operation.db_updates.into_iter() {
 					// child info with strong unique id are using the same state-db with prefixed key
 					if info.child_type() != ChildType::ParentKeyId {
 						// Unhandled child kind
@@ -1132,22 +1135,26 @@ impl<Block: BlockT> Backend<Block> {
 							info.child_type(),
 						)));
 					}
-					keyspace.change_keyspace(info.keyspace());
-					for (key, (val, rc)) in updates.drain() {
-						let key = if info.is_top_trie() {
-							key
-						} else {
-							keyspace.prefix_key(key.as_slice()).to_vec()
-						};
-						if rc > 0 {
-							ops += 1;
-							bytes += key.len() as u64 + val.len() as u64;
+					if change == ChildChange::BulkDeleteByKeyspace {
+						state_db_changeset.deleted_child.push(info.keyspace().to_vec());
+					} else {
+						keyspace.change_keyspace(info.keyspace());
+						for (key, (val, rc)) in updates.drain() {
+							let key = if info.is_top_trie() {
+								key
+							} else {
+								keyspace.prefix_key(key.as_slice()).to_vec()
+							};
+							if rc > 0 {
+								ops += 1;
+								bytes += key.len() as u64 + val.len() as u64;
 
-							state_db_changeset.inserted.push((key, val.to_vec()));
-						} else if rc < 0 {
-							ops += 1;
-							bytes += key.len() as u64;
-							state_db_changeset.deleted.push(key);
+								state_db_changeset.inserted.push((key, val.to_vec()));
+							} else if rc < 0 {
+								ops += 1;
+								bytes += key.len() as u64;
+								state_db_changeset.deleted.push(key);
+							}
 						}
 					}
 				}
@@ -1908,7 +1915,7 @@ pub(crate) mod tests {
 				.iter()
 				.cloned()
 				.map(|(x, y)| (x, Some(y))),
-				vec![(child_info.clone(), child_storage.clone())],
+				vec![(child_info.clone(), ChildChange::Update, child_storage.clone())],
 				false,
 			).0.into();
 			let hash = header.hash();
@@ -2022,7 +2029,7 @@ pub(crate) mod tests {
 
 			key = op.db_updates.entry(ChildInfo::top_trie())
 				.or_insert_with(Default::default)
-				.insert(EMPTY_PREFIX, b"hello");
+				.1.insert(EMPTY_PREFIX, b"hello");
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -2061,11 +2068,11 @@ pub(crate) mod tests {
 			op.db_updates
 				.entry(ChildInfo::top_trie())
 				.or_insert_with(Default::default)
-				.insert(EMPTY_PREFIX, b"hello");
+				.1.insert(EMPTY_PREFIX, b"hello");
 			op.db_updates
 				.entry(ChildInfo::top_trie())
 				.or_insert_with(Default::default)
-				.remove(&key, EMPTY_PREFIX);
+				.1.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -2104,7 +2111,7 @@ pub(crate) mod tests {
 			op.db_updates
 				.entry(ChildInfo::top_trie())
 				.or_insert_with(Default::default)
-				.remove(&key, EMPTY_PREFIX);
+				.1.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),

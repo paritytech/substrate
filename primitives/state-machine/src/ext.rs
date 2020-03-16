@@ -471,7 +471,7 @@ where
 								.flat_map(|child| child.values.clone().into_iter().map(|(k, v)| (k, v.value)))
 						);
 
-					self.backend.child_storage_root(child_info, delta)
+					self.backend.child_storage_root(child_info, child_change, delta)
 				};
 
 				let root = root.encode();

@@ -393,6 +393,11 @@ impl<B: BlockT> CacheChanges<B> {
 				for (k, v) in local_cache.hashes.drain() {
 					cache.lru_hashes.add(k, OptionHOut(v));
 				}
+				for storage_key in local_cache.deleted_child.drain() {
+					// currently only contain bulk deletion where storage key
+					// cannot be use once again.
+					cache.lru_child_storage.remove_by_storage_key(&storage_key);
+				}
 			}
 		}
 
@@ -664,12 +669,13 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
+		child_change: ChildChange,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.child_storage_root(child_info, delta)
+		self.state.child_storage_root(child_info, child_change, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -843,12 +849,13 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
+		child_change: ChildChange,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.caching_state().child_storage_root(child_info, delta)
+		self.caching_state().child_storage_root(child_info, child_change, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

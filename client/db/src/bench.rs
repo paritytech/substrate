@@ -23,7 +23,7 @@ use rand::Rng;
 
 use hash_db::{Prefix, Hasher};
 use sp_trie::MemoryDB;
-use sp_core::storage::{ChildInfo, ChildType};
+use sp_core::storage::{ChildInfo, ChildType, ChildChange};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend};
@@ -84,6 +84,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		state.reopen()?;
 		let child_delta = genesis.children_default.into_iter().map(|(_storage_key, child_content)| (
 			child_content.child_info,
+			child_content.child_change,
 			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
 		));
 		let (root, transaction, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
@@ -218,11 +219,13 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
+		child_change: ChildChange,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction) where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.borrow().as_ref().map_or(Default::default(), |s| s.child_storage_root(child_info, delta))
+		self.state.borrow().as_ref()
+			.map_or(Default::default(), |s| s.child_storage_root(child_info, child_change, delta))
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -253,7 +256,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		if let Some(db) = self.db.take() {
 			let mut db_transaction = DBTransaction::new();
 			let mut keyspace = crate::Keyspaced::new(&[]);
-			for (info, mut updates) in transaction.into_iter() {
+			for (info, (change, mut updates)) in transaction.into_iter() {
 				// child info with strong unique id are using the same state-db with prefixed key
 				if info.child_type() != ChildType::ParentKeyId {
 					// Unhandled child kind
@@ -262,18 +265,22 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 						info.child_type(),
 					);
 				}
-				keyspace.change_keyspace(info.keyspace());
-				for (key, (val, rc)) in updates.drain() {
-					let key = if info.is_top_trie() {
-						key
-					} else {
-						keyspace.prefix_key(key.as_slice()).to_vec()
-					};
+				if change == ChildChange::BulkDeleteByKeyspace {
+					db_transaction.delete_prefix(0, info.keyspace());
+				} else {
+					keyspace.change_keyspace(info.keyspace());
+					for (key, (val, rc)) in updates.drain() {
+						let key = if info.is_top_trie() {
+							key
+						} else {
+							keyspace.prefix_key(key.as_slice()).to_vec()
+						};
 
-					if rc > 0 {
-						db_transaction.put(0, &key, &val);
-					} else if rc < 0 {
-						db_transaction.delete(0, &key);
+						if rc > 0 {
+							db_transaction.put(0, &key, &val);
+						} else if rc < 0 {
+							db_transaction.delete(0, &key);
+						}
 					}
 				}
 			}

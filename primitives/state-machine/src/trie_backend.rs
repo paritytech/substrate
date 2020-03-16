@@ -75,7 +75,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	H::Out: Ord + Codec,
 {
 	type Error = String;
-	type Transaction = ChildrenMap<S::Overlay>;
+	type Transaction = ChildrenMap<(ChildChange, S::Overlay)>;
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
@@ -181,7 +181,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, ChildrenMap<S::Overlay>)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>
 	{
 		let mut write_overlay = S::Overlay::default();
@@ -200,7 +200,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			}
 		}
 		let mut tx = ChildrenMap::default();
-		tx.insert(self.top_trie.clone(), write_overlay);
+		tx.insert(self.top_trie.clone(), (ChildChange::Update, write_overlay));
 		(root, tx)
 	}
 
@@ -367,7 +367,8 @@ pub mod tests {
 	fn storage_root_transaction_is_empty() {
 		let tx = test_trie().storage_root(::std::iter::empty()).1;
 		for (_ct, mut tx) in tx.into_iter() {
-			assert!(tx.drain().is_empty());
+			assert_eq!(tx.0, ChildChange::Update);
+			assert!(tx.1.drain().is_empty());
 		}
 	}
 
@@ -375,7 +376,8 @@ pub mod tests {
 	fn storage_root_transaction_is_non_empty() {
 		let (new_root, tx) = test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
 		for (_ct, mut tx) in tx.into_iter() {
-			assert!(!tx.drain().is_empty());
+			assert_eq!(tx.0, ChildChange::Update);
+			assert!(!tx.1.drain().is_empty());
 		}
 		assert!(new_root != test_trie().storage_root(::std::iter::empty()).0);
 	}

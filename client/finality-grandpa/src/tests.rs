@@ -312,7 +312,7 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
 		let authorities = self.authorities(block)?;
 		let backend = <InMemoryBackend<HashFor<Block>>>::from(vec![
-			(None, vec![(b"authorities".to_vec(), Some(authorities.encode()))])
+			(None, Default::default(), vec![(b"authorities".to_vec(), Some(authorities.encode()))])
 		]);
 		let proof = prove_read(backend, vec![b"authorities"])
 			.expect("failure proving read from in-memory storage backend");

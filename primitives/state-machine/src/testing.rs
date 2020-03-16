@@ -32,7 +32,7 @@ use crate::{
 use sp_core::{
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
-		Storage,
+		Storage, ChildChange,
 	},
 };
 use codec::Encode;
@@ -105,7 +105,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
-		self.backend = self.backend.update(vec![(None, vec![(k, Some(v))])]);
+		self.backend = self.backend.update(vec![(None, ChildChange::Update, vec![(k, Some(v))])]);
 	}
 
 	/// Registers the given extension for this instance.
@@ -123,7 +123,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		let top: Vec<_> = self.overlay.committed.top.clone().into_iter()
 			.chain(self.overlay.prospective.top.clone().into_iter())
 			.map(|(k, v)| (k, v.value)).collect();
-		let mut transaction = vec![(None, top)];
+		let mut transaction = vec![(None, ChildChange::Update, top)];
 
 		self.overlay.committed.children_default.clone().into_iter()
 			.chain(self.overlay.prospective.children_default.clone().into_iter())
@@ -131,9 +131,14 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 				// TODO push child change transaction is of type ChildrenMap
 				transaction.push((
 					Some(child.info),
-					child.values.into_iter()
-						.map(|(k, v)| (k, v.value))
-						.collect::<Vec<_>>(),
+					child.change.0,
+					match child.change.0 {
+						ChildChange::Update => child.values.into_iter()
+							.map(|(k, v)| (k, v.value))
+							.collect::<Vec<_>>(),
+						// no need for change trie content
+						ChildChange::BulkDeleteByKeyspace => Vec::new(),
+					}
 				))
 			});
 

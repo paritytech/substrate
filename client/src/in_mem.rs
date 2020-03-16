@@ -516,8 +516,11 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		check_genesis_storage(&storage)?;
 
 		let child_delta = storage.children_default.into_iter()
-			.map(|(_storage_key, child_content)|
-				(child_content.child_info, child_content.data.into_iter().map(|(k, v)| (k, Some(v)))));
+			.map(|(_storage_key, child_content)|(
+				child_content.child_info,
+				child_content.child_change,
+				child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
+			));
 
 		let (root, transaction, _) = self.old_state.full_storage_root(
 			storage.top.into_iter().map(|(k, v)| (k, Some(v))),
