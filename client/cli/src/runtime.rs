@@ -176,9 +176,11 @@ where
 			Subcommand::BuildSpec(cmd) => cmd.run(self.config),
 			Subcommand::ExportBlocks(cmd) => {
 				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
-			}
+			},
+			Subcommand::ImportBlocks(cmd) => {
+				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
+			},
 			/*
-			Subcommand::ImportBlocks(cmd) => cmd.run(config, builder),
 			Subcommand::CheckBlock(cmd) => cmd.run(config, builder),
 			Subcommand::PurgeChain(cmd) => cmd.run(config),
 			Subcommand::Revert(cmd) => cmd.run(config, builder),
