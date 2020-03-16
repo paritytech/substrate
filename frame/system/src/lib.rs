@@ -342,7 +342,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
 		pub Account get(fn account):
-			map hasher(twox_64_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
+			map hasher(blake2_128_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
 
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
