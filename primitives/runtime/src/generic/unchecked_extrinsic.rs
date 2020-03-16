@@ -24,7 +24,7 @@ use crate::{
 		self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, ExtrinsicMetadata,
 		IdentifyAccount,
 	},
-	generic::{CheckSignature, CheckedExtrinsic},
+	generic::CheckedExtrinsic,
 	transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
 
