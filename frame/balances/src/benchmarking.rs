@@ -54,31 +54,6 @@ benchmarks! {
 		let transfer_amount = existential_deposit.saturating_mul((e - 1).into()) + 1.into();
 	}: _(RawOrigin::Signed(caller), recipient_lookup, transfer_amount)
 
-	// Same as benchmarking transfer, but creates idle users
-	transfer_idle_users {
-		let u in ...;
-		let e in ...;
-
-		let existential_deposit = T::ExistentialDeposit::get();
-		let caller = account("caller", u, SEED);
-
-		// Give some multiple of the existential deposit + creation fee + transfer fee
-		let balance = existential_deposit.saturating_mul(e.into());
-		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&caller, balance);
-
-		// Create idle users
-		for i in 0 .. u {
-			let idle = account("idle", i, SEED);
-			let balance = existential_deposit.saturating_mul(e.into());
-			let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&idle, balance);
-		}
-
-		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
-		let recipient = account("recipient", u, SEED);
-		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient);
-		let transfer_amount = existential_deposit.saturating_mul((e - 1).into()) + 1.into();
-	}: transfer(RawOrigin::Signed(caller), recipient_lookup, transfer_amount)
-
 	// Benchmark `transfer` with the best possible condition:
 	// * Both accounts exist and will continue to exist.
 	transfer_best_case {
