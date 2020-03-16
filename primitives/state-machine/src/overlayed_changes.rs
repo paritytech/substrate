@@ -316,8 +316,10 @@ impl OverlayedChanges {
 		}
 
 		map_entry.change = (ChildChange::BulkDeleteByKeyspace, extrinsic_index);
-		// drop value to reclaim some memory, not strictly needed.
-		map_entry.values.clear();
+		// drop value to reclaim some memory, keep change trie if there is some.
+		if !extrinsic_index.is_some() {
+			map_entry.values.clear();
+		}
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
