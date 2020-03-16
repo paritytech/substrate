@@ -376,7 +376,7 @@ decl_storage! {
 
 		/// Any liquidity locks on some account balances.
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
-		pub Locks get(fn locks): map hasher(twox_64_concat) T::AccountId => Vec<BalanceLock<T::Balance>>;
+		pub Locks get(fn locks): map hasher(blake2_128_concat) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// Storage version of the pallet.
 		///
