@@ -63,17 +63,13 @@ pub struct BasicPool<PoolApi, Block>
 	ready_poll: Arc<Mutex<ReadyPoll<ReadyIteratorFor<PoolApi>, Block>>>,
 }
 
-struct ReadyPoll<T, Block>
-where
-	Block: BlockT,
+struct ReadyPoll<T, Block: BlockT>
 {
 	updated_at: Option<NumberFor<Block>>,
 	pollers: Vec<(NumberFor<Block>, oneshot::Sender<T>)>,
 }
 
-impl<T, Block> Default for ReadyPoll<T, Block>
-where
-	Block: BlockT,
+impl<T, Block: BlockT> Default for ReadyPoll<T, Block>
 {
 	fn default() -> Self {
 		Self {
@@ -83,9 +79,7 @@ where
 	}
 }
 
-impl<T, Block> ReadyPoll<T, Block>
-where
-	Block: BlockT,
+impl<T, Block: BlockT> ReadyPoll<T, Block>
 {
 	fn trigger(&mut self, number: NumberFor<Block>, iterator_factory: impl Fn() -> T) {
 		self.updated_at = Some(number);
