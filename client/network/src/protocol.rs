@@ -154,8 +154,7 @@ impl Metrics {
 				register(g, r)?
 			},
 			obsolete_requests: {
-				// TODO: Should this be a counter?
-				let g = Gauge::new("sync_obsolete_requests", "Total number of obsolete requests")?;
+				let g = Gauge::new("sync_obsolete_requests", "Number of obsolete requests")?;
 				register(g, r)?
 			},
 			peers: {
