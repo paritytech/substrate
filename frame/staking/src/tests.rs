@@ -23,7 +23,7 @@ use sp_staking::offence::OffenceDetails;
 use frame_support::{
 	assert_ok, assert_noop,
 	traits::{Currency, ReservableCurrency},
-	StorageMap, StorageLinkedMap,
+	StorageMap,
 };
 use pallet_balances::Error as BalancesError;
 use substrate_test_utils::assert_eq_uvec;
