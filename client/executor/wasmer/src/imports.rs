@@ -8,8 +8,9 @@ use wasmer_runtime_core::trampoline::{
 };
 use wasmer_runtime_core::{
 	export::{Context, Export, FuncPointer},
-	import::{ImportObject, Namespace},
+	import::{ImportObject, IsExport, Namespace},
 	memory::Memory,
+	typed_func::DynamicFunc,
 	types::{FuncSig, MemoryDescriptor},
 	units::Pages,
 };
@@ -215,19 +216,6 @@ fn resolve_func_import(
 	let call_ctx_ptr = call_ctx.as_ref() as *const CallCtx;
 	call_ctx_vec.push(call_ctx);
 
-	// It seems that the arguments that the stub gets has 1 implicit argument.
-	let num_params = func_ty.params().len() + 1;
-
-	let mut tbb = TrampolineBufferBuilder::new();
-	let idx = tbb.add_callinfo_trampoline(
-		stub,
-		call_ctx_ptr as *const OpaqueCallContext,
-		num_params as u32,
-	);
-	let buf = tbb.build();
-	let trampoline_ptr = buf.get_trampoline(idx);
-	trampoline_bufs.push(buf);
-
 	let params = func_ty
 		.params()
 		.iter()
@@ -241,11 +229,14 @@ fn resolve_func_import(
 		.map(into_wasmer_ty)
 		.collect::<Vec<_>>();
 
-	Export::Function {
-		func: unsafe { FuncPointer::new(trampoline_ptr as _) },
-		ctx: Context::Internal,
-		signature: Arc::new(FuncSig::new(params, returns)),
-	}
+	DynamicFunc::new(
+		Arc::new(FuncSig::new(params, returns)),
+		move |ctx, args| -> Vec<wasmer_runtime_core::types::Value> {
+			let ctx = call_ctx_ptr as *const CallCtx;
+			panic!()
+		},
+	)
+	.to_export()
 }
 
 fn into_wasmer_ty(value_ty: parity_wasm::elements::ValueType) -> wasmer_runtime_core::types::Type {
