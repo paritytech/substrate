@@ -17,7 +17,7 @@ mkdir -p target/debug/wbuild/.cargo
 echo "paths = [ \"$SUBSTRATE_PATH\" ]" > target/debug/wbuild/.cargo/config
 
 # package, others are updated along the way.
-# cargo update
+cargo update
 
 # Check whether Polkadot 'master' branch builds with this Substrate commit.
 time cargo check
