@@ -59,7 +59,9 @@ pub use self::builder::{
 	TFullCallExecutor, TLightCallExecutor,
 };
 pub use config::{Configuration, Roles, PruningMode};
-pub use sc_chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
+pub use sc_chain_spec::{
+	ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension, NoExtension,
+};
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 pub use sc_client::FinalityNotifications;

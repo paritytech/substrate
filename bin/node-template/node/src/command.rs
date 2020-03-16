@@ -20,9 +20,10 @@ use crate::service;
 use crate::chain_spec::Alternative;
 use crate::cli::Cli;
 use node_template_runtime::GenesisConfig;
+use sc_service::ChainSpec;
 
-impl SubstrateCLI<GenesisConfig, Option<()>> for Cli {
-	fn spec_factory(id: &str) -> Result<Option<sc_service::ChainSpec<GenesisConfig, Option<()>>>, String> {
+impl SubstrateCLI<GenesisConfig> for Cli {
+	fn spec_factory(id: &str) -> Result<Option<ChainSpec<GenesisConfig>>, String> {
 		Ok(match Alternative::from(id) {
 			Some(spec) => Some(spec.load()?),
 			None => None,

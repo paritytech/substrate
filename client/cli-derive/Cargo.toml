@@ -1,0 +1,19 @@
+[package]
+name = "sc-cli-derive"
+version = "0.8.0-alpha.2"
+authors = ["Cecile Tonglet <cecile@parity.io>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1", default-features = false, features = ["derive", "parsing", "proc-macro"] }
+quote = "1"
+proc-macro2 = "1"
+heck = "0.3.0"
+proc-macro-error = "0.4.7"
+
+[dev-dependencies]
+trybuild = "1.0"
+#sc-service = { version = "0.8.0-alpha.2", default-features = false, path = "../service" }

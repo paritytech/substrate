@@ -46,12 +46,12 @@ use log::info;
 use lazy_static::lazy_static;
 use sc_service::{
 	ChainSpec, Configuration, RuntimeGenesis, ChainSpecExtension, AbstractService,
-	ServiceBuilderCommand,
+	ServiceBuilderCommand, NoExtension,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 /// Substrate client CLI
-pub trait SubstrateCLI<G, E>: Sized
+pub trait SubstrateCLI<G, E = NoExtension>: Sized
 where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
