@@ -79,7 +79,8 @@ where
 	Ok(())
 }
 
-fn build_runtime() -> Result<tokio::runtime::Runtime, std::io::Error> {
+/// Build a tokio runtime with all features
+pub fn build_runtime() -> Result<tokio::runtime::Runtime, std::io::Error> {
 	tokio::runtime::Builder::new()
 		.thread_name("main-tokio-")
 		.threaded_scheduler()
@@ -87,7 +88,9 @@ fn build_runtime() -> Result<tokio::runtime::Runtime, std::io::Error> {
 		.build()
 }
 
-fn run_until_exit<FUT, ERR>(
+/// A helper function that runs a future with the provided tokio and stops if the process receives
+/// the signal SIGTERM or SIGINT
+pub fn run_until_exit<FUT, ERR>(
 	mut tokio_runtime: tokio::runtime::Runtime,
 	future: FUT,
 ) -> error::Result<()>
@@ -180,11 +183,11 @@ where
 			Subcommand::ImportBlocks(cmd) => {
 				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
 			},
-			/*
-			Subcommand::CheckBlock(cmd) => cmd.run(config, builder),
-			Subcommand::PurgeChain(cmd) => cmd.run(config),
-			Subcommand::Revert(cmd) => cmd.run(config, builder),
-			*/
+			Subcommand::CheckBlock(cmd) => {
+				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
+			},
+			Subcommand::Revert(cmd) => cmd.run(self.config, builder),
+			Subcommand::PurgeChain(cmd) => cmd.run(self.config),
 		}
 	}
 

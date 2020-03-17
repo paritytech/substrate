@@ -22,7 +22,6 @@ use sc_service::{
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
-use crate::VersionInfo;
 use crate::params::{BlockNumber, SharedParams, PruningParams};
 
 /// The `revert` command used revert the chain to a previous state.
@@ -59,24 +58,6 @@ impl RevertCmd {
 	{
 		let blocks = self.num.parse()?;
 		builder(config)?.revert_chain(blocks)?;
-
-		Ok(())
-	}
-
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.pruning_params.update_config(&mut config, Roles::FULL, true)?;
-		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

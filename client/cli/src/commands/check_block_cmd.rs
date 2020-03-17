@@ -24,8 +24,6 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_runtime::generic::BlockId;
 
 use crate::error;
-use crate::VersionInfo;
-use crate::runtime::run_until_exit;
 use crate::params::SharedParams;
 use crate::params::ImportParams;
 
@@ -53,7 +51,7 @@ pub struct CheckBlockCmd {
 
 impl CheckBlockCmd {
 	/// Run the check-block command
-	pub fn run<G, E, B, BC, BB>(
+	pub async fn run<G, E, B, BC, BB>(
 		self,
 		config: Configuration<G, E>,
 		builder: B,
@@ -77,28 +75,8 @@ impl CheckBlockCmd {
 		};
 
 		let start = std::time::Instant::now();
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.check_block(block_id))
-		})?;
+		builder(config)?.check_block(block_id).await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
-
-		Ok(())
-	}
-
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.import_params.update_config(&mut config, Roles::FULL, self.shared_params.dev)?;
-		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}

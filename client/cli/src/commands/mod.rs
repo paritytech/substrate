@@ -18,9 +18,9 @@ mod runcmd;
 mod export_blocks_cmd;
 mod build_spec_cmd;
 mod import_blocks_cmd;
-//mod check_block_cmd;
-//mod revert_cmd;
-//mod purge_chain_cmd;
+mod check_block_cmd;
+mod revert_cmd;
+mod purge_chain_cmd;
 
 use std::fmt::Debug;
 use std::path::PathBuf;
@@ -45,11 +45,9 @@ pub use crate::commands::runcmd::RunCmd;
 pub use crate::commands::build_spec_cmd::BuildSpecCmd;
 pub use crate::commands::export_blocks_cmd::ExportBlocksCmd;
 pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
-/*
 pub use crate::commands::check_block_cmd::CheckBlockCmd;
 pub use crate::commands::revert_cmd::RevertCmd;
 pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
-*/
 
 /// default sub directory to store network config
 pub(crate) const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -70,7 +68,6 @@ pub enum Subcommand {
 	/// Import blocks from file.
 	ImportBlocks(ImportBlocksCmd),
 
-	/*
 	/// Validate a single block.
 	CheckBlock(CheckBlockCmd),
 
@@ -79,7 +76,6 @@ pub enum Subcommand {
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
-	*/
 }
 
 impl Subcommand {
@@ -91,11 +87,9 @@ impl Subcommand {
 			BuildSpec(params) => &params.shared_params,
 			ExportBlocks(params) => &params.shared_params,
 			ImportBlocks(params) => &params.shared_params,
-			/*
 			CheckBlock(params) => &params.shared_params,
 			Revert(params) => &params.shared_params,
 			PurgeChain(params) => &params.shared_params,
-			*/
 		}
 	}
 
@@ -148,6 +142,9 @@ impl CliConfiguration for Subcommand
 			Subcommand::BuildSpec(_) => Ok(Default::default()),
 			Subcommand::ExportBlocks(cmd) => cmd.pruning_params.get_pruning(Roles::FULL, is_dev),
 			Subcommand::ImportBlocks(cmd) => cmd.import_params.get_pruning(Roles::FULL, is_dev),
+			Subcommand::CheckBlock(cmd) => cmd.import_params.get_pruning(Roles::FULL, is_dev),
+			Subcommand::Revert(cmd) => cmd.pruning_params.get_pruning(Roles::FULL, is_dev),
+			Subcommand::PurgeChain(_) => Ok(Default::default()),
 		}
 	}
 
@@ -175,6 +172,9 @@ impl CliConfiguration for Subcommand
 				}),
 			Subcommand::ExportBlocks(_) => Ok(config),
 			Subcommand::ImportBlocks(_) => Ok(config),
+			Subcommand::CheckBlock(_) => Ok(config),
+			Subcommand::Revert(_) => Ok(config),
+			Subcommand::PurgeChain(_) => Ok(config),
 		}
 	}
 
@@ -183,6 +183,9 @@ impl CliConfiguration for Subcommand
 			Subcommand::BuildSpec(_) => Default::default(),
 			Subcommand::ExportBlocks(_) => Default::default(),
 			Subcommand::ImportBlocks(cmd) => cmd.import_params.tracing_receiver.clone().into(),
+			Subcommand::CheckBlock(cmd) => cmd.import_params.tracing_receiver.clone().into(),
+			Subcommand::Revert(_) => Default::default(),
+			Subcommand::PurgeChain(_) => Default::default(),
 		}
 	}
 
@@ -191,6 +194,9 @@ impl CliConfiguration for Subcommand
 			Subcommand::BuildSpec(_) => Default::default(),
 			Subcommand::ExportBlocks(_) => Default::default(),
 			Subcommand::ImportBlocks(cmd) => cmd.import_params.tracing_targets.clone().into(),
+			Subcommand::CheckBlock(cmd) => cmd.import_params.tracing_targets.clone().into(),
+			Subcommand::Revert(_) => Default::default(),
+			Subcommand::PurgeChain(_) => Default::default(),
 		}
 	}
 
@@ -198,7 +204,10 @@ impl CliConfiguration for Subcommand
 		match self {
 			Subcommand::BuildSpec(_) => Default::default(),
 			Subcommand::ExportBlocks(_) => Default::default(),
-			Subcommand::ImportBlocks(cmd) => cmd.import_params.state_cache_size
+			Subcommand::ImportBlocks(cmd) => cmd.import_params.state_cache_size,
+			Subcommand::CheckBlock(cmd) => cmd.import_params.state_cache_size,
+			Subcommand::Revert(_) => Default::default(),
+			Subcommand::PurgeChain(_) => Default::default(),
 		}
 	}
 
@@ -207,6 +216,9 @@ impl CliConfiguration for Subcommand
 			Subcommand::BuildSpec(_) => WasmExecutionMethod::Interpreted,
 			Subcommand::ExportBlocks(_) => WasmExecutionMethod::Interpreted,
 			Subcommand::ImportBlocks(cmd) => cmd.import_params.get_wasm_method(),
+			Subcommand::CheckBlock(cmd) => cmd.import_params.get_wasm_method(),
+			Subcommand::Revert(_) => WasmExecutionMethod::Interpreted,
+			Subcommand::PurgeChain(_) => WasmExecutionMethod::Interpreted,
 		}
 	}
 
@@ -215,6 +227,9 @@ impl CliConfiguration for Subcommand
 			Subcommand::BuildSpec(_) => Ok(Default::default()),
 			Subcommand::ExportBlocks(_) => Ok(Default::default()),
 			Subcommand::ImportBlocks(cmd) => cmd.import_params.get_execution_strategies(is_dev),
+			Subcommand::CheckBlock(cmd) => cmd.import_params.get_execution_strategies(is_dev),
+			Subcommand::Revert(_) => Ok(Default::default()),
+			Subcommand::PurgeChain(_) => Ok(Default::default()),
 		}
 	}
 
@@ -223,6 +238,9 @@ impl CliConfiguration for Subcommand
 			Subcommand::BuildSpec(_) => Default::default(),
 			Subcommand::ExportBlocks(_) => Default::default(),
 			Subcommand::ImportBlocks(cmd) => cmd.import_params.database_cache_size,
+			Subcommand::CheckBlock(cmd) => cmd.import_params.database_cache_size,
+			Subcommand::Revert(_) => Default::default(),
+			Subcommand::PurgeChain(_) => Default::default(),
 		}
 	}
 }

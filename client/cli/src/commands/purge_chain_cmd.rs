@@ -22,9 +22,7 @@ use sc_service::{
 	Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec,
 	config::{DatabaseConfig},
 };
-
 use crate::error;
-use crate::VersionInfo;
 use crate::params::SharedParams;
 
 /// The `purge-chain` command used to remove the whole chain.
@@ -85,22 +83,5 @@ impl PurgeChainCmd {
 			},
 			Err(err) => Result::Err(err.into())
 		}
-	}
-
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		config.use_in_memory_keystore()?;
-
-		Ok(())
 	}
 }
