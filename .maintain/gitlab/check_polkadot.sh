@@ -19,16 +19,16 @@ boldprint () { printf "|\n| \033[1m${@}\033[0m\n|\n" ; }
 SUBSTRATE_PATH=$(pwd)
 
 # Clone the current Polkadot master branch into ./polkadot.
-git clone --depth 1 https://gitlab.parity.io/parity/polkadot.git
+git clone --depth 1 https://github.com/paritytech/polkadot.git
 
 cd polkadot
 # either it's a pull request or the tag/branch exists on github.com
 if expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
 then
   boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
+  # get the last reference to a pr in polkadot
   comppr="$(curl -H "${github_header}" -s ${github_api_polkadot_pull_url}/${CI_COMMIT_REF_NAME} \
-    | tr -d '\r\n' | jq -r ".body" \
-    | sed -r -n "s;^polkadot companion: paritytech/polkadot#([0-9]+);\1;p;\$\!d")"
+    | sed -n -r 's;^[[:space:]]+"body":[[:space:]]+".*polkadot companion: paritytech/polkadot#([0-9]+).*"[^"]+$;\1;p;$!d')"
   if [ "${comppr}" ]
   then
     boldprint "companion pr found: #${comppr}"
