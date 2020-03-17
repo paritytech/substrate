@@ -78,7 +78,7 @@ impl<T, Block: BlockT> Default for ReadyPoll<T, Block> {
 	}
 }
 
-impl<T, Block: BlockT> ReadyPoll<T, Block>
+impl<T, Block: BlockT> ReadyPoll<T, Block> {
 	fn trigger(&mut self, number: NumberFor<Block>, iterator_factory: impl Fn() -> T) {
 		self.updated_at = number;
 
