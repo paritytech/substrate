@@ -411,7 +411,6 @@ impl<B: BlockT> CacheChanges<B> {
 			let mut modifications = HashSet::new();
 			let mut child_modifications = HashSet::new();
 			let mut deleted_child = HashSet::new();
-			// TODO manage delete
 			child_changes.into_iter().for_each(|(child_info, child_change, child_values)|
 				match child_change {
 					ChildChange::Update => for (k, v) in child_values.into_iter() {

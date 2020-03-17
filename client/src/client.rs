@@ -977,7 +977,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				.trigger(
 					&notify_import.hash,
 					storage_changes.0.into_iter(),
-					// TODO EMCH trigger batch delete plus why storage key (is unprefixed right here?)
 					storage_changes.1.into_iter().map(|(child_info, child_change, child_values)| (
 						child_info.storage_key().to_vec(), child_change, child_values.into_iter(),
 					)),

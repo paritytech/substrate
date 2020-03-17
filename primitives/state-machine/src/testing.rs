@@ -128,7 +128,6 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		self.overlay.committed.children_default.clone().into_iter()
 			.chain(self.overlay.prospective.children_default.clone().into_iter())
 			.for_each(|(_storage_key, child)| {
-				// TODO push child change transaction is of type ChildrenMap
 				transaction.push((
 					Some(child.info),
 					child.change.0,

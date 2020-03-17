@@ -567,7 +567,6 @@ impl OverlayedChanges {
 				child_change,
 				self.committed.children_default.get(storage_key)
 					.into_iter()
-					// TODO deleted
 					.flat_map(|child| child.values.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 					.chain(
 						self.prospective.children_default.get(storage_key)
