@@ -15,6 +15,8 @@ github_header="Accept: application/vnd.github.v3+json"
 boldprint () { printf "|\n| \033[1m${@}\033[0m\n|\n" ; }
 boldcat () { printf "|\n"; while read l; do printf "| \033[1m${l}\033[0m\n"; done; printf "|\n" ; }
 
+
+
 boldcat <<-EOT
 
 
@@ -40,7 +42,9 @@ SUBSTRATE_PATH=$(pwd)
 git clone --depth 1 https://github.com/paritytech/polkadot.git
 
 cd polkadot
-# either it's a pull request or the tag/branch exists on github.com
+
+# either it's a pull request then check for a companion otherwise use 
+# polkadot:master
 if expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
 then
   boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
@@ -64,16 +68,14 @@ mkdir .cargo
 # echo "paths = [ \"$SUBSTRATE_PATH\" ]" > .cargo/config
 # see https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html
 echo "[patch.\"https://github.com/paritytech/substrate\"]\nsubstrate = { path = \"$SUBSTRATE_PATH\" }" > .cargo/config
-echo ".cargo/config:"
-cat .cargo/config
+
 mkdir -p target/debug/wbuild/.cargo
-# echo "paths = [ \"$SUBSTRATE_PATH\" ]" > target/debug/wbuild/.cargo/config
 cp .cargo/config target/debug/wbuild/.cargo/config
 
 # package, others are updated along the way.
 cargo update
 
-# Check whether Polkadot 'master' branch builds with this Substrate commit.
+# Check whether Polkadot pr or master branch builds with this Substrate commit.
 time cargo check
 
 
