@@ -365,8 +365,9 @@ check_warnings:
       - $DEPLOY_TAG
   variables:
     GIT_STRATEGY:                  none
-  dependencies:
-    - test-linux-stable
+  needs:
+    - job:                         test-linux-stable
+      artifacts:                   true
   script:
     - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
         cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
@@ -374,7 +375,6 @@ check_warnings:
       else
         echo "___No warnings___";
       fi
-  allow_failure:                   true
 
 # Nightly check whether Polkadot 'master' branch builds.
 check_polkadot:

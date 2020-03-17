@@ -109,6 +109,7 @@ use frame_support::{ensure, decl_module, decl_event, decl_storage, decl_error, C
 use frame_support::{traits::{Get, FindAuthor, ValidatorRegistration}, Parameter};
 use frame_support::dispatch::{self, DispatchResult, DispatchError};
 use frame_system::{self as system, ensure_signed};
+use frame_support::traits::MigrateAccount;
 
 #[cfg(test)]
 mod mock;
@@ -342,8 +343,6 @@ pub trait Trait: frame_system::Trait {
 	type DisabledValidatorsThreshold: Get<Perbill>;
 }
 
-const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// The current set of validators.
@@ -366,20 +365,10 @@ decl_storage! {
 		DisabledValidators get(fn disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
-		///
-		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
-		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		// TODO: Migrate to a normal map now https://github.com/paritytech/substrate/issues/4917
-		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) T::ValidatorId
-			=> Option<T::Keys>;
+		NextKeys: map hasher(twox_64_concat) T::ValidatorId => Option<T::Keys>;
 
-		/// The owner of a key. The second key is the `KeyTypeId` + the encoded key.
-		///
-		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
-		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		// TODO: Migrate to a normal map now https://github.com/paritytech/substrate/issues/4917
-		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) (KeyTypeId, Vec<u8>)
-			=> Option<T::ValidatorId>;
+		/// The owner of a key. The key is the `KeyTypeId` + the encoded key.
+		KeyOwner: map hasher(twox_64_concat) (KeyTypeId, Vec<u8>) => Option<T::ValidatorId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::AccountId, T::ValidatorId, T::Keys)>;
@@ -460,10 +449,6 @@ decl_error! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Used as first key for `NextKeys` and `KeyOwner` to put all the data into the same branch
-		/// of the trie.
-		const DEDUP_KEY_PREFIX: &[u8] = DEDUP_KEY_PREFIX;
-
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -512,6 +497,18 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) {
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();
+			}
+		}
+	}
+}
+
+impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
+	fn migrate_account(a: &T::AccountId) {
+		if let Some(v) = T::ValidatorIdOf::convert(a.clone()) {
+			if let Some(keys) = NextKeys::<T>::migrate_key_from_blake(v) {
+				for id in T::Keys::key_ids() {
+					KeyOwner::<T>::migrate_key_from_blake((*id, keys.get_raw(*id)));
+				}
 			}
 		}
 	}
@@ -704,27 +701,27 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		<NextKeys<T>>::get(DEDUP_KEY_PREFIX, v)
+		<NextKeys<T>>::get(v)
 	}
 
 	fn take_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		<NextKeys<T>>::take(DEDUP_KEY_PREFIX, v)
+		<NextKeys<T>>::take(v)
 	}
 
 	fn put_keys(v: &T::ValidatorId, keys: &T::Keys) {
-		<NextKeys<T>>::insert(DEDUP_KEY_PREFIX, v, keys);
+		<NextKeys<T>>::insert(v, keys);
 	}
 
 	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
-		<KeyOwner<T>>::get(DEDUP_KEY_PREFIX, (id, key_data))
+		<KeyOwner<T>>::get((id, key_data))
 	}
 
 	fn put_key_owner(id: KeyTypeId, key_data: &[u8], v: &T::ValidatorId) {
-		<KeyOwner<T>>::insert(DEDUP_KEY_PREFIX, (id, key_data), v)
+		<KeyOwner<T>>::insert((id, key_data), v)
 	}
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
-		<KeyOwner<T>>::remove(DEDUP_KEY_PREFIX, (id, key_data));
+		<KeyOwner<T>>::remove((id, key_data));
 	}
 }
 

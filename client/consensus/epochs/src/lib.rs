@@ -16,6 +16,8 @@
 
 //! Generic utilities for epoch-based consensus engines.
 
+pub mod migration;
+
 use std::{sync::Arc, ops::Add, collections::BTreeMap, borrow::{Borrow, BorrowMut}};
 use parking_lot::Mutex;
 use codec::{Encode, Decode};
@@ -69,7 +71,7 @@ impl<'a, H, Block> IsDescendentOfBuilder<Block::Hash>
 /// Epoch data, distinguish whether it is genesis or not.
 ///
 /// Once an epoch is created, it must have a known `start_slot` and `end_slot`, which cannot be
-/// changed. Consensus engine can modify and other data into the epoch, if needed.
+/// changed. Consensus engine may modify any other data in the epoch, if needed.
 pub trait Epoch {
 	/// Descriptor for the next epoch.
 	type NextEpochDescriptor;
@@ -78,7 +80,8 @@ pub trait Epoch {
 
 	/// The starting slot of the epoch.
 	fn start_slot(&self) -> Self::SlotNumber;
-	/// The end slot of the epoch.
+	/// Produce the "end slot" of the epoch. This is NOT inclusive to the epoch,
+	/// i.e. the slots covered by the epoch are `self.start_slot() .. self.end_slot()`.
 	fn end_slot(&self) -> Self::SlotNumber;
 	/// Increment the epoch data, using the next epoch descriptor.
 	fn increment(&self, descriptor: Self::NextEpochDescriptor) -> Self;
@@ -98,7 +101,8 @@ impl<'a, E: Epoch> From<&'a E> for EpochHeader<E> {
 pub struct EpochHeader<E: Epoch> {
 	/// The starting slot of the epoch.
 	pub start_slot: E::SlotNumber,
-	/// The end slot of the epoch.
+	/// The end slot of the epoch. This is NOT inclusive to the epoch,
+	/// i.e. the slots covered by the epoch are `self.start_slot() .. self.end_slot()`.
 	pub end_slot: E::SlotNumber,
 }
 
@@ -225,7 +229,7 @@ impl<Hash, Number, E: Epoch> ViableEpochDescriptor<Hash, Number, E> {
 }
 
 /// Persisted epoch stored in EpochChanges.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug)]
 pub enum PersistedEpoch<E: Epoch> {
 	/// Genesis persisted epoch data. epoch_0, epoch_1.
 	Genesis(E, E),
@@ -245,7 +249,7 @@ impl<'a, E: Epoch> From<&'a PersistedEpoch<E>> for PersistedEpochHeader<E> {
 }
 
 /// Persisted epoch header stored in ForkTree.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, PartialEq, Eq)]
 pub enum PersistedEpochHeader<E: Epoch> {
 	/// Genesis persisted epoch header. epoch_0, epoch_1.
 	Genesis(EpochHeader<E>, EpochHeader<E>),

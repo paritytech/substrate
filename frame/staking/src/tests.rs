@@ -76,7 +76,7 @@ fn basic_setup_works() {
 		assert_eq!(Staking::ledger(&1), None);
 
 		// ValidatorPrefs are default
-		assert_eq!(<Validators<Test>>::enumerate().collect::<Vec<_>>(), vec![
+		assert_eq!(<Validators<Test>>::iter().collect::<Vec<_>>(), vec![
 			(31, ValidatorPrefs::default()),
 			(21, ValidatorPrefs::default()),
 			(11, ValidatorPrefs::default())
@@ -2616,7 +2616,13 @@ fn remove_deferred() {
 			1,
 		);
 
-		Staking::cancel_deferred_slash(Origin::ROOT, 1, vec![0]).unwrap();
+		// fails if empty
+		assert_noop!(
+			Staking::cancel_deferred_slash(Origin::ROOT, 1, vec![]),
+			Error::<Test>::EmptyTargets
+		);
+
+		assert_ok!(Staking::cancel_deferred_slash(Origin::ROOT, 1, vec![0]));
 
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(101), 2000);
@@ -2689,12 +2695,51 @@ fn remove_multi_deferred() {
 			&[Perbill::from_percent(25)],
 		);
 
-		assert_eq!(<Staking as Store>::UnappliedSlashes::get(&1).len(), 3);
-		Staking::cancel_deferred_slash(Origin::ROOT, 1, vec![0, 2]).unwrap();
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (42, exposure.clone()),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(25)],
+		);
+
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (69, exposure.clone()),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(25)],
+		);
+
+		assert_eq!(<Staking as Store>::UnappliedSlashes::get(&1).len(), 5);
+
+		// fails if list is not sorted
+		assert_noop!(
+			Staking::cancel_deferred_slash(Origin::ROOT, 1, vec![2, 0, 4]),
+			Error::<Test>::NotSortedAndUnique
+		);
+		// fails if list is not unique
+		assert_noop!(
+			Staking::cancel_deferred_slash(Origin::ROOT, 1, vec![0, 2, 2]),
+			Error::<Test>::NotSortedAndUnique
+		);
+		// fails if bad index
+		assert_noop!(
+			Staking::cancel_deferred_slash(Origin::ROOT, 1, vec![1, 2, 3, 4, 5]),
+			Error::<Test>::InvalidSlashIndex
+		);
+
+		assert_ok!(Staking::cancel_deferred_slash(Origin::ROOT, 1, vec![0, 2, 4]));
 
 		let slashes = <Staking as Store>::UnappliedSlashes::get(&1);
-		assert_eq!(slashes.len(), 1);
+		assert_eq!(slashes.len(), 2);
+		println!("Slashes: {:?}", slashes);
 		assert_eq!(slashes[0].validator, 21);
+		assert_eq!(slashes[1].validator, 42);
 	})
 }
 
@@ -2724,7 +2769,7 @@ fn slash_kicks_validators_not_nominators() {
 
 		// This is the best way to check that the validator was chilled; `get` will
 		// return default value.
-		for (stash, _) in <Staking as Store>::Validators::enumerate() {
+		for (stash, _) in <Staking as Store>::Validators::iter() {
 			assert!(stash != 11);
 		}
 
@@ -2824,7 +2869,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 			// Fail: Era not finished yet
 			Error::<Test>::InvalidEraToReward
 		);
-		
+
 		// Era 0 can't be rewarded anymore and current era can't be rewarded yet
 		// only era 1 and 2 can be rewarded.
 
@@ -2864,7 +2909,7 @@ fn zero_slash_keeps_nominators() {
 
 		// This is the best way to check that the validator was chilled; `get` will
 		// return default value.
-		for (stash, _) in <Staking as Store>::Validators::enumerate() {
+		for (stash, _) in <Staking as Store>::Validators::iter() {
 			assert!(stash != 11);
 		}
 
@@ -2994,4 +3039,3 @@ fn set_history_depth_works() {
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
 	});
 }
-

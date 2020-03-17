@@ -813,9 +813,7 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 				import_block.justification = justification;
 				import_block.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate::<Block> {
-						epoch_descriptor,
-					}) as Box<dyn Any>,
+					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<dyn Any>,
 				);
 				import_block.post_hash = Some(hash);
 

@@ -31,7 +31,7 @@ wasm-timer = "0.2"
 exit-future = "0.2.0"
 serde = "1.0.101"
 serde_json = "1.0.41"
-sysinfo = "0.9.5"
+sysinfo = "0.11.7"
 target_info = "0.1.0"
 sc-keystore = { version = "2.0.0-alpha.2", path = "../keystore" }
 sp-io = { version = "2.0.0-alpha.2", path = "../../primitives/io" }
@@ -55,11 +55,11 @@ sc-rpc-server = { version = "2.0.0-alpha.2", path = "../rpc-servers" }
 sc-rpc = { version = "2.0.0-alpha.2", path = "../rpc" }
 sc-telemetry = { version = "2.0.0-alpha.2", path = "../telemetry" }
 sc-offchain = { version = "2.0.0-alpha.2", path = "../offchain" }
-parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
+parity-multiaddr = { package = "parity-multiaddr", version = "0.7.3" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" , version = "0.8.0-alpha.2"}
 sc-tracing = { version = "2.0.0-alpha.2", path = "../tracing" }
 tracing = "0.1.10"
-parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.5.2", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
