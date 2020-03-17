@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use sc_cli::SubstrateCLI;
+use sc_cli_derive::spec_factory;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use crate::service;
 use crate::chain_spec::Alternative;
@@ -22,35 +23,17 @@ use crate::cli::Cli;
 use node_template_runtime::GenesisConfig;
 use sc_service::ChainSpec;
 
-impl SubstrateCLI<GenesisConfig> for Cli {
-	fn spec_factory(id: &str) -> Result<Option<ChainSpec<GenesisConfig>>, String> {
-		Ok(match Alternative::from(id) {
-			Some(spec) => Some(spec.load()?),
-			None => None,
-		})
-	}
-
-	fn get_impl_name() -> &'static str { "Substrate Node" }
-	fn get_impl_version() -> &'static str { "1.0.todo" }
-	fn get_support_url() -> &'static str { "support.anonymous.an" }
-	fn get_executable_name() -> &'static str { "node-template" }
-	fn get_author() -> &'static str { "Anonymous" }
-	fn get_description() -> &'static str { "Template Node" }
-	fn get_copyright_start_year() -> i32 { 2017 }
+#[spec_factory(
+	impl_name = "Substrate Node",
+	support_url = "support.anonymous.an",
+	copyright_start_year = 2017,
+)]
+fn spec_factory(id: &str) -> Result<Option<ChainSpec<GenesisConfig>>, String> {
+	Ok(match Alternative::from(id) {
+		Some(spec) => Some(spec.load()?),
+		None => None,
+	})
 }
-
-/*
-	let version = sc_cli::VersionInfo {
-		name: "Substrate Node",
-		commit: env!("VERGEN_SHA_SHORT"),
-		version: env!("CARGO_PKG_VERSION"),
-		executable_name: "node-template",
-		author: "Anonymous",
-		description: "Template Node",
-		support_url: "support.anonymous.an",
-		copyright_start_year: 2017,
-	};
-*/
 
 /// Parse and run command line arguments
 pub fn run() -> sc_cli::Result<()> {

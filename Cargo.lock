@@ -3580,6 +3580,7 @@ dependencies = [
  "node-template-runtime",
  "sc-basic-authorship",
  "sc-cli",
+ "sc-cli-derive",
  "sc-client",
  "sc-consensus-aura",
  "sc-executor",
