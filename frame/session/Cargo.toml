@@ -17,7 +17,7 @@ sp-staking = { version = "2.0.0-alpha.2", default-features = false, path = "../.
 frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
 pallet-timestamp = { version = "2.0.0-alpha.2", default-features = false, path = "../timestamp" }
-sp-trie = { optional = true, path = "../../primitives/trie", default-features = false , version = "2.0.0-alpha.2"}
+sp-trie = { optional = true, path = "../../primitives/trie", default-features = false, version = "2.0.0-alpha.2"}
 sp-io ={ path = "../../primitives/io", default-features = false , version = "2.0.0-alpha.2"}
 impl-trait-for-tuples = "0.1.3"
 
