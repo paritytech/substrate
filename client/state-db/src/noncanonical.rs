@@ -177,7 +177,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 					let journal_key = to_journal_key_v1(block, index);
 					let record: JournalRecordV1<BlockHash, Key> = match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
-						Some(record) =>  Decode::decode(&mut record.as_slice())?,
+						Some(record) => Decode::decode(&mut record.as_slice())?,
 						None => {
 							let journal_key = to_old_journal_key(block, index);
 							match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
@@ -363,6 +363,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		commit.data.inserted.extend(overlay.inserted.iter()
 			.map(|k| (k.clone(), self.values.get(k).expect("For each key in overlays there's a value in values").1.clone())));
 		commit.data.deleted.extend(overlay.deleted.clone());
+		commit.data.deleted_child.extend(overlay.deleted_child.clone());
 
 		commit.meta.deleted.append(&mut discarded_journals);
 		let canonicalized = (hash.clone(), self.front_block_number() + self.pending_canonicalizations.len() as u64);

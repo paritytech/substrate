@@ -286,6 +286,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 			Ok(()) => {
 				if self.mode == PruningMode::ArchiveCanonical {
 					commit.data.deleted.clear();
+					commit.data.deleted_child.clear();
 				}
 			}
 			Err(e) => return Err(e),

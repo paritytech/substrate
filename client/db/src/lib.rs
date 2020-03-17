@@ -1883,7 +1883,194 @@ pub(crate) mod tests {
 		}
 	}
 
-	// TODO EMCH do a bulk delet test similar to this
+	#[test]
+	fn bulk_delete_child_trie() {
+		let _ = ::env_logger::try_init();
+		let mut key = Vec::new();
+		let backend = Backend::<Block>::new_test(2, 0);
+		// This is not collision resistant but enough for the test.
+		let storage_key = b"unique_storage_key";
+
+		let hash = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default())).unwrap();
+			let mut header = Header {
+				number: 0,
+				parent_hash: Default::default(),
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage: Vec<(_, _)> = vec![];
+
+			header.state_root = op.old_state.storage_root(storage
+				.iter()
+				.cloned()
+				.map(|(x, y)| (x, Some(y)))
+			).0.into();
+			let hash = header.hash();
+
+			op.reset_storage(Storage {
+				top: storage.iter().cloned().collect(),
+				children_default: Default::default(),
+			}).unwrap();
+
+			let top = op.db_updates.entry(ChildInfo::top_trie())
+				.or_insert_with(Default::default);
+			key.push(top.1.insert(EMPTY_PREFIX, b"hello1"));
+			key.push(top.1.insert(EMPTY_PREFIX, b"hello2"));
+			key.push(top.1.insert(EMPTY_PREFIX, b"hello3"));
+			let child = op.db_updates.entry(ChildInfo::new_default(storage_key))
+				.or_insert_with(Default::default);
+			key.push(child.1.insert(EMPTY_PREFIX, b"hello1"));
+			key.push(child.1.insert(EMPTY_PREFIX, b"hello2"));
+			key.push(child.1.insert(EMPTY_PREFIX, b"hello3"));
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			backend.commit_operation(op).unwrap();
+			assert_eq!(backend.storage.db.get(
+				columns::STATE,
+				&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
+			).unwrap().unwrap(), &b"hello1"[..]);
+			assert_eq!(backend.storage.db.get(
+				columns::STATE,
+				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
+			).unwrap().unwrap(), &b"hello1"[..]);
+			hash
+		};
+
+		let key = key;
+
+		let hash = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Number(0)).unwrap();
+			let mut header = Header {
+				number: 1,
+				parent_hash: hash,
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage: Vec<(_, _)> = vec![];
+
+			header.state_root = op.old_state.storage_root(storage
+				.iter()
+				.cloned()
+				.map(|(x, y)| (x, Some(y)))
+			).0.into();
+			let hash = header.hash();
+
+			let child = op.db_updates.entry(ChildInfo::new_default(storage_key))
+				.or_insert_with(Default::default);
+			child.0 = ChildChange::BulkDeleteByKeyspace; 
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			backend.commit_operation(op).unwrap();
+			assert_eq!(backend.storage.db.get(
+				columns::STATE,
+				&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
+			).unwrap().unwrap(), &b"hello1"[..]);
+			assert_eq!(backend.storage.db.get(
+				columns::STATE,
+				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
+			).unwrap().unwrap(), &b"hello1"[..]);
+			hash
+		};
+
+		let hash = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Number(1)).unwrap();
+			let mut header = Header {
+				number: 2,
+				parent_hash: hash,
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage: Vec<(_, _)> = vec![];
+
+			header.state_root = op.old_state.storage_root(storage
+				.iter()
+				.cloned()
+				.map(|(x, y)| (x, Some(y)))
+			).0.into();
+			let hash = header.hash();
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+
+			backend.commit_operation(op).unwrap();
+
+			assert_eq!(backend.storage.db.get(
+				columns::STATE,
+				&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
+			).unwrap().unwrap(), &b"hello1"[..]);
+			assert_eq!(backend.storage.db.get(
+				columns::STATE,
+				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
+			).unwrap().unwrap(), &b"hello1"[..]);
+			hash
+		};
+
+		{
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Number(2)).unwrap();
+			let mut header = Header {
+				number: 3,
+				parent_hash: hash,
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage: Vec<(_, _)> = vec![];
+
+			header.state_root = op.old_state.storage_root(storage
+				.iter()
+				.cloned()
+				.map(|(x, y)| (x, Some(y)))
+			).0.into();
+
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+			backend.commit_operation(op).unwrap();
+		}
+
+		assert_eq!(backend.storage.db.get(
+			columns::STATE,
+			&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
+		).unwrap().unwrap(), &b"hello1"[..]);
+		assert!(backend.storage.db.get(
+			columns::STATE,
+			&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
+		).unwrap().is_none());
+		assert!(backend.storage.db.get(
+			columns::STATE,
+			&sp_trie::prefixed_key::<BlakeTwo256>(&key[4], (storage_key, None))
+		).unwrap().is_none());
+	}
+
 	#[test]
 	fn set_state_data() {
 		let db = Backend::<Block>::new_test(2, 0);
