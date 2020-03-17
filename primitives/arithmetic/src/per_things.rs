@@ -583,7 +583,7 @@ macro_rules! implement_per_thing {
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_pow(0), 
 					$name::from_parts($max)
-					);
+				);
 
 				// x^1 == x
 				assert_eq!(
