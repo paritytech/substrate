@@ -88,7 +88,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			child_content.child_info,
 			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
 		));
-		let (root, transaction): (B::Hash, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
+		let (root, transaction, _): (B::Hash, _, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
 			genesis.top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta,
 			false,
