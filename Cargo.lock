@@ -3545,6 +3545,7 @@ dependencies = [
  "pallet-randomness-collective-flip",
  "pallet-recovery",
  "pallet-session",
+ "pallet-session-benchmarking",
  "pallet-society",
  "pallet-staking",
  "pallet-staking-reward-curve",
@@ -4401,6 +4402,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-session-benchmarking"
+version = "2.0.0-alpha.3"
+dependencies = [
+ "frame-benchmarking",
+ "frame-system",
+ "pallet-session",
+ "pallet-staking",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-society"
 version = "2.0.0-alpha.3"
 dependencies = [
@@ -4420,6 +4433,7 @@ dependencies = [
 name = "pallet-staking"
 version = "2.0.0-alpha.3"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-authorship",
@@ -4428,6 +4442,7 @@ dependencies = [
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
+ "rand_chacha 0.2.1",
  "serde",
  "sp-core",
  "sp-io",
@@ -5631,6 +5646,7 @@ name = "sc-basic-authorship"
 version = "0.8.0-alpha.3"
 dependencies = [
  "futures 0.3.4",
+ "futures-timer 3.0.2",
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
@@ -5959,6 +5975,7 @@ dependencies = [
 name = "sc-consensus-manual-seal"
 version = "0.8.0-alpha.3"
 dependencies = [
+ "assert_matches",
  "derive_more",
  "env_logger 0.7.1",
  "futures 0.3.4",

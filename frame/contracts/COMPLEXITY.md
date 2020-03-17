@@ -350,6 +350,20 @@ Loading `init_code` and `input_data` should be charged in any case.
 
 **complexity**: All complexity comes from loading buffers and executing `instantiate` executive function. The former component is proportional to the sizes of `init_code`, `value` and `input_data` buffers. The latter component completely depends on the complexity of `instantiate` executive function and also dominated by it.
 
+## ext_terminate
+
+This function receives the following arguments:
+
+- `beneficiary`, buffer of a marshaled `AccountId`
+
+It consists of the following steps:
+
+1. Loading `beneficiary` buffer from the sandbox memory (see sandboxing memory get) and then decoding it.
+
+Loading of the `beneficiary` buffer should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId`.
+
+**complexity**: All complexity comes from loading buffers and executing `terminate` executive function. The former component is proportional to the size of the `beneficiary` buffer. The latter component completely depends on the complexity of `terminate` executive function and also dominated by it.
+
 ## ext_return
 
 This function receives a `data` buffer as an argument. Execution of the function consists of the following steps:
