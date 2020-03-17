@@ -68,7 +68,7 @@ struct ReadyPoll<T, Block: BlockT> {
 	pollers: Vec<(NumberFor<Block>, oneshot::Sender<T>)>,
 }
 
-impl<T, Block: BlockT> Default for ReadyPoll<T, Block>
+impl<T, Block: BlockT> Default for ReadyPoll<T, Block> {
 {
 	fn default() -> Self {
 		Self {
