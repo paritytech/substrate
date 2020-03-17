@@ -1603,13 +1603,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
-<<<<<<< HEAD
 		let child_info = match ChildType::from_prefixed_key(&request.storage_key) {
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
 			None => Err("Invalid child storage key".into()),
 		};
 		let proof = match child_info.and_then(|child_info| self.context_data.chain.read_child_proof(
-			&request.block,
+			&BlockId::Hash(request.block),
 			&child_info,
 			&mut request.keys.iter().map(AsRef::as_ref),
 		)) {
@@ -1624,27 +1623,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					error
 				);
 				StorageProof::empty()
-=======
-		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
-			match self.context_data.chain.read_child_proof(
-				&BlockId::Hash(request.block),
-				&request.storage_key,
-				child_info,
-				&mut request.keys.iter().map(AsRef::as_ref),
-			) {
-				Ok(proof) => proof,
-				Err(error) => {
-					trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
-						request.id,
-						who,
-						request.storage_key.to_hex::<String>(),
-						keys_str(),
-						request.block,
-						error
-					);
-					StorageProof::empty()
-				}
->>>>>>> master
 			}
 		};
 		self.send_message(
