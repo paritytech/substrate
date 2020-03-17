@@ -191,6 +191,7 @@ where
 			digest,
 			frame_system::InitKind::Full,
 		);
+		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		<frame_system::Module<System>>::register_extra_weight_unchecked(
 			<AllModules as WeighBlock<System::BlockNumber>>::on_initialize(*block_number)
@@ -249,11 +250,11 @@ where
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
-
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
 		// post-extrinsics book-keeping
 		<frame_system::Module<System>>::note_finished_extrinsics();
+		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 	}
 
@@ -261,7 +262,9 @@ where
 	/// except state-root.
 	pub fn finalize_block() -> System::Header {
 		<frame_system::Module<System>>::note_finished_extrinsics();
-		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(<frame_system::Module<System>>::block_number());
+		let block_number = <frame_system::Module<System>>::block_number();
+		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 
 		// set up extrinsics
 		<frame_system::Module<System>>::derive_extrinsics();
@@ -478,7 +481,7 @@ mod tests {
 		type Version = RuntimeVersion;
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {
@@ -595,7 +598,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("e97d724f480f6e3215bd5c24b9ba51250e2514ac1c99e563fd77bfb9d6100b1c").into(),
+					state_root: hex!("489ae9b57a19bb4733a264dc64bbcae9b140a904657a681ed3bb5fbbe8cf412b").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},

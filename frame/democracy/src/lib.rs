@@ -159,7 +159,7 @@ use sp_runtime::{
 };
 use codec::{Ref, Encode, Decode, Input, Output};
 use frame_support::{
-	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
+	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter, IterableStorageMap,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
@@ -170,6 +170,7 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
+use frame_support::traits::MigrateAccount;
 
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
@@ -420,11 +421,11 @@ decl_storage! {
 		/// Map of hashes to the proposal preimage, along with who registered it and their deposit.
 		/// The block number is the block at which it was deposited.
 		pub Preimages:
-			map hasher(blake2_256) T::Hash
+			map hasher(identity) T::Hash
 			=> Option<(Vec<u8>, T::AccountId, BalanceOf<T>, T::BlockNumber)>;
 		/// Those who have locked a deposit.
 		pub DepositOf get(fn deposit_of):
-			map hasher(blake2_256) PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
+			map hasher(twox_64_concat) PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
 
 		/// The next free referendum index, aka the number of referenda started so far.
 		pub ReferendumCount get(fn referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
@@ -433,32 +434,32 @@ decl_storage! {
 		pub LowestUnbaked get(fn lowest_unbaked) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// Information concerning any given referendum.
 		pub ReferendumInfoOf get(fn referendum_info):
-			map hasher(blake2_256) ReferendumIndex
+			map hasher(twox_64_concat) ReferendumIndex
 			=> Option<ReferendumInfo<T::BlockNumber, T::Hash>>;
 		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
 		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 
 		/// Get the voters for the current proposal.
 		pub VotersFor get(fn voters_for):
-			map hasher(blake2_256) ReferendumIndex => Vec<T::AccountId>;
+			map hasher(twox_64_concat) ReferendumIndex => Vec<T::AccountId>;
 
 		/// Get the vote in a given referendum of a particular voter. The result is meaningful only
 		/// if `voters_for` includes the voter when called with the referendum (you'll get the
 		/// default `Vote` value otherwise). If you don't want to check `voters_for`, then you can
 		/// also check for simple existence with `VoteOf::contains_key` first.
-		pub VoteOf get(fn vote_of): map hasher(blake2_256) (ReferendumIndex, T::AccountId) => Vote;
+		pub VoteOf get(fn vote_of): map hasher(twox_64_concat) (ReferendumIndex, T::AccountId) => Vote;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
-		pub Proxy get(fn proxy): map hasher(blake2_256) T::AccountId => Option<ProxyState<T::AccountId>>;
+		pub Proxy get(fn proxy): map hasher(twox_64_concat) T::AccountId => Option<ProxyState<T::AccountId>>;
 
 		/// Get the account (and lock periods) to which another account is delegating vote.
 		pub Delegations get(fn delegations):
-			linked_map hasher(blake2_256) T::AccountId => (T::AccountId, Conviction);
+			map hasher(twox_64_concat) T::AccountId => (T::AccountId, Conviction);
 
 		/// Accounts for which there are locks in action which may be removed at some point in the
 		/// future. The value is the block number at which the lock expires and may be removed.
-		pub Locks get(locks): map hasher(blake2_256) T::AccountId => Option<T::BlockNumber>;
+		pub Locks get(locks): map hasher(twox_64_concat) T::AccountId => Option<T::BlockNumber>;
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public
 		/// proposal.
@@ -473,10 +474,10 @@ decl_storage! {
 		/// A record of who vetoed what. Maps proposal hash to a possible existent block number
 		/// (until when it may not be resubmitted) and who vetoed it.
 		pub Blacklist get(fn blacklist):
-			map hasher(blake2_256) T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
+			map hasher(identity) T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
 
 		/// Record of all proposals that have been subject to emergency cancellation.
-		pub Cancellations: map hasher(blake2_256) T::Hash => bool;
+		pub Cancellations: map hasher(identity) T::Hash => bool;
 	}
 }
 
@@ -583,9 +584,41 @@ decl_error! {
 	}
 }
 
+impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
+	fn migrate_account(a: &T::AccountId) {
+		Proxy::<T>::migrate_key_from_blake(a);
+		Locks::<T>::migrate_key_from_blake(a);
+		Delegations::<T>::migrate_key_from_blake(a);
+		for i in LowestUnbaked::get()..ReferendumCount::get() {
+			VoteOf::<T>::migrate_key_from_blake((i, a));
+		}
+	}
+}
+
+mod migration {
+	use super::*;
+	pub fn migrate<T: Trait>() {
+		Blacklist::<T>::remove_all();
+		Cancellations::<T>::remove_all();
+		for i in LowestUnbaked::get()..ReferendumCount::get() {
+			VotersFor::<T>::migrate_key_from_blake(i);
+			ReferendumInfoOf::<T>::migrate_key_from_blake(i);
+		}
+		for (p, h, _) in PublicProps::<T>::get().into_iter() {
+			DepositOf::<T>::migrate_key_from_blake(p);
+			Preimages::<T>::migrate_key_from_blake(h);
+		}
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
+
+		fn on_runtime_upgrade() {
+			migration::migrate::<T>();
+		}
+
 		/// The minimum period of locking and the period between a proposal being approved and enacted.
 		///
 		/// It should generally be a little more than the unstake period to ensure that
@@ -1290,7 +1323,7 @@ impl<T: Trait> Module<T> {
 		recursion_limit: u32,
 	) -> (BalanceOf<T>, BalanceOf<T>) {
 		if recursion_limit == 0 { return (Zero::zero(), Zero::zero()); }
-		<Delegations<T>>::enumerate()
+		<Delegations<T>>::iter()
 			.filter(|(delegator, (delegate, _))|
 				*delegate == to && !<VoteOf<T>>::contains_key(&(ref_index, delegator.clone()))
 			).fold(
@@ -1606,7 +1639,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {

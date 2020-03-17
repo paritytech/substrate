@@ -439,26 +439,26 @@ decl_storage! {
 		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T>| {
 			let issuance = config.initial_balance * (config.endowed_accounts.len() as u32).into();
 			config.assets.iter().map(|id| (id.clone(), issuance)).collect::<Vec<_>>()
-		}): map hasher(blake2_256) T::AssetId => T::Balance;
+		}): map hasher(twox_64_concat) T::AssetId => T::Balance;
 
 		/// The free balance of a given asset under an account.
 		pub FreeBalance:
-			double_map hasher(blake2_256) T::AssetId, hasher(twox_128) T::AccountId => T::Balance;
+			double_map hasher(twox_64_concat) T::AssetId, hasher(blake2_128_concat) T::AccountId => T::Balance;
 
 		/// The reserved balance of a given asset under an account.
 		pub ReservedBalance:
-			double_map hasher(blake2_256) T::AssetId, hasher(twox_128) T::AccountId => T::Balance;
+			double_map hasher(twox_64_concat) T::AssetId, hasher(blake2_128_concat) T::AccountId => T::Balance;
 
 		/// Next available ID for user-created asset.
 		pub NextAssetId get(fn next_asset_id) config(): T::AssetId;
 
 		/// Permission options for a given asset.
 		pub Permissions get(fn get_permission):
-			map hasher(blake2_256) T::AssetId => PermissionVersions<T::AccountId>;
+			map hasher(twox_64_concat) T::AssetId => PermissionVersions<T::AccountId>;
 
 		/// Any liquidity locks on some account balances.
 		pub Locks get(fn locks):
-			map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
+			map hasher(blake2_128_concat) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// The identity of the asset which is the one that is designated for the chain's staking system.
 		pub StakingAssetId get(fn staking_asset_id) config(): T::AssetId;
@@ -1123,7 +1123,7 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type Version = T::Version;
 	type ModuleToIndex = ();
 	type AccountData = ();
-	type OnNewAccount = ();
+	type MigrateAccount = (); type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {

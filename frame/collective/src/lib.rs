@@ -106,10 +106,10 @@ decl_storage! {
 		pub Proposals get(fn proposals): Vec<T::Hash>;
 		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(fn proposal_of):
-			map hasher(blake2_256) T::Hash => Option<<T as Trait<I>>::Proposal>;
+			map hasher(identity) T::Hash => Option<<T as Trait<I>>::Proposal>;
 		/// Votes on a given proposal, if it is ongoing.
 		pub Voting get(fn voting):
-			map hasher(blake2_256) T::Hash => Option<Votes<T::AccountId, T::BlockNumber>>;
+			map hasher(identity) T::Hash => Option<Votes<T::AccountId, T::BlockNumber>>;
 		/// Proposals so far.
 		pub ProposalCount get(fn proposal_count): u32;
 		/// The current members of the collective. This is stored sorted (just by value).
@@ -168,6 +168,17 @@ decl_error! {
 	}
 }
 
+mod migration {
+	use super::*;
+
+	pub fn migrate<T: Trait<I>, I: Instance>() {
+		for p in Proposals::<T, I>::get().into_iter() {
+			ProposalOf::<T, I>::migrate_key_from_blake(&p);
+			Voting::<T, I>::migrate_key_from_blake(&p);
+		}
+	}
+}
+
 // Note: this module is not benchmarked. The weights are obtained based on the similarity of the
 // executed logic with other democracy function. Note that councillor operations are assigned to the
 // operational class.
@@ -176,6 +187,10 @@ decl_module! {
 		type Error = Error<T, I>;
 
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() {
+			migration::migrate::<T, I>();
+		}
 
 		/// Set the collective's membership.
 		///
@@ -535,7 +550,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	impl Trait<Instance1> for Test {
