@@ -90,6 +90,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 use sp_std::{result, cmp};
@@ -277,7 +278,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {

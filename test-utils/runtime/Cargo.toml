@@ -15,7 +15,7 @@ sp-consensus-aura = { version = "0.8.0-alpha.2", default-features = false, path 
 sp-consensus-babe = { version = "0.8.0-alpha.2", default-features = false, path = "../../primitives/consensus/babe" }
 sp-block-builder = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/block-builder" }
 cfg-if = "0.1.10"
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 frame-executive = { version = "2.0.0-alpha.2", default-features = false, path = "../../frame/executive" }
 sp-inherents = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/inherents" }
 sp-keyring = { version = "2.0.0-alpha.2", optional = true, path = "../../primitives/keyring" }
@@ -40,9 +40,10 @@ sc-client = { version = "0.8.0-alpha.2", optional = true, path = "../../client" 
 sp-trie = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.20.0", default-features = false }
-parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.5.2", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
+sc-block-builder = { version = "0.8.0-alpha.2", path = "../../client/block-builder" }
 sc-executor = { version = "0.8.0-alpha.2", path = "../../client/executor" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "./client" }
 sp-state-machine = { version = "0.8.0-alpha.2", path = "../../primitives/state-machine" }

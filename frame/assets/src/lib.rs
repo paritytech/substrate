@@ -228,11 +228,11 @@ decl_error! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Assets {
 		/// The number of units of assets held by any given account.
-		Balances: map hasher(blake2_256) (T::AssetId, T::AccountId) => T::Balance;
+		Balances: map hasher(blake2_128_concat) (T::AssetId, T::AccountId) => T::Balance;
 		/// The next asset identifier up for grabs.
 		NextAssetId get(fn next_asset_id): T::AssetId;
 		/// The total unit supply of an asset.
-		TotalSupply: map hasher(blake2_256) T::AssetId => T::Balance;
+		TotalSupply: map hasher(twox_64_concat) T::AssetId => T::Balance;
 	}
 }
 
@@ -294,7 +294,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	impl Trait for Test {

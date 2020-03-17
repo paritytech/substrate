@@ -27,6 +27,6 @@ macro_rules! reserved {
 	}
 }
 
-reserved!(on_finalize on_initialize on_finalise on_initialise offchain_worker deposit_event);
+reserved!(on_finalize on_initialize on_runtime_upgrade offchain_worker deposit_event);
 
 fn main() {}

@@ -14,7 +14,7 @@ pallet-balances = { version = "2.0.0-alpha.2", path = "../../../frame/balances" 
 sc-client = { version = "0.8.0-alpha.2", path = "../../../client/" }
 sc-client-db = { version = "0.8.0-alpha.2", path = "../../../client/db/", features = ["kvdb-rocksdb"] }
 sc-client-api = { version = "2.0.0-alpha.2", path = "../../../client/api/" }
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+codec = { package = "parity-scale-codec", version = "1.2.0" }
 pallet-contracts = { version = "2.0.0-alpha.2", path = "../../../frame/contracts" }
 pallet-grandpa = { version = "2.0.0-alpha.2", path = "../../../frame/grandpa" }
 pallet-indices = { version = "2.0.0-alpha.2", path = "../../../frame/indices" }
@@ -41,6 +41,7 @@ sp-api = { version = "2.0.0-alpha.2", path = "../../../primitives/api" }
 sp-finality-tracker = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/finality-tracker" }
 sp-timestamp = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/timestamp" }
 sp-block-builder = { version = "2.0.0-alpha.2", path = "../../../primitives/block-builder" }
+sc-block-builder = { version = "0.8.0-alpha.3", path = "../../../client/block-builder" }
 sp-inherents = { version = "2.0.0-alpha.2", path = "../../../primitives/inherents" }
 sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockchain" }
 log = "0.4.8"

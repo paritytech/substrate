@@ -28,10 +28,7 @@ use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
 use std::marker::PhantomData;
 
-use sc_client_api::{
-	backend::Backend,
-	utils::is_descendent_of,
-};
+use sc_client_api::{backend::Backend, utils::is_descendent_of};
 use sc_client::apply_aux;
 use finality_grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
@@ -58,6 +55,7 @@ use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
 use sp_finality_grandpa::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
+use prometheus_endpoint::{Gauge, U64, register, PrometheusError};
 
 type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -372,6 +370,24 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	}
 }
 
+/// Prometheus metrics for GRANDPA.
+#[derive(Clone)]
+pub(crate) struct Metrics {
+	finality_grandpa_round: Gauge<U64>,
+}
+
+impl Metrics {
+	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			finality_grandpa_round: register(
+				Gauge::new("finality_grandpa_round", "Highest completed GRANDPA round.")?,
+				registry
+			)?,
+		})
+	}
+}
+
+
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	pub(crate) client: Arc<C>,
@@ -384,6 +400,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
+	pub(crate) metrics: Option<Metrics>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -397,6 +414,17 @@ impl<Backend, Block: BlockT, C, N: NetworkT<Block>, SC, VR> Environment<Backend,
 		self.voter_set_state.with(|voter_set_state| {
 			if let Some(set_state) = f(&voter_set_state)? {
 				*voter_set_state = set_state;
+
+				if let Some(metrics) = self.metrics.as_ref() {
+					if let VoterSetState::Live { completed_rounds, .. } = voter_set_state {
+						let highest = completed_rounds.rounds.iter()
+							.map(|round| round.number)
+							.max()
+							.expect("There is always one completed round (genesis); qed");
+
+						metrics.finality_grandpa_round.set(highest);
+					}
+				}
 			}
 			Ok(())
 		})

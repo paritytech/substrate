@@ -41,6 +41,9 @@ enum SpecialTrap {
 	Return(Vec<u8>),
 	/// Signals that trap was generated because the contract exhausted its gas limit.
 	OutOfGas,
+	/// Signals that a trap was generated in response to a succesful call to the
+	/// `ext_terminate` host function.
+	Termination,
 }
 
 /// Can only be used for one call.
@@ -83,14 +86,20 @@ pub(crate) fn to_execution_result<E: Ext>(
 				status: STATUS_SUCCESS,
 				data,
 			})
-		}
+		},
+		Some(SpecialTrap::Termination) => {
+			return Ok(ExecReturnValue {
+				status: STATUS_SUCCESS,
+				data: Vec::new(),
+			})
+		},
 		Some(SpecialTrap::OutOfGas) => {
 			return Err(ExecError {
 				reason: "ran out of gas during contract execution".into(),
 				buffer: runtime.scratch_buf,
 			})
-		}
-		_ => (),
+		},
+		None => (),
 	}
 
 	// Check the exact type of the error.
@@ -348,30 +357,42 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Change the value at the given key in the storage or remove the entry.
-	// The value length must not exceed the maximum defined by the Contracts module parameters.
+	// Set the value at the given key in the contract storage.
 	//
-	// - key_ptr: pointer into the linear
-	//   memory where the location of the requested value is placed.
-	// - value_non_null: if set to 0, then the entry
-	//   at the given location will be removed.
-	// - value_ptr: pointer into the linear memory
-	//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
-	// - value_len: the length of the value. If `value_non_null` is set to 0, then this parameter is ignored.
-	ext_set_storage(ctx, key_ptr: u32, value_non_null: u32, value_ptr: u32, value_len: u32) => {
-		if value_non_null != 0 && ctx.ext.max_value_size() < value_len {
+	// The value length must not exceed the maximum defined by the contracts module parameters.
+	// Storing an empty value is disallowed.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: pointer into the linear memory where the location to store the value is placed.
+	// - `value_ptr`: pointer into the linear memory where the value to set is placed.
+	// - `value_len`: the length of the value in bytes.
+	//
+	// # Errors
+	//
+	// - If value length exceeds the configured maximum value length of a storage entry.
+	// - Upon trying to set an empty storage entry (value length is 0).
+	ext_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
+		if value_len > ctx.ext.max_value_size() {
+			// Bail out if value length exceeds the set maximum value size.
 			return Err(sp_sandbox::HostError);
 		}
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
-		let value =
-			if value_non_null != 0 {
-				Some(read_sandbox_memory(ctx, value_ptr, value_len)?)
-			} else {
-				None
-			};
+		let value = Some(read_sandbox_memory(ctx, value_ptr, value_len)?);
 		ctx.ext.set_storage(key, value).map_err(|_| sp_sandbox::HostError)?;
+		Ok(())
+	},
 
+	// Clear the value at the given key in the contract storage.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: pointer into the linear memory where the location to clear the value is placed.
+	ext_clear_storage(ctx, key_ptr: u32) => {
+		let mut key: StorageKey = [0; 32];
+		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
+		ctx.ext.set_storage(key, None).map_err(|_| sp_sandbox::HostError)?;
 		Ok(())
 	},
 
@@ -393,6 +414,36 @@ define_env!(Env, <E: Ext>,
 		}
 	},
 
+	// Transfer some value to another account.
+	//
+	// If the value transfer was succesful zero is returned. Otherwise one is returned.
+	// The scratch buffer is not touched. The receiver can be a plain account or
+	// a contract.
+	//
+	// - account_ptr: a pointer to the address of the beneficiary account
+	//   Should be decodable as an `T::AccountId`. Traps otherwise.
+	// - account_len: length of the address buffer.
+	// - value_ptr: a pointer to the buffer with value, how much value to send.
+	//   Should be decodable as a `T::Balance`. Traps otherwise.
+	// - value_len: length of the value buffer.
+	ext_transfer(
+		ctx,
+		account_ptr: u32,
+		account_len: u32,
+		value_ptr: u32,
+		value_len: u32
+	) -> u32 => {
+		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
+			read_sandbox_memory_as(ctx, account_ptr, account_len)?;
+		let value: BalanceOf<<E as Ext>::T> =
+			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
+
+		match ctx.ext.transfer(&callee, value, ctx.gas_meter) {
+			Ok(_) => Ok(0),
+			Err(_) => Ok(1),
+		}
+	},
+
 	// Make a call to another contract.
 	//
 	// If the called contract runs to completion, then this returns the status code the callee
@@ -400,6 +451,9 @@ define_env!(Env, <E: Ext>,
 	// code of 0 indicates success, and any other code indicates a failure. On failure, any state
 	// changes made by the called contract are reverted. The scratch buffer is filled with the
 	// output data returned by the called contract, even in the case of a failure status.
+	//
+	// This call fails if it would bring the calling contract below the existential deposit.
+	// In order to destroy a contract `ext_terminate` must be used.
 	//
 	// If the contract traps during execution or otherwise fails to complete successfully, then
 	// this function clears the scratch buffer and returns 0x0100. As with a failure status, any
@@ -481,6 +535,9 @@ define_env!(Env, <E: Ext>,
 	// of the newly instantiated contract. In the case of a failure status, the scratch buffer is
 	// cleared.
 	//
+	// This call fails if it would bring the calling contract below the existential deposit.
+	// In order to destroy a contract `ext_terminate` must be used.
+	//
 	// If the contract traps during execution or otherwise fails to complete successfully, then
 	// this function clears the scratch buffer and returns 0x0100. As with a failure status, any
 	// state changes made by the called contract are reverted.
@@ -557,6 +614,30 @@ define_env!(Env, <E: Ext>,
 				Ok(TRAP_RETURN_CODE)
 			},
 		}
+	},
+
+	// Remove the calling account and transfer remaining balance.
+	//
+	// This function never returns. Either the termination was successful and the
+	// execution of the destroyed contract is halted. Or it failed during the termination
+	// which is considered fatal and results in a trap + rollback.
+	//
+	// - beneficiary_ptr: a pointer to the address of the beneficiary account where all
+	//   where all remaining funds of the caller are transfered.
+	//   Should be decodable as an `T::AccountId`. Traps otherwise.
+	// - beneficiary_len: length of the address buffer.
+	ext_terminate(
+		ctx,
+		beneficiary_ptr: u32,
+		beneficiary_len: u32
+	) => {
+		let beneficiary: <<E as Ext>::T as frame_system::Trait>::AccountId =
+			read_sandbox_memory_as(ctx, beneficiary_ptr, beneficiary_len)?;
+
+		if let Ok(_) = ctx.ext.terminate(&beneficiary, ctx.gas_meter) {
+			ctx.special_trap = Some(SpecialTrap::Termination);
+		}
+		Err(sp_sandbox::HostError)
 	},
 
 	// Save a data buffer as a result of the execution, terminate the execution and return a

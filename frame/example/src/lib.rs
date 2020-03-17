@@ -258,7 +258,9 @@ use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use sp_std::prelude::*;
+use frame_benchmarking::{benchmarks, account};
+use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
@@ -324,6 +326,10 @@ decl_storage! {
 	// A macro for the Storage trait, and its implementation, for this pallet.
 	// This allows for type-safe usage of the Substrate storage database, so you can
 	// keep things around between blocks.
+	//
+	// It is important to update your storage name so that your pallet's
+	// storage items are isolated from other pallets.
+	// ---------------------------------vvvvvvv
 	trait Store for Module<T: Trait> as Example {
 		// Any storage declarations of the form:
 		//   `pub? Name get(fn getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
@@ -339,7 +345,7 @@ decl_storage! {
 		//   - `Foo::put(1); Foo::get()` returns `1`;
 		//   - `Foo::kill(); Foo::get()` returns `0` (u32::default()).
 		// e.g. Foo: u32;
-		// e.g. pub Bar get(fn bar): map hasher(blake2_256) T::AccountId => Vec<(T::Balance, u64)>;
+		// e.g. pub Bar get(fn bar): map hasher(blake2_128_concat) T::AccountId => Vec<(T::Balance, u64)>;
 		//
 		// For basic value items, you'll get a type which implements
 		// `frame_support::StorageValue`. For map items, you'll get a type which
@@ -351,7 +357,7 @@ decl_storage! {
 		Dummy get(fn dummy) config(): Option<T::Balance>;
 
 		// A map that has enumerable entries.
-		Bar get(fn bar) config(): linked_map hasher(blake2_256) T::AccountId => T::Balance;
+		Bar get(fn bar) config(): map hasher(blake2_128_concat) T::AccountId => T::Balance;
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(fn foo) config(): T::Balance;
@@ -642,6 +648,42 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	}
 }
 
+benchmarks!{
+	_ {
+		// Define a common range for `b`.
+		let b in 1 .. 1000 => ();
+	}
+
+	// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
+	accumulate_dummy {
+		let b in ...;
+		let caller = account("caller", 0, 0);
+	}: _ (RawOrigin::Signed(caller), b.into())
+
+	// This will measure the execution time of `set_dummy` for b in [1..1000] range.
+	set_dummy {
+		let b in ...;
+		let caller = account("caller", 0, 0);
+	}: set_dummy (RawOrigin::Signed(caller), b.into())
+
+	// This will measure the execution time of `set_dummy` for b in [1..10] range.
+	another_set_dummy {
+		let b in 1 .. 10;
+		let caller = account("caller", 0, 0);
+	}: set_dummy (RawOrigin::Signed(caller), b.into())
+
+	// This will measure the execution time of sorting a vector.
+	sort_vector {
+		let x in 0 .. 10000;
+		let mut m = Vec::<u32>::new();
+		for i in 0..x {
+			m.push(i);
+		}
+	}: {
+		m.sort();
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -689,7 +731,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {

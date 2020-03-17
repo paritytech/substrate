@@ -14,7 +14,140 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Democratic system: Handles administration of general stakeholder voting.
+//! # Democracy Pallet
+//!
+//! - [`democracy::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! The Democracy pallet handles the administration of general stakeholder voting.
+//!
+//! There are two different queues that a proposal can be added to before it
+//! becomes a referendum, 1) the proposal queue consisting of all public proposals
+//! and 2) the external queue consisting of a single proposal that originates
+//! from one of the _external_ origins (such as a collective group).
+//!
+//! Every launch period - a length defined in the runtime - the Democracy pallet
+//! launches a referendum from a proposal that it takes from either the proposal
+//! queue or the external queue in turn. Any token holder in the system can vote
+//! on referenda. The voting system
+//! uses time-lock voting by allowing the token holder to set their _conviction_
+//! behind a vote. The conviction will dictate the length of time the tokens
+//! will be locked, as well as the multiplier that scales the vote power.
+//!
+//! ### Terminology
+//!
+//! - **Enactment Period:** The minimum period of locking and the period between a proposal being
+//! approved and enacted.
+//! - **Lock Period:** A period of time after proposal enactment that the tokens of _winning_ voters
+//! will be locked.
+//! - **Conviction:** An indication of a voter's strength of belief in their vote. An increase
+//! of one in conviction indicates that a token holder is willing to lock their tokens for twice
+//! as many lock periods after enactment.
+//! - **Vote:** A value that can either be in approval ("Aye") or rejection ("Nay")
+//!   of a particular referendum.
+//! - **Proposal:** A submission to the chain that represents an action that a proposer (either an
+//! account or an external origin) suggests that the system adopt.
+//! - **Referendum:** A proposal that is in the process of being voted on for
+//!   either acceptance or rejection as a change to the system.
+//! - **Proxy:** An account that votes on behalf of a separate "Stash" account
+//!   that holds the funds.
+//! - **Delegation:** The act of granting your voting power to the decisions of another account.
+//!
+//! ### Adaptive Quorum Biasing
+//!
+//! A _referendum_ can be either simple majority-carries in which 50%+1 of the
+//! votes decide the outcome or _adaptive quorum biased_. Adaptive quorum biasing
+//! makes the threshold for passing or rejecting a referendum higher or lower
+//! depending on how the referendum was originally proposed. There are two types of
+//! adaptive quorum biasing: 1) _positive turnout bias_ makes a referendum
+//! require a super-majority to pass that decreases as turnout increases and
+//! 2) _negative turnout bias_ makes a referendum require a super-majority to
+//! reject that decreases as turnout increases. Another way to think about the
+//! quorum biasing is that _positive bias_ referendums will be rejected by
+//! default and _negative bias_ referendums get passed by default.
+//!
+//! ## Interface
+//!
+//! ### Dispatchable Functions
+//!
+//! #### Public
+//!
+//! These calls can be made from any externally held account capable of creating
+//! a signed extrinsic.
+//!
+//! - `propose` - Submits a sensitive action, represented as a hash.
+//!	  Requires a deposit.
+//! - `second` - Signals agreement with a proposal, moves it higher on the
+//!   proposal queue, and requires a matching deposit to the original.
+//! - `vote` - Votes in a referendum, either the vote is "Aye" to enact the
+//!   proposal or "Nay" to keep the status quo.
+//! - `proxy_vote` - Votes in a referendum on behalf of a stash account.
+//! - `activate_proxy` - Activates a proxy that is already open to the sender.
+//! - `close_proxy` - Clears the proxy status, called by the proxy.
+//! - `deactivate_proxy` - Deactivates a proxy back to the open status, called by
+//!   the stash.
+//! - `open_proxy` - Opens a proxy account on behalf of the sender.
+//! - `delegate` - Delegates the voting power (tokens * conviction) to another
+//!   account.
+//! - `undelegate` - Stops the delegation of voting power to another account.
+//! - `note_preimage` - Registers the preimage for an upcoming proposal, requires
+//!   a deposit that is returned once the proposal is enacted.
+//! - `note_imminent_preimage` - Registers the preimage for an upcoming proposal.
+//!   Does not require a deposit, but the proposal must be in the dispatch queue.
+//! - `reap_preimage` - Removes the preimage for an expired proposal. Will only
+//!   work under the condition that it's the same account that noted it and
+//!   after the voting period, OR it's a different account after the enactment period.
+//! - `unlock` - Unlocks tokens that have an expired lock.
+//!
+//! #### Cancellation Origin
+//!
+//! This call can only be made by the `CancellationOrigin`.
+//!
+//! - `emergency_cancel` - Schedules an emergency cancellation of a referendum.
+//!   Can only happen once to a specific referendum.
+//!
+//! #### ExternalOrigin
+//!
+//! This call can only be made by the `ExternalOrigin`.
+//!
+//! - `external_propose` - Schedules a proposal to become a referendum once it is is legal
+//!   for an externally proposed referendum.
+//!
+//! #### External Majority Origin
+//!
+//! This call can only be made by the `ExternalMajorityOrigin`.
+//!
+//! - `external_propose_majority` - Schedules a proposal to become a majority-carries
+//!	 referendum once it is legal for an externally proposed referendum.
+//!
+//! #### External Default Origin
+//!
+//! This call can only be made by the `ExternalDefaultOrigin`.
+//!
+//! - `external_propose_default` - Schedules a proposal to become a negative-turnout-bias
+//!   referendum once it is legal for an externally proposed referendum.
+//!
+//! #### Fast Track Origin
+//!
+//! This call can only be made by the `FastTrackOrigin`.
+//!
+//! - `fast_track` - Schedules the current externally proposed proposal that
+//!   is "majority-carries" to become a referendum immediately.
+//!
+//! #### Veto Origin
+//!
+//! This call can only be made by the `VetoOrigin`.
+//!
+//! - `veto_external` - Vetoes and blacklists the external proposal hash.
+//!
+//! #### Root
+//!
+//! - `cancel_referendum` - Removes a referendum.
+//! - `cancel_queued` - Cancels a proposal that is queued for enactment.
+//! - `clear_public_proposal` - Removes all public proposals.
+
 #![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -26,7 +159,7 @@ use sp_runtime::{
 };
 use codec::{Ref, Encode, Decode, Input, Output};
 use frame_support::{
-	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
+	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter, IterableStorageMap,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
@@ -37,6 +170,7 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
+use frame_support::traits::MigrateAccount;
 
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
@@ -287,11 +421,11 @@ decl_storage! {
 		/// Map of hashes to the proposal preimage, along with who registered it and their deposit.
 		/// The block number is the block at which it was deposited.
 		pub Preimages:
-			map hasher(blake2_256) T::Hash
+			map hasher(identity) T::Hash
 			=> Option<(Vec<u8>, T::AccountId, BalanceOf<T>, T::BlockNumber)>;
 		/// Those who have locked a deposit.
 		pub DepositOf get(fn deposit_of):
-			map hasher(blake2_256) PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
+			map hasher(twox_64_concat) PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
 
 		/// The next free referendum index, aka the number of referenda started so far.
 		pub ReferendumCount get(fn referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
@@ -300,32 +434,32 @@ decl_storage! {
 		pub LowestUnbaked get(fn lowest_unbaked) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// Information concerning any given referendum.
 		pub ReferendumInfoOf get(fn referendum_info):
-			map hasher(blake2_256) ReferendumIndex
+			map hasher(twox_64_concat) ReferendumIndex
 			=> Option<ReferendumInfo<T::BlockNumber, T::Hash>>;
 		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
 		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 
 		/// Get the voters for the current proposal.
 		pub VotersFor get(fn voters_for):
-			map hasher(blake2_256) ReferendumIndex => Vec<T::AccountId>;
+			map hasher(twox_64_concat) ReferendumIndex => Vec<T::AccountId>;
 
 		/// Get the vote in a given referendum of a particular voter. The result is meaningful only
 		/// if `voters_for` includes the voter when called with the referendum (you'll get the
 		/// default `Vote` value otherwise). If you don't want to check `voters_for`, then you can
 		/// also check for simple existence with `VoteOf::contains_key` first.
-		pub VoteOf get(fn vote_of): map hasher(blake2_256) (ReferendumIndex, T::AccountId) => Vote;
+		pub VoteOf get(fn vote_of): map hasher(twox_64_concat) (ReferendumIndex, T::AccountId) => Vote;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
-		pub Proxy get(fn proxy): map hasher(blake2_256) T::AccountId => Option<ProxyState<T::AccountId>>;
+		pub Proxy get(fn proxy): map hasher(twox_64_concat) T::AccountId => Option<ProxyState<T::AccountId>>;
 
 		/// Get the account (and lock periods) to which another account is delegating vote.
 		pub Delegations get(fn delegations):
-			linked_map hasher(blake2_256) T::AccountId => (T::AccountId, Conviction);
+			map hasher(twox_64_concat) T::AccountId => (T::AccountId, Conviction);
 
 		/// Accounts for which there are locks in action which may be removed at some point in the
 		/// future. The value is the block number at which the lock expires and may be removed.
-		pub Locks get(locks): map hasher(blake2_256) T::AccountId => Option<T::BlockNumber>;
+		pub Locks get(locks): map hasher(twox_64_concat) T::AccountId => Option<T::BlockNumber>;
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public
 		/// proposal.
@@ -340,10 +474,10 @@ decl_storage! {
 		/// A record of who vetoed what. Maps proposal hash to a possible existent block number
 		/// (until when it may not be resubmitted) and who vetoed it.
 		pub Blacklist get(fn blacklist):
-			map hasher(blake2_256) T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
+			map hasher(identity) T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
 
 		/// Record of all proposals that have been subject to emergency cancellation.
-		pub Cancellations: map hasher(blake2_256) T::Hash => bool;
+		pub Cancellations: map hasher(identity) T::Hash => bool;
 	}
 }
 
@@ -450,9 +584,41 @@ decl_error! {
 	}
 }
 
+impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
+	fn migrate_account(a: &T::AccountId) {
+		Proxy::<T>::migrate_key_from_blake(a);
+		Locks::<T>::migrate_key_from_blake(a);
+		Delegations::<T>::migrate_key_from_blake(a);
+		for i in LowestUnbaked::get()..ReferendumCount::get() {
+			VoteOf::<T>::migrate_key_from_blake((i, a));
+		}
+	}
+}
+
+mod migration {
+	use super::*;
+	pub fn migrate<T: Trait>() {
+		Blacklist::<T>::remove_all();
+		Cancellations::<T>::remove_all();
+		for i in LowestUnbaked::get()..ReferendumCount::get() {
+			VotersFor::<T>::migrate_key_from_blake(i);
+			ReferendumInfoOf::<T>::migrate_key_from_blake(i);
+		}
+		for (p, h, _) in PublicProps::<T>::get().into_iter() {
+			DepositOf::<T>::migrate_key_from_blake(p);
+			Preimages::<T>::migrate_key_from_blake(h);
+		}
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
+
+		fn on_runtime_upgrade() {
+			migration::migrate::<T>();
+		}
+
 		/// The minimum period of locking and the period between a proposal being approved and enacted.
 		///
 		/// It should generally be a little more than the unstake period to ensure that
@@ -482,8 +648,16 @@ decl_module! {
 
 		/// Propose a sensitive action to be taken.
 		///
+		/// The dispatch origin of this call must be _Signed_ and the sender must
+		/// have funds to cover the deposit.
+		///
+		/// - `proposal_hash`: The hash of the proposal preimage.
+		/// - `value`: The amount of deposit (must be at least `MinimumDeposit`).
+		///
+		/// Emits `Proposed`.
+		///
 		/// # <weight>
-		/// - O(1).
+		/// - `O(1)`.
 		/// - Two DB changes, one DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
@@ -505,10 +679,15 @@ decl_module! {
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
 
-		/// Propose a sensitive action to be taken.
+		/// Signals agreement with a particular proposal.
+		///
+		/// The dispatch origin of this call must be _Signed_ and the sender
+		/// must have funds to cover the deposit, equal to the original deposit.
+		///
+		/// - `proposal`: The index of the proposal to second.
 		///
 		/// # <weight>
-		/// - O(1).
+		/// - `O(1)`.
 		/// - One DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
@@ -524,8 +703,13 @@ decl_module! {
 		/// Vote in a referendum. If `vote.is_aye()`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
 		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `ref_index`: The index of the referendum to vote for.
+		/// - `vote`: The vote configuration.
+		///
 		/// # <weight>
-		/// - O(1).
+		/// - `O(1)`.
 		/// - One DB change, one DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
@@ -540,8 +724,13 @@ decl_module! {
 		/// Vote in a referendum on behalf of a stash. If `vote.is_aye()`, the vote is to enact
 		/// the proposal; otherwise it is a vote to keep the status quo.
 		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `ref_index`: The index of the referendum to proxy vote for.
+		/// - `vote`: The vote configuration.
+		///
 		/// # <weight>
-		/// - O(1).
+		/// - `O(1)`.
 		/// - One DB change, one DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
@@ -556,6 +745,14 @@ decl_module! {
 
 		/// Schedule an emergency cancellation of a referendum. Cannot happen twice to the same
 		/// referendum.
+		///
+		/// The dispatch origin of this call must be `CancellationOrigin`.
+		///
+		/// -`ref_index`: The index of the referendum to cancel.
+		///
+		/// # <weight>
+		/// - Depends on size of storage vec `VotersFor` for this referendum.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
 			T::CancellationOrigin::ensure_origin(origin)?;
@@ -570,6 +767,15 @@ decl_module! {
 
 		/// Schedule a referendum to be tabled once it is legal to schedule an external
 		/// referendum.
+		///
+		/// The dispatch origin of this call must be `ExternalOrigin`.
+		///
+		/// - `proposal_hash`: The preimage hash of the proposal.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One DB change.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose(origin, proposal_hash: T::Hash) {
 			T::ExternalOrigin::ensure_origin(origin)?;
@@ -586,8 +792,17 @@ decl_module! {
 		/// Schedule a majority-carries referendum to be tabled next once it is legal to schedule
 		/// an external referendum.
 		///
+		/// The dispatch of this call must be `ExternalMajorityOrigin`.
+		///
+		/// - `proposal_hash`: The preimage hash of the proposal.
+		///
 		/// Unlike `external_propose`, blacklisting has no effect on this and it may replace a
 		/// pre-scheduled `external_propose` call.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One DB change.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose_majority(origin, proposal_hash: T::Hash) {
 			T::ExternalMajorityOrigin::ensure_origin(origin)?;
@@ -597,8 +812,17 @@ decl_module! {
 		/// Schedule a negative-turnout-bias referendum to be tabled next once it is legal to
 		/// schedule an external referendum.
 		///
+		/// The dispatch of this call must be `ExternalDefaultOrigin`.
+		///
+		/// - `proposal_hash`: The preimage hash of the proposal.
+		///
 		/// Unlike `external_propose`, blacklisting has no effect on this and it may replace a
 		/// pre-scheduled `external_propose` call.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One DB change.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose_default(origin, proposal_hash: T::Hash) {
 			T::ExternalDefaultOrigin::ensure_origin(origin)?;
@@ -609,11 +833,21 @@ decl_module! {
 		/// immediately. If there is no externally-proposed referendum currently, or if there is one
 		/// but it is not a majority-carries referendum then it fails.
 		///
+		/// The dispatch of this call must be `FastTrackOrigin`.
+		///
 		/// - `proposal_hash`: The hash of the current external proposal.
 		/// - `voting_period`: The period that is allowed for voting on this proposal. Increased to
 		///   `EmergencyVotingPeriod` if too low.
 		/// - `delay`: The number of block after voting has ended in approval and this should be
 		///   enacted. This doesn't have a minimum amount.
+		///
+		/// Emits `Started`.
+		///
+		/// # <weight>
+		/// - One DB clear.
+		/// - One DB change.
+		/// - One extra DB entry.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn fast_track(origin,
 			proposal_hash: T::Hash,
@@ -636,6 +870,19 @@ decl_module! {
 		}
 
 		/// Veto and blacklist the external proposal hash.
+		///
+		/// The dispatch origin of this call must be `VetoOrigin`.
+		///
+		/// - `proposal_hash`: The preimage hash of the proposal to veto and blacklist.
+		///
+		/// Emits `Vetoed`.
+		///
+		/// # <weight>
+		/// - Two DB entries.
+		/// - One DB clear.
+		/// - Performs a binary search on `existing_vetoers` which should not
+		///   be very large.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn veto_external(origin, proposal_hash: T::Hash) {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
@@ -661,6 +908,14 @@ decl_module! {
 		}
 
 		/// Remove a referendum.
+		///
+		/// The dispatch origin of this call must be _Root_.
+		///
+		/// - `ref_index`: The index of the referendum to cancel.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
 			ensure_root(origin)?;
@@ -668,6 +923,14 @@ decl_module! {
 		}
 
 		/// Cancel a proposal queued for enactment.
+		///
+		/// The dispatch origin of this call must be _Root_.
+		///
+		/// - `which`: The index of the referendum to cancel.
+		///
+		/// # <weight>
+		/// - One DB change.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
@@ -687,6 +950,10 @@ decl_module! {
 		/// Specify a proxy that is already open to us. Called by the stash.
 		///
 		/// NOTE: Used to be called `set_proxy`.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `proxy`: The account that will be activated as proxy.
 		///
 		/// # <weight>
 		/// - One extra DB entry.
@@ -709,6 +976,8 @@ decl_module! {
 		///
 		/// NOTE: Used to be called `resign_proxy`.
 		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
 		/// # <weight>
 		/// - One DB clear.
 		/// # </weight>
@@ -729,6 +998,10 @@ decl_module! {
 		///
 		/// NOTE: Used to be called `remove_proxy`.
 		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `proxy`: The account that will be deactivated as proxy.
+		///
 		/// # <weight>
 		/// - One DB clear.
 		/// # </weight>
@@ -746,6 +1019,16 @@ decl_module! {
 		}
 
 		/// Delegate vote.
+		///
+		/// Currency is locked indefinitely for as long as it's delegated.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `to`: The account to make a delegate of the sender.
+		/// - `conviction`: The conviction that will be attached to the delegated
+		///   votes.
+		///
+		/// Emits `Delegated`.
 		///
 		/// # <weight>
 		/// - One extra DB entry.
@@ -766,6 +1049,14 @@ decl_module! {
 		}
 
 		/// Undelegate vote.
+		///
+		/// Must be sent from an account that has called delegate previously.
+		/// The tokens will be reduced from an indefinite lock to the maximum
+		/// possible according to the conviction of the prior delegation.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// Emits `Undelegated`.
 		///
 		/// # <weight>
 		/// - O(1).
@@ -788,7 +1079,14 @@ decl_module! {
 			Self::deposit_event(RawEvent::Undelegated(who));
 		}
 
-		/// Veto and blacklist the proposal hash. Must be from Root origin.
+		/// Clears all public proposals.
+		///
+		/// The dispatch origin of this call must be _Root_.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One DB clear.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn clear_public_proposals(origin) {
 			ensure_root(origin)?;
@@ -798,6 +1096,17 @@ decl_module! {
 
 		/// Register the preimage for an upcoming proposal. This doesn't require the proposal to be
 		/// in the dispatch queue but does require a deposit, returned once enacted.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `encoded_proposal`: The preimage of a proposal.
+		///
+		/// Emits `PreimageNoted`.
+		///
+		/// # <weight>
+		/// - Dependent on the size of `encoded_proposal` but protected by a
+		///   required deposit.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn note_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
@@ -816,6 +1125,16 @@ decl_module! {
 
 		/// Register the preimage for an upcoming proposal. This requires the proposal to be
 		/// in the dispatch queue. No deposit is needed.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `encoded_proposal`: The preimage of a proposal.
+		///
+		/// Emits `PreimageNoted`.
+		///
+		/// # <weight>
+		/// - Dependent on the size of `encoded_proposal`.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
@@ -833,9 +1152,19 @@ decl_module! {
 
 		/// Remove an expired proposal preimage and collect the deposit.
 		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `proposal_hash`: The preimage hash of a proposal.
+		///
 		/// This will only work after `VotingPeriod` blocks from the time that the preimage was
 		/// noted, if it's the same account doing it. If it's a different account, then it'll only
 		/// work an additional `EnactmentPeriod` later.
+		///
+		/// Emits `PreimageReaped`.
+		///
+		/// # <weight>
+		/// - One DB clear.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn reap_preimage(origin, proposal_hash: T::Hash) {
 			let who = ensure_signed(origin)?;
@@ -855,6 +1184,17 @@ decl_module! {
 			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
 		}
 
+		/// Unlock tokens that have an expired lock.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `target`: The account to remove the lock on.
+		///
+		/// Emits `Unlocked`.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn unlock(origin, target: T::AccountId) {
 			ensure_signed(origin)?;
@@ -983,7 +1323,7 @@ impl<T: Trait> Module<T> {
 		recursion_limit: u32,
 	) -> (BalanceOf<T>, BalanceOf<T>) {
 		if recursion_limit == 0 { return (Zero::zero(), Zero::zero()); }
-		<Delegations<T>>::enumerate()
+		<Delegations<T>>::iter()
 			.filter(|(delegator, (delegate, _))|
 				*delegate == to && !<VoteOf<T>>::contains_key(&(ref_index, delegator.clone()))
 			).fold(
@@ -1065,7 +1405,6 @@ impl<T: Trait> Module<T> {
 	/// Remove all info on a referendum.
 	fn clear_referendum(ref_index: ReferendumIndex) {
 		<ReferendumInfoOf<T>>::remove(ref_index);
-
 
 		LowestUnbaked::mutate(|i| if *i == ref_index {
 			*i += 1;
@@ -1167,19 +1506,22 @@ impl<T: Trait> Module<T> {
 		let (approve, against, capital) = Self::tally(index);
 		let total_issuance = T::Currency::total_issuance();
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
+		let enactment_period = T::EnactmentPeriod::get();
 
 		// Logic defined in https://www.slideshare.net/gavofyork/governance-in-polkadot-poc3
 		// Essentially, we extend the lock-period of the coins behind the winning votes to be the
 		// vote strength times the public delay period from now.
-		for (a, Vote { conviction, .. }) in Self::voters_for(index).into_iter()
+		for (a, lock_periods) in Self::voters_for(index).into_iter()
 			.map(|a| (a.clone(), Self::vote_of((index, a))))
 			// ^^^ defensive only: all items come from `voters`; for an item to be in `voters`
 			// there must be a vote registered; qed
 			.filter(|&(_, vote)| vote.aye == approved)  // Just the winning coins
+			.map(|(a, vote)| (a, vote.conviction.lock_periods()))
+			.filter(|&(_, lock_periods)| !lock_periods.is_zero()) // Just the lock votes
 		{
 			// now plus: the base lock period multiplied by the number of periods this voter
 			// offered to lock should they win...
-			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
+			let locked_until = now + enactment_period * lock_periods.into();
 			Locks::<T>::insert(&a, locked_until);
 			// ...extend their bondage until at least then.
 			T::Currency::extend_lock(
@@ -1188,7 +1530,6 @@ impl<T: Trait> Module<T> {
 				Bounded::max_value(),
 				WithdrawReason::Transfer.into()
 			);
-
 		}
 
 		Self::clear_referendum(index);
@@ -1249,12 +1590,11 @@ mod tests {
 	};
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup, Bounded, BadOrigin, OnInitialize},
+		traits::{BlakeTwo256, IdentityLookup, Bounded, BadOrigin},
 		testing::Header, Perbill,
 	};
 	use pallet_balances::{BalanceLock, Error as BalancesError};
 	use frame_system::EnsureSignedBy;
-	use sp_storage::Storage;
 
 	const AYE: Vote = Vote{ aye: true, conviction: Conviction::None };
 	const NAY: Vote = Vote{ aye: false, conviction: Conviction::None };
@@ -1299,7 +1639,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {
@@ -1372,55 +1712,6 @@ mod tests {
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Democracy = Module<Test>;
-
-	#[test]
-	fn lock_info_via_migration_should_work() {
-		let mut s = Storage::default();
-		use hex_literal::hex;
-		// A dump of data from the previous version for which we know account 1 has 5 of its 10
-		// reserved and 3 of the rest is locked for misc. Account 2 has all 20 locked until block 5
-		// for everything and additionally 3 locked for just fees.
-		let data = vec![
-			(hex!["26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac"].to_vec(), hex!["0100000000000000"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850"].to_vec(), hex!["02000000"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7"].to_vec(), hex!["08000000000000000000000000"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc"].to_vec(), hex!["4545454545454545454545454545454545454545454545454545454545454545"].to_vec()),
-			(hex!["26aa394eea5630e07c48ae0c9558cef7a44704b568d21667356a5a050c11874681e47a19e6b29b0a65b9591762ce5143ed30d0261e5d24a3201752506b20f15c"].to_vec(), hex!["4545454545454545454545454545454545454545454545454545454545454545"].to_vec()),
-			(hex!["3a636f6465"].to_vec(), hex![""].to_vec()),
-			(hex!["3a65787472696e7369635f696e646578"].to_vec(), hex!["00000000"].to_vec()),
-			(hex!["3a686561707061676573"].to_vec(), hex!["0800000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f218f26c73add634897550b4003b26bc61dbd7d0b561a41d23c2a469ad42fbd70d5438bae826f6fd607413190c37c363b"].to_vec(), hex!["046d697363202020200300000000000000ffffffffffffffff04"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f218f26c73add634897550b4003b26bc66cddb367afbd583bb48f9bbd7d5ba3b1d0738b4881b1cddd38169526d8158137"].to_vec(), hex!["0474786665657320200300000000000000ffffffffffffffff01"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f218f26c73add634897550b4003b26bc6e88b43fded6323ef02ffeffbd8c40846ee09bf316271bd22369659c959dd733a"].to_vec(), hex!["08616c6c20202020200300000000000000ffffffffffffffff1f64656d6f63726163ffffffffffffffff030000000000000002"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f3c22813def93ef32c365b55cb92f10f91dbd7d0b561a41d23c2a469ad42fbd70d5438bae826f6fd607413190c37c363b"].to_vec(), hex!["0500000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80"].to_vec(), hex!["d200000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f5f27b51b5ec208ee9cb25b55d8728243b8788bb218b185b63e3e92653953f29b6b143fb8cf5159fc908632e6fe490501"].to_vec(), hex!["1e0000000000000006000000000000000200000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b41dbd7d0b561a41d23c2a469ad42fbd70d5438bae826f6fd607413190c37c363b"].to_vec(), hex!["0500000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b46cddb367afbd583bb48f9bbd7d5ba3b1d0738b4881b1cddd38169526d8158137"].to_vec(), hex!["1e00000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4b8788bb218b185b63e3e92653953f29b6b143fb8cf5159fc908632e6fe490501"].to_vec(), hex!["3c00000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4e88b43fded6323ef02ffeffbd8c40846ee09bf316271bd22369659c959dd733a"].to_vec(), hex!["1400000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4e96760d274653a39b429a87ebaae9d3aa4fdf58b9096cf0bebc7c4e5a4c2ed8d"].to_vec(), hex!["2800000000000000"].to_vec()),
-			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4effb728943197fd12e694cbf3f3ede28fbf7498b0370c6dfa0013874b417c178"].to_vec(), hex!["3200000000000000"].to_vec()),
-			(hex!["f2794c22e353e9a839f12faab03a911b7f17cdfbfa73331856cca0acddd7842e"].to_vec(), hex!["00000000"].to_vec()),
-			(hex!["f2794c22e353e9a839f12faab03a911bbdcb0c5143a8617ed38ae3810dd45bc6"].to_vec(), hex!["00000000"].to_vec()),
-			(hex!["f2794c22e353e9a839f12faab03a911be2f6cb0456905c189bcb0458f9440f13"].to_vec(), hex!["00000000"].to_vec()),
-		];
-		s.top = data.into_iter().collect();
-		sp_io::TestExternalities::new(s).execute_with(|| {
-			Balances::on_initialize(1);
-			assert_eq!(Balances::free_balance(1), 5);
-			assert_eq!(Balances::reserved_balance(1), 5);
-			assert_eq!(Balances::usable_balance(&1), 2);
-			assert_eq!(Balances::usable_balance_for_fees(&1), 5);
-			assert_eq!(Balances::free_balance(2), 20);
-			assert_eq!(Balances::reserved_balance(2), 0);
-			assert_eq!(Balances::usable_balance(&2), 0);
-			assert_eq!(Balances::usable_balance_for_fees(&2), 17);
-			fast_forward_to(5);
-			assert_ok!(Democracy::unlock(Origin::signed(2), 2));
-			assert_eq!(Balances::usable_balance(&2), 17);
-		});
-	}
 
 	#[test]
 	fn params_should_work() {
@@ -2593,6 +2884,28 @@ mod tests {
 			fast_forward_to(18);
 			assert_ok!(Democracy::unlock(Origin::signed(1), 2));
 			assert_noop!(Democracy::unlock(Origin::signed(1), 2), Error::<Test>::NotLocked);
+		});
+	}
+
+	#[test]
+	fn no_locks_without_conviction_should_work() {
+		new_test_ext().execute_with(|| {
+			System::set_block_number(0);
+			let r = Democracy::inject_referendum(
+				2,
+				set_balance_proposal_hash_and_note(2),
+				VoteThreshold::SuperMajorityApprove,
+				0,
+			);
+			assert_ok!(Democracy::vote(Origin::signed(1), r, Vote {
+				aye: true,
+				conviction: Conviction::None,
+			}));
+
+			fast_forward_to(2);
+
+			assert_eq!(Balances::free_balance(42), 2);
+			assert_eq!(Balances::locks(1), vec![]);
 		});
 	}
 
