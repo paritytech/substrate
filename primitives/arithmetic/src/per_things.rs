@@ -20,7 +20,7 @@ use serde::{Serialize, Deserialize};
 use sp_std::{ops, prelude::*, convert::TryInto};
 use codec::{Encode, Decode, CompactAs};
 use crate::traits::{
-	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic,
+	SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto, Saturating, BaseArithmetic, Zero
 };
 use sp_debug_derive::RuntimeDebug;
 
@@ -30,29 +30,55 @@ pub trait PerThing: Sized + Saturating + Copy {
 	/// The data type used to build this per-thingy.
 	type Inner: BaseArithmetic + Copy;
 
-	/// accuracy of this type
+	/// A data type larger than `Self::Inner`, used to avoid overflow in some computations.
+	type Upper: BaseArithmetic + Copy + From<Self::Inner> + TryInto<Self::Inner>;
+
+	/// The accuracy of this type.
 	const ACCURACY: Self::Inner;
 
-	/// NoThing
-	fn zero() -> Self;
+	/// Equivalent to `Self::from_parts(0)`.
+	fn zero() -> Self { Self::from_parts(Self::Inner::zero()) }
 
-	/// `true` if this is nothing.
-	fn is_zero(&self) -> bool;
+	/// Return `true` if this is nothing.
+	fn is_zero(&self) -> bool { self.deconstruct() == Self::Inner::zero() }
 
-	/// Everything.
-	fn one() -> Self;
+	/// Equivalent to `Self::from_parts(Self::ACCURACY)`.
+	fn one() -> Self { Self::from_parts(Self::ACCURACY) }
 
-	/// Consume self and deconstruct into a raw numeric type.
-	fn deconstruct(self) -> Self::Inner;
+	/// Return `true` if this is one.
+	fn is_one(&self) -> bool { self.deconstruct() == Self::ACCURACY }
 
-	/// From an explicitly defined number of parts per maximum of the type.
-	fn from_parts(parts: Self::Inner) -> Self;
-
-	/// Converts a percent into `Self`. Equal to `x / 100`.
-	fn from_percent(x: Self::Inner) -> Self;
+	/// Build this type from a percent. Equivalent to `Self::from_parts(x * Self::ACCURACY / 100)`.
+	fn from_percent(x: Self::Inner) -> Self {
+		Self::from_parts(x.min(100.into()) * (Self::ACCURACY / 100.into()))
+	}
 
 	/// Return the product of multiplication of this value by itself.
-	fn square(self) -> Self;
+	fn square(self) -> Self {
+		let p = Self::Upper::from(self.deconstruct());
+		let q = Self::Upper::from(Self::ACCURACY); 
+		Self::from_rational_approximation(p * p, q * q)
+	}
+
+	/// Saturating reciprocal multiplication. Compute `x / self`, saturating at the numeric 
+	/// bounds instead of overflowing.
+	fn saturating_reciprocal_mul<N>(self, x: N) -> N
+	where N: Into<Self::Upper> + UniqueSaturatedFrom<Self::Upper> {
+		N::unique_saturated_from(x.into() * Self::Upper::from(Self::ACCURACY) / Self::Upper::from(self.deconstruct()))
+	}
+
+	/// Saturating truncating multiplication. Compute `x * self`, truncating any fractional
+	/// remainder, IE rounding down to the nearest integer.
+	fn saturating_truncating_mul<N>(self, x: N) -> N 
+	where N: Into<Self::Upper> + UniqueSaturatedFrom<Self::Upper> {
+		N::unique_saturated_from(x.into() * Self::Upper::from(self.deconstruct()) / Self::Upper::from(Self::ACCURACY))
+	}
+
+	/// Consume self and return the number of parts per thing. 
+	fn deconstruct(self) -> Self::Inner;
+
+	/// Build this type from a number of parts per thing.
+	fn from_parts(parts: Self::Inner) -> Self;
 
 	/// Converts a fraction into `Self`.
 	#[cfg(feature = "std")]
@@ -64,12 +90,12 @@ pub trait PerThing: Sized + Saturating + Copy {
 	/// `M` as the data type that can hold the maximum value of this per-thing (e.g. u32 for
 	/// perbill), this can only work if `N == M` or `N: From<M> + TryInto<M>`.
 	fn from_rational_approximation<N>(p: N, q: N) -> Self
-		where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + ops::Div<N, Output=N>;
+	where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + ops::Div<N, Output=N>;
 }
 
 macro_rules! implement_per_thing {
 	($name:ident, $test_mod:ident, [$($test_units:tt),+], $max:tt, $type:ty, $upper_type:ty, $title:expr $(,)?) => {
-		/// A fixed point representation of a number between in the range [0, 1].
+		/// A fixed point representation of a number in the range [0, 1].
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -78,39 +104,16 @@ macro_rules! implement_per_thing {
 
 		impl PerThing for $name {
 			type Inner = $type;
+			type Upper = $upper_type;
 
 			/// The accuracy of this type.
 			const ACCURACY: Self::Inner = $max;
 
-			/// Nothing.
-			fn zero() -> Self { Self(0) }
-
-			/// `true` if this is nothing.
-			fn is_zero(&self) -> bool { self.0 == 0 }
-
-			/// Everything.
-			fn one() -> Self { Self($max) }
-
-			/// Consume self and deconstruct into a raw numeric type.
+			/// Consume self and return the number of parts per thing. 
 			fn deconstruct(self) -> Self::Inner { self.0 }
 
-			/// From an explicitly defined number of parts per maximum of the type.
-			fn from_parts(parts: Self::Inner) -> Self {
-				Self([parts, $max][(parts > $max) as usize])
-			}
-
-			/// Converts a percent into `Self`. Equal to `x / 100`.
-			fn from_percent(x: Self::Inner) -> Self {
-				Self([x, 100][(x > 100) as usize] * ($max / 100))
-			}
-
-			/// Return the product of multiplication of this value by itself.
-			fn square(self) -> Self {
-				// both can be safely casted and multiplied.
-				let p: $upper_type = self.0 as $upper_type * self.0 as $upper_type;
-				let q: $upper_type = <$upper_type>::from($max) * <$upper_type>::from($max);
-				Self::from_rational_approximation(p, q)
-			}
+			/// Build this type from a number of parts per thing.
+			fn from_parts(parts: Self::Inner) -> Self { Self(parts.min($max)) }
 
 			/// Converts a fraction into `Self`.
 			#[cfg(feature = "std")]
@@ -122,8 +125,7 @@ macro_rules! implement_per_thing {
 			/// `M` as the data type that can hold the maximum value of this per-thing (e.g. u32 for
 			/// perbill), this can only work if `N == M` or `N: From<M> + TryInto<M>`.
 			fn from_rational_approximation<N>(p: N, q: N) -> Self
-				where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + ops::Div<N, Output=N>
-			{
+			where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + ops::Div<N, Output=N> {
 				// q cannot be zero.
 				let q = q.max((1 as Self::Inner).into());
 				// p should not be bigger than q.
@@ -159,39 +161,22 @@ macro_rules! implement_per_thing {
 			}
 		}
 
-		/// Implement const functions
-		impl $name {
-			/// From an explicitly defined number of parts per maximum of the type.
-			///
-			/// This can be called at compile time.
-			pub const fn from_parts(parts: $type) -> Self {
-				Self([parts, $max][(parts > $max) as usize])
-			}
-
-			/// Converts a percent into `Self`. Equal to `x / 100`.
-			///
-			/// This can be created at compile time.
-			pub const fn from_percent(x: $type) -> Self {
-				Self([x, 100][(x > 100) as usize] * ($max / 100))
-			}
-
-			/// Everything.
-			///
-			/// To avoid having to import `PerThing` when one needs to be used in test mocks.
-			#[cfg(feature = "std")]
-			pub fn one() -> Self {
-				<Self as PerThing>::one()
-			}
-		}
-
 		impl Saturating for $name {
+			/// Saturating addition. Compute `self + rhs`, saturating at the numeric bounds instead of
+			/// overflowing. This operation is lossless if it does not saturate.
 			fn saturating_add(self, rhs: Self) -> Self {
 				// defensive-only: since `$max * 2 < $type::max_value()`, this can never overflow.
 				Self::from_parts(self.0.saturating_add(rhs.0))
 			}
+
+			/// Saturating subtraction. Compute `self - rhs`, saturating at the numeric bounds instead of
+			/// overflowing. This operation is lossless if it does not saturate.
 			fn saturating_sub(self, rhs: Self) -> Self {
 				Self::from_parts(self.0.saturating_sub(rhs.0))
 			}
+
+			/// Saturating multiply. Compute `self * rhs`, saturating at the numeric bounds instead of
+			/// overflowing. This operation is lossy.
 			fn saturating_mul(self, rhs: Self) -> Self {
 				let a = self.0 as $upper_type;
 				let b = rhs.0 as $upper_type;
@@ -199,6 +184,26 @@ macro_rules! implement_per_thing {
 				let parts = a * b / m;
 				// This will always fit into $type.
 				Self::from_parts(parts as $type)
+			}
+
+			/// Saturating exponentiation. Computes `self.pow(exp)`, saturating at the numeric
+			/// bounds instead of overflowing. This operation is lossy.
+			fn saturating_pow(self, exp: usize) -> Self {
+				if self.is_zero() || self.is_one() {
+					self
+				} else {
+					let p = <$name as PerThing>::Upper::from(self.deconstruct());
+					let q = <$name as PerThing>::Upper::from(Self::ACCURACY);
+					let mut s = Self::one();
+					for _ in 0..exp {
+						if s.is_zero() {
+							break;
+						} else {
+							s = Self::from_rational_approximation(<$name as PerThing>::Upper::from(s.deconstruct()) * p, q * q);
+						}
+					}
+					s
+				}
 			}
 		}
 
@@ -320,6 +325,7 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_percent(0), $name::from_parts(Zero::zero()));
 				assert_eq!($name::from_percent(10), $name::from_parts($max / 10));
 				assert_eq!($name::from_percent(100), $name::from_parts($max));
+				assert_eq!($name::from_percent(200), $name::from_parts($max));
 			}
 
 			macro_rules! per_thing_mul_test {
@@ -544,6 +550,67 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_percent(100) / $name::from_percent(50),
 					$name::from_percent(100)
 				);
+			}
+
+			#[test]
+			fn saturating_pow_works() {
+				// x^0 == 1
+				assert_eq!(
+					$name::from_parts($max / 2).saturating_pow(0), 
+					$name::from_parts($max)
+					);
+
+				// x^1 == x
+				assert_eq!(
+					$name::from_parts($max / 2).saturating_pow(1), 
+					$name::from_parts($max / 2)
+					);
+
+				// x^2
+				assert_eq!(
+					$name::from_parts($max / 2).saturating_pow(2), 
+					$name::from_parts($max / 2).square()
+					);
+
+				// x^3
+				assert_eq!(
+					$name::from_parts($max / 2).saturating_pow(3), 
+					$name::from_parts($max / 8)
+					);
+
+				// 0^n == 0
+				assert_eq!(
+					$name::from_parts(0).saturating_pow(3), 
+					$name::from_parts(0)
+					);
+
+				// 1^n == 1
+				assert_eq!(
+					$name::from_parts($max).saturating_pow(3), 
+					$name::from_parts($max)
+					);
+
+				// (x < 1)^inf == 0 (where u32::MAX ~ inf)
+				assert_eq!(
+					$name::from_parts($max / 2).saturating_pow(usize::MAX), 
+					$name::from_parts(0)
+					);
+			}
+
+			#[test]
+			fn saturating_reciprocal_mul_works() {
+				assert_eq!(
+					$name::from_parts($max).saturating_reciprocal_mul(<$type>::from(10u8)),
+					10
+					);
+				assert_eq!(
+					$name::from_parts($max / 2).saturating_reciprocal_mul(<$type>::from(10u8)),
+					20
+					);
+				assert_eq!(
+					$name::from_parts(1).saturating_reciprocal_mul($max),
+					<$type>::max_value()
+					);
 			}
 		}
 	};
