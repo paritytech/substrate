@@ -44,6 +44,7 @@ fn setup<T: Trait>(b: u32) -> T::AccountId {
 		let starting_block = 0;
 
 		let caller = account("caller", 0, SEED);
+		System::<T>::set_block_number(0.into());
 
 		// Add schedule to avoid `NotVesting` error.
 		let _ = Vesting::<T>::add_vesting_schedule(
