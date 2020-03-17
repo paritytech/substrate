@@ -13,6 +13,24 @@ github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate
 github_header="Accept: application/vnd.github.v3+json" 
 
 boldprint () { printf "|\n| \033[1m${@}\033[0m\n|\n" ; }
+boldcat () { printf "|\n"; while read l; do printf "| \033[1m${l}\033[0m\n"; done; printf "|\n" ; }
+
+boldcat <<-EOT
+
+
+check_polkadot
+==============
+
+this job checks if there is a string in the description of the pr like
+
+polkadot companion: paritytech/polkadot#567
+
+
+it will then run cargo check from this polkadot's branch with substrate code 
+from this pull request.
+
+
+EOT
 
 
 
