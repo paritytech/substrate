@@ -35,10 +35,12 @@ mod insert;
 pub mod tests;
 
 use std::fmt::{Debug, Display};
+use std::str::FromStr;
 use structopt::StructOpt;
-
-use sc_service::{ Configuration, ServiceBuilderCommand, ChainSpec };
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, IdentifyAccount};
+use sp_core::crypto::{Ss58Codec, Derive};
+use parity_scale_codec::Codec;
+use sc_service::{Configuration, ServiceBuilderCommand, ChainSpec};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
 use crate::VersionInfo;
@@ -60,9 +62,6 @@ pub use crate::commands::sign_transaction::SignTransactionCmd;
 pub use crate::commands::transfer::TransferCmd;
 pub use crate::commands::vanity::VanityCmd;
 pub use crate::commands::verify::VerifyCmd;
-use sp_core::crypto::{Ss58Codec, Derive};
-use std::str::FromStr;
-use parity_scale_codec::{Codec, WrapperTypeEncode};
 
 
 /// default sub directory to store network config
@@ -156,8 +155,7 @@ impl Subcommand {
 		RA: RuntimeAdapter,
 		AccountIdFor<RA>: Ss58Codec + Derive,
 		<IndexFor<RA> as FromStr>::Err: Display,
-		CallFor<RA>: Codec + WrapperTypeEncode,
-		RA::Address: From<<RA::Public as IdentifyAccount>::AccountId>,
+		CallFor<RA>: Codec,
 	{
 		match self {
 			Subcommand::BuildSpec(cmd) => cmd.run(config),

@@ -178,10 +178,6 @@ use sp_runtime::{
 	},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
-use frame_support::storage::migration::{
-	get_storage_value, take_storage_value, put_storage_value, StorageIterator, have_storage_value
-};
-
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {

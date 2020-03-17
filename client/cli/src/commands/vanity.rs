@@ -43,6 +43,7 @@ pub struct VanityCmd {
 }
 
 impl VanityCmd {
+	/// Run the command
 	pub fn run<RA>(self) -> error::Result<()>
 		where
 			RA: RuntimeAdapter,

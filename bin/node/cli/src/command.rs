@@ -17,7 +17,13 @@
 use sc_cli::VersionInfo;
 use sc_service::{Roles as ServiceRoles};
 use node_transaction_factory::RuntimeAdapter;
-use crate::{Cli, service, ChainSpec, load_spec, Subcommand, factory_impl::FactoryState};
+use crate::{
+	Cli, service, ChainSpec, load_spec, Subcommand,
+	factory_impl::FactoryState,
+};
+use sp_runtime::generic::Era;
+use node_primitives::{Signature, AccountId, Index};
+use node_runtime::{Runtime, SignedExtra};
 
 /// Parse command line arguments into service configuration.
 pub fn run<I, T>(args: I, version: VersionInfo) -> sc_cli::Result<()>
@@ -106,10 +112,32 @@ where
 		Some(Subcommand::Base(subcommand)) => {
 			subcommand.init(&version)?;
 			subcommand.update_config(&mut config, load_spec, &version)?;
-			subcommand.run(
+			subcommand.run::<Adapter, _, _, _>(
 				config,
 				|config: sc_service::Configuration| Ok(new_full_start!(config).0),
 			)
 		},
+	}
+}
+
+pub struct Adapter;
+
+impl sc_cli::RuntimeAdapter for Adapter {
+	type Pair = ();
+	type Public = ();
+	type Signature = Signature;
+	type Runtime = Runtime;
+	type Extra = SignedExtra;
+
+	fn build_extra(index: Index) -> Self::Extra {
+		(
+			frame_system::CheckVersion::new(),
+			frame_system::CheckGenesis::new(),
+			frame_system::CheckEra::from(Era::Immortal),
+			frame_system::CheckNonce::from(index),
+			frame_system::CheckWeight::new(),
+			pallet_transaction_payment::ChargeTransactionPayment::from(0),
+			pallet_contracts::CheckBlockGasLimit::default(),
+		)
 	}
 }

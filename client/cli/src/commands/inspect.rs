@@ -41,6 +41,7 @@ pub struct InspectCmd {
 }
 
 impl InspectCmd {
+	/// Run the command
 	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()>
 		where
 			AccountIdFor<RA>: Ss58Codec + Derive,

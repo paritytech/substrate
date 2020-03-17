@@ -22,7 +22,6 @@ use structopt::StructOpt;
 use pallet_balances::Call as BalancesCall;
 use std::{str::FromStr, fmt::Display};
 use parity_scale_codec::{Encode, Decode};
-use sp_runtime::traits::IdentifyAccount;
 use sc_service::{Configuration, ChainSpec};
 
 /// The `transfer` command
@@ -55,13 +54,14 @@ pub struct TransferCmd {
 
 
 impl TransferCmd {
-	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()>
+	/// Run the command
+	pub fn run<RA>(self) -> error::Result<()>
 		where
+			RA: RuntimeAdapter,
 			AddressFor<RA>: Decode,
 			<IndexFor<RA> as FromStr>::Err: Display,
 			<BalanceFor<RA> as FromStr>::Err: Display,
 			BalancesCall<RA::Runtime>: Encode,
-			RA::Address: From<<RA::Public as IdentifyAccount>::AccountId>,
 	{
 		let password = get_password(&self.shared_params)?;
 		let nonce = IndexFor::<RA>::from_str(&self.index).map_err(|e| format!("{}", e))?;
@@ -69,7 +69,7 @@ impl TransferCmd {
 		let amount = BalanceFor::<RA>::from_str(&self.amount).map_err(|e| format!("{}", e))?;
 
 		let signer = RA::pair_from_suri(&self.from, &password);
-		let call = BalancesCall::transfer(to.into(), amount);
+		let call = BalancesCall::transfer(to, amount);
 
 		let extrinsic = create_extrinsic_for::<RA, _>(call, nonce, signer)?;
 		println!("0x{}", hex::encode(Encode::encode(&extrinsic)));

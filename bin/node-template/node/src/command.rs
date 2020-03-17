@@ -15,33 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
-use sc_cli::{VersionInfo, RuntimeAdapter};
-use node_template_runtime::{Runtime, SignedExtra, Index, Balance};
-use crate::{chain_spec, service, cli::Cli};
-use sp_runtime::{MultiSignature, MultiSigner, generic::Era, traits::StaticLookup};
-use sp_core::sr25519;
-
-struct Adapter;
-
-impl RuntimeAdapter for Adapter {
-	type Pair = sr25519::Pair;
-	type Public =  sr25519::Public;
-	type Signature = MultiSignature;
-	type Runtime = Runtime;
-	type Extra = SignedExtra;
-	type Address = <pallet_indices::Module<Runtime> as StaticLookup>::Source;
-
-	fn build_extra(index: Index) -> Self::Extra {
-		(
-			frame_system::CheckVersion::new(),
-			frame_system::CheckGenesis::new(),
-			frame_system::CheckEra::from(Era::Immortal),
-			frame_system::CheckNonce::from(index),
-			frame_system::CheckWeight::new(),
-			pallet_transaction_payment::ChargeTransactionPayment::from(0),
-		)
-	}
-}
+use sc_cli::VersionInfo;
+use crate::{chain_spec, service, cli::{Cli, Adapter}};
 
 /// Parse and run command line arguments
 pub fn run(version: VersionInfo) -> sc_cli::Result<()> {

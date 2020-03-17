@@ -21,9 +21,8 @@ use super::{
 	RuntimeAdapter, IndexFor, CallFor,
 };
 use structopt::StructOpt;
-use parity_scale_codec::{WrapperTypeEncode, Codec, Encode, Decode};
+use parity_scale_codec::{Codec, Encode, Decode};
 use std::{str::FromStr, fmt::Display};
-use sp_runtime::traits::IdentifyAccount;
 use sc_service::{Configuration, ChainSpec};
 
 type Call = Vec<u8>;
@@ -53,11 +52,12 @@ pub struct SignTransactionCmd {
 }
 
 impl SignTransactionCmd {
-	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()>
+	/// Run the command
+	pub fn run<RA>(self) -> error::Result<()>
 		where
+			RA: RuntimeAdapter,
 			<IndexFor<RA> as FromStr>::Err: Display,
-			CallFor<RA>: Codec + WrapperTypeEncode,
-			RA::Address: From<<RA::Public as IdentifyAccount>::AccountId>,
+			CallFor<RA>: Codec,
 	{
 		let signer = RA::pair_from_suri(&self.suri, &get_password(&self.shared_params)?);
 

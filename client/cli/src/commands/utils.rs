@@ -18,10 +18,10 @@
 use std::{io::Read, path::PathBuf};
 use sp_core::{Pair, Public, crypto::{Ss58Codec,Derive, Ss58AddressFormat}, hexdisplay::HexDisplay};
 use sp_runtime::{
-	MultiSignature, MultiSigner, generic::{UncheckedExtrinsic, SignedPayload},
-	traits::IdentifyAccount, AccountId32,
+	generic::{UncheckedExtrinsic, SignedPayload},
+	traits::IdentifyAccount,
 };
-use parity_scale_codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Codec};
 use serde_json::json;
 use sp_runtime::traits::{
 	SignedExtension, StaticLookup,
@@ -50,15 +50,13 @@ pub trait RuntimeAdapter: Sized {
 	/// Pair type
 	type Pair: Pair<Public = Self::Public, Signature = Self::Signature>;
 	/// public type
-	type Public: Public + IdentifyAccount<AccountId = AccountIdFor<Self>> + std::hash::Hash + Ss58Codec;
+	type Public: Codec + Public + IdentifyAccount<AccountId = AccountIdFor<Self>> + std::hash::Hash + Ss58Codec;
 	/// signature type
 	type Signature: AsRef<[u8]> + AsMut<[u8]> + Encode + Default;
 	/// runtime
-	type Runtime: frame_system::Trait + pallet_balances::Trait + pallet_indices::Trait;
+	type Runtime: frame_system::Trait + pallet_balances::Trait;
 	/// extras
 	type Extra: SignedExtension;
-	/// Address type
-	type Address: Encode + Decode;
 
 	/// generate a pair from suri
 	fn pair_from_suri(suri: &str, password: &str) -> Self::Pair {
@@ -252,21 +250,21 @@ pub fn read_message(msg: Option<String>, should_decode: bool) -> Result<Vec<u8>,
 }
 
 /// create an extrinsic for the runtime.
-pub fn create_extrinsic_for<RA: RuntimeAdapter, Call>(
+pub fn create_extrinsic_for<RA, Call>(
 	call: Call,
 	nonce:  IndexFor<RA>,
 	signer: RA::Pair,
-) -> Result<UncheckedExtrinsic<RA::Address, Call, RA::Signature, RA::Extra>, Error>
+) -> Result<UncheckedExtrinsic<RA::Public, Call, RA::Signature, RA::Extra>, Error>
 	where
 		Call: Encode,
-		RA::Address: From<<RA::Public as IdentifyAccount>::AccountId>,
+		RA: RuntimeAdapter,
 {
 	let extra = RA::build_extra(nonce);
 	let payload = SignedPayload::new(call, extra)
 		.map_err(|_| Error::Other("Transaction validity error".into()))?;
 
 	let signature = payload.using_encoded(|payload| signer.sign(payload));
-	let signer = signer.public().into_account().into();
+	let signer = signer.public();
 	let (function, extra, _) = payload.deconstruct();
 
 	Ok(UncheckedExtrinsic::new_signed(
@@ -276,4 +274,3 @@ pub fn create_extrinsic_for<RA: RuntimeAdapter, Call>(
 		extra,
 	))
 }
-

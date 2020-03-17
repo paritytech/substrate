@@ -53,6 +53,7 @@ pub struct VerifyCmd {
 }
 
 impl VerifyCmd {
+	/// Run the command
 	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()> {
 		let message = read_message(self.message, self.hex)?;
 		let mut signature = <RA::Pair as Pair>::Signature::default();

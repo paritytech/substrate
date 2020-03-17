@@ -51,6 +51,7 @@ pub struct SignCmd {
 
 
 impl SignCmd {
+	/// Run the command
 	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()> {
 		let message = read_message(self.message, self.hex)?;
 		let suri = read_uri(self.suri)?;

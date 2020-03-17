@@ -39,7 +39,6 @@ impl RuntimeAdapter for Adapter {
 		frame_system::CheckNonce<Runtime>,
 		frame_system::CheckWeight<Runtime>,
 	);
-	type Address = <pallet_indices::Module<Runtime> as StaticLookup>::Source;
 
 	fn build_extra(index: IndexFor<Self>) -> Self::Extra {
 		(
