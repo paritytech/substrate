@@ -176,6 +176,7 @@ panic = "unwind"
 
 [patch.crates-io]
 # libp2p = { path = "../rust-libp2p" }
-libp2p = { git = "https://github.com/romanb/rust-libp2p", branch = "multicon" }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p", branch = "master" }
+libp2p-wasm-ext = { git = "https://github.com/libp2p/rust-libp2p", branch = "master" }
 
 
