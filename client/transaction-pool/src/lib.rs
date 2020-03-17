@@ -64,7 +64,6 @@ pub struct BasicPool<PoolApi, Block>
 }
 
 struct ReadyPoll<T, Block: BlockT> {
-{
 	updated_at: NumberFor<Block>,
 	pollers: Vec<(NumberFor<Block>, oneshot::Sender<T>)>,
 }
