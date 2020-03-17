@@ -224,6 +224,8 @@ macro_rules! implement_per_thing {
 						if s.is_zero() {
 							break;
 						} else {
+							// x^2 always fits in Self::Upper if x fits in Self::Inner.
+							// Verified by a test.
 							s = Self::from_rational_approximation(<$name as PerThing>::Upper::from(s.deconstruct()) * p, q * q);
 						}
 					}
@@ -305,6 +307,9 @@ macro_rules! implement_per_thing {
 				// for something like percent they can be the same.
 				assert!((<$type>::max_value() as $upper_type) <= <$upper_type>::max_value());
 				assert!(<$upper_type>::from($max).checked_mul($max.into()).is_some());
+
+				// make sure saturating_pow won't overflow the upper type
+				assert!(<$upper_type>::from($max) * <$upper_type>::from($max) < <$upper_type>::max_value());
 			}
 
 			#[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
@@ -615,9 +620,9 @@ macro_rules! implement_per_thing {
 					$name::from_parts($max)
 					);
 
-				// (x < 1)^inf == 0 (where u32::MAX ~ inf)
+				// (x < 1)^inf == 0 (where 2.pow(31) ~ inf)
 				assert_eq!(
-					$name::from_parts($max / 2).saturating_pow(2usize.pow(32)), 
+					$name::from_parts($max / 2).saturating_pow(2usize.pow(31)), 
 					$name::from_parts(0)
 					);
 			}
