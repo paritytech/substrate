@@ -109,6 +109,7 @@ use frame_support::{ensure, decl_module, decl_event, decl_storage, decl_error, C
 use frame_support::{traits::{Get, FindAuthor, ValidatorRegistration}, Parameter};
 use frame_support::dispatch::{self, DispatchResult, DispatchError};
 use frame_system::{self as system, ensure_signed};
+use frame_support::traits::MigrateAccount;
 
 #[cfg(test)]
 mod mock;
@@ -364,10 +365,10 @@ decl_storage! {
 		DisabledValidators get(fn disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
-		NextKeys: map hasher(blake2_256) T::ValidatorId => Option<T::Keys>;
+		NextKeys: map hasher(twox_64_concat) T::ValidatorId => Option<T::Keys>;
 
 		/// The owner of a key. The key is the `KeyTypeId` + the encoded key.
-		KeyOwner: map hasher(blake2_256) (KeyTypeId, Vec<u8>) => Option<T::ValidatorId>;
+		KeyOwner: map hasher(twox_64_concat) (KeyTypeId, Vec<u8>) => Option<T::ValidatorId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::AccountId, T::ValidatorId, T::Keys)>;
@@ -498,36 +499,22 @@ decl_module! {
 				Self::rotate_session();
 			}
 		}
+	}
+}
 
-		/// Called when the runtime is upgraded.
-		fn on_runtime_upgrade() {
-			Self::migrate();
+impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
+	fn migrate_account(a: &T::AccountId) {
+		if let Some(v) = T::ValidatorIdOf::convert(a.clone()) {
+			if let Some(keys) = NextKeys::<T>::migrate_key_from_blake(v) {
+				for id in T::Keys::key_ids() {
+					KeyOwner::<T>::migrate_key_from_blake((*id, keys.get_raw(*id)));
+				}
+			}
 		}
 	}
 }
 
 impl<T: Trait> Module<T> {
-	/// Move keys from NextKeys and KeyOwner, if any exist.
-	fn migrate() {
-		use frame_support::storage::migration::{put_storage_value, StorageIterator};
-		sp_runtime::print("Migrating session's double-maps...");
-
-		let prefix = {
-			const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
-			let encoded_prefix_key_hash = codec::Encode::encode(&DEDUP_KEY_PREFIX);
-			let mut h = sp_io::hashing::twox_64(&encoded_prefix_key_hash[..]).to_vec();
-			h.extend(&encoded_prefix_key_hash[..]);
-			h
-		};
-
-		for (hash, value) in StorageIterator::<T::Keys>::with_suffix(b"Session", b"NextKeys", &prefix[..]).drain() {
-			put_storage_value(b"Session", b"NextKeys", &hash, value);
-		}
-		for (hash, value) in StorageIterator::<T::ValidatorId>::with_suffix(b"Session", b"KeyOwner", &prefix[..]).drain() {
-			put_storage_value(b"Session", b"KeyOwner", &hash, value);
-		}
-	}
-
 	/// Move on to next session. Register new validator set and session keys. Changes
 	/// to the validator set have a session of delay to take effect. This allows for
 	/// equivocation punishment after a fork.

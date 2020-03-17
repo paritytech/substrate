@@ -122,7 +122,7 @@ impl DummyProposer {
 		// figure out if we should add a consensus digest, since the test runtime
 		// doesn't.
 		let epoch_changes = self.factory.epoch_changes.lock();
-		let epoch = epoch_changes.epoch_for_child_of(
+		let epoch = epoch_changes.epoch_data_for_child_of(
 			descendent_query(&*self.factory.client),
 			&self.parent_hash,
 			self.parent_number,
@@ -130,8 +130,7 @@ impl DummyProposer {
 			|slot| self.factory.config.genesis_epoch(slot),
 		)
 			.expect("client has data to find epoch")
-			.expect("can compute epoch for baked block")
-			.into_inner();
+			.expect("can compute epoch for baked block");
 
 		let first_in_epoch = self.parent_slot < epoch.start_slot;
 		if first_in_epoch {
@@ -421,7 +420,7 @@ fn run_one_test(
 					panic!("Verification failed for {:?}: {}", h, e);
 				}
 			}
-	
+
 			Poll::<()>::Pending
 		}),
 		future::select(future::join_all(import_notifications), future::join_all(babe_futures))
@@ -566,12 +565,11 @@ fn propose_and_import_block<Transaction>(
 
 	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap().block;
 
-	let epoch = proposer_factory.epoch_changes.lock().epoch_for_child_of(
+	let epoch_descriptor = proposer_factory.epoch_changes.lock().epoch_descriptor_for_child_of(
 		descendent_query(&*proposer_factory.client),
 		&parent_hash,
 		*parent.number(),
 		slot_number,
-		|slot| proposer_factory.config.genesis_epoch(slot)
 	).unwrap().unwrap();
 
 	let seal = {
@@ -595,7 +593,7 @@ fn propose_and_import_block<Transaction>(
 	import.body = Some(block.extrinsics);
 	import.intermediates.insert(
 		Cow::from(INTERMEDIATE_KEY),
-		Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+		Box::new(BabeIntermediate::<TestBlock> { epoch_descriptor }) as Box<dyn Any>,
 	);
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 	let import_result = block_import.import_block(import, Default::default()).unwrap();
@@ -637,13 +635,13 @@ fn importing_block_one_sets_genesis_epoch() {
 	let genesis_epoch = data.link.config.genesis_epoch(999);
 
 	let epoch_changes = data.link.epoch_changes.lock();
-	let epoch_for_second_block = epoch_changes.epoch_for_child_of(
+	let epoch_for_second_block = epoch_changes.epoch_data_for_child_of(
 		descendent_query(&*client),
 		&block_hash,
 		1,
 		1000,
 		|slot| data.link.config.genesis_epoch(slot),
-	).unwrap().unwrap().into_inner();
+	).unwrap().unwrap();
 
 	assert_eq!(epoch_for_second_block, genesis_epoch);
 }
