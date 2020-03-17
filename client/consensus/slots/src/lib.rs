@@ -37,7 +37,7 @@ use futures_timer::Delay;
 use sp_inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header, HasherFor, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
@@ -47,7 +47,7 @@ use parking_lot::Mutex;
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
 pub type StorageChanges<Transaction, Block> =
-	sp_state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>;
+	sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>;
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: BlockT> {
@@ -94,7 +94,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn epoch_data(&self, header: &B::Header, slot_number: u64) -> Result<Self::EpochData, sp_consensus::Error>;
 
 	/// Returns the number of authorities given the epoch data.
-	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize;
+	/// None indicate that the authorities information is incomplete.
+	fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize>;
 
 	/// Tries to claim the given slot, returning an object with claim data if successful.
 	fn claim_slot(
@@ -194,7 +195,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		let authorities_len = self.authorities_len(&epoch_data);
 
-		if !self.force_authoring() && self.sync_oracle().is_offline() && authorities_len > 1 {
+		if !self.force_authoring() &&
+			self.sync_oracle().is_offline() &&
+			authorities_len.map(|a| a > 1).unwrap_or(false)
+		{
 			debug!(target: self.logging_target(), "Skipping proposal slot. Waiting for the network.");
 			telemetry!(
 				CONSENSUS_DEBUG;

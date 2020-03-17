@@ -18,9 +18,9 @@ use sp_api::ProvideRuntimeApi;
 use substrate_test_runtime_client::{
 	prelude::*,
 	DefaultTestClientBuilderExt, TestClientBuilder,
-	runtime::{TestAPI, DecodeFails, Transfer, Header},
+	runtime::{TestAPI, DecodeFails, Transfer, Block},
 };
-use sp_runtime::{generic::BlockId, traits::{Header as HeaderT, Hash as HashT}};
+use sp_runtime::{generic::BlockId, traits::{Header as HeaderT, HashFor}};
 use sp_state_machine::{
 	ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend,
@@ -164,6 +164,12 @@ fn record_proof_works() {
 	let block_id = BlockId::Number(client.chain_info().best_number);
 	let storage_root = longest_chain.best_chain().unwrap().state_root().clone();
 
+	let runtime_code = sp_core::traits::RuntimeCode {
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(client.code_at(&block_id).unwrap().into()),
+		hash: vec![1],
+		heap_pages: None,
+	};
+
 	let transaction = Transfer {
 		amount: 1000,
 		nonce: 0,
@@ -178,19 +184,25 @@ fn record_proof_works() {
 	builder.push(transaction.clone()).unwrap();
 	let (block, _, proof) = builder.build().expect("Bake block").into_inner();
 
-	let backend = create_proof_check_backend::<<<Header as HeaderT>::Hashing as HashT>::Hasher>(
+	let backend = create_proof_check_backend::<HashFor<Block>>(
 		storage_root,
 		proof.expect("Proof was generated"),
 	).expect("Creates proof backend.");
 
 	// Use the proof backend to execute `execute_block`.
 	let mut overlay = Default::default();
-	let executor = NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None);
+	let executor = NativeExecutor::<LocalExecutor>::new(
+		WasmExecutionMethod::Interpreted,
+		None,
+		8,
+	);
 	execution_proof_check_on_trie_backend::<_, u64, _>(
 		&backend,
 		&mut overlay,
 		&executor,
+		sp_core::tasks::executor(),
 		"Core_execute_block",
 		&block.encode(),
+		&runtime_code,
 	).expect("Executes block while using the proof backend");
 }

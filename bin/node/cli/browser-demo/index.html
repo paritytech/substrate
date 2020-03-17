@@ -6,7 +6,6 @@
 	<link rel="shortcut icon" href="/favicon.png" />
 	<script type="module">
 import { start_client, default as init } from './pkg/node_cli.js';
-import ws from './ws.js';
 
 function log(msg) {
 	document.getElementsByTagName('body')[0].innerHTML += msg + '\n';
@@ -20,7 +19,7 @@ async function start() {
 	const chain_spec_text = await chain_spec_response.text();
 
 	// Build our client.
-	let client = await start_client(chain_spec_text, 'info', ws());
+	let client = await start_client(chain_spec_text, 'info');
 	log('Client started');
 
 	client.rpcSubscribe('{"method":"chain_subscribeNewHead","params":[],"id":1,"jsonrpc":"2.0"}',

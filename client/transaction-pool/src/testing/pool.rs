@@ -28,6 +28,7 @@ use substrate_test_runtime_client::{
 };
 use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 use crate::revalidation::BACKGROUND_REVALIDATION_INTERVAL;
+use futures::task::Poll;
 
 fn pool() -> Pool<TestApi> {
 	Pool::new(Default::default(), TestApi::with_alice_nonce(209).into())
@@ -294,6 +295,36 @@ fn should_revalidate_transaction_multiple_times() {
 
 	assert_eq!(pool.status().ready, 0);
 }
+
+#[test]
+fn should_revalidate_across_many_blocks() {
+	let xt1 = uxt(Alice, 209);
+	let xt2 = uxt(Alice, 210);
+	let xt3 = uxt(Alice, 211);
+
+	let (pool, _guard) = maintained_pool();
+
+	block_on(pool.submit_one(&BlockId::number(1), xt1.clone())).expect("1. Imported");
+	block_on(pool.submit_one(&BlockId::number(1), xt2.clone())).expect("1. Imported");
+	assert_eq!(pool.status().ready, 2);
+
+	pool.api.push_block(1, vec![]);
+	block_on(pool.maintain(block_event(1)));
+	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
+
+
+	block_on(pool.submit_one(&BlockId::number(2), xt3.clone())).expect("1. Imported");
+	assert_eq!(pool.status().ready, 3);
+
+	pool.api.push_block(2, vec![xt1.clone()]);
+	block_on(pool.maintain(block_event(2)));
+	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
+
+	assert_eq!(pool.status().ready, 2);
+	// xt1 and xt2 validated twice, then xt3 once, then xt2 and xt3 again
+	assert_eq!(pool.api.validation_requests().len(), 7);
+}
+
 
 #[test]
 fn should_push_watchers_during_maintaince() {
@@ -570,5 +601,56 @@ fn fork_aware_finalization() {
 		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1.clone())));
 		assert_eq!(stream.next(), None);
 	}
+}
 
+#[test]
+fn ready_set_should_not_resolve_before_block_update() {
+	let (pool, _guard) = maintained_pool();
+	let xt1 = uxt(Alice, 209);
+	block_on(pool.submit_one(&BlockId::number(1), xt1.clone())).expect("1. Imported");
+
+	assert!(pool.ready_at(1).now_or_never().is_none());
+}
+
+#[test]
+fn ready_set_should_resolve_after_block_update() {
+	let (pool, _guard) = maintained_pool();
+	pool.api.push_block(1, vec![]);
+
+	let xt1 = uxt(Alice, 209);
+
+	block_on(pool.submit_one(&BlockId::number(1), xt1.clone())).expect("1. Imported");
+	block_on(pool.maintain(block_event(1)));
+
+	assert!(pool.ready_at(1).now_or_never().is_some());
+}
+
+#[test]
+fn ready_set_should_eventually_resolve_when_block_update_arrives() {
+	let (pool, _guard) = maintained_pool();
+	pool.api.push_block(1, vec![]);
+
+	let xt1 = uxt(Alice, 209);
+
+	block_on(pool.submit_one(&BlockId::number(1), xt1.clone())).expect("1. Imported");
+
+	let noop_waker = futures::task::noop_waker();
+	let mut context = futures::task::Context::from_waker(&noop_waker);
+
+	let mut ready_set_future = pool.ready_at(1);
+	if let Poll::Ready(_) = ready_set_future.poll_unpin(&mut context) {
+		panic!("Ready set should not be ready before block update!");
+	}
+
+	block_on(pool.maintain(block_event(1)));
+
+	match ready_set_future.poll_unpin(&mut context)  {
+		Poll::Pending => {
+			panic!("Ready set should become ready after block update!");
+		},
+		Poll::Ready(iterator) => {
+			let data = iterator.collect::<Vec<_>>();
+			assert_eq!(data.len(), 1);
+		}
+	}
 }

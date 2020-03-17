@@ -41,20 +41,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 					hasher: #scrate::metadata::#hasher,
 					key: #scrate::metadata::DecodeDifferent::Encode(#key),
 					value: #scrate::metadata::DecodeDifferent::Encode(#value_type),
-					is_linked: false,
-				}
-			}
-		},
-		StorageLineTypeDef::LinkedMap(map) => {
-			let hasher = map.hasher.into_metadata();
-			let key = &map.key;
-			let key = clean_type_string(&quote!(#key).to_string());
-			quote!{
-				#scrate::metadata::StorageEntryType::Map {
-					hasher: #scrate::metadata::#hasher,
-					key: #scrate::metadata::DecodeDifferent::Encode(#key),
-					value: #scrate::metadata::DecodeDifferent::Encode(#value_type),
-					is_linked: true,
+					unused: false,
 				}
 			}
 		},

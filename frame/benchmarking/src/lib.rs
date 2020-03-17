@@ -23,6 +23,7 @@ mod utils;
 pub use utils::*;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
+pub use sp_runtime::traits::Dispatchable;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -79,14 +80,14 @@ pub use sp_io::storage::root as storage_root;
 ///   }
 ///
 ///   // first dispatchable: foo; this is a user dispatchable and operates on a `u8` vector of
-///   // size `l`, which we allow to be initialised as usual.
+///   // size `l`, which we allow to be initialized as usual.
 ///   foo {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let l = ...;
 ///   }: _(Origin::Signed(caller), vec![0u8; l])
 ///
 ///   // second dispatchable: bar; this is a root dispatchable and accepts a `u8` vector of size
-///   // `l`. We don't want it preininitialised like before so we override using the `=> ()` notation.
+///   // `l`. We don't want it pre-initialized like before so we override using the `=> ()` notation.
 ///   // In this case, we explicitly name the call using `bar` instead of `_`.
 ///   bar {
 ///     let l = _ .. _ => ();
@@ -157,7 +158,7 @@ macro_rules! benchmarks_iter {
 	) => {
 		$crate::benchmarks_iter! {
 			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: { 
-				Call::<T>::$dispatch($($arg),*).dispatch($origin.into())?;
+				<Call<T> as $crate::Dispatchable>::dispatch(Call::<T>::$dispatch($($arg),*), $origin.into())?;
 			} $( $rest )*
 		}
 	};
