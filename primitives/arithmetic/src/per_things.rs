@@ -617,7 +617,7 @@ macro_rules! implement_per_thing {
 
 				// (x < 1)^inf == 0 (where u32::MAX ~ inf)
 				assert_eq!(
-					$name::from_parts($max / 2).saturating_pow(usize::MAX), 
+					$name::from_parts($max / 2).saturating_pow(2usize.pow(32)), 
 					$name::from_parts(0)
 					);
 			}
