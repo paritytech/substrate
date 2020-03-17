@@ -16,8 +16,11 @@
 
 //! implementation of the `verify` subcommand
 
-use crate::{RuntimeAdapter, read_message, decode_hex, read_uri, error, SharedParams, VersionInfo};
-use sp_core::{Pair, Public, crypto::Ss58Codec};
+use crate::{
+	read_message, decode_hex, read_uri,
+	error, SharedParams, VersionInfo, with_crypto_scheme,
+};
+use sp_core::{Public, crypto::Ss58Codec};
 use structopt::StructOpt;
 use sc_service::{Configuration, ChainSpec};
 
@@ -54,20 +57,9 @@ pub struct VerifyCmd {
 
 impl VerifyCmd {
 	/// Run the command
-	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()> {
+	pub fn run(self) -> error::Result<()> {
 		let message = read_message(self.message, self.hex)?;
-		let mut signature = <RA::Pair as Pair>::Signature::default();
 		let sig_data = decode_hex(self.sig)?;
-
-		if sig_data.len() != signature.as_ref().len() {
-			return Err(error::Error::Other(format!(
-				"signature has an invalid length. read {} bytes, expected {} bytes",
-				sig_data.len(),
-				signature.as_ref().len(),
-			)));
-		}
-
-		signature.as_mut().copy_from_slice(&sig_data);
 		let uri = read_uri(self.uri)?;
 		let uri = if uri.starts_with("0x") {
 			&uri[2..]
@@ -75,21 +67,10 @@ impl VerifyCmd {
 			&uri
 		};
 
-		let pubkey = if let Ok(pubkey_vec) = hex::decode(uri) {
-			RA::Public::from_slice(pubkey_vec.as_slice())
-		} else {
-			RA::Public::from_string(uri)
-				.ok()
-				.expect("Invalid URI; expecting either a secret URI or a public URI.")
-		};
-
-		if <RA::Pair as Pair>::verify(&signature, &message, &pubkey) {
-			println!("Signature verifies correctly.");
-		} else {
-			return Err(error::Error::Other("Signature invalid.".into()))
-		}
-
-		Ok(())
+		with_crypto_scheme!(
+			self.shared_params.scheme,
+			verify(sig_data, message, uri)
+		)
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
@@ -106,4 +87,36 @@ impl VerifyCmd {
 
 		Ok(())
 	}
+}
+
+fn verify<Pair>(sig_data: Vec<u8>, message: Vec<u8>, uri: &str) -> error::Result<()>
+	where
+		Pair: sp_core::Pair,
+		Pair::Signature: Default + AsMut<[u8]>,
+{
+	let mut signature = Pair::Signature::default();
+	if sig_data.len() != signature.as_ref().len() {
+		return Err(error::Error::Other(format!(
+			"signature has an invalid length. read {} bytes, expected {} bytes",
+			sig_data.len(),
+			signature.as_ref().len(),
+		)));
+	}
+	signature.as_mut().copy_from_slice(&sig_data);
+
+	let pubkey = if let Ok(pubkey_vec) = hex::decode(uri) {
+		Pair::Public::from_slice(pubkey_vec.as_slice())
+	} else {
+		Pair::Public::from_string(uri)
+			.ok()
+			.expect("Invalid URI; expecting either a secret URI or a public URI.")
+	};
+
+	if Pair::verify(&signature, &message, &pubkey) {
+		println!("Signature verifies correctly.");
+	} else {
+		return Err(error::Error::Other("Signature invalid.".into()))
+	}
+
+	Ok(())
 }

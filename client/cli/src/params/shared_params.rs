@@ -22,7 +22,7 @@ use sc_service::{
 };
 use sp_core::crypto::Ss58AddressFormat;
 use std::convert::TryFrom;
-use crate::{error, VersionInfo, arg_enums::OutputType};
+use crate::{error, VersionInfo, arg_enums::{OutputType, CryptoScheme}};
 
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
@@ -89,6 +89,16 @@ pub struct SharedParams {
 		default_value = "Text"
 	)]
 	pub output_type: OutputType,
+
+	/// output format
+	#[structopt(
+		long,
+		value_name = "SCHEME",
+		possible_values = &CryptoScheme::variants(),
+		case_insensitive = true,
+		default_value = "Sr25519"
+	)]
+	pub scheme: CryptoScheme,
 }
 
 impl SharedParams {

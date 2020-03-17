@@ -15,11 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
-use substrate_test_runtime::{AccountSignature, Runtime};
-use sp_core::sr25519;
+use substrate_test_runtime::Runtime;
 
 use sp_runtime::generic::Era;
-use sp_runtime::traits::StaticLookup;
 use tempfile::Builder;
 use std::io::Read;
 use crate::commands::inspect::InspectCmd;
@@ -28,9 +26,6 @@ use crate::Error;
 pub struct Adapter;
 
 impl RuntimeAdapter for Adapter {
-	type Pair = sr25519::Pair;
-	type Public =  sr25519::Public;
-	type Signature = AccountSignature;
 	type Runtime = Runtime;
 	type Extra = (
 		frame_system::CheckVersion<Runtime>,
@@ -62,7 +57,7 @@ fn new_test_ext() -> sp_io::TestExternalities {
 #[test]
 fn generate() {
 	let generate = GenerateCmd::from_iter(&["generate", "--password", "12345"]);
-	assert!(generate.run::<Adapter>().is_ok())
+	assert!(generate.run().is_ok())
 }
 
 #[test]
@@ -84,10 +79,10 @@ fn inspect() {
 	let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
 
 	let inspect = InspectCmd::from_iter(&["inspect", "--uri", words, "--password", "12345"]);
-	assert!(inspect.run::<Adapter>().is_ok());
+	assert!(inspect.run().is_ok());
 
 	let inspect = InspectCmd::from_iter(&["inspect", "--uri", seed]);
-	assert!(inspect.run::<Adapter>().is_ok());
+	assert!(inspect.run().is_ok());
 }
 
 #[test]
@@ -96,16 +91,16 @@ fn sign() {
 	let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
 
 	let sign = SignCmd::from_iter(&["sign", "--suri", seed, "--message", &seed[2..], "--password", "12345"]);
-	assert!(sign.run::<Adapter>().is_ok());
+	assert!(sign.run().is_ok());
 
 	let sign = SignCmd::from_iter(&["sign", "--suri", words, "--message", &seed[2..]]);
-	assert!(matches!(sign.run::<Adapter>(), Err(Error::Input(_))))
+	assert!(matches!(sign.run(), Err(Error::Input(_))))
 }
 
 #[test]
 fn vanity() {
 	let vanity = VanityCmd::from_iter(&["vanity", "--number", "1", "--pattern", "j"]);
-	assert!(vanity.run::<Adapter>().is_ok());
+	assert!(vanity.run().is_ok());
 }
 
 #[test]

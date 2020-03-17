@@ -15,15 +15,16 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign-transaction` subcommand
-use crate::{error, VersionInfo};
+use crate::{error, VersionInfo, with_crypto_scheme};
 use super::{
 	SharedParams, get_password, decode_hex, create_extrinsic_for,
-	RuntimeAdapter, IndexFor, CallFor,
+	RuntimeAdapter, IndexFor, CallFor, pair_from_suri,
 };
 use structopt::StructOpt;
 use parity_scale_codec::{Codec, Encode, Decode};
 use std::{str::FromStr, fmt::Display};
 use sc_service::{Configuration, ChainSpec};
+use sp_runtime::MultiSigner;
 
 type Call = Vec<u8>;
 
@@ -59,15 +60,19 @@ impl SignTransactionCmd {
 			<IndexFor<RA> as FromStr>::Err: Display,
 			CallFor<RA>: Codec,
 	{
-		let signer = RA::pair_from_suri(&self.suri, &get_password(&self.shared_params)?);
 
 		let nonce = IndexFor::<RA>::from_str(&self.nonce).map_err(|e| format!("{}", e))?;
 		let call = CallFor::<RA>::decode(&mut &self.call[..])?;
-		let extrinsic = create_extrinsic_for::<RA, _>(call, nonce, signer)?;
 
-		println!("0x{}", hex::encode(Encode::encode(&extrinsic)));
-
-		Ok(())
+		with_crypto_scheme!(
+			self.shared_params.scheme,
+			print_ext<RA>(
+				&self.suri,
+				&get_password(&self.shared_params)?,
+				call,
+				nonce
+			)
+		)
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
@@ -84,4 +89,18 @@ impl SignTransactionCmd {
 
 		Ok(())
 	}
+}
+
+fn print_ext<Pair, RA>(uri: &str, pass: &str, call: CallFor<RA>, nonce: IndexFor<RA>) -> error::Result<()>
+	where
+		Pair: sp_core::Pair,
+		Pair::Public: Into<MultiSigner>,
+		Pair::Signature: Encode,
+		RA: RuntimeAdapter,
+		CallFor<RA>: Codec,
+{
+	let signer = pair_from_suri::<Pair>(uri, pass);
+	let extrinsic = create_extrinsic_for::<Pair, RA, CallFor<RA>>(call, nonce, signer)?;
+	println!("0x{}", hex::encode(Encode::encode(&extrinsic)));
+	Ok(())
 }

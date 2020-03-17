@@ -15,11 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign` subcommand
-use crate::{error, VersionInfo};
-use super::{SharedParams, get_password, read_message, read_uri, RuntimeAdapter};
+use crate::{error, VersionInfo, with_crypto_scheme, pair_from_suri};
+use super::{SharedParams, get_password, read_message, read_uri};
 use structopt::StructOpt;
-
-use sp_core::crypto::Pair;
 use sc_service::{Configuration, ChainSpec};
 
 /// The `sign` command
@@ -52,12 +50,20 @@ pub struct SignCmd {
 
 impl SignCmd {
 	/// Run the command
-	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()> {
+	pub fn run(self) -> error::Result<()> {
 		let message = read_message(self.message, self.hex)?;
 		let suri = read_uri(self.suri)?;
 		let password = get_password(&self.shared_params)?;
-		let pair = RA::pair_from_suri(&suri, &password);
-		let signature = format!("{}", hex::encode(pair.sign(&message)));
+
+		let signature = with_crypto_scheme!(
+			self.shared_params.scheme,
+			sign(
+				&suri,
+				&password,
+				message
+			)
+		)?;
+
 		println!("{}", signature);
 		Ok(())
 	}
@@ -72,8 +78,12 @@ impl SignCmd {
 		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}
+}
+
+fn sign<P: sp_core::Pair>(suri: &str, password: &str, message: Vec<u8>) ->  error::Result<String> {
+	let pair = pair_from_suri::<P>(suri, password);
+	Ok(format!("{}", hex::encode(pair.sign(&message))))
 }

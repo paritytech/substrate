@@ -16,11 +16,15 @@
 
 //! implementation of the `vanity` subcommand
 
-use crate::{RuntimeAdapter, error, format_seed, SharedParams, AccountIdFor, VersionInfo};
-use sp_core::{Pair, crypto::{Ss58Codec, Derive}};
+use crate::{
+	error, format_seed, SharedParams,
+	VersionInfo, print_from_uri, with_crypto_scheme,
+};
+use sp_core::crypto::Ss58Codec;
 use structopt::StructOpt;
 use rand::{rngs::OsRng, RngCore};
 use sc_service::{Configuration, ChainSpec};
+use sp_runtime::traits::IdentifyAccount;
 
 /// The `vanity` command
 #[derive(Debug, StructOpt, Clone)]
@@ -44,15 +48,18 @@ pub struct VanityCmd {
 
 impl VanityCmd {
 	/// Run the command
-	pub fn run<RA>(self) -> error::Result<()>
-		where
-			RA: RuntimeAdapter,
-			AccountIdFor<RA>: Ss58Codec + Derive,
-	{
+	pub fn run(self) -> error::Result<()> {
 		let desired: String = self.pattern.unwrap_or_default();
-		let result = generate_key::<RA>(&desired)?;
-		let formated_seed = format_seed::<RA>(result.seed);
-		RA::print_from_uri(&formated_seed, None, self.shared_params.network, self.shared_params.output_type);
+		let formated_seed = with_crypto_scheme!(self.shared_params.scheme, generate_key(&desired))?;
+		with_crypto_scheme!(
+			self.shared_params.scheme,
+			print_from_uri(
+				&formated_seed,
+				None,
+				self.shared_params.network,
+				self.shared_params.output_type
+			)
+		);
 		Ok(())
 	}
 
@@ -73,10 +80,11 @@ impl VanityCmd {
 }
 
 /// genertae a key based on given pattern
-fn generate_key<RA>(desired: &str) -> Result<KeyPair<RA::Pair>, &'static str>
+fn generate_key<Pair>(desired: &str) -> Result<String, &'static str>
 	where
-		RA: RuntimeAdapter,
-		AccountIdFor<RA>: Ss58Codec + Derive,
+		Pair: sp_core::Pair,
+		Pair::Public: IdentifyAccount,
+		<Pair::Public as IdentifyAccount>::AccountId: Ss58Codec,
 {
 	if desired.is_empty() {
 		return Err("Pattern must not be empty");
@@ -86,7 +94,7 @@ fn generate_key<RA>(desired: &str) -> Result<KeyPair<RA::Pair>, &'static str>
 
 	let top = 45 + (desired.len() * 48);
 	let mut best = 0;
-	let mut seed = <RA::Pair as Pair>::Seed::default();
+	let mut seed = Pair::Seed::default();
 	let mut done = 0;
 
 	loop {
@@ -96,19 +104,14 @@ fn generate_key<RA>(desired: &str) -> Result<KeyPair<RA::Pair>, &'static str>
 			next_seed(seed.as_mut());
 		}
 
-		let p = RA::Pair::from_seed(&seed);
-		let ss58 = RA::ss58_from_pair(&p);
+		let p = Pair::from_seed(&seed);
+		let ss58 = p.public().into_account().to_ss58check();
 		let score = calculate_score(&desired, &ss58);
 		if score > best || desired.len() < 2 {
 			best = score;
-			let keypair = KeyPair {
-				pair: p,
-				seed: seed.clone(),
-				score: score,
-			};
 			if best >= top {
 				println!("best: {} == top: {}", best, top);
-				return Ok(keypair);
+				return Ok(format_seed::<Pair>(seed.clone()));
 			}
 		}
 		done += 1;
@@ -142,14 +145,6 @@ fn next_seed(seed: &mut [u8]) {
 	}
 }
 
-/// A structure used to carry both Pair and seed.
-/// This should usually NOT been used. If unsure, use Pair.
-struct KeyPair<P: Pair> {
-	pub pair: P,
-	pub seed: <P as Pair>::Seed,
-	pub score: usize,
-}
-
 /// Calculate the score of a key based on the desired
 /// input.
 fn calculate_score(_desired: &str, key: &str) -> usize {
@@ -168,18 +163,19 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 mod tests {
 	use super::*;
 	use sp_core::{crypto::Ss58Codec, Pair};
-	use crate::commands::tests::Adapter;
+	use sp_core::sr25519;
 	#[cfg(feature = "bench")]
 	use test::Bencher;
 
 	#[test]
 	fn test_generation_with_single_char() {
-		assert!(generate_key::<Adapter>("j")
-			.unwrap()
-			.pair
-			.public()
-			.to_ss58check()
-			.contains("j"));
+		let seed = generate_key::<sr25519::Pair>("j").unwrap();
+		assert!(
+			sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
+				.unwrap()
+				.public()
+				.to_ss58check()
+				.contains("j"));
 	}
 
 	#[test]

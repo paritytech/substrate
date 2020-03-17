@@ -16,10 +16,9 @@
 
 //! Implementation of the `inspect` subcommand
 
-use crate::{error, AccountIdFor, VersionInfo};
-use super::{SharedParams, get_password, read_uri, RuntimeAdapter};
+use crate::{error, VersionInfo, print_from_uri, with_crypto_scheme};
+use super::{SharedParams, get_password, read_uri};
 use structopt::StructOpt;
-use sp_core::crypto::{Ss58Codec, Derive};
 use sc_service::{Configuration, ChainSpec};
 
 /// The `inspect` command
@@ -42,18 +41,18 @@ pub struct InspectCmd {
 
 impl InspectCmd {
 	/// Run the command
-	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()>
-		where
-			AccountIdFor<RA>: Ss58Codec + Derive,
-	{
+	pub fn run(self) -> error::Result<()> {
 		let uri = read_uri(self.uri)?;
 		let pass = get_password(&self.shared_params).ok();
 
-		RA::print_from_uri(
-			&uri,
-			pass.as_ref().map(String::as_str),
-			self.shared_params.network,
-			self.shared_params.output_type
+		with_crypto_scheme!(
+			self.shared_params.scheme,
+			print_from_uri(
+				&uri,
+				pass.as_ref().map(String::as_str),
+				self.shared_params.network,
+				self.shared_params.output_type
+			)
 		);
 
 		Ok(())

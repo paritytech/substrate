@@ -22,7 +22,7 @@ use crate::{
 	factory_impl::FactoryState,
 };
 use sp_runtime::generic::Era;
-use node_primitives::{Signature, AccountId, Index};
+use node_primitives::Index;
 use node_runtime::{Runtime, SignedExtra};
 
 /// Parse command line arguments into service configuration.
@@ -120,12 +120,9 @@ where
 	}
 }
 
-pub struct Adapter;
+struct Adapter;
 
 impl sc_cli::RuntimeAdapter for Adapter {
-	type Pair = ();
-	type Public = ();
-	type Signature = Signature;
 	type Runtime = Runtime;
 	type Extra = SignedExtra;
 

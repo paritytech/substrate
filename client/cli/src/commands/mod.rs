@@ -37,7 +37,6 @@ pub mod tests;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use structopt::StructOpt;
-use sp_core::crypto::{Ss58Codec, Derive};
 use parity_scale_codec::Codec;
 use sc_service::{Configuration, ServiceBuilderCommand, ChainSpec};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -110,6 +109,9 @@ pub enum Subcommand {
 	/// Sign transaction from encoded Call. Returns a signed and encoded UncheckedMortalCompactExtrinsic as hex.
 	SignTransaction(sign_transaction::SignTransactionCmd),
 
+	/// Author and sign a Node pallet_balances::Transfer transaction with a given (secret) key.
+	Transfer(transfer::TransferCmd),
+
 	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
 	Verify(verify::VerifyCmd),
 
@@ -135,6 +137,7 @@ impl Subcommand {
 			Insert(params) => &params.shared_params,
 			Sign(params) => &params.shared_params,
 			SignTransaction(params) => &params.shared_params,
+			Transfer(params) => &params.shared_params,
 			Verify(params) => &params.shared_params,
 			Vanity(params) => &params.shared_params,
 		}
@@ -153,8 +156,8 @@ impl Subcommand {
 		<<Block::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		Block::Hash: std::str::FromStr,
 		RA: RuntimeAdapter,
-		AccountIdFor<RA>: Ss58Codec + Derive,
 		<IndexFor<RA> as FromStr>::Err: Display,
+		<BalanceFor<RA> as FromStr>::Err: Display,
 		CallFor<RA>: Codec,
 	{
 		match self {
@@ -165,13 +168,14 @@ impl Subcommand {
 			Subcommand::PurgeChain(cmd) => cmd.run(config),
 			Subcommand::Revert(cmd) => cmd.run(config, builder),
 			Subcommand::GenerateNodeKey(cmd) => cmd.run(),
-			Subcommand::Generate(cmd) => cmd.run::<RA>(),
-			Subcommand::Inspect(cmd) => cmd.run::<RA>(),
-			Subcommand::Insert(cmd) => cmd.run::<RA>(),
-			Subcommand::Sign(cmd) => cmd.run::<RA>(),
+			Subcommand::Generate(cmd) => cmd.run(),
+			Subcommand::Inspect(cmd) => cmd.run(),
+			Subcommand::Sign(cmd) => cmd.run(),
+			Subcommand::Verify(cmd) => cmd.run(),
+			Subcommand::Vanity(cmd) => cmd.run(),
+			Subcommand::Transfer(cmd) => cmd.run::<RA>(),
 			Subcommand::SignTransaction(cmd) => cmd.run::<RA>(),
-			Subcommand::Verify(cmd) => cmd.run::<RA>(),
-			Subcommand::Vanity(cmd) => cmd.run::<RA>(),
+			Subcommand::Insert(cmd) => cmd.run::<RA>(),
 		}
 	}
 
@@ -197,6 +201,7 @@ impl Subcommand {
 			Subcommand::Insert(cmd) => cmd.update_config(&mut config, spec_factory, version),
 			Subcommand::Sign(cmd) => cmd.update_config(&mut config, spec_factory, version),
 			Subcommand::SignTransaction(cmd) => cmd.update_config(&mut config, spec_factory, version),
+			Subcommand::Transfer(cmd) => cmd.update_config(&mut config, spec_factory, version),
 			Subcommand::Verify(cmd) => cmd.update_config(&mut config, spec_factory, version),
 			Subcommand::Vanity(cmd) => cmd.update_config(&mut config, spec_factory, version),
 		}

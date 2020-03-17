@@ -2,7 +2,6 @@ use structopt::StructOpt;
 use sc_cli::{RunCmd, Subcommand, RuntimeAdapter};
 use node_template_runtime::{Runtime, SignedExtra, Index};
 use sp_runtime::generic::Era;
-use sp_core::sr25519;
 
 #[derive(Debug, StructOpt)]
 pub struct Cli {
@@ -16,9 +15,6 @@ pub struct Cli {
 pub struct Adapter;
 
 impl RuntimeAdapter for Adapter {
-	type Pair = sr25519::Pair;
-	type Public =  sr25519::Public;
-	type Signature = sr25519::Signature;
 	type Runtime = Runtime;
 	type Extra = SignedExtra;
 

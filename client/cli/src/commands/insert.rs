@@ -16,10 +16,10 @@
 
 //! Implementation of the `insert` subcommand
 
-use crate::{error, HashFor, VersionInfo};
+use crate::{error, HashFor, VersionInfo, with_crypto_scheme, pair_from_suri};
 use super::{SharedParams, get_password, read_uri, RuntimeAdapter};
 use structopt::StructOpt;
-use sp_core::{crypto::{KeyTypeId, Pair}, Bytes};
+use sp_core::{crypto::KeyTypeId, Bytes};
 use std::convert::TryFrom;
 use futures01::Future;
 use hyper::rt;
@@ -62,7 +62,12 @@ impl InsertCmd {
 	{
 		let suri = read_uri(self.suri)?;
 		let password = get_password(&self.shared_params)?;
-		let pair = RA::pair_from_suri(&suri, &password);
+
+		let public = with_crypto_scheme!(
+			self.shared_params.scheme,
+			to_vec(&suri, &password)
+		);
+
 		let node_url = self.node_url.unwrap_or("http://localhost:9933".into());
 		let key_type = self.key_type;
 
@@ -77,7 +82,7 @@ impl InsertCmd {
 			&node_url,
 			key_type.to_string(),
 			suri,
-			sp_core::Bytes(pair.public().as_ref().to_vec()),
+			sp_core::Bytes(public),
 		);
 
 		Ok(())
@@ -97,6 +102,11 @@ impl InsertCmd {
 
 		Ok(())
 	}
+}
+
+fn to_vec<P: sp_core::Pair>(uri: &str, pass: &str) -> Vec<u8> {
+	let p = pair_from_suri::<P>(uri, pass);
+	p.public().as_ref().to_vec()
 }
 
 fn insert_key<H>(url: &str, key_type: String, suri: String, public: Bytes)

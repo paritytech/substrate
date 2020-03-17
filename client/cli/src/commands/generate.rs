@@ -16,12 +16,11 @@
 
 //! Implementation of the `generate` subcommand
 
-use super::{SharedParams, RuntimeAdapter, get_password};
+use super::{SharedParams, get_password};
 use crate::error::{self, Error};
 use bip39::{MnemonicType, Mnemonic, Language};
 use structopt::StructOpt;
-use crate::{AccountIdFor, VersionInfo};
-use sp_core::crypto::{Ss58Codec, Derive};
+use crate::{VersionInfo, print_from_uri, with_crypto_scheme};
 use sc_service::{Configuration, ChainSpec};
 
 /// The `generate` command
@@ -39,9 +38,7 @@ pub struct GenerateCmd {
 
 impl GenerateCmd {
 	/// Run the command
-	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()>
-		where
-			AccountIdFor<RA>: Ss58Codec + Derive,
+	pub fn run(self) -> error::Result<()>
 	{
 		let words = match self.words {
 			Some(words) => {
@@ -57,13 +54,15 @@ impl GenerateCmd {
 		let maybe_network = self.shared_params.network;
 		let output = self.shared_params.output_type;
 
-		RA::print_from_uri(
-			mnemonic.phrase(),
-			Some(password.as_str()),
-			maybe_network,
-			output
+		with_crypto_scheme!(
+			self.shared_params.scheme,
+			print_from_uri(
+				mnemonic.phrase(),
+				Some(password.as_str()),
+				maybe_network,
+				output
+			)
 		);
-
 		Ok(())
 	}
 

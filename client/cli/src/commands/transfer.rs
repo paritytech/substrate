@@ -16,13 +16,17 @@
 
 //! Implementation of the `transfer` subcommand
 
-use crate::{error, IndexFor, BalanceFor, create_extrinsic_for, get_password, AddressFor, VersionInfo};
+use crate::{
+	error, IndexFor, BalanceFor, create_extrinsic_for, get_password,
+	AddressFor, VersionInfo, with_crypto_scheme, pair_from_suri,
+};
 use super::{SharedParams, RuntimeAdapter};
 use structopt::StructOpt;
 use pallet_balances::Call as BalancesCall;
 use std::{str::FromStr, fmt::Display};
 use parity_scale_codec::{Encode, Decode};
 use sc_service::{Configuration, ChainSpec};
+use sp_runtime::MultiSigner;
 
 /// The `transfer` command
 #[derive(Debug, StructOpt, Clone)]
@@ -61,20 +65,22 @@ impl TransferCmd {
 			AddressFor<RA>: Decode,
 			<IndexFor<RA> as FromStr>::Err: Display,
 			<BalanceFor<RA> as FromStr>::Err: Display,
-			BalancesCall<RA::Runtime>: Encode,
 	{
 		let password = get_password(&self.shared_params)?;
 		let nonce = IndexFor::<RA>::from_str(&self.index).map_err(|e| format!("{}", e))?;
 		let to = AddressFor::<RA>::decode(&mut self.to.as_bytes()).map_err(|e| format!("{}", e))?;
 		let amount = BalanceFor::<RA>::from_str(&self.amount).map_err(|e| format!("{}", e))?;
 
-		let signer = RA::pair_from_suri(&self.from, &password);
-		let call = BalancesCall::transfer(to, amount);
-
-		let extrinsic = create_extrinsic_for::<RA, _>(call, nonce, signer)?;
-		println!("0x{}", hex::encode(Encode::encode(&extrinsic)));
-
-		Ok(())
+		with_crypto_scheme!(
+			self.shared_params.scheme,
+			print_ext<RA>(
+				&self.from,
+				&password,
+				to,
+				nonce,
+				amount
+			)
+		)
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
@@ -91,4 +97,25 @@ impl TransferCmd {
 
 		Ok(())
 	}
+}
+
+fn print_ext<Pair, RA>(
+	uri: &str,
+	pass: &str,
+	to: AddressFor<RA>,
+	nonce: IndexFor<RA>,
+	amount: BalanceFor<RA>,
+) -> error::Result<()>
+	where
+		Pair: sp_core::Pair,
+		Pair::Public: Into<MultiSigner>,
+		Pair::Signature: Encode,
+		RA: RuntimeAdapter,
+		BalancesCall<RA::Runtime>: Encode,
+{
+	let signer = pair_from_suri::<Pair>(uri, pass);
+	let call = BalancesCall::transfer(to, amount);
+	let extrinsic = create_extrinsic_for::<Pair, RA, _>(call, nonce, signer)?;
+	println!("0x{}", hex::encode(Encode::encode(&extrinsic)));
+	Ok(())
 }
