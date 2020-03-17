@@ -130,9 +130,6 @@ check-line-width:
 check-polkadot:
   stage:                           build
   <<:                              *docker-env
-  variables:
-    GITLAB_API:                    "https://gitlab.parity.io/api/v4"
-    GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
     - ./.maintain/gitlab/check_polkadot.sh
   interruptible:                   true
