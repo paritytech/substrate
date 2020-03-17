@@ -474,12 +474,12 @@ fn incoming_global<B: BlockT>(
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
-		let precommits_signed_by: Vec<String> =
-			msg.message.auth_data.iter().map(move |(_, a)| {
-				format!("{}", a)
-			}).collect();
-
 		if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+			let precommits_signed_by: Vec<String> =
+				msg.message.auth_data.iter().map(move |(_, a)| {
+					format!("{}", a)
+				}).collect();
+
 			telemetry!(CONSENSUS_INFO; "afg.received_commit";
 				"contains_precommits_signed_by" => ?precommits_signed_by,
 				"target_number" => ?msg.message.target_number.clone(),
