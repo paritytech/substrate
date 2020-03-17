@@ -69,7 +69,6 @@ struct ReadyPoll<T, Block: BlockT> {
 }
 
 impl<T, Block: BlockT> Default for ReadyPoll<T, Block> {
-{
 	fn default() -> Self {
 		Self {
 			updated_at: NumberFor::<Block>::zero(),
