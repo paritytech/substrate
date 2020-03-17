@@ -138,4 +138,5 @@ runtime-benchmarks = [
 	"pallet-identity/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
+	"pallet-democracy/runtime-benchmarks",
 ]

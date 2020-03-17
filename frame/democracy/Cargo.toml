@@ -14,8 +14,10 @@ codec = { package = "parity-scale-codec", version = "1.2.0", default-features = 
 sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
+frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
+pallet-collective = { version = "2.0.0-alpha.2", default-features = false, path = "../collective" }
 
 [dev-dependencies]
 sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
@@ -30,7 +32,10 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"sp-io/std",
+	"frame-benchmarking/std",
 	"frame-support/std",
 	"sp-runtime/std",
 	"frame-system/std",
+	"pallet-collective/std",
 ]
+runtime-benchmarks = ["frame-benchmarking"]

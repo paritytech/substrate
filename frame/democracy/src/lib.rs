@@ -172,6 +172,9 @@ mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
 use frame_support::traits::MigrateAccount;
 
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
+
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
 /// A proposal index.
