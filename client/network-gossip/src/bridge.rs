@@ -148,8 +148,8 @@ impl<B: BlockT> Future for GossipEngine<B> {
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = &mut *self;
 
-		while let Poll::Ready(Some(event)) = this.network_event_stream.poll_next_unpin(cx) {
-			match event {
+		loop { match this.network_event_stream.poll_next_unpin(cx) {
+			Poll::Ready(Some(event)) => match event {
 				Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
 					if msg_engine_id != this.engine_id {
 						continue;
@@ -176,7 +176,10 @@ impl<B: BlockT> Future for GossipEngine<B> {
 				},
 				Event::Dht(_) => {}
 			}
-		}
+			// The network event stream closed. Do the same for [`GossipValidator`].
+			Poll::Ready(None) => return Poll::Ready(()),
+			Poll::Pending => break,
+		}}
 
 		while let Poll::Ready(()) = this.periodic_maintenance_interval.poll_unpin(cx) {
 			this.periodic_maintenance_interval.reset(PERIODIC_MAINTENANCE_INTERVAL);
