@@ -54,7 +54,7 @@ then
   if [ "${comppr}" ]
   then
     boldprint "companion pr specified: #${comppr}"
-    git fetch origin refs/pull/${comppr}/head:pr/${comppr}
+    git fetch --depth 1 origin refs/pull/${comppr}/head:pr/${comppr}
     git checkout pr/${comppr}
   else
     boldprint "no companion pr declared - building polkadot:master"
