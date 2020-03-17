@@ -249,3 +249,13 @@ fn kill_color(s: &str) -> String {
 	}
 	RE.replace_all(s, "").to_string()
 }
+
+pub fn generate_cargo_keys() {
+	use vergen::{ConstantsFlags, generate_cargo_keys};
+
+	generate_cargo_keys(ConstantsFlags::SHA_SHORT).expect("Failed to generate metadata files");
+}
+
+pub fn rerun_if_git_head_changed() {
+	build_script_utils::rerun_if_git_head_changed();
+}

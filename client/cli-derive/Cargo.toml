@@ -13,6 +13,7 @@ quote = "1"
 proc-macro2 = "1"
 heck = "0.3.0"
 proc-macro-error = "0.4.7"
+platforms = "0.2"
 
 [dev-dependencies]
 trybuild = "1.0"

@@ -38,16 +38,7 @@ pub fn spec_factory(
 	let cli = attrs.get("cli").unwrap_or(&default_cli);
 	let default_impl_name = std::env::var("CARGO_PKG_NAME").unwrap().to_token_stream();
 	let impl_name = attrs.get("impl_name").unwrap_or(&default_impl_name);
-	let impl_commit = std::env::var("SUBSTRATE_CLI_COMMIT").unwrap_or_default();
-	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
-	let default_impl_version = format!(
-		"{}{}{}-{}",
-		std::env::var("CARGO_PKG_VERSION").unwrap_or_default(),
-		commit_dash,
-		impl_commit,
-		std::env::var("SUBSTRATE_CLI_PLATFORM").unwrap_or_default(),
-	)
-	.to_token_stream();
+	let default_impl_version = get_version().to_token_stream();
 	let impl_version = attrs.get("impl_version").unwrap_or(&default_impl_version);
 
 	let s: ItemFn = match syn::parse(i) {
@@ -147,4 +138,35 @@ fn get_type_arguments<'a>(
 		}
 		_ => Err(ty.span()),
 	}
+}
+
+fn get_platform() -> String {
+	use platforms::*;
+
+	let env_dash = if TARGET_ENV.is_some() {
+		"-"
+	} else {
+		""
+	};
+
+	format!(
+		"{}-{}{}{}",
+		TARGET_ARCH.as_str(),
+		TARGET_OS.as_str(),
+		env_dash,
+		TARGET_ENV.map(|x| x.as_str()).unwrap_or(""),
+	)
+}
+
+fn get_version() -> String {
+	let impl_commit = std::env::var("VERGEN_SHA_SHORT").unwrap_or_default();
+	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
+
+	format!(
+		"{}{}{}-{}",
+		std::env::var("CARGO_PKG_VERSION").unwrap_or_default(),
+		commit_dash,
+		impl_commit,
+		get_platform(),
+	)
 }

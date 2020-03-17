@@ -36,5 +36,4 @@ sc-basic-authorship = { path = "../../../client/basic-authorship" , version = "0
 node-template-runtime = { version = "2.0.0-alpha.2", path = "../runtime" }
 
 [build-dependencies]
-vergen = "3.0.4"
-build-script-utils = { version = "2.0.0-alpha.2", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
+sc-cli = { version = "0.8.0-alpha.2", path = "../../../client/cli" }
