@@ -57,7 +57,7 @@ pub trait CliConfiguration: Sized {
 		&self,
 		_chain_spec: &ChainSpec<G, E>,
 		_is_dev: bool,
-		_base_path: &PathBuf,
+		net_config_dir: &PathBuf,
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
@@ -66,7 +66,7 @@ pub trait CliConfiguration: Sized {
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		Ok(NetworkConfiguration::new(node_name, client_id, node_key))
+		Ok(NetworkConfiguration::new(node_name, client_id, node_key, net_config_dir))
 	}
 
 	fn get_keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig>;

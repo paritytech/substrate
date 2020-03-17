@@ -281,9 +281,14 @@ pub struct NetworkConfiguration {
 
 impl NetworkConfiguration {
 	/// Create new default configuration
-	pub fn new<S: Into<String>>(node_name: S, client_version: S, node_key: NodeKeyConfig) -> Self {
+	pub fn new<S: Into<String>>(
+		node_name: S,
+		client_version: S,
+		node_key: NodeKeyConfig,
+		net_config_path: &PathBuf,
+	) -> Self {
 		NetworkConfiguration {
-			net_config_path: std::env::current_dir().expect("current directory must exist"),
+			net_config_path: net_config_path.clone(),
 			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
@@ -309,7 +314,12 @@ impl NetworkConfiguration {
 impl NetworkConfiguration {
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new("test-node", "test-client", Default::default());
+		let mut config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			&std::env::current_dir().expect("current directory must exist"),
+		);
 
 		config.listen_addresses = vec![
 			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
@@ -322,7 +332,12 @@ impl NetworkConfiguration {
 
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_memory() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new("test-node", "test-client", Default::default());
+		let mut config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			&std::env::current_dir().expect("current directory must exist"),
+		);
 
 		config.listen_addresses = vec![
 			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
