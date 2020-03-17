@@ -138,7 +138,7 @@ pub struct ChainSync<B: BlockT> {
 	block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	max_parallel_downloads: u32,
-	/// Total numbet of processed blocks (imported or failed).
+	/// Total number of processed blocks (imported or failed).
 	processed_blocks: usize,
 }
 
@@ -909,10 +909,12 @@ impl<B: BlockT> ChainSync<B> {
 		let mut output = Vec::new();
 
 		let mut has_error = false;
-		let mut hashes = Vec::with_capacity(results.len());
-		for (result, hash) in results {
-			hashes.push(hash);
+		for (_, hash) in &results {
+			self.queue_blocks.remove(&hash);
+		}
+		self.processed_blocks += results.len();
 
+		for (result, hash) in results {
 			if has_error {
 				continue;
 			}
@@ -988,11 +990,6 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				Err(BlockImportError::Cancelled) => {}
 			};
-		}
-
-		self.processed_blocks += hashes.len();
-		for hash in hashes {
-			self.queue_blocks.remove(&hash);
 		}
 
 		self.is_idle = false;
@@ -1111,7 +1108,7 @@ impl<B: BlockT> ChainSync<B> {
 		}
 		// If the announced block is the best they have and is not ahead of us, our common number
 		// is either one further ahead or it's the one they just announced, if we know about it.
-		if is_best {
+		if is_best && self.best_queued_number >= number {
 			if known {
 				peer.common_number = number
 			} else if header.parent_hash() == &self.best_queued_hash || known_parent {
@@ -1183,7 +1180,6 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Restart the sync process.
 	fn restart<'a>(&'a mut self) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a {
-		self.queue_blocks.clear();
 		self.processed_blocks = 0;
 		self.blocks.clear();
 		let info = self.client.info();
