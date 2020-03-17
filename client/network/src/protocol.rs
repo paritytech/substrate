@@ -451,8 +451,6 @@ pub struct ProtocolConfig {
 	pub roles: Roles,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
-	/// Use default block announcement
-	pub default_announce_block: bool,
 }
 
 impl Default for ProtocolConfig {
@@ -460,7 +458,6 @@ impl Default for ProtocolConfig {
 		ProtocolConfig {
 			roles: Roles::FULL,
 			max_parallel_downloads: 5,
-			default_announce_block: true,
 		}
 	}
 }
@@ -1439,18 +1436,17 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 	/// Call this when a block has been imported in the import queue and we should announce it on
 	/// the network.
-	pub fn on_block_imported(&mut self, header: &B::Header, data: Vec<u8>, is_best: bool) {
+	pub fn on_block_imported(&mut self, header: &B::Header, data: Vec<u8>, is_best: bool, also_announce: bool) {
 		if is_best {
 			self.sync.update_chain_info(header);
 		}
 
-		// blocks are not announced by light clients
-		if self.config.roles.is_light() {
+		if !also_announce {
 			return;
 		}
 
-		// blocks are announced by default
-		if !self.config.default_announce_block {
+		// blocks are not announced by light clients
+		if self.config.roles.is_light() {
 			return;
 		}
 
@@ -2171,7 +2167,6 @@ mod tests {
 			ProtocolConfig {
 				roles: Roles::FULL,
 				max_parallel_downloads: 10,
-				default_announce_block: true,
 			},
 			client.clone(),
 			Arc::new(AlwaysBadChecker),

@@ -335,7 +335,8 @@ fn build_network_future<
 
 		// We poll `imported_blocks_stream`.
 		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
-			network.on_block_imported(notification.header, Vec::new(), notification.is_new_best);
+			network.on_block_imported(notification.header, Vec::new(), notification.is_new_best, false);
+			network.service().announce_block(notification.hash, Vec::new());
 		}
 
 		// We poll `finality_notification_stream`, but we only take the last event.

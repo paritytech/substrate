@@ -233,7 +233,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			protocol::ProtocolConfig {
 				roles: params.roles,
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
-				default_announce_block: params.network_config.default_announce_block,
 			},
 			params.chain.clone(),
 			checker.clone(),
@@ -392,8 +391,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	}
 
 	/// You must call this when a new block is imported by the client.
-	pub fn on_block_imported(&mut self, header: B::Header, data: Vec<u8>, is_best: bool) {
-		self.network_service.user_protocol_mut().on_block_imported(&header, data, is_best);
+	pub fn on_block_imported(&mut self, header: B::Header, data: Vec<u8>, is_best: bool, also_announce: bool) {
+		self.network_service.user_protocol_mut().on_block_imported(&header, data, is_best, also_announce);
 	}
 
 	/// You must call this when a new block is finalized by the client.

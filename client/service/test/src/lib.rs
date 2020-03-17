@@ -169,7 +169,6 @@ fn node_config<G, E: Clone> (
 			use_yamux_flow_control: true,
 		},
 		max_parallel_downloads: NetworkConfiguration::default().max_parallel_downloads,
-		default_announce_block: true,
 	};
 
 	Configuration {
