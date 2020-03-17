@@ -58,7 +58,7 @@ pub fn from_block_number(n: u32) -> Header {
 }
 
 pub fn executor() -> NativeExecutor<Executor> {
-	NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+	NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 }
 
 pub fn executor_call<

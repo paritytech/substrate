@@ -24,7 +24,7 @@ use sp_std::prelude::*;
 use frame_support::{
 	construct_runtime, parameter_types, debug,
 	weights::Weight,
-	traits::{SplitTwoWays, Currency, Randomness},
+	traits::{Currency, Randomness, OnUnbalanced, Imbalance},
 };
 use sp_core::u32_trait::{_1, _2, _3, _4};
 pub use node_primitives::{AccountId, Signature};
@@ -82,7 +82,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 235,
+	spec_version: 237,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -98,12 +98,21 @@ pub fn native_version() -> NativeVersion {
 
 type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
 
-pub type DealWithFees = SplitTwoWays<
-	Balance,
-	NegativeImbalance,
-	_4, Treasury,   // 4 parts (80%) goes to the treasury.
-	_1, Author,     // 1 part (20%) goes to the block author.
->;
+pub struct DealWithFees;
+impl OnUnbalanced<NegativeImbalance> for DealWithFees {
+	fn on_unbalanceds<B>(mut fees_then_tips: impl Iterator<Item=NegativeImbalance>) {
+		if let Some(fees) = fees_then_tips.next() {
+			// for fees, 80% to treasury, 20% to author
+			let mut split = fees.ration(80, 20);
+			if let Some(tips) = fees_then_tips.next() {
+				// for tips, if any, 80% to treasury, 20% to author (though this can be anything)
+				tips.ration_merge_into(80, 20, &mut split);
+			}
+			Treasury::on_unbalanced(split.0);
+			Author::on_unbalanced(split.1);
+		}
+	}
+}
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
@@ -131,6 +140,7 @@ impl frame_system::Trait for Runtime {
 	type Version = Version;
 	type ModuleToIndex = ModuleToIndex;
 	type AccountData = pallet_balances::AccountData<Balance>;
+	type MigrateAccount = (Balances, Identity, Democracy, Elections, ImOnline, Recovery, Session, Society, Staking, Vesting);
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
@@ -841,6 +851,11 @@ impl_runtime_apis! {
 			repeat: u32,
 		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::Benchmarking;
+			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency issues.
+			// To get around that, we separated the Session benchmarks into its own crate, which is why
+			// we need these two lines below.
+			use pallet_session_benchmarking::Module as SessionBench;
+			impl pallet_session_benchmarking::Trait for Runtime {}
 
 			let result = match module.as_slice() {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(
@@ -851,6 +866,20 @@ impl_runtime_apis! {
 					repeat,
 				),
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-session" | b"session" => SessionBench::<Runtime>::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-staking" | b"staking" => Staking::run_benchmark(
 					extrinsic,
 					lowest_range_values,
 					highest_range_values,

@@ -27,6 +27,7 @@ sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
 sp-rpc = { version = "2.0.0-alpha.2", path = "../../primitives/rpc" }
 sp-state-machine = { version = "0.8.0-alpha.2", path = "../../primitives/state-machine" }
 sc-executor = { version = "0.8.0-alpha.2", path = "../executor" }
+sc-block-builder = { version = "0.8.0-alpha.2", path = "../../client/block-builder" }
 sc-keystore = { version = "2.0.0-alpha.2", path = "../keystore" }
 sp-transaction-pool = { version = "2.0.0-alpha.2", path = "../../primitives/transaction-pool" }
 sp-blockchain = { version = "2.0.0-alpha.2", path = "../../primitives/blockchain" }

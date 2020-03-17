@@ -170,7 +170,8 @@ fn bench_execute_block(c: &mut Criterion) {
 				ExecutionMethod::Native => (true, WasmExecutionMethod::Interpreted),
 				ExecutionMethod::Wasm(wasm_method) => (false, *wasm_method),
 			};
-			let executor = NativeExecutor::new(wasm_method, None);
+
+			let executor = NativeExecutor::new(wasm_method, None, 8);
 			let runtime_code = RuntimeCode {
 				code_fetcher: &sp_core::traits::WrappedRuntimeCode(COMPACT_CODE.into()),
 				hash: vec![1, 2, 3],

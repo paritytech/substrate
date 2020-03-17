@@ -190,11 +190,16 @@ fn record_proof_works() {
 
 	// Use the proof backend to execute `execute_block`.
 	let mut overlay = Default::default();
-	let executor = NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None);
+	let executor = NativeExecutor::<LocalExecutor>::new(
+		WasmExecutionMethod::Interpreted,
+		None,
+		8,
+	);
 	execution_proof_check_on_trie_backend::<_, u64, _>(
 		&backend,
 		&mut overlay,
 		&executor,
+		sp_core::tasks::executor(),
 		"Core_execute_block",
 		&block.encode(),
 		&runtime_code,
