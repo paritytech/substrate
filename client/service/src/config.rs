@@ -25,7 +25,6 @@ use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::{ChainSpec, NoExtension};
 use sp_core::crypto::Protected;
-use target_info::Target;
 use sc_telemetry::TelemetryEndpoints;
 
 /// Service configuration.
@@ -180,46 +179,6 @@ impl<G, E> Default for Configuration<G, E> {
 */
 
 impl<G, E> Configuration<G, E> {
-	// TODO: we probably don't need that VersionInfo at all
-	/*
-	/// Create a default config using `VersionInfo`
-	pub fn from_version(version: &VersionInfo) -> Self {
-		let mut config = Configuration::default();
-		config.impl_name = version.name;
-		config.impl_version = version.version;
-		config.impl_commit = version.commit;
-
-		config
-	}
-	*/
-
-	/// Returns full version string of this configuration.
-	pub fn full_version(&self) -> String {
-		self.impl_version.to_string()
-	}
-
-	// TODO: move to sc_cli
-	/*
-	/// Implementation id and version.
-	pub fn client_id(&self) -> String {
-		format!("{}/v{}", self.impl_name, self.full_version())
-	}
-	*/
-
-	// TODO: move to sc_cli
-	/*
-	/// Generate a PathBuf to sub in the chain configuration directory
-	/// if given
-	pub fn in_chain_config_dir(&self, sub: &str) -> Option<PathBuf> {
-		self.config_dir.clone().map(|mut path| {
-			path.push("chains");
-			path.push(self.chain_spec.id());
-			path.push(sub);
-			path
-		})
-	}
-	*/
-
 	// TODO: move to sc_cli?
 	/// Returns a string displaying the node role, special casing the sentry mode
 	/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
@@ -231,31 +190,4 @@ impl<G, E> Configuration<G, E> {
 			self.roles.to_string()
 		}
 	}
-
-	// TODO: move to sc_cli
-	/*
-	/// Use in memory keystore config when it is not required at all.
-	///
-	/// This function returns an error if the keystore is already set to something different than
-	/// `KeystoreConfig::None`.
-	pub fn use_in_memory_keystore(&mut self) -> Result<(), String> {
-		match &mut self.keystore {
-			cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
-			_ => Err("Keystore config specified when it should not be!".into()),
-		}
-	}
-	*/
-}
-
-/// Returns platform info
-pub fn platform() -> String {
-	let env = Target::env();
-	let env_dash = if env.is_empty() { "" } else { "-" };
-	format!("{}-{}{}{}", Target::arch(), Target::os(), env_dash, env)
-}
-
-/// Returns full version string, using supplied version and commit.
-pub fn full_version_from_strs(impl_version: &str, impl_commit: &str) -> String {
-	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
-	format!("{}{}{}-{}", impl_version, commit_dash, impl_commit, platform())
 }

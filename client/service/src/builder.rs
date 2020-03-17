@@ -849,7 +849,7 @@ ServiceBuilder<
 		let chain_info = client.chain_info();
 		let chain_spec = &config.chain_spec;
 
-		let version = config.full_version();
+		let version = config.impl_version;
 		info!("Highest known block at #{}", chain_info.best_number);
 		telemetry!(
 			SUBSTRATE_INFO;
@@ -1137,7 +1137,7 @@ ServiceBuilder<
 			let system_info = sc_rpc::system::SystemInfo {
 				chain_name: chain_spec.name().into(),
 				impl_name: config.impl_name.into(),
-				impl_version: config.impl_version.into(),
+				impl_version: config.impl_version.into(), // TODO: this is now using full version instead of just version. Is it correct?
 				properties: chain_spec.properties().clone(),
 			};
 

@@ -6465,7 +6465,6 @@ dependencies = [
  "sp-transaction-pool",
  "substrate-test-runtime-client",
  "sysinfo",
- "target_info",
  "tokio 0.2.11",
  "tracing",
  "wasm-timer",
@@ -7866,12 +7865,6 @@ name = "target-lexicon"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab0e7238dcc7b40a7be719a25365910f6807bd864f4cce6b2e6b873658e2b19d"
-
-[[package]]
-name = "target_info"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c63f48baada5c52e65a29eef93ab4f8982681b67f9e8d29c7b05abcfec2b9ffe"
 
 [[package]]
 name = "tempfile"
