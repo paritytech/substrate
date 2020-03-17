@@ -1200,28 +1200,28 @@ dependencies = [
 
 [[package]]
 name = "ethbloom"
-version = "0.8.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32cfe1c169414b709cf28aa30c74060bdb830a03a8ba473314d079ac79d80a5f"
+checksum = "9e7abcddbdd5db30aeed4deb586adc4824e6c247e2f7238d1187f752893f096b"
 dependencies = [
  "crunchy",
- "fixed-hash 0.5.2",
+ "fixed-hash 0.6.0",
  "impl-rlp",
- "impl-serde 0.2.3",
- "tiny-keccak 1.5.0",
+ "impl-serde 0.3.0",
+ "tiny-keccak 2.0.1",
 ]
 
 [[package]]
 name = "ethereum-types"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba744248e3553a393143d5ebb68939fc3a4ec0c22a269682535f5ffe7fed728c"
+checksum = "964c23cdee0ca07d5be2a628b46d5c11a2134ce554a8c16d8dbc2db647e4fd4d"
 dependencies = [
  "ethbloom",
- "fixed-hash 0.5.2",
+ "fixed-hash 0.6.0",
  "impl-rlp",
- "impl-serde 0.2.3",
- "primitive-types 0.6.2",
+ "impl-serde 0.3.0",
+ "primitive-types 0.7.0",
  "uint",
 ]
 
@@ -4663,14 +4663,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9344bc978467339b9ae688f9dcf279d1aaa0ccfc88e9a780c729b765a82d57d5"
 dependencies = [
  "cfg-if",
- "ethereum-types",
- "hashbrown",
  "impl-trait-for-tuples",
- "lru",
  "parity-util-mem-derive",
  "parking_lot 0.10.0",
- "primitive-types 0.6.2",
- "smallvec 1.2.0",
  "winapi 0.3.8",
 ]
 
@@ -4681,7 +4676,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e42755f26e5ea21a6a819d9e63cbd70713e9867a2b767ec2cc65ca7659532c5"
 dependencies = [
  "cfg-if",
+ "ethereum-types",
+ "hashbrown",
  "impl-trait-for-tuples",
+ "lru",
  "parity-util-mem-derive",
  "parking_lot 0.10.0",
  "primitive-types 0.7.0",
@@ -4940,7 +4938,6 @@ dependencies = [
  "fixed-hash 0.5.2",
  "impl-codec",
  "impl-rlp",
- "impl-serde 0.3.0",
  "uint",
 ]
 
@@ -6527,7 +6524,7 @@ dependencies = [
  "env_logger 0.7.1",
  "log 0.4.8",
  "parity-scale-codec",
- "parity-util-mem 0.5.2",
+ "parity-util-mem 0.6.0",
  "parity-util-mem-derive",
  "parking_lot 0.10.0",
  "sc-client-api",
