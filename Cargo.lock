@@ -5642,6 +5642,7 @@ name = "sc-basic-authorship"
 version = "0.8.0-alpha.3"
 dependencies = [
  "futures 0.3.4",
+ "futures-timer 3.0.2",
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
@@ -5970,6 +5971,7 @@ dependencies = [
 name = "sc-consensus-manual-seal"
 version = "0.8.0-alpha.3"
 dependencies = [
+ "assert_matches",
  "derive_more",
  "env_logger 0.7.1",
  "futures 0.3.4",
