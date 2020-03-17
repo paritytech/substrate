@@ -7252,7 +7252,6 @@ version = "2.0.0-alpha.3"
 dependencies = [
  "futures 0.3.4",
  "hash-db",
- "lazy_static",
  "libsecp256k1",
  "log 0.4.8",
  "parity-scale-codec",
