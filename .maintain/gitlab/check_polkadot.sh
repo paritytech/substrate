@@ -8,7 +8,7 @@
 # polkadot companion: paritytech/polkadot#567
 
 
-github_api_polkadot_pull_url="https://api.github.com/repos/paritytech/polkadot"
+github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
 # use github api v3 in order to access the data without authentication
 github_header="Accept: application/vnd.github.v3+json" 
 
@@ -27,15 +27,15 @@ if expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
 then
   boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
   # get the last reference to a pr in polkadot
-  comppr="$(curl -H "${github_header}" -s ${github_api_polkadot_pull_url}/${CI_COMMIT_REF_NAME} \
+  comppr="$(curl -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME} \
     | sed -n -r 's;^[[:space:]]+"body":[[:space:]]+".*polkadot companion: paritytech/polkadot#([0-9]+).*"[^"]+$;\1;p;$!d')"
   if [ "${comppr}" ]
   then
-    boldprint "companion pr found: #${comppr}"
+    boldprint "companion pr specified: #${comppr}"
     git fetch origin refs/pull/${comppr}/head:pr/${comppr}
     git checkout pr/${comppr}
   else
-    boldprint "no companion pr found - building polkadot:master"
+    boldprint "no companion pr declared - building polkadot:master"
   fi
 else
   boldprint "this is not a pull request - building polkadot master"
