@@ -20,8 +20,7 @@ use sp_std::{
 };
 use codec::{Encode, Decode};
 use crate::{
-    Perbill,
-    per_things::PerThing,
+	Perbill,
 	traits::{
 		SaturatedConversion, CheckedSub, CheckedAdd, CheckedDiv, Bounded, UniqueSaturatedInto, Saturating
 	}
@@ -120,9 +119,9 @@ impl Saturating for Fixed64 {
 		Self(self.0.saturating_sub(rhs.0))
 	}
 
-    fn saturating_pow(self, exp: usize) -> Self {
-        Self(self.0.saturating_pow(exp as u32))
-    }
+	fn saturating_pow(self, exp: usize) -> Self {
+		Self(self.0.saturating_pow(exp as u32))
+	}
 }
 
 /// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait

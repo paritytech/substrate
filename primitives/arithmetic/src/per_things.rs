@@ -161,6 +161,31 @@ macro_rules! implement_per_thing {
 			}
 		}
 
+		/// Implement const functions
+		impl $name {
+			/// From an explicitly defined number of parts per maximum of the type.
+			///
+			/// This can be called at compile time.
+			pub const fn from_parts(parts: $type) -> Self {
+				Self([parts, $max][(parts > $max) as usize])
+			}
+
+			/// Converts a percent into `Self`. Equal to `x / 100`.
+			///
+			/// This can be created at compile time.
+			pub const fn from_percent(x: $type) -> Self {
+				Self([x, 100][(x > 100) as usize] * ($max / 100))
+			}
+
+			/// Everything.
+			///
+			/// To avoid having to import `PerThing` when one needs to be used in test mocks.
+			#[cfg(feature = "std")]
+			pub fn one() -> Self {
+				<Self as PerThing>::one()
+			}
+		}
+
 		impl Saturating for $name {
 			/// Saturating addition. Compute `self + rhs`, saturating at the numeric bounds instead of
 			/// overflowing. This operation is lossless if it does not saturate.
