@@ -77,6 +77,7 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_support::traits::MigrateAccount;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
@@ -382,21 +383,21 @@ pub struct RegistrarInfo<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Sudo {
+	trait Store for Module<T: Trait> as Identity {
 		/// Information that is pertinent to identify the entity behind an account.
 		pub IdentityOf get(fn identity):
-			map hasher(blake2_256) T::AccountId => Option<Registration<BalanceOf<T>>>;
+			map hasher(twox_64_concat) T::AccountId => Option<Registration<BalanceOf<T>>>;
 
 		/// The super-identity of an alternative "sub" identity together with its name, within that
 		/// context. If the account is not some other account's sub-identity, then just `None`.
 		pub SuperOf get(fn super_of):
-			map hasher(blake2_256) T::AccountId => Option<(T::AccountId, Data)>;
+			map hasher(blake2_128_concat) T::AccountId => Option<(T::AccountId, Data)>;
 
 		/// Alternative "sub" identities of this account.
 		///
 		/// The first item is the deposit, the second is a vector of the accounts.
 		pub SubsOf get(fn subs_of):
-			map hasher(blake2_256) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
+			map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The set of registrars. Not expected to get very big as can only be added through a
 		/// special origin (likely a council motion).
@@ -886,6 +887,18 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
+	fn migrate_account(a: &T::AccountId) {
+		if IdentityOf::<T>::migrate_key_from_blake(a).is_some() {
+			if let Some((_, subs)) = SubsOf::<T>::migrate_key_from_blake(a) {
+				for sub in subs.into_iter() {
+					SuperOf::<T>::migrate_key_from_blake(sub);
+				}
+			}
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -936,7 +949,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {

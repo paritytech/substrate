@@ -25,7 +25,7 @@ use sc_client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
 use node_executor;
 use node_primitives::Block;
-use node_runtime::{GenesisConfig, RuntimeApi};
+use node_runtime::RuntimeApi;
 use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
@@ -193,6 +193,7 @@ macro_rules! new_full {
 				sentry_nodes,
 				service.keystore(),
 				dht_event_stream,
+				service.prometheus_registry(),
 			);
 
 			service.spawn_task("authority-discovery", authority_discovery);
@@ -269,11 +270,8 @@ type ConcreteTransactionPool = sc_transaction_pool::BasicPool<
 	ConcreteBlock
 >;
 
-/// A specialized configuration object for setting up the node..
-pub type NodeConfiguration = Configuration<GenesisConfig, crate::chain_spec::Extensions>;
-
 /// Builds a new service for a full client.
-pub fn new_full(config: NodeConfiguration)
+pub fn new_full(config: Configuration)
 -> Result<
 	Service<
 		ConcreteBlock,
@@ -295,7 +293,7 @@ pub fn new_full(config: NodeConfiguration)
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: NodeConfiguration)
+pub fn new_light(config: Configuration)
 -> Result<impl AbstractService, ServiceError> {
 	type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
@@ -511,12 +509,11 @@ mod tests {
 					service.transaction_pool()
 				);
 
-				let epoch = babe_link.epoch_changes().lock().epoch_for_child_of(
+				let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(
 					descendent_query(&*service.client()),
 					&parent_hash,
 					parent_number,
 					slot_num,
-					|slot| babe_link.config().genesis_epoch(slot)
 				).unwrap().unwrap();
 
 				let mut digest = Digest::<H256>::default();
@@ -566,7 +563,7 @@ mod tests {
 				params.body = Some(new_body);
 				params.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<dyn Any>,
 				);
 				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 

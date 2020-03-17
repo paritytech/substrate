@@ -18,7 +18,7 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use structopt::StructOpt;
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, Roles, ChainSpec,
+	Configuration, ServiceBuilderCommand, Roles, ChainSpec,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_runtime::generic::BlockId;
@@ -53,15 +53,13 @@ pub struct CheckBlockCmd {
 
 impl CheckBlockCmd {
 	/// Run the check-block command
-	pub fn run<G, E, B, BC, BB>(
+	pub fn run<B, BC, BB>(
 		self,
-		config: Configuration<G, E>,
+		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
@@ -86,15 +84,13 @@ impl CheckBlockCmd {
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
+	pub fn update_config<F>(
 		&self,
-		mut config: &mut Configuration<G, E>,
+		mut config: &mut Configuration,
 		spec_factory: F,
 		version: &VersionInfo,
 	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
 		self.import_params.update_config(&mut config, Roles::FULL, self.shared_params.dev)?;

@@ -14,15 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sp_runtime::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
+use std::fmt::Debug;
+use sp_runtime::{traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sc_client::StateMachine;
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod, VersionInfo};
 use sc_client_db::BenchmarkingState;
-use sc_service::{RuntimeGenesis, ChainSpecExtension, Configuration, ChainSpec};
+use sc_service::{Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
-use std::fmt::Debug;
 use codec::{Encode, Decode};
 use frame_benchmarking::BenchmarkResults;
+use sp_core::tasks;
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt, Clone)]
@@ -82,13 +83,11 @@ impl BenchmarkCmd {
 	}
 
 	/// Runs the command and benchmarks the chain.
-	pub fn run<G, E, BB, ExecDispatch>(
+	pub fn run<BB, ExecDispatch>(
 		self,
-		config: Configuration<G, E>,
+		config: Configuration,
 	) -> sc_cli::Result<()>
 	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
 		BB: BlockT + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
@@ -104,6 +103,7 @@ impl BenchmarkCmd {
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method,
 			None, // heap pages
+			2, // The runtime instances cache size.
 		);
 
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
@@ -121,6 +121,8 @@ impl BenchmarkCmd {
 				self.repeat,
 			).encode(),
 			Default::default(),
+			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+			tasks::executor(),
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
@@ -162,18 +164,19 @@ impl BenchmarkCmd {
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E>(
+	pub fn update_config(
 		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: impl FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		version: &VersionInfo,
-	) -> sc_cli::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		mut config: &mut Configuration,
+		spec_factory: impl FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
+		_version: &VersionInfo,
+	) -> sc_cli::Result<()>
 	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		// Configure chain spec.
+		let chain_key = self.shared_params.chain.clone().unwrap_or("dev".into());
+		let spec = spec_factory(&chain_key)?;
+		config.chain_spec = Some(spec);
 
-		// make sure to configure keystore
+		// Make sure to configure keystore.
 		config.use_in_memory_keystore()?;
 
 		Ok(())

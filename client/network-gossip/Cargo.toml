@@ -16,7 +16,6 @@ futures-timer = "3.0.1"
 libp2p = { version = "0.16.2", default-features = false, features = ["libp2p-websocket"] }
 log = "0.4.8"
 lru = "0.4.3"
-parking_lot = "0.10.0"
 sc-network = { version = "0.8.0-alpha.2", path = "../network" }
 sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
 wasm-timer = "0.2"

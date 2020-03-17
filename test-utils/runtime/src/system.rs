@@ -46,7 +46,7 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as TestRuntime {
-		ExtrinsicData: map hasher(blake2_256) u32 => Vec<u8>;
+		ExtrinsicData: map hasher(blake2_128_concat) u32 => Vec<u8>;
 		// The current block number being processed. Set by `execute_block`.
 		Number get(fn number): Option<BlockNumber>;
 		ParentHash get(fn parent_hash): Hash;
@@ -342,7 +342,7 @@ mod tests {
 	use sp_io::TestExternalities;
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 	use crate::{Header, Transfer, WASM_BINARY};
-	use sp_core::{NeverNativeValue, map, traits::CodeExecutor};
+	use sp_core::{NeverNativeValue, map, traits::{CodeExecutor, RuntimeCode}};
 	use sc_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
 	use sp_io::hashing::twox_128;
 
@@ -354,7 +354,7 @@ mod tests {
 	);
 
 	fn executor() -> NativeExecutor<NativeDispatch> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 	}
 
 	fn new_test_ext() -> TestExternalities {
@@ -405,8 +405,15 @@ mod tests {
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
 			let mut ext = ext.ext();
+			let runtime_code = RuntimeCode {
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				hash: Vec::new(),
+				heap_pages: None,
+			};
+
 			executor().call::<NeverNativeValue, fn() -> _>(
 				&mut ext,
+				&runtime_code,
 				"Core_execute_block",
 				&b.encode(),
 				false,
@@ -498,8 +505,15 @@ mod tests {
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
 			let mut ext = ext.ext();
+			let runtime_code = RuntimeCode {
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				hash: Vec::new(),
+				heap_pages: None,
+			};
+
 			executor().call::<NeverNativeValue, fn() -> _>(
 				&mut ext,
+				&runtime_code,
 				"Core_execute_block",
 				&b.encode(),
 				false,
