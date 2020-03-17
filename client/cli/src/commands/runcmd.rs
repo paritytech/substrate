@@ -277,7 +277,7 @@ impl CliConfiguration for RunCmd {
 		self.shared_params.base_path.as_ref()
 	}
 
-	fn get_is_dev(&self) -> bool {
+	fn is_dev(&self) -> bool {
 		self.shared_params.dev
 	}
 

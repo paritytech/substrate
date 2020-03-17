@@ -43,7 +43,10 @@ pub(crate) const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 pub trait CliConfiguration: Sized {
 	fn get_base_path(&self) -> Option<&PathBuf>;
 
-	fn get_is_dev(&self) -> bool;
+	// TODO: maybe not a good idea to have this in this trait
+	fn is_dev(&self) -> bool {
+		false
+	}
 
 	fn get_roles(&self) -> Roles {
 		Roles::FULL
@@ -181,7 +184,7 @@ pub trait CliConfiguration: Sized {
 		E: ChainSpecExtension,
 	{
 		let chain_spec = self.get_chain_spec::<C, G, E>()?;
-		let is_dev = self.get_is_dev(); // TODO: probably not a good thing to have this getter
+		let is_dev = self.is_dev();
 		let default_config_dir = app_dirs::get_app_root(
 			AppDataType::UserData,
 			&AppInfo {
