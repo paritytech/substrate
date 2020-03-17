@@ -27,6 +27,8 @@ use codec::{Encode, Decode};
 use log::trace;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
+// version at start to avoid collision on v10
+const NON_CANONICAL_JOURNAL_V1: &[u8] = b"v1_non_canonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
 
 /// See module documentation.
@@ -43,9 +45,16 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	pinned_insertions: HashMap<BlockHash, Vec<Key>>,
 }
 
-// TODO new format!!
 #[derive(Encode, Decode)]
-struct JournalRecord<BlockHash: Hash, Key: Hash> {
+struct JournalRecordCompat<BlockHash: Hash, Key: Hash> {
+	hash: BlockHash,
+	parent_hash: BlockHash,
+	inserted: Vec<(Key, DBValue)>,
+	deleted: Vec<Key>,
+}
+
+#[derive(Encode, Decode)]
+struct JournalRecordV1<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	parent_hash: BlockHash,
 	inserted: Vec<(Key, DBValue)>,
@@ -53,8 +62,24 @@ struct JournalRecord<BlockHash: Hash, Key: Hash> {
 	deleted_child: Vec<Vec<u8>>,
 }
 
-fn to_journal_key(block: u64, index: u64) -> Vec<u8> {
+impl<BlockHash: Hash, Key: Hash> From<JournalRecordCompat<BlockHash, Key>> for JournalRecordV1<BlockHash, Key> {
+	fn from(old: JournalRecordCompat<BlockHash, Key>) -> Self {
+		JournalRecordV1 {
+			hash: old.hash,
+			parent_hash: old.parent_hash,
+			inserted: old.inserted,
+			deleted: old.deleted,
+			deleted_child: Vec::new(),
+		}
+	}
+}
+
+fn to_old_journal_key(block: u64, index: u64) -> Vec<u8> {
 	to_meta_key(NON_CANONICAL_JOURNAL, &(block, index))
+}
+
+fn to_journal_key_v1(block: u64, index: u64) -> Vec<u8> {
+	to_meta_key(NON_CANONICAL_JOURNAL_V1, &(block, index))
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
@@ -149,27 +174,35 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				let mut index: u64 = 0;
 				let mut level = Vec::new();
 				loop {
-					let journal_key = to_journal_key(block, index);
-					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
-						Some(record) => {
-							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
-							let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();
-							let overlay = BlockOverlay {
-								hash: record.hash.clone(),
-								journal_key,
-								inserted: inserted,
-								deleted: record.deleted,
-								deleted_child: record.deleted_child,
-							};
-							insert_values(&mut values, record.inserted);
-							trace!(target: "state-db", "Uncanonicalized journal entry {}.{} ({} inserted, {} deleted)", block, index, overlay.inserted.len(), overlay.deleted.len());
-							level.push(overlay);
-							parents.insert(record.hash, record.parent_hash);
-							index += 1;
-							total += 1;
+
+					let journal_key = to_journal_key_v1(block, index);
+					let record: JournalRecordV1<BlockHash, Key> = match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+						Some(record) =>  Decode::decode(&mut record.as_slice())?,
+						None => {
+							let journal_key = to_old_journal_key(block, index);
+							match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+								Some(record) => {
+									let record: JournalRecordCompat<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
+									record.into()
+								},
+								None => break,
+							}
 						},
-						None => break,
-					}
+					};
+					let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();
+					let overlay = BlockOverlay {
+						hash: record.hash.clone(),
+						journal_key,
+						inserted: inserted,
+						deleted: record.deleted,
+						deleted_child: record.deleted_child,
+					};
+					insert_values(&mut values, record.inserted);
+					trace!(target: "state-db", "Uncanonicalized journal entry {}.{} ({} inserted, {} deleted)", block, index, overlay.inserted.len(), overlay.deleted.len());
+					level.push(overlay);
+					parents.insert(record.hash, record.parent_hash);
+					index += 1;
+					total += 1;
 				}
 				if level.is_empty() {
 					break;
@@ -227,7 +260,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 
 		let index = level.len() as u64;
-		let journal_key = to_journal_key(number, index);
+		let journal_key = to_journal_key_v1(number, index);
 
 		let inserted = changeset.inserted.iter().map(|(k, _)| k.clone()).collect();
 		let overlay = BlockOverlay {
@@ -239,7 +272,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 		level.push(overlay);
 		self.parents.insert(hash.clone(), parent_hash.clone());
-		let journal_record = JournalRecord {
+		let journal_record = JournalRecordV1 {
 			hash: hash.clone(),
 			parent_hash: parent_hash.clone(),
 			inserted: changeset.inserted,
@@ -481,7 +514,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 mod tests {
 	use std::io;
 	use sp_core::H256;
-	use super::{NonCanonicalOverlay, to_journal_key};
+	use super::{NonCanonicalOverlay, to_journal_key_v1};
 	use crate::{ChangeSet, CommitSet};
 	use crate::test::{make_db, make_changeset};
 
@@ -760,11 +793,11 @@ mod tests {
 		assert!(contains(&overlay, 111));
 		assert!(!contains(&overlay, 211));
 		// check that journals are deleted
-		assert!(db.get_meta(&to_journal_key(1, 0)).unwrap().is_none());
-		assert!(db.get_meta(&to_journal_key(1, 1)).unwrap().is_none());
-		assert!(db.get_meta(&to_journal_key(2, 1)).unwrap().is_some());
-		assert!(db.get_meta(&to_journal_key(2, 2)).unwrap().is_none());
-		assert!(db.get_meta(&to_journal_key(2, 3)).unwrap().is_none());
+		assert!(db.get_meta(&to_journal_key_v1(1, 0)).unwrap().is_none());
+		assert!(db.get_meta(&to_journal_key_v1(1, 1)).unwrap().is_none());
+		assert!(db.get_meta(&to_journal_key_v1(2, 1)).unwrap().is_some());
+		assert!(db.get_meta(&to_journal_key_v1(2, 2)).unwrap().is_none());
+		assert!(db.get_meta(&to_journal_key_v1(2, 3)).unwrap().is_none());
 
 		// canonicalize 1_2. 1_1 and all its children should be discarded
 		let mut commit = CommitSet::default();

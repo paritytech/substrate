@@ -28,7 +28,8 @@ use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
 use log::{trace, warn};
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
-const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
+const OLD_PRUNING_JOURNAL: &[u8] = b"pruning_journal";
+const PRUNING_JOURNAL_V1: &[u8] = b"v1_pruning_journal";
 
 /// See module documentation.
 #[derive(parity_util_mem_derive::MallocSizeOf)]
@@ -56,16 +57,37 @@ struct DeathRow<BlockHash: Hash, Key: Hash> {
 }
 
 #[derive(Encode, Decode)]
-struct JournalRecord<BlockHash: Hash, Key: Hash> {
+struct JournalRecordCompat<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	inserted: Vec<Key>,
 	deleted: Vec<Key>,
-	// TODO ensure encode compatibility!!!
+}
+
+#[derive(Encode, Decode)]
+struct JournalRecordV1<BlockHash: Hash, Key: Hash> {
+	hash: BlockHash,
+	inserted: Vec<Key>,
+	deleted: Vec<Key>,
 	deleted_child: Vec<Vec<u8>>,
 }
 
-fn to_journal_key(block: u64) -> Vec<u8> {
-	to_meta_key(PRUNING_JOURNAL, &block)
+fn to_old_journal_key(block: u64) -> Vec<u8> {
+	to_meta_key(OLD_PRUNING_JOURNAL, &block)
+}
+
+fn to_journal_key_v1(block: u64) -> Vec<u8> {
+	to_meta_key(PRUNING_JOURNAL_V1, &block)
+}
+
+impl<BlockHash: Hash, Key: Hash> From<JournalRecordCompat<BlockHash, Key>> for JournalRecordV1<BlockHash, Key> {
+	fn from(old: JournalRecordCompat<BlockHash, Key>) -> Self {
+		JournalRecordV1 {
+			hash: old.hash,
+			inserted: old.inserted,
+			deleted: old.deleted,
+			deleted_child: Vec::new(),
+		}
+	}
 }
 
 impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
@@ -87,15 +109,20 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		// read the journal
 		trace!(target: "state-db", "Reading pruning journal. Pending #{}", pending_number);
 		loop {
-			let journal_key = to_journal_key(block);
-			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
-				Some(record) => {
-					let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
-					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
-					pruning.import(&record.hash, journal_key, record.inserted.into_iter(), record.deleted, record.deleted_child);
+			let journal_key = to_journal_key_v1(block);
+			let record: JournalRecordV1<BlockHash, Key> = match db.get_meta(&journal_key)
+				.map_err(|e| Error::Db(e))? {
+				Some(record) => Decode::decode(&mut record.as_slice())?,
+				None => {
+					let journal_key = to_old_journal_key(block);
+					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+						Some(record) => JournalRecordCompat::decode(&mut record.as_slice())?.into(),
+						None => break,
+					}
 				},
-				None => break,
-			}
+			};
+			trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
+			pruning.import(&record.hash, journal_key, record.inserted.into_iter(), record.deleted, record.deleted_child);
 			block += 1;
 		}
 		Ok(pruning)
@@ -172,14 +199,14 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		let inserted = commit.data.inserted.iter().map(|(k, _)| k.clone()).collect();
 		let deleted = ::std::mem::replace(&mut commit.data.deleted, Vec::new());
 		let deleted_child = ::std::mem::replace(&mut commit.data.deleted_child, Vec::new());
-		let journal_record = JournalRecord {
+		let journal_record = JournalRecordV1 {
 			hash: hash.clone(),
 			inserted,
 			deleted,
 			deleted_child,
 		};
 		let block = self.pending_number + self.death_rows.len() as u64;
-		let journal_key = to_journal_key(block);
+		let journal_key = to_journal_key_v1(block);
 		commit.meta.inserted.push((journal_key.clone(), journal_record.encode()));
 		self.import(&journal_record.hash, journal_key, journal_record.inserted.into_iter(), journal_record.deleted, journal_record.deleted_child);
 		self.pending_canonicalizations += 1;
