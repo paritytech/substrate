@@ -23,6 +23,7 @@ tokio = { version = "0.2.9", features = [ "signal", "rt-core", "rt-threaded" ] }
 futures = "0.3.1"
 fdlimit = "0.1.1"
 serde_json = "1.0.41"
+sc-cli-derive = { version = "0.8.0-alpha.2", path = "../cli-derive" }
 sc-informant = { version = "0.8.0-alpha.2", path = "../informant" }
 sp-panic-handler = { version = "2.0.0-alpha.2", path = "../../primitives/panic-handler" }
 sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }

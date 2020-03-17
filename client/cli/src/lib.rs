@@ -44,6 +44,7 @@ pub use config::*;
 pub use runtime::*;
 use log::info;
 use lazy_static::lazy_static;
+pub use sc_cli_derive::*;
 use sc_service::{
 	ChainSpec, Configuration, RuntimeGenesis, ChainSpecExtension, AbstractService,
 	ServiceBuilderCommand, NoExtension,
@@ -110,11 +111,9 @@ where
 		full_version.push_str("\n");
 
 		let app = app
-			/*
-			.name(V::executable_name)
-			.author(V::author)
-			.about(V::description)
-			*/
+			.name(Self::get_executable_name())
+			.author(Self::get_author())
+			.about(Self::get_description())
 			.version(full_version.as_str())
 			.settings(&[
 				AppSettings::GlobalVersion,
@@ -151,11 +150,9 @@ where
 		full_version.push_str("\n");
 
 		let app = app
-			/*
-			.name(V::executable_name())
-			.author(V::author())
-			.about(V::description())
-			*/
+			.name(Self::get_executable_name())
+			.author(Self::get_author())
+			.about(Self::get_description())
 			.version(full_version.as_str());
 
 		let matches = app.get_matches_from_safe(iter)?;

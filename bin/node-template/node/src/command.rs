@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::SubstrateCLI;
-use sc_cli_derive::spec_factory;
+use sc_cli::{SubstrateCLI, spec_factory};
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use crate::service;
 use crate::chain_spec::Alternative;
