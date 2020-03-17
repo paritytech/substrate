@@ -109,7 +109,7 @@ mod module {
 				} else {
 					vec![]
 				}
-			}): map hasher(blake2_256) Role => Option<RoleParameters<T>>;
+			}): map hasher(blake2_128_concat) Role => Option<RoleParameters<T>>;
 
 			/// the roles members can enter into
 			pub AvailableRoles get(fn available_roles) build(|config: &GenesisConfig| {
@@ -125,11 +125,11 @@ mod module {
 
 			/// actor accounts associated with a role
 			pub AccountIdsByRole get(fn account_ids_by_role):
-				map hasher(blake2_256) Role => Vec<T::AccountId>;
+				map hasher(blake2_128_concat) Role => Vec<T::AccountId>;
 
 			/// tokens locked until given block number
 			pub Bondage get(fn bondage):
-				map hasher(blake2_256) T::AccountId => T::BlockNumber;
+				map hasher(blake2_128_concat) T::AccountId => T::BlockNumber;
 
 			/// First step before enter a role is registering intent with a new account/key.
 			/// This is done by sending a role_entry_request() from the new account.

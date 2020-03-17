@@ -35,7 +35,7 @@ use sp_consensus::{
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
-use sc_client_api::BlockBody;
+use sc_client_api::BlockBackend;
 
 /// Build a chain spec json
 pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {

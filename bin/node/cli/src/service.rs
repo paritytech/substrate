@@ -509,12 +509,11 @@ mod tests {
 					service.transaction_pool()
 				);
 
-				let epoch = babe_link.epoch_changes().lock().epoch_for_child_of(
+				let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(
 					descendent_query(&*service.client()),
 					&parent_hash,
 					parent_number,
 					slot_num,
-					|slot| babe_link.config().genesis_epoch(slot)
 				).unwrap().unwrap();
 
 				let mut digest = Digest::<H256>::default();
@@ -564,7 +563,7 @@ mod tests {
 				params.body = Some(new_body);
 				params.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<dyn Any>,
 				);
 				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 

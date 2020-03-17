@@ -56,6 +56,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 pub struct BenchmarkingState<B: BlockT> {
 	path: PathBuf,
 	root: Cell<B::Hash>,
+	genesis_root: B::Hash,
 	state: RefCell<Option<DbState<B>>>,
 	db: Cell<Option<Arc<dyn KeyValueDB>>>,
 	genesis: <DbState<B> as StateBackend<HashFor<B>>>::Transaction,
@@ -79,6 +80,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			path,
 			root: Cell::new(root),
 			genesis: Default::default(),
+			genesis_root: Default::default(),
 		};
 
 		state.reopen()?;
@@ -86,12 +88,13 @@ impl<B: BlockT> BenchmarkingState<B> {
 			child_content.child_info,
 			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
 		));
-		let (root, transaction, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
+		let (root, transaction): (B::Hash, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
 			genesis.top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta,
 			false,
 		);
 		state.genesis = transaction.clone();
+		state.genesis_root = root.clone();
 		state.commit(root, transaction)?;
 		Ok(state)
 	}
@@ -288,7 +291,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn wipe(&self) -> Result<(), Self::Error> {
 		self.kill()?;
 		self.reopen()?;
-		self.commit(self.root.get(), self.genesis.clone())?;
+		self.commit(self.genesis_root.clone(), self.genesis.clone())?;
 		Ok(())
 	}
 }
@@ -298,4 +301,3 @@ impl<Block: BlockT> std::fmt::Debug for BenchmarkingState<Block> {
 		write!(f, "DB at {:?}", self.path)
 	}
 }
-

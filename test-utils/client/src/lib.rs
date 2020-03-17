@@ -23,7 +23,7 @@ pub mod client_ext;
 pub use sc_client::{blockchain, self};
 pub use sc_client_api::{
 	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
-	ForkBlocks, BadBlocks,
+	ForkBlocks, BadBlocks, CloneableSpawn,
 };
 pub use sc_client_db::{Backend, self};
 pub use sp_consensus;
@@ -33,7 +33,7 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring,
 	sr25519::Keyring as Sr25519Keyring,
 };
-pub use sp_core::traits::BareCryptoStorePtr;
+pub use sp_core::{traits::BareCryptoStorePtr, tasks::executor as tasks_executor};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
 pub use self::client_ext::{ClientExt, ClientBlockImportExt};
@@ -246,7 +246,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		let executor = executor.into().unwrap_or_else(||
 			NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 		);
-		let executor = LocalCallExecutor::new(self.backend.clone(), executor);
+		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor());
 
 		self.build_with_executor(executor)
 	}

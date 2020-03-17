@@ -47,7 +47,7 @@ use std::io;
 use std::collections::HashMap;
 
 use sc_client_api::{
-	ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo, MemorySize,
+	ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo, MemorySize, CloneableSpawn,
 	execution_extensions::ExecutionExtensions,
 	backend::{NewBlockState, PrunableStateChangesTrieStorage},
 };
@@ -285,6 +285,7 @@ pub fn new_client<E, Block, RA>(
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	prometheus_registry: Option<Registry>,
 ) -> Result<(
 		sc_client::Client<
@@ -302,7 +303,7 @@ pub fn new_client<E, Block, RA>(
 		E: CodeExecutor + RuntimeInfo,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
+	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
 	Ok((
 		sc_client::Client::new(
 			backend.clone(),

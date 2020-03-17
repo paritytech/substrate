@@ -12,7 +12,7 @@ repository = "https://github.com/paritytech/substrate/"
 ansi_term = "0.12.1"
 futures = "0.3.1"
 log = "0.4.8"
-parity-util-mem = { version = "0.5.1", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.5.2", default-features = false, features = ["primitive-types"] }
 wasm-timer = "0.2"
 sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
 sc-network = { version = "0.8.0-alpha.2", path = "../network" }
