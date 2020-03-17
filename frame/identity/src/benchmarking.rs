@@ -150,10 +150,9 @@ benchmarks! {
 
 	set_subs {
 		let caller = account::<T>("caller", 0);
-		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
 
+		// Give them s many sub accounts.
 		let s in 1 .. T::MaxSubAccounts::get() - 1 => {
-			// Give them s many sub accounts
 			let _ = add_sub_accounts::<T>(&caller, s)?;
 		};
 
