@@ -408,21 +408,11 @@ mod tests {
 
 			create_validators_with_nominators_for_era::<Test>(v,n).unwrap();
 
-			let mut validator_iter = Validators::<Test>::enumerate();
-			let mut nominator_iter = Nominators::<Test>::enumerate();
+			let count_validators = Validators::<Test>::iter().count();
+			let count_nominators = Nominators::<Test>::iter().count();
 
-			let mut count_validators = 0;
-			while let Some(_) = validator_iter.next() {
-				count_validators += 1;
-			}
-			let mut count_nominators = 0;
-			while let Some((_key, value)) = nominator_iter.next() {
-				assert_eq!(value.targets.len(), v as usize);
-				count_nominators += 1;
-			}
-
-			assert_eq!(count_validators, v);
-			assert_eq!(count_nominators, n);
+			assert_eq!(count_validators, v as usize);
+			assert_eq!(count_nominators, n as usize);
 		});
 	}
 
