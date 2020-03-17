@@ -30,7 +30,7 @@ const LRU_CACHE_SIZE: usize = 5_000;
 /// small branches, and because of our current query pattern:
 /// lca(best, final), lca(best + 1, final), lca(best + 2, final), etc.
 /// The first call is O(h) but the others are O(1).
-pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block>>(
+pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block> + ?Sized>(
 	backend: &T,
 	id_one: Block::Hash,
 	id_two: Block::Hash,

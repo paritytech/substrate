@@ -30,6 +30,7 @@
 use futures::{prelude::*, channel::mpsc};
 use log::{debug, trace};
 use parking_lot::Mutex;
+use prometheus_endpoint::Registry;
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 
 use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
@@ -178,10 +179,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
+		prometheus_registry: Option<&Registry>,
 	) -> Self {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
 			set_state.clone(),
+			prometheus_registry,
 		);
 
 		let validator = Arc::new(validator);
@@ -471,12 +474,12 @@ fn incoming_global<B: BlockT>(
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
-		let precommits_signed_by: Vec<String> =
-			msg.message.auth_data.iter().map(move |(_, a)| {
-				format!("{}", a)
-			}).collect();
-
 		if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+			let precommits_signed_by: Vec<String> =
+				msg.message.auth_data.iter().map(move |(_, a)| {
+					format!("{}", a)
+				}).collect();
+
 			telemetry!(CONSENSUS_INFO; "afg.received_commit";
 				"contains_precommits_signed_by" => ?precommits_signed_by,
 				"target_number" => ?msg.message.target_number.clone(),
