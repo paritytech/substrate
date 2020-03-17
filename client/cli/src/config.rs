@@ -25,6 +25,7 @@ use sc_service::config::{
 	NetworkConfiguration, PruningMode, Roles, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, ChainSpecExtension, RuntimeGenesis};
+use sc_network::config::NodeKeyConfig;
 use sc_telemetry::TelemetryEndpoints;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -35,39 +36,53 @@ use std::sync::Arc;
 /// The maximum number of characters for a node name.
 pub(crate) const NODE_NAME_MAX_LENGTH: usize = 32;
 
+/// default sub directory to store network config
+pub(crate) const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
+
 // TODO: all getters should probably return a Result no matter what
 pub trait CliConfiguration: Sized {
 	fn get_base_path(&self) -> Option<&PathBuf>;
+
 	fn get_is_dev(&self) -> bool;
+
 	fn get_roles(&self) -> Roles {
 		Roles::FULL
 	}
+
 	fn get_transaction_pool(&self) -> Result<TransactionPoolOptions> {
 		Ok(Default::default())
 	}
+
 	fn get_network_config<G, E>(
 		&self,
 		_chain_spec: &ChainSpec<G, E>,
 		_is_dev: bool,
 		_base_path: &PathBuf,
-		_client_id: &str,
+		client_id: &str,
 		node_name: &str,
+		node_key: NodeKeyConfig,
 	) -> Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		Ok(NetworkConfiguration::new(node_name))
+		Ok(NetworkConfiguration::new(node_name, client_id, node_key))
 	}
+
 	fn get_keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig>;
+
 	fn get_database_cache_size(&self) -> Option<usize> { Default::default() }
+
 	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> DatabaseConfig;
+
 	fn get_state_cache_size(&self) -> usize {
 		Default::default()
 	}
+
 	fn get_state_cache_child_ratio(&self) -> Option<usize> {
 		Default::default()
 	}
+
 	fn get_pruning(&self, _is_dev: bool) -> Result<PruningMode> {
 		Ok(Default::default())
 	}
@@ -84,36 +99,46 @@ pub trait CliConfiguration: Sized {
 	fn get_wasm_method(&self) -> WasmExecutionMethod {
 		WasmExecutionMethod::Interpreted
 	}
+
 	fn get_execution_strategies(&self, _is_dev: bool) -> Result<ExecutionStrategies> {
 		Ok(Default::default())
 	}
+
 	fn get_rpc_http(&self) -> Result<Option<SocketAddr>> {
 		Ok(Default::default())
 	}
+
 	fn get_rpc_ws(&self) -> Result<Option<SocketAddr>> {
 		Ok(Default::default())
 	}
+
 	fn get_rpc_ws_max_connections(&self) -> Option<usize> {
 		Default::default()
 	}
+
 	fn get_rpc_cors(&self, _is_dev: bool) -> Option<Vec<String>> {
 		Some(Vec::new())
 	}
+
 	fn get_prometheus_port(&self) -> Result<Option<SocketAddr>> {
 		Ok(Default::default())
 	}
+
 	fn get_telemetry_endpoints<G, E>(
 		&self,
 		chain_spec: &ChainSpec<G, E>,
 	) -> Option<TelemetryEndpoints> {
 		chain_spec.telemetry_endpoints().clone()
 	}
+
 	fn get_telemetry_external_transport(&self) -> Option<ExtTransport> {
 		Default::default()
 	}
+
 	fn get_default_heap_pages(&self) -> Option<u64> {
 		Default::default()
 	}
+
 	fn get_offchain_worker(&self) -> bool {
 		Default::default()
 	}
@@ -126,17 +151,25 @@ pub trait CliConfiguration: Sized {
 	fn get_force_authoring(&self) -> bool {
 		Default::default()
 	}
+
 	fn get_disable_grandpa(&self) -> bool {
 		Default::default()
 	}
+
 	fn get_dev_key_seed(&self, _is_dev: bool) -> Option<String> {
 		Default::default()
 	}
+
 	fn get_tracing_targets(&self) -> Option<String> {
 		Default::default()
 	}
+
 	fn get_tracing_receiver(&self) -> sc_tracing::TracingReceiver {
 		Default::default()
+	}
+
+	fn get_node_key(&self, _net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
+		Ok(Default::default())
 	}
 
 	fn create_configuration<C: SubstrateCLI<G, E>, G, E>(
@@ -158,9 +191,11 @@ pub trait CliConfiguration: Sized {
 		)
 		.expect("app directories exist on all supported platforms; qed");
 		let config_dir = self.get_base_path().unwrap_or(&default_config_dir);
+		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		// TODO: this parameter is really optional, shouldn't we leave it to None?
 		let database_cache_size = Some(self.get_database_cache_size().unwrap_or(1024));
+		let node_key = self.get_node_key(&net_config_dir)?;
 
 		Ok(Configuration {
 			impl_name: C::get_impl_name(),
@@ -171,9 +206,10 @@ pub trait CliConfiguration: Sized {
 			network: self.get_network_config(
 				&chain_spec,
 				is_dev,
-				&config_dir,
+				&net_config_dir,
 				client_id.as_str(),
 				self.get_node_name()?.as_str(),
+				node_key,
 			)?,
 			keystore: self.get_keystore_config(config_dir)?,
 			database: self.get_database_config(&config_dir, database_cache_size),

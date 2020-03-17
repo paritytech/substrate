@@ -250,7 +250,7 @@ impl From<multiaddr::Error> for ParseErr {
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
 	/// Directory path to store network-specific configuration. None means nothing will be saved.
-	pub net_config_path: Option<PathBuf>,
+	pub net_config_path: PathBuf,
 	/// Multiaddresses to listen for incoming connections.
 	pub listen_addresses: Vec<Multiaddr>,
 	/// Multiaddresses to advertise. Detected automatically if empty.
@@ -280,20 +280,21 @@ pub struct NetworkConfiguration {
 }
 
 impl NetworkConfiguration {
-	pub fn new(node_name: &str) -> Self {
+	/// Create new default configuration
+	pub fn new<S: Into<String>>(node_name: S, client_version: S, node_key: NodeKeyConfig) -> Self {
 		NetworkConfiguration {
-			net_config_path: None,
+			net_config_path: std::env::current_dir().expect("current directory must exist"),
 			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
-			node_key: NodeKeyConfig::Ed25519(Secret::New),
+			node_key,
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
 			sentry_nodes: Vec::new(),
-			client_version: "unknown".into(),
-			node_name: node_name.to_string(),
+			client_version: client_version.into(),
+			node_name: node_name.into(),
 			transport: TransportConfig::Normal {
 				enable_mdns: false,
 				allow_private_ipv4: true,
@@ -308,7 +309,7 @@ impl NetworkConfiguration {
 impl NetworkConfiguration {
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new("test-node".into());
+		let mut config = NetworkConfiguration::new("test-node", "test-client", Default::default());
 
 		config.listen_addresses = vec![
 			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
@@ -321,7 +322,7 @@ impl NetworkConfiguration {
 
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_memory() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new("test-node".into());
+		let mut config = NetworkConfiguration::new("test-node", "test-client", Default::default());
 
 		config.listen_addresses = vec![
 			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
@@ -391,6 +392,12 @@ impl NonReservedPeerMode {
 pub enum NodeKeyConfig {
 	/// A Ed25519 secret key configuration.
 	Ed25519(Secret<ed25519::SecretKey>)
+}
+
+impl Default for NodeKeyConfig {
+	fn default() -> NodeKeyConfig {
+		NodeKeyConfig::Ed25519(Secret::New)
+	}
 }
 
 /// The options for obtaining a Ed25519 secret key.

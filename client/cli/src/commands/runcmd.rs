@@ -31,6 +31,7 @@ use sc_service::{
 	AbstractService, ChainSpec, ChainSpecExtension, Configuration, PruningMode, Roles,
 	RuntimeGenesis,
 };
+use sc_network::config::NodeKeyConfig;
 use sc_telemetry::TelemetryEndpoints;
 use sc_tracing::TracingReceiver;
 use std::fs;
@@ -295,13 +296,14 @@ impl CliConfiguration for RunCmd {
 		base_path: &PathBuf,
 		client_id: &str,
 		node_name: &str,
+		node_key: NodeKeyConfig,
 	) -> error::Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
 		self.network_config
-			.get_network_config(chain_spec, client_id, is_dev, base_path, node_name)
+			.get_network_config(chain_spec, client_id, is_dev, base_path, node_name, node_key)
 	}
 
 	fn get_keystore_config(&self, base_path: &PathBuf) -> error::Result<KeystoreConfig> {
@@ -494,6 +496,10 @@ impl CliConfiguration for RunCmd {
 
 	fn get_transaction_pool(&self) -> error::Result<TransactionPoolOptions> {
 		self.pool_config.get_transaction_pool()
+	}
+
+	fn get_node_key(&self, net_config_dir: &PathBuf) -> error::Result<NodeKeyConfig> {
+		self.network_config.node_key_params.get_node_key(net_config_dir)
 	}
 }
 

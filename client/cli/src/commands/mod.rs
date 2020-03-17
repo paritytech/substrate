@@ -34,6 +34,7 @@ use sc_service::{
 	config::KeystoreConfig, config::DatabaseConfig, config::NetworkConfiguration, Roles,
 	PruningMode, config::WasmExecutionMethod,
 };
+use sc_network::config::NodeKeyConfig;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sc_tracing::TracingReceiver;
 use sc_client_api::execution_extensions::ExecutionStrategies;
@@ -48,9 +49,6 @@ pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
 pub use crate::commands::check_block_cmd::CheckBlockCmd;
 pub use crate::commands::revert_cmd::RevertCmd;
 pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
-
-/// default sub directory to store network config
-pub(crate) const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 
 /// All core commands that are provided by default.
 ///
@@ -148,36 +146,6 @@ impl CliConfiguration for Subcommand
 		}
 	}
 
-	fn get_network_config<G, E>(
-		&self,
-		_chain_spec: &ChainSpec<G, E>,
-		_is_dev: bool,
-		base_path: &PathBuf,
-		_client_id: &str,
-		node_name: &str,
-	) -> error::Result<NetworkConfiguration>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		// TODO: we shouldn't have to set things in the middle of NetworkConfiguration
-		let config = NetworkConfiguration::new(node_name);
-		let config_path = base_path.join(crate::DEFAULT_NETWORK_CONFIG_PATH);
-
-		match self {
-			Subcommand::BuildSpec(cmd) =>
-				Ok(NetworkConfiguration {
-					node_key: cmd.node_key_params.get_node_key::<G, E>(Some(&config_path))?,
-					..config
-				}),
-			Subcommand::ExportBlocks(_) => Ok(config),
-			Subcommand::ImportBlocks(_) => Ok(config),
-			Subcommand::CheckBlock(_) => Ok(config),
-			Subcommand::Revert(_) => Ok(config),
-			Subcommand::PurgeChain(_) => Ok(config),
-		}
-	}
-
 	fn get_tracing_receiver(&self) -> TracingReceiver {
 		match self {
 			Subcommand::BuildSpec(_) => Default::default(),
@@ -241,6 +209,13 @@ impl CliConfiguration for Subcommand
 			Subcommand::CheckBlock(cmd) => cmd.import_params.database_cache_size,
 			Subcommand::Revert(_) => Default::default(),
 			Subcommand::PurgeChain(_) => Default::default(),
+		}
+	}
+
+	fn get_node_key(&self, net_config_dir: &PathBuf) -> error::Result<NodeKeyConfig> {
+		match self {
+			Subcommand::BuildSpec(cmd) => cmd.node_key_params.get_node_key(net_config_dir),
+			_ => Ok(Default::default()),
 		}
 	}
 }

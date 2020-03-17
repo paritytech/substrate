@@ -19,7 +19,8 @@ use std::iter;
 use std::net::Ipv4Addr;
 use structopt::StructOpt;
 use sc_network::{
-	config::{NonReservedPeerMode, TransportConfig, NetworkConfiguration}, multiaddr::Protocol,
+	config::{NonReservedPeerMode, TransportConfig, NetworkConfiguration, NodeKeyConfig},
+	multiaddr::Protocol,
 };
 use sc_service::{Configuration, RuntimeGenesis, ChainSpec};
 
@@ -106,13 +107,13 @@ impl NetworkConfigurationParams {
 		chain_spec: &ChainSpec<G, E>,
 		client_id: &str,
 		is_dev: bool,
-		base_path: &PathBuf,
+		net_config_path: &PathBuf,
 		node_name: &str,
+		node_key: NodeKeyConfig,
 	) -> error::Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
 	{
-		let config_path = base_path.join(crate::commands::DEFAULT_NETWORK_CONFIG_PATH);
 		let port = self.port.unwrap_or(30333);
 		let mut listen_addresses = vec![
 			iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
@@ -130,7 +131,7 @@ impl NetworkConfigurationParams {
 
 		Ok(NetworkConfiguration {
 			boot_nodes,
-			net_config_path: Some(config_path.clone()),
+			net_config_path: net_config_path.clone(),
 			reserved_nodes: self.reserved_nodes.clone(),
 			non_reserved_mode: if self.reserved_only {
 				NonReservedPeerMode::Deny
@@ -139,7 +140,7 @@ impl NetworkConfigurationParams {
 			},
 			listen_addresses,
 			public_addresses: Vec::new(),
-			node_key: self.node_key_params.get_node_key::<G, E>(Some(&config_path))?,
+			node_key,
 			node_name: node_name.to_string(),
 			sentry_nodes: self.sentry_nodes.clone(),
 			client_version: client_id.to_string(),
