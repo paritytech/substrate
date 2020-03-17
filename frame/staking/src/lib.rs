@@ -254,6 +254,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod slashing;
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod benchmarking;
 
 pub mod inflation;
 
@@ -287,7 +289,7 @@ use sp_phragmen::ExtendedBalance;
 use frame_support::traits::MigrateAccount;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
-const MAX_NOMINATIONS: usize = 16;
+pub const MAX_NOMINATIONS: usize = 16;
 const MAX_UNLOCKING_CHUNKS: usize = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
@@ -1281,14 +1283,14 @@ decl_module! {
 			}
 		}
 
+		// ----- Root calls.
+
 		/// The ideal number of validators.
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
 		}
-
-		// ----- Root calls.
 
 		/// Force there to be no new eras indefinitely.
 		///
@@ -1357,7 +1359,7 @@ decl_module! {
 				.or_else(ensure_root)?;
 
 			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(Self::is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
+			ensure!(is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
 
 			let mut unapplied = <Self as Store>::UnappliedSlashes::get(&era);
 			let last_item = slash_indices[slash_indices.len() - 1];
@@ -1508,11 +1510,6 @@ impl<T: Trait> Module<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
-	}
-
-	/// Check that list is sorted and has no duplicates.
-	fn is_sorted_and_unique(list: &Vec<u32>) -> bool {
-		list.windows(2).all(|w| w[0] < w[1])
 	}
 
 	// MUTABLES (DANGEROUS)
@@ -2219,4 +2216,9 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 			Ok(())
 		}
 	}
+}
+
+/// Check that list is sorted and has no duplicates.
+fn is_sorted_and_unique(list: &[u32]) -> bool {
+	list.windows(2).all(|w| w[0] < w[1])
 }
