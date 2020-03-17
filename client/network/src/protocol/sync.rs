@@ -1407,6 +1407,7 @@ mod test {
 		DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
 	};
 	use sp_blockchain::HeaderBackend;
+	use sc_block_builder::BlockBuilderProvider;
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 
 	#[test]

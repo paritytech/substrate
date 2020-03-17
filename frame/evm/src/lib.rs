@@ -131,7 +131,7 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Example {
+	trait Store for Module<T: Trait> as EVM {
 		Accounts get(fn accounts) config(): map hasher(blake2_256) H160 => Account;
 		AccountCodes: map hasher(blake2_256) H160 => Vec<u8>;
 		AccountStorages: double_map hasher(blake2_256) H160, hasher(blake2_256) H256 => H256;

@@ -833,6 +833,7 @@ mod tests {
 	use sc_client::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use std::task::Poll;
+	use sc_block_builder::BlockBuilderProvider;
 
 	type Error = sp_blockchain::Error;
 
