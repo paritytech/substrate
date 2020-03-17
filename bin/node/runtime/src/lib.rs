@@ -140,7 +140,6 @@ impl frame_system::Trait for Runtime {
 	type Version = Version;
 	type ModuleToIndex = ModuleToIndex;
 	type AccountData = pallet_balances::AccountData<Balance>;
-	type MigrateAccount = (Balances, Identity, Democracy, Elections, ImOnline, Recovery, Session, Society, Staking, Vesting);
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }

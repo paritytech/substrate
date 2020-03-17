@@ -188,12 +188,6 @@ decl_module! {
 				Self::deposit_vrf_output(&vrf_output);
 			}
 		}
-
-		fn on_runtime_upgrade() {
-			for i in 0..=SegmentIndex::get() {
-				UnderConstruction::migrate_key_from_blake(i);
-			}
-		}
 	}
 }
 

@@ -30,7 +30,6 @@ pallet-staking-reward-curve = { version = "2.0.0-alpha.2",  path = "../staking/r
 substrate-test-utils = { version = "2.0.0-alpha.2", path = "../../test-utils" }
 
 [features]
-migrate = []
 default = ["std"]
 std = [
 	"serde",

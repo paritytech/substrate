@@ -25,7 +25,7 @@ use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sp_runtime::traits::Block as BlockT;
 use sp_consensus_babe::BabeBlockWeight;
-use sc_consensus_epochs::{EpochChangesFor, SharedEpochChanges, migration::EpochChangesForV0};
+use sc_consensus_epochs::{EpochChangesFor, SharedEpochChanges};
 use crate::Epoch;
 
 const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_epoch_changes_version";
@@ -57,11 +57,7 @@ pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	let version = load_decode::<_, u32>(backend, BABE_EPOCH_CHANGES_VERSION)?;
 
 	let maybe_epoch_changes = match version {
-		None => load_decode::<_, EpochChangesForV0<Block, Epoch>>(
-			backend,
-			BABE_EPOCH_CHANGES_KEY,
-		)?.map(|v0| v0.migrate()),
-		Some(BABE_EPOCH_CHANGES_CURRENT_VERSION) => load_decode::<_, EpochChangesFor<Block, Epoch>>(
+		None | Some(BABE_EPOCH_CHANGES_CURRENT_VERSION) => load_decode::<_, EpochChangesFor<Block, Epoch>>(
 			backend,
 			BABE_EPOCH_CHANGES_KEY,
 		)?,
@@ -126,73 +122,4 @@ pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
 	block_hash: H,
 ) -> ClientResult<Option<BabeBlockWeight>> {
 	load_decode(backend, block_weight_key(block_hash).as_slice())
-}
-
-#[cfg(test)]
-mod test {
-	use super::*;
-	use crate::Epoch;
-	use fork_tree::ForkTree;
-	use substrate_test_runtime_client;
-	use sp_core::H256;
-	use sp_runtime::traits::NumberFor;
-	use sc_consensus_epochs::{PersistedEpoch, PersistedEpochHeader, EpochHeader};
-	use sp_consensus::Error as ConsensusError;
-	use sc_network_test::Block as TestBlock;
-
-	#[test]
-	fn load_decode_from_v0_epoch_changes() {
-		let epoch = Epoch {
-			start_slot: 0,
-			authorities: vec![],
-			randomness: [0; 32],
-			epoch_index: 1,
-			duration: 100,
-		};
-		let client = substrate_test_runtime_client::new();
-		let mut v0_tree = ForkTree::<H256, NumberFor<TestBlock>, _>::new();
-		v0_tree.import::<_, ConsensusError>(
-			Default::default(),
-			Default::default(),
-			PersistedEpoch::Regular(epoch),
-			&|_, _| Ok(false), // Test is single item only so this can be set to false.
-		).unwrap();
-
-		client.insert_aux(
-			&[(BABE_EPOCH_CHANGES_KEY,
-			   &EpochChangesForV0::<TestBlock, Epoch>::from_raw(v0_tree).encode()[..])],
-			&[],
-		).unwrap();
-
-		assert_eq!(
-			load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(),
-			None,
-		);
-
-		let epoch_changes = load_epoch_changes::<TestBlock, _>(&client).unwrap();
-
-		assert!(
-			epoch_changes.lock()
-				.tree()
-				.iter()
-				.map(|(_, _, epoch)| epoch.clone())
-				.collect::<Vec<_>>() ==
-				vec![PersistedEpochHeader::Regular(EpochHeader {
-					start_slot: 0,
-					end_slot: 100,
-				})],
-		); // PersistedEpochHeader does not implement Debug, so we use assert! directly.
-
-		write_epoch_changes::<TestBlock, _, _>(
-			&epoch_changes.lock(),
-			|values| {
-				client.insert_aux(values, &[]).unwrap();
-			},
-		);
-
-		assert_eq!(
-			load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(),
-			Some(1),
-		);
-	}
 }
