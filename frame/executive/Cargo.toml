@@ -34,4 +34,5 @@ std = [
 	"serde",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-io/std",
 ]
