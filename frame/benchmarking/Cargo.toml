@@ -17,6 +17,7 @@ sp-std = { version = "2.0.0-alpha.2", path = "../../primitives/std", default-fea
 sp-io = { path = "../../primitives/io", default-features = false, version = "2.0.0-alpha.2" }
 frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
+pallet-collective = { version = "2.0.0-alpha.2", default-features = false, path = "../collective" }
 
 [features]
 default = [ "std" ]
@@ -28,4 +29,5 @@ std = [
 	"sp-std/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-collective/std",
 ]
