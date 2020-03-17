@@ -396,8 +396,8 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
 	pub unlocking: Vec<UnlockChunk<Balance>>,
-	/// The latest and highest era which the staker has claimed reward for.
-	pub last_reward: Option<EraIndex>,
+	/// The rewards claims by a validator between current_era and max_eras
+	pub claimed_rewards: Vec<EraIndex>,
 }
 
 impl<
@@ -422,7 +422,7 @@ impl<
 			total,
 			active: self.active,
 			unlocking,
-			last_reward: self.last_reward
+			claimed_rewards: self.claimed_rewards
 		}
 	}
 
@@ -542,8 +542,6 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
-	/// The max payout for a validator for that era
-	pub max_payout: u16,
 }
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
@@ -763,21 +761,6 @@ decl_storage! {
 		/// Is it removed after `HISTORY_DEPTH` eras.
 		/// If stakers hasn't been set or has been removed then empty exposure is returned.
 		pub ErasStakers get(fn eras_stakers):
-			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
-			=> Exposure<T::AccountId, BalanceOf<T>>;
-
-		/// Clipped Exposure of validator at era.
-		///
-		/// This is similar to [`ErasStakers`] but number of nominators exposed is reduce to the
-		/// `T::MaxNominatorRewardedPerValidator` biggest stakers.
-		/// (Note: the field `total` and `own` of the exposure remains unchanged).
-		/// This is used to limit the i/o cost for the nominator payout.
-		///
-		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
-		///
-		/// Is it removed after `HISTORY_DEPTH` eras.
-		/// If stakers hasn't been set or has been removed then empty exposure is returned.
-		pub ErasStakersClipped get(fn eras_stakers_clipped):
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> Exposure<T::AccountId, BalanceOf<T>>;
 
@@ -1028,7 +1011,7 @@ decl_module! {
 				total: value,
 				active: value,
 				unlocking: vec![],
-				last_reward: Self::current_era(),
+				claimed_rewards: vec![],
 			};
 			Self::update_ledger(&controller, &item);
 		}
@@ -1376,40 +1359,6 @@ decl_module! {
 			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
 		}
 
-		/// Make one nominator's payout for one era.
-		///
-		/// - `who` is the controller account of the nominator to pay out.
-		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
-		///   then it indicates an instruction to skip the payout of all previous eras.
-		/// - `validators` is the list of all validators that `who` had exposure to during `era`,
-		///   alongside the index of `who` in the clipped exposure of the validator.
-		///   I.e. each element is a tuple of
-		///   `(validator, index of `who` in clipped exposure of validator)`.
-		///   If it is incomplete, then less than the full reward will be paid out.
-		///   It must not exceed `MAX_NOMINATIONS`.
-		///
-		/// WARNING: once an era is payed for a validator such validator can't claim the payout of
-		/// previous era.
-		///
-		/// WARNING: Incorrect arguments here can result in loss of payout. Be very careful.
-		///
-		/// # <weight>
-		/// - Number of storage read of `O(validators)`; `validators` is the argument of the call,
-		///   and is bounded by `MAX_NOMINATIONS`.
-		/// - Each storage read is `O(N)` size and decode complexity; `N` is the  maximum
-		///   nominations that can be given to a single validator.
-		/// - Computation complexity: `O(MAX_NOMINATIONS * logN)`; `MAX_NOMINATIONS` is the
-		///   maximum number of validators that may be nominated by a single nominator, it is
-		///   bounded only economically (all nominators are required to place a minimum stake).
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn payout_nominator(origin, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
-			-> DispatchResult
-		{
-			let who = ensure_signed(origin)?;
-			Self::do_payout_nominator(who, era, validators)
-		}
-
 		/// Make one validator's payout for one era.
 		///
 		/// - `who` is the controller account of the validator to pay out.
@@ -1426,9 +1375,9 @@ decl_module! {
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn payout_validator(origin, era: EraIndex) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			Self::do_payout_validator(who, era)
+		fn payout_validator(origin, validator: T::AccountId, era: EraIndex) -> DispatchResult {
+			let _ = ensure_signed(origin)?;
+			Self::do_payout_validator_and_nominators(validator, era)
 		}
 
 		/// Rebond a portion of the stash scheduled to be unlocked.
@@ -1523,17 +1472,24 @@ impl<T: Trait> Module<T> {
 	// MUTABLES (DANGEROUS)
 
 	fn do_payout_validator_and_nominators(validator: T::AccountId, era: EraIndex) -> DispatchResult {
-		// Note: if era has no reward to be claimed, era may be future. better not to update
-		// `ledger.last_reward` in this case.
+		let current_era = CurrentEra::get().unwrap_or(0);
+		// TODO: Check this vv  I think should be strictly less than.
+		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
+		// TODO: Check this vv  I think should be strictly less than.
+		let history_depth = Self::history_depth();
+		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
+
 		let era_payout = <ErasValidatorReward<T>>::get(&era)
 			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
 
 		let mut ledger = <Ledger<T>>::get(&validator).ok_or_else(|| Error::<T>::NotController)?;
-		if ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
-			return Err(Error::<T>::InvalidEraToReward.into());
+		ledger.claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
+		match ledger.claimed_rewards.binary_search(&era) {
+			Ok(_) => Err(Error::<T>::InvalidEraToReward)?,
+			Err(pos) => ledger.claimed_rewards.insert(pos, era),
 		}
 
-		// TODO TRACK PREVIOUS PAYOUTS
+		<Ledger<T>>::insert(&validator, &ledger);
 
 		// Get Era reward points. It has TOTAL and INDIVIDUAL
 		// Find the fraction of the era reward that belongs to the validator
@@ -1573,7 +1529,7 @@ impl<T: Trait> Module<T> {
 
 		// We can now make total validator payout:
 		if let Some(imbalance) = Self::make_payout(
-			&validator,
+			&ledger.stash,
 			validator_staking_payout + validator_commission_payout
 		) {
 			Self::deposit_event(RawEvent::Reward(validator, imbalance.peek()));
@@ -1581,9 +1537,12 @@ impl<T: Trait> Module<T> {
 
 		// Lets now calculate how this is split to the nominators.
 		// Sort nominators by highest to lowest exposure, but only keep `max_payout` of them.
-		let nominators_exposure = exposure.others.clone();
-		// nominators_exposure.sort_by(|a, b| (b.value).cmp(&a.value));
-		//let nominators_exposure = nominators_exposure[0..exposure.max_payout as usize];
+		let max_payout = validator_prefs.max_payout as usize;
+		let mut nominators_exposure = exposure.others;
+		if nominators_exposure.len() > max_payout {
+			nominators_exposure.sort_unstable_by(|a, b| b.value.cmp(&a.value));
+			nominators_exposure.truncate(max_payout);
+		}
 
 		for nominator in nominators_exposure.iter() {
 			let nominator_exposure_part = Perbill::from_rational_approximation(
@@ -1596,111 +1555,6 @@ impl<T: Trait> Module<T> {
 			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
 				Self::deposit_event(RawEvent::Reward(nominator.who.clone(), imbalance.peek()));
 			}
-		}
-
-		Ok(())
-	}
-
-	fn do_payout_nominator(who: T::AccountId, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
-		-> DispatchResult
-	{
-		// validators len must not exceed `MAX_NOMINATIONS` to avoid querying more validator
-		// exposure than necessary.
-		if validators.len() > MAX_NOMINATIONS {
-			return Err(Error::<T>::InvalidNumberOfNominations.into());
-		}
-
-		// Note: if era has no reward to be claimed, era may be future. better not to update
-		// `nominator_ledger.last_reward` in this case.
-		let era_payout = <ErasValidatorReward<T>>::get(&era)
-			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
-
-		let mut nominator_ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
-
-		if nominator_ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
-			return Err(Error::<T>::InvalidEraToReward.into());
-		}
-
-		nominator_ledger.last_reward = Some(era);
-		<Ledger<T>>::insert(&who, &nominator_ledger);
-
-		let mut reward = Perbill::zero();
-		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
-
-		for (validator, nominator_index) in validators.into_iter() {
-			let commission = Self::eras_validator_prefs(&era, &validator).commission;
-			let validator_exposure = <ErasStakersClipped<T>>::get(&era, &validator);
-
-			if let Some(nominator_exposure) = validator_exposure.others
-				.get(nominator_index as usize)
-			{
-				if nominator_exposure.who != nominator_ledger.stash {
-					continue;
-				}
-
-				let nominator_exposure_part = Perbill::from_rational_approximation(
-					nominator_exposure.value,
-					validator_exposure.total,
-				);
-				let validator_point = era_reward_points.individual.get(&validator)
-					.map(|points| *points)
-					.unwrap_or_else(|| Zero::zero());
-				let validator_point_part = Perbill::from_rational_approximation(
-					validator_point,
-					era_reward_points.total,
-				);
-				reward = reward.saturating_add(
-					validator_point_part
-						.saturating_mul(Perbill::one().saturating_sub(commission))
-						.saturating_mul(nominator_exposure_part)
-				);
-			}
-		}
-
-		if let Some(imbalance) = Self::make_payout(&nominator_ledger.stash, reward * era_payout) {
-			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
-		}
-
-		Ok(())
-	}
-
-	fn do_payout_validator(who: T::AccountId, era: EraIndex) -> DispatchResult {
-		// Note: if era has no reward to be claimed, era may be future. better not to update
-		// `ledger.last_reward` in this case.
-		let era_payout = <ErasValidatorReward<T>>::get(&era)
-			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
-
-		let mut ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
-		if ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
-			return Err(Error::<T>::InvalidEraToReward.into());
-		}
-
-		ledger.last_reward = Some(era);
-		<Ledger<T>>::insert(&who, &ledger);
-
-		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
-		let commission = Self::eras_validator_prefs(&era, &ledger.stash).commission;
-		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
-
-		let exposure_part = Perbill::from_rational_approximation(
-			exposure.own,
-			exposure.total,
-		);
-		let validator_point = era_reward_points.individual.get(&ledger.stash)
-			.map(|points| *points)
-			.unwrap_or_else(|| Zero::zero());
-		let validator_point_part = Perbill::from_rational_approximation(
-			validator_point,
-			era_reward_points.total,
-		);
-		let reward = validator_point_part.saturating_mul(
-			commission.saturating_add(
-				Perbill::one().saturating_sub(commission).saturating_mul(exposure_part)
-			)
-		);
-
-		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
-			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
 		}
 
 		Ok(())
@@ -1892,7 +1746,6 @@ impl<T: Trait> Module<T> {
 	/// Clear all era information for given era.
 	fn clear_era_information(era_index: EraIndex) {
 		<ErasStakers<T>>::remove_prefix(era_index);
-		<ErasStakersClipped<T>>::remove_prefix(era_index);
 		<ErasValidatorPrefs<T>>::remove_prefix(era_index);
 		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
@@ -2004,18 +1857,8 @@ impl<T: Trait> Module<T> {
 					// of balance and receive some support. This is super unlikely to happen, yet
 					// we simulate it in some tests.
 					total,
-					// TODO TEMP ERROR REMOVAL
-					max_payout: 10,
 				};
 				<ErasStakers<T>>::insert(&current_era, &c, &exposure);
-
-				let mut exposure_clipped = exposure;
-				let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
-				if exposure_clipped.others.len() > clipped_max_len {
-					exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value).reverse());
-					exposure_clipped.others.truncate(clipped_max_len);
-				}
-				<ErasStakersClipped<T>>::insert(&current_era, &c, exposure_clipped);
 			}
 
 			// Insert current era staking informations
