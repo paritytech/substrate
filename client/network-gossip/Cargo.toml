@@ -18,4 +18,5 @@ log = "0.4.8"
 lru = "0.4.3"
 sc-network = { version = "0.8.0-alpha.2", path = "../network" }
 sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
+substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
 wasm-timer = "0.2"

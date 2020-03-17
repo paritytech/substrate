@@ -6272,6 +6272,7 @@ dependencies = [
  "lru",
  "sc-network",
  "sp-runtime",
+ "substrate-test-runtime-client",
  "wasm-timer",
 ]
 
