@@ -1,6 +1,6 @@
 [package]
 name = "sp-externalities"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -10,6 +10,6 @@ description = "Substrate externalities abstraction"
 documentation = "https://docs.rs/sp-externalities"
 
 [dependencies]
-sp-storage = { version = "2.0.0-alpha.2", path = "../storage" }
-sp-std = { version = "2.0.0-alpha.2", path = "../std" }
+sp-storage = { version = "2.0.0-alpha.4", path = "../storage" }
+sp-std = { version = "2.0.0-alpha.4", path = "../std" }
 environmental = { version = "1.1.1" }

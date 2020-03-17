@@ -1,6 +1,6 @@
 [package]
 name = "substrate-frame-rpc-support"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>", "Andrew Dirksen <andrew@dirksen.com>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -14,10 +14,10 @@ jsonrpc-client-transports = "14"
 jsonrpc-core = "14"
 codec = { package = "parity-scale-codec", version = "1" }
 serde = "1"
-frame-support = { version = "2.0.0-alpha.2", path = "../../../../frame/support" }
-sp-storage = { version = "2.0.0-alpha.2", path = "../../../../primitives/storage" }
-sc-rpc-api = { version = "0.8.0-alpha.2", path = "../../../../client/rpc-api" }
+frame-support = { version = "2.0.0-alpha.4", path = "../../../../frame/support" }
+sp-storage = { version = "2.0.0-alpha.4", path = "../../../../primitives/storage" }
+sc-rpc-api = { version = "0.8.0-alpha.4", path = "../../../../client/rpc-api" }
 
 [dev-dependencies]
-frame-system = { version = "2.0.0-alpha.2", path = "../../../../frame/system" }
+frame-system = { version = "2.0.0-alpha.4", path = "../../../../frame/system" }
 tokio = "0.2"
