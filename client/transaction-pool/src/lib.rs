@@ -63,7 +63,7 @@ pub struct BasicPool<PoolApi, Block>
 	ready_poll: Arc<Mutex<ReadyPoll<ReadyIteratorFor<PoolApi>, Block>>>,
 }
 
-struct ReadyPoll<T, Block: BlockT>
+struct ReadyPoll<T, Block: BlockT> {
 {
 	updated_at: NumberFor<Block>,
 	pollers: Vec<(NumberFor<Block>, oneshot::Sender<T>)>,
