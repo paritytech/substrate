@@ -2518,18 +2518,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03080afe6f42cd996da9f568d6add5d7fb5ee2ea7fb7802d2d2cbd836958fd87"
 dependencies = [
  "parity-bytes",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
+ "smallvec 1.2.0",
+]
+
+[[package]]
+name = "kvdb"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cad096c6849b2ef027fabe35c4aed356d0e3d3f586d0a8361e5e17f1e50a7ce5"
+dependencies = [
+ "parity-util-mem 0.6.0",
  "smallvec 1.2.0",
 ]
 
 [[package]]
 name = "kvdb-memorydb"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9355274e5a9e0a7e8ef43916950eae3949024de2a8dffe4d5a6c13974a37c8e"
+checksum = "4aa954d12cfac958822dfd77aab34f3eec71f103b918c4ab79ab59a36ee594ea"
 dependencies = [
- "kvdb",
- "parity-util-mem",
+ "kvdb 0.5.0",
+ "parity-util-mem 0.6.0",
  "parking_lot 0.10.0",
 ]
 
@@ -2541,11 +2551,11 @@ checksum = "1fecd50b14a534125228d7039951f92aaff742aff151c04546347aba4d3b4fbc"
 dependencies = [
  "fs-swap",
  "interleaved-ordered",
- "kvdb",
+ "kvdb 0.4.0",
  "log 0.4.8",
  "num_cpus",
  "owning_ref",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "parking_lot 0.10.0",
  "regex",
  "rocksdb",
@@ -2554,16 +2564,16 @@ dependencies = [
 
 [[package]]
 name = "kvdb-web"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a985c47b4c46429e96033ebf6eaed784a81ceccb4e5df13d63f3b9078a4df81"
+checksum = "26f96eec962af83cdf7c83036b3dbb0ae6a1249ddab746820618e2567ca8ebcd"
 dependencies = [
  "futures 0.3.4",
  "js-sys",
- "kvdb",
+ "kvdb 0.5.0",
  "kvdb-memorydb",
  "log 0.4.8",
- "parity-util-mem",
+ "parity-util-mem 0.6.0",
  "send_wrapper 0.3.0",
  "wasm-bindgen",
  "web-sys",
@@ -3158,7 +3168,7 @@ dependencies = [
  "ahash",
  "hash-db",
  "hashbrown",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
 ]
 
 [[package]]
@@ -3176,6 +3186,18 @@ dependencies = [
  "byteorder 1.3.4",
  "keccak",
  "rand_core 0.4.2",
+ "zeroize 1.1.0",
+]
+
+[[package]]
+name = "merlin"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6feca46f4fa3443a01769d768727f10c10a20fdb65e52dc16a81f0c8269bb78"
+dependencies = [
+ "byteorder 1.3.4",
+ "keccak",
+ "rand_core 0.5.1",
  "zeroize 1.1.0",
 ]
 
@@ -4672,6 +4694,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "parity-util-mem"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e42755f26e5ea21a6a819d9e63cbd70713e9867a2b767ec2cc65ca7659532c5"
+dependencies = [
+ "cfg-if",
+ "impl-trait-for-tuples",
+ "parity-util-mem-derive",
+ "parking_lot 0.10.0",
+ "winapi 0.3.8",
+]
+
+[[package]]
 name = "parity-util-mem-derive"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5701,7 +5736,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.8",
  "names",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "regex",
  "rpassword",
  "sc-client-api",
@@ -5734,7 +5769,7 @@ dependencies = [
  "futures 0.3.4",
  "hash-db",
  "hex-literal",
- "kvdb",
+ "kvdb 0.5.0",
  "kvdb-memorydb",
  "log 0.4.8",
  "parity-scale-codec",
@@ -5771,7 +5806,7 @@ dependencies = [
  "futures 0.3.4",
  "hash-db",
  "hex-literal",
- "kvdb",
+ "kvdb 0.5.0",
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
@@ -5800,13 +5835,13 @@ version = "0.8.0-alpha.4"
 dependencies = [
  "env_logger 0.7.1",
  "hash-db",
- "kvdb",
+ "kvdb 0.5.0",
  "kvdb-memorydb",
  "kvdb-rocksdb",
  "linked-hash-map",
  "log 0.4.8",
  "parity-scale-codec",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "parking_lot 0.10.0",
  "quickcheck",
  "rand 0.7.3",
@@ -5874,7 +5909,7 @@ dependencies = [
  "futures 0.3.4",
  "futures-timer 3.0.2",
  "log 0.4.8",
- "merlin",
+ "merlin 1.3.0",
  "num-bigint",
  "num-rational",
  "num-traits",
@@ -5894,7 +5929,7 @@ dependencies = [
  "sc-network-test",
  "sc-service",
  "sc-telemetry",
- "schnorrkel",
+ "schnorrkel 0.8.5",
  "serde",
  "sp-api",
  "sp-application-crypto",
@@ -6163,7 +6198,7 @@ dependencies = [
  "ansi_term 0.12.1",
  "futures 0.3.4",
  "log 0.4.8",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "sc-client-api",
  "sc-network",
  "sc-service",
@@ -6431,7 +6466,7 @@ dependencies = [
  "log 0.4.8",
  "parity-multiaddr",
  "parity-scale-codec",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "parking_lot 0.10.0",
  "sc-chain-spec",
  "sc-client",
@@ -6496,7 +6531,7 @@ dependencies = [
  "env_logger 0.7.1",
  "log 0.4.8",
  "parity-scale-codec",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "parity-util-mem-derive",
  "parking_lot 0.10.0",
  "sc-client-api",
@@ -6550,7 +6585,7 @@ dependencies = [
  "linked-hash-map",
  "log 0.4.8",
  "parity-scale-codec",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "parking_lot 0.10.0",
  "serde",
  "sp-blockchain",
@@ -6571,7 +6606,7 @@ dependencies = [
  "futures-timer 2.0.2",
  "log 0.4.8",
  "parity-scale-codec",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "parking_lot 0.10.0",
  "sc-client-api",
  "sc-transaction-graph",
@@ -6604,13 +6639,31 @@ checksum = "eacd8381b3c37840c9c9f40472af529e49975bdcbc24f83c31059fd6539023d3"
 dependencies = [
  "curve25519-dalek 1.2.3",
  "failure",
- "merlin",
+ "merlin 1.3.0",
  "rand 0.6.5",
  "rand_core 0.4.2",
  "rand_os",
  "sha2",
  "subtle 2.2.2",
  "zeroize 0.9.3",
+]
+
+[[package]]
+name = "schnorrkel"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "021b403afe70d81eea68f6ea12f6b3c9588e5d536a94c3bf80f15e7faa267862"
+dependencies = [
+ "arrayref",
+ "arrayvec 0.5.1",
+ "curve25519-dalek 2.0.0",
+ "getrandom",
+ "merlin 2.0.0",
+ "rand 0.7.3",
+ "rand_core 0.5.1",
+ "sha2",
+ "subtle 2.2.2",
+ "zeroize 1.1.0",
 ]
 
 [[package]]
@@ -7103,7 +7156,7 @@ name = "sp-consensus-babe"
 version = "0.8.0-alpha.4"
 dependencies = [
  "parity-scale-codec",
- "schnorrkel",
+ "schnorrkel 0.8.5",
  "sp-api",
  "sp-application-crypto",
  "sp-consensus",
@@ -7144,14 +7197,14 @@ dependencies = [
  "log 0.4.8",
  "num-traits",
  "parity-scale-codec",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "parking_lot 0.10.0",
  "pretty_assertions",
  "primitive-types",
  "rand 0.7.3",
  "regex",
  "rustc-hex",
- "schnorrkel",
+ "schnorrkel 0.8.5",
  "serde",
  "serde_json",
  "sha2",
@@ -7291,7 +7344,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "log 0.4.8",
  "parity-scale-codec",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "paste",
  "rand 0.7.3",
  "serde",
@@ -7437,7 +7490,7 @@ name = "sp-test-primitives"
 version = "2.0.0-dev"
 dependencies = [
  "parity-scale-codec",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "serde",
  "sp-application-crypto",
  "sp-core",
@@ -7637,13 +7690,13 @@ dependencies = [
 
 [[package]]
 name = "substrate-bip39"
-version = "0.3.1"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3be511be555a3633e71739a79e4ddff6a6aaa6579fa6114182a51d72c3eb93c5"
+checksum = "c004e8166d6e0aa3a9d5fa673e5b7098ff25f930de1013a21341988151e681bb"
 dependencies = [
  "hmac",
  "pbkdf2",
- "schnorrkel",
+ "schnorrkel 0.9.1",
  "sha2",
 ]
 
@@ -7761,7 +7814,7 @@ dependencies = [
  "pallet-babe",
  "pallet-timestamp",
  "parity-scale-codec",
- "parity-util-mem",
+ "parity-util-mem 0.5.2",
  "sc-block-builder",
  "sc-client",
  "sc-executor",
