@@ -3543,6 +3543,7 @@ dependencies = [
  "pallet-randomness-collective-flip",
  "pallet-recovery",
  "pallet-session",
+ "pallet-session-benchmarking",
  "pallet-society",
  "pallet-staking",
  "pallet-staking-reward-curve",
@@ -4397,6 +4398,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-session-benchmarking"
+version = "2.0.0-alpha.3"
+dependencies = [
+ "frame-benchmarking",
+ "frame-system",
+ "pallet-session",
+ "pallet-staking",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-society"
 version = "2.0.0-alpha.3"
 dependencies = [
@@ -4416,6 +4429,7 @@ dependencies = [
 name = "pallet-staking"
 version = "2.0.0-alpha.3"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-authorship",
@@ -4424,6 +4438,7 @@ dependencies = [
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
+ "rand_chacha 0.2.1",
  "serde",
  "sp-core",
  "sp-io",

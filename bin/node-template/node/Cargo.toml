@@ -32,7 +32,7 @@ grandpa-primitives = { version = "2.0.0-alpha.2", package = "sp-finality-grandpa
 sc-client = { version = "0.8.0-alpha.2", path = "../../../client/" }
 sc-client-api = { version = "2.0.0-alpha.2", path = "../../../client/api" }
 sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
-sc-basic-authorship = { path = "../../../client/basic-authorship" , version = "0.8.0-alpha.2"}
+sc-basic-authorship = { path = "../../../client/basic-authorship", version = "0.8.0-alpha.2"}
 
 node-template-runtime = { version = "2.0.0-alpha.2", path = "../runtime" }
 
