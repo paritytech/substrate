@@ -76,7 +76,7 @@ fn basic_setup_works() {
 		assert_eq!(Staking::ledger(&1), None);
 
 		// ValidatorPrefs are default
-		assert_eq!(<Validators<Test>>::enumerate().collect::<Vec<_>>(), vec![
+		assert_eq!(<Validators<Test>>::iter().collect::<Vec<_>>(), vec![
 			(31, ValidatorPrefs::default()),
 			(21, ValidatorPrefs::default()),
 			(11, ValidatorPrefs::default())
@@ -2769,7 +2769,7 @@ fn slash_kicks_validators_not_nominators() {
 
 		// This is the best way to check that the validator was chilled; `get` will
 		// return default value.
-		for (stash, _) in <Staking as Store>::Validators::enumerate() {
+		for (stash, _) in <Staking as Store>::Validators::iter() {
 			assert!(stash != 11);
 		}
 
@@ -2869,7 +2869,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 			// Fail: Era not finished yet
 			Error::<Test>::InvalidEraToReward
 		);
-		
+
 		// Era 0 can't be rewarded anymore and current era can't be rewarded yet
 		// only era 1 and 2 can be rewarded.
 
@@ -2909,7 +2909,7 @@ fn zero_slash_keeps_nominators() {
 
 		// This is the best way to check that the validator was chilled; `get` will
 		// return default value.
-		for (stash, _) in <Staking as Store>::Validators::enumerate() {
+		for (stash, _) in <Staking as Store>::Validators::iter() {
 			assert!(stash != 11);
 		}
 

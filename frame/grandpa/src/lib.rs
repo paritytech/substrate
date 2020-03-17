@@ -174,12 +174,22 @@ decl_storage! {
 		/// in the "set" of Grandpa validators from genesis.
 		CurrentSetId get(fn current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
 
-		/// A mapping from grandpa set ID to the index of the *most recent* session for which its members were responsible.
-		SetIdSession get(fn session_for_set): map hasher(blake2_256) SetId => Option<SessionIndex>;
+		/// A mapping from grandpa set ID to the index of the *most recent* session for which its
+		/// members were responsible.
+		SetIdSession get(fn session_for_set): map hasher(twox_64_concat) SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
 		config(authorities): AuthorityList;
 		build(|config| Module::<T>::initialize_authorities(&config.authorities))
+	}
+}
+
+mod migration {
+	use super::*;
+	pub fn migrate<T: Trait>() {
+		for i in 0..=CurrentSetId::get() {
+			SetIdSession::migrate_key_from_blake(i);
+		}
 	}
 }
 
@@ -193,6 +203,10 @@ decl_module! {
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
+		}
+
+		fn on_runtime_upgrade() {
+			migration::migrate::<T>();
 		}
 
 		fn on_initialize() {

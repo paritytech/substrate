@@ -291,6 +291,21 @@ performed. Moreover, the DB read has to be synchronous and no progress can be ma
 **complexity**: The memory and computing complexity is proportional to the size of the fetched value. This function performs a
 DB read.
 
+## ext_transfer
+
+This function receives the following arguments:
+
+- `account` buffer of a marshaled `AccountId`,
+- `value` buffer of a marshaled `Balance`,
+
+It consists of the following steps:
+
+1. Loading `account` buffer from the sandbox memory (see sandboxing memory get) and then decoding it.
+2. Loading `value` buffer from the sandbox memory and then decoding it.
+4. Invoking the executive function `transfer`.
+
+Loading of `account` and `value` buffers should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId` and `Balance`.
+
 ## ext_call
 
 This function receives the following arguments:
@@ -334,6 +349,20 @@ Loading of `value` buffer should be charged. This is because the size of the buf
 Loading `init_code` and `input_data` should be charged in any case.
 
 **complexity**: All complexity comes from loading buffers and executing `instantiate` executive function. The former component is proportional to the sizes of `init_code`, `value` and `input_data` buffers. The latter component completely depends on the complexity of `instantiate` executive function and also dominated by it.
+
+## ext_terminate
+
+This function receives the following arguments:
+
+- `beneficiary`, buffer of a marshaled `AccountId`
+
+It consists of the following steps:
+
+1. Loading `beneficiary` buffer from the sandbox memory (see sandboxing memory get) and then decoding it.
+
+Loading of the `beneficiary` buffer should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId`.
+
+**complexity**: All complexity comes from loading buffers and executing `terminate` executive function. The former component is proportional to the size of the `beneficiary` buffer. The latter component completely depends on the complexity of `terminate` executive function and also dominated by it.
 
 ## ext_return
 

@@ -574,7 +574,6 @@ mod tests {
 	type TestBackend = InMemoryBackend<Blake2Hasher>;
 	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend>;
 
-
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
 			prospective: vec![

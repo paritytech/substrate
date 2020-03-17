@@ -46,7 +46,7 @@ use self::error::{Result, Error, FutureResult};
 
 pub use sc_rpc_api::chain::*;
 use sp_blockchain::HeaderBackend;
-use sc_client_api::BlockBody;
+use sc_client_api::BlockBackend;
 
 /// Blockchain backend API
 trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
@@ -182,7 +182,7 @@ pub fn new_full<Block: BlockT, Client>(
 ) -> Chain<Block, Client>
 	where
 		Block: BlockT + 'static,
-		Client: BlockBody<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+		Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	Chain {
 		backend: Box::new(self::chain_full::FullChain::new(client, subscriptions)),
@@ -198,7 +198,7 @@ pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 ) -> Chain<Block, Client>
 	where
 		Block: BlockT + 'static,
-		Client: BlockBody<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+		Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 		F: Send + Sync + 'static,
 {
 	Chain {
