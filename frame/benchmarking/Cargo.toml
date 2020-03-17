@@ -18,6 +18,7 @@ sp-io = { path = "../../primitives/io", default-features = false, version = "2.0
 frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
 pallet-collective = { version = "2.0.0-alpha.2", default-features = false, path = "../collective" }
+node-primitives = { version = "2.0.0-alpha.2", default-features = false, path = "../../bin/node/primitives" }
 
 [features]
 default = [ "std" ]
@@ -30,4 +31,5 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-collective/std",
+	"node-primitives/std",
 ]

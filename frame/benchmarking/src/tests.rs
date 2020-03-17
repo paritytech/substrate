@@ -24,6 +24,8 @@ use sp_std::prelude::*;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::{H256, Header}};
 use frame_support::{dispatch::DispatchResult, decl_module, impl_outer_origin};
 use frame_system::{RawOrigin, ensure_signed, ensure_none};
+use pallet_collective::{RawOrigin as CollectiveOrigin};
+use node_primitives::AccountId;
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -47,7 +49,22 @@ pub trait Trait {
 	type Event;
 	type BlockNumber;
 	type AccountId: 'static + Default + Decode;
-	type Origin: From<frame_system::RawOrigin<Self::AccountId>> + Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>;
+	type Origin: From<frame_system::RawOrigin<Self::AccountId>>
+		+ From<CollectiveOrigin<Self::AccountId, Instance1>>
+		+ From<CollectiveOrigin<Self::AccountId, Instance2>>
+		+ Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>;
+}
+
+impl From<CollectiveOrigin<AccountId, Instance1>> for Origin {
+	fn from(_o: CollectiveOrigin<AccountId, Instance1>) -> Origin {
+		Origin::system(RawOrigin::None)
+	}
+}
+
+impl From<CollectiveOrigin<AccountId, Instance2>> for Origin {
+	fn from(_o: CollectiveOrigin<AccountId, Instance2>) -> Origin {
+		Origin::system(RawOrigin::None)
+	}
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -60,7 +77,7 @@ impl frame_system::Trait for Test {
 	type Hash = H256;
 	type Call = ();
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
@@ -79,7 +96,7 @@ impl Trait for Test {
 	type Event = ();
 	type BlockNumber = u32;
 	type Origin = Origin;
-	type AccountId = u64;
+	type AccountId = AccountId;
 }
 
 // This function basically just builds a genesis storage key/value store according to
