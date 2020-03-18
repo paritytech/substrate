@@ -73,37 +73,49 @@ pub trait StateApi<Hash> {
 	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<u64>>;
 
 	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
+	/// This method is deprecated in favor of `childstate_getChildKeys`.
 	#[rpc(name = "state_getChildKeys")]
 	fn child_storage_keys(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		prefix: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a child storage entry at a specific block's state.
+	/// This method is deprecated in favor of `childstate_getChildStorage`.
 	#[rpc(name = "state_getChildStorage")]
 	fn child_storage(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Option<StorageData>>;
 
 	/// Returns the hash of a child storage entry at a block's state.
+	/// This method is deprecated in favor of `childstate_getChildStorageHash`.
 	#[rpc(name = "state_getChildStorageHash")]
 	fn child_storage_hash(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Option<Hash>>;
 
 	/// Returns the size of a child storage entry at a block's state.
+	/// This method is deprecated in favor of `childstate_getChildStorageSize`.
 	#[rpc(name = "state_getChildStorageSize")]
 	fn child_storage_size(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Option<u64>>;
