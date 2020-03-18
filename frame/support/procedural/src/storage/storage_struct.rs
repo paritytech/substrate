@@ -158,47 +158,6 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 					}
 				)
 			},
-			StorageLineTypeDef::LinkedMap(map) => {
-				let hasher = map.hasher.to_storage_hasher_struct();
-
-				let head_prefix_str = syn::LitStr::new(
-					&format!("HeadOf{}", line.name.to_string()),
-					line.name.span(),
-				);
-
-				quote!(
-					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
-					#optional_storage_where_clause
-					{
-						type Query = #query_type;
-						type KeyFormat = Self;
-
-						fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {
-							#from_optional_value_to_query
-						}
-
-						fn from_query_to_optional_value(v: Self::Query) -> Option<#value_type> {
-							#from_query_to_optional_value
-						}
-					}
-
-					impl<#impl_trait> #scrate::storage::generator::LinkedMapKeyFormat for #storage_struct {
-						type Hasher = #scrate::#hasher;
-
-						fn module_prefix() -> &'static [u8] {
-							#instance_or_inherent::PREFIX.as_bytes()
-						}
-
-						fn storage_prefix() -> &'static [u8] {
-							#storage_name_str.as_bytes()
-						}
-
-						fn head_prefix() -> &'static [u8] {
-							#head_prefix_str.as_bytes()
-						}
-					}
-				)
-			},
 			StorageLineTypeDef::DoubleMap(map) => {
 				let hasher1 = map.hasher1.to_storage_hasher_struct();
 				let hasher2 = map.hasher2.to_storage_hasher_struct();

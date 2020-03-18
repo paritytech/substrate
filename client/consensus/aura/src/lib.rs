@@ -230,8 +230,8 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
 	}
 
-	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize {
-		epoch_data.len()
+	fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize> {
+		Some(epoch_data.len())
 	}
 
 	fn claim_slot(
