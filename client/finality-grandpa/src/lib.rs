@@ -444,6 +444,7 @@ where
 
 	let (voter_commands_tx, voter_commands_rx) = mpsc::unbounded();
 
+	// FIXME
 	Ok((
 		GrandpaBlockImport::new(
 			client.clone(),
@@ -451,6 +452,7 @@ where
 			persistent_data.authority_set.clone(),
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
+			Default::default(),
 		),
 		LinkHalf {
 			client,
