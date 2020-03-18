@@ -281,9 +281,9 @@ pub struct NetworkConfiguration {
 
 impl NetworkConfiguration {
 	/// Create new default configuration
-	pub fn new<S: Into<String>>(
-		node_name: S,
-		client_version: S,
+	pub fn new<SN: Into<String>, SV: Into<String>>(
+		node_name: SN,
+		client_version: SV,
 		node_key: NodeKeyConfig,
 		net_config_path: &PathBuf,
 	) -> Self {
