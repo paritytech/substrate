@@ -7168,6 +7168,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-consensus-vrf"
+version = "0.8.0-alpha.2"
+dependencies = [
+ "parity-scale-codec",
+ "schnorrkel",
+ "sp-core",
+ "sp-runtime",
+]
+
+[[package]]
 name = "sp-core"
 version = "2.0.0-alpha.3"
 dependencies = [
