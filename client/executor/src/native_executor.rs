@@ -85,6 +85,8 @@ pub struct WasmExecutor {
 	cache: Arc<RuntimeCache>,
 	/// Allow missing function imports.
 	allow_missing_func_imports: bool,
+	/// The size of the instances cache.
+	max_runtime_instances: usize,
 }
 
 impl WasmExecutor {
@@ -101,13 +103,15 @@ impl WasmExecutor {
 		default_heap_pages: Option<u64>,
 		host_functions: Vec<&'static dyn Function>,
 		allow_missing_func_imports: bool,
+		max_runtime_instances: usize,
 	) -> Self {
 		WasmExecutor {
 			method,
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
 			host_functions: Arc::new(host_functions),
-			cache: Arc::new(RuntimeCache::new()),
+			cache: Arc::new(RuntimeCache::new(max_runtime_instances)),
 			allow_missing_func_imports,
+			max_runtime_instances,
 		}
 	}
 
@@ -223,7 +227,11 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
-	pub fn new(fallback_method: WasmExecutionMethod, default_heap_pages: Option<u64>) -> Self {
+	pub fn new(
+		fallback_method: WasmExecutionMethod,
+		default_heap_pages: Option<u64>,
+		max_runtime_instances: usize,
+	) -> Self {
 		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions();
 
 		// Add the custom host functions provided by the user.
@@ -233,6 +241,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			default_heap_pages,
 			host_functions,
 			false,
+			max_runtime_instances,
 		);
 
 		NativeExecutor {
@@ -463,7 +472,11 @@ mod tests {
 
 	#[test]
 	fn native_executor_registers_custom_interface() {
-		let executor = NativeExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None);
+		let executor = NativeExecutor::<MyExecutor>::new(
+			WasmExecutionMethod::Interpreted,
+			None,
+			8,
+		);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
 			assert_eq!(
 				executor.wasm.host_functions.iter().filter(|f| f == &function).count(),

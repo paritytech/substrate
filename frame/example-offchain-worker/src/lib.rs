@@ -106,7 +106,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Example {
+	trait Store for Module<T: Trait> as ExampleOffchainWorker {
 		/// A vector of recently submitted prices.
 		///
 		/// This is used to calculate average price, should have bounded size.
@@ -276,7 +276,7 @@ impl<T: Trait> Module<T> {
 			match last_send {
 				// If we already have a value in storage and the block number is recent enough
 				// we avoid sending another transaction at this time.
-				Some(Some(block)) if block + T::GracePeriod::get() < block_number => {
+				Some(Some(block)) if block_number < block + T::GracePeriod::get() => {
 					Err(RECENTLY_SENT)
 				},
 				// In every other case we attempt to acquire the lock and send a transaction.

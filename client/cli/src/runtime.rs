@@ -79,12 +79,12 @@ fn build_runtime() -> Result<tokio::runtime::Runtime, std::io::Error> {
 
 /// A helper function that runs a future with tokio and stops if the process receives the signal
 /// SIGTERM or SIGINT
-pub fn run_until_exit<FUT, ERR, G, E, F>(
-	mut config: Configuration<G, E>,
+pub fn run_until_exit<FUT, ERR, F>(
+	mut config: Configuration,
 	future_builder: F,
 ) -> error::Result<()>
 where
-	F: FnOnce(Configuration<G, E>) -> error::Result<FUT>,
+	F: FnOnce(Configuration) -> error::Result<FUT>,
 	FUT: Future<Output = Result<(), ERR>> + future::Future,
 	ERR: 'static + std::error::Error,
 {
@@ -106,12 +106,12 @@ where
 
 /// A helper function that runs an `AbstractService` with tokio and stops if the process receives
 /// the signal SIGTERM or SIGINT
-pub fn run_service_until_exit<T, G, E, F>(
-	mut config: Configuration<G, E>,
+pub fn run_service_until_exit<T, F>(
+	mut config: Configuration,
 	service_builder: F,
 ) -> error::Result<()>
 where
-	F: FnOnce(Configuration<G, E>) -> Result<T, sc_service::error::Error>,
+	F: FnOnce(Configuration) -> Result<T, sc_service::error::Error>,
 	T: AbstractService + Unpin,
 {
 	let mut runtime = build_runtime()?;

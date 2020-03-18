@@ -56,12 +56,12 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// Mapping from historical session indices to session-data root hash and validator count.
 		HistoricalSessions get(fn historical_root):
-			map hasher(blake2_256) SessionIndex => Option<(T::Hash, ValidatorCount)>;
+			map hasher(twox_64_concat) SessionIndex => Option<(T::Hash, ValidatorCount)>;
 		/// The range of historical sessions we store. [first, last)
 		StoredRange: Option<(SessionIndex, SessionIndex)>;
 		/// Deprecated.
 		CachedObsolete:
-			map hasher(blake2_256) SessionIndex
+			map hasher(twox_64_concat) SessionIndex
 			=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
 	}
 }
@@ -70,6 +70,20 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn on_initialize(_n: T::BlockNumber) {
 			CachedObsolete::<T>::remove_all();
+		}
+		fn on_runtime_upgrade() {
+			migration::migrate::<T>();
+		}
+	}
+}
+
+mod migration {
+	use super::*;
+	pub fn migrate<T: Trait>() {
+		if let Some((begin, end)) = StoredRange::get() {
+			for i in begin..end {
+				HistoricalSessions::<T>::migrate_key_from_blake(i);
+			}
 		}
 	}
 }
