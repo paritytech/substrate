@@ -131,7 +131,7 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 	}
 }
 
-fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'static> (
+fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'static + Send> (
 	index: usize,
 	spec: &GenericChainSpec<G, E>,
 	role: Roles,
@@ -219,7 +219,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	F: AbstractService,
 	L: AbstractService,
-	E: ChainSpecExtension + Clone + 'static,
+	E: ChainSpecExtension + Clone + 'static + Send,
 	G: RuntimeGenesis + 'static,
 {
 	fn new(
@@ -324,7 +324,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	full_builder: Fb,
 	light_builder: Lb,
 ) where
-	E: ChainSpecExtension + Clone + 'static,
+	E: ChainSpecExtension + Clone + 'static + Send,
 	G: RuntimeGenesis + 'static,
 	Fb: Fn(Configuration) -> Result<F, Error>,
 	F: AbstractService,
@@ -432,7 +432,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	B: FnMut(&F, &mut U),
 	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
 	U: Clone + Send + 'static,
-	E: ChainSpecExtension + Clone + 'static,
+	E: ChainSpecExtension + Clone + 'static + Send,
 	G: RuntimeGenesis + 'static,
 {
 	const NUM_FULL_NODES: usize = 10;
@@ -503,7 +503,7 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	F: AbstractService,
 	Lb: Fn(Configuration) -> Result<L, Error>,
 	L: AbstractService,
-	E: ChainSpecExtension + Clone + 'static,
+	E: ChainSpecExtension + Clone + 'static + Send,
 	G: RuntimeGenesis + 'static,
 {
 	const NUM_FULL_NODES: usize = 10;
