@@ -1,6 +1,6 @@
 [package]
 name = "sc-service"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -33,36 +33,36 @@ serde = "1.0.101"
 serde_json = "1.0.41"
 sysinfo = "0.11.7"
 target_info = "0.1.0"
-sc-keystore = { version = "2.0.0-alpha.2", path = "../keystore" }
-sp-io = { version = "2.0.0-alpha.2", path = "../../primitives/io" }
-sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
-sp-blockchain = { version = "2.0.0-alpha.2", path = "../../primitives/blockchain" }
-sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
-sp-session = { version = "2.0.0-alpha.2", path = "../../primitives/session" }
-sp-application-crypto = { version = "2.0.0-alpha.2", path = "../../primitives/application-crypto" }
-sp-consensus = { version = "0.8.0-alpha.2", path = "../../primitives/consensus/common" }
-sc-network = { version = "0.8.0-alpha.2", path = "../network" }
-sc-chain-spec = { version = "2.0.0-alpha.2", path = "../chain-spec" }
-sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
-sc-client = { version = "0.8.0-alpha.2", path = "../" }
-sp-api = { version = "2.0.0-alpha.2", path = "../../primitives/api" }
-sc-client-db = { version = "0.8.0-alpha.2", path = "../db" }
+sc-keystore = { version = "2.0.0-alpha.4", path = "../keystore" }
+sp-io = { version = "2.0.0-alpha.4", path = "../../primitives/io" }
+sp-runtime = { version = "2.0.0-alpha.4", path = "../../primitives/runtime" }
+sp-blockchain = { version = "2.0.0-alpha.4", path = "../../primitives/blockchain" }
+sp-core = { version = "2.0.0-alpha.4", path = "../../primitives/core" }
+sp-session = { version = "2.0.0-alpha.4", path = "../../primitives/session" }
+sp-application-crypto = { version = "2.0.0-alpha.4", path = "../../primitives/application-crypto" }
+sp-consensus = { version = "0.8.0-alpha.4", path = "../../primitives/consensus/common" }
+sc-network = { version = "0.8.0-alpha.4", path = "../network" }
+sc-chain-spec = { version = "2.0.0-alpha.4", path = "../chain-spec" }
+sc-client-api = { version = "2.0.0-alpha.4", path = "../api" }
+sc-client = { version = "0.8.0-alpha.4", path = "../" }
+sp-api = { version = "2.0.0-alpha.4", path = "../../primitives/api" }
+sc-client-db = { version = "0.8.0-alpha.4", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.2.0" }
-sc-executor = { version = "0.8.0-alpha.2", path = "../executor" }
-sc-transaction-pool = { version = "2.0.0-alpha.2", path = "../transaction-pool" }
-sp-transaction-pool = { version = "2.0.0-alpha.2", path = "../../primitives/transaction-pool" }
-sc-rpc-server = { version = "2.0.0-alpha.2", path = "../rpc-servers" }
-sc-rpc = { version = "2.0.0-alpha.2", path = "../rpc" }
-sc-telemetry = { version = "2.0.0-alpha.2", path = "../telemetry" }
-sc-offchain = { version = "2.0.0-alpha.2", path = "../offchain" }
+sc-executor = { version = "0.8.0-alpha.4", path = "../executor" }
+sc-transaction-pool = { version = "2.0.0-alpha.4", path = "../transaction-pool" }
+sp-transaction-pool = { version = "2.0.0-alpha.4", path = "../../primitives/transaction-pool" }
+sc-rpc-server = { version = "2.0.0-alpha.4", path = "../rpc-servers" }
+sc-rpc = { version = "2.0.0-alpha.4", path = "../rpc" }
+sc-telemetry = { version = "2.0.0-alpha.4", path = "../telemetry" }
+sc-offchain = { version = "2.0.0-alpha.4", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.7.3" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" , version = "0.8.0-alpha.2"}
-sc-tracing = { version = "2.0.0-alpha.2", path = "../tracing" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" , version = "0.8.0-alpha.4"}
+sc-tracing = { version = "2.0.0-alpha.4", path = "../tracing" }
 tracing = "0.1.10"
 parity-util-mem = { version = "0.5.2", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
-sp-consensus-babe = { version = "0.8.0-alpha.2", path = "../../primitives/consensus/babe" }
-grandpa = { version = "0.8.0-alpha.2", package = "sc-finality-grandpa", path = "../finality-grandpa" }
-grandpa-primitives = { version = "2.0.0-alpha.2", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
+sp-consensus-babe = { version = "0.8.0-alpha.4", path = "../../primitives/consensus/babe" }
+grandpa = { version = "0.8.0-alpha.4", package = "sc-finality-grandpa", path = "../finality-grandpa" }
+grandpa-primitives = { version = "2.0.0-alpha.4", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
