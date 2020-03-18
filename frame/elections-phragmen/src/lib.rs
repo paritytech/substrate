@@ -786,6 +786,8 @@ impl<T: Trait> Contains<T::AccountId> for Module<T> {
 	fn sorted_members() -> Vec<T::AccountId> { Self::members_ids() }
 
 	#[cfg(feature = "runtime-benchmarks")]
+	// A special function to populate members in this pallet for passing Origin
+	// checks in runtime benchmarking.
 	fn add(who: &T::AccountId) {
 		Members::<T>::mutate(|members| {
 			match members.binary_search_by(|(a, _b)| a.cmp(who)) {

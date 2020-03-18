@@ -180,7 +180,10 @@ pub trait Contains<T: Ord> {
 	fn count() -> usize { Self::sorted_members().len() }
 
 	#[cfg(feature = "runtime-benchmarks")]
-	/// Add an item that would satisfy `contains`. Should be used for benchmarking only.
+	/// Add an item that would satisfy `contains`. It does not make sure any other
+	/// state is correctly maintained or generated.
+	///
+	/// **Should be used for benchmarking only!!!**
 	fn add(t: &T);
 }
 
