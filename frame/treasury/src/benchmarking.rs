@@ -24,7 +24,6 @@ use frame_benchmarking::{benchmarks, account};
 use sp_runtime::traits::OnFinalize;
 
 use crate::Module as Treasury;
-use pallet_elections_phragmen::Module as Elections;
 
 const SEED: u32 = 0;
 
@@ -118,15 +117,13 @@ benchmarks! {
 		let r in 0 .. 16384;
 		let t in 0 .. 100 => {
 			let member = account("member", 0, SEED);
-			pallet_elections_phragmen::Members::<T>::append(
-				(member, BalanceOf::<T>::default())
-			);
+			T::Tippers::add(&member);
 		};
 		let caller = account("member", t, SEED);
-		let reason = vec![0; r];
+		let reason = vec![0; r as usize];
 		let beneficiary = account("beneficiary", t, SEED);
-		let value = T::Currency::minimum_balance().saturing_mul(100.into());
-	}: _(RawOrigin::Signed(caller), reason, value)
+		let value = T::Currency::minimum_balance().saturating_mul(100.into());
+	}: _(RawOrigin::Signed(caller), reason, beneficiary, value)
 
 	// tip {
 

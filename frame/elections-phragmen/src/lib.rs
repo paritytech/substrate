@@ -784,6 +784,16 @@ impl<T: Trait> Contains<T::AccountId> for Module<T> {
 		Self::is_member(who)
 	}
 	fn sorted_members() -> Vec<T::AccountId> { Self::members_ids() }
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(who: &T::AccountId) {
+		Members::<T>::mutate(|members| {
+			match members.binary_search_by(|(a, _b)| a.cmp(who)) {
+				Ok(_) => (),
+				Err(pos) => members.insert(pos, (who.clone(), BalanceOf::<T>::default())),
+			}
+		})
+	}
 }
 
 #[cfg(test)]
