@@ -117,10 +117,6 @@ impl CliConfiguration for Subcommand
 		self.get_shared_params().dev
 	}
 
-	fn get_keystore_config(&self, _base_path: &PathBuf) -> error::Result<KeystoreConfig> {
-		Ok(KeystoreConfig::InMemory)
-	}
-
 	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> DatabaseConfig { self.get_shared_params().get_database_config(base_path, cache_size) }
 
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<ChainSpec<G, E>>
@@ -135,13 +131,13 @@ impl CliConfiguration for Subcommand
 		E: ChainSpecExtension,
 	{ self.get_shared_params().init::<C, G, E>() }
 
-	fn get_pruning(&self, is_dev: bool) -> error::Result<PruningMode> {
+	fn get_pruning(&self, is_dev: bool, roles: Roles) -> error::Result<PruningMode> {
 		match self {
 			Subcommand::BuildSpec(_) => Ok(Default::default()),
-			Subcommand::ExportBlocks(cmd) => cmd.pruning_params.get_pruning(Roles::FULL, is_dev),
-			Subcommand::ImportBlocks(cmd) => cmd.import_params.get_pruning(Roles::FULL, is_dev),
-			Subcommand::CheckBlock(cmd) => cmd.import_params.get_pruning(Roles::FULL, is_dev),
-			Subcommand::Revert(cmd) => cmd.pruning_params.get_pruning(Roles::FULL, is_dev),
+			Subcommand::ExportBlocks(cmd) => cmd.pruning_params.get_pruning(roles, is_dev),
+			Subcommand::ImportBlocks(cmd) => cmd.import_params.get_pruning(roles, is_dev),
+			Subcommand::CheckBlock(cmd) => cmd.import_params.get_pruning(roles, is_dev),
+			Subcommand::Revert(cmd) => cmd.pruning_params.get_pruning(roles, is_dev),
 			Subcommand::PurgeChain(_) => Ok(Default::default()),
 		}
 	}

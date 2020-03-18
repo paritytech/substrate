@@ -14,44 +14,46 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::VersionInfo;
+use sc_cli::{spec_factory, SubstrateCLI};
 use sc_service::{Roles as ServiceRoles};
 use node_transaction_factory::RuntimeAdapter;
-use crate::{Cli, service, ChainSpec, load_spec, Subcommand, factory_impl::FactoryState};
+use crate::{Cli, service, Subcommand, factory_impl::FactoryState, ChainSpec, chain_spec::{GenesisConfig, Extensions}};
+
+#[spec_factory(
+	impl_name = "Substrate Node",
+	support_url = "https://github.com/paritytech/substrate/issues/new",
+	copyright_start_year = 2017,
+	executable_name = "substrate"
+)]
+fn spec_factory(id: &str) -> Result<Option<sc_service::ChainSpec<GenesisConfig, Extensions>>, String> {
+	Ok(match ChainSpec::from(id) {
+		Some(spec) => Some(spec.load()?),
+		None => None,
+	})
+}
 
 /// Parse command line arguments into service configuration.
-pub fn run<I, T>(args: I, version: VersionInfo) -> sc_cli::Result<()>
-where
-	I: Iterator<Item = T>,
-	T: Into<std::ffi::OsString> + Clone,
+pub fn run() -> sc_cli::Result<()>
 {
-	let args: Vec<_> = args.collect();
-	let opt = sc_cli::from_iter::<Cli, _>(args.clone(), &version);
-
-	let mut config = sc_service::Configuration::from_version(&version);
+	let opt = Cli::from_args();
 
 	match opt.subcommand {
 		None => {
-			opt.run.init(&version)?;
-			opt.run.update_config(&mut config, load_spec, &version)?;
-			opt.run.run(
-				config,
+			let runtime = Cli::create_runtime(&opt.run)?;
+			runtime.run_node(
 				service::new_light,
 				service::new_full,
-				&version,
 			)
 		},
 		Some(Subcommand::Inspect(cmd)) => {
-			cmd.init(&version)?;
-			cmd.update_config(&mut config, load_spec, &version)?;
+			use node_runtime::*;
+			use node_executor::*;
 
-			let client = sc_service::new_full_client::<
-				node_runtime::Block, node_runtime::RuntimeApi, node_executor::Executor, _, _,
-			>(&config)?;
-			let inspect = node_inspect::Inspector::<node_runtime::Block>::new(client);
+			let runtime = Cli::create_runtime(&cmd)?;
 
-			cmd.run(inspect)
+			runtime.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor, _, _>(config))
 		},
+		/*
 		Some(Subcommand::Benchmark(cmd)) => {
 			cmd.init(&version)?;
 			cmd.update_config(&mut config, load_spec, &version)?;
@@ -103,13 +105,14 @@ where
 
 			Ok(())
 		},
+		*/
 		Some(Subcommand::Base(subcommand)) => {
-			subcommand.init(&version)?;
-			subcommand.update_config(&mut config, load_spec, &version)?;
-			subcommand.run(
-				config,
-				|config: service::NodeConfiguration| Ok(new_full_start!(config).0),
+			let runtime = Cli::create_runtime(&subcommand)?;
+			runtime.run_subcommand(
+				subcommand,
+				|config| Ok(new_full_start!(config).0),
 			)
 		},
+		_ => todo!(),
 	}
 }

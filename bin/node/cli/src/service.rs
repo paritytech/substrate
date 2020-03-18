@@ -126,7 +126,7 @@ macro_rules! new_full {
 		) = (
 			$config.roles.is_authority(),
 			$config.force_authoring,
-			$config.name.clone(),
+			$config.network.node_name.clone(),
 			$config.disable_grandpa,
 			$config.network.sentry_nodes.clone(),
 		);

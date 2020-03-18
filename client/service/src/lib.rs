@@ -71,6 +71,7 @@ pub use sc_executor::NativeExecutionDispatch;
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+pub use sc_tracing::TracingReceiver;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 

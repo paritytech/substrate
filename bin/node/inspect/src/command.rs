@@ -19,51 +19,35 @@
 use std::{
 	fmt::Debug,
 	str::FromStr,
+	path::PathBuf,
 };
 
 use crate::cli::{InspectCmd, InspectSubCmd};
-use crate::{Inspector, PrettyPrinter};
+use crate::Inspector;
+use sc_service::{
+	Configuration, NativeExecutionDispatch, RuntimeGenesis, ChainSpecExtension,
+	config::{DatabaseConfig, ExecutionStrategies, WasmExecutionMethod}, ChainSpec, new_full_client,
+	PruningMode, Roles, TracingReceiver,
+};
+use sc_cli::{SubstrateCLI, Result, CliConfiguration};
+use sp_runtime::traits::Block;
 
 impl InspectCmd {
-	/// Initialize
-	pub fn init(&self, version: &sc_cli::VersionInfo) -> sc_cli::Result<()> {
-		self.shared_params.init(version)
-	}
-
-	/// Parse CLI arguments and initialize given config.
-	pub fn update_config<G, E>(
-		&self,
-		mut config: &mut sc_service::config::Configuration<G, E>,
-		spec_factory: impl FnOnce(&str) -> Result<Option<sc_service::ChainSpec<G, E>>, String>,
-		version: &sc_cli::VersionInfo,
-	) -> sc_cli::Result<()> where
-		G: sc_service::RuntimeGenesis,
-		E: sc_service::ChainSpecExtension,
-	{
-		self.shared_params.update_config(config, spec_factory, version)?;
-
-		// make sure to configure keystore
-		config.use_in_memory_keystore()?;
-
-		// and all import params (especially pruning that has to match db meta)
-		self.import_params.update_config(
-			&mut config,
-			sc_service::Roles::FULL,
-			self.shared_params.dev,
-		)?;
-
-		Ok(())
-	}
-
 	/// Run the inspect command, passing the inspector.
-	pub fn run<B, P>(
+	pub fn run<B, RA, EX, G, E>(
 		self,
-		inspect: Inspector<B, P>,
-	) -> sc_cli::Result<()> where
-		B: sp_runtime::traits::Block,
+		config: Configuration<G, E>,
+	) -> Result<()> where
+		B: Block,
 		B::Hash: FromStr,
-		P: PrettyPrinter<B>,
+		RA: Send + Sync + 'static,
+		EX: NativeExecutionDispatch + 'static,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
 	{
+		let client = new_full_client::<B, RA, EX, _, _>(&config)?;
+		let inspect = Inspector::<B>::new(client);
+
 		match self.command {
 			InspectSubCmd::Block { input } => {
 				let input = input.parse()?;
@@ -83,6 +67,67 @@ impl InspectCmd {
 	}
 }
 
+impl CliConfiguration for InspectCmd {
+	fn is_dev(&self) -> bool {
+		self.shared_params.dev
+	}
+
+	fn get_base_path(&self) -> Option<&PathBuf> {
+		self.shared_params.base_path.as_ref()
+	}
+
+	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> DatabaseConfig
+	{
+		self.shared_params.get_database_config(base_path, cache_size)
+	}
+
+	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		self.shared_params.get_chain_spec::<C, G, E>()
+	}
+
+	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		self.shared_params.init::<C, G, E>()
+	}
+
+	fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> {
+		self.import_params.get_pruning(roles, is_dev)
+	}
+
+	fn get_tracing_receiver(&self) -> TracingReceiver {
+		self.import_params.tracing_receiver.clone().into()
+	}
+
+	fn get_tracing_targets(&self) -> Option<String> {
+		self.import_params.tracing_targets.clone().into()
+	}
+
+	fn get_state_cache_size(&self) -> usize {
+		self.import_params.state_cache_size
+	}
+
+	fn get_wasm_method(&self) -> WasmExecutionMethod {
+		self.import_params.get_wasm_method()
+	}
+
+	fn get_execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
+		self.import_params.get_execution_strategies(is_dev)
+	}
+
+	fn get_database_cache_size(&self) -> Option<usize> {
+		self.import_params.database_cache_size
+	}
+
+}
+
+// TODO: move out all of this
 /// A block to retrieve.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BlockAddress<Hash, Number> {
@@ -97,7 +142,7 @@ pub enum BlockAddress<Hash, Number> {
 impl<Hash: FromStr, Number: FromStr> FromStr for BlockAddress<Hash, Number> {
 	type Err = String;
 
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
+	fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
 		// try to parse hash first
 		if let Ok(hash) = s.parse() {
 			return Ok(Self::Hash(hash))
@@ -130,7 +175,7 @@ pub enum ExtrinsicAddress<Hash, Number> {
 impl<Hash: FromStr + Debug, Number: FromStr + Debug> FromStr for ExtrinsicAddress<Hash, Number> {
 	type Err = String;
 
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
+	fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
 		// first try raw bytes
 		if let Ok(bytes) = sp_core::bytes::from_hex(s).map(Self::Bytes) {
 			return Ok(bytes)

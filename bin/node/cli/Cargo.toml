@@ -2,7 +2,7 @@
 name = "node-cli"
 version = "2.0.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Substrate node implementation in Rust."
+description = "Generic Substrate node implementation in Rust."
 build = "build.rs"
 edition = "2018"
 license = "GPL-3.0"

@@ -48,8 +48,8 @@ pub trait CliConfiguration: Sized {
 		false
 	}
 
-	fn get_roles(&self) -> Roles {
-		Roles::FULL
+	fn get_roles(&self) -> Result<Roles> {
+		Ok(Roles::FULL)
 	}
 
 	fn get_transaction_pool(&self) -> Result<TransactionPoolOptions> {
@@ -72,7 +72,9 @@ pub trait CliConfiguration: Sized {
 		Ok(NetworkConfiguration::new(node_name, client_id, node_key, net_config_dir))
 	}
 
-	fn get_keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig>;
+	fn get_keystore_config(&self, _base_path: &PathBuf) -> Result<KeystoreConfig> {
+		Ok(KeystoreConfig::InMemory)
+	}
 
 	fn get_database_cache_size(&self) -> Option<usize> { Default::default() }
 
@@ -86,7 +88,7 @@ pub trait CliConfiguration: Sized {
 		Default::default()
 	}
 
-	fn get_pruning(&self, _is_dev: bool) -> Result<PruningMode> {
+	fn get_pruning(&self, _is_dev: bool, _roles: Roles) -> Result<PruningMode> {
 		Ok(Default::default())
 	}
 
@@ -142,7 +144,7 @@ pub trait CliConfiguration: Sized {
 		Default::default()
 	}
 
-	fn get_offchain_worker(&self) -> bool {
+	fn get_offchain_worker(&self, _roles: Roles) -> bool {
 		Default::default()
 	}
 
@@ -199,11 +201,12 @@ pub trait CliConfiguration: Sized {
 		// TODO: this parameter is really optional, shouldn't we leave it to None?
 		let database_cache_size = Some(self.get_database_cache_size().unwrap_or(1024));
 		let node_key = self.get_node_key(&net_config_dir)?;
+		let roles = self.get_roles()?; // TODO: it it role or roles?
 
 		Ok(Configuration {
 			impl_name: C::get_impl_name(),
 			impl_version: C::get_impl_version(),
-			roles: self.get_roles(),
+			roles,
 			task_executor,
 			transaction_pool: self.get_transaction_pool()?,
 			network: self.get_network_config(
@@ -218,7 +221,7 @@ pub trait CliConfiguration: Sized {
 			database: self.get_database_config(&config_dir, database_cache_size),
 			state_cache_size: self.get_state_cache_size(),
 			state_cache_child_ratio: self.get_state_cache_child_ratio(),
-			pruning: self.get_pruning(is_dev)?,
+			pruning: self.get_pruning(is_dev, roles)?,
 			wasm_method: self.get_wasm_method(),
 			execution_strategies: self.get_execution_strategies(is_dev)?,
 			rpc_http: self.get_rpc_http()?,
@@ -229,7 +232,7 @@ pub trait CliConfiguration: Sized {
 			telemetry_endpoints: self.get_telemetry_endpoints(&chain_spec),
 			telemetry_external_transport: self.get_telemetry_external_transport(),
 			default_heap_pages: self.get_default_heap_pages(),
-			offchain_worker: self.get_offchain_worker(),
+			offchain_worker: self.get_offchain_worker(roles),
 			sentry_mode: self.get_sentry_mode(),
 			force_authoring: self.get_force_authoring(),
 			disable_grandpa: self.get_disable_grandpa(),

@@ -16,7 +16,7 @@
 
 use sp_runtime::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sc_client::StateMachine;
-use sc_cli::{ExecutionStrategy, WasmExecutionMethod, VersionInfo};
+use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use sc_client_db::BenchmarkingState;
 use sc_service::{RuntimeGenesis, ChainSpecExtension, Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
@@ -68,11 +68,6 @@ pub struct BenchmarkCmd {
 }
 
 impl BenchmarkCmd {
-	/// Initialize
-	pub fn init(&self, version: &sc_cli::VersionInfo) -> sc_cli::Result<()> {
-		self.shared_params.init(version)
-	}
-
 	/// Runs the command and benchmarks the chain.
 	pub fn run<G, E, BB, ExecDispatch>(
 		self,
@@ -86,7 +81,7 @@ impl BenchmarkCmd {
 		<BB as BlockT>::Hash: std::str::FromStr,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
-		let spec = config.chain_spec.expect("chain_spec is always Some");
+		let spec = config.chain_spec;
 		let wasm_method = self.wasm_method.into();
 		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
 
@@ -142,6 +137,7 @@ impl BenchmarkCmd {
 		Ok(())
 	}
 
+	/*
 	/// Update and prepare a `Configuration` with command line parameters
 	pub fn update_config<G, E>(
 		&self,
@@ -159,4 +155,5 @@ impl BenchmarkCmd {
 
 		Ok(())
 	}
+	*/
 }

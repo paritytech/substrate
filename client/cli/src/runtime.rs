@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::error;
+use crate::Result;
 use crate::CliConfiguration;
 use crate::SubstrateCLI;
 use crate::{RunCmd, Subcommand};
@@ -33,9 +33,9 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 #[cfg(target_family = "unix")]
-async fn main<F, E>(func: F) -> Result<(), Box<dyn std::error::Error>>
+async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
 where
-	F: Future<Output = Result<(), E>> + future::FusedFuture,
+	F: Future<Output = std::result::Result<(), E>> + future::FusedFuture,
 	E: 'static + std::error::Error,
 {
 	use tokio::signal::unix::{signal, SignalKind};
@@ -59,9 +59,9 @@ where
 }
 
 #[cfg(not(unix))]
-async fn main<F, E>(func: F) -> Result<(), Box<dyn std::error::Error>>
+async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
 where
-	F: Future<Output = Result<(), E>> + future::FusedFuture,
+	F: Future<Output = std::result::Result<(), E>> + future::FusedFuture,
 	E: 'static + std::error::Error,
 {
 	use tokio::signal::ctrl_c;
@@ -80,7 +80,7 @@ where
 }
 
 /// Build a tokio runtime with all features
-pub fn build_runtime() -> Result<tokio::runtime::Runtime, std::io::Error> {
+pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::Error> {
 	tokio::runtime::Builder::new()
 		.thread_name("main-tokio-")
 		.threaded_scheduler()
@@ -88,14 +88,12 @@ pub fn build_runtime() -> Result<tokio::runtime::Runtime, std::io::Error> {
 		.build()
 }
 
-/// A helper function that runs a future with the provided tokio and stops if the process receives
-/// the signal SIGTERM or SIGINT
-pub fn run_until_exit<FUT, ERR>(
+fn run_until_exit<FUT, ERR>(
 	mut tokio_runtime: tokio::runtime::Runtime,
 	future: FUT,
-) -> error::Result<()>
+) -> Result<()>
 where
-	FUT: Future<Output = Result<(), ERR>> + future::Future,
+	FUT: Future<Output = std::result::Result<(), ERR>> + future::Future,
 	ERR: 'static + std::error::Error,
 {
 	let f = future.fuse();
@@ -111,8 +109,8 @@ where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 {
-	pub config: Configuration<G, E>,
-	pub tokio_runtime: tokio::runtime::Runtime,
+	config: Configuration<G, E>,
+	tokio_runtime: tokio::runtime::Runtime,
 	phantom: PhantomData<C>,
 }
 
@@ -121,7 +119,7 @@ where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 {
-	pub fn new<T: CliConfiguration>(cli_config: &T) -> error::Result<Runtime<C, G, E>> {
+	pub fn new<T: CliConfiguration>(cli_config: &T) -> Result<Runtime<C, G, E>> {
 		let tokio_runtime = build_runtime()?;
 
 		let task_executor = {
@@ -140,7 +138,7 @@ where
 
 	/// A helper function that runs an `AbstractService` with tokio and stops if the process receives
 	/// the signal SIGTERM or SIGINT
-	pub fn run_node<FNL, FNF, SL, SF>(self, new_light: FNL, new_full: FNF) -> error::Result<()>
+	pub fn run_node<FNL, FNF, SL, SF>(self, new_light: FNL, new_full: FNF) -> Result<()>
 	where
 		FNL: FnOnce(Configuration<G, E>) -> sc_service::error::Result<SL>,
 		FNF: FnOnce(Configuration<G, E>) -> sc_service::error::Result<SF>,
@@ -167,7 +165,7 @@ where
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
 	/// SIGTERM or SIGINT
-	pub fn run_subcommand<B, BC, BB>(self, subcommand: Subcommand, builder: B) -> error::Result<()>
+	pub fn run_subcommand<B, BC, BB>(self, subcommand: Subcommand, builder: B) -> Result<()>
 	where
 		B: FnOnce(Configuration<G, E>) -> sc_service::error::Result<BC>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
@@ -191,9 +189,9 @@ where
 		}
 	}
 
-	fn run_service_until_exit<T, F>(mut self, service_builder: F) -> error::Result<()>
+	fn run_service_until_exit<T, F>(mut self, service_builder: F) -> Result<()>
 	where
-		F: FnOnce(Configuration<G, E>) -> Result<T, sc_service::error::Error>,
+		F: FnOnce(Configuration<G, E>) -> std::result::Result<T, sc_service::error::Error>,
 		T: AbstractService + Unpin,
 	{
 		let service = service_builder(self.config)?;
@@ -215,5 +213,19 @@ where
 		drop(self.tokio_runtime);
 
 		Ok(())
+	}
+
+	/// A helper function that runs a command with the configuration of this node
+	pub fn sync_run(self, runner: impl FnOnce(Configuration<G, E>) -> Result<()>) -> Result<()> {
+		runner(self.config)
+	}
+
+	/// A helper function that runs a future with tokio and stops if the process receives
+	/// the signal SIGTERM or SIGINT
+	pub fn async_run<FUT>(self, runner: impl FnOnce(Configuration<G, E>) -> FUT) -> Result<()>
+	where
+		FUT: Future<Output = Result<()>> + future::Future,
+	{
+		run_until_exit(self.tokio_runtime, runner(self.config))
 	}
 }

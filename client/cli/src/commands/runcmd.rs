@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::error;
+use crate::error::{Result, Error};
 use crate::params::ImportParams;
 use crate::params::KeystoreParams;
 use crate::params::NetworkConfigurationParams;
@@ -281,7 +281,7 @@ impl CliConfiguration for RunCmd {
 		self.shared_params.dev
 	}
 
-	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<ChainSpec<G, E>>
+	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -297,7 +297,7 @@ impl CliConfiguration for RunCmd {
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
-	) -> error::Result<NetworkConfiguration>
+	) -> Result<NetworkConfiguration>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -306,7 +306,7 @@ impl CliConfiguration for RunCmd {
 			.get_network_config(chain_spec, client_id, is_dev, base_path, node_name, node_key)
 	}
 
-	fn get_keystore_config(&self, base_path: &PathBuf) -> error::Result<KeystoreConfig> {
+	fn get_keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
 		self.keystore_params.get_keystore_config(base_path)
 	}
 
@@ -319,7 +319,7 @@ impl CliConfiguration for RunCmd {
 			.get_database_config(base_path, cache_size)
 	}
 
-	fn get_node_name(&self) -> error::Result<String> {
+	fn get_node_name(&self) -> Result<String> {
 		let name: String = match (self.name.as_ref(), self.get_keyring()) {
 			(Some(name), _) => name.to_string(),
 			(_, Some(keyring)) => keyring.to_string(),
@@ -327,7 +327,7 @@ impl CliConfiguration for RunCmd {
 		};
 
 		if let Err(msg) = is_node_name_valid(&name) {
-			return Err(error::Error::Input(format!(
+			return Err(Error::Input(format!(
 				"Invalid node name '{}'. Reason: {}. If unsure, use none.",
 				name, msg
 			)));
@@ -356,7 +356,7 @@ impl CliConfiguration for RunCmd {
 			chain_spec.telemetry_endpoints().clone()
 		}
 	}
-	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
+	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -368,20 +368,20 @@ impl CliConfiguration for RunCmd {
 		self.sentry
 	}
 
-	fn get_roles(&self) -> Roles {
+	fn get_roles(&self) -> Result<Roles> {
 		let keyring = self.get_keyring();
 		let is_dev = self.shared_params.dev;
 		let is_light = self.light;
 		let is_authority =
 			(self.validator || self.sentry || is_dev || keyring.is_some()) && !is_light;
 
-		if is_light {
+		Ok(if is_light {
 			sc_service::Roles::LIGHT
 		} else if is_authority {
 			sc_service::Roles::AUTHORITY
 		} else {
 			sc_service::Roles::FULL
-		}
+		})
 	}
 
 	fn get_force_authoring(&self) -> bool {
@@ -397,7 +397,7 @@ impl CliConfiguration for RunCmd {
 		self.import_params.tracing_targets.clone().into() // TODO: get from import_params
 	}
 
-	fn get_prometheus_port(&self) -> error::Result<Option<SocketAddr>> {
+	fn get_prometheus_port(&self) -> Result<Option<SocketAddr>> {
 		if self.no_prometheus {
 			Ok(None)
 		} else {
@@ -443,7 +443,7 @@ impl CliConfiguration for RunCmd {
 			.into()
 	}
 
-	fn get_rpc_http(&self) -> error::Result<Option<SocketAddr>> {
+	fn get_rpc_http(&self) -> Result<Option<SocketAddr>> {
 		let rpc_interface: &str =
 			interface_str(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
 
@@ -453,7 +453,7 @@ impl CliConfiguration for RunCmd {
 		)?))
 	}
 
-	fn get_rpc_ws(&self) -> error::Result<Option<SocketAddr>> {
+	fn get_rpc_ws(&self) -> Result<Option<SocketAddr>> {
 		let ws_interface: &str =
 			interface_str(self.ws_external, self.unsafe_ws_external, self.validator)?;
 
@@ -463,11 +463,9 @@ impl CliConfiguration for RunCmd {
 		)?))
 	}
 
-	fn get_offchain_worker(&self) -> bool {
-		let role = self.get_roles(); // TODO: it it role or roles?
-
-		match (&self.offchain_worker, role) {
-			(OffchainWorkerEnabled::WhenValidating, sc_service::Roles::AUTHORITY) => true,
+	fn get_offchain_worker(&self, roles: Roles) -> bool {
+		match (&self.offchain_worker, roles) {
+			(OffchainWorkerEnabled::WhenValidating, Roles::AUTHORITY) => true,
 			(OffchainWorkerEnabled::Always, _) => true,
 			(OffchainWorkerEnabled::Never, _) => false,
 			(OffchainWorkerEnabled::WhenValidating, _) => false,
@@ -482,7 +480,7 @@ impl CliConfiguration for RunCmd {
 		self.import_params.get_wasm_method()
 	}
 
-	fn get_execution_strategies(&self, is_dev: bool) -> error::Result<ExecutionStrategies> {
+	fn get_execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
 		self.import_params.get_execution_strategies(is_dev)
 	}
 
@@ -490,21 +488,21 @@ impl CliConfiguration for RunCmd {
 		self.import_params.database_cache_size
 	}
 
-	fn get_pruning(&self, is_dev: bool) -> error::Result<PruningMode> {
-		self.import_params.get_pruning(self.get_roles(), is_dev)
+	fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> {
+		self.import_params.get_pruning(roles, is_dev)
 	}
 
-	fn get_transaction_pool(&self) -> error::Result<TransactionPoolOptions> {
+	fn get_transaction_pool(&self) -> Result<TransactionPoolOptions> {
 		self.pool_config.get_transaction_pool()
 	}
 
-	fn get_node_key(&self, net_config_dir: &PathBuf) -> error::Result<NodeKeyConfig> {
+	fn get_node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
 		self.network_config.node_key_params.get_node_key(net_config_dir)
 	}
 }
 
 /// Check whether a node name is considered as valid
-pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
+pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 	let name = _name.to_string();
 	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
 		return Err("Node name too long");
@@ -525,7 +523,7 @@ pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-fn parse_address(address: &str, port: Option<u16>) -> Result<SocketAddr, String> {
+fn parse_address(address: &str, port: Option<u16>) -> std::result::Result<SocketAddr, String> {
 	let mut address: SocketAddr = address
 		.parse()
 		.map_err(|_| format!("Invalid address: {}", address))?;
@@ -540,9 +538,9 @@ fn interface_str(
 	is_external: bool,
 	is_unsafe_external: bool,
 	is_validator: bool,
-) -> Result<&'static str, error::Error> {
+) -> Result<&'static str> {
 	if is_external && is_validator {
-		return Err(error::Error::Input(
+		return Err(Error::Input(
 			"--rpc-external and --ws-external options shouldn't be \
 		used if the node is running as a validator. Use `--unsafe-rpc-external` if you understand \
 		the risks. See the options description for more information."
@@ -563,7 +561,7 @@ fn interface_str(
 }
 
 /// Default to verbosity level 0, if none is provided.
-fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<dyn std::error::Error>> {
+fn parse_telemetry_endpoints(s: &str) -> std::result::Result<(String, u8), Box<dyn std::error::Error>> {
 	let pos = s.find(' ');
 	match pos {
 		None => Ok((s.to_owned(), 0)),
@@ -597,7 +595,7 @@ impl From<Cors> for Option<Vec<String>> {
 }
 
 /// Parse cors origins
-fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
+fn parse_cors(s: &str) -> std::result::Result<Cors, Box<dyn std::error::Error>> {
 	let mut is_all = false;
 	let mut origins = Vec::new();
 	for part in s.split(',') {
