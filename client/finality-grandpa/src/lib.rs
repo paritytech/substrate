@@ -417,6 +417,35 @@ pub fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
+) -> Result<
+	(
+		GrandpaBlockImport<BE, Block, Client, SC>,
+		LinkHalf<Block, Client, SC>,
+	),
+	ClientError,
+>
+where
+	SC: SelectChain<Block>,
+	BE: Backend<Block> + 'static,
+	Client: ClientForGrandpa<Block, BE> + 'static,
+{
+	block_import_with_authority_set_hard_forks(
+		client,
+		genesis_authorities_provider,
+		select_chain,
+		Default::default(),
+	)
+}
+
+/// Make block importer and link half necessary to tie the background voter to
+/// it. A vector of authority set hard forks can be passed, any authority set
+/// change signaled at the given block (either already signalled or in a further
+/// block when importing it) will be replaced by a standard change with the
+/// given static authorities.
+pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>(
+	client: Arc<Client>,
+	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
+	select_chain: SC,
 	authority_set_hard_forks: Vec<(SetId, (Block::Hash, NumberFor<Block>), AuthorityList)>,
 ) -> Result<
 	(
