@@ -39,7 +39,6 @@ impl<B: BlockT> Unpin for GossipEngine<B> {}
 
 impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
-	// TODO: We don't need this clone, right?
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
 		mut network: N,
 		engine_id: ConsensusEngineId,
