@@ -16,9 +16,9 @@
 
 //! Tools for analysing the benchmark results.
 
-use linregress::{FormulaRegressionBuilder, RegressionDataBuilder, RegressionModel};
-use frame_benchmarking::BenchmarkResults;
 use std::collections::BTreeMap;
+use linregress::{FormulaRegressionBuilder, RegressionDataBuilder, RegressionModel};
+use crate::BenchmarkResults;
 
 pub struct Analysis {
 	base: u128,
@@ -30,7 +30,7 @@ pub struct Analysis {
 
 impl Analysis {
 	pub fn median_slopes(r: &Vec<BenchmarkResults>) -> Option<Self> {
-		let results = r[0].0.iter().enumerate().map(|(i, &(p, _))| {
+		let results = r[0].0.iter().enumerate().map(|(i, &(param, _))| {
 			let mut counted = BTreeMap::<Vec<u32>, usize>::new();
 			for (params, _, _) in r.iter() {
 				let mut p = params.iter().map(|x| x.1).collect::<Vec<_>>();
@@ -47,7 +47,7 @@ impl Analysis {
 						.all(|(j, (v1, v2))| j == i || v1 == *v2)
 				).map(|(ps, v, _)| (ps[i].1, *v))
 				.collect::<Vec<_>>();
-			(format!("{:?}", p), i, others, values)
+			(format!("{:?}", param), i, others, values)
 		}).collect::<Vec<_>>();
 
 		let models = results.iter().map(|(_, _, _, ref values)| {

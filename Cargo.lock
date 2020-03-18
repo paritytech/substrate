@@ -1481,6 +1481,7 @@ version = "2.0.0-alpha.3"
 dependencies = [
  "frame-support",
  "frame-system",
+ "linregress",
  "parity-scale-codec",
  "sp-api",
  "sp-io",
@@ -1494,7 +1495,6 @@ name = "frame-benchmarking-cli"
 version = "2.0.0-alpha.3"
 dependencies = [
  "frame-benchmarking",
- "linregress",
  "parity-scale-codec",
  "sc-cli",
  "sc-client",

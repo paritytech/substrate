@@ -22,12 +22,8 @@ use sc_client_db::BenchmarkingState;
 use sc_service::{Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use codec::{Encode, Decode};
-use frame_benchmarking::BenchmarkResults;
+use frame_benchmarking::{BenchmarkResults, Analysis};
 use sp_core::tasks;
-
-mod analysis;
-
-use crate::analysis::Analysis;
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt, Clone)]

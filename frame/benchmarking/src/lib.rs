@@ -20,7 +20,10 @@
 
 mod tests;
 mod utils;
+mod analysis;
+
 pub use utils::*;
+pub use analysis::Analysis;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 pub use sp_runtime::traits::Dispatchable;
