@@ -587,60 +587,60 @@ macro_rules! implement_per_thing {
 				// x^0 == 1
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_pow(0), 
-					$name::from_parts($max)
+					$name::from_parts($max),
 				);
 
 				// x^1 == x
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_pow(1), 
-					$name::from_parts($max / 2)
-					);
+					$name::from_parts($max / 2),
+                );
 
 				// x^2
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_pow(2), 
-					$name::from_parts($max / 2).square()
-					);
+					$name::from_parts($max / 2).square(),
+                );
 
 				// x^3
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_pow(3), 
-					$name::from_parts($max / 8)
-					);
+					$name::from_parts($max / 8),
+                );
 
 				// 0^n == 0
 				assert_eq!(
 					$name::from_parts(0).saturating_pow(3), 
-					$name::from_parts(0)
-					);
+					$name::from_parts(0),
+                );
 
 				// 1^n == 1
 				assert_eq!(
 					$name::from_parts($max).saturating_pow(3), 
-					$name::from_parts($max)
-					);
+					$name::from_parts($max),
+                );
 
 				// (x < 1)^inf == 0 (where 2.pow(31) ~ inf)
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_pow(2usize.pow(31)), 
-					$name::from_parts(0)
-					);
+					$name::from_parts(0),
+                );
 			}
 
 			#[test]
 			fn saturating_reciprocal_mul_works() {
 				assert_eq!(
 					$name::from_parts($max).saturating_reciprocal_mul(<$type>::from(10u8)),
-					10
-					);
+					10,
+                );
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_reciprocal_mul(<$type>::from(10u8)),
-					20
-					);
+					20,
+                );
 				assert_eq!(
 					$name::from_parts(1).saturating_reciprocal_mul($max),
-					<$type>::max_value()
-					);
+					<$type>::max_value(),
+                );
 			}
 		}
 	};
