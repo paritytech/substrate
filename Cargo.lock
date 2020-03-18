@@ -6101,7 +6101,7 @@ dependencies = [
 
 [[package]]
 name = "sc-executor-wasmi"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 dependencies = [
  "log 0.4.8",
  "parity-scale-codec",
@@ -6116,7 +6116,7 @@ dependencies = [
 
 [[package]]
 name = "sc-executor-wasmtime"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 dependencies = [
  "assert_matches",
  "log 0.4.8",
