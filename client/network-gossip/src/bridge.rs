@@ -31,7 +31,7 @@ pub struct GossipEngine<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
 	network: Box<dyn Network<B>>,
 	periodic_maintenance_interval: futures_timer::Delay,
-	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
+	network_event_stream: Pin<Box<dyn Stream<Item = Event>>>,
 	engine_id: ConsensusEngineId,
 }
 
