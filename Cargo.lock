@@ -4158,7 +4158,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-example"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.4"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -4174,7 +4174,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-example-offchain-worker"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.4"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6101,7 +6101,7 @@ dependencies = [
 
 [[package]]
 name = "sc-executor-wasmi"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 dependencies = [
  "log 0.4.8",
  "parity-scale-codec",
@@ -6116,7 +6116,7 @@ dependencies = [
 
 [[package]]
 name = "sc-executor-wasmtime"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 dependencies = [
  "assert_matches",
  "log 0.4.8",
@@ -7544,7 +7544,7 @@ dependencies = [
 
 [[package]]
 name = "sp-wasm-interface"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.4"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
@@ -7866,7 +7866,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-test-utils"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.4"
 
 [[package]]
 name = "substrate-wasm-builder"
