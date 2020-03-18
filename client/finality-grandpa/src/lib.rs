@@ -417,10 +417,14 @@ pub fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
-) -> Result<(
+	authority_set_hard_forks: Vec<(SetId, (Block::Hash, NumberFor<Block>), AuthorityList)>,
+) -> Result<
+	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
 		LinkHalf<Block, Client, SC>,
-	), ClientError>
+	),
+	ClientError,
+>
 where
 	SC: SelectChain<Block>,
 	BE: Backend<Block> + 'static,
@@ -444,7 +448,24 @@ where
 
 	let (voter_commands_tx, voter_commands_rx) = mpsc::unbounded();
 
-	// FIXME
+	// create pending change objects with 0 delay and enacted on finality
+	// (i.e. standard changes) for each authority set hard fork.
+	let authority_set_hard_forks = authority_set_hard_forks
+		.into_iter()
+		.map(|(set_id, (hash, number), authorities)| {
+			(
+				set_id,
+				authorities::PendingChange {
+					next_authorities: authorities,
+					delay: Zero::zero(),
+					canon_hash: hash,
+					canon_height: number,
+					delay_kind: authorities::DelayKind::Finalized,
+				},
+			)
+		})
+		.collect();
+
 	Ok((
 		GrandpaBlockImport::new(
 			client.clone(),
@@ -452,7 +473,7 @@ where
 			persistent_data.authority_set.clone(),
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
-			Default::default(),
+			authority_set_hard_forks,
 		),
 		LinkHalf {
 			client,
