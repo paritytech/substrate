@@ -18,11 +18,69 @@
 
 use codec::{Encode, Decode};
 use sp_runtime::RuntimeDebug;
-use crate::vote_threshold::VoteThreshold;
+use sp_runtime::traits::{Zero, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, AppendZerosInput};
+use crate::{Vote, VoteThreshold, Tally};
 
 /// Info regarding an ongoing referendum.
+#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct Tally<Balance> {
+	/// The number of aye votes, expressed in terms of post-conviction lock-vote.
+	pub (crate) ayes: Balance,
+	/// The number of nay votes, expressed in terms of post-conviction lock-vote.
+	pub (crate) nays: Balance,
+	/// The amount of funds currently expressing its opinion. Pre-conviction.
+	pub (crate) turnout: Balance,
+}
+
+impl<
+	Balance: From<u8> + Zero + Copy + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Bounded
+> Tally<Balance> {
+	pub fn new(
+		vote: Vote,
+		balance: Balance,
+	) -> Self {
+		let (votes, turnout) = vote.conviction.votes(balance);
+		Self {
+			ayes: if vote.aye { votes } else { Zero::zero() },
+			nays: if vote.aye { Zero::zero() } else { votes },
+			turnout,
+		}
+	}
+
+	/// Increment some amount of votes.
+	pub fn try_add(
+		&mut self,
+		vote: Vote,
+		balance: Balance,
+	) -> Option<()> {
+		let (votes, turnout) = vote.conviction.votes(balance);
+		self.turnout = self.turnout.checked_add(&turnout)?;
+		match vote.aye {
+			true => self.ayes = self.ayes.checked_add(&votes)?,
+			false => self.nays = self.nays.checked_add(&votes)?,
+		};
+		Some(())
+	}
+
+	/// Decrement some amount of votes.
+	pub fn try_remove(
+		&mut self,
+		vote: Vote,
+		balance: Balance,
+	) -> Option<()> {
+		let (votes, turnout) = vote.conviction.votes(balance);
+		self.turnout = self.turnout.checked_sub(&turnout)?;
+		match vote.aye {
+			true => self.ayes = self.ayes.checked_sub(&votes)?,
+			false => self.nays = self.nays.checked_sub(&votes)?,
+		};
+		Some(())
+	}
+}
+/*
+/// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct ReferendumInfo<BlockNumber, Hash> {
+pub struct OldReferendumInfo<BlockNumber, Hash, Balance> {
 	/// When voting on this referendum will end.
 	pub (crate) end: BlockNumber,
 	/// The hash of the proposal being voted on.
@@ -32,16 +90,42 @@ pub struct ReferendumInfo<BlockNumber, Hash> {
 	/// The delay (in blocks) to wait after a successful referendum before deploying.
 	pub (crate) delay: BlockNumber,
 }
+*/
 
-impl<BlockNumber, Hash> ReferendumInfo<BlockNumber, Hash> {
+/// Info regarding an ongoing referendum.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct ReferendumStatus<BlockNumber, Hash, Balance> {
+	/// When voting on this referendum will end.
+	pub (crate) end: BlockNumber,
+	/// The hash of the proposal being voted on.
+	pub (crate) proposal_hash: Hash,
+	/// The thresholding mechanism to determine whether it passed.
+	pub (crate) threshold: VoteThreshold,
+	/// The delay (in blocks) to wait after a successful referendum before deploying.
+	pub (crate) delay: BlockNumber,
+	/// The current tally of votes in this referendum.
+	pub (crate) tally: Tally<Balance>,
+}
+
+/// Info regarding a referendum, present or past.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum ReferendumInfo<BlockNumber, Hash, Balance> {
+	/// Referendum is happening, the arg is the block number at which it will end.
+	Ongoing(ReferendumStatus<BlockNumber, Hash, Balance>),
+	/// Referendum finished at `end`, and has been `approved` or rejected.
+	Finished{approved: bool, end: BlockNumber},
+}
+
+impl<BlockNumber, Hash, Balance> ReferendumInfo<BlockNumber, Hash, Balance> {
 	/// Create a new instance.
 	pub fn new(
 		end: BlockNumber,
 		proposal_hash: Hash,
 		threshold: VoteThreshold,
-		delay: BlockNumber
+		delay: BlockNumber,
 	) -> Self {
-		ReferendumInfo { end, proposal_hash, threshold, delay }
+		let s = ReferendumStatus{ end, proposal_hash, threshold, delay, tally: Tally::default() };
+		ReferendumInfo::Ongoing(s)
 	}
 }
 

@@ -174,7 +174,7 @@ mod types;
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use vote::Vote;
 pub use conviction::Conviction;
-pub use types::{ReferendumInfo, ProxyState};
+pub use types::{ReferendumInfo, ReferendumStatus, ProxyState, Tally};
 
 #[cfg(test)]
 mod tests;
@@ -276,11 +276,12 @@ decl_storage! {
 		/// Information concerning any given referendum.
 		pub ReferendumInfoOf get(fn referendum_info):
 			map hasher(twox_64_concat) ReferendumIndex
-			=> Option<ReferendumInfo<T::BlockNumber, T::Hash>>;
+			=> Option<ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>>;
 		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
 		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 
 		/// Get the voters for the current proposal.
+		/// DEPRECATED
 		pub VotersFor get(fn voters_for):
 			map hasher(twox_64_concat) ReferendumIndex => Vec<T::AccountId>;
 
@@ -288,7 +289,12 @@ decl_storage! {
 		/// if `voters_for` includes the voter when called with the referendum (you'll get the
 		/// default `Vote` value otherwise). If you don't want to check `voters_for`, then you can
 		/// also check for simple existence with `VoteOf::contains_key` first.
+		/// DEPRECATED
 		pub VoteOf get(fn vote_of): map hasher(twox_64_concat) (ReferendumIndex, T::AccountId) => Vote;
+
+		/// All votes for a particular voter. We store the balance for the number of votes that we
+		/// have recorded.
+		pub VotesOf: map hasher(twox_64_concat) T::AccountId => Vec<(ReferendumIndex, Vote, BalanceOf<T>)>;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
@@ -421,7 +427,11 @@ decl_error! {
 		/// A proxy-pairing was attempted to an account that was open to another account.
 		WrongOpen,
 		/// A proxy-de-pairing was attempted to an account that was not active.
-		NotActive
+		NotActive,
+		/// The given account did not vote on the referendum,
+		NotVoter,
+		/// The actor has no permission to conduct the action.
+		NoPermission,
 	}
 }
 
@@ -1031,21 +1041,43 @@ decl_module! {
 		///
 		/// - `target`: The account to remove the lock on.
 		///
-		/// Emits `Unlocked`.
-		///
 		/// # <weight>
 		/// - `O(1)`.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn unlock(origin, target: T::AccountId) {
 			ensure_signed(origin)?;
+			Self::do_unlock(&target);
+		}
 
-			let expiry = Locks::<T>::get(&target).ok_or(Error::<T>::NotLocked)?;
-			ensure!(expiry <= system::Module::<T>::block_number(), Error::<T>::NotExpired);
+		/// Unvote tokens that have an expired lock.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `target`: The account to remove the lock on.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		fn unlock(origin, index: RefIndex) {
+			ensure_signed(origin)?;
+			Self::do_unvote(&target, index, true);
+		}
 
-			T::Currency::remove_lock(DEMOCRACY_ID, &target);
-			Locks::<T>::remove(&target);
-			Self::deposit_event(RawEvent::Unlocked(target));
+		/// Unvote tokens that have an expired lock.
+		///
+		/// The dispatch origin of this call must be _Signed_.
+		///
+		/// - `target`: The account to remove the lock on.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		fn unlock_other(origin, target: T::AccountId, index: RefIndex) {
+			ensure_signed(origin)?;
+			Self::do_unvote(&target, index, false);
 		}
 
 		/// Become a proxy.
@@ -1074,114 +1106,31 @@ decl_module! {
 	}
 }
 
+// TODO: migrate referenda to new format.
+
 impl<T: Trait> Module<T> {
 	// exposed immutables.
 
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
-	pub fn locked_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
+	pub fn backing_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
 		Self::deposit_of(proposal).map(|(d, l)| d * (l.len() as u32).into())
-	}
-
-	/// Return true if `ref_index` is an on-going referendum.
-	pub fn is_active_referendum(ref_index: ReferendumIndex) -> bool {
-		<ReferendumInfoOf<T>>::contains_key(ref_index)
-	}
-
-	/// Get all referenda currently active.
-	pub fn active_referenda()
-		-> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Hash>)>
-	{
-		let next = Self::lowest_unbaked();
-		let last = Self::referendum_count();
-		(next..last).into_iter()
-			.filter_map(|i| Self::referendum_info(i).map(|info| (i, info)))
-			.collect()
 	}
 
 	/// Get all referenda ready for tally at block `n`.
 	pub fn maturing_referenda_at(
 		n: T::BlockNumber
-	) -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Hash>)> {
+	) -> Vec<(ReferendumIndex, ReferendumStatus<T::BlockNumber, T::Hash, BalanceOf<T>>)> {
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();
 		(next..last).into_iter()
-			.filter_map(|i| Self::referendum_info(i).map(|info| (i, info)))
-			.filter(|&(_, ref info)| info.end == n)
+			.map(|i| (i, Self::referendum_info(i)))
+			.filter_map(|(i, info)| match info {
+				ReferendumInfo::Ongoing(status) => Some((i, status)),
+				_ => None,
+			})
+			.filter(|(i, status)| status.end == n)
 			.collect()
-	}
-
-	/// Get the voters for the current proposal.
-	pub fn tally(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
-		let (approve, against, capital):
-			(BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) = Self::voters_for(ref_index)
-				.iter()
-				.map(|voter| (
-					T::Currency::total_balance(voter), Self::vote_of((ref_index, voter.clone()))
-				))
-				.map(|(balance, Vote { aye, conviction })| {
-					let (votes, turnout) = conviction.votes(balance);
-					if aye {
-						(votes, Zero::zero(), turnout)
-					} else {
-						(Zero::zero(), votes, turnout)
-					}
-				}).fold(
-					(Zero::zero(), Zero::zero(), Zero::zero()),
-					|(a, b, c), (d, e, f)| (a + d, b + e, c + f)
-				);
-		let (del_approve, del_against, del_capital) = Self::tally_delegation(ref_index);
-		(approve + del_approve, against + del_against, capital + del_capital)
-	}
-
-	/// Get the delegated voters for the current proposal.
-	/// I think this goes into a worker once https://github.com/paritytech/substrate/issues/1458 is
-	/// done.
-	fn tally_delegation(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
-		Self::voters_for(ref_index).iter().fold(
-			(Zero::zero(), Zero::zero(), Zero::zero()),
-			|(approve_acc, against_acc, turnout_acc), voter| {
-				let Vote { aye, conviction } = Self::vote_of((ref_index, voter.clone()));
-				let (votes, turnout) = Self::delegated_votes(
-					ref_index,
-					voter.clone(),
-					conviction,
-					MAX_RECURSION_LIMIT
-				);
-				if aye {
-					(approve_acc + votes, against_acc, turnout_acc + turnout)
-				} else {
-					(approve_acc, against_acc + votes, turnout_acc + turnout)
-				}
-			}
-		)
-	}
-
-	fn delegated_votes(
-		ref_index: ReferendumIndex,
-		to: T::AccountId,
-		parent_conviction: Conviction,
-		recursion_limit: u32,
-	) -> (BalanceOf<T>, BalanceOf<T>) {
-		if recursion_limit == 0 { return (Zero::zero(), Zero::zero()); }
-		<Delegations<T>>::iter()
-			.filter(|(delegator, (delegate, _))|
-				*delegate == to && !<VoteOf<T>>::contains_key(&(ref_index, delegator.clone()))
-			).fold(
-				(Zero::zero(), Zero::zero()),
-				|(votes_acc, turnout_acc), (delegator, (_delegate, max_conviction))| {
-					let conviction = Conviction::min(parent_conviction, max_conviction);
-					let balance = T::Currency::total_balance(&delegator);
-					let (votes, turnout) = conviction.votes(balance);
-					let (del_votes, del_turnout) = Self::delegated_votes(
-						ref_index,
-						delegator,
-						conviction,
-						recursion_limit - 1
-					);
-					(votes_acc + votes + del_votes, turnout_acc + turnout + del_turnout)
-				}
-			)
 	}
 
 	// Exposed mutables.
@@ -1218,14 +1167,88 @@ impl<T: Trait> Module<T> {
 
 	// private.
 
+	/// Ok if the given referendum is active, Err otherwise
+	fn ensure_active(r: ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>)
+		-> Result<ReferendumStatus<T::BlockNumber, T::Hash, BalanceOf<T>>, DispatchError>
+	{
+		match r {
+			ReferendumInfo::Ongoing(s) => Ok(s),
+			_ => Err(Error::<T>::ReferendumInvalid),
+		}
+	}
+
 	/// Actually enact a vote, if legit.
 	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> DispatchResult {
-		ensure!(Self::is_active_referendum(ref_index), Error::<T>::ReferendumInvalid);
-		if !<VoteOf<T>>::contains_key((ref_index, &who)) {
-			<VotersFor<T>>::append_or_insert(ref_index, &[&who][..]);
-		}
-		<VoteOf<T>>::insert((ref_index, &who), vote);
+		let info = ReferendumInfoOf::<T>::get(ref_index).ok_or(Error::<T>::ReferendumInvalid)?;
+		let mut status = ensure_active(info)?;
+		let balance = T::Currency::free_balance(&who);
+		VotesOf::<T>::try_mutate(who, |votes| {
+			match votes.binary_search_by_key(|i| i.0, ref_index) {
+				Ok(i) => {
+					// Shouldn't be possible to fail, but we handle it gracefully.
+					info.tally.remove(votes[i].1, votes[i].2).ok_or(Error::<T>::Underflow)?;
+					votes[i].1 = vote;
+					votes[i].2 = balance;
+				}
+				Err(i) => votes.insert(i, Tally::new(vote, balance)),
+			}
+			Ok(())
+		});
+		// Shouldn't be possible to fail, but we handle it gracefully.
+		info.tally.add(vote, balance).ok_or(Error::<T>::Overflow)?;
+		// Extend the lock to `balance` (rather than setting it) since we don't know what other
+		// votes are in place.
+		T::Currency::extend_lock(
+			DEMOCRACY_ID,
+			&a,
+			balance,
+			WithdrawReason::Transfer.into()
+		);
+		ReferendumInfoOf::<T>::put(ref_index, ReferendumInfo::Ongoing(status));
 		Ok(())
+	}
+
+	/// Remove the account's vote for the given referendum if possible. This is possible when:
+	/// - The referendum has not finished.
+	/// - The referendum has finished and the voter lost their direction.
+	/// - The referendum has finished and the voter's lock period is up.
+	///
+	/// This will generally be combined with a call to `unlock`.
+	fn do_unvote(who: &T::AccountId, ref_index: ReferendumIndex, allow_ongoing: bool) -> DispatchResult {
+		let mut info = ReferendumInfoOf::<T>::get(ref_index);
+		VotesOf::<T>::try_mutate(who, |votes| {
+			let i = votes.binary_search_by_key(|i| i.0, ref_index).map_err(|_| Error::<T>::NotVoter)?;
+			match info {
+				Some(ReferendumInfo::Ongoing(ref mut status)) => {
+					ensure!(allow_ongoing, Error::<T>::NoPermission);
+					// Shouldn't be possible to fail, but we handle it gracefully.
+					status.tally.remove(votes[i].1, votes[i].2).ok_or(Error::<T>::Underflow)?;
+				}
+				Some(ReferendumInfo::Finished{end, approved}) => if votes[i].1.aye == approved {
+					// winning side: can only be removed after the lock period ends.
+					let lock_periods = votes[i].1.conviction.lock_periods();
+					let unlock_at = end + T::EnactmentPeriod::get() * lock_periods;
+					let now = system::Module::<T>::block_number();
+					ensure!(now >= unlock_at, Error::<T>::TooEarly);
+				},
+				None => {}  // Referendum was cancelled.
+			}
+			votes.remove(i);
+			Ok(())
+		})?;
+		ReferendumInfoOf::<T>::put(ref_index, info);
+		Ok(())
+	}
+
+	/// Rejig the locks on an account. They will never get more stringent but may be reduced from
+	/// what they are currently.
+	fn do_unlock(who: &T::AccountId) -> DispatchResult {
+		let max = VotesOf::<T>::get().into_iter().map(|i| i.2).fold(Zero::zero(), |a, i| a.max(i));
+		if max.is_zero() {
+			T::Currency::remove_lock(DEMOCRACY_ID, &a);
+		} else {
+			T::Currency::set_lock(DEMOCRACY_ID, &a, max, WithdrawReason::Transfer.into());
+		}
 	}
 
 	/// Start a referendum
@@ -1237,27 +1260,11 @@ impl<T: Trait> Module<T> {
 	) -> ReferendumIndex {
 		let ref_index = Self::referendum_count();
 		ReferendumCount::put(ref_index + 1);
-		let item = ReferendumInfo { end, proposal_hash, threshold, delay };
+		let status = ReferendumStatus { end, proposal_hash, threshold, delay, tally: Default::default() };
+		let item = ReferendumInfo::Ongoing(status);
 		<ReferendumInfoOf<T>>::insert(ref_index, item);
 		Self::deposit_event(RawEvent::Started(ref_index, threshold));
 		ref_index
-	}
-
-	/// Remove all info on a referendum.
-	fn clear_referendum(ref_index: ReferendumIndex) {
-		<ReferendumInfoOf<T>>::remove(ref_index);
-
-		LowestUnbaked::mutate(|i| if *i == ref_index {
-			*i += 1;
-			let end = ReferendumCount::get();
-			while !Self::is_active_referendum(*i) && *i < end {
-				*i += 1;
-			}
-		});
-		<VotersFor<T>>::remove(ref_index);
-		for v in Self::voters_for(ref_index) {
-			<VoteOf<T>>::remove((ref_index, v));
-		}
 	}
 
 	/// Enact a proposal from a referendum.
@@ -1313,7 +1320,7 @@ impl<T: Trait> Module<T> {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter()
 			.enumerate()
-			.max_by_key(|x| Self::locked_for((x.1).0).unwrap_or_else(Zero::zero)
+			.max_by_key(|x| Self::backing_for((x.1).0).unwrap_or_else(Zero::zero)
 				/* ^^ defensive only: All current public proposals have an amount locked*/)
 		{
 			let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
@@ -1342,45 +1349,18 @@ impl<T: Trait> Module<T> {
 	fn bake_referendum(
 		now: T::BlockNumber,
 		index: ReferendumIndex,
-		info: ReferendumInfo<T::BlockNumber, T::Hash>
-	) -> DispatchResult {
-		let (approve, against, capital) = Self::tally(index);
+		status: ReferendumStatus<T::BlockNumber, T::Hash, BalanceOf<T>>,
+	) -> Result<bool, DispatchError> {
+		let (approve, against, capital) = status.tally;
 		let total_issuance = T::Currency::total_issuance();
-		let approved = info.threshold.approved(approve, against, capital, total_issuance);
-		let enactment_period = T::EnactmentPeriod::get();
-
-		// Logic defined in https://www.slideshare.net/gavofyork/governance-in-polkadot-poc3
-		// Essentially, we extend the lock-period of the coins behind the winning votes to be the
-		// vote strength times the public delay period from now.
-		for (a, lock_periods) in Self::voters_for(index).into_iter()
-			.map(|a| (a.clone(), Self::vote_of((index, a))))
-			// ^^^ defensive only: all items come from `voters`; for an item to be in `voters`
-			// there must be a vote registered; qed
-			.filter(|&(_, vote)| vote.aye == approved)  // Just the winning coins
-			.map(|(a, vote)| (a, vote.conviction.lock_periods()))
-			.filter(|&(_, lock_periods)| !lock_periods.is_zero()) // Just the lock votes
-		{
-			// now plus: the base lock period multiplied by the number of periods this voter
-			// offered to lock should they win...
-			let locked_until = now + enactment_period * lock_periods.into();
-			Locks::<T>::insert(&a, locked_until);
-			// ...extend their bondage until at least then.
-			T::Currency::extend_lock(
-				DEMOCRACY_ID,
-				&a,
-				Bounded::max_value(),
-				WithdrawReason::Transfer.into()
-			);
-		}
-
-		Self::clear_referendum(index);
+		let approved = status.threshold.approved(approve, against, capital, total_issuance);
 
 		if approved {
 			Self::deposit_event(RawEvent::Passed(index));
 			if info.delay.is_zero() {
 				let _ = Self::enact_proposal(info.proposal_hash, index);
 			} else {
-				let item = (now + info.delay,info.proposal_hash, index);
+				let item = (now + status.delay, status.proposal_hash, index);
 				<DispatchQueue<T>>::mutate(|queue| {
 					let pos = queue.binary_search_by_key(&item.0, |x| x.0).unwrap_or_else(|e| e);
 					queue.insert(pos, item);
@@ -1390,7 +1370,7 @@ impl<T: Trait> Module<T> {
 			Self::deposit_event(RawEvent::NotPassed(index));
 		}
 
-		Ok(())
+		Ok(approved)
 	}
 
 	/// Current era is ending; we should finish up any proposals.
@@ -1404,7 +1384,8 @@ impl<T: Trait> Module<T> {
 
 		// tally up votes for any expiring referenda.
 		for (index, info) in Self::maturing_referenda_at(now).into_iter() {
-			Self::bake_referendum(now, index, info)?;
+			let approved = Self::bake_referendum(now, index, info)?;
+			ReferendumInfoOf::<T>::put(index, ReferendumInfo::Finished { end: now, approved });
 		}
 
 		let queue = <DispatchQueue<T>>::get();
