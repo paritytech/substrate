@@ -73,7 +73,6 @@ impl VanityCmd {
 		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		config.use_in_memory_keystore()?;
 
 		Ok(())
 	}
