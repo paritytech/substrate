@@ -24,8 +24,8 @@ use crate::{Module, Trait};
 use sp_runtime::Perbill;
 use sp_staking::{SessionIndex, offence::{ReportOffence, OffenceError}};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
-use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
-use sp_core::H256;
+use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto, Extrinsic as ExtrinsicT, Verify};
+use sp_core::{H256, sr25519::{Public, Signature}};
 use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
 
 use frame_system as system;
@@ -44,16 +44,16 @@ thread_local! {
 }
 
 pub struct TestSessionManager;
-impl pallet_session::SessionManager<u64> for TestSessionManager {
-	fn new_session(_new_index: SessionIndex) -> Option<Vec<u64>> {
+impl pallet_session::SessionManager<UintAuthorityId> for TestSessionManager {
+	fn new_session(_new_index: SessionIndex) -> Option<Vec<UintAuthorityId>> {
 		VALIDATORS.with(|l| l.borrow_mut().take())
 	}
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
 }
 
-impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager {
-	fn new_session(_new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
+impl pallet_session::historical::SessionManager<UintAuthorityId, UintAuthorityId> for TestSessionManager {
+	fn new_session(_new_index: SessionIndex) -> Option<Vec<(UintAuthorityId, UintAuthorityId)>> {
 		VALIDATORS.with(|l| l
 			.borrow_mut()
 			.take()
@@ -68,8 +68,7 @@ impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager
 
 /// An extrinsic type used for tests.
 pub type Extrinsic = TestXt<Call, ()>;
-type SubmitTransaction = frame_system::offchain::TransactionSubmitter<(), Call, Extrinsic>;
-type IdentificationTuple = (u64, u64);
+type IdentificationTuple = (UintAuthorityId, UintAuthorityId);
 type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
 
 thread_local! {
@@ -78,8 +77,8 @@ thread_local! {
 
 /// A mock offence report handler.
 pub struct OffenceHandler;
-impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
-	fn report_offence(reporters: Vec<u64>, offence: Offence) -> Result<(), OffenceError> {
+impl ReportOffence<UintAuthorityId, IdentificationTuple, Offence> for OffenceHandler {
+	fn report_offence(reporters: Vec<UintAuthorityId>, offence: Offence) -> Result<(), OffenceError> {
 		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
 		Ok(())
 	}
@@ -108,7 +107,7 @@ impl frame_system::Trait for Runtime {
 	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = UintAuthorityId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
@@ -136,7 +135,7 @@ impl pallet_session::Trait for Runtime {
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
 	type SessionHandler = (ImOnline, );
-	type ValidatorId = u64;
+	type ValidatorId = UintAuthorityId;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = ();
@@ -144,7 +143,7 @@ impl pallet_session::Trait for Runtime {
 }
 
 impl pallet_session::historical::Trait for Runtime {
-	type FullIdentification = u64;
+	type FullIdentification = UintAuthorityId;
 	type FullIdentificationOf = ConvertInto;
 }
 
@@ -162,10 +161,34 @@ impl pallet_authorship::Trait for Runtime {
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
-	type Call = Call;
-	type SubmitTransaction = SubmitTransaction;
 	type ReportUnresponsiveness = OffenceHandler;
 	type SessionDuration = Period;
+}
+
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime where
+	Call: From<LocalCall>,
+{
+
+	type OverarchingCall = Call;
+	type Extrinsic = Extrinsic;
+}
+
+impl frame_system::offchain::SigningTypes for Runtime {
+	type Public = <Signature as Verify>::Signer;
+	type Signature = Signature;
+}
+
+impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime where
+	Call: From<LocalCall>,
+{
+	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
+		call: Call,
+		_public: <Signature as Verify>::Signer,
+		_account: u64,
+		nonce: u64,
+	) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
+		Some((call, (nonce, ())))
+	}
 }
 
 /// Im Online module.

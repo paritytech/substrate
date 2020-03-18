@@ -34,7 +34,7 @@ use sp_runtime::{
 	traits::{
 		BlakeTwo256,
 		IdentityLookup,
-		Extrinsic as ExtrinsicsT,
+		Extrinsic as ExtrinsicT,
 		IdentifyAccount,
 		Verify
 	},
@@ -108,7 +108,7 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for T
 		_public: <Signature as Verify>::Signer,
 		_account: AccountId,
 		nonce: u64,
-	) -> Option<(Call<Test>, <Extrinsic as ExtrinsicsT>::SignaturePayload)> {
+	) -> Option<(Call<Test>, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
 		Some((call, (nonce, ())))
 	}
 }
