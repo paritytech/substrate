@@ -1,6 +1,6 @@
 [package]
 name = "sp-blockchain"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -16,7 +16,7 @@ lru = "0.4.0"
 parking_lot = "0.10.0"
 derive_more = "0.99.2"
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
-sp-consensus = { version = "0.8.0-alpha.2", path = "../consensus/common" }
-sp-runtime = { version = "2.0.0-alpha.2", path = "../runtime" }
-sp-block-builder = { version = "2.0.0-alpha.2", path = "../block-builder" }
-sp-state-machine = { version = "0.8.0-alpha.2", path = "../state-machine" }
+sp-consensus = { version = "0.8.0-alpha.4", path = "../consensus/common" }
+sp-runtime = { version = "2.0.0-alpha.4", path = "../runtime" }
+sp-block-builder = { version = "2.0.0-alpha.4", path = "../block-builder" }
+sp-state-machine = { version = "0.8.0-alpha.4", path = "../state-machine" }
