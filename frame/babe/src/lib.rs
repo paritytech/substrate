@@ -216,7 +216,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				let pre_digest = RawPreDigest::decode(&mut data).ok()?;
+				let pre_digest: RawPreDigest = RawPreDigest::decode(&mut data).ok()?;
 				return Some(match pre_digest {
 					RawPreDigest::Primary { authority_index, .. } =>
 						authority_index,
@@ -402,7 +402,7 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let maybe_pre_digest = <frame_system::Module<T>>::digest()
+		let maybe_pre_digest: Option<RawPreDigest> = <frame_system::Module<T>>::digest()
 			.logs
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
