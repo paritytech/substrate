@@ -578,7 +578,7 @@ publish-to-crates-io:
   <<:                              *docker-env
   only:
     - tags
-    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+    - ci-release
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}

@@ -21,7 +21,7 @@ sp-io = { version = "2.0.0-alpha.4", path = "../../primitives/io" }
 hex-literal = "0.2.1"
 pallet-balances = { version = "2.0.0-alpha.4", path = "../balances" }
 sp-core = { version = "2.0.0-alpha.4", path = "../../primitives/core" }
-substrate-test-utils = { version = "2.0.0-alpha.2", path = "../../test-utils" }
+substrate-test-utils = { version = "2.0.0-alpha.4", path = "../../test-utils" }
 serde = { version = "1.0.101" }
 
 [features]
