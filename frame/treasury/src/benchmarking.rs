@@ -20,28 +20,117 @@ use super::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::SaturatedConversion;
+use sp_runtime::traits::OnFinalize;
 
 use crate::Module as Treasury;
 
 const SEED: u32 = 0;
 
+fn setup_proposal<T: Trait>(u: u32) -> (
+	T::AccountId,
+	BalanceOf<T>,
+	<T::Lookup as StaticLookup>::Source,
+) {
+	let caller = account("caller", u, SEED);
+	let value: BalanceOf<T> = T::ProposalBondMinimum::get().saturating_mul(100.into());
+	let _ = T::Currency::make_free_balance_be(&caller, value);
+	let beneficiary = account("beneficiary", u, SEED);
+	let beneficiary_lookup = T::Lookup::unlookup(beneficiary);
+	(caller, value, beneficiary_lookup)
+}
+
+fn setup_awesome<T: Trait>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId) {
+	let caller = account("caller", 0, SEED);
+	let value = T::TipReportDepositBase::get()
+		+ T::TipReportDepositPerByte::get() * length.into()
+		+ T::Currency::minimum_balance();
+	let _ = T::Currency::make_free_balance_be(&caller, value);
+	let reason = vec![0; length as usize];
+	let awesome_person = account("awesome", 0, SEED);
+	(caller, reason, awesome_person)
+}
+
+fn create_approved_proposals<T: Trait>(n: u32) -> Result<(), &'static str> {
+	for i in 0 .. n {
+		let (caller, value, lookup) = setup_proposal::<T>(i);
+		Treasury::<T>::propose_spend(
+			RawOrigin::Signed(caller).into(),
+			value,
+			lookup
+		)?;
+		let proposal_id = ProposalCount::get() - 1;
+		Treasury::<T>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
+	}
+	ensure!(Approvals::get().len() == n as usize, "Not all approved");
+	Ok(())
+}
 
 benchmarks! {
 	_ { }
 
 	propose_spend {
 		let u in 0 .. 1000;
-		let caller = account("caller", u, SEED);
-		let value: BalanceOf<T> = T::ProposalBondMinimum::get().saturating_mul(100.into());
-		let _ = T::Currency::make_free_balance_be(&caller, value);
-		let beneficiary = account("beneficiary", u, SEED);
-		let beneficiary_lookup = T::Lookup::unlookup(beneficiary);
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T>(u);
 	}: _(RawOrigin::Signed(caller), value, beneficiary_lookup)
 
 	reject_proposal {
 		let u in 0 .. 1000;
-		let reject_origin = T::RejectOrigin;
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T>(u);
+		Treasury::<T>::propose_spend(
+			RawOrigin::Signed(caller).into(),
+			value,
+			beneficiary_lookup
+		)?;
+		let proposal_id = ProposalCount::get() - 1;
+	}: _(RawOrigin::Root, proposal_id)
 
-	}: _(RawOrigin::Signed(caller), value, beneficiary_lookup)
+	approve_proposal {
+		let u in 0 .. 1000;
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T>(u);
+		Treasury::<T>::propose_spend(
+			RawOrigin::Signed(caller).into(),
+			value,
+			beneficiary_lookup
+		)?;
+		let proposal_id = ProposalCount::get() - 1;
+	}: _(RawOrigin::Root, proposal_id)
+
+	report_awesome {
+		let r in 0 .. 16384;
+		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
+	}: _(RawOrigin::Signed(caller), reason, awesome_person)
+
+	retract_tip {
+		let r in 0 .. 16384;
+		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
+		Treasury::<T>::report_awesome(
+			RawOrigin::Signed(caller.clone()).into(),
+			reason.clone(),
+			awesome_person.clone()
+		)?;
+		let reason_hash = T::Hashing::hash(&reason[..]);
+		let hash = T::Hashing::hash_of(&(&reason_hash, &awesome_person));
+	}: _(RawOrigin::Signed(caller), hash)
+
+	// tip_new {
+	// 	let r in 0 .. 16384;
+	// 	let t in 0 .. 100;
+	// 	let reason = vec![0; ]
+	// }
+
+	// tip {
+
+	// }
+
+	// close_tip
+
+	on_finalize {
+		let p in 0 .. 100;
+		let pot_account = Treasury::<T>::account_id();
+		let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000.into());
+		let _ = T::Currency::make_free_balance_be(&pot_account, value);
+		create_approved_proposals::<T>(p)?;
+	}: {
+		Treasury::<T>::on_finalize(T::BlockNumber::zero());
+	}
 }
