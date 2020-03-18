@@ -54,6 +54,7 @@ use sp_runtime::{
 	traits::Zero,
 	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionValidity},
 };
+use sp_std::prelude::*;
 
 #[cfg(test)]
 mod tests;
