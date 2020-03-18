@@ -24,7 +24,7 @@ data=$(jq -Rs --arg version "$version" \
   "draft": true,
   "prerelease": false
 }' < /dev/null)
-exit
+
 out=$(curl -s -X POST --data "$data" -H "Authorization: token $GITHUB_RELEASE_TOKEN" "$api_base/paritytech/substrate/releases")
 
 html_url=$(echo "$out" | jq -r .html_url)
