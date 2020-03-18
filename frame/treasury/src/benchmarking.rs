@@ -27,6 +27,7 @@ use crate::Module as Treasury;
 
 const SEED: u32 = 0;
 
+// Create the pre-requisite information needed to create a treasury `propose_spend`.
 fn setup_proposal<T: Trait>(u: u32) -> (
 	T::AccountId,
 	BalanceOf<T>,
@@ -40,6 +41,7 @@ fn setup_proposal<T: Trait>(u: u32) -> (
 	(caller, value, beneficiary_lookup)
 }
 
+// Create the pre-requisite information needed to create a `report_awesome`.
 fn setup_awesome<T: Trait>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId) {
 	let caller = account("caller", 0, SEED);
 	let value = T::TipReportDepositBase::get()
@@ -51,6 +53,37 @@ fn setup_awesome<T: Trait>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId)
 	(caller, reason, awesome_person)
 }
 
+// Create the pre-requisite information needed to call `tip_new`.
+fn setup_tip<T: Trait>(r: u32, t: u32) ->
+	Result<(T::AccountId, Vec<u8>, T::AccountId, BalanceOf<T>), &'static str>
+{
+	for i in 0 .. t {
+		let member = account("member", i, SEED);
+		T::Tippers::add(&member);
+	}
+
+	ensure!(T::Tippers::count() == t as usize, "problem creating tippers");
+	let caller = account("member", t - 1, SEED);
+	let reason = vec![0; r as usize];
+	let beneficiary = account("beneficiary", t, SEED);
+	let value = T::Currency::minimum_balance().saturating_mul(100.into());
+	Ok((caller, reason, beneficiary, value))
+}
+
+// Create `t` new types for the tip proposal with `hash`.
+// This function automatically moves forward the block number to a time which
+// would resolve the tipping process.
+fn create_tips<T: Trait>(t: u32, hash: T::Hash, value: BalanceOf<T>) -> Result<(), &'static str> {
+	for i in 0 .. t {
+		let caller = account("member", i, SEED);
+		ensure!(T::Tippers::contains(&caller), "caller is not a tipper");
+		Treasury::<T>::tip(RawOrigin::Signed(caller).into(), hash, value)?;
+	}
+	frame_system::Module::<T>::set_block_number(T::TipCountdown::get() * 10.into());
+	Ok(())
+}
+
+// Create proposals that are approved for use in `on_finalize`.
 fn create_approved_proposals<T: Trait>(n: u32) -> Result<(), &'static str> {
 	for i in 0 .. n {
 		let (caller, value, lookup) = setup_proposal::<T>(i);
@@ -65,6 +98,9 @@ fn create_approved_proposals<T: Trait>(n: u32) -> Result<(), &'static str> {
 	ensure!(Approvals::get().len() == n as usize, "Not all approved");
 	Ok(())
 }
+
+const MAX_BYTES: u32 = 16384;
+const MAX_TIPPERS: u32 = 100;
 
 benchmarks! {
 	_ { }
@@ -97,12 +133,12 @@ benchmarks! {
 	}: _(RawOrigin::Root, proposal_id)
 
 	report_awesome {
-		let r in 0 .. 16384;
+		let r in 0 .. MAX_BYTES;
 		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
 	}: _(RawOrigin::Signed(caller), reason, awesome_person)
 
 	retract_tip {
-		let r in 0 .. 16384;
+		let r in 0 .. MAX_BYTES;
 		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
 		Treasury::<T>::report_awesome(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -114,22 +150,55 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), hash)
 
 	tip_new {
-		let r in 0 .. 16384;
-		let t in 0 .. 100 => {
-			let member = account("member", 0, SEED);
-			T::Tippers::add(&member);
-		};
-		let caller = account("member", t, SEED);
-		let reason = vec![0; r as usize];
-		let beneficiary = account("beneficiary", t, SEED);
-		let value = T::Currency::minimum_balance().saturating_mul(100.into());
+		let r in 0 .. MAX_BYTES;
+		let t in 1 .. MAX_TIPPERS;
+
+		let (caller, reason, beneficiary, value) = setup_tip::<T>(r, t)?;
 	}: _(RawOrigin::Signed(caller), reason, beneficiary, value)
 
-	// tip {
+	tip {
+		let t in 1 .. MAX_TIPPERS;
+		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
+		let value = T::Currency::minimum_balance().saturating_mul(100.into());
+		Treasury::<T>::tip_new(
+			RawOrigin::Signed(member).into(),
+			reason.clone(),
+			beneficiary.clone(),
+			value
+		)?;
+		let reason_hash = T::Hashing::hash(&reason[..]);
+		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
+		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
+		create_tips::<T>(t - 1, hash.clone(), value)?;
+		let caller = account("member", t - 1, SEED);
+	}: _(RawOrigin::Signed(caller), hash, value)
 
-	// }
+	close_tip {
+		let t in 1 .. MAX_TIPPERS;
 
-	// close_tip
+		// Make sure pot is funded
+		let pot_account = Treasury::<T>::account_id();
+		let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000.into());
+		let _ = T::Currency::make_free_balance_be(&pot_account, value);
+
+		// Set up a new tip proposal
+		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
+		let value = T::Currency::minimum_balance().saturating_mul(100.into());
+		Treasury::<T>::tip_new(
+			RawOrigin::Signed(member).into(),
+			reason.clone(),
+			beneficiary.clone(),
+			value
+		)?;
+
+		// Create a bunch of tips
+		let reason_hash = T::Hashing::hash(&reason[..]);
+		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
+		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
+		create_tips::<T>(t, hash.clone(), value)?;
+
+		let caller = account("caller", t, SEED);
+	}: _(RawOrigin::Signed(caller), hash)
 
 	on_finalize {
 		let p in 0 .. 100;
