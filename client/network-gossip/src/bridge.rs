@@ -29,7 +29,7 @@ use std::{borrow::Cow, pin::Pin, sync::Arc, task::{Context, Poll}};
 /// top of it.
 pub struct GossipEngine<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
-	network: Box<dyn Network<B> + Send>,
+	network: Box<dyn Network<B>>,
 	periodic_maintenance_interval: futures_timer::Delay,
 	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
 	engine_id: ConsensusEngineId,
@@ -39,7 +39,7 @@ impl<B: BlockT> Unpin for GossipEngine<B> {}
 
 impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
-	pub fn new<N: Network<B> + Send + Clone + 'static>(
+	pub fn new<N: Network<B> + 'static>(
 		mut network: N,
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
