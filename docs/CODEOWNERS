@@ -78,3 +78,8 @@
 
 # Prometheus endpoint
 /utils/prometheus/ @mxinden
+
+# Client Team
+/bin/ @gnunicorn
+/client/ @gnunicorn
+/primitives/ @gnunicorn
