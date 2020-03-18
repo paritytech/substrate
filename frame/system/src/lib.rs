@@ -116,7 +116,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
-		StoredMap
+		StoredMap, MigrateAccount,
 	},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
 };
@@ -126,6 +126,7 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
+mod migration;
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -221,6 +222,9 @@ pub trait Trait: 'static + Eq + Clone {
 	///
 	/// All resources should be cleaned up associated with the given account.
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
+
+	/// Migrate an account.
+	type MigrateAccount: MigrateAccount<Self::AccountId>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -307,13 +311,38 @@ pub struct AccountInfo<Index, AccountData> {
 	pub data: AccountData,
 }
 
+/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade
+/// happened.
+#[derive(sp_runtime::RuntimeDebug, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(PartialEq))]
+pub struct LastRuntimeUpgradeInfo {
+	pub spec_version: codec::Compact<u32>,
+	pub spec_name: sp_runtime::RuntimeString,
+}
+
+impl LastRuntimeUpgradeInfo {
+	/// Returns if the runtime was upgraded in comparison of `self` and `current`.
+	///
+	/// Checks if either the `spec_version` increased or the `spec_name` changed.
+	pub fn was_upgraded(&self, current: &sp_version::RuntimeVersion) -> bool {
+		current.spec_version > self.spec_version.0 || current.spec_name != self.spec_name
+	}
+}
+
+impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
+	fn from(version: sp_version::RuntimeVersion) -> Self {
+		Self {
+			spec_version: version.spec_version.into(),
+			spec_name: version.spec_name,
+		}
+	}
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
-		// TODO: should be hasher(twox64_concat) - will need staged migration
-		// https://github.com/paritytech/substrate/issues/4917
 		pub Account get(fn account):
-			map hasher(blake2_256) T::AccountId => AccountInfo<T::Index, T::AccountData>;
+			map hasher(blake2_128_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
 
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
@@ -325,10 +354,8 @@ decl_storage! {
 		AllExtrinsicsLen: Option<u32>;
 
 		/// Map of block numbers to block hashes.
-		// TODO: should be hasher(twox64_concat) - will need one-off migration
-		// https://github.com/paritytech/substrate/issues/4917
 		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
-			map hasher(blake2_256) T::BlockNumber => T::Hash;
+			map hasher(twox_64_concat) T::BlockNumber => T::Hash;
 
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
@@ -366,10 +393,10 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): map hasher(blake2_128_concat) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
 
-		/// A bool to track if the runtime was upgraded last block.
-		pub RuntimeUpgraded: bool;
+		/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
+		pub LastRuntimeUpgrade build(|_| Some(LastRuntimeUpgradeInfo::from(T::Version::get()))): Option<LastRuntimeUpgradeInfo>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -416,13 +443,7 @@ decl_error! {
 		InvalidSpecName,
 		/// The specification version is not allowed to decrease between the current runtime
 		/// and the new runtime.
-		SpecVersionNotAllowedToDecrease,
-		/// The implementation version is not allowed to decrease between the current runtime
-		/// and the new runtime.
-		ImplVersionNotAllowedToDecrease,
-		/// The specification or the implementation version need to increase between the
-		/// current runtime and the new runtime.
-		SpecOrImplVersionNeedToIncrease,
+		SpecVersionNeedsToIncrease,
 		/// Failed to extract the runtime version from the new runtime.
 		///
 		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
@@ -431,13 +452,22 @@ decl_error! {
 		/// Suicide called when the account has non-default composite data.
 		NonDefaultComposite,
 		/// There is a non-zero reference count preventing the account from being purged.
-		NonZeroRefCount
+		NonZeroRefCount,
 	}
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
+
+		fn on_runtime_upgrade() {
+			migration::migrate::<T>();
+
+			// Remove the old `RuntimeUpgraded` storage entry.
+			let mut runtime_upgraded_key = sp_io::hashing::twox_128(b"System").to_vec();
+			runtime_upgraded_key.extend(&sp_io::hashing::twox_128(b"RuntimeUpgraded"));
+			sp_io::storage::clear(&runtime_upgraded_key);
+		}
 
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
@@ -478,18 +508,11 @@ decl_module! {
 				Err(Error::<T>::InvalidSpecName)?
 			}
 
-			if new_version.spec_version < current_version.spec_version {
-				Err(Error::<T>::SpecVersionNotAllowedToDecrease)?
-			} else if new_version.spec_version == current_version.spec_version {
-				if new_version.impl_version < current_version.impl_version {
-					Err(Error::<T>::ImplVersionNotAllowedToDecrease)?
-				} else if new_version.impl_version == current_version.impl_version {
-					Err(Error::<T>::SpecOrImplVersionNeedToIncrease)?
-				}
+			if new_version.spec_version <= current_version.spec_version {
+				Err(Error::<T>::SpecVersionNeedsToIncrease)?
 			}
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
-			RuntimeUpgraded::put(true);
 			Self::deposit_event(RawEvent::CodeUpdated);
 		}
 
@@ -498,7 +521,6 @@ decl_module! {
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
-			RuntimeUpgraded::put(true);
 			Self::deposit_event(RawEvent::CodeUpdated);
 		}
 
@@ -526,9 +548,6 @@ decl_module! {
 			ensure_root(origin)?;
 			for i in &items {
 				storage::unhashed::put_raw(&i.0, &i.1);
-				if i.0 == well_known_keys::CODE {
-					RuntimeUpgraded::put(true);
-				}
 			}
 		}
 
@@ -557,6 +576,21 @@ decl_module! {
 			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
 			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
 			Account::<T>::remove(who);
+		}
+
+		#[weight = FunctionOf(
+			|(accounts,): (&Vec<T::AccountId>,)| accounts.len() as u32 * 10_000,
+			DispatchClass::Normal,
+			true,
+		)]
+		fn migrate_accounts(origin, accounts: Vec<T::AccountId>) {
+			let _ = ensure_signed(origin)?;
+			for a in &accounts {
+				if Account::<T>::migrate_key_from_blake(a).is_some() {
+					// Inform other modules about the account.
+					T::MigrateAccount::migrate_account(a);
+				}
+			}
 		}
 	}
 }
@@ -1257,7 +1291,7 @@ impl<T: Trait> CheckNonce<T> {
 impl<T: Trait> Debug for CheckNonce<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		self.0.fmt(f)
+		write!(f, "CheckNonce({})", self.0)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1336,19 +1370,19 @@ impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
 
 /// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckEra<T: Trait + Send + Sync>((Era, sp_std::marker::PhantomData<T>));
+pub struct CheckEra<T: Trait + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckEra<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(era: Era) -> Self {
-		Self((era, sp_std::marker::PhantomData))
+		Self(era, sp_std::marker::PhantomData)
 	}
 }
 
 impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		self.0.fmt(f)
+		write!(f, "CheckEra({:?})", self.0)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1373,7 +1407,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 		_len: usize,
 	) -> TransactionValidity {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let valid_till = (self.0).0.death(current_u64);
+		let valid_till = self.0.death(current_u64);
 		Ok(ValidTransaction {
 			longevity: valid_till.saturating_sub(current_u64),
 			..Default::default()
@@ -1382,7 +1416,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
+		let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
 		if !<BlockHash<T>>::contains_key(n) {
 			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {
@@ -1536,7 +1570,7 @@ mod tests {
 		type Version = Version;
 		type ModuleToIndex = ();
 		type AccountData = u32;
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = RecordKilled;
 	}
 
@@ -1925,6 +1959,7 @@ mod tests {
 			fn call_in_wasm(
 				&self,
 				_: &[u8],
+				_: Option<Vec<u8>>,
 				_: &str,
 				_: &[u8],
 				_: &mut dyn sp_externalities::Externalities,
@@ -1934,12 +1969,12 @@ mod tests {
 		}
 
 		let test_data = vec![
-			("test", 1, 2, Ok(())),
-			("test", 1, 1, Err(Error::<Test>::SpecOrImplVersionNeedToIncrease)),
+			("test", 1, 2, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
+			("test", 1, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 			("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
 			("test", 2, 1, Ok(())),
-			("test", 0, 1, Err(Error::<Test>::SpecVersionNotAllowedToDecrease)),
-			("test", 1, 0, Err(Error::<Test>::ImplVersionNotAllowedToDecrease)),
+			("test", 0, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
+			("test", 1, 0, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		];
 
 		for (spec_name, spec_version, impl_version, expected) in test_data.into_iter() {
@@ -1979,8 +2014,6 @@ mod tests {
 				System::events(),
 				vec![EventRecord { phase: Phase::ApplyExtrinsic(0), event: 102u16, topics: vec![] }],
 			);
-
-			assert_eq!(RuntimeUpgraded::get(), true);
 		});
 	}
 
@@ -1997,8 +2030,6 @@ mod tests {
 					substrate_test_runtime_client::runtime::WASM_BINARY.to_vec()
 				)],
 			).unwrap();
-
-			assert_eq!(RuntimeUpgraded::get(), true);
 		});
 	}
 }

@@ -28,8 +28,7 @@ use sp_runtime::{
 use sp_externalities::Extensions;
 use sp_state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
-	merge_storage_proofs,
+	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof, CloneableSpawn,
 };
 use hash_db::Hasher;
 
@@ -206,7 +205,7 @@ pub fn prove_execution<Block, S, E>(
 		method,
 		call_data,
 	)?;
-	let total_proof = merge_storage_proofs(vec![init_proof, exec_proof]);
+	let total_proof = StorageProof::merge(vec![init_proof, exec_proof]);
 
 	Ok((result, total_proof))
 }
@@ -217,6 +216,7 @@ pub fn prove_execution<Block, S, E>(
 /// Proof should include both environment preparation proof and method execution proof.
 pub fn check_execution_proof<Header, E, H>(
 	executor: &E,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	request: &RemoteCallRequest<Header>,
 	remote_proof: StorageProof,
 ) -> ClientResult<Vec<u8>>
@@ -228,6 +228,7 @@ pub fn check_execution_proof<Header, E, H>(
 {
 	check_execution_proof_with_make_header::<Header, E, H, _>(
 		executor,
+		spawn_handle,
 		request,
 		remote_proof,
 		|header| <Header as HeaderT>::new(
@@ -242,6 +243,7 @@ pub fn check_execution_proof<Header, E, H>(
 
 fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Header) -> Header>(
 	executor: &E,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	request: &RemoteCallRequest<Header>,
 	remote_proof: StorageProof,
 	make_next_header: MakeNextHeader,
@@ -259,12 +261,19 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 	let mut changes = OverlayedChanges::default();
 	let trie_backend = create_proof_check_backend(root, remote_proof)?;
 	let next_header = make_next_header(&request.header);
+
+	// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
+	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_backend);
+	let runtime_code = backend_runtime_code.runtime_code()?;
+
 	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
 		&trie_backend,
 		&mut changes,
 		executor,
+		spawn_handle.clone(),
 		"Core_initialize_block",
 		&next_header.encode(),
+		&runtime_code,
 	)?;
 
 	// execute method
@@ -272,9 +281,12 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 		&trie_backend,
 		&mut changes,
 		executor,
+		spawn_handle,
 		&request.method,
 		&request.call_data,
-	).map_err(Into::into)
+		&runtime_code,
+	)
+	.map_err(Into::into)
 }
 
 #[cfg(test)]
@@ -285,11 +297,12 @@ mod tests {
 		runtime::{Header, Digest, Block}, TestClient, ClientBlockImportExt,
 	};
 	use sc_executor::{NativeExecutor, WasmExecutionMethod};
-	use sp_core::H256;
+	use sp_core::{H256, tasks::executor as tasks_executor};
 	use sc_client_api::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
 	use sc_client_api::ProofProvider;
 	use sp_runtime::traits::BlakeTwo256;
+	use sc_block_builder::BlockBuilderProvider;
 
 	struct DummyCallExecutor;
 
@@ -360,7 +373,7 @@ mod tests {
 	}
 
 	fn local_executor() -> NativeExecutor<substrate_test_runtime_client::LocalExecutor> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 	}
 
 	#[test]
@@ -379,6 +392,7 @@ mod tests {
 			// check remote execution proof locally
 			let local_result = check_execution_proof::<_, _, BlakeTwo256>(
 				&local_executor(),
+				tasks_executor(),
 				&RemoteCallRequest {
 					block: substrate_test_runtime_client::runtime::Hash::default(),
 					header: remote_header,
@@ -406,6 +420,7 @@ mod tests {
 			// check remote execution proof locally
 			let execution_result = check_execution_proof_with_make_header::<_, _, BlakeTwo256, _>(
 				&local_executor(),
+				tasks_executor(),
 				&RemoteCallRequest {
 					block: substrate_test_runtime_client::runtime::Hash::default(),
 					header: remote_header,

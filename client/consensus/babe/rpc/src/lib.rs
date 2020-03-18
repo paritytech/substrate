@@ -50,8 +50,6 @@ pub trait BabeApi {
 }
 
 /// Implements the BabeRPC trait for interacting with Babe.
-///
-/// Uses a background thread to calculate epoch_authorship data.
 pub struct BabeRPCHandler<B: BlockT, C, SC> {
 	/// shared reference to the client.
 	client: Arc<C>,
@@ -74,7 +72,6 @@ impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
 		babe_config: Config,
 		select_chain: SC,
 	) -> Self {
-
 		Self {
 			client,
 			shared_epoch_changes,
@@ -182,7 +179,7 @@ fn epoch_data<B, C, SC>(
 		SC: SelectChain<B>,
 {
 	let parent = select_chain.best_chain()?;
-	epoch_changes.lock().epoch_for_child_of(
+	epoch_changes.lock().epoch_data_for_child_of(
 		descendent_query(&**client),
 		&parent.hash(),
 		parent.number().clone(),
@@ -190,7 +187,6 @@ fn epoch_data<B, C, SC>(
 		|slot| babe_config.genesis_epoch(slot),
 	)
 		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(format!("{:?}", e))))?
-		.map(|e| e.into_inner())
 		.ok_or(Error::Consensus(ConsensusError::InvalidAuthoritiesSet))
 }
 

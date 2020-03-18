@@ -41,8 +41,7 @@ use sp_runtime::{
 use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProof,
-	merge_storage_proofs,
+	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo};
 use sp_consensus::{
@@ -55,6 +54,7 @@ use sp_blockchain::{self as blockchain,
 	well_known_cache_keys::Id as CacheKeyId,
 	HeaderMetadata, CachedHeaderMetadata,
 };
+use sp_trie::StorageProof;
 
 use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
@@ -71,12 +71,12 @@ pub use sc_client_api::{
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, BadBlocks, ForkBlocks,
+		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
 		BlockOf,
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	notifications::{StorageNotifications, StorageEventStream},
-	CallExecutor, ExecutorProvider, ProofProvider,
+	CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn,
 };
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
@@ -135,6 +135,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
+	spawn_handle: Box<dyn CloneableSpawn>,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
 	LocalCallExecutor<in_mem::Backend<Block>, E>,
@@ -145,7 +146,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	S: BuildStorage,
 	Block: BlockT,
 {
-	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore, prometheus_registry)
+	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore, spawn_handle, prometheus_registry)
 }
 
 /// Create a client with the explicitly provided backend.
@@ -155,6 +156,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	executor: E,
 	build_genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	prometheus_registry: Option<Registry>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
@@ -163,7 +165,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
 	Client::new(
 		backend,
@@ -208,11 +210,9 @@ impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
 
 			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
 			self.backend.commit_operation(op)?;
-			self.notify_finalized(notify_finalized)?;
 
-			if let Some(notify_imported) = notify_imported {
-				self.notify_imported(notify_imported)?;
-			}
+			self.notify_finalized(notify_finalized)?;
+			self.notify_imported(notify_imported)?;
 
 			Ok(r)
 		};
@@ -245,10 +245,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	Block: BlockT,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
-	pub fn new<S: BuildStorage>(
+	pub fn new(
 		backend: Arc<B>,
 		executor: E,
-		build_genesis_storage: &S,
+		build_genesis_storage: &dyn BuildStorage,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
@@ -474,7 +474,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Ok(())
 		}, ())?;
 
-		Ok(merge_storage_proofs(proofs))
+		Ok(StorageProof::merge(proofs))
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
@@ -544,28 +544,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		Ok((storage, configs))
-	}
-
-	/// Create a new block, built on the head of the chain.
-	pub fn new_block(
-		&self,
-		inherent_digests: DigestFor<Block>,
-	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> where
-		E: Clone + Send + Sync,
-		RA: Send + Sync,
-		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error> +
-			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-	{
-		let info = self.chain_info();
-		sc_block_builder::BlockBuilder::new(
-			self,
-			info.best_hash,
-			info.best_number,
-			RecordProof::No,
-			inherent_digests,
-			&self.backend,
-		)
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
@@ -919,6 +897,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<()> {
 		let mut sinks = self.finality_notification_sinks.lock();
 
+		if notify_finalized.is_empty() {
+			// cleanup any closed finality notification sinks
+			// since we won't be running the loop below which
+			// would also remove any closed sinks.
+			sinks.retain(|sink| !sink.is_closed());
+
+			return Ok(());
+		}
+
 		for finalized_hash in notify_finalized {
 			let header = self.header(&BlockId::Hash(finalized_hash))?
 				.expect("header already known to exist in DB because it is indicated in the tree route; qed");
@@ -939,7 +926,27 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	fn notify_imported(&self, notify_import: ImportSummary<Block>) -> sp_blockchain::Result<()> {
+	fn notify_imported(
+		&self,
+		notify_import: Option<ImportSummary<Block>>,
+	) -> sp_blockchain::Result<()> {
+		let notify_import = match notify_import {
+			Some(notify_import) => notify_import,
+			None => {
+				// cleanup any closed import notification sinks since we won't
+				// be sending any notifications below which would remove any
+				// closed sinks. this is necessary since during initial sync we
+				// won't send any import notifications which could lead to a
+				// temporary leak of closed/discarded notification sinks (e.g.
+				// from consensus code).
+				self.import_notification_sinks
+					.lock()
+					.retain(|sink| !sink.is_closed());
+
+				return Ok(());
+			}
+		};
+
 		if let Some(storage_changes) = notify_import.storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 			self.storage_notifications.lock()
@@ -1031,11 +1038,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.blockchain().body(*id)
 	}
 
-	/// Get block justification set by id.
-	pub fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
-		self.backend.blockchain().justification(*id)
-	}
-
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		let load_header = |id: Block::Hash| -> sp_blockchain::Result<Block::Header> {
@@ -1113,9 +1115,26 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		method: &str,
 		call_data: &[u8]
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
+		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
+		// backwards compatible.
+		//
+		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
+		let code_proof = self.read_proof(
+			id,
+			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
+		)?;
+
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
-		prove_execution(state, header, &self.executor, method, call_data)
+		prove_execution(
+			state,
+			header,
+			&self.executor,
+			method,
+			call_data,
+		).map(|(r, p)| {
+			(r, StorageProof::merge(vec![p, code_proof]))
+		})
 	}
 
 	fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, StorageProof)> {
@@ -1166,6 +1185,21 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 			record_proof.into(),
 			inherent_digests,
 			&self.backend
+		)
+	}
+
+	fn new_block(
+		&self,
+		inherent_digests: DigestFor<Block>,
+	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
+		let info = self.chain_info();
+		sc_block_builder::BlockBuilder::new(
+			self,
+			info.best_hash,
+			info.best_number,
+			RecordProof::No,
+			inherent_digests,
+			&self.backend,
 		)
 	}
 }
@@ -1827,7 +1861,7 @@ where
 	}
 }
 
-impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
+impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	where
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
@@ -1847,6 +1881,33 @@ impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
 				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
 			_ => None,
 		})
+	}
+
+	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
+		// this can probably be implemented more efficiently
+		if let BlockId::Hash(ref h) = id {
+			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
+				return Ok(BlockStatus::Queued);
+			}
+		}
+		let hash_and_number = match id.clone() {
+			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
+			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
+		};
+		match hash_and_number {
+			Some((hash, number)) => {
+				if self.backend.have_state_at(&hash, number) {
+					Ok(BlockStatus::InChainWithState)
+				} else {
+					Ok(BlockStatus::InChainPruned)
+				}
+			}
+			None => Ok(BlockStatus::Unknown),
+		}
+	}
+
+	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
+		self.backend.blockchain().justification(*id)
 	}
 }
 
@@ -3409,5 +3470,81 @@ pub(crate) mod tests {
 			.map(|x| x.0)
 			.collect();
 		assert_eq!(res, [hex!("cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f").to_vec()]);
+	}
+
+	#[test]
+	fn cleans_up_closed_notification_sinks_on_block_import() {
+		use substrate_test_runtime_client::GenesisInit;
+
+		// NOTE: we need to build the client here instead of using the client
+		// provided by test_runtime_client otherwise we can't access the private
+		// `import_notification_sinks` and `finality_notification_sinks` fields.
+		let mut client =
+			new_in_mem::<
+				_,
+				substrate_test_runtime_client::runtime::Block,
+				_,
+				substrate_test_runtime_client::runtime::RuntimeApi
+			>(
+				substrate_test_runtime_client::new_native_executor(),
+				&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+				None,
+				None,
+				sp_core::tasks::executor(),
+			)
+			.unwrap();
+
+		type TestClient = Client<
+			in_mem::Backend<Block>,
+			LocalCallExecutor<in_mem::Backend<Block>, sc_executor::NativeExecutor<LocalExecutor>>,
+			substrate_test_runtime_client::runtime::Block,
+			substrate_test_runtime_client::runtime::RuntimeApi,
+		>;
+
+		let import_notif1 = client.import_notification_stream();
+		let import_notif2 = client.import_notification_stream();
+		let finality_notif1 = client.finality_notification_stream();
+		let finality_notif2 = client.finality_notification_stream();
+
+		// for some reason I can't seem to use `ClientBlockImportExt`
+		let bake_and_import_block = |client: &mut TestClient, origin| {
+			let block = client
+				.new_block(Default::default())
+				.unwrap()
+				.build()
+				.unwrap()
+				.block;
+
+			let (header, extrinsics) = block.deconstruct();
+			let mut import = BlockImportParams::new(origin, header);
+			import.body = Some(extrinsics);
+			import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+			client.import_block(import, Default::default()).unwrap();
+		};
+
+		// after importing a block we should still have 4 notification sinks
+		// (2 import + 2 finality)
+		bake_and_import_block(&mut client, BlockOrigin::Own);
+		assert_eq!(client.import_notification_sinks.lock().len(), 2);
+		assert_eq!(client.finality_notification_sinks.lock().len(), 2);
+
+		// if we drop one import notification receiver and one finality
+		// notification receiver
+		drop(import_notif2);
+		drop(finality_notif2);
+
+		// the sinks should be cleaned up after block import
+		bake_and_import_block(&mut client, BlockOrigin::Own);
+		assert_eq!(client.import_notification_sinks.lock().len(), 1);
+		assert_eq!(client.finality_notification_sinks.lock().len(), 1);
+
+		// the same thing should happen if block import happens during initial
+		// sync
+		drop(import_notif1);
+		drop(finality_notif1);
+
+		bake_and_import_block(&mut client, BlockOrigin::NetworkInitialSync);
+		assert_eq!(client.import_notification_sinks.lock().len(), 0);
+		assert_eq!(client.finality_notification_sinks.lock().len(), 0);
 	}
 }

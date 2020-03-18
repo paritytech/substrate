@@ -1,6 +1,6 @@
 [package]
 name = "sp-consensus"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -14,15 +14,15 @@ documentation = "https://docs.rs/sp-consensus/"
 derive_more = "0.99.2"
 libp2p = { version = "0.16.2", default-features = false }
 log = "0.4.8"
-sp-core = { path= "../../core" , version = "2.0.0-alpha.2"}
-sp-inherents = { version = "2.0.0-alpha.2", path = "../../inherents" }
-sp-state-machine = { version = "0.8.0-alpha.2", path = "../../../primitives/state-machine" }
+sp-core = { path= "../../core" , version = "2.0.0-alpha.4"}
+sp-inherents = { version = "2.0.0-alpha.4", path = "../../inherents" }
+sp-state-machine = { version = "0.8.0-alpha.4", path = "../../../primitives/state-machine" }
 futures = { version = "0.3.1", features = ["thread-pool"] }
 futures-timer = "3.0.1"
 futures-diagnose = "1.0"
-sp-std = { version = "2.0.0-alpha.2", path = "../../std" }
-sp-version = { version = "2.0.0-alpha.2", path = "../../version" }
-sp-runtime = { version = "2.0.0-alpha.2", path = "../../runtime" }
+sp-std = { version = "2.0.0-alpha.4", path = "../../std" }
+sp-version = { version = "2.0.0-alpha.4", path = "../../version" }
+sp-runtime = { version = "2.0.0-alpha.4", path = "../../runtime" }
 codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 parking_lot = "0.10.0"
 serde = { version = "1.0", features = ["derive"] }

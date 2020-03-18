@@ -23,8 +23,8 @@ use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
 use sp_core::{
-	storage::ChildInfo, NativeOrEncoded, NeverNativeValue,
-	traits::{CodeExecutor, CallInWasmExt}, hexdisplay::HexDisplay,
+	storage::ChildInfo, NativeOrEncoded, NeverNativeValue, hexdisplay::HexDisplay,
+	traits::{CodeExecutor, CallInWasmExt, RuntimeCode},
 };
 use overlayed_changes::OverlayedChangeSet;
 use sp_externalities::Extensions;
@@ -41,7 +41,7 @@ mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
 
-pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
+pub use sp_trie::{trie_types::{Layout, TrieDBMut}, StorageProof, TrieMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -66,13 +66,13 @@ pub use overlayed_changes::{
 	StorageCollection, ChildStorageCollection,
 };
 pub use proving_backend::{
-	create_proof_check_backend, create_proof_check_backend_storage, merge_storage_proofs,
-	ProofRecorder, ProvingBackend, ProvingBackendRecorder, StorageProof,
+	create_proof_check_backend, ProofRecorder, ProvingBackend, ProvingBackendRecorder,
 };
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
 pub use in_memory_backend::InMemory as InMemoryBackend;
+pub use sp_core::traits::CloneableSpawn;
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
@@ -189,6 +189,7 @@ pub struct StateMachine<'a, B, H, N, Exec>
 	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 	_marker: PhantomData<(H, N)>,
 	storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
+	runtime_code: &'a RuntimeCode<'a>,
 }
 
 impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
@@ -207,8 +208,11 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		method: &'a str,
 		call_data: &'a [u8],
 		mut extensions: Extensions,
+		runtime_code: &'a RuntimeCode,
+		spawn_handle: Box<dyn CloneableSpawn>,
 	) -> Self {
 		extensions.register(CallInWasmExt::new(exec.clone()));
+		extensions.register(sp_core::traits::TaskExecutorExt::new(spawn_handle));
 
 		Self {
 			backend,
@@ -220,6 +224,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			changes_trie_state,
 			_marker: PhantomData,
 			storage_transaction_cache: None,
+			runtime_code,
 		}
 	}
 
@@ -290,6 +295,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 
 		let (result, was_native) = self.exec.call(
 			&mut ext,
+			self.runtime_code,
 			self.method,
 			self.call_data,
 			use_native,
@@ -432,8 +438,10 @@ pub fn prove_execution<B, H, N, Exec>(
 	mut backend: B,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	method: &str,
 	call_data: &[u8],
+	runtime_code: &RuntimeCode,
 ) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 where
 	B: Backend<H>,
@@ -444,7 +452,15 @@ where
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
-	prove_execution_on_trie_backend::<_, _, N, _>(trie_backend, overlay, exec, method, call_data)
+	prove_execution_on_trie_backend::<_, _, N, _>(
+		trie_backend,
+		overlay,
+		exec,
+		spawn_handle,
+		method,
+		call_data,
+		runtime_code,
+	)
 }
 
 /// Prove execution using the given trie backend, overlayed changes, and call executor.
@@ -460,8 +476,10 @@ pub fn prove_execution_on_trie_backend<S, H, N, Exec>(
 	trie_backend: &TrieBackend<S, H>,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	method: &str,
 	call_data: &[u8],
+	runtime_code: &RuntimeCode,
 ) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
@@ -472,7 +490,15 @@ where
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let mut sm = StateMachine::<_, H, N, Exec>::new(
-		&proving_backend, None, overlay, exec, method, call_data, Extensions::default(),
+		&proving_backend,
+		None,
+		overlay,
+		exec,
+		method,
+		call_data,
+		Extensions::default(),
+		runtime_code,
+		spawn_handle,
 	);
 
 	let result = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -489,8 +515,10 @@ pub fn execution_proof_check<H, N, Exec>(
 	proof: StorageProof,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	method: &str,
 	call_data: &[u8],
+	runtime_code: &RuntimeCode,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher,
@@ -499,7 +527,15 @@ where
 	N: crate::changes_trie::BlockNumber,
 {
 	let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
-	execution_proof_check_on_trie_backend::<_, N, _>(&trie_backend, overlay, exec, method, call_data)
+	execution_proof_check_on_trie_backend::<_, N, _>(
+		&trie_backend,
+		overlay,
+		exec,
+		spawn_handle,
+		method,
+		call_data,
+		runtime_code,
+	)
 }
 
 /// Check execution proof on proving backend, generated by `prove_execution` call.
@@ -507,8 +543,10 @@ pub fn execution_proof_check_on_trie_backend<H, N, Exec>(
 	trie_backend: &TrieBackend<MemoryDB<H>, H>,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	method: &str,
 	call_data: &[u8],
+	runtime_code: &RuntimeCode,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher,
@@ -517,7 +555,15 @@ where
 	N: crate::changes_trie::BlockNumber,
 {
 	let mut sm = StateMachine::<_, H, N, Exec>::new(
-		trie_backend, None, overlay, exec, method, call_data, Extensions::default(),
+		trie_backend,
+		None,
+		overlay,
+		exec,
+		method,
+		call_data,
+		Extensions::default(),
+		runtime_code,
+		spawn_handle,
 	);
 
 	sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -690,7 +736,7 @@ mod tests {
 	use super::*;
 	use super::ext::Ext;
 	use super::changes_trie::Configuration as ChangesTrieConfig;
-	use sp_core::{map, traits::Externalities, storage::ChildStorageKey};
+	use sp_core::{map, traits::{Externalities, RuntimeCode}, storage::ChildStorageKey};
 	use sp_runtime::traits::BlakeTwo256;
 
 	#[derive(Clone)]
@@ -712,6 +758,7 @@ mod tests {
 		>(
 			&self,
 			ext: &mut dyn Externalities,
+			_: &RuntimeCode,
 			_method: &str,
 			_data: &[u8],
 			use_native: bool,
@@ -753,6 +800,7 @@ mod tests {
 		fn call_in_wasm(
 			&self,
 			_: &[u8],
+			_: Option<Vec<u8>>,
 			_: &str,
 			_: &[u8],
 			_: &mut dyn Externalities,
@@ -765,6 +813,7 @@ mod tests {
 	fn execute_works() {
 		let backend = trie_backend::tests::test_trie();
 		let mut overlayed_changes = Default::default();
+		let wasm_code = RuntimeCode::empty();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
@@ -779,6 +828,8 @@ mod tests {
 			"test",
 			&[],
 			Default::default(),
+			&wasm_code,
+			sp_core::tasks::executor(),
 		);
 
 		assert_eq!(
@@ -792,6 +843,7 @@ mod tests {
 	fn execute_works_with_native_else_wasm() {
 		let backend = trie_backend::tests::test_trie();
 		let mut overlayed_changes = Default::default();
+		let wasm_code = RuntimeCode::empty();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
@@ -806,6 +858,8 @@ mod tests {
 			"test",
 			&[],
 			Default::default(),
+			&wasm_code,
+			sp_core::tasks::executor(),
 		);
 
 		assert_eq!(state_machine.execute(ExecutionStrategy::NativeElseWasm).unwrap(), vec![66]);
@@ -816,6 +870,7 @@ mod tests {
 		let mut consensus_failed = false;
 		let backend = trie_backend::tests::test_trie();
 		let mut overlayed_changes = Default::default();
+		let wasm_code = RuntimeCode::empty();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
@@ -830,6 +885,8 @@ mod tests {
 			"test",
 			&[],
 			Default::default(),
+			&wasm_code,
+			sp_core::tasks::executor(),
 		);
 
 		assert!(
@@ -860,8 +917,10 @@ mod tests {
 			remote_backend,
 			&mut Default::default(),
 			&executor,
+			sp_core::tasks::executor(),
 			"test",
 			&[],
+			&RuntimeCode::empty(),
 		).unwrap();
 
 		// check proof locally
@@ -870,8 +929,10 @@ mod tests {
 			remote_proof,
 			&mut Default::default(),
 			&executor,
+			sp_core::tasks::executor(),
 			"test",
 			&[],
+			&RuntimeCode::empty(),
 		).unwrap();
 
 		// check that both results are correct
