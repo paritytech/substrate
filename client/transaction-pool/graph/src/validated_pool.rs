@@ -545,7 +545,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Get an iterator for ready transactions ordered by priority
-	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> {
+	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> + Send {
 		self.pool.read().ready()
 	}
 
