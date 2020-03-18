@@ -135,7 +135,6 @@ trait Crypto: Sized {
 					);
 				},
 			}
-
 		} else if let Ok((public_key, v)) =
 			<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{
