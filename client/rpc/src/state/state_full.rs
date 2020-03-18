@@ -39,7 +39,8 @@ use sp_runtime::{
 
 use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
-use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
+use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error, Result},
+	client_err, child_resolution_error};
 use std::marker::PhantomData;
 use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider};
 
@@ -309,67 +310,58 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 	fn child_storage_keys(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		child_storage_key: StorageKey,
+		_child_info: StorageKey,
+		child_type: u32,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(
-			self.block_or_best(block)
-				.and_then(|block| {
-					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
-						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-						None => return Err("Invalid child storage key".into()),
-					};
-					self.client.child_storage_keys(
-						&BlockId::Hash(block),
-						&child_info,
-						&prefix,
-					)
-				})
-				.map_err(client_err)))
+		if child_type != 1 {
+			return Box::new(result(Err(child_resolution_error())));
+		}
+		ChildStateBackend::storage_keys(
+			self,
+			block,
+			child_storage_key,
+			prefix,
+		)
 	}
 
 	fn child_storage(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		child_storage_key: StorageKey,
+		_child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
-		Box::new(result(
-			self.block_or_best(block)
-				.and_then(|block| {
-					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
-						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-						None => return Err("Invalid child storage key".into()),
-					};
-					self.client.child_storage(
-						&BlockId::Hash(block),
-						&child_info,
-						&key,
-					)
-				})
-				.map_err(client_err)))
+		if child_type != 1 {
+			return Box::new(result(Err(child_resolution_error())));
+		}
+		ChildStateBackend::storage(
+			self,
+			block,
+			child_storage_key,
+			key,
+		)
 	}
 
 	fn child_storage_hash(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		child_storage_key: StorageKey,
+		_child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
-		Box::new(result(
-			self.block_or_best(block)
-				.and_then(|block| {
-					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
-						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-						None => return Err("Invalid child storage key".into()),
-					};
-					self.client.child_storage_hash(
-						&BlockId::Hash(block),
-						&child_info,
-						&key,
-					)
-				})
-				.map_err(client_err)))
+		if child_type != 1 {
+			return Box::new(result(Err(child_resolution_error())));
+		}
+		ChildStateBackend::storage_hash(
+			self,
+			block,
+			child_storage_key,
+			key,
+		)
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
@@ -488,7 +480,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 				let block = self.client.info().best_hash;
 				let changes = keys
 					.into_iter()
-					.map(|key| self.storage(Some(block.clone()).into(), key.clone())
+					.map(|key| StateBackend::storage(self, Some(block.clone()).into(), key.clone())
 						.map(|val| (key.clone(), val))
 						.wait()
 						.unwrap_or_else(|_| (key, None))
@@ -522,6 +514,82 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
+	}
+}
+
+impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block, Client> where
+	Block: BlockT + 'static,
+	BE: Backend<Block> + 'static,
+	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
+		+ CallApiAt<Block, Error = sp_blockchain::Error> + ProvideRuntimeApi<Block>
+		+ Send + Sync + 'static,
+	Client::Api: Metadata<Block, Error = sp_blockchain::Error>,
+{
+	fn storage_keys(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: StorageKey,
+		prefix: StorageKey,
+	) -> FutureResult<Vec<StorageKey>> {
+		Box::new(result(
+			self.block_or_best(block)
+				.and_then(|block| {
+					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
+						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+						None => return Err("Invalid child storage key".into()),
+					};
+					self.client.child_storage_keys(
+						&BlockId::Hash(block),
+						&child_info,
+						&prefix,
+					)
+				})
+				.map_err(client_err)))
+	}
+
+	fn storage(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: StorageKey,
+		key: StorageKey,
+	) -> FutureResult<Option<StorageData>> {
+		Box::new(result(
+			self.block_or_best(block)
+				.and_then(|block| {
+					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
+						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+						None => return Err("Invalid child storage key".into()),
+					};
+					self.client.child_storage(
+						&BlockId::Hash(block),
+						&child_info,
+						&key,
+					)
+				})
+				.map_err(client_err)))
+	}
+
+	fn storage_hash(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: StorageKey,
+		key: StorageKey,
+	) -> FutureResult<Option<Block::Hash>> {
+		Box::new(result(
+			self.block_or_best(block)
+				.and_then(|block| {
+					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
+						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+						None => return Err("Invalid child storage key".into()),
+					};
+					self.client.child_storage_hash(
+						&BlockId::Hash(block),
+						&child_info,
+						&key,
+					)
+				})
+				.map_err(client_err)))
 	}
 }
 
