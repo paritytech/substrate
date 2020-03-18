@@ -124,7 +124,6 @@ impl CliConfiguration for InspectCmd {
 	fn get_database_cache_size(&self) -> Option<usize> {
 		self.import_params.database_cache_size
 	}
-
 }
 
 // TODO: move out all of this
