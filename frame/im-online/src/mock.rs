@@ -41,7 +41,11 @@ impl_outer_dispatch! {
 }
 
 thread_local! {
-	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![1, 2, 3]));
+	pub static VALIDATORS: RefCell<Option<Vec<UintAuthorityId>>> = RefCell::new(Some(vec![
+		UintAuthorityId(1),
+		UintAuthorityId(2),
+		UintAuthorityId(3)
+	]));
 }
 
 pub struct ImOnlineAuthId;
@@ -66,7 +70,7 @@ impl pallet_session::historical::SessionManager<UintAuthorityId, UintAuthorityId
 			.borrow_mut()
 			.take()
 			.map(|validators| {
-				validators.iter().map(|v| (*v, *v)).collect()
+				validators.iter().map(|v| (v.clone(), v.clone())).collect()
 			})
 		)
 	}
@@ -80,7 +84,7 @@ type IdentificationTuple = (UintAuthorityId, UintAuthorityId);
 type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
 
 thread_local! {
-	pub static OFFENCES: RefCell<Vec<(Vec<u64>, Offence)>> = RefCell::new(vec![]);
+	pub static OFFENCES: RefCell<Vec<(Vec<UintAuthorityId>, Offence)>> = RefCell::new(vec![]);
 }
 
 /// A mock offence report handler.
