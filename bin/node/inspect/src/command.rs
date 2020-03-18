@@ -71,13 +71,13 @@ impl CliConfiguration for InspectCmd {
 		self.shared_params.dev
 	}
 
-	fn get_base_path(&self) -> Option<&PathBuf> {
-		self.shared_params.base_path.as_ref()
+	fn get_base_path(&self) -> Result<Option<&PathBuf>> {
+		Ok(self.shared_params.base_path.as_ref())
 	}
 
-	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> DatabaseConfig
+	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig>
 	{
-		self.shared_params.get_database_config(base_path, cache_size)
+		Ok(self.shared_params.get_database_config(base_path, cache_size))
 	}
 
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
@@ -100,27 +100,27 @@ impl CliConfiguration for InspectCmd {
 		self.import_params.get_pruning(roles, is_dev)
 	}
 
-	fn get_tracing_receiver(&self) -> TracingReceiver {
-		self.import_params.tracing_receiver.clone().into()
+	fn get_tracing_receiver(&self) -> Result<TracingReceiver> {
+		Ok(self.import_params.tracing_receiver.clone().into())
 	}
 
-	fn get_tracing_targets(&self) -> Option<String> {
-		self.import_params.tracing_targets.clone().into()
+	fn get_tracing_targets(&self) -> Result<Option<String>> {
+		Ok(self.import_params.tracing_targets.clone().into())
 	}
 
-	fn get_state_cache_size(&self) -> usize {
-		self.import_params.state_cache_size
+	fn get_state_cache_size(&self) -> Result<usize> {
+		Ok(self.import_params.state_cache_size)
 	}
 
-	fn get_wasm_method(&self) -> WasmExecutionMethod {
-		self.import_params.get_wasm_method()
+	fn get_wasm_method(&self) -> Result<WasmExecutionMethod> {
+		Ok(self.import_params.get_wasm_method())
 	}
 
 	fn get_execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
 		self.import_params.get_execution_strategies(is_dev)
 	}
 
-	fn get_database_cache_size(&self) -> Option<usize> {
-		self.import_params.database_cache_size
+	fn get_database_cache_size(&self) -> Result<Option<usize>> {
+		Ok(self.import_params.database_cache_size)
 	}
 }

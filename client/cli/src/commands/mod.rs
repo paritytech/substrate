@@ -38,7 +38,7 @@ use sc_network::config::NodeKeyConfig;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sc_tracing::TracingReceiver;
 use sc_client_api::execution_extensions::ExecutionStrategies;
-use crate::error;
+use crate::Result;
 use crate::SubstrateCLI;
 use crate::CliConfiguration;
 use crate::params::SharedParams;
@@ -98,7 +98,7 @@ impl Subcommand {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
+	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -109,29 +109,35 @@ impl Subcommand {
 
 impl CliConfiguration for Subcommand
 {
-	fn get_base_path(&self) -> Option<&PathBuf> {
-		self.get_shared_params().base_path.as_ref()
+	fn get_base_path(&self) -> Result<Option<&PathBuf>> {
+		Ok(self.get_shared_params().base_path.as_ref())
 	}
 
 	fn is_dev(&self) -> bool {
 		self.get_shared_params().dev
 	}
 
-	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> DatabaseConfig { self.get_shared_params().get_database_config(base_path, cache_size) }
+	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> {
+		Ok(self.get_shared_params().get_database_config(base_path, cache_size))
+	}
 
-	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<ChainSpec<G, E>>
+	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-	{ self.get_shared_params().get_chain_spec::<C, G, E>() }
+	{
+		self.get_shared_params().get_chain_spec::<C, G, E>()
+	}
 
-	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> error::Result<()>
+	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-	{ self.get_shared_params().init::<C, G, E>() }
+	{
+		self.get_shared_params().init::<C, G, E>()
+	}
 
-	fn get_pruning(&self, is_dev: bool, roles: Roles) -> error::Result<PruningMode> {
+	fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> {
 		match self {
 			Subcommand::BuildSpec(_) => Ok(Default::default()),
 			Subcommand::ExportBlocks(cmd) => cmd.pruning_params.get_pruning(roles, is_dev),
@@ -142,51 +148,51 @@ impl CliConfiguration for Subcommand
 		}
 	}
 
-	fn get_tracing_receiver(&self) -> TracingReceiver {
-		match self {
+	fn get_tracing_receiver(&self) -> Result<TracingReceiver> {
+		Ok(match self {
 			Subcommand::BuildSpec(_) => Default::default(),
 			Subcommand::ExportBlocks(_) => Default::default(),
 			Subcommand::ImportBlocks(cmd) => cmd.import_params.tracing_receiver.clone().into(),
 			Subcommand::CheckBlock(cmd) => cmd.import_params.tracing_receiver.clone().into(),
 			Subcommand::Revert(_) => Default::default(),
 			Subcommand::PurgeChain(_) => Default::default(),
-		}
+		})
 	}
 
-	fn get_tracing_targets(&self) -> Option<String> {
-		match self {
+	fn get_tracing_targets(&self) -> Result<Option<String>> {
+		Ok(match self {
 			Subcommand::BuildSpec(_) => Default::default(),
 			Subcommand::ExportBlocks(_) => Default::default(),
 			Subcommand::ImportBlocks(cmd) => cmd.import_params.tracing_targets.clone().into(),
 			Subcommand::CheckBlock(cmd) => cmd.import_params.tracing_targets.clone().into(),
 			Subcommand::Revert(_) => Default::default(),
 			Subcommand::PurgeChain(_) => Default::default(),
-		}
+		})
 	}
 
-	fn get_state_cache_size(&self) -> usize {
-		match self {
+	fn get_state_cache_size(&self) -> Result<usize> {
+		Ok(match self {
 			Subcommand::BuildSpec(_) => Default::default(),
 			Subcommand::ExportBlocks(_) => Default::default(),
 			Subcommand::ImportBlocks(cmd) => cmd.import_params.state_cache_size,
 			Subcommand::CheckBlock(cmd) => cmd.import_params.state_cache_size,
 			Subcommand::Revert(_) => Default::default(),
 			Subcommand::PurgeChain(_) => Default::default(),
-		}
+		})
 	}
 
-	fn get_wasm_method(&self) -> WasmExecutionMethod {
-		match self {
+	fn get_wasm_method(&self) -> Result<WasmExecutionMethod> {
+		Ok(match self {
 			Subcommand::BuildSpec(_) => WasmExecutionMethod::Interpreted,
 			Subcommand::ExportBlocks(_) => WasmExecutionMethod::Interpreted,
 			Subcommand::ImportBlocks(cmd) => cmd.import_params.get_wasm_method(),
 			Subcommand::CheckBlock(cmd) => cmd.import_params.get_wasm_method(),
 			Subcommand::Revert(_) => WasmExecutionMethod::Interpreted,
 			Subcommand::PurgeChain(_) => WasmExecutionMethod::Interpreted,
-		}
+		})
 	}
 
-	fn get_execution_strategies(&self, is_dev: bool) -> error::Result<ExecutionStrategies> {
+	fn get_execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
 		match self {
 			Subcommand::BuildSpec(_) => Ok(Default::default()),
 			Subcommand::ExportBlocks(_) => Ok(Default::default()),
@@ -197,18 +203,18 @@ impl CliConfiguration for Subcommand
 		}
 	}
 
-	fn get_database_cache_size(&self) -> Option<usize> {
-		match self {
+	fn get_database_cache_size(&self) -> Result<Option<usize>> {
+		Ok(match self {
 			Subcommand::BuildSpec(_) => Default::default(),
 			Subcommand::ExportBlocks(_) => Default::default(),
 			Subcommand::ImportBlocks(cmd) => cmd.import_params.database_cache_size,
 			Subcommand::CheckBlock(cmd) => cmd.import_params.database_cache_size,
 			Subcommand::Revert(_) => Default::default(),
 			Subcommand::PurgeChain(_) => Default::default(),
-		}
+		})
 	}
 
-	fn get_node_key(&self, net_config_dir: &PathBuf) -> error::Result<NodeKeyConfig> {
+	fn get_node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
 		match self {
 			Subcommand::BuildSpec(cmd) => cmd.node_key_params.get_node_key(net_config_dir),
 			_ => Ok(Default::default()),

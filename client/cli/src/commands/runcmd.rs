@@ -273,8 +273,8 @@ impl RunCmd {
 }
 
 impl CliConfiguration for RunCmd {
-	fn get_base_path(&self) -> Option<&PathBuf> {
-		self.shared_params.base_path.as_ref()
+	fn get_base_path(&self) -> Result<Option<&PathBuf>> {
+		Ok(self.shared_params.base_path.as_ref())
 	}
 
 	fn is_dev(&self) -> bool {
@@ -314,9 +314,8 @@ impl CliConfiguration for RunCmd {
 		&self,
 		base_path: &PathBuf,
 		cache_size: Option<usize>,
-	) -> DatabaseConfig {
-		self.shared_params
-			.get_database_config(base_path, cache_size)
+	) -> Result<DatabaseConfig> {
+		Ok(self.shared_params.get_database_config(base_path, cache_size))
 	}
 
 	fn get_node_name(&self) -> Result<String> {
@@ -335,27 +334,30 @@ impl CliConfiguration for RunCmd {
 
 		Ok(name)
 	}
-	fn get_dev_key_seed(&self, is_dev: bool) -> Option<String> {
-		self.get_keyring().map(|a| format!("//{}", a)).or_else(|| {
+
+	fn get_dev_key_seed(&self, is_dev: bool) -> Result<Option<String>> {
+		Ok(self.get_keyring().map(|a| format!("//{}", a)).or_else(|| {
 			if is_dev && !self.light {
 				Some("//Alice".into())
 			} else {
 				None
 			}
-		})
+		}))
 	}
+
 	fn get_telemetry_endpoints<G, E>(
 		&self,
 		chain_spec: &ChainSpec<G, E>,
-	) -> Option<TelemetryEndpoints> {
-		if self.no_telemetry {
+	) -> Result<Option<TelemetryEndpoints>> {
+		Ok(if self.no_telemetry {
 			None
 		} else if !self.telemetry_endpoints.is_empty() {
 			Some(TelemetryEndpoints::new(self.telemetry_endpoints.clone()))
 		} else {
 			chain_spec.telemetry_endpoints().clone()
-		}
+		})
 	}
+
 	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
 	where
 		G: RuntimeGenesis,
@@ -364,8 +366,8 @@ impl CliConfiguration for RunCmd {
 		self.shared_params.init::<C, G, E>()
 	}
 
-	fn get_sentry_mode(&self) -> bool {
-		self.sentry
+	fn get_sentry_mode(&self) -> Result<bool> {
+		Ok(self.sentry)
 	}
 
 	fn get_roles(&self) -> Result<Roles> {
@@ -384,17 +386,17 @@ impl CliConfiguration for RunCmd {
 		})
 	}
 
-	fn get_force_authoring(&self) -> bool {
+	fn get_force_authoring(&self) -> Result<bool> {
 		// Imply forced authoring on --dev
-		self.shared_params.dev || self.force_authoring
+		Ok(self.shared_params.dev || self.force_authoring)
 	}
 
-	fn get_tracing_receiver(&self) -> TracingReceiver {
-		self.import_params.tracing_receiver.clone().into() // TODO: get from import_params
+	fn get_tracing_receiver(&self) -> Result<TracingReceiver> {
+		Ok(self.import_params.tracing_receiver.clone().into())
 	}
 
-	fn get_tracing_targets(&self) -> Option<String> {
-		self.import_params.tracing_targets.clone().into() // TODO: get from import_params
+	fn get_tracing_targets(&self) -> Result<Option<String>> {
+		Ok(self.import_params.tracing_targets.clone().into())
 	}
 
 	fn get_prometheus_port(&self) -> Result<Option<SocketAddr>> {
@@ -414,16 +416,16 @@ impl CliConfiguration for RunCmd {
 		}
 	}
 
-	fn get_disable_grandpa(&self) -> bool {
-		self.no_grandpa
+	fn get_disable_grandpa(&self) -> Result<bool> {
+		Ok(self.no_grandpa)
 	}
 
-	fn get_rpc_ws_max_connections(&self) -> Option<usize> {
-		self.ws_max_connections
+	fn get_rpc_ws_max_connections(&self) -> Result<Option<usize>> {
+		Ok(self.ws_max_connections)
 	}
 
-	fn get_rpc_cors(&self, is_dev: bool) -> Option<Vec<String>> {
-		self.rpc_cors
+	fn get_rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {
+		Ok(self.rpc_cors
 			.clone()
 			.unwrap_or_else(|| {
 				if is_dev {
@@ -440,7 +442,7 @@ impl CliConfiguration for RunCmd {
 					])
 				}
 			})
-			.into()
+			.into())
 	}
 
 	fn get_rpc_http(&self) -> Result<Option<SocketAddr>> {
@@ -463,29 +465,29 @@ impl CliConfiguration for RunCmd {
 		)?))
 	}
 
-	fn get_offchain_worker(&self, roles: Roles) -> bool {
-		match (&self.offchain_worker, roles) {
+	fn get_offchain_worker(&self, roles: Roles) -> Result<bool> {
+		Ok(match (&self.offchain_worker, roles) {
 			(OffchainWorkerEnabled::WhenValidating, Roles::AUTHORITY) => true,
 			(OffchainWorkerEnabled::Always, _) => true,
 			(OffchainWorkerEnabled::Never, _) => false,
 			(OffchainWorkerEnabled::WhenValidating, _) => false,
-		}
+		})
 	}
 
-	fn get_state_cache_size(&self) -> usize {
-		self.import_params.state_cache_size
+	fn get_state_cache_size(&self) -> Result<usize> {
+		Ok(self.import_params.state_cache_size)
 	}
 
-	fn get_wasm_method(&self) -> WasmExecutionMethod {
-		self.import_params.get_wasm_method()
+	fn get_wasm_method(&self) -> Result<WasmExecutionMethod> {
+		Ok(self.import_params.get_wasm_method())
 	}
 
 	fn get_execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
 		self.import_params.get_execution_strategies(is_dev)
 	}
 
-	fn get_database_cache_size(&self) -> Option<usize> {
-		self.import_params.database_cache_size
+	fn get_database_cache_size(&self) -> Result<Option<usize>> {
+		Ok(self.import_params.database_cache_size)
 	}
 
 	fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> {

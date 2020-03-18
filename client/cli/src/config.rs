@@ -41,7 +41,7 @@ pub(crate) const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 
 // TODO: all getters should probably return a Result no matter what
 pub trait CliConfiguration: Sized {
-	fn get_base_path(&self) -> Option<&PathBuf>;
+	fn get_base_path(&self) -> Result<Option<&PathBuf>>;
 
 	// TODO: maybe not a good idea to have this in this trait
 	fn is_dev(&self) -> bool {
@@ -76,16 +76,16 @@ pub trait CliConfiguration: Sized {
 		Ok(KeystoreConfig::InMemory)
 	}
 
-	fn get_database_cache_size(&self) -> Option<usize> { Default::default() }
+	fn get_database_cache_size(&self) -> Result<Option<usize>> { Ok(Default::default()) }
 
-	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> DatabaseConfig;
+	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig>;
 
-	fn get_state_cache_size(&self) -> usize {
-		Default::default()
+	fn get_state_cache_size(&self) -> Result<usize> {
+		Ok(Default::default())
 	}
 
-	fn get_state_cache_child_ratio(&self) -> Option<usize> {
-		Default::default()
+	fn get_state_cache_child_ratio(&self) -> Result<Option<usize>> {
+		Ok(Default::default())
 	}
 
 	fn get_pruning(&self, _is_dev: bool, _roles: Roles) -> Result<PruningMode> {
@@ -101,8 +101,8 @@ pub trait CliConfiguration: Sized {
 		Ok(generate_node_name())
 	}
 
-	fn get_wasm_method(&self) -> WasmExecutionMethod {
-		Default::default()
+	fn get_wasm_method(&self) -> Result<WasmExecutionMethod> {
+		Ok(Default::default())
 	}
 
 	fn get_execution_strategies(&self, _is_dev: bool) -> Result<ExecutionStrategies> {
@@ -117,12 +117,12 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
-	fn get_rpc_ws_max_connections(&self) -> Option<usize> {
-		Default::default()
+	fn get_rpc_ws_max_connections(&self) -> Result<Option<usize>> {
+		Ok(Default::default())
 	}
 
-	fn get_rpc_cors(&self, _is_dev: bool) -> Option<Vec<String>> {
-		Some(Vec::new())
+	fn get_rpc_cors(&self, _is_dev: bool) -> Result<Option<Vec<String>>> {
+		Ok(Some(Vec::new()))
 	}
 
 	fn get_prometheus_port(&self) -> Result<Option<SocketAddr>> {
@@ -132,45 +132,45 @@ pub trait CliConfiguration: Sized {
 	fn get_telemetry_endpoints<G, E>(
 		&self,
 		chain_spec: &ChainSpec<G, E>,
-	) -> Option<TelemetryEndpoints> {
-		chain_spec.telemetry_endpoints().clone()
+	) -> Result<Option<TelemetryEndpoints>> {
+		Ok(chain_spec.telemetry_endpoints().clone())
 	}
 
-	fn get_telemetry_external_transport(&self) -> Option<ExtTransport> {
-		Default::default()
+	fn get_telemetry_external_transport(&self) -> Result<Option<ExtTransport>> {
+		Ok(Default::default())
 	}
 
-	fn get_default_heap_pages(&self) -> Option<u64> {
-		Default::default()
+	fn get_default_heap_pages(&self) -> Result<Option<u64>> {
+		Ok(Default::default())
 	}
 
-	fn get_offchain_worker(&self, _roles: Roles) -> bool {
-		Default::default()
+	fn get_offchain_worker(&self, _roles: Roles) -> Result<bool> {
+		Ok(Default::default())
 	}
 
 	/// set sentry mode (i.e. act as an authority but **never** actively participate)
-	fn get_sentry_mode(&self) -> bool {
-		Default::default()
+	fn get_sentry_mode(&self) -> Result<bool> {
+		Ok(Default::default())
 	}
 
-	fn get_force_authoring(&self) -> bool {
-		Default::default()
+	fn get_force_authoring(&self) -> Result<bool> {
+		Ok(Default::default())
 	}
 
-	fn get_disable_grandpa(&self) -> bool {
-		Default::default()
+	fn get_disable_grandpa(&self) -> Result<bool> {
+		Ok(Default::default())
 	}
 
-	fn get_dev_key_seed(&self, _is_dev: bool) -> Option<String> {
-		Default::default()
+	fn get_dev_key_seed(&self, _is_dev: bool) -> Result<Option<String>> {
+		Ok(Default::default())
 	}
 
-	fn get_tracing_targets(&self) -> Option<String> {
-		Default::default()
+	fn get_tracing_targets(&self) -> Result<Option<String>> {
+		Ok(Default::default())
 	}
 
-	fn get_tracing_receiver(&self) -> sc_tracing::TracingReceiver {
-		Default::default()
+	fn get_tracing_receiver(&self) -> Result<sc_tracing::TracingReceiver> {
+		Ok(Default::default())
 	}
 
 	fn get_node_key(&self, _net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
@@ -195,11 +195,11 @@ pub trait CliConfiguration: Sized {
 			},
 		)
 		.expect("app directories exist on all supported platforms; qed");
-		let config_dir = self.get_base_path().unwrap_or(&default_config_dir).join("chains").join(chain_spec.id());
+		let config_dir = self.get_base_path()?.unwrap_or(&default_config_dir).join("chains").join(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		// TODO: this parameter is really optional, shouldn't we leave it to None?
-		let database_cache_size = Some(self.get_database_cache_size().unwrap_or(1024));
+		let database_cache_size = Some(self.get_database_cache_size()?.unwrap_or(1024));
 		let node_key = self.get_node_key(&net_config_dir)?;
 		let roles = self.get_roles()?; // TODO: it it role or roles?
 
@@ -218,27 +218,27 @@ pub trait CliConfiguration: Sized {
 				node_key,
 			)?,
 			keystore: self.get_keystore_config(&config_dir)?,
-			database: self.get_database_config(&config_dir, database_cache_size),
-			state_cache_size: self.get_state_cache_size(),
-			state_cache_child_ratio: self.get_state_cache_child_ratio(),
+			database: self.get_database_config(&config_dir, database_cache_size)?,
+			state_cache_size: self.get_state_cache_size()?,
+			state_cache_child_ratio: self.get_state_cache_child_ratio()?,
 			pruning: self.get_pruning(is_dev, roles)?,
-			wasm_method: self.get_wasm_method(),
+			wasm_method: self.get_wasm_method()?,
 			execution_strategies: self.get_execution_strategies(is_dev)?,
 			rpc_http: self.get_rpc_http()?,
 			rpc_ws: self.get_rpc_ws()?,
-			rpc_ws_max_connections: self.get_rpc_ws_max_connections(),
-			rpc_cors: self.get_rpc_cors(is_dev),
+			rpc_ws_max_connections: self.get_rpc_ws_max_connections()?,
+			rpc_cors: self.get_rpc_cors(is_dev)?,
 			prometheus_port: self.get_prometheus_port()?,
-			telemetry_endpoints: self.get_telemetry_endpoints(&chain_spec),
-			telemetry_external_transport: self.get_telemetry_external_transport(),
-			default_heap_pages: self.get_default_heap_pages(),
-			offchain_worker: self.get_offchain_worker(roles),
-			sentry_mode: self.get_sentry_mode(),
-			force_authoring: self.get_force_authoring(),
-			disable_grandpa: self.get_disable_grandpa(),
-			dev_key_seed: self.get_dev_key_seed(is_dev),
-			tracing_targets: self.get_tracing_targets(),
-			tracing_receiver: self.get_tracing_receiver(),
+			telemetry_endpoints: self.get_telemetry_endpoints(&chain_spec)?,
+			telemetry_external_transport: self.get_telemetry_external_transport()?,
+			default_heap_pages: self.get_default_heap_pages()?,
+			offchain_worker: self.get_offchain_worker(roles)?,
+			sentry_mode: self.get_sentry_mode()?,
+			force_authoring: self.get_force_authoring()?,
+			disable_grandpa: self.get_disable_grandpa()?,
+			dev_key_seed: self.get_dev_key_seed(is_dev)?,
+			tracing_targets: self.get_tracing_targets()?,
+			tracing_receiver: self.get_tracing_receiver()?,
 			chain_spec,
 		})
 	}
