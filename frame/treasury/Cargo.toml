@@ -18,6 +18,7 @@ frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "..
 pallet-balances = { version = "2.0.0-alpha.2", default-features = false, path = "../balances" }
 
 frame-benchmarking = { version = "2.0.0-alpha.2", default-features = false, path = "../benchmarking", optional = true }
+pallet-elections-phragmen = { version = "2.0.0-alpha.2", default-features = false, path = "../elections-phragmen", optional = true }
 
 [dev-dependencies]
 sp-io ={ version = "2.0.0-alpha.2", path = "../../primitives/io" }
@@ -34,4 +35,7 @@ std = [
 	"frame-system/std",
 	"pallet-balances/std",
 ]
-runtime-benchmarks = ["frame-benchmarking"]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"pallet-elections-phragmen",
+]

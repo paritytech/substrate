@@ -19,10 +19,12 @@
 use super::*;
 
 use frame_system::RawOrigin;
+use frame_support::storage::StorageValue;
 use frame_benchmarking::{benchmarks, account};
 use sp_runtime::traits::OnFinalize;
 
 use crate::Module as Treasury;
+use pallet_elections_phragmen::Module as Elections;
 
 const SEED: u32 = 0;
 
@@ -112,11 +114,19 @@ benchmarks! {
 		let hash = T::Hashing::hash_of(&(&reason_hash, &awesome_person));
 	}: _(RawOrigin::Signed(caller), hash)
 
-	// tip_new {
-	// 	let r in 0 .. 16384;
-	// 	let t in 0 .. 100;
-	// 	let reason = vec![0; ]
-	// }
+	tip_new {
+		let r in 0 .. 16384;
+		let t in 0 .. 100 => {
+			let member = account("member", 0, SEED);
+			pallet_elections_phragmen::Members::<T>::append(
+				(member, BalanceOf::<T>::default())
+			);
+		};
+		let caller = account("member", t, SEED);
+		let reason = vec![0; r];
+		let beneficiary = account("beneficiary", t, SEED);
+		let value = T::Currency::minimum_balance().saturing_mul(100.into());
+	}: _(RawOrigin::Signed(caller), reason, value)
 
 	// tip {
 
