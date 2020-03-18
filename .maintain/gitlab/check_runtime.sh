@@ -33,7 +33,7 @@ git log --graph --oneline --decorate=short -n 10
 boldprint "make sure the master branch and release tag are available in shallow clones"
 git fetch --depth=${GIT_DEPTH:-100} origin master
 git fetch --depth=${GIT_DEPTH:-100} origin release
-git tag release FETCH_HEAD
+git tag -f release FETCH_HEAD
 git log -n1 release
 
 
