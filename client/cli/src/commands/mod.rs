@@ -61,6 +61,8 @@ pub use crate::commands::sign_transaction::SignTransactionCmd;
 pub use crate::commands::transfer::TransferCmd;
 pub use crate::commands::vanity::VanityCmd;
 pub use crate::commands::verify::VerifyCmd;
+use std::convert::TryFrom;
+use sp_core::crypto::Ss58Codec;
 
 
 /// default sub directory to store network config
@@ -156,6 +158,7 @@ impl Subcommand {
 		<<Block::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		Block::Hash: std::str::FromStr,
 		RA: RuntimeAdapter,
+		AddressFor<RA>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec,
 		<IndexFor<RA> as FromStr>::Err: Display,
 		<BalanceFor<RA> as FromStr>::Err: Display,
 		CallFor<RA>: Codec,

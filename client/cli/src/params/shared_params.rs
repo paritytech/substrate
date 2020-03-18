@@ -90,7 +90,7 @@ pub struct SharedParams {
 	)]
 	pub output_type: OutputType,
 
-	/// output format
+	/// cryptography scheme
 	#[structopt(
 		long,
 		value_name = "SCHEME",

@@ -35,7 +35,6 @@ sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
 sc-basic-authorship = { path = "../../../client/basic-authorship" , version = "0.8.0-alpha.2"}
 frame-system = { version = "2.0.0-alpha.3", path= "../../../frame/system" }
 pallet-transaction-payment = { version = "2.0.0-alpha.3", path = "../../../frame/transaction-payment" }
-pallet-indices = { version = "2.0.0-alpha.3", path = "../../../frame/indices" }
 node-template-runtime = { version = "2.0.0-alpha.2", path = "../runtime" }
 
 [build-dependencies]

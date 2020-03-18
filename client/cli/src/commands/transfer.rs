@@ -16,17 +16,16 @@
 
 //! Implementation of the `transfer` subcommand
 
-use crate::{
-	error, IndexFor, BalanceFor, create_extrinsic_for, get_password,
-	AddressFor, VersionInfo, with_crypto_scheme, pair_from_suri,
-};
+use crate::{error, IndexFor, BalanceFor, create_extrinsic_for, get_password, AddressFor, VersionInfo, with_crypto_scheme, pair_from_suri, decode_hex};
 use super::{SharedParams, RuntimeAdapter};
 use structopt::StructOpt;
 use pallet_balances::Call as BalancesCall;
 use std::{str::FromStr, fmt::Display};
-use parity_scale_codec::{Encode, Decode};
+use parity_scale_codec::Encode;
 use sc_service::{Configuration, ChainSpec};
 use sp_runtime::MultiSigner;
+use std::convert::TryFrom;
+use sp_core::crypto::Ss58Codec;
 
 /// The `transfer` command
 #[derive(Debug, StructOpt, Clone)]
@@ -62,13 +61,19 @@ impl TransferCmd {
 	pub fn run<RA>(self) -> error::Result<()>
 		where
 			RA: RuntimeAdapter,
-			AddressFor<RA>: Decode,
+			AddressFor<RA>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec,
 			<IndexFor<RA> as FromStr>::Err: Display,
 			<BalanceFor<RA> as FromStr>::Err: Display,
 	{
 		let password = get_password(&self.shared_params)?;
 		let nonce = IndexFor::<RA>::from_str(&self.index).map_err(|e| format!("{}", e))?;
-		let to = AddressFor::<RA>::decode(&mut self.to.as_bytes()).map_err(|e| format!("{}", e))?;
+		let to = if let Ok(data_vec) = decode_hex(&self.to) {
+			AddressFor::<RA>::try_from(&data_vec)
+				.expect("Invalid hex length for account ID; should be 32 bytes")
+		} else {
+			AddressFor::<RA>::from_ss58check(&self.to).ok()
+				.expect("Invalid SS58-check address given for account ID.")
+		};
 		let amount = BalanceFor::<RA>::from_str(&self.amount).map_err(|e| format!("{}", e))?;
 
 		with_crypto_scheme!(

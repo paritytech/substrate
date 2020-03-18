@@ -39,7 +39,7 @@ use sp_runtime::{
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify,
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
 	},
 };
 use sp_version::RuntimeVersion;
@@ -363,7 +363,6 @@ impl_outer_event!{
 	pub enum MetaEvent for Runtime {
 		frame_system<T>,
 		pallet_balances<T>,
-		pallet_indices<T>,
 	}
 }
 
@@ -375,13 +374,6 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	pub const Deposit: u64 = 1;
 	pub const ExistentialDeposit: u64 = 1;
-}
-
-impl pallet_indices::Trait for Runtime {
-	type AccountIndex = u64;
-	type Currency = pallet_balances::Module<Runtime>;
-	type Deposit = Deposit;
-	type Event = MetaEvent;
 }
 
 impl pallet_balances::Trait for Runtime {
@@ -403,9 +395,6 @@ impl frame_system::Trait for Runtime {
 	type AccountId = sr25519::Public;
 	#[cfg(not(feature = "indices-lookup"))]
 	type AccountId = u64;
-	#[cfg(feature = "indices-lookup")]
-	type Lookup = pallet_indices::Module<Runtime>;
-	#[cfg(not(feature = "indices-lookup"))]
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = MetaEvent;
@@ -974,7 +963,6 @@ mod tests {
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_state_machine::ExecutionStrategy;
 	use codec::Encode;
-	use sc_block_builder::BlockBuilderProvider;
 
 	#[test]
 	fn heap_pages_is_respected() {

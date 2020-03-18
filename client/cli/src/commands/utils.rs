@@ -32,8 +32,6 @@ pub type PublicFor<P> = <P as sp_core::Pair>::Public;
 pub type SeedFor<P> = <P as sp_core::Pair>::Seed;
 /// AccountIndex type for Runtime
 pub type IndexFor<R> = <<R as RuntimeAdapter>::Runtime as frame_system::Trait>::Index;
-/// AccountId type for Runtime
-pub type AccountIdFor<R> = <<R as RuntimeAdapter>::Runtime as frame_system::Trait>::AccountId;
 /// Balance type
 pub type BalanceFor<R> = <<R as RuntimeAdapter>::Runtime as pallet_balances::Trait>::Balance;
 /// Call type for Runtime
@@ -231,6 +229,10 @@ fn format_account_id<P: sp_core::Pair>(public_key: PublicFor<P>) -> String
 
 /// helper method for decoding hex
 pub fn decode_hex<T: AsRef<[u8]>>(message: T) -> Result<Vec<u8>, Error> {
+	let mut message = message.as_ref();
+	if message[..2] == [b'0', b'x'] {
+		message = &message[2..]
+	}
 	hex::decode(message)
 		.map_err(|e| Error::Other(format!("Invalid hex ({})", e)))
 }
