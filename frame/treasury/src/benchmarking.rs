@@ -19,7 +19,6 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_support::storage::StorageValue;
 use frame_benchmarking::{benchmarks, account};
 use sp_runtime::traits::OnFinalize;
 
