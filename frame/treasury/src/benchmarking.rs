@@ -42,9 +42,6 @@ benchmarks! {
 	reject_proposal {
 		let u in 0 .. 1000;
 		let reject_origin = T::RejectOrigin;
-		let value: BalanceOf<T> = T::ProposalBondMinimum::get().saturating_mul(100.into());
-		let _ = T::Currency::make_free_balance_be(&caller, value);
-		let beneficiary = account("beneficiary", u, SEED);
-		let beneficiary_lookup = T::Lookup::unlookup(beneficiary);
+
 	}: _(RawOrigin::Signed(caller), value, beneficiary_lookup)
 }

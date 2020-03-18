@@ -100,7 +100,7 @@ use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
 }};
 use frame_support::{weights::SimpleDispatchInfo, traits::Contains};
 use codec::{Encode, Decode};
-use frame_system::{self as system, ensure_signed};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 #[cfg(test)]
 mod tests;
@@ -371,9 +371,11 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::RejectOrigin::ensure_origin(origin)?;
-			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
+			T::RejectOrigin::try_origin(origin)
+				.map(|_| ())
+				.or_else(ensure_root)?;
 
+			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
 			let value = proposal.bond;
 			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
 			T::ProposalRejection::on_unbalanced(imbalance);
@@ -391,10 +393,11 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::ApproveOrigin::ensure_origin(origin)?;
+			T::ApproveOrigin::try_origin(origin)
+				.map(|_| ())
+				.or_else(ensure_root)?;
 
 			ensure!(<Proposals<T>>::contains_key(proposal_id), Error::<T>::InvalidProposalIndex);
-
 			Approvals::mutate(|v| v.push(proposal_id));
 		}
 
