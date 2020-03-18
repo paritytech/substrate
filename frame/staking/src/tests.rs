@@ -364,7 +364,7 @@ fn no_candidate_emergency_condition() {
 		.execute_with(|| {
 			// initial validators
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
-			let prefs = ValidatorPrefs { commission: Perbill::one(), max_payout: 64 };
+			let prefs = ValidatorPrefs { commission: Perbill::one(), max_nominator_payouts: 64 };
 			<Staking as crate::Store>::Validators::insert(11, prefs.clone());
 
 			// set the minimum validator count.
@@ -923,7 +923,7 @@ fn validator_payment_prefs_work() {
 		let commission = Perbill::from_percent(40);
 		<Validators<Test>>::insert(&11, ValidatorPrefs {
 			commission: commission.clone(),
-			max_payout: 64,
+			max_nominator_payouts: 64,
 		});
 
 		// Reward controller so staked ratio doesn't change.
@@ -1816,7 +1816,7 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		ErasRewardPoints::<Test>::insert(0, reward);
 		ErasStakers::<Test>::insert(0, 11, &exposure);
 		ErasValidatorReward::<Test>::insert(0, stake);
-		assert_ok!(Staking::payout_validator(Origin::signed(1337), 10, 0));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 0, 64));
 		assert_eq!(Balances::total_balance(&11), stake * 2);
 
 		// Set staker
@@ -2833,19 +2833,19 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		// Last kept is 1:
 		assert!(current_era - Staking::history_depth() == 1);
 		assert_noop!(
-			Staking::payout_validator(Origin::signed(1337), 10, 0),
+			Staking::payout_stakers(Origin::signed(1337), 10, 0, 64),
 			// Fail: Era out of history
 			Error::<Test>::InvalidEraToReward
 		);
-		assert_ok!(Staking::payout_validator(Origin::signed(1337), 10, 1));
-		assert_ok!(Staking::payout_validator(Origin::signed(1337), 10, 2));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 1, 64));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 2, 64));
 		assert_noop!(
-			Staking::payout_validator(Origin::signed(1337), 10, 2),
+			Staking::payout_stakers(Origin::signed(1337), 10, 2, 64),
 			// Fail: Double claim
 			Error::<Test>::InvalidEraToReward
 		);
 		assert_noop!(
-			Staking::payout_validator(Origin::signed(1337), 10, active_era),
+			Staking::payout_stakers(Origin::signed(1337), 10, active_era, 64),
 			// Fail: Era not finished yet
 			Error::<Test>::InvalidEraToReward
 		);

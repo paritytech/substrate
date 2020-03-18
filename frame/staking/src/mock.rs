@@ -509,6 +509,6 @@ pub fn make_all_reward_payment(era: EraIndex) {
 
 	// reward validators
 	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
-		assert_ok!(Staking::payout_validator(Origin::signed(1337), validator_controller, era));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), validator_controller, era, 64));
 	}
 }

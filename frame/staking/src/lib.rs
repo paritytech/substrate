@@ -357,14 +357,14 @@ pub struct ValidatorPrefs {
 	#[codec(compact)]
 	pub commission: Perbill,
 	/// Max number of nominators they will payout
-	pub max_payout: u16,
+	pub max_nominator_payouts: u16,
 }
 
 impl Default for ValidatorPrefs {
 	fn default() -> Self {
 		ValidatorPrefs {
 			commission: Default::default(),
-			max_payout: 64,
+			max_nominator_payouts: 64,
 		}
 	}
 }
@@ -927,6 +927,8 @@ decl_error! {
 		InvalidNumberOfNominations,
 		/// Items are not sorted and unique.
 		NotSortedAndUnique,
+		/// Invalid input to extrinsic
+		InvalidInput,
 	}
 }
 
@@ -1375,9 +1377,13 @@ decl_module! {
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn payout_validator(origin, validator: T::AccountId, era: EraIndex) -> DispatchResult {
+		fn payout_stakers(origin,
+			validator: T::AccountId,
+			era: EraIndex,
+			max_nominator_payouts: u16,
+		) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
-			Self::do_payout_validator_and_nominators(validator, era)
+			Self::do_payout_stakers(validator, era, max_nominator_payouts)
 		}
 
 		/// Rebond a portion of the stash scheduled to be unlocked.
@@ -1471,7 +1477,11 @@ impl<T: Trait> Module<T> {
 
 	// MUTABLES (DANGEROUS)
 
-	fn do_payout_validator_and_nominators(validator: T::AccountId, era: EraIndex) -> DispatchResult {
+	fn do_payout_stakers(
+		validator: T::AccountId,
+		era: EraIndex,
+		max_nominator_payouts: u16,
+	) -> DispatchResult {
 		let current_era = CurrentEra::get().unwrap_or(0);
 		// TODO: Check this vv  I think should be strictly less than.
 		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
@@ -1483,6 +1493,10 @@ impl<T: Trait> Module<T> {
 			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
 
 		let mut ledger = <Ledger<T>>::get(&validator).ok_or_else(|| Error::<T>::NotController)?;
+
+		let validator_prefs = Self::eras_validator_prefs(&era, &ledger.stash);
+		ensure!(max_nominator_payouts >= validator_prefs.max_nominator_payouts, Error::<T>::InvalidInput);
+
 		ledger.claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		match ledger.claimed_rewards.binary_search(&era) {
 			Ok(_) => Err(Error::<T>::InvalidEraToReward)?,
@@ -1514,7 +1528,6 @@ impl<T: Trait> Module<T> {
 		// This is how much validator + nominators are entitled to.
 		let validator_total_payout = validator_total_reward_part * era_payout;
 		// Validator first gets a cut off the top.
-		let validator_prefs = Self::eras_validator_prefs(&era, &ledger.stash);
 		let validator_commission = validator_prefs.commission;
 		let validator_commission_payout = validator_commission * validator_total_payout;
 
@@ -1536,12 +1549,11 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Lets now calculate how this is split to the nominators.
-		// Sort nominators by highest to lowest exposure, but only keep `max_payout` of them.
-		let max_payout = validator_prefs.max_payout as usize;
+		// Sort nominators by highest to lowest exposure, but only keep `max_nominator_payouts` of them.
 		let mut nominators_exposure = exposure.others;
-		if nominators_exposure.len() > max_payout {
+		if nominators_exposure.len() > max_nominator_payouts as usize {
 			nominators_exposure.sort_unstable_by(|a, b| b.value.cmp(&a.value));
-			nominators_exposure.truncate(max_payout);
+			nominators_exposure.truncate(max_nominator_payouts as usize);
 		}
 
 		for nominator in nominators_exposure.iter() {
@@ -1710,7 +1722,7 @@ impl<T: Trait> Module<T> {
 			let now = T::Time::now();
 
 			let era_duration = now - active_era_start;
-			let (total_payout, _max_payout) = inflation::compute_total_payout(
+			let (total_payout, _max_nominator_payouts) = inflation::compute_total_payout(
 				&T::RewardCurve::get(),
 				Self::eras_total_stake(&active_era.index),
 				T::Currency::total_issuance(),
