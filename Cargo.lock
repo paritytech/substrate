@@ -3964,6 +3964,7 @@ dependencies = [
  "parking_lot 0.10.0",
  "serde",
  "sp-consensus-babe",
+ "sp-consensus-vrf",
  "sp-core",
  "sp-inherents",
  "sp-io",
@@ -7176,6 +7177,7 @@ dependencies = [
  "schnorrkel",
  "sp-core",
  "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]

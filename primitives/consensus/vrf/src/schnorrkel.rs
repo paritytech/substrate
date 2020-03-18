@@ -19,8 +19,9 @@
 use codec::{Encode, Decode};
 use sp_core::U512;
 use sp_runtime::RuntimeDebug;
+use sp_std::ops::{Deref, DerefMut};
 #[cfg(feature = "std")]
-use std::{ops::{Deref, DerefMut}, convert::TryFrom};
+use std::convert::TryFrom;
 #[cfg(feature = "std")]
 use codec::EncodeLike;
 #[cfg(feature = "std")]
@@ -37,9 +38,21 @@ pub const VRF_PROOF_LENGTH: usize = 64;
 #[cfg(not(feature = "std"))]
 pub const VRF_OUTPUT_LENGTH: usize = 32;
 
+/// The length of the Randomness.
+pub const RANDOMNESS_LENGTH: usize = VRF_OUTPUT_LENGTH;
+
 /// Raw VRF output.
 #[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
 pub struct RawVRFOutput(pub [u8; VRF_OUTPUT_LENGTH]);
+
+impl Deref for RawVRFOutput {
+	type Target = [u8; VRF_OUTPUT_LENGTH];
+	fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for RawVRFOutput {
+	fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
 
 /// VRF output type available for `std` environment, suitable for schnorrkel operations.
 #[cfg(feature = "std")]
@@ -103,6 +116,15 @@ impl From<VRFOutput> for RawVRFOutput {
 /// Raw VRF proof.
 #[derive(Clone, Encode, Decode)]
 pub struct RawVRFProof(pub [u8; VRF_PROOF_LENGTH]);
+
+impl Deref for RawVRFProof {
+	type Target = [u8; VRF_PROOF_LENGTH];
+	fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for RawVRFProof {
+	fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
 
 #[cfg(feature = "std")]
 impl std::fmt::Debug for RawVRFProof {
@@ -224,4 +246,4 @@ fn convert_error(e: SignatureError) -> codec::Error {
 }
 
 /// Schnorrkel randomness value. Same size as `VRFOutput`.
-pub type Randomness = [u8; VRF_OUTPUT_LENGTH];
+pub type Randomness = [u8; RANDOMNESS_LENGTH];
