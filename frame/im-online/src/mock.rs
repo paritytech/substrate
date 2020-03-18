@@ -20,7 +20,7 @@
 
 use std::cell::RefCell;
 
-use crate::{Module, Trait};
+use crate::{Module, Trait, sr25519};
 use sp_runtime::Perbill;
 use sp_staking::{SessionIndex, offence::{ReportOffence, OffenceError}};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
@@ -41,6 +41,13 @@ impl_outer_dispatch! {
 
 thread_local! {
 	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![1, 2, 3]));
+}
+
+pub struct ImOnlineAuthId;
+impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature> for ImOnlineAuthId {
+	type RuntimeAppPublic = sr25519::AuthorityId;
+	type GenericSignature = Signature;
+	type GenericPublic = Public;
 }
 
 pub struct TestSessionManager;
@@ -160,6 +167,7 @@ impl pallet_authorship::Trait for Runtime {
 
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
+	type OffchainAuthorityId = ImOnlineAuthId;
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
 	type SessionDuration = Period;
@@ -174,7 +182,7 @@ impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runt
 }
 
 impl frame_system::offchain::SigningTypes for Runtime {
-	type Public = <Signature as Verify>::Signer;
+	type Public = Public;
 	type Signature = Signature;
 }
 

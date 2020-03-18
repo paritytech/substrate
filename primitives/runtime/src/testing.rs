@@ -17,11 +17,11 @@
 //! Testing utilities.
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
-use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
+use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable,
+	SignedExtension, Dispatchable, IdentifyAccount
 };
 use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
@@ -32,6 +32,19 @@ use crate::transaction_validity::{TransactionValidity, TransactionValidityError}
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct UintAuthorityId(pub u64);
+
+impl fmt::Display for UintAuthorityId {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
+
+impl IdentifyAccount for UintAuthorityId {
+	type AccountId = Self;
+	fn into_account(self) -> Self::AccountId {
+		self
+	}
+}
 
 impl From<u64> for UintAuthorityId {
 	fn from(id: u64) -> Self {
