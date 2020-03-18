@@ -21,7 +21,7 @@ use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable, IdentifyAccount
+	SignedExtension, Dispatchable
 };
 use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
@@ -36,13 +36,6 @@ pub struct UintAuthorityId(pub u64);
 impl fmt::Display for UintAuthorityId {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "{}", self.0)
-	}
-}
-
-impl IdentifyAccount for UintAuthorityId {
-	type AccountId = Self;
-	fn into_account(self) -> Self::AccountId {
-		self
 	}
 }
 
