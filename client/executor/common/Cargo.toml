@@ -1,6 +1,6 @@
 [package]
 name = "sc-executor-common"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -14,11 +14,11 @@ log = "0.4.8"
 derive_more = "0.99.2"
 codec = { package = "parity-scale-codec", version = "1.2.0" }
 wasmi = "0.6.2"
-sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
-sp-allocator = { version = "2.0.0-alpha.2", path = "../../../primitives/allocator" }
+sp-core = { version = "2.0.0-alpha.4", path = "../../../primitives/core" }
+sp-allocator = { version = "2.0.0-alpha.4", path = "../../../primitives/allocator" }
 sp-wasm-interface = { version = "2.0.0-alpha.2", path = "../../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime-interface" }
-sp-serializer = { version = "2.0.0-alpha.2", path = "../../../primitives/serializer" }
+sp-runtime-interface = { version = "2.0.0-alpha.4", path = "../../../primitives/runtime-interface" }
+sp-serializer = { version = "2.0.0-alpha.4", path = "../../../primitives/serializer" }
 
 [features]
 default = []

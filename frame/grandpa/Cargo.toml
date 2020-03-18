@@ -1,6 +1,6 @@
 [package]
 name = "pallet-grandpa"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -11,18 +11,18 @@ description = "FRAME pallet for GRANDPA finality gadget"
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
-sp-core = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/core" }
-sp-finality-grandpa = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/finality-grandpa" }
-sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
-sp-staking = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/staking" }
-frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
-pallet-session = { version = "2.0.0-alpha.2", default-features = false, path = "../session" }
-pallet-finality-tracker = { version = "2.0.0-alpha.2", default-features = false, path = "../finality-tracker" }
+sp-core = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/core" }
+sp-finality-grandpa = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/finality-grandpa" }
+sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/staking" }
+frame-support = { version = "2.0.0-alpha.4", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../system" }
+pallet-session = { version = "2.0.0-alpha.4", default-features = false, path = "../session" }
+pallet-finality-tracker = { version = "2.0.0-alpha.4", default-features = false, path = "../finality-tracker" }
 
 [dev-dependencies]
-sp-io ={ version = "2.0.0-alpha.2", path = "../../primitives/io" }
+sp-io ={ version = "2.0.0-alpha.4", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
