@@ -148,38 +148,42 @@ impl<B: BlockT> Future for GossipEngine<B> {
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = &mut *self;
 
-		loop { match this.network_event_stream.poll_next_unpin(cx) {
-			Poll::Ready(Some(event)) => match event {
-				Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
-					if msg_engine_id != this.engine_id {
-						continue;
+		loop {
+			match this.network_event_stream.poll_next_unpin(cx) {
+				Poll::Ready(Some(event)) => match event {
+					Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
+						if msg_engine_id != this.engine_id {
+							continue;
+						}
+						this.state_machine.new_peer(&mut *this.network, remote, roles);
 					}
-					this.state_machine.new_peer(&mut *this.network, remote, roles);
+					Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
+						if msg_engine_id != this.engine_id {
+							continue;
+						}
+						this.state_machine.peer_disconnected(&mut *this.network, remote);
+					},
+					Event::NotificationsReceived { remote, messages } => {
+						let engine_id = this.engine_id.clone();
+						this.state_machine.on_incoming(
+							&mut *this.network,
+							remote,
+							messages.into_iter()
+								.filter_map(|(engine, data)| if engine == engine_id {
+									Some(ConsensusMessage {
+										engine_id: engine, data: data.to_vec(),
+									})
+								} else { None })
+								.collect()
+						);
+					},
+					Event::Dht(_) => {}
 				}
-				Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
-					if msg_engine_id != this.engine_id {
-						continue;
-					}
-					this.state_machine.peer_disconnected(&mut *this.network, remote);
-				},
-				Event::NotificationsReceived { remote, messages } => {
-					let engine_id = this.engine_id.clone();
-					this.state_machine.on_incoming(
-						&mut *this.network,
-						remote,
-						messages.into_iter()
-							.filter_map(|(engine, data)| if engine == engine_id {
-								Some(ConsensusMessage { engine_id: engine, data: data.to_vec() })
-							} else { None })
-							.collect()
-					);
-				},
-				Event::Dht(_) => {}
+				// The network event stream closed. Do the same for [`GossipValidator`].
+				Poll::Ready(None) => return Poll::Ready(()),
+				Poll::Pending => break,
 			}
-			// The network event stream closed. Do the same for [`GossipValidator`].
-			Poll::Ready(None) => return Poll::Ready(()),
-			Poll::Pending => break,
-		}}
+		}
 
 		while let Poll::Ready(()) = this.periodic_maintenance_interval.poll_unpin(cx) {
 			this.periodic_maintenance_interval.reset(PERIODIC_MAINTENANCE_INTERVAL);
