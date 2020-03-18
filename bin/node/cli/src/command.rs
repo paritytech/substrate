@@ -53,13 +53,14 @@ pub fn run() -> sc_cli::Result<()>
 
 			runtime.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor, _, _>(config))
 		},
-		/*
 		Some(Subcommand::Benchmark(cmd)) => {
-			cmd.init(&version)?;
-			cmd.update_config(&mut config, load_spec, &version)?;
+			let runtime = Cli::create_runtime(&cmd)?;
 
-			cmd.run::<_, _, node_runtime::Block, node_executor::Executor>(config)
+			runtime.sync_run(
+				|config| cmd.run::<_, _, node_runtime::Block, node_executor::Executor>(config)
+			)
 		},
+		/*
 		Some(Subcommand::Factory(cli_args)) => {
 			cli_args.shared_params.init(&version)?;
 			cli_args.shared_params.update_config(&mut config, load_spec, &version)?;
