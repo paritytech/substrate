@@ -199,6 +199,8 @@ where
 		<frame_system::Module<System>>::register_extra_weight_unchecked(
 			<AllModules as WeighBlock<System::BlockNumber>>::on_finalize(*block_number)
 		);
+
+		frame_system::Module::<System>::note_finished_initialize();
 	}
 
 	/// Returns if the runtime was upgraded since the last time this function was called.
