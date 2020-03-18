@@ -36,7 +36,7 @@ fn spec_factory(id: &str) -> Result<Option<ChainSpec<GenesisConfig>>, String> {
 
 /// Parse and run command line arguments
 pub fn run() -> sc_cli::Result<()> {
-	let opt: Cli = Cli::from_args();
+	let opt = Cli::from_args();
 
 	match opt.subcommand {
 		Some(subcommand) => {

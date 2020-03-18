@@ -83,11 +83,11 @@ where
 	///
 	/// Gets the struct from the command line arguments. Print the
 	/// error message and quit the program in case of failure.
-	fn from_args<T>() -> T
+	fn from_args() -> Self
 	where
-		T: StructOpt + Sized,
+		Self: StructOpt + Sized,
 	{
-		Self::from_iter::<T, _>(&mut std::env::args_os())
+		<Self as StructOpt>::from_iter(&mut std::env::args_os())
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
@@ -99,13 +99,13 @@ where
 	///
 	/// Gets the struct from any iterator such as a `Vec` of your making.
 	/// Print the error message and quit the program in case of failure.
-	fn from_iter<T, I>(iter: I) -> T
+	fn from_iter<I>(iter: I) -> Self
 	where
-		T: StructOpt + Sized,
+		Self: StructOpt + Sized,
 		I: IntoIterator,
 		I::Item: Into<std::ffi::OsString> + Clone,
 	{
-		let app = T::clap();
+		let app = <Self as StructOpt>::clap();
 
 		let mut full_version = Self::get_impl_version().to_string();
 		full_version.push_str("\n");
@@ -121,7 +121,7 @@ where
 				AppSettings::SubcommandsNegateReqs,
 			]);
 
-		T::from_clap(&app.get_matches_from(iter))
+		<Self as StructOpt>::from_clap(&app.get_matches_from(iter))
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
@@ -138,13 +138,13 @@ where
 	/// used. It will return a [`clap::Error`], where the [`kind`] is a
 	/// [`ErrorKind::HelpDisplayed`] or [`ErrorKind::VersionDisplayed`] respectively. You must call
 	/// [`Error::exit`] or perform a [`std::process::exit`].
-	fn try_from_iter<T, I>(iter: I) -> clap::Result<T>
+	fn try_from_iter<I>(iter: I) -> clap::Result<Self>
 	where
-		T: StructOpt + Sized,
+		Self: StructOpt + Sized,
 		I: IntoIterator,
 		I::Item: Into<std::ffi::OsString> + Clone,
 	{
-		let app = T::clap();
+		let app = <Self as StructOpt>::clap();
 
 		let mut full_version = Self::get_impl_version().to_string();
 		full_version.push_str("\n");
@@ -157,7 +157,7 @@ where
 
 		let matches = app.get_matches_from_safe(iter)?;
 
-		Ok(T::from_clap(&matches))
+		Ok(<Self as StructOpt>::from_clap(&matches))
 	}
 
 	fn client_id() -> String {
