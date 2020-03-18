@@ -18,8 +18,6 @@
 
 #[cfg(feature = "std")]
 use super::{BABE_ENGINE_ID, AuthoritySignature};
-#[cfg(not(feature = "std"))]
-use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight};
 #[cfg(feature = "std")]
 use sp_runtime::{DigestItem, generic::OpaqueDigestItemId};
@@ -29,7 +27,9 @@ use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use codec::Codec;
 use sp_std::vec::Vec;
-use sp_consensus_vrf::schnorrkel::{self, Randomness, SignatureError};
+use sp_consensus_vrf::schnorrkel::{self, Randomness};
+#[cfg(feature = "std")]
+use sp_consensus_vrf::schnorrkel::SignatureError;
 
 /// A BABE pre-runtime digest. This contains all data required to validate a
 /// block and for the BABE runtime module. Slots can be assigned to a primary
