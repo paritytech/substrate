@@ -7146,10 +7146,10 @@ name = "sp-consensus-babe"
 version = "0.8.0-alpha.3"
 dependencies = [
  "parity-scale-codec",
- "schnorrkel",
  "sp-api",
  "sp-application-crypto",
  "sp-consensus",
+ "sp-consensus-vrf",
  "sp-inherents",
  "sp-runtime",
  "sp-std",

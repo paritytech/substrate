@@ -24,10 +24,10 @@ use std::{ops::{Deref, DerefMut}, convert::TryFrom};
 #[cfg(feature = "std")]
 use codec::EncodeLike;
 #[cfg(feature = "std")]
-use schnorrkel::{SignatureError, errors::MultiSignatureStage};
+use schnorrkel::errors::MultiSignatureStage;
 
 #[cfg(feature = "std")]
-pub use schnorrkel::vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH};
+pub use schnorrkel::{SignatureError, vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH}};
 
 /// The length of the VRF proof.
 #[cfg(not(feature = "std"))]
