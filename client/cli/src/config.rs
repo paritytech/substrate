@@ -102,7 +102,7 @@ pub trait CliConfiguration: Sized {
 	}
 
 	fn get_wasm_method(&self) -> WasmExecutionMethod {
-		WasmExecutionMethod::Interpreted
+		Default::default()
 	}
 
 	fn get_execution_strategies(&self, _is_dev: bool) -> Result<ExecutionStrategies> {

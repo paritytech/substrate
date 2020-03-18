@@ -39,6 +39,12 @@ pub enum WasmExecutionMethod {
 	Compiled,
 }
 
+impl Default for WasmExecutionMethod {
+	fn default() -> WasmExecutionMethod {
+		WasmExecutionMethod::Interpreted
+	}
+}
+
 /// A Wasm runtime object along with its cached runtime version.
 struct VersionedRuntime {
 	runtime: Box<dyn WasmRuntime>,
