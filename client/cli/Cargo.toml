@@ -1,6 +1,6 @@
 [package]
 name = "sc-cli"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
 edition = "2018"
@@ -23,21 +23,21 @@ tokio = { version = "0.2.9", features = [ "signal", "rt-core", "rt-threaded" ] }
 futures = "0.3.1"
 fdlimit = "0.1.1"
 serde_json = "1.0.41"
-sc-informant = { version = "0.8.0-alpha.2", path = "../informant" }
-sp-panic-handler = { version = "2.0.0-alpha.2", path = "../../primitives/panic-handler" }
-sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
-sp-blockchain = { version = "2.0.0-alpha.2", path = "../../primitives/blockchain" }
-sc-network = { version = "0.8.0-alpha.2", path = "../network" }
-sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
-sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
-sc-service = { version = "0.8.0-alpha.2", default-features = false, path = "../service" }
-sp-state-machine = { version = "0.8.0-alpha.2", path = "../../primitives/state-machine" }
-sc-telemetry = { version = "2.0.0-alpha.2", path = "../telemetry" }
-substrate-prometheus-endpoint = { path = "../../utils/prometheus" , version = "0.8.0-alpha.2"}
-sp-keyring = { version = "2.0.0-alpha.2", path = "../../primitives/keyring" }
+sc-informant = { version = "0.8.0-alpha.4", path = "../informant" }
+sp-panic-handler = { version = "2.0.0-alpha.4", path = "../../primitives/panic-handler" }
+sc-client-api = { version = "2.0.0-alpha.4", path = "../api" }
+sp-blockchain = { version = "2.0.0-alpha.4", path = "../../primitives/blockchain" }
+sc-network = { version = "0.8.0-alpha.4", path = "../network" }
+sp-runtime = { version = "2.0.0-alpha.4", path = "../../primitives/runtime" }
+sp-core = { version = "2.0.0-alpha.4", path = "../../primitives/core" }
+sc-service = { version = "0.8.0-alpha.4", default-features = false, path = "../service" }
+sp-state-machine = { version = "0.8.0-alpha.4", path = "../../primitives/state-machine" }
+sc-telemetry = { version = "2.0.0-alpha.4", path = "../telemetry" }
+substrate-prometheus-endpoint = { path = "../../utils/prometheus" , version = "0.8.0-alpha.4"}
+sp-keyring = { version = "2.0.0-alpha.4", path = "../../primitives/keyring" }
 names = "0.11.0"
 structopt = "0.3.8"
-sc-tracing = { version = "2.0.0-alpha.2", path = "../tracing" }
+sc-tracing = { version = "2.0.0-alpha.4", path = "../tracing" }
 chrono = "0.4.10"
 parity-util-mem = { version = "0.5.2", default-features = false, features = ["primitive-types"] }
 

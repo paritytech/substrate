@@ -1,6 +1,6 @@
 [package]
 name = "sc-rpc"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -9,37 +9,37 @@ repository = "https://github.com/paritytech/substrate/"
 description = "Substrate Client RPC"
 
 [dependencies]
-sc-rpc-api = { version = "0.8.0-alpha.2", path = "../rpc-api" }
-sc-client-api = { version = "2.0.0-alpha.2", path = "../api" }
-sc-client = { version = "0.8.0-alpha.2", path = "../" }
-sp-api = { version = "2.0.0-alpha.2", path = "../../primitives/api" }
+sc-rpc-api = { version = "0.8.0-alpha.4", path = "../rpc-api" }
+sc-client-api = { version = "2.0.0-alpha.4", path = "../api" }
+sc-client = { version = "0.8.0-alpha.4", path = "../" }
+sp-api = { version = "2.0.0-alpha.4", path = "../../primitives/api" }
 codec = { package = "parity-scale-codec", version = "1.2.0" }
 futures = { version = "0.3.1", features = ["compat"] }
 jsonrpc-pubsub = "14.0.3"
 log = "0.4.8"
-sp-core = { version = "2.0.0-alpha.2", path = "../../primitives/core" }
+sp-core = { version = "2.0.0-alpha.4", path = "../../primitives/core" }
 rpc = { package = "jsonrpc-core", version = "14.0.3" }
-sp-version = { version = "2.0.0-alpha.2", path = "../../primitives/version" }
+sp-version = { version = "2.0.0-alpha.4", path = "../../primitives/version" }
 serde_json = "1.0.41"
-sp-session = { version = "2.0.0-alpha.2", path = "../../primitives/session" }
-sp-offchain = { version = "2.0.0-alpha.2", path = "../../primitives/offchain" }
-sp-runtime = { version = "2.0.0-alpha.2", path = "../../primitives/runtime" }
-sp-rpc = { version = "2.0.0-alpha.2", path = "../../primitives/rpc" }
-sp-state-machine = { version = "0.8.0-alpha.2", path = "../../primitives/state-machine" }
-sc-executor = { version = "0.8.0-alpha.2", path = "../executor" }
-sc-block-builder = { version = "0.8.0-alpha.2", path = "../../client/block-builder" }
-sc-keystore = { version = "2.0.0-alpha.2", path = "../keystore" }
-sp-transaction-pool = { version = "2.0.0-alpha.2", path = "../../primitives/transaction-pool" }
-sp-blockchain = { version = "2.0.0-alpha.2", path = "../../primitives/blockchain" }
+sp-session = { version = "2.0.0-alpha.4", path = "../../primitives/session" }
+sp-offchain = { version = "2.0.0-alpha.4", path = "../../primitives/offchain" }
+sp-runtime = { version = "2.0.0-alpha.4", path = "../../primitives/runtime" }
+sp-rpc = { version = "2.0.0-alpha.4", path = "../../primitives/rpc" }
+sp-state-machine = { version = "0.8.0-alpha.4", path = "../../primitives/state-machine" }
+sc-executor = { version = "0.8.0-alpha.4", path = "../executor" }
+sc-block-builder = { version = "0.8.0-alpha.4", path = "../../client/block-builder" }
+sc-keystore = { version = "2.0.0-alpha.4", path = "../keystore" }
+sp-transaction-pool = { version = "2.0.0-alpha.4", path = "../../primitives/transaction-pool" }
+sp-blockchain = { version = "2.0.0-alpha.4", path = "../../primitives/blockchain" }
 hash-db = { version = "0.15.2", default-features = false }
 parking_lot = "0.10.0"
 
 [dev-dependencies]
 assert_matches = "1.3.0"
 futures01 = { package = "futures", version = "0.1.29" }
-sc-network = { version = "0.8.0-alpha.2", path = "../network" }
+sc-network = { version = "0.8.0-alpha.4", path = "../network" }
 rustc-hex = "2.0.1"
-sp-io = { version = "2.0.0-alpha.2", path = "../../primitives/io" }
+sp-io = { version = "2.0.0-alpha.4", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
 tokio = "0.1.22"
-sc-transaction-pool = { version = "2.0.0-alpha.2", path = "../transaction-pool" }
+sc-transaction-pool = { version = "2.0.0-alpha.4", path = "../transaction-pool" }
