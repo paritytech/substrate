@@ -195,7 +195,7 @@ pub trait CliConfiguration: Sized {
 			},
 		)
 		.expect("app directories exist on all supported platforms; qed");
-		let config_dir = self.get_base_path().unwrap_or(&default_config_dir);
+		let config_dir = self.get_base_path().unwrap_or(&default_config_dir).join("chains").join(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		// TODO: this parameter is really optional, shouldn't we leave it to None?
@@ -217,7 +217,7 @@ pub trait CliConfiguration: Sized {
 				self.get_node_name()?.as_str(),
 				node_key,
 			)?,
-			keystore: self.get_keystore_config(config_dir)?,
+			keystore: self.get_keystore_config(&config_dir)?,
 			database: self.get_database_config(&config_dir, database_cache_size),
 			state_cache_size: self.get_state_cache_size(),
 			state_cache_child_ratio: self.get_state_cache_child_ratio(),
