@@ -5725,6 +5725,11 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2",
  "quote",
+ "sc-cli",
+ "sc-service",
+ "serde",
+ "sp-runtime",
+ "sp-storage",
  "syn",
  "trybuild",
 ]
