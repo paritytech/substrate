@@ -20,7 +20,7 @@ use serde::{Serialize, Deserialize};
 use sp_std::{ops, prelude::*, convert::TryInto};
 use codec::{Encode, Decode, CompactAs};
 use crate::traits::{
-	SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto, Saturating, BaseArithmetic, Zero
+	SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto, Saturating, BaseArithmetic, Zero, Bounded
 };
 use sp_debug_derive::RuntimeDebug;
 
@@ -31,6 +31,7 @@ pub trait PerThing: Sized + Saturating + Copy {
 	type Inner: BaseArithmetic + Copy;
 
 	/// A data type larger than `Self::Inner`, used to avoid overflow in some computations.
+	/// It must be able to compute `ACCURACY^2`.
 	type Upper: BaseArithmetic + Copy + From<Self::Inner> + TryInto<Self::Inner>;
 
 	/// The accuracy of this type.
@@ -63,15 +64,21 @@ pub trait PerThing: Sized + Saturating + Copy {
 	/// Saturating reciprocal multiplication. Compute `x / self`, saturating at the numeric 
 	/// bounds instead of overflowing.
 	fn saturating_reciprocal_mul<N>(self, x: N) -> N
-	where N: Into<Self::Upper> + UniqueSaturatedFrom<Self::Upper> {
-		N::unique_saturated_from(x.into() * Self::Upper::from(Self::ACCURACY) / Self::Upper::from(self.deconstruct()))
+	where N: UniqueSaturatedInto<Self::Inner> + UniqueSaturatedFrom<Self::Upper> {
+		if self.deconstruct() == 0.into() {
+			N::unique_saturated_from(Self::Upper::max_value())
+		} else {
+			let x = x.saturated_into::<Self::Inner>();
+			N::unique_saturated_from(Self::Upper::from(x) * Self::Upper::from(Self::ACCURACY) / Self::Upper::from(self.deconstruct()))
+		}
 	}
 
 	/// Saturating truncating multiplication. Compute `x * self`, truncating any fractional
-	/// remainder, IE rounding down to the nearest integer.
+	/// remainder, IE rounding down to the nearest integer. 
 	fn saturating_truncating_mul<N>(self, x: N) -> N 
-	where N: Into<Self::Upper> + UniqueSaturatedFrom<Self::Upper> {
-		N::unique_saturated_from(x.into() * Self::Upper::from(self.deconstruct()) / Self::Upper::from(Self::ACCURACY))
+	where N: UniqueSaturatedInto<Self::Inner> + UniqueSaturatedFrom<Self::Upper> {
+		let x = x.saturated_into::<Self::Inner>();
+		N::unique_saturated_from(Self::Upper::from(x) * Self::Upper::from(self.deconstruct()) / Self::Upper::from(Self::ACCURACY))
 	}
 
 	/// Consume self and return the number of parts per thing. 
@@ -594,37 +601,37 @@ macro_rules! implement_per_thing {
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_pow(1), 
 					$name::from_parts($max / 2),
-                );
+				);
 
 				// x^2
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_pow(2), 
 					$name::from_parts($max / 2).square(),
-                );
+				);
 
 				// x^3
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_pow(3), 
 					$name::from_parts($max / 8),
-                );
+				);
 
 				// 0^n == 0
 				assert_eq!(
 					$name::from_parts(0).saturating_pow(3), 
 					$name::from_parts(0),
-                );
+				);
 
 				// 1^n == 1
 				assert_eq!(
 					$name::from_parts($max).saturating_pow(3), 
 					$name::from_parts($max),
-                );
+				);
 
 				// (x < 1)^inf == 0 (where 2.pow(31) ~ inf)
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_pow(2usize.pow(31)), 
 					$name::from_parts(0),
-                );
+				);
 			}
 
 			#[test]
@@ -632,15 +639,15 @@ macro_rules! implement_per_thing {
 				assert_eq!(
 					$name::from_parts($max).saturating_reciprocal_mul(<$type>::from(10u8)),
 					10,
-                );
+				);
 				assert_eq!(
 					$name::from_parts($max / 2).saturating_reciprocal_mul(<$type>::from(10u8)),
 					20,
-                );
+				);
 				assert_eq!(
 					$name::from_parts(1).saturating_reciprocal_mul($max),
 					<$type>::max_value(),
-                );
+				);
 			}
 		}
 	};
