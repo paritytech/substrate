@@ -135,9 +135,8 @@ mod tests {
 
 	#[test]
 	fn test_node_key_config_input() {
-		fn secret_input(net_config_dir: Option<&PathBuf>) -> error::Result<()> {
+		fn secret_input(net_config_dir: &PathBuf) -> error::Result<()> {
 			NodeKeyType::variants().iter().try_for_each(|t| {
-				let mut config = Configuration::<(), ()>::default();
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let sk = match node_key_type {
 					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
@@ -147,7 +146,7 @@ mod tests {
 					node_key: Some(format!("{:x}", H256::from_slice(sk.as_ref()))),
 					node_key_file: None
 				};
-				params.update_config(&mut config, net_config_dir).and_then(|c| match c {
+				params.get_node_key(net_config_dir).and_then(|c| match c {
 					NodeKeyConfig::Ed25519(sc_network::config::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 &&
 							&sk[..] == ski.as_ref() => Ok(()),
@@ -156,15 +155,13 @@ mod tests {
 			})
 		}
 
-		assert!(secret_input(None).is_ok());
-		assert!(secret_input(Some(&PathBuf::from_str("x").unwrap())).is_ok());
+		assert!(secret_input(&PathBuf::from_str("x").unwrap()).is_ok());
 	}
 
 	#[test]
 	fn test_node_key_config_file() {
-		fn secret_file(net_config_dir: Option<&PathBuf>) -> error::Result<()> {
+		fn secret_file(net_config_dir: &PathBuf) -> error::Result<()> {
 			NodeKeyType::variants().iter().try_for_each(|t| {
-				let mut config = Configuration::<(), ()>::default();
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let tmp = tempfile::Builder::new().prefix("alice").tempdir()?;
 				let file = tmp.path().join(format!("{}_mysecret", t)).to_path_buf();
@@ -173,7 +170,7 @@ mod tests {
 					node_key: None,
 					node_key_file: Some(file.clone())
 				};
-				params.update_config(&mut config, net_config_dir).and_then(|c| match c {
+				params.get_node_key(net_config_dir).and_then(|c| match c {
 					NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
 						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into()))
@@ -181,8 +178,7 @@ mod tests {
 			})
 		}
 
-		assert!(secret_file(None).is_ok());
-		assert!(secret_file(Some(&PathBuf::from_str("x").unwrap())).is_ok());
+		assert!(secret_file(&PathBuf::from_str("x").unwrap()).is_ok());
 	}
 
 	#[test]
@@ -201,25 +197,11 @@ mod tests {
 			})
 		}
 
-		fn no_config_dir() -> error::Result<()> {
-			with_def_params(|params| {
-				let mut config = Configuration::<(), ()>::default();
-				let typ = params.node_key_type;
-				params.update_config(&mut config, None)
-					.and_then(|c| match c {
-						NodeKeyConfig::Ed25519(sc_network::config::Secret::New)
-							if typ == NodeKeyType::Ed25519 => Ok(()),
-						_ => Err(error::Error::Input("Unexpected node key config".into()))
-					})
-			})
-		}
-
 		fn some_config_dir(net_config_dir: &PathBuf) -> error::Result<()> {
 			with_def_params(|params| {
-				let mut config = Configuration::<(), ()>::default();
 				let dir = PathBuf::from(net_config_dir.clone());
 				let typ = params.node_key_type;
-				params.update_config(&mut config, Some(net_config_dir))
+				params.get_node_key(net_config_dir)
 					.and_then(move |c| match c {
 						NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
 							if typ == NodeKeyType::Ed25519 &&
@@ -229,7 +211,6 @@ mod tests {
 			})
 		}
 
-		assert!(no_config_dir().is_ok());
 		assert!(some_config_dir(&PathBuf::from_str("x").unwrap()).is_ok());
 	}
 }
