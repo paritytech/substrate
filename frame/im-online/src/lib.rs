@@ -69,6 +69,7 @@
 
 mod mock;
 mod tests;
+mod benchmarking;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
