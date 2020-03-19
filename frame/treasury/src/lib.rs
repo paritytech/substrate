@@ -419,6 +419,7 @@ decl_module! {
 		/// - One currency unreserve.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn payout_proposal(origin, proposal_id: ProposalIndex) {
 			ensure_signed(origin)?;
 			let proposal = Proposals::<T>::get(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
