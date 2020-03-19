@@ -173,6 +173,22 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn test_invalid_pattern() {
+		assert!(generate_key::<Ed25519>("").is_err());
+		assert!(generate_key::<Ed25519>("0").is_err());
+		assert!(generate_key::<Ed25519>("l").is_err());
+		assert!(generate_key::<Ed25519>("I").is_err());
+		assert!(generate_key::<Ed25519>("O").is_err());
+		assert!(generate_key::<Ed25519>("!").is_err());
+	}
+
+	#[test]
+	fn test_valid_pattern() {
+		assert!(generate_key::<Ed25519>("o").is_ok());
+		assert!(generate_key::<Ed25519>("L").is_ok());
+	}
+
 	#[cfg(feature = "bench")]
 	#[bench]
 	fn bench_paranoiac(b: &mut Bencher) {
