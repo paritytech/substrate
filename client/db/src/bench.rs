@@ -140,10 +140,9 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let state = self.state.borrow_mut();
 		let db_state = state.as_ref().ok_or_else(state_err)?;
-		let _ = self.usage_info.try_borrow_mut().map(|mut usage_info| {
-			usage_info.reads.ops += 1;
-			usage_info.reads.bytes += key.len() as u64;
-		});
+		let mut usage_info = self.usage_info.borrow_mut();
+		usage_info.reads.ops += 1;
+		usage_info.reads.bytes += key.len() as u64;
 		db_state.storage(key)
 	}
 
@@ -277,10 +276,9 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				bytes += key.len() as u64;
 			}
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
-			let _ = self.usage_info.try_borrow_mut().map(|mut usage_info| {
-				usage_info.writes.ops += 1;
-				usage_info.writes.bytes += bytes;
-			});
+			let mut usage_info = self.usage_info.borrow_mut();
+			usage_info.writes.ops += 1;
+			usage_info.writes.bytes += bytes;
 			self.root.set(storage_root);
 		} else {
 			return Err("Trying to commit to a closed db".into())
@@ -296,7 +294,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn usage_info(&self) -> UsageInfo {
-		self.usage_info.try_borrow().map_or(UsageInfo::empty(), |info| info.clone())
+		self.usage_info.borrow().clone()
 	}
 }
 
