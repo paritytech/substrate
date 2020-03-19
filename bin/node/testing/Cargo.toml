@@ -1,6 +1,6 @@
 [package]
 name = "node-testing"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Test utilities for Substrate node."
 edition = "2018"
@@ -10,48 +10,48 @@ repository = "https://github.com/paritytech/substrate/"
 publish = true
 
 [dependencies]
-pallet-balances = { version = "2.0.0-alpha.2", path = "../../../frame/balances" }
-sc-client = { version = "0.8.0-alpha.2", path = "../../../client/" }
-sc-client-db = { version = "0.8.0-alpha.2", path = "../../../client/db/", features = ["kvdb-rocksdb"] }
-sc-client-api = { version = "2.0.0-alpha.2", path = "../../../client/api/" }
+pallet-balances = { version = "2.0.0-alpha.4", path = "../../../frame/balances" }
+sc-client = { version = "0.8.0-alpha.4", path = "../../../client/" }
+sc-client-db = { version = "0.8.0-alpha.4", path = "../../../client/db/", features = ["kvdb-rocksdb"] }
+sc-client-api = { version = "2.0.0-alpha.4", path = "../../../client/api/" }
 codec = { package = "parity-scale-codec", version = "1.2.0" }
-pallet-contracts = { version = "2.0.0-alpha.2", path = "../../../frame/contracts" }
-pallet-grandpa = { version = "2.0.0-alpha.2", path = "../../../frame/grandpa" }
-pallet-indices = { version = "2.0.0-alpha.2", path = "../../../frame/indices" }
-sp-keyring = { version = "2.0.0-alpha.2", path = "../../../primitives/keyring" }
-node-executor = { version = "2.0.0-alpha.2", path = "../executor" }
-node-primitives = { version = "2.0.0-alpha.2", path = "../primitives" }
-node-runtime = { version = "2.0.0-alpha.2", path = "../runtime" }
-sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
-sp-io = { version = "2.0.0-alpha.2", path = "../../../primitives/io" }
-frame-support = { version = "2.0.0-alpha.2", path = "../../../frame/support" }
-pallet-session = { version = "2.0.0-alpha.2", path = "../../../frame/session" }
-pallet-society = { version = "2.0.0-alpha.2", path = "../../../frame/society" }
-sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
-pallet-staking = { version = "2.0.0-alpha.2", path = "../../../frame/staking" }
-sc-executor = { version = "0.8.0-alpha.2", path = "../../../client/executor", features = ["wasmtime"] }
-sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/common" }
-frame-system = { version = "2.0.0-alpha.2", path = "../../../frame/system" }
+pallet-contracts = { version = "2.0.0-alpha.4", path = "../../../frame/contracts" }
+pallet-grandpa = { version = "2.0.0-alpha.4", path = "../../../frame/grandpa" }
+pallet-indices = { version = "2.0.0-alpha.4", path = "../../../frame/indices" }
+sp-keyring = { version = "2.0.0-alpha.4", path = "../../../primitives/keyring" }
+node-executor = { version = "2.0.0-alpha.4", path = "../executor" }
+node-primitives = { version = "2.0.0-alpha.4", path = "../primitives" }
+node-runtime = { version = "2.0.0-alpha.4", path = "../runtime" }
+sp-core = { version = "2.0.0-alpha.4", path = "../../../primitives/core" }
+sp-io = { version = "2.0.0-alpha.4", path = "../../../primitives/io" }
+frame-support = { version = "2.0.0-alpha.4", path = "../../../frame/support" }
+pallet-session = { version = "2.0.0-alpha.4", path = "../../../frame/session" }
+pallet-society = { version = "2.0.0-alpha.4", path = "../../../frame/society" }
+sp-runtime = { version = "2.0.0-alpha.4", path = "../../../primitives/runtime" }
+pallet-staking = { version = "2.0.0-alpha.4", path = "../../../frame/staking" }
+sc-executor = { version = "0.8.0-alpha.4", path = "../../../client/executor", features = ["wasmtime"] }
+sp-consensus = { version = "0.8.0-alpha.4", path = "../../../primitives/consensus/common" }
+frame-system = { version = "2.0.0-alpha.4", path = "../../../frame/system" }
 substrate-test-client = { version = "2.0.0-dev", path = "../../../test-utils/client" }
-pallet-timestamp = { version = "2.0.0-alpha.2", path = "../../../frame/timestamp" }
-pallet-transaction-payment = { version = "2.0.0-alpha.2", path = "../../../frame/transaction-payment" }
-pallet-treasury = { version = "2.0.0-alpha.2", path = "../../../frame/treasury" }
+pallet-timestamp = { version = "2.0.0-alpha.4", path = "../../../frame/timestamp" }
+pallet-transaction-payment = { version = "2.0.0-alpha.4", path = "../../../frame/transaction-payment" }
+pallet-treasury = { version = "2.0.0-alpha.4", path = "../../../frame/treasury" }
 wabt = "0.9.2"
-sp-api = { version = "2.0.0-alpha.2", path = "../../../primitives/api" }
-sp-finality-tracker = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/finality-tracker" }
-sp-timestamp = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/timestamp" }
-sp-block-builder = { version = "2.0.0-alpha.2", path = "../../../primitives/block-builder" }
-sc-block-builder = { version = "0.8.0-alpha.3", path = "../../../client/block-builder" }
-sp-inherents = { version = "2.0.0-alpha.2", path = "../../../primitives/inherents" }
-sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockchain" }
+sp-api = { version = "2.0.0-alpha.4", path = "../../../primitives/api" }
+sp-finality-tracker = { version = "2.0.0-alpha.4", default-features = false, path = "../../../primitives/finality-tracker" }
+sp-timestamp = { version = "2.0.0-alpha.4", default-features = false, path = "../../../primitives/timestamp" }
+sp-block-builder = { version = "2.0.0-alpha.4", path = "../../../primitives/block-builder" }
+sc-block-builder = { version = "0.8.0-alpha.4", path = "../../../client/block-builder" }
+sp-inherents = { version = "2.0.0-alpha.4", path = "../../../primitives/inherents" }
+sp-blockchain = { version = "2.0.0-alpha.4", path = "../../../primitives/blockchain" }
 log = "0.4.8"
 tempfile = "3.1.0"
 fs_extra = "1"
 
 [dev-dependencies]
 criterion = "0.3.0"
-sc-cli = { version = "0.8.0-alpha.2", path = "../../../client/cli" }
-sc-service = { version = "0.8.0-alpha.2", path = "../../../client/service", features = ["rocksdb"] }
+sc-cli = { version = "0.8.0-alpha.4", path = "../../../client/cli" }
+sc-service = { version = "0.8.0-alpha.4", path = "../../../client/service", features = ["rocksdb"] }
 
 [[bench]]
 name = "import"

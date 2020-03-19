@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-epochs"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic epochs-based utilities for consensus"
 edition = "2018"
@@ -11,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 parking_lot = "0.10.0"
-fork-tree = { version = "2.0.0-alpha.2", path = "../../../utils/fork-tree" }
-sp-runtime = {  path = "../../../primitives/runtime" , version = "2.0.0-alpha.2"}
-sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockchain" }
-sc-client-api = { path = "../../api" , version = "2.0.0-alpha.2"}
+fork-tree = { version = "2.0.0-alpha.4", path = "../../../utils/fork-tree" }
+sp-runtime = {  path = "../../../primitives/runtime" , version = "2.0.0-alpha.4"}
+sp-blockchain = { version = "2.0.0-alpha.4", path = "../../../primitives/blockchain" }
+sc-client-api = { path = "../../api" , version = "2.0.0-alpha.4"}
