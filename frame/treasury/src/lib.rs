@@ -72,7 +72,8 @@
 //! - `set_pot` - Set the spendable balance of funds.
 //! - `configure` - Configure the module's proposal requirements.
 //! - `reject_proposal` - Reject a proposal, slashing the deposit.
-//! - `approve_proposal` - Accept the proposal, returning the deposit.
+//! - `approve_proposal` - Accept the proposal.
+//! - `payout_proposal` - Payout an approved proposal, returning the deposit.
 //!
 //! Tipping protocol:
 //! - `report_awesome` - Report something worthy of a tip and register for a finders fee.
@@ -96,7 +97,7 @@ use frame_support::traits::{
 	ReservableCurrency, WithdrawReason
 };
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
-	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
+	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, CheckedAdd, Hash, BadOrigin
 }};
 use frame_support::{weights::SimpleDispatchInfo, traits::Contains};
 use codec::{Encode, Decode};
@@ -285,6 +286,8 @@ decl_error! {
 		Premature,
 		/// The proposal has not been approved.
 		NotApproved,
+		/// There was an overflow in calculation.
+		Overflow,
 	}
 }
 
@@ -383,13 +386,12 @@ decl_module! {
 			Self::deposit_event(Event::<T>::Rejected(proposal_id, value));
 		}
 
-		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
-		/// and the original deposit will be returned.
+		/// Approve a proposal so that a user can call `payout_proposal` successfully.
 		///
 		/// # <weight>
 		/// - O(1).
 		/// - Limited storage reads.
-		/// - One DB change.
+		/// - Two DB changes.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
@@ -399,11 +401,13 @@ decl_module! {
 
 			let mut proposal = Proposals::<T>::get(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
 			proposal.approved = true;
-			AmountApproved::<T>::mutate(|amount| *amount += proposal.value);
+			let amount_approved = Self::amount_approved();
+			let new_amount = amount_approved.checked_add(&proposal.value).ok_or(Error::<T>::Overflow)?;
+			AmountApproved::<T>::put(new_amount);
 			Proposals::<T>::insert(proposal_id, proposal);
 		}
 
-		/// Payout an approved proposal
+		/// Payout an approved proposal, returning the deposit taken for making the proposal.
 		fn payout_proposal(origin, proposal_id: ProposalIndex) {
 			ensure_signed(origin)?;
 			let proposal = Proposals::<T>::get(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
@@ -413,7 +417,8 @@ decl_module! {
 			// return the proposal deposit and clean up.
 			let _ = T::Currency::unreserve(&proposal.proposer, proposal.bond);
 			<Proposals<T>>::remove(proposal_id);
-			AmountApproved::<T>::mutate(|amount| *amount -= proposal.value);
+			// Not much we can do if underflow here.
+			AmountApproved::<T>::mutate(|amount| *amount = amount.saturating_sub(proposal.value));
 
 			Self::deposit_event(RawEvent::Awarded(proposal_id, proposal.value, proposal.beneficiary));
 		}
