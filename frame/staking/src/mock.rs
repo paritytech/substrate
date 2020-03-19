@@ -27,8 +27,8 @@ use sp_runtime::testing::{Header, TestXt, UintAuthorityId};
 use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use sp_core::H256;
 use frame_support::{
-	assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue, StorageMap,
-	impl_outer_dispatch, StorageDoubleMap, impl_outer_event,
+	assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch, impl_outer_event,
+	StorageValue, StorageMap, StorageDoubleMap, IterableStorageMap,
 	traits::{Currency, Get, FindAuthor},
 	weights::Weight,
 };
@@ -216,7 +216,7 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
-	type OnNewAccount = ();
+	type MigrateAccount = (); type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 impl pallet_balances::Trait for Test {
@@ -511,32 +511,28 @@ impl ExtBuilder {
 			],
 		}.assimilate_storage(&mut storage);
 
-		let stake_21 = if self.fair { 1000 } else { 2000 };
-		let stake_31 = if self.validator_pool {
-			balance_factor * 1000
-		} else {
-			1
-		};
-		let status_41 = if self.validator_pool {
-			StakerStatus::<AccountId>::Validator
-		} else {
-			StakerStatus::<AccountId>::Idle
-		};
-		let nominated = if self.nominate { vec![11, 21] } else { vec![] };
-		let _ = GenesisConfig::<Test> {
-			stakers: if self.has_stakers {
-				vec![
-					// (stash, controller, staked_amount, status)
-					(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
-					(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
-					(31, 30, stake_31, StakerStatus::<AccountId>::Validator),
-					(41, 40, balance_factor * 1000, status_41),
-					// nominator
-					(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated)),
-				]
+		let mut stakers = vec![];
+		if self.has_stakers {
+			let stake_21 = if self.fair { 1000 } else { 2000 };
+			let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
+			let status_41 = if self.validator_pool {
+				StakerStatus::<AccountId>::Validator
 			} else {
-				vec![]
-			},
+				StakerStatus::<AccountId>::Idle
+			};
+			let nominated = if self.nominate { vec![11, 21] } else { vec![] };
+			stakers = vec![
+				// (stash, controller, staked_amount, status)
+				(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
+				(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
+				(31, 30, stake_31, StakerStatus::<AccountId>::Validator),
+				(41, 40, balance_factor * 1000, status_41),
+				// nominator
+				(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated))
+			];
+		}
+		let _ = GenesisConfig::<Test>{
+			stakers: stakers,
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
 			invulnerables: self.invulnerables,
@@ -580,7 +576,7 @@ pub fn check_exposure_all(era: EraIndex) {
 }
 
 pub fn check_nominator_all(era: EraIndex) {
-	<Nominators<Test>>::enumerate()
+	<Nominators<Test>>::iter()
 		.for_each(|(acc, _)| check_nominator_exposure(era, acc));
 }
 
@@ -757,12 +753,12 @@ pub fn horrible_phragmen_with_post_processing(
 	let mut backing_stake_of: BTreeMap<AccountId, Balance> = BTreeMap::new();
 
 	// self stake
-	<Validators<Test>>::enumerate().for_each(|(who, _p)| {
+	<Validators<Test>>::iter().for_each(|(who, _p)| {
 		*backing_stake_of.entry(who).or_insert(Zero::zero()) += Staking::slashable_balance_of(&who)
 	});
 
 	// add nominator stuff
-	<Nominators<Test>>::enumerate().for_each(|(who, nomination)| {
+	<Nominators<Test>>::iter().for_each(|(who, nomination)| {
 		nomination.targets.iter().for_each(|v| {
 			*backing_stake_of.entry(*v).or_insert(Zero::zero()) +=
 				Staking::slashable_balance_of(&who)
@@ -780,7 +776,7 @@ pub fn horrible_phragmen_with_post_processing(
 
 	// create assignments
 	let mut staked_assignment: Vec<StakedAssignment<AccountId>> = Vec::new();
-	<Nominators<Test>>::enumerate().for_each(|(who, nomination)| {
+	<Nominators<Test>>::iter().for_each(|(who, nomination)| {
 		let mut dist: Vec<(AccountId, ExtendedBalance)> = Vec::new();
 		nomination.targets.iter().for_each(|v| {
 			if winners.iter().find(|w| *w == v).is_some() {

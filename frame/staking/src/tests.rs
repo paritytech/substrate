@@ -79,7 +79,7 @@ fn basic_setup_works() {
 		assert_eq!(Staking::ledger(&1), None);
 
 		// ValidatorPrefs are default
-		assert_eq!(<Validators<Test>>::enumerate().collect::<Vec<_>>(), vec![
+		assert_eq!(<Validators<Test>>::iter().collect::<Vec<_>>(), vec![
 			(31, ValidatorPrefs::default()),
 			(21, ValidatorPrefs::default()),
 			(11, ValidatorPrefs::default())
@@ -3661,7 +3661,7 @@ mod offchain_phragmen {
 		ext.execute_with(|| {
 			assert_eq_uvec!(
 				Staking::keys(),
-				<Validators<Test>>::enumerate()
+				<Validators<Test>>::iter()
 					.map(|(acc, _)| dummy_sr25519::dummy_key_for(acc))
 					.collect::<Vec<DummyT>>()
 			);
@@ -3797,7 +3797,7 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 
 		// This is the best way to check that the validator was chilled; `get` will
 		// return default value.
-		for (stash, _) in <Staking as Store>::Validators::enumerate() {
+		for (stash, _) in <Staking as Store>::Validators::iter() {
 			assert!(stash != 11);
 		}
 
@@ -3952,7 +3952,7 @@ fn zero_slash_keeps_nominators() {
 
 		// This is the best way to check that the validator was chilled; `get` will
 		// return default value.
-		for (stash, _) in <Staking as Store>::Validators::enumerate() {
+		for (stash, _) in <Staking as Store>::Validators::iter() {
 			assert!(stash != 11);
 		}
 

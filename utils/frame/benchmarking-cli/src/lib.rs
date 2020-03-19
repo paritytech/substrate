@@ -23,6 +23,7 @@ use sc_service::{Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use codec::{Encode, Decode};
 use frame_benchmarking::BenchmarkResults;
+use sp_core::tasks;
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt, Clone)]
@@ -121,6 +122,7 @@ impl BenchmarkCmd {
 			).encode(),
 			Default::default(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+			tasks::executor(),
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;

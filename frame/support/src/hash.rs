@@ -28,6 +28,7 @@ pub trait Hashable: Sized {
 	fn twox_128(&self) -> [u8; 16];
 	fn twox_256(&self) -> [u8; 32];
 	fn twox_64_concat(&self) -> Vec<u8>;
+	fn identity(&self) -> Vec<u8>;
 }
 
 impl<T: Codec> Hashable for T {
@@ -49,12 +50,32 @@ impl<T: Codec> Hashable for T {
 	fn twox_64_concat(&self) -> Vec<u8> {
 		self.using_encoded(Twox64Concat::hash)
 	}
+	fn identity(&self) -> Vec<u8> { self.encode() }
 }
 
 /// Hasher to use to hash keys to insert to storage.
 pub trait StorageHasher: 'static {
 	type Output: AsRef<[u8]>;
 	fn hash(x: &[u8]) -> Self::Output;
+}
+
+/// Hasher to use to hash keys to insert to storage.
+pub trait ReversibleStorageHasher: StorageHasher {
+	fn reverse(x: &[u8]) -> &[u8];
+}
+
+/// Store the key directly.
+pub struct Identity;
+impl StorageHasher for Identity {
+	type Output = Vec<u8>;
+	fn hash(x: &[u8]) -> Vec<u8> {
+		x.to_vec()
+	}
+}
+impl ReversibleStorageHasher for Identity {
+	fn reverse(x: &[u8]) -> &[u8] {
+		x
+	}
 }
 
 /// Hash storage keys with `concat(twox64(key), key)`
@@ -69,6 +90,11 @@ impl StorageHasher for Twox64Concat {
 			.collect::<Vec<_>>()
 	}
 }
+impl ReversibleStorageHasher for Twox64Concat {
+	fn reverse(x: &[u8]) -> &[u8] {
+		&x[8..]
+	}
+}
 
 /// Hash storage keys with `concat(blake2_128(key), key)`
 pub struct Blake2_128Concat;
@@ -80,6 +106,11 @@ impl StorageHasher for Blake2_128Concat {
 			.chain(x.into_iter())
 			.cloned()
 			.collect::<Vec<_>>()
+	}
+}
+impl ReversibleStorageHasher for Blake2_128Concat {
+	fn reverse(x: &[u8]) -> &[u8] {
+		&x[16..]
 	}
 }
 
