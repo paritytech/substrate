@@ -38,8 +38,8 @@ pub struct UsageInfo {
 	/// Cache read statistics.
 	pub cache_reads: UsageUnit,
 	/// Memory used.
-	// Encoded as u32 because wasm's usize is u32.
-	pub memory: u32,
+	// Encoded as u64 because wasm's usize is u64.
+	pub memory: u64,
 
 	/// Moment at which current statistics has been started being collected.
 	#[codec(skip)]
