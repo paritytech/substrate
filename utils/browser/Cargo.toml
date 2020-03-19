@@ -18,11 +18,11 @@ console_log = "0.1.2"
 js-sys = "0.3.34"
 wasm-bindgen = "0.2.57"
 wasm-bindgen-futures = "0.4.7"
-kvdb-web = "0.4"
+kvdb-web = "0.5"
 sc-informant = { version = "0.8.0-alpha.4", path = "../../client/informant" }
 sc-service = { version = "0.8.0-alpha.4", path = "../../client/service", default-features = false }
-sc-network = { path = "../../client/network" , version = "0.8.0-alpha.4"}
-sc-chain-spec = { path = "../../client/chain-spec" , version = "2.0.0-alpha.4"}
+sc-network = { path = "../../client/network", version = "0.8.0-alpha.4"}
+sc-chain-spec = { path = "../../client/chain-spec", version = "2.0.0-alpha.4"}
 
 # Imported just for the `no_cc` feature
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] }
