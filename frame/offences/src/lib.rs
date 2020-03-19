@@ -95,6 +95,12 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
+		fn on_runtime_upgrade() {
+			Reports::<T>::remove_all();
+			ConcurrentReportsIndex::<T>::remove_all();
+			ReportsByKindIndex::remove_all();
+		}
+
 		fn on_initialize(now: T::BlockNumber) {
 			// only decode storage if we can actually submit anything again.
 			if T::OnOffenceHandler::can_report() {
